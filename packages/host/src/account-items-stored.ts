@@ -46,6 +46,7 @@ import {
 import {
   followTakingRows,
   type LiveFailure,
+  type PagedRows,
   type SyncStanding,
   syncIdOf,
   type TxWait,
@@ -53,6 +54,22 @@ import {
 
 /** The most tasks kept beside the items, the latest changed first, as the eager follow keeps them. */
 const KEPT_HOLDERS = 250;
+
+/**
+ * How the account's items take a whole answer in pages (`followTakingRows`),
+ * the stored follow's and the eager one's alike: each row's key, an item's
+ * by its stamp too, since one a page carries unchanged since the read's
+ * `since` comes as its stamp alone, and two pages' rows as one.
+ */
+export const ACCOUNT_ITEMS_PAGES: PagedRows<AccountInboxItemsLiveRows> = {
+  keysOf: (rows) => [...rows.stamps, ...rows.items].map((row) => row.id),
+  join: (held, page) => ({
+    stamps: [...held.stamps, ...page.stamps],
+    items: [...held.items, ...page.items],
+    messages: [...held.messages, ...page.messages],
+    files: [...held.files, ...page.files],
+  }),
+};
 
 /** No item told on the document, whose rows a screen reads from the kind's collection instead. */
 const NO_ITEMS: AppInboxItems = { [INBOX_SCOPE_KIND.TASK]: {} };
@@ -195,9 +212,10 @@ function agedIds(pool: EntityPool, now: number): Effect.Effect<readonly string[]
 
 /** What the stored follow is handed. */
 export interface StoredItemsFollow {
-  /** The account's items read past the sync id named, whole where it is empty; a failure where the service answered none. */
+  /** The account's items read past the sync id named, whole where it is empty, or the page of a whole answer named; a failure where the service answered none. */
   readonly seal: (
     sync: string | undefined,
+    page?: string,
   ) => Effect.Effect<AccountInboxItemsLiveAnswer | LiveFailure>;
   readonly pool: EntityPool;
   /** The items the follow stands on, kept on disk whole. */
@@ -251,6 +269,8 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
     const first = yield* follow.seal(follow.resumes ? (kept?.at ?? "") : "");
 
     if ("failure" in first) return false;
+    /** The first page of a whole answer in pages, written ahead so its newest items draw, held until the last replaces what the database keeps with every page; none between whole answers in pages. */
+    let firstPage: readonly PlacedInboxItem[] = [];
 
     const landed = (rows: AccountInboxItemsLiveRows, standing: SyncStanding | undefined) =>
       Effect.gen(function* () {
@@ -258,11 +278,16 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
         holders = holdersAfter(holders, placed, follow.tasksListed);
         const at = syncIdOf(standing);
         const cursor = cursorOf(holders, standing);
+        // Note that the last page of a whole answer in pages comes with every other page but the first (`followTakingRows`), so with the first it names every item there is, as one whole answer does, and replaces what the database keeps, which a store that cannot list its keys lets go no other way.
+        const lastPage = standing?.paged === true && standing.carried !== undefined;
+        const whole = standing?.past === undefined || lastPage;
+        const written = lastPage ? [...firstPage, ...placed] : placed;
+        firstPage = standing?.paged === true && !lastPage ? placed : [];
 
         // Note that a whole answer names every item there is, so it replaces what the database keeps; one past a sync id names only what moved, and what stands no longer.
-        yield* standing?.past === undefined
-          ? items.answer(placed, { ...(at === undefined ? undefined : { at }), cursor })
-          : items.answer(placed, {
+        yield* whole
+          ? items.answer(written, { ...(at === undefined ? undefined : { at }), cursor })
+          : items.answer(written, {
               gone: standing.gone,
               ...(at === undefined ? undefined : { at }),
               cursor,
@@ -273,7 +298,11 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
       });
 
     yield* followTakingRows(
-      { poll: (_after, _cursor, sync) => follow.seal(sync), onTxWait: follow.onTxWait },
+      {
+        poll: (_after, _cursor, sync, page) => follow.seal(sync, page),
+        pages: ACCOUNT_ITEMS_PAGES,
+        onTxWait: follow.onTxWait,
+      },
       first,
       INBOX_ITEMS_READ.rows,
       (rows, standing, read) => {

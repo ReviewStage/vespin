@@ -11,7 +11,7 @@ import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
 import { Clock, Effect, Option, Schema } from "effect";
-import { followStoredItems } from "./account-items-stored.js";
+import { ACCOUNT_ITEMS_PAGES, followStoredItems } from "./account-items-stored.js";
 import type { AppInboxItems, AppInboxRead } from "./app-state.js";
 import {
   type AccountWideReads,
@@ -467,7 +467,7 @@ export function followAccountItems(
       // Note that where the account's database keeps the Inbox kind whole, the follow writes each answer there and tells no item on the document (`account-items-stored.ts`).
       if (items.onDisk) {
         const read = yield* followStoredItems({
-          seal: (sync) => dependencies.seal(userId, sync),
+          seal: (sync, page) => dependencies.seal(userId, sync, page),
           pool: dependencies.pool,
           items,
           resumes,
@@ -553,16 +553,7 @@ export function followAccountItems(
       yield* followTakingRows(
         {
           poll: (_after, _cursor, sync, page) => dependencies.seal(userId, sync, page),
-          pages: {
-            // Note that an item a page carries unchanged since the read's `since` comes as its stamp alone, which keeps it held.
-            keysOf: (rows) => [...rows.stamps, ...rows.items].map((row) => row.id),
-            join: (held, page) => ({
-              stamps: [...held.stamps, ...page.stamps],
-              items: [...held.items, ...page.items],
-              messages: [...held.messages, ...page.messages],
-              files: [...held.files, ...page.files],
-            }),
-          },
+          pages: ACCOUNT_ITEMS_PAGES,
           onTxWait: (handed) => {
             wait = handed;
           },

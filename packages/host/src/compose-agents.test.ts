@@ -2576,6 +2576,39 @@ it.effect(
 );
 
 it.effect(
+  "a whole answer of the account's items in pages is asked a page after another and kept on disk as every page named, an item kept before that no page carries let go",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-paged-");
+      const quit = yield* Scope.make();
+      const first = yield* Scope.provide(quit)(keptLaunch(root));
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+      deliverItems(first.live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* toldTimes(first.accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      const third = { ...OTHER_ITEM, id: "7b8c9d0e-1f2a-4b3c-9d4e-5f6a7b8c9d0e" };
+      const next = yield* keptLaunch(root);
+      next.sealItems(LIVE_ANSWERED);
+      next.pageItems([
+        { stamps: [stampOf(OTHER_ITEM, OTHER_TASK_ID)], items: [{ ...ITEM_ROW, ...OTHER_ITEM }] },
+        { stamps: [stampOf(third, OTHER_TASK_ID)], items: [{ ...ITEM_ROW, ...third }] },
+        { stamps: [], items: [] },
+      ]);
+      yield* next.open;
+      yield* settled;
+
+      assert.deepEqual(
+        next.asked.filter((each) => each.startsWith("account-items-page:")),
+        ["account-items-page:1", "account-items-page:2"],
+      );
+      assert.deepEqual(yield* keptItemIds(next.pool), [OTHER_ITEM.id, third.id].toSorted());
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
   "an item kept on disk that settled before the read's window is deleted from the account's database as the next launch stands, which no answer says",
   () =>
     Effect.gen(function* () {
