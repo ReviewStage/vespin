@@ -1,0 +1,11 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPad Pro 11 M5 (lane B) - iOS 27.2 - 9A4CF9AD-6100-42BA-937A-E7829B30BBC4
+ > Flow fgap-agent-empty
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Run flow when ".*Would Like to Send You Notifications.*" is visible...
+Run flow when ".*Would Like to Send You Notifications.*" is visible... SKIPPED
+Assert that id: composer-field is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot gap-agent-empty... COMPLETED
