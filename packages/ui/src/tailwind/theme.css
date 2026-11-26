@@ -784,8 +784,24 @@
   ); /* the disc a press wears at its corner (`CornerBadge`) */
   --spacing-corner-badge-glyph: 10px; /* off-scale: the glyph on that disc */
   --spacing-section-icon-scroll: 280px; /* off-scale: the icon grid's room, about seven rows */
-  --container-section-icon-picker: 420px; /* off-scale: ten icon buttons and the picker's insets */
-  --spacing-icon-picker-cell: 36px; /* off-scale: one icon picker cell, a glyph or emoji at 20px with room round it */
+  /* An icon picker's cell is 36px, a glyph or emoji at 20px with room round
+     it, wherever ten of them, their gaps, the picker's insets, and its
+     popover's margins fit across the window; a phone narrower than that
+     shrinks the cells to fit, so the tenth column never stands off screen.
+     The picker is as wide as its ten cells, gaps, and insets. */
+  --spacing-icon-picker-cell: min(
+    36px,
+    (100vw - 2 * 8px - 2px - 9 * var(--ui-tight-gap) - 2 * var(--ui-card-inset-snug)) /
+    10
+  ); /* off-scale: 8px is the popover's margin (`POPOVER_MARGIN`), 2px its card's edges */
+  --container-section-icon-picker: calc(
+    10 *
+    var(--spacing-icon-picker-cell) +
+    9 *
+    var(--ui-tight-gap) +
+    2 *
+    var(--ui-card-inset-snug)
+  ); /* ten icon picker cells, their gaps, and the picker's insets */
   --text-icon-picker: var(
     --ui-icon-20
   ); /* an emoji in an icon picker's cell, as large as its glyphs */
