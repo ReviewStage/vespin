@@ -3151,6 +3151,16 @@ function InlineDescriptionSection({
   const { field } = inline;
   const media = useDescriptionPictures(body);
   const openLink = useOpenLink(task.workspaceId);
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+
+  // Note that a chip's pull request or issue is read through the task's own workspace, as the read rows read it, so its pill draws and is heard by where it stands, following each change GitHub answers.
+  const linkStanding = useLinkStandings(
+    useMemo(() => [body], [body]),
+    task.repository,
+    workspaces.find((each) => each.id === task.workspaceId),
+    true,
+  );
+
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const threads = useTaskComments(task.id);
@@ -3202,6 +3212,7 @@ function InlineDescriptionSection({
           tapsToEdit
           onFocusChange={inline.focused}
           onOpenLink={openLink}
+          linkStanding={linkStanding}
           keepClear={inline.mentions === undefined ? undefined : room}
           media={media}
           comments={comments}

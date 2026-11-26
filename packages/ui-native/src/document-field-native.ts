@@ -204,8 +204,8 @@ interface NativeDocumentFieldProps {
   readonly formats?: NativeFormats | undefined;
   /** Whether the field stands read-only until a press on its words, which takes the keyboard there, as a description stands on its page; a press on a link, a mention or a picture opens it. */
   readonly tapsToEdit?: boolean | undefined;
-  /** A drawn picture pressed while the field stands at rest, by the address its Markdown names and its words. */
-  readonly onOpenPicture?:
+  /** A drawn picture or a read file pressed while the field stands at rest, by the address its Markdown names and its words. */
+  readonly onOpenMedia?:
     | ((event: NativeSyntheticEvent<{ readonly address: string; readonly alt: string }>) => void)
     | undefined;
   /** A link's or a mention's address pressed while the field stands at rest. */

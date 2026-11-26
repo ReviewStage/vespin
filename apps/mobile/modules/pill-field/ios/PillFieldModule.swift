@@ -92,7 +92,7 @@ public final class PillFieldModule: Module {
     }
 
     View(DocumentFieldView.self) {
-      Events("onLines", "onHeight", "onFocusChange", "onLinkAsk", "onCaret", "onCommentOpen", "onCommentAsk", "onOpenLink", "onOpenPicture")
+      Events("onLines", "onHeight", "onFocusChange", "onLinkAsk", "onCaret", "onCommentOpen", "onCommentAsk", "onOpenLink", "onOpenMedia")
 
       Prop("value") { (view: DocumentFieldView, value: DocumentValueRecord) in
         view.take(value.lines.map(DocumentLine.init), seen: value.seen)

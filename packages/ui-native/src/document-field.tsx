@@ -17,6 +17,7 @@ import {
   writtenPieces,
 } from "@repo/features/document-blocks";
 import { drawnPictureAddresses } from "@repo/features/drawn-pictures";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import { markdownTree, markdownTreeKept } from "@repo/features/markdown-tree";
 import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import {
@@ -73,7 +74,8 @@ import {
 } from "./document-field-native.js";
 import { fieldTable } from "./document-field-table.js";
 import { GLYPH, WRITING_GLYPH } from "./glyph.js";
-import { usePicturesView } from "./held-menu.js";
+import { useKeptOpen, usePicturesView } from "./held-menu.js";
+import { KEPT_KIND } from "./keep-model.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import type { MarkdownReading } from "./markdown-model.js";
 import { pillLook } from "./pill-look.js";
@@ -221,6 +223,8 @@ interface DocumentFieldProps {
   readonly tapsToEdit?: boolean | undefined;
   /** Opens a link's or a mention's address pressed while the field stands at rest. */
   readonly onOpenLink?: ((address: string) => void) | undefined;
+  /** What GitHub holds of the pull request or issue a mention names, as the host read it, which its pill draws its state by, as the read rows' chip does; none draws each by its kind. */
+  readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
   /** Whether the field holds the keyboard, as it takes it and lets it go. */
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
 }
@@ -411,11 +415,15 @@ function nativeRun(
   reading: MarkdownReading,
   markOf: ChipMarkOf,
   drawn: DrawnBlocks | undefined,
+  linkStanding: ((page: string) => LinkStanding | undefined) | undefined,
 ): NativeDocumentRun {
   if (run.kind === INLINE_RUN.WORDS) return { text: run.text, marks: run.marks, link: run.link };
 
-  if (run.kind === INLINE_RUN.PILL)
-    return { pill: { markdown: run.pill.markdown, ...pillLook(run.pill, reading, markOf) } };
+  if (run.kind === INLINE_RUN.PILL) {
+    const look = pillLook(run.pill, reading, markOf, linkStanding);
+
+    return { pill: { markdown: run.pill.markdown, ...look } };
+  }
 
   if (line.kind === BLOCK_KIND.LOCKED) {
     const code = drawn?.diagrams.get(run.source);
@@ -507,6 +515,7 @@ function FieldWords({
   comments,
   tapsToEdit = false,
   onOpenLink,
+  linkStanding,
   onFocusChange,
 }: DocumentFieldProps) {
   const colors = useColors();
@@ -565,12 +574,12 @@ function FieldWords({
     const lines = laid.map(
       (line): NativeDocumentLine => ({
         ...line,
-        runs: line.runs.map((run) => nativeRun(run, line, reading, markOf, drawn)),
+        runs: line.runs.map((run) => nativeRun(run, line, reading, markOf, drawn, linkStanding)),
       }),
     );
 
     return { markdown: base, value: { lines, seen } };
-  }, [own, told, read, base, repository, seen, markOf, drawn]);
+  }, [own, told, read, base, repository, seen, markOf, drawn, linkStanding]);
 
   // What each picture and diagram the document draws holds, handed apart from the words, so one landing draws only it again.
   const held = useMemo(
@@ -604,10 +613,20 @@ function FieldWords({
     [anchored, comments],
   );
 
-  // Note that a picture pressed at rest opens full screen in the app's viewer, grown from nothing, as the read rows' picture opened, drawn from the file its read wrote.
+  // Note that what a press at rest lands on opens as the read rows opened it: a file in Quick Look, as its chip opened it, named by its words, and a picture full screen in the app's viewer, drawn from the file its read wrote.
   const viewPictures = usePicturesView();
+  const openKept = useKeptOpen();
 
-  const openPicture = (address: string, alt: string) => {
+  const openMedia = (address: string, alt: string) => {
+    const file = media?.fileAt(address);
+
+    if (file !== undefined) {
+      const name = alt.trim() === "" ? UNNAMED_FILE : alt.trim();
+      openKept?.({ kind: KEPT_KIND.FILE, source: file.source, name, mediaType: file.mediaType });
+
+      return;
+    }
+
     const source = media?.pictureSource(address);
 
     if (source == null || viewPictures === undefined) return;
@@ -793,7 +812,7 @@ function FieldWords({
       onFocusChange={({ nativeEvent }) => onFocusChange?.(nativeEvent.focused)}
       tapsToEdit={tapsToEdit}
       onOpenLink={({ nativeEvent }) => onOpenLink?.(nativeEvent.address)}
-      onOpenPicture={({ nativeEvent }) => openPicture(nativeEvent.address, nativeEvent.alt)}
+      onOpenMedia={({ nativeEvent }) => openMedia(nativeEvent.address, nativeEvent.alt)}
     />
   );
 }

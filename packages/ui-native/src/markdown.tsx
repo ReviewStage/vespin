@@ -1,11 +1,10 @@
 // markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, drafts to send elsewhere, links, mention chips, and pictures that open full screen and zoom.
 
 import { readerZone } from "@repo/features/date-mention";
-import { ENTITY_KIND, entityWordHeard } from "@repo/features/entity-kind";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
-import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
 import {
@@ -37,11 +36,12 @@ import {
 import { AudioClip } from "./audio-clip.js";
 import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
 import type { ChipMarkOf } from "./chip-mark-model.js";
+import { chipStanding, type StandingLook } from "./chip-standing-model.js";
 import { DiagramBlock, DiagramRenderer } from "./diagram.js";
 import { DraftCard } from "./draft-card.js";
 import { ENTITY_GLYPH } from "./entity-glyph.js";
 import { FileChip } from "./file-chip.js";
-import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
+import { GLYPH, glyphSymbol } from "./glyph.js";
 import {
   HeldMenu,
   PictureSetProvider,
@@ -50,7 +50,6 @@ import {
   usePicturesView,
   usePictureView,
 } from "./held-menu.js";
-import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { KEPT_KIND, type Kept } from "./keep-model.js";
 import {
   COLUMN_ALIGN,
@@ -84,7 +83,7 @@ import {
   type SuggestionLook,
   suggestionHeard,
 } from "./suggestion-look.js";
-import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
+import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
 import { RADIUS, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
@@ -239,53 +238,9 @@ interface Drawing {
   readonly listDepth?: number | undefined;
 }
 
-/** A chip of a GitHub page as its standing draws it: its mark, its name, and its state's words after it. */
-type StandingLook = {
-  readonly glyph: Glyph;
-  readonly tone: StatusTone;
-  readonly name: string;
-  /** What VoiceOver hears: its kind, the name it now shows, and its state. */
-  readonly heard: string;
-};
-
-/** A GitHub chip's words as VoiceOver hears them once its standing is read, as the panel hears the label it shows: its kind and the name it shows, then its state. */
-function standingHeard(chip: MarkdownChip, name: string, state: string | undefined): string {
-  const word = entityWordHeard(chip.entity, name);
-  const named = word === undefined ? name : `${word} ${name}`;
-
-  return state === undefined ? named : `${named}, ${state}`;
-}
-
-/**
- * How a chip of a GitHub page stands, as the panel's chip draws it: a pull
- * request by its number alone, its title fading mid-word in a chip, with
- * its state's mark, its words heard alone; an issue by its number and
- * title, likewise; none where GitHub has answered nothing of it.
- */
+/** How a chip of a GitHub page stands in these words, as its standing draws it (`chipStanding`); none where GitHub has answered nothing of it. */
 function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | undefined {
-  const standing = chip.github === undefined ? undefined : drawing.linkStanding(chip.github);
-
-  if (standing?.pullRequest !== undefined) {
-    const look = PULL_REQUEST_LOOK[pullRequestMarkState(standing.pullRequest)];
-    const name = `#${standing.pullRequest.number}`;
-
-    return {
-      ...look,
-      glyph: look.symbol,
-      name,
-      heard: standingHeard(chip, name, standing.state),
-    };
-  }
-
-  if (standing?.issue !== undefined) {
-    const look = ISSUE_LOOK[standing.issue.state];
-    const name = `#${standing.issue.number} ${standing.title}`;
-    const heard = standingHeard(chip, name, standing.state);
-
-    return { ...look, glyph: look.symbol, name, heard };
-  }
-
-  return undefined;
+  return chipStanding(chip, drawing.linkStanding);
 }
 
 /** A chip as VoiceOver hears it: as its standing shows it once GitHub has answered, else by its kind and written name. */

@@ -639,7 +639,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
   let onCommentOpen = EventDispatcher()
   let onCommentAsk = EventDispatcher()
   let onOpenLink = EventDispatcher()
-  let onOpenPicture = EventDispatcher()
+  let onOpenMedia = EventDispatcher()
 
   private let textView = UITextView(usingTextLayoutManager: true)
   /// What each picture the lines name holds, which JavaScript hands apart from the words, since a picture lands after them.
@@ -735,7 +735,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
     revealCaret()
   }
 
-  /// A press on the words at rest: a link or a mention opens its address, a picture opens in the app's viewer, and anything else takes the keyboard with the caret where the press landed.
+  /// A press on the words at rest: a link or a mention opens its address, a picture opens in the app's viewer and a file in Quick Look, and anything else takes the keyboard with the caret where the press landed.
   @objc private func pressedAtRest(_ tap: UITapGestureRecognizer) {
     guard tapsToEdit, tap.state == .ended, !textView.isFirstResponder else { return }
     let point = tap.location(in: textView)
@@ -754,7 +754,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
     return at < textView.textStorage.length ? at : nil
   }
 
-  /// Opens what the character at `at` is, told to JavaScript: a link's address or a mention's, which it opens as a link the app reads, or a picture's, which it opens in the app's viewer, as the read rows' picture opens. Answers whether it opened anything.
+  /// Opens what the character at `at` is, told to JavaScript: a link's address or a mention's, which it opens as a link the app reads, or a picture's or a file's, which it opens in the app's viewer or in Quick Look, as the read rows' picture and file chip open. Answers whether it opened anything.
   private func openedAtRest(_ at: Int) -> Bool {
     let attributes = textView.textStorage.attributes(at: at, effectiveRange: nil)
 
@@ -768,8 +768,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
       return true
     }
 
-    if let shown = attributes[.attachment] as? MediaAttachment, media.drawsPicture(shown.run.address) {
-      onOpenPicture(["address": shown.run.address, "alt": shown.run.alt])
+    if let shown = attributes[.attachment] as? MediaAttachment, media.opensAtRest(shown.run.address) {
+      onOpenMedia(["address": shown.run.address, "alt": shown.run.alt])
       return true
     }
 
@@ -1067,7 +1067,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
         return [textView] + placed.sorted { $0.top < $1.top }.map { $0.view }
       }
       let paragraphs = restParagraphs().map { (view: $0 as Any, top: $0.accessibilityFrameInContainerSpace.minY) }
-      return (paragraphs + placed).sorted { $0.top < $1.top }.map { $0.view }
+      // Note that words holding no paragraph, as an empty description holds none, stand as the text view, heard by its placeholder, whose Edit takes the keyboard, so a reader can start writing them.
+      let words = paragraphs.isEmpty ? [(view: textView as Any, top: CGFloat(0))] : paragraphs
+      return (words + placed).sorted { $0.top < $1.top }.map { $0.view }
     }
     set {}
   }
