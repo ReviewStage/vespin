@@ -1,0 +1,14 @@
+-- jfiles4507: main pinned to 2c7272a1bc: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to 026994170d
+== bundle PJjfiles4507 base 026994170d
+  built 026994170d base app Vmain15.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain15.app
+iphone-light-pull-request-files: fails 0 shots 3 
+iphone-dark-pull-request-files: fails 1 shots 1 Assert that "Ready to merge" is visible... FAILED
+  iphone-dark-pull-request-files around the failure: Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED|Assert that "Recorded the invite flow" is visible... COMPLETED|Open vespin://tasks/pull/workspace-personal/ada/relay/128... COMPLETED|Tap on (Optional) "Open"... COMPLETED|Assert that "Ready to merge" is visible... FAILED||
+iphone-light-tasks-search-drag: fails 1 shots 1 Tap on id: integratedButton... FAILED
+  iphone-light-tasks-search-drag around the failure:   Run flow when false is true... SKIPPED|  Wait for animation to end... COMPLETED|Run subflows/tab.yaml... COMPLETED|Assert that "Teammate invitations" is visible... COMPLETED|Tap on id: integratedButton... FAILED||
