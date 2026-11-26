@@ -1,0 +1,12 @@
+pinned to e76e984d77
+== bundle PJjpr11020 base e76e984d77
+  built e76e984d77 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app
+iphone-light-managers: fails 1 shots 10 Tap on "Back"... FAILED
+  iphone-light-managers around the failure: Assert that "ada/ledger" is visible... COMPLETED|Assert that "ada/relay" is visible... COMPLETED|Wait for animation to end within 5000 ms... COMPLETED|Take screenshot managers-repositories... COMPLETED|Tap on "Back"... FAILED||
+iphone-dark-managers: fails 1 shots 10 Tap on "Back"... FAILED
+  iphone-dark-managers around the failure: Assert that "ada/ledger" is visible... COMPLETED|Assert that "ada/relay" is visible... COMPLETED|Wait for animation to end within 5000 ms... COMPLETED|Take screenshot managers-repositories... COMPLETED|Tap on "Back"... FAILED||
