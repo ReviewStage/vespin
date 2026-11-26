@@ -447,7 +447,7 @@ export function PathTitle({
   const faceSize = useScaledSize(MARK_SIZE.GLYPH);
 
   const title = (
-    <HStack spacing={SPACE.TIGHT + 2}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       {manager !== undefined ? (
         <ManagerFace face={manager} size={faceSize} seat={MANAGER_FACE_SEAT.WORDS} />
       ) : status === undefined ? null : (

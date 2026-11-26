@@ -164,7 +164,7 @@ function PlayMark({
             accessibilityHint(PLAYS_IN_PLACE),
           ]}
         >
-          <HStack spacing={SPACE.TIGHT}>
+          <HStack spacing={SPACE.GLYPH_GAP}>
             <Image {...glyphImage(GLYPH.RUN)} size={MARK_SIZE.GLYPH + 2} />
             {runs === undefined ? null : (
               <SwiftUIText

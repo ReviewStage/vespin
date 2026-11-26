@@ -526,7 +526,7 @@ function GroupHeader({
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
   return (
     <HStack
-      spacing={SPACE.TIGHT + 2}
+      spacing={SPACE.GLYPH_GAP}
       modifiers={[
         SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         accessibilityElement("combine"),

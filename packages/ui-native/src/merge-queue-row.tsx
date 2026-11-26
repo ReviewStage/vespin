@@ -56,7 +56,7 @@ function ChecksMark({ checks }: { readonly checks: MergeQueueRowProps["checks"] 
   if (look === undefined && checks.count === undefined) return null;
 
   return (
-    <HStack spacing={SPACE.TIGHT}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       {look === undefined ? null : <ToneGlyph glyph={look.symbol} tone={look.tone} hidden />}
       {checks.count === undefined ? null : (
         <Text

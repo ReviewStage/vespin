@@ -27,7 +27,7 @@ export function ProblemLine({
 
   return (
     <HStack
-      spacing={SPACE.TIGHT}
+      spacing={SPACE.GLYPH_GAP}
       alignment="firstTextBaseline"
       modifiers={id === undefined ? [] : [accessibilityIdentifier(id)]}
     >

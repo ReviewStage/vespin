@@ -31,12 +31,13 @@ import { useEffect, useRef } from "react";
 import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
 import { forgetField, noteFieldFocus } from "./field-focus.js";
 import { GLYPH, glyphImage } from "./glyph.js";
-import { PickOption as PickedOption } from "./glyph-label.js";
+import { PickOption as PickedOption, PickedValue } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
-import { MENU_ICON, markLook } from "./row-menu-model.js";
+import { type ChoiceLook, MENU_ICON, markLook } from "./row-menu-model.js";
 import type { PickOption } from "./settings-form.js";
 import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import type { StatusTone } from "./tokens/status-tone.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How many lines the words take before anything is typed, and the most they grow to before they scroll. */
@@ -238,6 +239,13 @@ export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }:
   );
 }
 
+/** What leads an option in a menu picker: the entity's own mark, the panel's glyph, or nothing. */
+function optionLook(option: PickOption): ChoiceLook | undefined {
+  if (option.lead !== undefined) return markLook(option.lead);
+
+  return option.symbol === undefined ? undefined : { kind: MENU_ICON.GLYPH, glyph: option.symbol };
+}
+
 type PickRowProps = {
   /** The row's name, beside what is picked. */
   readonly label: string;
@@ -254,6 +262,8 @@ type PickRowProps = {
  */
 export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
   const colors = useColors();
+  const toneInk = (tone: StatusTone) => toneColor(colors, tone);
+  const chosen = options.find((option) => option.id === picked);
 
   return (
     <Picker<string | null>
@@ -262,6 +272,16 @@ export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
       onSelectionChange={(id) => {
         if (id !== null) onPick(id);
       }}
+      currentValue={
+        chosen === undefined ? undefined : (
+          <PickedValue
+            label={chosen.label}
+            look={optionLook(chosen)}
+            ink={colors.TEXT_MUTED}
+            toneInk={toneInk}
+          />
+        )
+      }
       modifiers={[pickerStyle("menu"), tint(colors.TEXT_MUTED), listRowBackground(colors.RAISED)]}
     >
       {options.map((option) => (
@@ -269,14 +289,8 @@ export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
           key={option.id}
           label={option.label}
           value={option.id}
-          look={
-            option.lead !== undefined
-              ? markLook(option.lead)
-              : option.symbol === undefined
-                ? undefined
-                : { kind: MENU_ICON.GLYPH, glyph: option.symbol }
-          }
-          toneInk={(tone) => toneColor(colors, tone)}
+          look={optionLook(option)}
+          toneInk={toneInk}
         />
       ))}
     </Picker>

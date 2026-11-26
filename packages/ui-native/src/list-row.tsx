@@ -404,7 +404,7 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
   const clock = useScaledSize(MARK_SIZE.GLYPH - 4);
 
   return (
-    <HStack spacing={SPACE.TIGHT}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       <Image
         {...glyphImage(GLYPH.TIME)}
         size={clock}
@@ -997,7 +997,7 @@ function ThreadLine(props: ListRowProps & { readonly flush: boolean }) {
   if (flush) {
     return (
       <FlushLine>
-        <HStack spacing={SPACE.TIGHT} alignment="center">
+        <HStack spacing={SPACE.GLYPH_GAP} alignment="center">
           <LineGlyph line={line} />
           {text}
         </HStack>
@@ -1041,7 +1041,7 @@ export function ListRow(props: ListRowProps) {
   const now = props.now ?? minute;
 
   const end = (
-    <HStack spacing={SPACE.TIGHT + 2}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       {face === undefined ? null : (
         <Avatar name={face.name} id={face.id} picture={face.picture} size={MARK_SIZE.FACE} />
       )}

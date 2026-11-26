@@ -320,7 +320,7 @@ function PullRequestMark({
   const look = PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
 
   return (
-    <HStack spacing={SPACE.TIGHT}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />
       <Text
         modifiers={[
@@ -362,7 +362,7 @@ function AgentStateWords({
   const colors = useColors();
 
   return (
-    <HStack spacing={SPACE.TIGHT}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       {working ? <WorkingMark /> : <FailedMark />}
       <Text
         modifiers={[
@@ -427,7 +427,7 @@ export function AgentRow(props: AgentRowProps) {
         title={name}
         ink={colors.TEXT}
         end={
-          <HStack spacing={SPACE.TIGHT}>
+          <HStack spacing={SPACE.GLYPH_GAP}>
             {props.runsOnGlyph === undefined ? null : (
               <ToneGlyph glyph={props.runsOnGlyph} tone={STATUS_TONE.NEUTRAL} hidden />
             )}
@@ -567,7 +567,7 @@ export function RelationRow({
       ink={faded ? colors.TEXT_MUTED : colors.TEXT_BODY}
       end={
         relation === undefined ? undefined : (
-          <HStack spacing={SPACE.TIGHT}>
+          <HStack spacing={SPACE.GLYPH_GAP}>
             {relationMark === undefined ? null : (
               <ToneGlyph
                 glyph={relationMark.glyph}
@@ -999,7 +999,7 @@ function CommentCount({ comments }: { readonly comments: WordsComments }) {
       {/* Note that the count stands in Apple's least target, the shape on that frame rather than on the button, since a borderless button takes a press only where its label is hit. */}
       {/* Note that it stands at its target's top, set down a little, so it reads level with the block's first line, a heading's or a paragraph's, rather than 22 pt down the target's middle. */}
       <HStack
-        spacing={SPACE.TIGHT}
+        spacing={SPACE.GLYPH_GAP}
         modifiers={[
           padding({ top: SPACE.TIGHT }),
           frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE, alignment: "top" }),

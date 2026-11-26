@@ -141,7 +141,7 @@ function SwitcherFace({
   // Note that the named face heads the sidebar's list rather than a bar, so it grows with Dynamic Type as the rows under it do.
   return (
     <HStack
-      spacing={SPACE.TIGHT + 2}
+      spacing={SPACE.GLYPH_GAP}
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
       <WorkspaceTile workspace={chosen} size={tile} />

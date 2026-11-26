@@ -128,7 +128,7 @@ function ChipLabel({ label, symbol, repository }: ChipLead & { readonly label: s
 
   if (repository !== undefined) {
     return (
-      <HStack spacing={SPACE.TIGHT + 2}>
+      <HStack spacing={SPACE.GLYPH_GAP}>
         <RepositoryPicture repository={repository} size={markSize} />
         {words}
       </HStack>
@@ -138,7 +138,7 @@ function ChipLabel({ label, symbol, repository }: ChipLead & { readonly label: s
   if (symbol === undefined) return words;
 
   return (
-    <HStack spacing={SPACE.TIGHT + 2}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       <Image {...glyphImage(symbol)} modifiers={[type]} />
       {words}
     </HStack>

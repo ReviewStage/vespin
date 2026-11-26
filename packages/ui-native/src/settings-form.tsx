@@ -1752,7 +1752,7 @@ export function AutomationRow({
         }
         end={
           !failed && when === undefined ? null : (
-            <HStack spacing={SPACE.TIGHT}>
+            <HStack spacing={SPACE.GLYPH_GAP}>
               {failed ? <FailedMark /> : null}
               {when === undefined ? null : (
                 <Text modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(VALUE_INK)]}>

@@ -180,7 +180,7 @@ export function ConversationEntryRow({
       after={by.bot === true ? <BotTag /> : undefined}
       ink={colors.TEXT}
       end={
-        <HStack spacing={SPACE.TIGHT}>
+        <HStack spacing={SPACE.GLYPH_GAP}>
           {standing === undefined ? null : (
             <ToneGlyph
               glyph={standing.mark.symbol}

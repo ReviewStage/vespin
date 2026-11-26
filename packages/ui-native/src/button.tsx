@@ -401,7 +401,7 @@ export function FieldChip(props: FieldChipProps) {
   const { menu } = props;
 
   const words = (
-    <HStack spacing={SPACE.TIGHT + 2}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       {fieldMark(props, colors, glyphSize)}
       <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
     </HStack>
@@ -570,7 +570,7 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
   const colors = useColors();
 
   const words = (
-    <HStack spacing={SPACE.TIGHT + 2}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       {faces.length === 0 ? null : (
         <HStack spacing={-FACE_OVERLAP}>
           {faces.map((face, at) => (

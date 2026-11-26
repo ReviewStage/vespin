@@ -472,7 +472,7 @@ function face(
 
 /** A preview's path over its heading: a mark and small muted words, as a pushed page's bar names its path. */
 function path(mark: PreviewNode | undefined, words: string, look: PreviewLook): PreviewNode {
-  return row(SPACE.TIGHT + 2, [
+  return row(SPACE.GLYPH_GAP, [
     mark,
     {
       kind: PREVIEW_NODE.TEXT,
@@ -537,7 +537,7 @@ function body(words: string, lines: number | undefined, look: PreviewLook): Prev
 /** One message of a thread's preview: its writer's tile or face and name, its time, and its words under them. */
 function messageNode(message: PreviewMessage, look: PreviewLook): PreviewNode {
   return column(SPACE.TIGHT, [
-    row(SPACE.TIGHT + 2, [
+    row(SPACE.GLYPH_GAP, [
       message.agent
         ? agentTile(message.harness, MARK_SIZE.WRITER, look)
         : face(message.writer, message.picture, MARK_SIZE.WRITER, look),
@@ -566,7 +566,7 @@ function messageNode(message: PreviewMessage, look: PreviewLook): PreviewNode {
 function agentNode(agent: PreviewAgent, look: PreviewLook): PreviewNode {
   const words = agentStateWords(agent.status);
 
-  return row(SPACE.TIGHT + 2, [
+  return row(SPACE.GLYPH_GAP, [
     agentTile(agent.harness, MARK_SIZE.WRITER, look),
     body(agent.name, 1, look),
     agentStateMark(agent.status, look),
@@ -639,14 +639,14 @@ function agentNodes(
       agentTile(facts.harness, MARK_SIZE.AVATAR, look, facts.face),
       heading(facts.name, look),
     ]),
-    row(SPACE.TIGHT + 2, [
+    row(SPACE.GLYPH_GAP, [
       agentStateMark(facts.status, look),
       line(lineOf([agentStateWords(facts.status), facts.model, facts.runsOn]), look),
     ]),
     ...(facts.step === undefined ? [] : [rule(look), body(facts.step, PREVIEW_LINES.STEP, look)]),
     facts.pullRequest === undefined || pull === undefined
       ? undefined
-      : row(SPACE.TIGHT, [
+      : row(SPACE.GLYPH_GAP, [
           toneGlyph(pull.symbol, pull.tone, TYPE_ROLE.ROW_LINE, look),
           line(`#${facts.pullRequest.number}`, look),
         ]),

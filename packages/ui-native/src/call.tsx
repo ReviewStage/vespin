@@ -196,7 +196,7 @@ export function CallCardRow({
       >
         {/* Note that the shape stands on the label's row, the Spacer's blank run included, since a plain button takes a press only where its label is hit. */}
         <HStack
-          spacing={SPACE.TIGHT * 2}
+          spacing={SPACE.GLYPH_GAP}
           modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
         >
           <AgentTile

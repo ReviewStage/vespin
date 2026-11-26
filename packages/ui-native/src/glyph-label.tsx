@@ -1,13 +1,14 @@
-// glyph-label.tsx -- a glyph as SwiftUI draws it, alone or beside an act's words, whether one of Lucide's from the asset catalog or an SF Symbol.
+// glyph-label.tsx -- a glyph as SwiftUI draws it, alone or beside an act's words or a picked value's, whether one of Lucide's from the asset catalog or an SF Symbol.
 
-import { Image, Label } from "@expo/ui/swift-ui";
-import { font, tag } from "@expo/ui/swift-ui/modifiers";
+import { HStack, Image, Label } from "@expo/ui/swift-ui";
+import { font, foregroundStyle, tag } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { type ChoiceLook, MENU_ICON, type MenuPhotoFile } from "./row-menu-model.js";
 import { Text } from "./text.js";
-import { MARK_SIZE } from "./tokens/space.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import type { StatusTone } from "./tokens/status-tone.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The text style a glyph stands at beside an act's words, as SwiftUI sizes a symbol by its text. */
 type GlyphTextStyle = "body" | "callout" | "subheadline" | "footnote" | "caption";
@@ -155,6 +156,46 @@ export function PickOption({
 
   return (
     <Label title={label} icon={<LookIcon look={look} toneInk={toneInk} />} modifiers={tagged} />
+  );
+}
+
+/**
+ * A menu picker's picked value as its row stands it closed: its head beside
+ * its words, `SPACE.GLYPH_GAP` apart, or its words alone, in `ink`. Note
+ * that it stands in place of the picked option's own label, because a menu
+ * picker reads that label into the system's button, which stands an image
+ * flush against its words where no symbol's own margins part them, such as
+ * a harness's mark or a repository's picture. A glyph stands in its tone's
+ * ink where it has one, without the faint glyph a menu draws under it.
+ */
+export function PickedValue({
+  label,
+  look,
+  ink,
+  toneInk,
+}: {
+  readonly label: string;
+  readonly look: ChoiceLook | undefined;
+  readonly ink: string;
+  readonly toneInk: (tone: StatusTone) => string;
+}) {
+  const words = (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(ink)]}>
+      {label}
+    </Text>
+  );
+
+  if (look === undefined) return words;
+
+  return (
+    <HStack spacing={SPACE.GLYPH_GAP}>
+      {look.kind === MENU_ICON.GLYPH ? (
+        <GlyphImage glyph={look.glyph} color={look.tone === undefined ? ink : toneInk(look.tone)} />
+      ) : (
+        <LookIcon look={look} toneInk={toneInk} />
+      )}
+      {words}
+    </HStack>
   );
 }
 

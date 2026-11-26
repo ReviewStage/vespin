@@ -87,7 +87,7 @@ function Capsule({ chip }: { readonly chip: DockChip }) {
         accessibilityHint(chip.hint),
       ]}
     >
-      <HStack spacing={ROW_GAP}>
+      <HStack spacing={SPACE.GLYPH_GAP}>
         {/* Note that SwiftUI reads a picture from a file alone, so one held as any other address stands as the glyph. */}
         {chip.icon?.startsWith(FILE_ADDRESS) === true ? (
           <Image

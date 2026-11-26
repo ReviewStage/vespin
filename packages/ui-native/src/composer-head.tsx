@@ -351,15 +351,17 @@ function MentionCrumbRow({ crumb }: { readonly crumb: MentionCrumb }) {
         ]}
       >
         <Image {...glyphImage(GLYPH.BACK)} size={size} color={colors.TEXT_MUTED} />
-        <Image {...glyphImage(crumb.glyph)} size={size} color={colors.TEXT_MUTED} />
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
-            foregroundStyle(colors.TEXT),
-          ]}
-        >
-          {crumb.name}
-        </Text>
+        <HStack spacing={SPACE.GLYPH_GAP}>
+          <Image {...glyphImage(crumb.glyph)} size={size} color={colors.TEXT_MUTED} />
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
+              foregroundStyle(colors.TEXT),
+            ]}
+          >
+            {crumb.name}
+          </Text>
+        </HStack>
       </HStack>
     </Button>
   );
@@ -542,7 +544,7 @@ export function EditingLine({ onCancel }: { readonly onCancel: () => void }) {
   const glyph = useScaledSize(MARK_SIZE.GLYPH);
 
   return (
-    <HStack spacing={SPACE.TIGHT * 2}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       <Image {...glyphImage(GLYPH.EDIT_MESSAGE)} size={glyph} color={colors.TEXT_MUTED} />
       <Text
         modifiers={[

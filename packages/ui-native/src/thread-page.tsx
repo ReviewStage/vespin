@@ -62,7 +62,7 @@ import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
 
 /** Between a writer's face and their name. */
-const WRITER_GAP = SPACE.TIGHT * 2;
+const WRITER_GAP = SPACE.GLYPH_GAP;
 
 /** How many of a thread's newest messages its first frame draws at least, the runs before them a render later: more than most threads hold, so most open whole. */
 const FIRST_DRAWN = 10;
@@ -313,7 +313,7 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
 
   return (
     <HStack
-      spacing={SPACE.TIGHT + 2}
+      spacing={SPACE.GLYPH_GAP}
       modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
     >
       <Image

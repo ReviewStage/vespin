@@ -46,7 +46,7 @@ export function UndeliveredMark({ line }: { readonly line: UndeliveredLine }) {
     : UNDELIVERED_WORDS.NOT_DELIVERED;
 
   const label = (
-    <HStack spacing={SPACE.TIGHT + 2}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       <Image
         {...glyphImage(GLYPH.FAILED)}
         size={MARK_SIZE.GLYPH - 2}

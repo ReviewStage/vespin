@@ -119,7 +119,7 @@ function Branch({ name, wraps }: { readonly name: string; readonly wraps: boolea
   const colors = useColors();
 
   return (
-    <HStack spacing={SPACE.TIGHT}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       <ToneGlyph
         glyph={GLYPH.BRANCH}
         tone={STATUS_TONE.NEUTRAL}
@@ -161,7 +161,7 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
       : `${verb} · merged ${agoText(opened.mergedAt, now)}`;
 
   return (
-    <HStack spacing={SPACE.TIGHT + 2}>
+    <HStack spacing={SPACE.GLYPH_GAP}>
       {by === undefined ? null : (
         <Avatar name={by.name} picture={by.picture} kind={by.kind} size={face} />
       )}
@@ -419,7 +419,7 @@ export function MarkRow({
       ink={colors.TEXT_BODY}
       end={
         leads ? (
-          <HStack spacing={SPACE.TIGHT}>
+          <HStack spacing={SPACE.GLYPH_GAP}>
             {glyph}
             {said}
           </HStack>

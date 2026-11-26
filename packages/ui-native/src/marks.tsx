@@ -729,7 +729,7 @@ export function SubTaskProgress({
   const size = useScaledSize(MARK_SIZE.GLYPH - 2);
 
   return (
-    <HStack spacing={SPACE.TIGHT} modifiers={[accessibilityHidden(true)]}>
+    <HStack spacing={SPACE.GLYPH_GAP} modifiers={[accessibilityHidden(true)]}>
       <Gauge
         value={total > 0 ? done / total : 0}
         modifiers={[
