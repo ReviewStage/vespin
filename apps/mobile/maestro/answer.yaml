@@ -302,16 +302,23 @@ appId: dev.vespin.ios
 
 # The decide's options at an accessibility size (AX3, Accessibility XL), from
 # a fresh launch: each option's label keeps its lines, and the Recommended tag
-# stands under its label rather than beside it.
+# stands under its label rather than beside it. Note that the Inbox is known
+# by its first row, the do ask under Pinned, because the pinned tasks' threads
+# stand first and at this size push the decide's row below the window's foot,
+# so its row is scrolled to the window's middle before it is opened.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
 - extendedWaitUntil:
-    visible: "Who can withdraw an invite?"
+    visible: "Verify the digest's sender domain"
     timeout: 30000
-- tapOn: "Who can withdraw an invite?"
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Who can withdraw an invite\\?"
+- tapOn: "Who can withdraw an invite\\?"
 # Note that at this size the options run past the box's head, which scrolls in place, so the head is dragged from the first option until the recommended one, the last, shows; a swipe at the window's middle would scroll the thread instead.
 - extendedWaitUntil:
     visible: "The member who sent it.*"
