@@ -1,0 +1,29 @@
+-- j10537b3: main pinned to 2c7272a1bc: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to 6117b68ec3
+== bundle PJj10537b3 base 6117b68ec3
+  built 6117b68ec3 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-large-agent-empty: fails 0 shots 1 
+iphone-light-large-agent-lines: fails 0 shots 1 
+iphone-light-large-newtask: fails 2 shots 5   Hide Keyboard... FAILED
+ipad27-light-large-agent-empty: fails 0 shots 1 
+ipad27-light-large-agent-lines: fails 0 shots 1 
+ipad27-light-large-newtask: fails 0 shots 2 
+ipad27-light-large-ipadsplit: fails 0 shots 1 
+iphone-light-ax3-agent-empty: fails 1 shots 0 AXCHECK FAILED: the Inbox title stood 0 pt at accessibility-extra-large
+iphone-light-ax3-agent-lines: fails 1 shots 0 AXCHECK FAILED: the Inbox title stood 0 pt at accessibility-extra-large
+iphone-light-ax3-newtask: fails 1 shots 0 AXCHECK FAILED: the Inbox title stood 0 pt at accessibility-extra-large
+ipad27-light-ax3-agent-empty: fails 1 shots 0 AXCHECK FAILED: the Inbox title stood 0 pt at accessibility-extra-large
+ipad27-light-ax3-agent-lines: fails 1 shots 0 AXCHECK FAILED: the Inbox title stood 0 pt at accessibility-extra-large
+ipad27-light-ax3-newtask: fails 1 shots 0 AXCHECK FAILED: the Inbox title stood 0 pt at accessibility-extra-large
+ipad27-light-ax3-ipadsplit: fails 1 shots 0 AXCHECK FAILED: the Inbox title stood 0 pt at accessibility-extra-large
+ipad27-light-large-agent-empty: gap: field bottom 1115; + top 1134 (gap 19 pt); Send/Talk n/a; words bottom 1112.5 (to + 21.5 pt)
+ipad27-light-large-agent-lines: gap: field bottom 1120; + top 1134 (gap 14 pt); Send top 1134 (gap 14 pt); words bottom 1115.0 (to + 19.0 pt)
+ipad27-light-large-ipadsplit: gap: field bottom 1115; + top 1134 (gap 19 pt); Send/Talk n/a; words bottom 1112.5 (to + 21.5 pt)
+ipad27-light-large-newtask: gap: field bottom 860; + top 879 (gap 19 pt); Talk top 879 (gap 19 pt); words bottom 855.0 (to + 24.0 pt)
+iphone-light-large-agent-empty: gap: field bottom 765; + top 784 (gap 19 pt); Send/Talk n/a; words bottom 762.7 (to + 21.3 pt)
+iphone-light-large-agent-lines: gap: field bottom 770; + top 784 (gap 14 pt); Send top 784 (gap 14 pt); words bottom 764.7 (to + 19.3 pt)
+iphone-light-large-newtask: gap: field bottom 419; + top 438 (gap 19 pt); Talk top 490 (gap 71 pt); words bottom n/a

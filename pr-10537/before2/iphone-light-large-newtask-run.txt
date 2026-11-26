@@ -1,0 +1,27 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane C) - iOS 27.2 - D479E601-B915-45AA-99C5-5295A84F641E
+ > Flow fgap-newtask
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run flow when ".*Would Like to Send You Notifications.*" is visible...
+Run flow when ".*Would Like to Send You Notifications.*" is visible... SKIPPED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Open vespin://start-task... COMPLETED
+Tap on (Optional) "Open"... COMPLETED
+Assert that id: new-task-words is visible... COMPLETED
+Tap on (Optional) "Continue"... WARNED
+Retry 2 times...
+  Hide Keyboard... FAILED
+Retry 2 times... FAILED
+
+Couldn't hide the keyboard. This can happen if the app uses a custom input or doesn't expose a standard dismiss action.
+
+Instead of hideKeyboard, try tapping on non-interactive element to hide keyboard. Example:
+
+- tapOn: 
+    text: 'Static Text on your screen'
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sj10537b3/iphone-light-large-newtask/2026-11-25_234430
