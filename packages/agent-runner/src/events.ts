@@ -374,37 +374,43 @@ class PictureUnkept extends Data.TaggedError("PictureUnkept")<{ readonly detail:
 /**
  * One picture's bytes posted to the service's pictures route, answered as
  * what it kept (`RunnerPictureAnswer`), or nothing where it kept none; it
- * fails where the service did not answer.
+ * fails where the service did not answer whole within one post's bound.
  */
-const postPicture = Effect.fnUntraced(function* (
-  client: HttpClient.HttpClient,
-  options: SinkOptions & { readonly picturesUrl: string },
-  data: string,
-): Effect.fn.Return<Option.Option<Json>, PictureUnkept> {
-  const request = HttpClientRequest.post(options.picturesUrl).pipe(
-    HttpClientRequest.bearerToken(options.bearer),
-    HttpClientRequest.bodyUint8Array(Buffer.from(data, "base64"), "application/octet-stream"),
-  );
+const postPicture = Effect.fnUntraced(
+  function* (
+    client: HttpClient.HttpClient,
+    options: SinkOptions & { readonly picturesUrl: string },
+    data: string,
+  ): Effect.fn.Return<Option.Option<Json>, PictureUnkept> {
+    const request = HttpClientRequest.post(options.picturesUrl).pipe(
+      HttpClientRequest.bearerToken(options.bearer),
+      HttpClientRequest.bodyUint8Array(Buffer.from(data, "base64"), "application/octet-stream"),
+    );
 
-  // Note that the client's error is not kept, because the request it carries holds the bearer in its headers.
-  const response = yield* client.execute(request).pipe(
-    Effect.timeout(POST_TIMEOUT),
-    Effect.mapError(() => new PictureUnkept({ detail: "the service did not answer" })),
-  );
+    // Note that the client's error is not kept, because the request it carries holds the bearer in its headers.
+    const response = yield* client
+      .execute(request)
+      .pipe(Effect.mapError(() => new PictureUnkept({ detail: "the service did not answer" })));
 
-  if (response.status !== HTTP_OK) {
-    return yield* new PictureUnkept({ detail: `the service answered ${response.status}` });
-  }
+    if (response.status !== HTTP_OK) {
+      return yield* new PictureUnkept({ detail: `the service answered ${response.status}` });
+    }
 
-  const body = yield* response.json.pipe(
-    Effect.mapError(() => new PictureUnkept({ detail: "the service's answer is not JSON" })),
-  );
+    const body = yield* response.json.pipe(
+      Effect.mapError(() => new PictureUnkept({ detail: "the service's answer is not JSON" })),
+    );
 
-  return Option.map(
-    decodePictureAnswer(body),
-    (kept): Json => (kept satisfies RunnerPictureAnswer).picture,
-  );
-});
+    return Option.map(
+      decodePictureAnswer(body),
+      (kept): Json => (kept satisfies RunnerPictureAnswer).picture,
+    );
+  },
+  // Note that the bound holds the whole post, its answer's body included, since the runner's client sets no body timeout of its own.
+  Effect.timeoutOrElse({
+    duration: POST_TIMEOUT,
+    orElse: () => Effect.fail(new PictureUnkept({ detail: "the service did not answer in time" })),
+  }),
+);
 
 /**
  * What keeps the pictures of one taken batch apart, at the launch's
