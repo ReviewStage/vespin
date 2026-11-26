@@ -357,6 +357,9 @@ env:
 # pill does: Convert to draft, and Close pull request in red. Each lands on
 # the chip; Close, which can be taken back, acts at once and says so in the
 # app's notice, whose Undo reopens it. The bar's ⋯ offers the same changes.
+# Note that the list is let settle after the scroll up, since a tap on a list
+# still gliding only stops it and opens no menu.
+- waitForAnimationToEnd
 - tapOn: "Pull request, Open"
 - assertVisible: "Convert to draft"
 - assertVisible: "Close pull request"
