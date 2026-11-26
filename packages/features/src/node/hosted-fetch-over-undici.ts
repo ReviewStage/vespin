@@ -21,7 +21,8 @@
  *
  * One connection is what every call then waits on, so a connection that
  * died without a word, as one does across a Mac's sleep or a change of
- * network, would hold every call until a timeout: `reconnect` moves every
+ * network, would hold every call until a timeout: on a wake, or as the
+ * network comes back from offline (`networkSaid`), `reconnect` moves every
  * later call to a new connection and fails those on the old one as dropped,
  * and the reads among them are asked again at once on the new (`RETRIED`),
  * as they never got an answer; a write is not, since its caller reads a
@@ -74,8 +75,15 @@ interface AttributedSpan {
 export interface HostedFetch {
   /** The fetch every call goes out on. */
   readonly fetch: typeof globalThis.fetch;
-  /** Moves every later call to a new connection and fails those on the old one as dropped, which the reads among them ask again on the new. */
+  /** Moves every later call to a new connection and fails those on the old one as dropped, which the reads among them ask again on the new: what a wake asks, when the connection may have died in the sleep. */
   readonly reconnect: () => void;
+  /**
+   * What the machine's network says, as it changes: the connection is
+   * replaced (`reconnect`) only as the network comes back from offline, and
+   * never as the service answers again while the network stood, since that
+   * answer is still arriving on the very connection.
+   */
+  readonly networkSaid: (online: boolean) => void;
   /** Closes the connections, failing nothing still open. */
   readonly close: () => Promise<void>;
 }
@@ -160,10 +168,18 @@ export function hostedFetchOverUndici(connect?: Agent.Options["connect"]): Hoste
     return loaded;
   };
 
+  // Note that before the first call there is no connection to replace.
+  const reconnect = () => void loaded?.then((standing) => standing.replace());
+  // Whether the network last said it was online; it is until it says otherwise.
+  let online = true;
+
   return {
     fetch: async (input, init) => (await transport()).fetch(input, init),
-    // Note that before the first call there is no connection to replace.
-    reconnect: () => void loaded?.then((standing) => standing.replace()),
+    reconnect,
+    networkSaid: (now) => {
+      if (now && !online) reconnect();
+      online = now;
+    },
     close: async () => {
       await (await loaded)?.close();
     },

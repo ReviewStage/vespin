@@ -406,13 +406,11 @@ export function composeDesktop(
         unsavedWork,
         menuOffers: offers,
         handoff: handedOff,
-        // Note that a connection that outlived the network going may be dead without a word, so the calls on it are asked again on a new one; only the network coming back says so, never the service answering again, whose answer is on that very connection.
-        tellOnline: (found) =>
-          void run(
-            Effect.map(SubscriptionRef.getAndSet(online, found), (was) => {
-              if (found && !was) hostedConnection.reconnect();
-            }),
-          ),
+        tellOnline: (found) => {
+          // A connection that outlived the network going may be dead without a word (`networkSaid`).
+          hostedConnection.networkSaid(found);
+          void run(SubscriptionRef.set(online, found));
+        },
         askBeforeLeaving: askFirst,
       };
     }),

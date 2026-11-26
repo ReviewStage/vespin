@@ -38,6 +38,12 @@ const HELD_READS = 12;
 /** How long a held read waits before the server answers it, unless the server stops answering its connection. */
 const HOLD_MS = 600;
 
+/** How long the second half of a long answer comes after its first. */
+const HALF_MS = 300;
+
+/** A long answer, in the two halves it is sent in. */
+const HALVES = "first half, second half";
+
 /** The server's sessions, in the order the client opened them. */
 interface Served {
   readonly origin: string;
@@ -46,6 +52,8 @@ interface Served {
   readonly silence: () => void;
   /** Settles once the server has heard `count` streams in all. */
   readonly heard: (count: number) => Promise<void>;
+  /** Settles once the first half of a long answer is out. */
+  readonly halfway: () => Promise<void>;
   readonly server: Http2SecureServer;
 }
 
@@ -96,6 +104,15 @@ async function serving(t: Parameters<typeof temporaryDirectory>[0]): Promise<Ser
       stream.end(path);
     };
 
+    // A long answer comes in two halves, its length said up front as the service's are, the server telling when the first is out.
+    if (path === "/halves") {
+      stream.respond({ ":status": 200, "content-length": HALVES.length });
+      stream.write("first half, ", () => server.emit("halfway"));
+      setTimeout(() => stream.end("second half"), HALF_MS);
+
+      return;
+    }
+
     if (path.startsWith("/hold")) setTimeout(answer, HOLD_MS);
     else answer();
   });
@@ -129,6 +146,7 @@ async function serving(t: Parameters<typeof temporaryDirectory>[0]): Promise<Ser
         server.on("heard", check);
         check();
       }),
+    halfway: () => new Promise((out) => server.once("halfway", () => out())),
     server,
   };
 }
@@ -142,11 +160,11 @@ function fetching() {
 }
 
 /** What one call answered: its body, or the error it failed with, and when it settled. */
-async function asked(fetch: typeof globalThis.fetch, url: string) {
+async function asked(fetch: typeof globalThis.fetch, url: string, init?: RequestInit) {
   const startedAt = performance.now();
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, init);
 
     return { body: await response.text(), ms: performance.now() - startedAt };
   } catch (error) {
@@ -200,16 +218,17 @@ test("a GOAWAY under twelve held reads lets each finish on the drained connectio
   assert.equal(served.sessions.length, 2);
 });
 
-test("a connection that stops answering costs no held read once it is replaced: each is asked again on a new one", async (t) => {
+test("a connection that stops answering costs no held read once the network comes back: each is asked again on a new one", async (t) => {
   const served = await serving(t);
-  const { fetch, reconnect } = fetching();
+  const { fetch, networkSaid } = fetching();
 
   await asked(fetch, `${served.origin}/read`);
-  // The connection dies across a sleep: the server hears the reads but never answers them.
+  // The connection dies as the network goes: the server hears the reads but never answers them.
   served.silence();
   const holds = holding(fetch, served.origin);
   await served.heard(1 + HELD_READS);
-  reconnect();
+  networkSaid(false);
+  networkSaid(true);
 
   const answered = await holds;
 
@@ -221,6 +240,20 @@ test("a connection that stops answering costs no held read once it is replaced: 
     Math.max(...answered.map((call) => call.ms)) < HOLD_MS * 3,
     "no read waits out a timeout",
   );
+});
+
+test("a write's answer under way as the service answers again, the network standing, finishes whole on its connection", async (t) => {
+  const served = await serving(t);
+  const { fetch, networkSaid } = fetching();
+
+  // A write, which nothing asks again, so an answer cut short is a write its caller reads as unanswered.
+  const answering = asked(fetch, `${served.origin}/halves`, { method: "POST", body: "{}" });
+  await served.halfway();
+  // The answer's headers have told the host the service answers again, while the network never went.
+  networkSaid(true);
+
+  assert.equal((await answering).body, HALVES);
+  assert.equal(served.sessions.length, 1);
 });
 
 test("a call's span says the protocol of its connection and whether an earlier call opened it", async (t) => {
