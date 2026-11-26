@@ -245,9 +245,10 @@ function IdentityRow({
 
 /**
  * Who pays for the Manager's turns, said under its Model: its starter's
- * subscriptions, named as the reader's own where they started it. With the
- * Manager acting for whoever asks (`MANAGER_ACTS_FOR_ASKER`), what it starts
- * for a reader who is not its starter runs on that reader's, as the experiment's own line says; its starter hears nothing more, since everything already runs on theirs.
+ * subscriptions, named as the reader's own where they started it. What it
+ * starts for a reader who is not its starter runs on that reader's, since a
+ * Manager acts for whoever asked; its starter hears nothing more, since
+ * everything already runs on theirs.
  */
 function PayerLine({
   agent,
@@ -257,20 +258,15 @@ function PayerLine({
   me: string | undefined;
 }): React.JSX.Element {
   const owner = teammateStarter(agent.startedBy, me);
-  const forAsker = useWorkspaceExperiment(agent.workspaceId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER);
+
+  if (owner === undefined) return <>{WORDS.RUNS_ON_YOURS}</>;
 
   return (
     <>
-      {owner === undefined ? (
-        WORDS.RUNS_ON_YOURS
-      ) : (
-        <>
-          {WORDS.RUNS_ON_PREFIX}
-          <ReplayMask>{owner}</ReplayMask>
-          {WORDS.RUNS_ON_SUFFIX}
-        </>
-      )}
-      {forAsker && owner !== undefined ? WORDS.STARTS_ON_YOURS : null}
+      {WORDS.RUNS_ON_PREFIX}
+      <ReplayMask>{owner}</ReplayMask>
+      {WORDS.RUNS_ON_SUFFIX}
+      {WORDS.STARTS_ON_YOURS}
     </>
   );
 }

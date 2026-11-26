@@ -415,6 +415,7 @@ export const PRODUCT_EXPERIMENT = {
   MOVE_AGENTS: "move-agents",
   CURSOR: "cursor",
   MANAGERS: "managers",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   MANAGER_ACTS_FOR_ASKER: "manager-acts-for-asker",
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   STARTER_TASKS: "starter-tasks",
