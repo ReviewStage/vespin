@@ -1,0 +1,13 @@
+pinned to c10106baa6
+== bundle PJjpk10921 base c10106baa6
+  built c10106baa6 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+EXCEPTION (the Manager 23:16 UTC Nov 25): flow-only PR over Vmain14 (natives from 938bbc656d), missing #10759 AgentsLiveActivity.swift and #10966 ClaudeMark/OpenAIMark assets; base in use: Vmain14.app local i
+iphone-light-new-task-1: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+iphone-light-new-task-2: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+iphone-light-new-task-3: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+ipad27-light-new-task-1: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+ipad27-light-new-task-2: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
