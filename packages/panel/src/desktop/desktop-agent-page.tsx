@@ -130,6 +130,13 @@ import { AgentThreads as AgentThreadsView } from "./agent-threads.js";
 import { AgentPane } from "./main-tabs.js";
 import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
 import { ManagerOverview } from "./manager-overview.js";
+import {
+  ManagerOverviewPrototype,
+  OVERVIEW_DIRECTION,
+  OVERVIEW_DIRECTION_NAME,
+  type OverviewDirection,
+  overviewDirectionOf,
+} from "./manager-overview-prototype.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
@@ -674,8 +681,24 @@ function OwnAgentPage({
     agents.agents?.find((each) => each.id === agent.id) ??
     agents.archived?.find((each) => each.id === agent.id);
 
+  // PROTOTYPE: the Overview pane beside the chat, in the direction `?overview=` names.
+  const [overviewDirection, setOverviewDirection] = useState(() =>
+    overviewDirectionOf(window.location.search),
+  );
+
+  const chooseOverview = (next: OverviewDirection) => {
+    const address = new URL(window.location.href);
+    address.searchParams.set("overview", next);
+    window.history.replaceState(window.history.state, "", address);
+    setOverviewDirection(next);
+  };
+
   const split = useSideSplit({
-    open: chat && tabbed && summary !== undefined && besideThread !== undefined,
+    open:
+      chat &&
+      tabbed &&
+      summary !== undefined &&
+      (besideThread !== undefined || overviewDirection !== undefined),
     width: threadWidth,
     bounds: THREAD_PANE,
     mainMin: THREAD_PANE.CHAT_MIN,
@@ -745,6 +768,34 @@ function OwnAgentPage({
           cards={cards.agent(agent.id)}
         />
       </FindScope>
+    );
+
+  const overviewPane =
+    overviewDirection === undefined ? null : (
+      <div className="manager-thread-pane flex min-h-0 min-w-0 flex-1 flex-col">
+        <PaneBar
+          title={`Overview · ${OVERVIEW_DIRECTION_NAME[overviewDirection]}`}
+          titleReplayUnmasked
+          end={
+            <ChoiceBar
+              label="Prototype direction"
+              items={Object.values(OVERVIEW_DIRECTION).map((value) => ({
+                value,
+                label: value.toUpperCase(),
+              }))}
+              value={overviewDirection}
+              look={CHOICE_BAR_LOOK.SEGMENTED}
+              onChange={chooseOverview}
+            />
+          }
+        />
+        <ManagerOverviewPrototype
+          tasks={tasks}
+          manager={agent}
+          threads={threads}
+          direction={overviewDirection}
+        />
+      </div>
     );
 
   const thread =
@@ -822,7 +873,7 @@ function OwnAgentPage({
               >
                 <SideSplit
                   split={split}
-                  side={threadPane}
+                  side={threadPane ?? overviewPane}
                   main={
                     // Note that the scope stands as the column's own box, as its fill did.
                     <FindScope

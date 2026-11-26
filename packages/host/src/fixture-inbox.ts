@@ -317,6 +317,10 @@ const AGENT = {
   DIGEST: "6fc08203-4b7d-4e95-90bd-7c8d9eafb0c6",
   ROUNDING: "70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7",
   MANAGER: "81e2a425-6d3f-4a07-92df-9eafb0c1d2e8",
+  // PROTOTYPE (manager overview): an orchestrator the Manager started, and the two workers it started in turn.
+  ORCHESTRATOR: "92e3b536-7e4f-4b18-a3ef-0ea0c1d2e3f9",
+  WORKER_COPY: "a3f4c647-8f50-4c29-b4f0-1fb1d2e3f40a",
+  WORKER_ALERTS: "b405d758-9061-4d3a-85a1-20c2e3f4051b",
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
@@ -1014,7 +1018,56 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
   ],
   [
     TASK.ROUNDING,
-    agentOn(AGENT.ROUNDING, TASK.ROUNDING, "Fix ledger rounding", AGENT_STATUS.COMPLETED, 5 * DAY),
+    {
+      ...agentOn(
+        AGENT.ROUNDING,
+        TASK.ROUNDING,
+        "Fix ledger rounding",
+        AGENT_STATUS.COMPLETED,
+        5 * DAY,
+      ),
+      startedByAgentId: AGENT.MANAGER,
+    },
+  ],
+  // PROTOTYPE (manager overview): the launch's orchestrator, started by the Manager, and its two workers, started by it.
+  [
+    LISTED.LAUNCH,
+    {
+      ...agentOn(
+        AGENT.ORCHESTRATOR,
+        LISTED.LAUNCH,
+        "Orchestrate the launch checklist",
+        AGENT_STATUS.RUNNING,
+        52 * MINUTE,
+      ),
+      startedByAgentId: AGENT.MANAGER,
+    },
+  ],
+  [
+    LISTED.COPY,
+    {
+      ...agentOn(
+        AGENT.WORKER_COPY,
+        LISTED.COPY,
+        "Write the invite email copy",
+        AGENT_STATUS.RUNNING,
+        11 * MINUTE,
+      ),
+      startedByAgentId: AGENT.ORCHESTRATOR,
+    },
+  ],
+  [
+    LISTED.ALERTS,
+    {
+      ...agentOn(
+        AGENT.WORKER_ALERTS,
+        LISTED.ALERTS,
+        "Add usage alert thresholds",
+        AGENT_STATUS.COMPLETED,
+        41 * MINUTE,
+      ),
+      startedByAgentId: AGENT.ORCHESTRATOR,
+    },
   ],
 ]);
 
@@ -1146,9 +1199,10 @@ function listedTask(
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
     repository: "ada/relay",
-    status: TASK_STATUS.TODO,
+    status: TASK_STATUS.IN_PROGRESS,
     number: 44,
-    updatedAt: LANDED - 3 * HOUR,
+    updatedAt: LANDED - 11 * MINUTE,
+    ...agentsLine(LISTED.COPY),
     parentTaskId: TASK.INVITES,
     blocks: [LISTED.LAUNCH],
     priority: TASK_PRIORITY.NONE,
@@ -1159,14 +1213,17 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     number: 50,
     updatedAt: LANDED - 1 * DAY,
     completedAt: LANDED - 1 * DAY,
+    origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: AGENT.MANAGER },
     parentTaskId: TASK.INVITES,
     blocks: [TASK.INVITES],
   }),
   listedTask(LISTED.ALERTS, "Usage alerts", {
     repository: "ada/ledger",
-    status: TASK_STATUS.TODO,
+    status: TASK_STATUS.DONE,
     number: 45,
-    updatedAt: LANDED - 5 * HOUR,
+    updatedAt: LANDED - 18 * MINUTE,
+    completedAt: LANDED - 18 * MINUTE,
+    ...agentsLine(LISTED.ALERTS),
     priority: TASK_PRIORITY.LOW,
     blocks: [TASK.INVITES],
   }),
@@ -1174,7 +1231,9 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     repository: "ada/relay",
     status: TASK_STATUS.IN_PROGRESS,
     number: 46,
-    updatedAt: LANDED - 7 * HOUR,
+    updatedAt: LANDED - 7 * MINUTE,
+    ...agentsLine(LISTED.LAUNCH),
+    origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: AGENT.MANAGER },
     blocked: true,
     blockedBy: [LISTED.COPY],
     priority: TASK_PRIORITY.URGENT,
@@ -1768,7 +1827,12 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
             ...agent,
             workspaceId: task.workspaceId,
             repository: task.repository,
-            ...(agent.status === AGENT_STATUS.RUNNING ? undefined : { settledAt: agent.createdAt }),
+            ...(agent.status === AGENT_STATUS.RUNNING
+              ? undefined
+              : {
+                  settledAt:
+                    agent.id === AGENT.WORKER_ALERTS ? LANDED - 18 * MINUTE : agent.createdAt,
+                }),
           },
         ];
   });
