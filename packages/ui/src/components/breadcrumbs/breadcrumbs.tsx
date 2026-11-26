@@ -5,7 +5,6 @@ import {
   type ReactNode,
   useState,
 } from "react";
-import { pulseOnPress } from "../../press-pulse.js";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -261,7 +260,7 @@ function CrumbControl({
         aria-current={current}
         aria-haspopup={crumb.popup}
         aria-expanded={crumb.popup === undefined ? undefined : crumb.expanded === true}
-        onClick={pulseOnPress((event) => onPress(event.currentTarget))}
+        onClick={(event) => onPress(event.currentTarget)}
         {...withContextMenu(crumb.menu?.contextMenu, {})}
         onKeyDown={crumb.menu?.keyMenu}
       >

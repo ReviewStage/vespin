@@ -29,8 +29,7 @@ import { CARD_CORNER, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
  * A press opens or closes the fold at once, and nothing moves: the body is
  * drawn or taken out on the commit the press lands in, the chevron stands
  * turned while open with no turn between, what stands under the fold jumps
- * to its new place, and the summary's words stand still under the pointer,
- * with no pulse.
+ * to its new place, and the summary's words stand still under the pointer.
  *
  * While an app's find looks through what holds the fold (`DisclosureFind`),
  * a closed body is drawn after all, still hidden inside its closed `details`
@@ -219,9 +218,7 @@ export function useDisclosureFinding(): boolean {
 
 /**
  * The summary's click, routed to the fold's state. Note that the element's
- * own toggle is stopped, because the open state is React's, and that the
- * press plays no pulse: a fold answers it with its chevron's turn alone, as
- * a scale on a line of words would move them under the pointer.
+ * own toggle is stopped, because the open state is React's.
  */
 export function useDisclosureSummaryClick(): (event: MouseEvent<HTMLElement>) => void {
   const { toggle } = useDisclosureState();
