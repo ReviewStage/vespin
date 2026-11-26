@@ -37,6 +37,7 @@ import { busyAccountAnswer } from "./busy-account-server.js";
 import { deviceSeams, hostStateRoot, onNetworkChanged } from "./device-seams.js";
 import {
   launchBusyAccount,
+  launchDescriptionDiagram,
   launchFixtureProfile,
   launchInboxOff,
   launchMachineAsk,
@@ -306,6 +307,7 @@ function launchOptions(): MobileHostStartOptions {
     fixtureMachineAsk: launchMachineAsk(),
     fixtureSetupOwed: launchSetupOwed(),
     fixtureInboxOff: launchInboxOff(),
+    fixtureDescriptionDiagram: launchDescriptionDiagram(),
     fixtureRefusesWrites: launchRefusesWrites(),
     appVersion: APP_VERSION,
     stateRoot: hostStateRoot(),

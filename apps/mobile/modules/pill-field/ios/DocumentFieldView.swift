@@ -1,4 +1,4 @@
-// DocumentFieldView.swift -- the app's rich field for a document edited whole, such as a task's description: UIKit's text view on TextKit 2 drawing each block with no syntax, a heading in its text style, a list with the system's own markers, a task's box, a quote, a code block, a picture, a video, a sound clip or a file as the read rows draw it (`DocumentMedia.swift`), and a block the phone cannot edit as a card.
+// DocumentFieldView.swift -- the app's rich field for a document edited whole, such as a task's description: UIKit's text view on TextKit 2 drawing each block with no syntax, a heading in its text style, a list with the system's own markers, a task's box, a quote, a code block, a picture, a video, a sound clip, a file or a diagram as the read rows draw it (`DocumentMedia.swift`), a table as its grid (`DocumentTable.swift`), and a block the phone cannot edit as a card.
 //
 // `@repo/ui-native`'s `DocumentField` hands this view the document as lines
 // (`document-field-model.ts`), a paragraph each, every line carrying its
@@ -33,6 +33,7 @@ struct DocumentRunRecord: Record {
   @Field var pill: PillRecord? = nil
   @Field var card: CardRecord? = nil
   @Field var media: MediaRunRecord? = nil
+  @Field var table: TableRecord? = nil
 }
 
 /// A line of the document, and the facts of the block it belongs to.
@@ -261,10 +262,13 @@ enum DocumentRun: Equatable {
   case pill(Pill)
   case card(Card)
   case media(MediaRun)
+  case table(TableModel)
 
   init?(_ record: DocumentRunRecord) {
     if let media = record.media {
       self = .media(MediaRun(media))
+    } else if let table = record.table {
+      self = .table(TableModel(table))
     } else if let pill = record.pill {
       self = .pill(Pill(pill))
     } else if let card = record.card {
@@ -286,6 +290,7 @@ enum DocumentRun: Equatable {
     case .pill(let pill): return ["pill": ["markdown": pill.markdown]]
     case .card(let card): return ["card": ["source": card.source]]
     case .media(let media): return ["media": ["source": media.source]]
+    case .table(let table): return ["table": ["source": table.source]]
     }
   }
 }
@@ -635,6 +640,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   private let textView = UITextView(usingTextLayoutManager: true)
   /// What each picture the lines name holds, which JavaScript hands apart from the words, since a picture lands after them.
   private let media = MediaShelf()
+  /// The tables standing in the words, each a container of its cells, which VoiceOver reaches beside the words.
+  private let tables = NSHashTable<UIView>.weakObjects()
   /// The page the field stands in scrolling, which tells each picture whether it stands near the window.
   private var pageScrolled: NSKeyValueObservation?
   private let placeholderLabel = UILabel()
@@ -945,7 +952,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// The views standing in the words that VoiceOver reaches beside them.
   private func standingViews() -> [UIView] {
-    media.shownViews()
+    media.shownViews() + tables.allObjects
   }
 
   /// Takes what each picture the lines name holds, drawing again only the pictures that changed.
@@ -1247,6 +1254,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
           piece.append(NSAttributedString(attachment: BlockAttachment(card: card, look: look)))
         case .media(let run):
           piece.append(NSAttributedString(attachment: MediaAttachment(run: run, look: look, shelf: media)))
+        case .table(let table):
+          piece.append(NSAttributedString(attachment: TableAttachment(table: table, look: look, standing: tables)))
         }
       }
 
@@ -2340,6 +2349,11 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
       if let shown = attributes[.attachment] as? MediaAttachment {
         runs.append(.media(shown.run))
+        return
+      }
+
+      if let shown = attributes[.attachment] as? TableAttachment {
+        runs.append(.table(shown.table))
         return
       }
 

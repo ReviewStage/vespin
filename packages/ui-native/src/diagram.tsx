@@ -13,6 +13,7 @@ import {
   type ReactNode,
   useContext,
   useEffect,
+  useMemo,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -59,13 +60,13 @@ const styles = StyleSheet.create({
 });
 
 /** A fence drawn: its picture, as a PNG's `data:` address, and its own size in points. */
-interface DiagramPicture {
+export interface DiagramPicture {
   readonly source: string;
   readonly size: MediaSize;
 }
 
 /** A fence's drawing: its picture, `null` where Mermaid could not draw it, or none while it is drawn. */
-type Drawing = DiagramPicture | null | undefined;
+export type DiagramDrawing = DiagramPicture | null | undefined;
 
 /**
  * Each picture drawn, by the palette it was drawn in and then by its code,
@@ -77,6 +78,9 @@ const drawn = new Map<BrandColors, Map<string, DiagramPicture | null>>();
 
 /** What is told when a picture lands. */
 const listeners = new Set<() => void>();
+
+/** How many pictures have landed, which a reader of several fences reads to know when to read them again. */
+let landings = 0;
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
@@ -96,6 +100,7 @@ function keep(palette: BrandColors, code: string, drawing: DiagramPicture | null
   }
 
   drawn.set(palette, held);
+  landings += 1;
 
   for (const listener of listeners) listener();
 }
@@ -274,7 +279,7 @@ export function DiagramRenderer({ children }: { readonly children: ReactNode }) 
 }
 
 /** A fence's drawing in the palette of the renderer around it, asked of that renderer once; none while it is drawn, and `null` where it could not be. */
-function useDiagram(code: string): Drawing {
+function useDiagram(code: string): DiagramDrawing {
   const asking = useContext(DiagramAskContext);
 
   const held = useSyncExternalStore(subscribe, () =>
@@ -287,6 +292,36 @@ function useDiagram(code: string): Drawing {
 
   // Note that words drawn with no renderer around them, which nothing asks, stand as their code.
   return asking === undefined ? null : held;
+}
+
+/** How many pictures have landed so far. */
+function landed(): number {
+  return landings;
+}
+
+/**
+ * Several fences' drawings in the palette of the renderer around them, each
+ * asked of that renderer once, as `useDiagram` asks one: what each fence's
+ * code is drawn as, read again as each picture lands. Note that words drawn
+ * with no renderer around them, which nothing asks, stand as their code.
+ */
+export function useDiagramPictures(codes: readonly string[]): (code: string) => DiagramDrawing {
+  const asking = useContext(DiagramAskContext);
+  const seen = useSyncExternalStore(subscribe, landed);
+
+  useEffect(() => {
+    if (asking === undefined) return;
+
+    for (const code of codes) {
+      if (drawn.get(asking.palette)?.get(code) === undefined) asking.ask(code);
+    }
+  }, [asking, codes, seen]);
+
+  return useMemo(() => {
+    const palette = asking?.palette;
+
+    return (code: string) => (palette === undefined ? null : drawn.get(palette)?.get(code));
+  }, [asking, seen]);
 }
 
 /**

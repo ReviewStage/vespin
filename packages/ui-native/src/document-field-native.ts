@@ -20,7 +20,7 @@ export interface NativeMediaRun {
   readonly alt: string;
 }
 
-/** What a picture's address holds, as the view draws it: on its way, a picture, a video, a sound clip, a file, or one that could not be read. */
+/** What a picture's address holds, as the view draws it: on its way, a picture, a video, a sound clip, a file, one that could not be read, or a Mermaid fence's diagram, whose code stands where it could not be drawn. */
 export const MEDIA_KIND = {
   READING: "reading",
   PICTURE: "picture",
@@ -28,17 +28,36 @@ export const MEDIA_KIND = {
   AUDIO: "audio",
   FILE: "file",
   UNREAD: "unread",
+  DIAGRAM: "diagram",
 } as const;
 
 export type MediaKind = (typeof MEDIA_KIND)[keyof typeof MEDIA_KIND];
 
-/** What an address holds once read: its kind, the file of the app's caches it is drawn from, and the words its strip or card says. */
+/** What an address holds once read: its kind, the file of the app's caches it is drawn from, the words its strip or card says, a diagram's code as its detail, and its own size in points where it is known before it is read. */
 export interface NativeMedia {
   readonly address: string;
   readonly kind: MediaKind;
   readonly file?: string | undefined;
   readonly label: string;
   readonly detail?: string | undefined;
+  readonly width?: number | undefined;
+  readonly height?: number | undefined;
+}
+
+/** A run of a table's cell: words with their looks and the address they link to. */
+export interface NativeTableRun {
+  readonly text: string;
+  readonly marks: readonly string[];
+  readonly link?: string | undefined;
+}
+
+/** A table the phone does not edit, drawn as the read rows draw it: the source it is written back as, each column's alignment, and its rows, the header first, each cell its runs. */
+export interface NativeTable {
+  readonly source: string;
+  readonly align: readonly string[];
+  readonly rows: readonly {
+    readonly cells: readonly { readonly runs: readonly NativeTableRun[] }[];
+  }[];
 }
 
 /** A run of a line as the view takes it: words with their looks and address, a pill, a card, or a picture drawn as its media. */
@@ -46,7 +65,8 @@ export type NativeDocumentRun =
   | { readonly text: string; readonly marks: readonly string[]; readonly link?: string | undefined }
   | { readonly pill: NativePill }
   | { readonly card: NativeCard }
-  | { readonly media: NativeMediaRun };
+  | { readonly media: NativeMediaRun }
+  | { readonly table: NativeTable };
 
 /** What a line carries of its block (`document-field-model.ts`'s `FieldLine`). */
 interface NativeLineFacts {
@@ -72,7 +92,8 @@ export type NativeToldRun =
   | { readonly text: string; readonly marks: readonly string[]; readonly link?: string | undefined }
   | { readonly pill: { readonly markdown: string } }
   | { readonly card: { readonly source: string } }
-  | { readonly media: { readonly source: string } };
+  | { readonly media: { readonly source: string } }
+  | { readonly table: { readonly source: string } };
 
 /** A line as the view tells it. */
 export interface NativeToldLine extends NativeLineFacts {

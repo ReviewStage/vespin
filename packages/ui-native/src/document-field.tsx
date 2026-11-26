@@ -17,7 +17,7 @@ import {
   writtenDocument,
 } from "@repo/features/document-blocks";
 import { drawnPictureAddresses } from "@repo/features/drawn-pictures";
-import { markdownTreeKept } from "@repo/features/markdown-tree";
+import { markdownTree, markdownTreeKept } from "@repo/features/markdown-tree";
 import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import {
   WRITING_BLOCK,
@@ -43,6 +43,7 @@ import {
 } from "./caret-at-word.js";
 import { useChipMarkOf } from "./chip-mark.js";
 import type { ChipMarkOf } from "./chip-mark-model.js";
+import { type DiagramDrawing, DiagramRenderer, useDiagramPictures } from "./diagram.js";
 import { editedBlocks, editedLines, type FieldLine, fieldLines } from "./document-field-model.js";
 import {
   FORMAT_ACT,
@@ -57,9 +58,11 @@ import {
   type NativeFormats,
   type NativeMedia,
   type NativeOpening,
+  type NativeTable,
   type NativeToldLine,
   type NativeToldRun,
 } from "./document-field-native.js";
+import { fieldTable } from "./document-field-table.js";
 import { GLYPH, WRITING_GLYPH } from "./glyph.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import type { MarkdownReading } from "./markdown-model.js";
@@ -138,6 +141,18 @@ const RAW_WORDS = { PICTURE: "Picture", BREAK: "Line break" } as const;
 
 /** What a file a picture's address names is called where its words name it nothing, as the read rows' chip calls it. */
 const UNNAMED_FILE = "Attachment";
+
+/** What a Mermaid fence's diagram is called at its head, as the read rows' card heads it. */
+const DIAGRAM_HEAD = "Diagram";
+
+/** The locked blocks a field that draws media draws as they read, by their source: each Mermaid fence's code, and each table's rows. */
+interface DrawnBlocks {
+  readonly diagrams: ReadonlyMap<string, string>;
+  readonly tables: ReadonlyMap<string, NativeTable>;
+}
+
+/** No diagram asked for. */
+const NO_CODES: readonly string[] = [];
 
 /** A picture's words in its Markdown, `![words](address)`, its escapes read. */
 const PICTURE_WORDS = /^!\[((?:\\.|[^\\\]])*)\]/u;
@@ -295,24 +310,56 @@ function heldMedia(address: string, alt: string, media: DocumentMedia): NativeMe
   return { address, kind: MEDIA_KIND.PICTURE, file: source, label: "" };
 }
 
+/** What a Mermaid fence's diagram stands as, by its code: its picture at its own size, its code where Mermaid could not draw it, or its well while it is drawn. */
+function heldDiagram(code: string, drawing: DiagramDrawing): NativeMedia {
+  const label = DIAGRAM_HEAD;
+
+  if (drawing === undefined)
+    return { address: code, kind: MEDIA_KIND.READING, label, detail: code };
+
+  if (drawing === null) return { address: code, kind: MEDIA_KIND.DIAGRAM, label, detail: code };
+  const { width, height } = drawing.size;
+
+  return {
+    address: code,
+    kind: MEDIA_KIND.DIAGRAM,
+    file: drawing.source,
+    label,
+    detail: code,
+    width,
+    height,
+  };
+}
+
 /**
- * What each picture the document's blocks draw as media holds, each address
- * once, in the order first drawn. Note that it is read from the blocks the
- * field's lines stand on, which change only with the Markdown they were
- * read from, never on a key, so typing hands the view none of it; a
- * picture a key took out stands on, unread by any line.
+ * What each picture and diagram the document's blocks draw as media holds,
+ * each address once, in the order first drawn. Note that it is read from
+ * the blocks the field's lines stand on, which change only with the
+ * Markdown they were read from, never on a key, so typing hands the view
+ * none of it; a picture a key took out stands on, unread by any line.
  */
 function blocksMedia(
   blocks: readonly DocumentBlock[],
   media: DocumentMedia,
+  drawn: DrawnBlocks,
+  diagramOf: (code: string) => DiagramDrawing,
 ): readonly NativeMedia[] {
   const held = new Map<string, NativeMedia>();
 
   for (const block of blocks) {
     for (const line of block.lines) {
       for (const run of line.runs) {
-        if (run.kind !== INLINE_RUN.RAW || !run.source.startsWith("![")) continue;
-        const address = drawnPictureAddresses(run.source)[0];
+        if (run.kind !== INLINE_RUN.RAW) continue;
+        const code = drawn.diagrams.get(run.source);
+
+        if (code !== undefined) {
+          if (!held.has(code)) held.set(code, heldDiagram(code, diagramOf(code)));
+          continue;
+        }
+
+        const address = run.source.startsWith("![")
+          ? drawnPictureAddresses(run.source)[0]
+          : undefined;
 
         if (address === undefined || held.has(address)) continue;
         held.set(address, heldMedia(address, pictureWords(run.source), media));
@@ -323,24 +370,67 @@ function blocksMedia(
   return [...held.values()];
 }
 
-/** A run as the native field takes it: words, a pill drawn as the panel's chip, a picture drawn as the media it names where the field draws media, a picture or break kept as its source as a pill of its own, or a locked block's card. */
+/** The fence's code a Mermaid block's source writes; none where it writes no fence. */
+function fenceCode(source: string): string | undefined {
+  const fence = markdownTree(source).children.find((node) => node.type === "code");
+
+  return fence?.type === "code" ? fence.value : undefined;
+}
+
+/** The locked blocks of `blocks` drawn as they read: each diagram's code and each table's rows, by the source the field's run keeps. */
+function drawnBlocks(blocks: readonly DocumentBlock[], reading: MarkdownReading): DrawnBlocks {
+  const diagrams = new Map<string, string>();
+  const tables = new Map<string, NativeTable>();
+
+  for (const block of blocks) {
+    if (block.kind !== BLOCK_KIND.LOCKED) continue;
+    const run = block.lines[0]?.runs[0];
+
+    if (run?.kind !== INLINE_RUN.RAW) continue;
+
+    if (block.locked === LOCKED_KIND.DIAGRAM) {
+      const code = fenceCode(run.source);
+
+      if (code !== undefined) diagrams.set(run.source, code);
+    }
+
+    if (block.locked === LOCKED_KIND.TABLE) {
+      const table = fieldTable(run.source, reading);
+
+      if (table !== undefined) tables.set(run.source, table);
+    }
+  }
+
+  return { diagrams, tables };
+}
+
+/** A run as the native field takes it: words, a pill drawn as the panel's chip, a picture, a diagram or a table drawn as it reads where the field draws media (`drawn`), a picture or break kept as its source as a pill of its own, or a locked block's card. */
 function nativeRun(
   run: InlineRun,
   line: FieldLine,
   reading: MarkdownReading,
   markOf: ChipMarkOf,
-  drawsMedia: boolean,
+  drawn: DrawnBlocks | undefined,
 ): NativeDocumentRun {
   if (run.kind === INLINE_RUN.WORDS) return { text: run.text, marks: run.marks, link: run.link };
 
   if (run.kind === INLINE_RUN.PILL)
     return { pill: { markdown: run.pill.markdown, ...pillLook(run.pill, reading, markOf) } };
 
-  if (line.kind === BLOCK_KIND.LOCKED)
+  if (line.kind === BLOCK_KIND.LOCKED) {
+    const code = drawn?.diagrams.get(run.source);
+
+    if (code !== undefined)
+      return { media: { source: run.source, address: code, alt: DIAGRAM_HEAD } };
+    const table = drawn?.tables.get(run.source);
+
+    if (table !== undefined) return { table };
+
     return { card: cardOf(line.locked ?? LOCKED_KIND.OTHER, run.source) };
+  }
 
   const picture = run.source.startsWith("![");
-  const address = picture && drawsMedia ? drawnPictureAddresses(run.source)[0] : undefined;
+  const address = picture && drawn !== undefined ? drawnPictureAddresses(run.source)[0] : undefined;
 
   if (address !== undefined)
     return { media: { source: run.source, address, alt: pictureWords(run.source) } };
@@ -365,6 +455,8 @@ function toldRun(run: NativeToldRun, files: ReadonlySet<string>): InlineRun {
   if ("card" in run) return { kind: INLINE_RUN.RAW, source: run.card.source };
 
   if ("media" in run) return { kind: INLINE_RUN.RAW, source: run.media.source };
+
+  if ("table" in run) return { kind: INLINE_RUN.RAW, source: run.table.source };
   const [only, ...rest] = pillRuns(run.pill.markdown, files);
 
   if (only?.kind === PILL_RUN.PILL && rest.length === 0)
@@ -397,17 +489,8 @@ function toldLine(line: NativeToldLine, files: ReadonlySet<string>): FieldLine {
   };
 }
 
-/**
- * A document edited as rich text, as Notion edits a page: the app's native
- * document field (`document-field-native.ts`) draws each block of the
- * Markdown with no syntax (`@repo/features/document-blocks`), a block the
- * phone cannot edit (a table, a diagram, HTML) as a card, and tells its
- * lines back after each change; the document is written from them
- * (`writtenDocument`), each untouched block as its exact source, so an
- * agent's tables and diagrams survive a phone's edit. The field fills the
- * room it is given and scrolls, its words clear of the keyboard.
- */
-export function DocumentField({
+/** The field itself, inside the renderer its diagrams are drawn through. */
+function FieldWords({
   ref,
   value,
   onChange,
@@ -456,6 +539,22 @@ export function DocumentField({
   // Note that a pill leads with a Manager's face where the app holds one, so the words are handed again as the marks move, as they are on each key.
   const markOf = useChipMarkOf();
 
+  // The diagrams and tables the field draws as they read, read once for each Markdown the lines stand on rather than on each key, and the diagrams' pictures, asked of the renderer around the field.
+  const drawn = useMemo(
+    () =>
+      media === undefined
+        ? undefined
+        : drawnBlocks(read, { repository, now: Date.now(), zone: readerZone() }),
+    [media, read, repository],
+  );
+
+  const codes = useMemo(
+    () => (drawn === undefined ? NO_CODES : [...drawn.diagrams.values()]),
+    [drawn],
+  );
+
+  const diagramOf = useDiagramPictures(codes);
+
   const handed = useMemo(() => {
     const reading = { repository, now: Date.now(), zone: readerZone() };
     const laid = own ? told.lines : fieldLines(read);
@@ -463,17 +562,20 @@ export function DocumentField({
     const lines = laid.map(
       (line): NativeDocumentLine => ({
         ...line,
-        runs: line.runs.map((run) => nativeRun(run, line, reading, markOf, media !== undefined)),
+        runs: line.runs.map((run) => nativeRun(run, line, reading, markOf, drawn)),
       }),
     );
 
     return { markdown: base, value: { lines, seen } };
-  }, [own, told, read, base, repository, seen, markOf, media]);
+  }, [own, told, read, base, repository, seen, markOf, drawn]);
 
-  // What each picture the document draws holds, handed apart from the words, so a picture landing draws only that picture again.
+  // What each picture and diagram the document draws holds, handed apart from the words, so one landing draws only it again.
   const held = useMemo(
-    () => (media === undefined ? undefined : blocksMedia(read, media)),
-    [media, read],
+    () =>
+      media === undefined || drawn === undefined
+        ? undefined
+        : blocksMedia(read, media, drawn, diagramOf),
+    [media, drawn, read, diagramOf],
   );
 
   const look = {
@@ -483,6 +585,8 @@ export function DocumentField({
     pillFill: colors.FILL_STRONG,
     pillWords: colors.TEXT,
     pillGlyph: colors.TEXT_MUTED,
+    well: colors.WELL,
+    edge: colors.CHIP_EDGE,
   };
 
   const onCaret = ({ nativeEvent }: NativeSyntheticEvent<CaretLine>) => {
@@ -642,5 +746,26 @@ export function DocumentField({
       onLines={onLines}
       onFocusChange={() => undefined}
     />
+  );
+}
+
+/**
+ * A document edited as rich text, as Notion edits a page: the app's native
+ * document field (`document-field-native.ts`) draws each block of the
+ * Markdown with no syntax (`@repo/features/document-blocks`), its pictures,
+ * diagrams and tables as the read rows draw them where it is handed
+ * `media`, any other block the phone cannot edit (HTML, a footnote) as a
+ * card, and tells its lines back after each change; the document is written
+ * from them (`writtenDocument`), each untouched block as its exact source,
+ * so an agent's tables and diagrams survive a phone's edit. The field fills
+ * the room it is given and scrolls, its words clear of the keyboard. Note
+ * that its diagrams are drawn through one renderer around it, which holds
+ * no web view until a diagram not drawn before asks for one.
+ */
+export function DocumentField(props: DocumentFieldProps) {
+  return (
+    <DiagramRenderer>
+      <FieldWords {...props} />
+    </DiagramRenderer>
   );
 }
