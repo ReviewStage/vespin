@@ -63,7 +63,9 @@ agent's reply and reasoning summaries, each tool call with its input and
 output, and the model, token counts, and timing. Tool output can include files
 from your repository, command output, web pages, screenshots of the agent's
 browser, windows of apps on your Mac you let agents use, and answers from your
-integrations. We also store the agent harness's
+integrations. We also keep the pictures an agent's own tools read or make,
+such as images and PDF pages it reads, beside its transcript, and delete them
+with it. We also store the agent harness's
 own record of its session, Claude Code's transcript or Codex's thread, its
 thinking text included, so the agent can resume it and an agent continued or
 forked from it goes on from it. Transcripts and descriptions are stored

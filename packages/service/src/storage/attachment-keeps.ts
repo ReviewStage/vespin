@@ -23,8 +23,15 @@ import {
 } from "@repo/database/models/description-attachments";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
-import type { ConversationMediaType, KeptPicture } from "@repo/features/conversation-picture-wire";
+import {
+  CONVERSATION_PICTURE_BOUNDS,
+  type ConversationMediaType,
+  type KeptPicture,
+  PICTURE_OMISSION,
+  type PictureOmission,
+} from "@repo/features/conversation-picture-wire";
 import type { DescriptionFile } from "@repo/features/description-attachment-wire";
+import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
 import { Effect, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import {
@@ -129,6 +136,49 @@ export function keepPictureBytesOne(
   return Effect.map(
     keepPictureBytes(target, [picture]),
     Option.flatMap(([one]) => Option.fromNullishOr(one)),
+  );
+}
+
+/**
+ * What a transcript names of one picture in its bytes' place: the picture
+ * kept, or why it was not and its size. A type rather than an interface, so
+ * a tool's answer holding one is a `WireRecord` as it stands.
+ */
+export type KeptPictureNote =
+  | { readonly picture: { readonly [Key in keyof KeptPicture]: KeptPicture[Key] } }
+  | { readonly omitted: PictureOmission; readonly byteCount: number };
+
+/**
+ * Bytes a tool or a runner answered kept beside the conversation as a
+ * picture, sniffed and measured from the bytes themselves rather than from
+ * what their sender said of them, and named as a transcript names one
+ * (`KeptPictureNote`): why not where they are past one picture's bound, no
+ * picture whose header states its size, or past the conversation's bytes.
+ * A store that fails fails the call, which each caller answers in its own way.
+ */
+export function keepPictureNote(
+  target: ConversationTarget,
+  bytes: Uint8Array,
+): Effect.Effect<KeptPictureNote, TaskStoreFailure | BlobStoreFailure, DatabaseServices> {
+  const byteCount = bytes.byteLength;
+
+  if (byteCount > CONVERSATION_PICTURE_BOUNDS.MAX_BYTES) {
+    return Effect.succeed({ omitted: PICTURE_OMISSION.TOO_LARGE, byteCount });
+  }
+
+  const contentType = sniffImageType(bytes);
+  const dimensions = contentType === undefined ? undefined : imageDimensions(bytes, contentType);
+
+  if (contentType === undefined || dimensions === undefined) {
+    return Effect.succeed({ omitted: PICTURE_OMISSION.UNSUPPORTED, byteCount });
+  }
+
+  return Effect.map(
+    keepPictureBytesOne(target, { bytes, contentType, ...dimensions }),
+    Option.match({
+      onNone: (): KeptPictureNote => ({ omitted: PICTURE_OMISSION.LIMIT, byteCount }),
+      onSome: (picture): KeptPictureNote => ({ picture: { ...picture } }),
+    }),
   );
 }
 

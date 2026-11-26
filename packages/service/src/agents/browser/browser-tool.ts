@@ -68,18 +68,14 @@ import {
 import {
   CONVERSATION_MEDIA_TYPE,
   CONVERSATION_PICTURE_BOUNDS,
-  type KeptPicture,
-  PICTURE_OMISSION,
-  type PictureOmission,
 } from "@repo/features/conversation-picture-wire";
-import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
 import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { webmDimensions } from "@repo/features/video-signature";
 import { isRecord, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
-import { DateTime, Duration, Effect, Option, Predicate, Result, Schema } from "effect";
+import { DateTime, Duration, Effect, Predicate, Result, Schema } from "effect";
 import { logStoreFailure } from "../../http/store-failure.js";
-import { keepPictureBytesOne } from "../../storage/attachment-keeps.js";
+import { type KeptPictureNote, keepPictureNote } from "../../storage/attachment-keeps.js";
 import {
   reserveAttachmentUpload,
   withAttachmentUploads,
@@ -150,15 +146,10 @@ type ScreenshotStep = Extract<
   { readonly action: typeof BROWSER_AGENT_ACTION.SCREENSHOT; readonly status: "done" }
 >;
 
-/** What the transcript kept of a screenshot: the picture by id, or why it was not kept and its size. */
-type KeptNote =
-  | { readonly picture: { readonly [Key in keyof KeptPicture]: KeptPicture[Key] } }
-  | { readonly omitted: PictureOmission; readonly byteCount: number };
-
 /** A step as the tool answers it: a screenshot's transcript copy replaced by what was kept of it, every other step as it ran. */
 type BrowserToolStep =
   | Exclude<BrowserAgentStep, ScreenshotStep>
-  | (Omit<ScreenshotStep, "kept"> & (KeptNote | Record<never, never>));
+  | (Omit<ScreenshotStep, "kept"> & (KeptPictureNote | Record<never, never>));
 
 // A type rather than an interface, so a result is a `WireRecord` the model is handed as it stands.
 export type BrowserToolResult =
@@ -615,35 +606,12 @@ function runOn(cdp: CdpSession, call: BrowserCall, actions: readonly BrowserAgen
   });
 }
 
-/**
- * What the transcript keeps of one screenshot's copy: the picture, sniffed
- * and measured from its own bytes, kept beside the transcript; why not
- * where its bytes are no picture or the transcript has no room left.
- */
+/** What the transcript keeps of one screenshot's copy, kept from its own bytes (`keepPictureNote`). */
 function keepScreenshot(
   transcript: ConversationTarget,
   kept: BrowserKeptScreenshot,
-): Effect.Effect<KeptNote, TaskStoreFailure | BlobStoreFailure, DatabaseServices> {
-  return Effect.gen(function* () {
-    const bytes = new Uint8Array(Buffer.from(kept.data, "base64"));
-    const contentType = sniffImageType(bytes);
-    const dimensions = contentType === undefined ? undefined : imageDimensions(bytes, contentType);
-
-    if (contentType === undefined || dimensions === undefined) {
-      return { omitted: PICTURE_OMISSION.UNSUPPORTED, byteCount: bytes.byteLength };
-    }
-
-    const picture = yield* keepPictureBytesOne(transcript, {
-      bytes,
-      contentType,
-      ...dimensions,
-    });
-
-    if (Option.isNone(picture))
-      return { omitted: PICTURE_OMISSION.LIMIT, byteCount: bytes.byteLength };
-
-    return { picture: { ...picture.value } };
-  });
+): Effect.Effect<KeptPictureNote, TaskStoreFailure | BlobStoreFailure, DatabaseServices> {
+  return keepPictureNote(transcript, new Uint8Array(Buffer.from(kept.data, "base64")));
 }
 
 /**

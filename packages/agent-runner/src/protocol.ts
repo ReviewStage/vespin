@@ -318,6 +318,26 @@ export const APPROVAL_INPUT = {
 } as const;
 
 /**
+ * How a runner keeps a picture its harness's tool answered beside the
+ * transcript, apart from its events, so no event carries a picture's bytes.
+ * It posts the picture's bytes alone, one picture to a request, under its
+ * bearer, to the service's pictures route
+ * (`runner-pictures-app.ts`), which answers what it kept, `picture`, which
+ * the runner hands on as it came, or why it kept nothing, `omitted`, with
+ * the bytes' size. The runner then posts the picture's block with its bytes
+ * replaced by the picture under `RUNNER_KEPT_PICTURE_KEY`, its `type` left
+ * as it was (`{ "type": "image", "keptPicture": … }`), in every harness's
+ * shape alike. A picture the route kept nothing of, or a post that failed,
+ * is posted as a runner from before the route posts it, its bytes left out.
+ */
+export const RUNNER_KEPT_PICTURE_KEY = "keptPicture";
+
+/** What the pictures route answers a runner for one picture: what it kept, or why it kept nothing and the bytes' size. */
+export type RunnerPictureAnswer =
+  | { readonly picture: WireValue }
+  | { readonly omitted: string; readonly byteCount: number };
+
+/**
  * What the service's token route answers a runner: the plan's access token,
  * good for at least the route's margin, and the ChatGPT workspace it pays
  * from, which the route names for every runner in the cloud's sandbox, as
