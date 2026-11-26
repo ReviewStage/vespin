@@ -1,4 +1,4 @@
-// empty-state.tsx -- what a screen or a column says when it has nothing to show, in the system's own ContentUnavailableView, or the system's bare spinner while what it shows is still read.
+// empty-state.tsx -- what a screen or a column says when it has nothing to show, in the system's own ContentUnavailableView, or the system's bare spinner while what it shows is still read; a read that failed while the phone is offline says only that the place comes back with the connection.
 
 import { ContentUnavailableView, ProgressView, ScrollView, VStack } from "@expo/ui/swift-ui";
 import {
@@ -11,9 +11,11 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { useContext } from "react";
 import { useAccessibilitySize } from "./accessibility.js";
 import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
+import { emptyStateWords, ServiceReached } from "./offline-read-model.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 
@@ -48,6 +50,14 @@ export type EmptyStateProps = EmptyStateAct & {
   readonly description?: string | undefined;
   /** Whether what the screen shows is still read, which stands the system's bare spinner in the state's place, the title heard by VoiceOver alone, so a read under way never looks like nothing to show. */
   readonly loading?: boolean | undefined;
+  /**
+   * Whether it says a read that failed, such as "The inbox could not be
+   * read.": while the phone does not reach the service (`ServiceReached`),
+   * it says only that the place is there once back online, quietly and with
+   * no act, since the app's offline notice already said why. Unset for a
+   * failure the connection does not explain, such as a screen that threw.
+   */
+  readonly readFailed?: boolean | undefined;
 };
 
 /**
@@ -85,25 +95,29 @@ export function EmptyState({
   action: given,
   retry,
   loading = false,
+  readFailed = false,
 }: EmptyStateProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
+  const reached = useContext(ServiceReached);
 
   if (loading) return <LoadingState title={title} />;
 
-  const image = glyphImage(symbol);
+  const said = emptyStateWords({ title, symbol, description }, readFailed, reached);
+  const image = glyphImage(said.symbol);
 
-  const action =
-    retry === undefined
+  const action = !said.acts
+    ? undefined
+    : retry === undefined
       ? given
       : { label: TRY_AGAIN_WORDS, onPress: retry, look: BUTTON_LOOK.BORDERED };
 
   const view = (
     <ContentUnavailableView
-      title={title}
+      title={said.title}
       {...("assetName" in image ? { image: image.assetName } : { systemImage: image.systemName })}
-      description={description ?? ""}
-      primaryColor={colors.TEXT}
+      description={said.description ?? ""}
+      primaryColor={said.quiet ? colors.TEXT_MUTED : colors.TEXT}
       secondaryColor={colors.TEXT_MUTED}
       modifiers={[
         frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),

@@ -272,6 +272,7 @@ function Pairing({ code }: { readonly code: string }) {
               <EmptyState
                 title={HOST_CONNECT_WORDS.UNREAD}
                 symbol={GLYPH.FAILED}
+                readFailed
                 retry={() => void pairing.refetch()}
               />
             ) : (

@@ -229,6 +229,7 @@ function MemoryEditor({
           <EmptyState
             title={MEMORY_PAGE_WORDS.FAILED}
             symbol={GLYPH.FAILED}
+            readFailed
             retry={() => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost)}
           />
         ) : reading ? (

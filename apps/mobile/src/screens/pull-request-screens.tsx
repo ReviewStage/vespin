@@ -712,6 +712,7 @@ function PullRequestPage({
         <EmptyState
           title={PULL_REQUEST_READ_WORDS.FAILED}
           symbol={GLYPH.FAILED}
+          readFailed
           retry={() => void retry()}
         />
       ) : (

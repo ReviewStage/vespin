@@ -408,6 +408,7 @@ export function DescriptionEditScreen({ taskId }: { readonly taskId: string }) {
         <EmptyState
           title={WORDS.UNREAD}
           symbol={GLYPH.FAILED}
+          readFailed
           action={{ label: WORDS.TRY_AGAIN, onPress: retry, look: BUTTON_LOOK.BORDERED }}
         />
       )}

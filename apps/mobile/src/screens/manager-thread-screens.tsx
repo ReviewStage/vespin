@@ -254,6 +254,7 @@ export function ManagerThreadScreen() {
         title: failed ? READ_WORDS.FAILED : READ_WORDS.READING,
         symbol: failed ? GLYPH.FAILED : GLYPH.THREAD,
         loading: !failed,
+        readFailed: failed,
         action: failed
           ? { label: READ_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
           : undefined,

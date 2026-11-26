@@ -75,7 +75,12 @@ function GitHubPage({ workspaceId }: { readonly workspaceId: string }) {
         <SettingsForm>
           <ListSection>
             {failed ? (
-              <EmptyState title={GITHUB_WORDS.READ_FAILED} symbol={GLYPH.FAILED} retry={retry} />
+              <EmptyState
+                title={GITHUB_WORDS.READ_FAILED}
+                symbol={GLYPH.FAILED}
+                readFailed
+                retry={retry}
+              />
             ) : (
               <LoadingRow words={GITHUB_WORDS.READING} />
             )}

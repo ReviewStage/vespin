@@ -118,6 +118,7 @@ export default function SkillScreen() {
           <EmptyState
             title={SKILLS_LINE.VIEW_FAILED}
             symbol={GLYPH.FAILED}
+            readFailed
             retry={() => {
               setRead({ kind: SKILL_READ.READING });
               setRound((each) => each + 1);

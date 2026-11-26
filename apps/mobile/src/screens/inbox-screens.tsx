@@ -556,6 +556,7 @@ function InboxEmpty({
       <EmptyState
         title={INBOX_NOT_READ}
         symbol={GLYPH.FAILED}
+        readFailed
         action={{ label: TRY_AGAIN, onPress: onRetry, look: BUTTON_LOOK.BORDERED }}
       />
     );
@@ -1239,6 +1240,7 @@ function ThreadNotDrawn({
       <EmptyState
         title={INBOX_NOT_READ}
         symbol={GLYPH.FAILED}
+        readFailed
         action={{ label: TRY_AGAIN, onPress: onRetry, look: BUTTON_LOOK.BORDERED }}
       />
     );

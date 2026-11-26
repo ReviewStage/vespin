@@ -143,6 +143,7 @@ function BlockState({ overview }: { readonly overview: TaskOverview | undefined 
     <EmptyState
       title={DESCRIPTION_UNREAD}
       symbol={GLYPH.COMMENT}
+      readFailed
       action={{ label: TRY_AGAIN, onPress: retry, look: BUTTON_LOOK.BORDERED }}
     />
   );
@@ -172,6 +173,7 @@ function ThreadMissing({
       <EmptyState
         title={COMMENTS_UNREAD}
         symbol={GLYPH.COMMENT}
+        readFailed
         action={{ label: TRY_AGAIN, onPress: retry, look: BUTTON_LOOK.BORDERED }}
       />
     );

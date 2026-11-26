@@ -232,6 +232,7 @@ function History({ taskId: id }: { readonly taskId: string }) {
       <EmptyState
         title={VERSION_HISTORY_WORDS.UNREAD}
         symbol={GLYPH.FAILED}
+        readFailed
         retry={history.retry}
       />
     ) : history.read === HISTORY_READ.READING ? (
@@ -436,6 +437,7 @@ function Version({
     <EmptyState
       title={VERSION_HISTORY_WORDS.VERSION_UNREAD}
       symbol={GLYPH.FAILED}
+      readFailed
       retry={() => void version.refetch()}
     />
   ) : (

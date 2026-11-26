@@ -67,6 +67,7 @@ export default function IntegrationScreen() {
             <EmptyState
               title={INTEGRATIONS_PAGE_WORDS.READ_FAILED}
               symbol={GLYPH.FAILED}
+              readFailed
               retry={page.retry}
             />
           ) : (

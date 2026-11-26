@@ -1342,6 +1342,7 @@ export function AutomationEditorScreen() {
             <EmptyState
               title={AUTOMATION_PHONE_WORDS.FAILED}
               symbol={GLYPH.FAILED}
+              readFailed
               retry={read.retry}
             />
           ) : (

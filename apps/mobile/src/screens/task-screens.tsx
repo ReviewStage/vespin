@@ -1345,6 +1345,7 @@ function notRead(
       <EmptyState
         title={TASKS_UNREAD}
         symbol={GLYPH.TASK}
+        readFailed
         action={{
           label: TRY_AGAIN,
           onPress: () => {

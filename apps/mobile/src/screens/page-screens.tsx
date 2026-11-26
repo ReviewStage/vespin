@@ -120,6 +120,7 @@ export function PageScreen({
     <EmptyState
       title={PAGE_WORDS.FAILED}
       symbol={GLYPH.FAILED}
+      readFailed
       action={{ label: PAGE_WORDS.TRY_AGAIN, onPress: again, look: BUTTON_LOOK.BORDERED }}
     />
   );

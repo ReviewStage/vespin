@@ -152,7 +152,12 @@ function GitHubSetupSection({ workspaceId }: { readonly workspaceId: string }) {
     return (
       <ListSection title={GITHUB_WORDS.NAME}>
         {failed ? (
-          <EmptyState title={GITHUB_WORDS.READ_FAILED} symbol={GLYPH.FAILED} retry={retry} />
+          <EmptyState
+            title={GITHUB_WORDS.READ_FAILED}
+            symbol={GLYPH.FAILED}
+            readFailed
+            retry={retry}
+          />
         ) : (
           <LoadingRow words={GITHUB_WORDS.READING} />
         )}
