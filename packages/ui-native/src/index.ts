@@ -329,8 +329,7 @@ export {
 export {
   BotTag,
   githubFace,
-  MARK_FACE,
-  type MarkFace,
+  type HeadReviewer,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,

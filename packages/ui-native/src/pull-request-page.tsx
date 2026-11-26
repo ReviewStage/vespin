@@ -1,10 +1,22 @@
-// pull-request-page.tsx -- a pull request's page: its heading with where it stands, who opened it and its branches, the rows of its checks and reviews, each with its face, the line a change GitHub refused leaves, and the question an act asks first.
+// pull-request-page.tsx -- a pull request's page: its heading with where it stands, who opened it and its branches, its reviewers' faces, the rows of its checks, the line a change GitHub refused leaves, and the question an act asks first.
 
-import { HStack, Menu, ScrollView, Toggle, VStack } from "@expo/ui/swift-ui";
+import {
+  Circle,
+  HStack,
+  Image,
+  Menu,
+  ScrollView,
+  Button as SwiftUIButton,
+  Toggle,
+  VStack,
+  ZStack,
+} from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityHint,
+  accessibilityLabel,
+  accessibilityValue,
   background,
   buttonStyle,
   controlSize,
@@ -12,32 +24,42 @@ import {
   fixedSize,
   font,
   foregroundStyle,
+  frame,
   lineLimit,
   listRowBackground,
   listRowInsets,
   listRowSeparator,
   menuIndicator,
   monospacedDigit,
+  offset,
   onTapGesture,
   padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import type { GitHubPerson, PullRequestLabel, PullRequestState } from "@repo/features/agent-wire";
+import {
+  type GitHubPerson,
+  type PullRequestLabel,
+  type PullRequestState,
+  REVIEW_STATE,
+  type ReviewState,
+} from "@repo/features/agent-wire";
 import { BOT_TAG_WORDS, githubLoginName } from "@repo/features/github-login";
-import { pullRequestMarkState } from "@repo/features/pull-request-model";
+import { pullRequestMarkState, REVIEW_WORDS } from "@repo/features/pull-request-model";
 import { agoText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { FieldChip, type FieldMenu, LabelChip } from "./button.js";
-import { GLYPH, type MarkLook } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
+import { menuActContent } from "./glyph-label.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { useRowInset } from "./layout-margin.js";
 import { LineCounts, lineCountsHeard } from "./line-counts.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
+import { REVIEW_LOOK } from "./pull-request-look.js";
 import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
 import { Text } from "./text.js";
-import { STATUS_TONE, useColors } from "./tokens/colors.js";
+import { STATUS_TONE, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -112,6 +134,14 @@ type PullRequestHeadProps = {
   readonly opened?: Opened | undefined;
   /** Its labels, in the order GitHub lists them; none until its read lands or where it has none. */
   readonly labels?: readonly PullRequestLabel[] | undefined;
+  /** Its reviewers, where each stands, in the order the panel's header draws them (`reviewersOf`); none where it has none. */
+  readonly reviewers?: readonly HeadReviewer[] | undefined;
+};
+
+/** A reviewer as a pull request's heading draws them: by their face, and where their reviews leave them. */
+export type HeadReviewer = {
+  readonly by: Face;
+  readonly state: ReviewState;
 };
 
 /** One branch, as the panel's header names it: Lucide's branch glyph, then its name in the monospaced face, on one line, or wrapped where `wraps`. */
@@ -189,6 +219,143 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
   );
 }
 
+/** How many reviewers' faces a pull request's heading draws before it counts the rest, as the panel's header does. */
+const HEAD_FACES = 3;
+
+/** What the heading's reviewers are heard as, before who they are and where each stands. */
+const REVIEWERS_HEARD = "Reviewers";
+
+/**
+ * The glyph a reviewer's face wears at its corner, cut from a disc of its
+ * tone, as the panel's face badge draws it: a check, a cross, a slash, a
+ * speech mark; a review asked for and not given wears the disc alone,
+ * smaller, as GitHub's waiting dot.
+ */
+const FACE_BADGE_GLYPHS = {
+  [REVIEW_STATE.APPROVED]: GLYPH.CHECK,
+  [REVIEW_STATE.CHANGES_REQUESTED]: GLYPH.REMOVE,
+  [REVIEW_STATE.DISMISSED]: GLYPH.CHECK_SKIPPED,
+  [REVIEW_STATE.COMMENTED]: GLYPH.COMMENT,
+  [REVIEW_STATE.REQUESTED]: undefined,
+} as const satisfies Record<ReviewState, Glyph | undefined>;
+
+/** How much of a face's side its badge's disc stands at, a waiting dot's smaller, and how much of the disc its glyph fills. */
+const FACE_BADGE_SCALE = 0.62;
+const FACE_DOT_SCALE = 0.44;
+const FACE_BADGE_GLYPH_SCALE = 0.62;
+
+/** How far past the face's end corner its badge stands, and how wide the ground's ring around it, in points, as the panel rings its badge off the face. */
+const FACE_BADGE_OUT = 3;
+const FACE_BADGE_RING = 2;
+
+/** One reviewer's face, wearing where they stand at its corner: a disc of its tone ringed by the ground, its glyph cut from it in the ground's ink. */
+function ReviewerFace({
+  reviewer,
+  size,
+}: {
+  readonly reviewer: HeadReviewer;
+  readonly size: number;
+}) {
+  const colors = useColors();
+  const glyph = FACE_BADGE_GLYPHS[reviewer.state];
+  const disc = size * (glyph === undefined ? FACE_DOT_SCALE : FACE_BADGE_SCALE);
+  const ring = disc + FACE_BADGE_RING;
+
+  return (
+    <ZStack alignment="bottomTrailing" modifiers={[frame({ width: size, height: size })]}>
+      <Avatar
+        name={reviewer.by.name}
+        picture={reviewer.by.picture}
+        kind={reviewer.by.kind}
+        size={size}
+      />
+      <ZStack
+        modifiers={[
+          frame({ width: ring, height: ring }),
+          offset({ x: FACE_BADGE_OUT, y: FACE_BADGE_OUT }),
+        ]}
+      >
+        <Circle modifiers={[foregroundStyle(colors.GROUND)]} />
+        <Circle
+          modifiers={[
+            frame({ width: disc, height: disc }),
+            foregroundStyle(toneColor(colors, REVIEW_LOOK[reviewer.state].tone)),
+          ]}
+        />
+        {glyph === undefined ? null : (
+          <Image
+            {...glyphImage(glyph)}
+            color={colors.GROUND}
+            modifiers={[font({ size: disc * FACE_BADGE_GLYPH_SCALE, weight: "bold" })]}
+          />
+        )}
+      </ZStack>
+    </ZStack>
+  );
+}
+
+/**
+ * A pull request's reviewers as its heading draws them, as the panel's
+ * header does: their first faces, each wearing where they stand at its
+ * corner, and a count of the rest. A press opens the system's menu of every
+ * reviewer, by name, where they stand, and its glyph in its tone, as the
+ * panel's faces reveal the rest past their count (`MoreFaces`), so a
+ * reviewer past the third is reachable by sight as well as by VoiceOver.
+ * The faces are heard as one element, every reviewer by name with where
+ * they stand.
+ */
+function HeadReviewers({ reviewers }: { readonly reviewers: readonly HeadReviewer[] }) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.FACE);
+  const drawn = reviewers.slice(0, HEAD_FACES);
+  const rest = reviewers.length - drawn.length;
+  const heard = reviewers.map(({ by, state }) => `${by.name}, ${REVIEW_WORDS[state]}`).join("; ");
+
+  const faces = (
+    <HStack spacing={SPACE.TIGHT + 2}>
+      {drawn.map((reviewer) => (
+        <ReviewerFace key={reviewer.by.name} reviewer={reviewer} size={size} />
+      ))}
+      {rest === 0 ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            monospacedDigit(),
+            foregroundStyle(colors.TEXT_MUTED),
+          ]}
+        >
+          {`+${rest}`}
+        </Text>
+      )}
+    </HStack>
+  );
+
+  return (
+    <Menu
+      label={faces}
+      modifiers={[
+        buttonStyle("plain"),
+        menuIndicator("hidden"),
+        accessibilityLabel(REVIEWERS_HEARD),
+        accessibilityValue(heard),
+      ]}
+    >
+      {reviewers.map(({ by, state }) => (
+        <SwiftUIButton
+          key={by.name}
+          {...menuActContent(
+            by.name,
+            REVIEW_LOOK[state].symbol,
+            REVIEW_WORDS[state],
+            toneColor(colors, REVIEW_LOOK[state].tone),
+          )}
+          onPress={() => undefined}
+        />
+      ))}
+    </Menu>
+  );
+}
+
 /**
  * A pull request's heading, as a list's first row: its title in 20 pt
  * semibold with its number muted after it, which a tap opens to edit where
@@ -196,7 +363,8 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
  * GitHub's color and its word, which opens the system's menu of what may
  * change there where it is handed one, as the panel's pill does, then who
  * opened it and
- * when, by their face, then its labels filled with their colors, scrolling
+ * when, by their face, and its reviewers' faces, each wearing where they
+ * stand, as the panel's people line draws them, then its labels filled with their colors, scrolling
  * sideways where they run past the row, then its branches on a line of
  * their own, the one it merges into first, then GitHub's sentence of
  * whether it would merge, in the body's ink. Past the accessibility sizes,
@@ -215,6 +383,7 @@ export function PullRequestHead({
   sentence,
   opened,
   labels = [],
+  reviewers = [],
 }: PullRequestHeadProps) {
   const colors = useColors();
   const inset = useRowInset();
@@ -268,7 +437,22 @@ export function PullRequestHead({
           menu={stateMenu}
         />
       </HStack>
-      {opened === undefined ? null : <OpenedLine opened={opened} wraps={large} />}
+      {/* Note that the reviewers' faces stand after who opened it, as the panel's people line names them, on a line of their own past the accessibility sizes, where who opened it wraps. */}
+      {reviewers.length === 0 ? (
+        opened === undefined ? null : (
+          <OpenedLine opened={opened} wraps={large} />
+        )
+      ) : large || opened === undefined ? (
+        <>
+          {opened === undefined ? null : <OpenedLine opened={opened} wraps />}
+          <HeadReviewers reviewers={reviewers} />
+        </>
+      ) : (
+        <HStack spacing={SPACE.ROW}>
+          <OpenedLine opened={opened} wraps={false} />
+          <HeadReviewers reviewers={reviewers} />
+        </HStack>
+      )}
       {labels.length === 0 ? null : (
         <ScrollView axes="horizontal" showsIndicators={false}>
           <HStack spacing={SPACE.TIGHT}>
@@ -304,14 +488,6 @@ export function PullRequestHead({
   );
 }
 
-/** Where a row's face stands: in the lead column in its mark's place, as a reviewer's does, or beside the mark before the title, as the App that runs a check does. */
-export const MARK_FACE = {
-  LEAD: "lead",
-  BESIDE: "beside",
-} as const;
-
-export type MarkFace = (typeof MARK_FACE)[keyof typeof MARK_FACE];
-
 type MarkRowProps = {
   /** The row's id, which its list's `onSelect` is called with. */
   readonly id: string;
@@ -322,8 +498,8 @@ type MarkRowProps = {
   readonly detail?: string | undefined;
   /** Where it stands in words, heard before the detail, since the mark says it only to the eye; not heard twice where the detail says it already. */
   readonly standing?: string | undefined;
-  /** Whose row it is, by their face, where the panel draws one: a reviewer, or the App that runs a check. */
-  readonly face?: { readonly of: Face; readonly stands: MarkFace } | undefined;
+  /** Whose row it is, by their face beside the mark, where the panel draws one: the App that runs a check. */
+  readonly face?: Face | undefined;
   /** The address a press on it opens out of the app, such as a check's run, marked at its end by the arrow out; none where it takes no press. */
   readonly opens?: string | undefined;
   /** Whether a press on it pushes a page of its own, such as the checks' list, marked at its end by the chevron; none where it opens an address or takes no press. */
@@ -351,13 +527,11 @@ function opensHeard(address: string): string {
 }
 
 /**
- * A row of a pull request's page, such as a check or a reviewer: its mark
- * in the lead column, its name in the row title's style, and what ends its
- * line in the time's, muted, standing as every list row does, plain and edge to edge with a
- * hairline under the words. A reviewer's face takes the lead column, its
- * mark moving to the line's end before its words, as the panel's facepile
- * wears where each stands; a check's App stands by its avatar beside the
- * mark. A row that opens an address out of the app ends in its arrow, and one
+ * A row of a pull request's page, such as a check: its mark in the lead
+ * column, its name in the row title's style, and what ends its line in the
+ * time's, muted, standing as every list row does, plain and edge to edge
+ * with a hairline under the words. A check's App stands by its avatar
+ * beside the mark. A row that opens an address out of the app ends in its arrow, and one
  * that pushes a page of its own, such as the checks' list, in the chevron;
  * one that counts lines ends its words with them in green and red. The row is heard as one
  * element: its name, where it stands, its words, and where a press goes.
@@ -376,11 +550,10 @@ export function MarkRow({
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.FACE);
   const glyph = <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.ROW_TITLE} />;
-  const leads = face?.stands === MARK_FACE.LEAD;
 
   const avatar =
     face === undefined ? null : (
-      <Avatar name={face.of.name} picture={face.of.picture} kind={face.of.kind} size={faceSize} />
+      <Avatar name={face.name} picture={face.picture} kind={face.kind} size={faceSize} />
     );
 
   const words =
@@ -412,21 +585,12 @@ export function MarkRow({
     <RowHead
       unread={false}
       faded={false}
-      lead={leads ? avatar : glyph}
-      beside={leads ? undefined : avatar}
+      lead={glyph}
+      beside={avatar}
       title={title}
-      after={face?.of.bot === true ? <BotTag /> : undefined}
+      after={face?.bot === true ? <BotTag /> : undefined}
       ink={colors.TEXT_BODY}
-      end={
-        leads ? (
-          <HStack spacing={SPACE.TIGHT}>
-            {glyph}
-            {said}
-          </HStack>
-        ) : (
-          said
-        )
-      }
+      end={said}
       trail={
         opens !== undefined ? (
           <GoesMark goes={PUSH_ROW_GOES.OUT} />
@@ -444,7 +608,7 @@ export function MarkRow({
       heard={{
         label: title,
         value: [
-          face?.of.bot === true && BOT_TAG_WORDS,
+          face?.bot === true && BOT_TAG_WORDS,
           standing !== detail && standing,
           detail,
           lines !== undefined && lineCountsHeard(lines.additions, lines.deletions),

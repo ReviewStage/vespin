@@ -1,4 +1,4 @@
-// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks, reviews and conversation held live, a row each pushing its checks and the files it changes, its conversation inline under them, its merge or Remove from queue under its heading in every window, as the panel's head stands it, its title edited from a tap on it, on its state chip the changes to where it stands (Ready for review, Convert to draft, Close, Reopen), and in the bar's ⋯ Copy GitHub link and Open on GitHub, as the panel's are.
+// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks, reviewers and conversation held live, a row each pushing its checks and the files it changes, its conversation inline under them, its merge or Remove from queue under its heading in every window, as the panel's head stands it, its title edited from a tap on it, on its state chip the changes to where it stands (Ready for review, Convert to draft, Close, Reopen), and in the bar's ⋯ Copy GitHub link and Open on GitHub, as the panel's are.
 
 import {
   type AgentOverviewPullRequest,
@@ -80,7 +80,6 @@ import {
   LinkRow,
   ListSection,
   LoadingRow,
-  MARK_FACE,
   MarkRow,
   MergeActRow,
   markdownShows,
@@ -379,7 +378,8 @@ function PullRequestToolbar({ url }: { readonly url: string | undefined }) {
  * checks, how many stand where, a failure first, and a row for the files
  * it changes, how many and their lines where its agent's listing counts
  * them, each pushing its own screen, as GitHub's app pushes its Checks and
- * Files changed; its reviewers, where each stands; and its conversation
+ * Files changed; its reviewers' faces in its heading, each wearing where
+ * they stand, as the panel's people line draws them; and its conversation
  * inline, as GitHub's app runs its timeline under the page: each comment
  * and review by who wrote it, where a review left them and when, a short
  * plain preview of its words that a press opens whole in Markdown, and each
@@ -791,6 +791,10 @@ function PullRequestPage({
                 }
           }
           labels={pullRequest?.labels}
+          reviewers={reviewers.map((reviewer) => ({
+            by: githubFace(reviewer.by),
+            state: reviewer.state,
+          }))}
         />
         {writes.note === undefined ? null : (
           <WriteNoteRow words={writes.note.words} said={writes.note.said} />
@@ -878,22 +882,6 @@ function PullRequestPage({
           }
           pushes
         />
-      </ListSection>
-      <ListSection title="Reviews" count={reviewers.length}>
-        {reviewers.map((reviewer) => {
-          const face = githubFace(reviewer.by);
-
-          return (
-            <MarkRow
-              key={reviewer.by.login}
-              id={reviewer.by.login}
-              mark={REVIEW_LOOK[reviewer.state]}
-              title={face.name}
-              detail={REVIEW_WORDS[reviewer.state]}
-              face={{ of: face, stands: MARK_FACE.LEAD }}
-            />
-          );
-        })}
       </ListSection>
       <ListSection
         title={CONVERSATION_WORDS}
