@@ -112,6 +112,16 @@ env:
 - assertNotVisible: "Reviews.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-reviewers
+# A press on the faces opens the system's menu of every reviewer, by name
+# and where they stand, as the panel's faces reveal those past their count;
+# a press on one closes it, since it only names them.
+- tapOn: "Reviewers"
+- assertVisible: "relay-review"
+- assertVisible: "Approved"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-reviewers-menu
+- tapOn: "Approved"
+- waitForAnimationToEnd
 # Merging is the press under the heading, in every window, and it asks
 # first, as the card's Merge does, with the page dragged to its top.
 # Note that it is dragged back to the page's top every time, rather than
