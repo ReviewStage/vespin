@@ -1991,9 +1991,15 @@ importers:
       '@repo/host':
         specifier: workspace:*
         version: link:../../packages/host
+      '@repo/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@repo/wire':
         specifier: workspace:*
         version: link:../../packages/wire
+      '@tanstack/db-sqlite-persistence-core':
+        specifier: 'catalog:'
+        version: 1.0.0-rc.1.5(typescript@7.0.2)
       effect:
         specifier: 'catalog:'
         version: 4.0.4
