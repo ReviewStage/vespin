@@ -12,6 +12,7 @@ import {
   dateWhole,
   isDateMoment,
   isDateRange,
+  readerZone,
   suggestedDates,
   timeZoneSchema,
 } from "./date-mention.js";
@@ -20,6 +21,32 @@ import {
 const NOW = Date.parse("2026-10-19T10:00-07:00");
 const LOS_ANGELES = "America/Los_Angeles";
 const TOKYO = "Asia/Tokyo";
+
+test("cached date words stay identical when the reader's system zone changes", () => {
+  const previous = process.env.TZ;
+  const span = { start: "2026-10-20T15:00-07:00", end: "2026-10-20T17:00-07:00" };
+
+  try {
+    for (const zone of [LOS_ANGELES, TOKYO, LOS_ANGELES]) {
+      process.env.TZ = zone;
+      assert.equal(readerZone(), zone);
+      assert.equal(dateLabel(span, LOS_ANGELES), "Oct 20, 2026, 3:00 PM PDT → 5:00 PM PDT");
+      assert.equal(
+        dateWhole(span, readerZone()),
+        zone === LOS_ANGELES
+          ? "Tuesday, October 20, 2026 at 3:00 PM PDT → Tuesday, October 20, 2026 at 5:00 PM PDT"
+          : "Wednesday, October 21, 2026 at 7:00 AM GMT+9 → Wednesday, October 21, 2026 at 9:00 AM GMT+9",
+      );
+      assert.equal(
+        dateChipText(span, NOW, readerZone()),
+        zone === LOS_ANGELES ? "Tomorrow 3:00 PM → 5:00 PM" : "Tomorrow 7:00 AM → 9:00 AM",
+      );
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+});
 
 /** The start the words name, from NOW in Los Angeles. */
 function startOf(words: string): string | undefined {
