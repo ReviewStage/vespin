@@ -1,4 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
+import { markSessionsForResume } from "@repo/database/models/claude-session-entries";
 import { markAwayDevices, markCommandsAwayDevices } from "@repo/database/models/device-store";
 import { pruneMachineAsks } from "@repo/database/models/machine-command-ask-store";
 import { pruneSyncLog } from "@repo/database/models/sync-log";
@@ -22,7 +23,11 @@ import { moveAttachmentsToBlob } from "../storage/attachment-blob-backfill.js";
 import { purgeAttachmentBlobs } from "../storage/attachment-blob-purge.js";
 import { BlobStore } from "../storage/blob-store.js";
 import { moveJournalImages } from "../storage/journal-image-move.js";
-import { MAINTENANCE_SWEEP, MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
+import {
+  MAINTENANCE_SWEEP,
+  MAINTENANCE_SWEEP_PATH,
+  TRANSCRIPT_MARK_BACKFILL,
+} from "./maintenance-bounds.js";
 import { handleMaintenanceSweep } from "./maintenance-sweep.js";
 
 /** The sweep as Sentry's Crons watches it: three minutes in a row missed, late, or failed open an issue. */
@@ -68,6 +73,11 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
     purgeAttachmentBlobs: () => Effect.provideService(purgeAttachmentBlobs(), BlobStore, blobs),
     moveAttachmentsToBlob: () => Effect.provideService(moveAttachmentsToBlob(), BlobStore, blobs),
     moveJournalImages: () => Effect.provideService(moveJournalImages(), BlobStore, blobs),
+    markTranscriptsForResume: () =>
+      markSessionsForResume({
+        rowsPerSweep: TRANSCRIPT_MARK_BACKFILL.ROWS_PER_SWEEP,
+        rowsPerBatch: TRANSCRIPT_MARK_BACKFILL.ROWS_PER_BATCH,
+      }),
   });
 });
 
