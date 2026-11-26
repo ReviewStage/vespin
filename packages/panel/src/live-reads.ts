@@ -68,6 +68,7 @@ import {
   TRANSCRIPT_KIND,
 } from "@repo/features/agent-view";
 import { AUTOMATION_FOLLOW, type AutomationFollow } from "@repo/features/automation-view";
+import type { FailureFacts } from "@repo/features/failure-facts";
 import type { IntegrationProviderParams } from "@repo/features/integration-view";
 import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -117,10 +118,18 @@ type LiveReadId = string | number;
 /** A live read's query key: its name, then its ids in its slice's order; its name alone where a surface names no ids. */
 type LiveReadKey<Read extends LiveReadName> = readonly [Read, ...LiveReadId[]];
 
-/** The read a live read's query stands for: the host could not answer it before it ever had. */
+/**
+ * The read a live read's query stands for: the host could not answer it
+ * before it ever had. Note that what failed beneath it, where the host said,
+ * is its `cause`, which a shown failure's report reads down (`@repo/features/shown-failure`),
+ * so a read that got no answer is reported as the network's failure rather than the app's.
+ */
 class LiveReadFailed extends Error {
-  constructor(readonly read: LiveReadName) {
-    super(`The host could not read ${read}.`);
+  constructor(
+    readonly read: LiveReadName,
+    cause: FailureFacts | undefined,
+  ) {
+    super(`The host could not read ${read}.`, cause === undefined ? undefined : { cause });
     this.name = "LiveReadFailed";
   }
 }
@@ -485,7 +494,9 @@ function firstAnswer<Read extends LiveReadName>(
       answered = true;
       stop?.();
       resume(
-        held.rows === undefined ? Effect.fail(new LiveReadFailed(read)) : Effect.succeed(held.rows),
+        held.rows === undefined
+          ? Effect.fail(new LiveReadFailed(read, held.cause))
+          : Effect.succeed(held.rows),
       );
     };
 

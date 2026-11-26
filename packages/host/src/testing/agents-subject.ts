@@ -33,7 +33,7 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
+import { FAILURE_FACT, type FailureFacts, GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { GITHUB_TOKEN_STATUS, type GitHubTokenSummary } from "@repo/features/github-token-wire";
 import { HOSTS_READ } from "@repo/features/host-live";
@@ -280,7 +280,9 @@ function fakeService() {
     memories: polledLive(MEMORIES_PARTS),
     origin: polledLive(["origin"]),
     // A Manager's chat: its newest page, followed; and the older page a read before a `seq` is answered at once, whatever `seq` it names.
-    managerChat: polledLive(["messages"]),
+    managerChat: polledLive<"messages", { readonly failure: string; readonly cause: FailureFacts }>(
+      ["messages"],
+    ),
     managerChatOlder: polledLive(["messages"]),
     hosts: polledLive(["hosts"]),
     // Note that the account stored no preferences and keeps no clip until a test sets a row, as a new account has none.
@@ -464,8 +466,9 @@ function fakeService() {
       poll?: { readonly after?: string | undefined },
     ) =>
       Effect.suspend((): Effect.Effect<unknown> => {
-        const answered = <Part extends string>(script: PolledLive<Part>) =>
-          poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after);
+        const answered = (
+          script: Pick<PolledLive<string, { readonly failure: string }>, "first" | "poll">,
+        ) => (poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after));
 
         switch (read.name) {
           case HOSTS_READ.name:

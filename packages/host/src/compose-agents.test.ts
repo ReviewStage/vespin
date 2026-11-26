@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
-import { ServiceReach } from "@repo/features";
+import { CALL_FAULT, ServiceReach } from "@repo/features";
 import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
@@ -2116,6 +2116,20 @@ it.effect(
           `manager-chat-older:${AGENT_ID}:151`,
         ],
       );
+    }),
+);
+
+it.effect(
+  "a Manager's chat whose first read got no answer is told failed with what failed beneath it, so the window reports the network's failure rather than the app's",
+  () =>
+    Effect.gen(function* () {
+      const { acts, live, managerChats } = yield* subject();
+      const cause = { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: CALL_FAULT.NETWORK };
+
+      live.managerChat.refuse({ failure: AGENT_CALL_FAILURE.UNANSWERED, cause });
+      yield* acts.AGENTS_MANAGER_CHAT_FOLLOW.hold({ agentId: AGENT_ID });
+      yield* settled;
+      assert.deepEqual(managerChats().at(-1)?.[AGENT_ID], { failed: true, cause });
     }),
 );
 

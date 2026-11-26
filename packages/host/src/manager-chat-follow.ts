@@ -8,6 +8,7 @@ import {
   type ManagerChatSending,
   type ManagerChatUnsendParams,
 } from "@repo/features/agent-view";
+import type { FailureFacts } from "@repo/features/failure-facts";
 import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import {
   MANAGER_CHAT_READ,
@@ -54,9 +55,10 @@ import { pushLive } from "./live-push.js";
  * nothing.
  */
 
-/** A read the service did not answer, as the client and the gate tell it. */
+/** A read the service did not answer, as the client and the gate tell it, with what failed beneath it where the client said. */
 interface ChatUnanswered {
   readonly failure: string;
+  readonly cause?: FailureFacts;
 }
 
 /** The parts of a chat's read: its messages. */
@@ -117,11 +119,13 @@ function goneAfter(failure: string): boolean {
   return failure === AGENT_CALL_FAILURE.NOT_FOUND || failure === LIVE_SIGNED_OUT.failure;
 }
 
-/** A sealed answer as a follow reads it, a failure marked gone where it names nothing the account reaches. */
+/** A sealed answer as a follow reads it, a failure marked gone where it names nothing the account reaches, with what failed beneath it. */
 function sealedOrGone(sealed: ChatSealed | ChatUnanswered): ChatSealed | LiveFailure {
-  return "failure" in sealed
-    ? { failure: sealed.failure, gone: goneAfter(sealed.failure) }
-    : sealed;
+  if (!("failure" in sealed)) return sealed;
+  const { failure, cause } = sealed;
+  const gone = goneAfter(failure);
+
+  return cause === undefined ? { failure, gone } : { failure, cause, gone };
 }
 
 /** The page a delivery's rows stand for; none where a row does not decode. */
@@ -194,9 +198,9 @@ function followChat(
         ? Effect.map(dependencies.seal({ agentId, userId }, poll, after), sealedOrGone)
         : Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true }),
     decode: pageOfRows,
-    publish: (page) =>
+    publish: (page, cause) =>
       Effect.sync(() => {
-        if (page === undefined) return answers.unanswered();
+        if (page === undefined) return answers.unanswered(cause);
         answers.answered(drawn(agentId, withNewestPage(answers.rows(), page)));
       }),
   });
