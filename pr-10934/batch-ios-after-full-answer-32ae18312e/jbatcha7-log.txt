@@ -1,0 +1,23 @@
+pinned to 32ae18312e
+== bundle PJjbatcha7 base 979ff9e943
+  built 979ff9e943 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 1 ui-native 1 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    apps/mobile/src/agents/use-agent-composer.ts(108,38): error TS2307: Cannot find module './composer-drafts.js' or its corresponding type declarations.
+    apps/mobile/src/agents/use-agent-composer.ts(324,15): error TS7006: Parameter 'typed' implicitly has an 'any' type.
+    apps/mobile/src/agents/use-agent-composer.ts(404,15): error TS7006: Parameter 'typed' implicitly has an 'any' type.
+    apps/mobile/src/agents/use-agent-composer.ts(900,22): error TS7006: Parameter 'typedSince' implicitly has an 'any' type.
+    apps/mobile/src/app/_layout.tsx(24,42): error TS2307: Cannot find module '../agents/composer-drafts.js' or its corresponding type declarations.
+    apps/mobile/src/host/compose-mobile.ts(97,38): error TS2307: Cannot find module '@repo/host/inbox-rows' or its corresponding type declarations.
+    apps/mobile/src/host/host-provider.tsx(7,38): error TS2307: Cannot find module '@repo/host/inbox-rows' or its corresponding type declarations.
+    apps/mobile/src/inbox/inbox-groups.ts(27,71): error TS2307: Cannot find module '@repo/host/inbox-rows' or its corresponding type declarations.
+    apps/mobile/src/inbox/inbox-groups.ts(33,30): error TS2307: Cannot find module './inbox-rows.js' or its corresponding type declarations.
+    apps/mobile/src/inbox/inbox-groups.ts(68,34): error TS7031: Binding element 'taskId' implicitly has an 'any' type.
+    apps/mobile/src/inbox/use-agent-threads.ts(18,46): error TS2307: Cannot find module '@repo/host/inbox-rows' or its corresponding type declarations.
+    apps/mobile/src/inbox/use-inbox.ts(21,44): error TS2307: Cannot find module '@repo/features/inbox-digest' or its corresponding type declarations.
+    apps/mobile/src/inbox/use-inbox.ts(80,76): error TS2307: Cannot find module '@repo/host/inbox-rows' or its corresponding type declarations.
+    apps/mobile/src/inbox/use-thread-answer.ts(42,46): error TS2307: Cannot find module '@repo/features/inbox-digest' or its corresponding type declarations.
+    apps/mobile/src/menu-commands/menu-commands.tsx(4,28): error TS2307: Cannot find module '@repo/features/inbox-digest' or its corresponding type declarations.
+  type errors in 26 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 1 (simulator-bundle.sh)
+  signed 1
