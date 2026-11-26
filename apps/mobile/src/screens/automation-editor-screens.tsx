@@ -80,7 +80,6 @@ import { markdownPlainText } from "@repo/features/markdown-plain-text";
 import { effortFor, effortsOf } from "@repo/features/model-effort";
 import { agentName } from "@repo/features/model-label";
 import { type CatalogModel, type ModelChoice, standardModelIdOf } from "@repo/features/models-wire";
-import { mentionPill } from "@repo/features/pill-words";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { dayAndTimeText, timeZoneNames } from "@repo/features/time-format";
@@ -99,7 +98,6 @@ import {
   BAR_TITLE,
   BUZZ,
   buzz,
-  type CaretAtWord,
   ConfirmAsk,
   DATE_PICK_PART,
   DatePickRow,
@@ -158,8 +156,8 @@ import {
   useRepositoryPick,
 } from "../tasks/use-start.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
+import { useDocumentMentions } from "../use-document-mentions.js";
 import { DISCARD_CHANGES_WORDS, DISCARD_WORDS, useKeptWords } from "../use-kept-words.js";
-import { useMentionOffer } from "../use-mention-offer.js";
 
 /** What the sheet says where the editor itself has no word for it. */
 const WORDS = {
@@ -1441,15 +1439,10 @@ export function PromptScreen() {
   const { write, lent } = usePromptPick();
   const [prompt, setPrompt] = useState(lent?.prompt ?? "");
   const field = useRef<DocumentFieldHandle>(null);
-  const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
 
-  const mentions = useMentionOffer(
+  const { mentions, onAtWord } = useDocumentMentions(
     { workspaceId: lent?.workspaceId, taskId: undefined },
-    {
-      word: atWord,
-      pick: (mention) => field.current?.pick(mentionPill(mention.name, mention.target)),
-      rewrite: (words) => field.current?.rewrite(words),
-    },
+    field,
   );
 
   return (
@@ -1463,17 +1456,8 @@ export function PromptScreen() {
           write(words);
         }}
         placeholder={AUTOMATION_EDITOR_WORDS.PROMPT_PLACEHOLDER}
-        onAtWord={setAtWord}
-        mentions={
-          mentions === undefined
-            ? undefined
-            : {
-                groups: mentions.groups,
-                empty: mentions.empty,
-                crumb: mentions.crumb,
-                onPick: mentions.pick,
-              }
-        }
+        onAtWord={onAtWord}
+        mentions={mentions}
         testID={PROMPT_FIELD_ID}
       />
     </>
