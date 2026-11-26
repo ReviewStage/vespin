@@ -33,7 +33,7 @@ it.layer(Layer.merge(getTestDB(), blobs.layer))("a new attachment's uploads", (i
 
       assert.ok(Exit.isFailure(failed));
       assert.ok(blobKey !== undefined && blobs.objects.has(blobKey));
-      assert.ok((yield* readAttachmentBlobTombstones(10_000)).includes(blobKey));
+      assert.ok((yield* readAttachmentBlobTombstones(10_000)).some((one) => one.key === blobKey));
     }),
   );
 });

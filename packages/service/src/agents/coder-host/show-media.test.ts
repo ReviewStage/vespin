@@ -274,7 +274,7 @@ it.layer(Layer.merge(getTestDB(), blobs.layer))("show_media", (it) => {
         );
         const swapped = blobs.presigned.at(-1)?.pathname;
         assert.ok(swapped !== undefined);
-        assert.ok((yield* readAttachmentBlobTombstones(10_000)).includes(swapped));
+        assert.ok((yield* readAttachmentBlobTombstones(10_000)).some((one) => one.key === swapped));
       }),
   );
 

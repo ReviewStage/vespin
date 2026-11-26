@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { inArray } from "drizzle-orm";
 import { Effect } from "effect";
 import { Database } from "../../core/query.js";
 import { attachment } from "../../schemas/attachment.js";
@@ -179,14 +180,16 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
 
         yield* tombstoneUnwrittenUploads([{ id: kept.id, keys: [blobKey, phoneKey] }]);
 
-        const tombstoned = yield* readAttachmentBlobTombstones(1_000);
+        // Note that the table is read whole, because the sweep reads no tombstone of a row that stands until the row goes.
+        const tombstoned = yield* db
+          .select({ key: attachmentBlobTombstone.key })
+          .from(attachmentBlobTombstone)
+          .where(inArray(attachmentBlobTombstone.key, [blobKey, phoneKey]));
 
         assert.deepEqual(
-          tombstoned.filter((key) => key === blobKey || key === phoneKey),
+          tombstoned.map((row) => row.key),
           [phoneKey],
         );
-
-        yield* dropAttachmentBlobTombstones([phoneKey]);
       }),
   );
 });
