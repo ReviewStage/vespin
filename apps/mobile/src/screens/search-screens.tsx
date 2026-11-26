@@ -59,6 +59,7 @@ import {
   RowForEach,
   RowList,
   type RowSubmenu,
+  SCOPE_LOOK,
   Screen,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -668,6 +669,7 @@ function useSearchTabShown(): boolean {
  */
 function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => void) {
   const found = useSearchFound(query);
+  const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const inboxShown = useInboxShown();
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
   const doors = useTaskRowDoors(found.listing.workspace?.id);
@@ -696,7 +698,12 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away, a miss saying it in Apple's own words under the query. The list stands even where the scope found nothing, its words its one row, so a pull still reads the workspace again.
   const results = (
     <FoundList
-      scopes={{ label: SCOPE_LABEL, scopes }}
+      // Note that a compact window stands the scopes as the system's menu picker, since five segments across an iPhone cut "Automations" short (seen on the iPhone 18 Pro).
+      scopes={{
+        label: SCOPE_LABEL,
+        scopes,
+        look: compact ? SCOPE_LOOK.MENU : SCOPE_LOOK.SEGMENTED,
+      }}
       found={found}
       query={query}
       scope={scope}
