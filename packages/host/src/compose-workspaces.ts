@@ -63,11 +63,6 @@ import {
   WORKSPACE_MEMBERS_READ,
   WORKSPACES_READ,
 } from "@repo/features/workspace-live";
-import { WORKSPACE_MACHINES_READ } from "@repo/features/workspace-machine-live";
-import {
-  WORKSPACE_MACHINE_UNANSWERED,
-  type WorkspaceMachineDoneView,
-} from "@repo/features/workspace-machine-view";
 import {
   WORKSPACE_SLUG_PROBLEM,
   type Workspace,
@@ -123,11 +118,6 @@ import {
   slackBotRepository,
 } from "./workspace-integrations-follow.js";
 import { workspaceInvitationsReads } from "./workspace-invitations-read.js";
-import {
-  heldWorkspaceMachines,
-  workspaceMachineRemove,
-  workspaceMachineRename,
-} from "./workspace-machines-follow.js";
 import {
   type MemberMoved,
   type MemberWritten,
@@ -208,8 +198,6 @@ export interface WorkspacesClient {
     | "sandboxSetup"
     | "mergeQueue"
     | "machines"
-    | "renameOwnedMachine"
-    | "removeOwnedMachine"
     | "putInstallScript"
     | "putRepositorySetup"
     | "putRunActions"
@@ -709,32 +697,6 @@ function workspacePeople(reach: WorkspacesReach) {
 }
 
 /**
- * The machines each workspace owns the windows draw, told on the app state
- * every window draws (`LIVE_READ.WORKSPACE_MACHINES`): followed from a
- * window's first hold, and let go a while after its last, a rename or a
- * removal drawn over them until the read carries it
- * (`workspace-machines-follow.ts`).
- */
-function workspaceOwnedMachines(reach: WorkspacesReach) {
-  const { dependencies, gate } = reach;
-  const { kernel, client } = dependencies;
-
-  return heldWorkspaceMachines({
-    gate,
-    seal: (workspaceId) =>
-      workspaceSeal(reach, (userId, poll, after) =>
-        client.workspaces.liveRead(
-          WORKSPACE_MACHINES_READ,
-          { userId, workspaceId },
-          poll ? { after } : undefined,
-        ),
-      ),
-    pool: dependencies.pool,
-    tell: liveTold(kernel.emit, WORKSPACE_FOLLOWS.WORKSPACE_OWNED_MACHINES_FOLLOW),
-  });
-}
-
-/**
  * Each workspace's token repositories the windows draw, told on the app
  * state every window draws (`LIVE_READ.TOKEN_REPOSITORIES`): asked of the
  * service as a window first holds them, again as a window comes forward
@@ -1012,7 +974,6 @@ interface WorkspaceParts {
   readonly people: Effect.Success<ReturnType<typeof workspacePeople>>;
   readonly tokens: Effect.Success<ReturnType<typeof workspaceTokenRepositories>>;
   readonly integrated: Effect.Success<ReturnType<typeof workspaceIntegrations>>;
-  readonly ownedMachines: Effect.Success<ReturnType<typeof workspaceOwnedMachines>>;
 }
 
 /**
@@ -1578,43 +1539,16 @@ function workspaceMergeQueueActs(
   };
 }
 
-/** A rename or a remove of a workspace's own machine carried to the service where the gate stands open, or unanswered where it is closed. */
-function ownedMachineAsked(
-  { served, gate }: WorkspacesReach,
-  call: Effect.Effect<WorkspaceMachineDoneView, never, HttpClient.HttpClient>,
-): Effect.Effect<WorkspaceMachineDoneView> {
-  return gate() ? served(call) : Effect.succeed(WORKSPACE_MACHINE_UNANSWERED);
-}
-
-/** A workspace's machines' acts: its members' machines read, or one member's, and one of the machines it owns renamed or removed. */
+/** A workspace's machines' act: its members' machines read, or one member's. */
 function workspaceMachinesActs(
   reach: WorkspacesReach,
-): Pick<
-  HostActTable<typeof WORKSPACE_ACTS>,
-  "WORKSPACE_MACHINES_READ" | "WORKSPACE_OWNED_MACHINE_RENAME" | "WORKSPACE_OWNED_MACHINE_REMOVE"
-> {
-  const { client, pool } = reach.dependencies;
+): Pick<HostActTable<typeof WORKSPACE_ACTS>, "WORKSPACE_MACHINES_READ"> {
+  const { client } = reach.dependencies;
 
+  // Note that the machines are asked of the service on each act and held nowhere here, since a place drawing them reads them again as it opens.
   return {
-    // Note that the members' machines are asked of the service on each act and held nowhere here, since a place drawing them reads them again as it opens.
     WORKSPACE_MACHINES_READ: ({ workspaceId, userId }) =>
       workspaceAsked(reach, client.workspaces.machines(workspaceId, userId)),
-    // A rename is drawn on the machine at once, and the follow carries the same name a moment later.
-    WORKSPACE_OWNED_MACHINE_RENAME: declaredWrite(
-      pool,
-      workspaceMachineRename(({ workspaceId, id, name }) =>
-        ownedMachineAsked(reach, client.workspaces.renameOwnedMachine(workspaceId, id, name)),
-      ),
-      { read: (renamed) => Effect.succeed(renamed) },
-    ),
-    // A removal draws the machine gone at once, and its box is refused as the service takes it.
-    WORKSPACE_OWNED_MACHINE_REMOVE: declaredWrite(
-      pool,
-      workspaceMachineRemove(({ workspaceId, id }) =>
-        ownedMachineAsked(reach, client.workspaces.removeOwnedMachine(workspaceId, id)),
-      ),
-      { read: (named) => Effect.succeed(named) },
-    ),
   };
 }
 
@@ -1688,7 +1622,6 @@ function workspaceFollowActs({
   people,
   tokens,
   integrated,
-  ownedMachines,
 }: WorkspaceParts): HostActTable<typeof WORKSPACE_FOLLOWS> {
   const { membersReads, invitationsReads } = people;
   const { integrations, slackChannels } = integrated;
@@ -1704,11 +1637,6 @@ function workspaceFollowActs({
     WORKSPACE_INVITATIONS_FOLLOW: {
       hold: ({ workspaceId }) => invitationsReads.held.hold(workspaceId),
       retry: ({ workspaceId }) => invitationsReads.held.retry(workspaceId),
-    },
-    // The machines a workspace owns, held for a window while it draws them.
-    WORKSPACE_OWNED_MACHINES_FOLLOW: {
-      hold: ({ workspaceId }) => ownedMachines.hold(workspaceId),
-      retry: ({ workspaceId }) => ownedMachines.retry(workspaceId),
     },
     // A workspace's own integrations.
     WORKSPACE_INTEGRATIONS_FOLLOW: {
@@ -1752,9 +1680,8 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
   const people = yield* workspacePeople(reach);
   const tokens = yield* workspaceTokenRepositories(reach);
   const integrated = yield* workspaceIntegrations(reach);
-  const ownedMachines = yield* workspaceOwnedMachines(reach);
   const github = yield* githubStanding(reach);
-  const parts: WorkspaceParts = { list, people, tokens, integrated, ownedMachines };
+  const parts: WorkspaceParts = { list, people, tokens, integrated };
 
   const methods: HostMethodTable = {
     // The panel coming forward, which may follow GitHub connected in the
@@ -1801,7 +1728,6 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       yield* tokens.tokenRepositories.open;
       yield* integrated.integrations.open;
       yield* integrated.slackChannels.open;
-      yield* ownedMachines.open;
 
       if (!gate()) return;
       yield* list.standOnLocal;
@@ -1822,7 +1748,6 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       yield* tokens.tokenRepositories.end;
       yield* integrated.integrations.end;
       yield* integrated.slackChannels.end;
-      yield* ownedMachines.end;
       yield* list.reset;
       yield* github.reset;
       yield* github.forgotten;

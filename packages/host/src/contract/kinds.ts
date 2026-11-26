@@ -976,20 +976,6 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
   /** The machines of a workspace's members, as the @ list offers them and a machine's chip names its owner, read as a place drawing them opens. */
   WORKSPACE_MACHINES_READ: "workspace.machinesRead",
-  /**
-   * The machines a workspace owns, which every member's agents may run on,
-   * held for the window while it holds the stream open; the stream carries
-   * nothing, and what they hold reaches the panel on app state
-   * (`LIVE_READ.WORKSPACE_MACHINES`), where a rename or a removal is drawn
-   * the moment it is asked.
-   */
-  WORKSPACE_OWNED_MACHINES_FOLLOW: "workspace.ownedMachinesFollow",
-  /** A held workspace's own machines read again at once, as Try again asks. */
-  WORKSPACE_OWNED_MACHINES_RETRY: "workspace.ownedMachinesRetry",
-  /** One of a workspace's own machines renamed by an owner or an admin. */
-  WORKSPACE_OWNED_MACHINE_RENAME: "workspace.ownedMachineRename",
-  /** One of a workspace's own machines removed by an owner or an admin, its box refused at once. */
-  WORKSPACE_OWNED_MACHINE_REMOVE: "workspace.ownedMachineRemove",
 } as const;
 
 /**
@@ -1485,10 +1471,6 @@ export const PORT_ACT_USE = {
   WORKSPACE_BILLING_PORTAL: ACT_USE.WRITE,
   WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
   WORKSPACE_MACHINES_READ: ACT_USE.FETCH,
-  WORKSPACE_OWNED_MACHINES_FOLLOW: ACT_USE.READ,
-  WORKSPACE_OWNED_MACHINES_RETRY: ACT_USE.READ,
-  WORKSPACE_OWNED_MACHINE_RENAME: ACT_USE.WRITE,
-  WORKSPACE_OWNED_MACHINE_REMOVE: ACT_USE.WRITE,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**
