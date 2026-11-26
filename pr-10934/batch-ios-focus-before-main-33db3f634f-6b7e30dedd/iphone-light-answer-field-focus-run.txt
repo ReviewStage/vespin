@@ -1,0 +1,24 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane B) - iOS 27.2 - D2E5EAB5-4ACE-4AE7-B7C9-7984D6FD7999
+ > Flow .kbd-answer-field-focus
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, UIPreferredContentSizeCategoryName=UICTContentSizeCategoryXL})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Swipe from (50%, 60%) to (50%, 35%) in 800 ms...
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjbatcha6/iphone-light-answer-field-focus/2026-11-26_082517
