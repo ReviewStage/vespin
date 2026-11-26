@@ -1,0 +1,13 @@
+pinned to 0957948252
+== bundle PJjsend2a base 0957948252
+  built 0957948252 base app Vsend6cae.app (6cae4d2b64 (vjnatsend's native build of main + #10993))
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-manager-send-once-after: fails 1 shots 1 Assert that "(?!What about the release$).*(What|abou|release).*" is not visible... FAILED
+  iphone-light-manager-send-once-after around the failure: Tap on "Send"... COMPLETED|Assert that "Send" is not visible... COMPLETED|Assert that "What about the release" is visible... COMPLETED|Assert that "What about the release", Index: 1 is not visible... COMPLETED|Assert that "(?!What about the release$).*(What|abou|release).*" is not visible... FAILED||
+iphone-light-description-comment-after: fails 1 shots 4 Assert that "Should this name the expiry?" is visible... FAILED
+  iphone-light-description-comment-after around the failure: Input text Should this name the expiry?... COMPLETED|Wait for animation to end... COMPLETED|Take screenshot description-new-comment... COMPLETED|Tap on "Send"... COMPLETED|Assert that "Should this name the expiry?" is visible... FAILED||
+iphone-light-pull-request-after: fails 1 shots 5 Assert that "Invite teammates by email #128" is visible... FAILED
+  iphone-light-pull-request-after around the failure: Run flow when "Speed up your typing.*" is visible... SKIPPED|RIG: the software keyboard stands before the first inputText... COMPLETED|Input text Invite teammates by email... COMPLETED|Tap on "Save"... COMPLETED|Assert that "Invite teammates by email #128" is visible... FAILED||
