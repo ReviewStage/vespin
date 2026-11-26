@@ -15,12 +15,21 @@
 
 import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, type SendingMessage } from "@repo/features/agent-view";
+import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import {
+  DESCRIPTION_COMMENT_ACTOR,
+  DESCRIPTION_COMMENT_ENTRY,
+  DESCRIPTION_COMMENT_SCOPE,
+  DESCRIPTION_COMMENT_STATUS,
+  type DescriptionCommentThread,
+} from "@repo/features/description-comment-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import {
+  COMMENT_SUBJECT,
   FOLLOWER_CALL_FAILURE,
   type ListedApart,
   type ListedTasksView,
@@ -199,6 +208,47 @@ const INVITE_DIAGRAM = [
   "",
 ].join("\n");
 
+/** The heading the diagram stands under, which its open thread is on. */
+const DIAGRAM_HEADING = "## Flow";
+
+/** When the diagram's thread was written, a fixed moment so its time reads the same in every run. */
+const DIAGRAM_THREAD_AT = Date.UTC(2026, 10, 16, 15);
+
+/** The open thread `-descriptionDiagram true` stands on the diagram's heading, anchored on it in `body`, so a flow sees a count below the words it types in. */
+function diagramThread(body: string): DescriptionCommentThread {
+  const from = body.indexOf(DIAGRAM_HEADING);
+
+  return {
+    id: "6d1f0b3a-7c2e-4d5f-8a9b-0c1d2e3f4a5b",
+    scope: DESCRIPTION_COMMENT_SCOPE.WORDS,
+    quote: "Flow",
+    anchor: { from, to: from + DIAGRAM_HEADING.length },
+    section: "Flow",
+    status: DESCRIPTION_COMMENT_STATUS.OPEN,
+    entries: [
+      {
+        id: "7e2a1c4b-8d3f-4e6a-9b0c-1d2e3f4a5b6c",
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: {
+          actor: DESCRIPTION_COMMENT_ACTOR.MEMBER,
+          by: { userId: "user-ada", name: "Ada Lovelace" },
+        },
+        words: "Should an expired invite say who sent it?",
+        at: DIAGRAM_THREAD_AT,
+      },
+    ],
+    createdAt: DIAGRAM_THREAD_AT,
+    updatedAt: DIAGRAM_THREAD_AT,
+    revision: 1,
+  };
+}
+
+/** Each held comments slice with the diagram's thread laid on Teammate invitations' threads, one object for each. */
+const THREADED = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
+  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS]
+>();
+
 /** Each held tasks slice with the diagram laid on Teammate invitations' description, one object for each, so staging it again patches nothing. */
 const DIAGRAMMED = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.HELD_TASK],
@@ -305,13 +355,10 @@ function withDescriptionDiagram(held: AppStateSnapshot, diagram: boolean): AppSt
   const invites = tasks[FIXTURE_IDS.TASK]?.rows;
 
   if (!diagram || invites === undefined || !("task" in invites)) return held;
-  const laid = DIAGRAMMED.get(tasks);
-
-  if (laid !== undefined) return { ...held, [LIVE_READ.HELD_TASK]: laid };
   const { task } = invites;
   const body = `${task.description.body.trimEnd()}\n${INVITE_DIAGRAM}`;
 
-  const diagrammed = {
+  const diagrammed = DIAGRAMMED.get(tasks) ?? {
     ...tasks,
     [FIXTURE_IDS.TASK]: {
       rows: { ...invites, task: { ...task, description: { ...task.description, body } } },
@@ -320,8 +367,80 @@ function withDescriptionDiagram(held: AppStateSnapshot, diagram: boolean): AppSt
 
   DIAGRAMMED.set(tasks, diagrammed);
   DIAGRAMMED.set(diagrammed, diagrammed);
+  // Note that a slice laid before holds the diagram already, so its body is read from it rather than laid again.
+  const laid = diagrammed[FIXTURE_IDS.TASK]?.rows;
+  const anchoredIn = laid !== undefined && "task" in laid ? laid.task.description.body : body;
 
-  return { ...held, [LIVE_READ.HELD_TASK]: diagrammed };
+  return {
+    ...held,
+    [LIVE_READ.HELD_TASK]: diagrammed,
+    [LIVE_READ.DESCRIPTION_COMMENTS]: withDiagramThread(
+      held[LIVE_READ.DESCRIPTION_COMMENTS],
+      anchoredIn,
+    ),
+    [LIVE_READ.LINK_STANDINGS]: withMergedFollowUp(held[LIVE_READ.LINK_STANDINGS]),
+  };
+}
+
+/** The follow-up pull request Teammate invitations' description links, which `-descriptionDiagram true` stands merged, so its chip draws and is heard by its state. */
+const MERGED_FOLLOW_UP = {
+  number: 131,
+  title: "Let an owner resend an invite that expired from the members page, with a fresh link",
+  url: "https://github.com/ada/relay/pull/131",
+} as const;
+
+/** Each held standings slice with the follow-up laid on it, merged, one object for each. */
+const MERGED = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.LINK_STANDINGS],
+  AppStateSnapshot[typeof LIVE_READ.LINK_STANDINGS]
+>();
+
+/** The standings the workspace reads its links through, the follow-up's answered merged as GitHub would answer it. */
+function withMergedFollowUp(
+  standings: AppStateSnapshot[typeof LIVE_READ.LINK_STANDINGS],
+): AppStateSnapshot[typeof LIVE_READ.LINK_STANDINGS] {
+  const laid = MERGED.get(standings);
+
+  if (laid !== undefined) return laid;
+  const pullRequest = { ...MERGED_FOLLOW_UP, state: PULL_REQUEST_STATE.MERGED };
+
+  const merged = {
+    ...standings,
+    [FIXTURE_IDS.WORKSPACE]: {
+      ...standings[FIXTURE_IDS.WORKSPACE],
+      [MERGED_FOLLOW_UP.url]: { rows: { pullRequest } },
+    },
+  };
+
+  MERGED.set(standings, merged);
+  MERGED.set(merged, merged);
+
+  return merged;
+}
+
+/** Teammate invitations' threads with the diagram's open thread after them, anchored in `body`. */
+function withDiagramThread(
+  comments: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
+  body: string,
+): AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS] {
+  const laid = THREADED.get(comments);
+
+  if (laid !== undefined) return laid;
+  const description = comments[COMMENT_SUBJECT.DESCRIPTION];
+  const rows = description[FIXTURE_IDS.TASK]?.rows ?? [];
+
+  const threaded = {
+    ...comments,
+    [COMMENT_SUBJECT.DESCRIPTION]: {
+      ...description,
+      [FIXTURE_IDS.TASK]: { rows: [...rows, diagramThread(body)] },
+    },
+  };
+
+  THREADED.set(comments, threaded);
+  THREADED.set(threaded, threaded);
+
+  return threaded;
 }
 
 function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateSnapshot["network"] {

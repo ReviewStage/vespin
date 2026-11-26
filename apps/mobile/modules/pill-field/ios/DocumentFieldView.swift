@@ -636,6 +636,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   let onFocusChange = EventDispatcher()
   let onLinkAsk = EventDispatcher()
   let onCaret = EventDispatcher()
+  let onCommentOpen = EventDispatcher()
+  let onCommentAsk = EventDispatcher()
 
   private let textView = UITextView(usingTextLayoutManager: true)
   /// What each picture the lines name holds, which JavaScript hands apart from the words, since a picture lands after them.
@@ -644,6 +646,13 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   private let tables = NSHashTable<UIView>.weakObjects()
   /// The page the field stands in scrolling, which tells each picture whether it stands near the window.
   private var pageScrolled: NSKeyValueObservation?
+  /// The count of each block's open comment threads, standing at its first line's trailing edge.
+  private let comments = CommentMarks()
+
+  /// Comment, as the edit menu offers it on the selection's block, its words and glyph; none for a field that offers none.
+  var commentAct: FormatActRecord? {
+    didSet { layComments() }
+  }
   private let placeholderLabel = UILabel()
   /// The mark of an empty last list item, which no layout fragment draws.
   private let endMark = EndMarkView()
@@ -804,6 +813,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     textView.frame = bounds
     tellHeight()
     media.reckonNear()
+    layComments()
     let line = ceil(bodyFont().lineHeight)
     placeholderLabel.frame = CGRect(
       x: textView.textContainerInset.left,
@@ -950,9 +960,14 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     set {}
   }
 
+  /// The name a flow finds the field by, which the text view carries too, so a find of the words by it reaches the element that reads and types them.
+  override var accessibilityIdentifier: String? {
+    didSet { textView.accessibilityIdentifier = accessibilityIdentifier }
+  }
+
   /// The views standing in the words that VoiceOver reaches beside them.
   private func standingViews() -> [UIView] {
-    media.shownViews() + tables.allObjects
+    media.shownViews() + tables.allObjects + comments.shown
   }
 
   /// Takes what each picture the lines name holds, drawing again only the pictures that changed.
@@ -977,6 +992,59 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     layout.textViewportLayoutController.layoutViewport()
     tellHeight()
     media.reckonNear()
+    layComments()
+  }
+
+  /// Takes each block's count of open comment threads: the words of a block that gained or lost one end short of it or no longer do, and every count stands where its block's first line does.
+  func takeComments(_ records: [CommentMarkRecord]) {
+    let changed = comments.take(records)
+    if !changed.isEmpty { restyle(changed) }
+    layComments()
+  }
+
+  /// Lays each paragraph of `blocks` in its style again, which holds its words short of a count where one stands; only their looks, never their words or the caret.
+  private func restyle(_ blocks: Set<Int>) {
+    let storage = textView.textStorage
+    quiet = true
+    storage.beginEditing()
+    storage.enumerateAttribute(lineKey, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+      guard let facts = value as? LineFacts, let from = facts.from, blocks.contains(from) else { return }
+      storage.addAttribute(.paragraphStyle, value: paragraphStyle(facts), range: range)
+    }
+    storage.endEditing()
+    quiet = false
+  }
+
+  /// Stands each block's count at the trailing edge of its first line, as TextKit 2 lays the line out, in the text view's space, so it scrolls with the words.
+  private func layComments() {
+    guard !comments.marks.isEmpty, let layout = textView.textLayoutManager, let content = layout.textContentManager else { return }
+    let firsts = firstLines(of: Set(comments.marks.keys))
+    let trailing = textView.bounds.width - textView.textContainerInset.right
+    let glyph = commentAct.flatMap { act in
+      UIImage(named: act.glyph, in: nil, with: UIImage.SymbolConfiguration(textStyle: .footnote))
+    }
+
+    comments.lay(in: textView, look: look, glyph: glyph, place: { block in
+      guard let at = firsts[block],
+        let location = content.location(content.documentRange.location, offsetBy: at),
+        let fragment = layout.textLayoutFragment(for: location)
+      else { return nil }
+      let line = fragment.textLineFragments.first?.typographicBounds.height ?? bodyFont().lineHeight
+      let middle = self.textView.textContainerInset.top + fragment.layoutFragmentFrame.minY + line / 2
+      return CGRect(x: trailing - CommentSpace.width, y: middle - CommentSpace.width / 2, width: CommentSpace.width, height: CommentSpace.width)
+    }, open: { [weak self] block in self?.onCommentOpen(["block": block]) })
+  }
+
+  /// Where each of `blocks` starts in the words: the first character whose line came from that block.
+  private func firstLines(of blocks: Set<Int>) -> [Int: Int] {
+    let storage = textView.textStorage
+    var found: [Int: Int] = [:]
+    storage.enumerateAttribute(lineKey, in: NSRange(location: 0, length: storage.length)) { value, range, stop in
+      guard let facts = value as? LineFacts, let from = facts.from, blocks.contains(from), found[from] == nil else { return }
+      found[from] = range.location
+      if found.count == blocks.count { stop.pointee = true }
+    }
+    return found
   }
 
   func focus() {
@@ -1092,6 +1160,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     tellCaret()
     // Note that a field grown to its words tells its new height as a key wraps a line or takes one away.
     tellHeight()
+    // Note that a key that wraps a line moves the counts below it with the words.
+    layComments()
     // Note that the bar is marked again once the typed words hold their looks, which they take only now.
     updateBar()
   }
@@ -1129,8 +1199,25 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     editMenuForTextIn range: NSRange,
     suggestedActions: [UIMenuElement]
   ) -> UIMenu? {
-    guard editable, let menu = formatMenu() else { return nil }
-    return UIMenu(children: suggestedActions + [menu])
+    var children = suggestedActions
+    if editable, let menu = formatMenu() { children.append(menu) }
+    if let comment = commentAction(for: range) { children.append(comment) }
+    return children.count == suggestedActions.count ? nil : UIMenu(children: children)
+  }
+
+  /// Comment on the selection's block, as a document's block offers it, quoting the selected words, else the block's line; none on a block made in the field, which the document as read holds nowhere yet.
+  private func commentAction(for range: NSRange) -> UIAction? {
+    guard let act = commentAct else { return nil }
+    let string = textView.textStorage.string as NSString
+    let paragraph = string.paragraphRange(for: NSRange(location: min(range.location, string.length), length: 0))
+    guard let from = heldFacts(paragraph)?.from else { return nil }
+    let quoted = range.length > 0 ? string.substring(with: range) : string.substring(with: paragraph)
+    // Note that an attachment's character, a pill's or a picture's, is no word of the quote.
+    let quote = quoted.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+
+    return UIAction(title: act.title, image: glyphImage(act.glyph)) { [weak self] _ in
+      self?.onCommentAsk(["block": from, "quote": quote])
+    }
   }
 
   // MARK: Drawing
@@ -1376,6 +1463,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     case .heading, .paragraph, .rule, .locked:
       break
     }
+
+    // Note that a block a count stands beside ends its words short of the count, as the read rows stand the count beside a block's words.
+    if let from = facts.from, comments.marks[from] != nil { style.tailIndent = -CommentSpace.tail }
 
     return style
   }

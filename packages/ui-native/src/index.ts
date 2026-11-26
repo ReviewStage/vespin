@@ -125,6 +125,8 @@ export {
   OPENS_AT_START,
 } from "./document-field.js";
 
+export type { DocumentComments } from "./document-field-comments.js";
+
 export { editedBlocks, type FieldLine, fieldLines } from "./document-field-model.js";
 
 export {

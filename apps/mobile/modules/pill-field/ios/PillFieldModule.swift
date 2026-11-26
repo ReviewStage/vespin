@@ -92,7 +92,7 @@ public final class PillFieldModule: Module {
     }
 
     View(DocumentFieldView.self) {
-      Events("onLines", "onHeight", "onFocusChange", "onLinkAsk", "onCaret")
+      Events("onLines", "onHeight", "onFocusChange", "onLinkAsk", "onCaret", "onCommentOpen", "onCommentAsk")
 
       Prop("value") { (view: DocumentFieldView, value: DocumentValueRecord) in
         view.take(value.lines.map(DocumentLine.init), seen: value.seen)
@@ -100,6 +100,14 @@ public final class PillFieldModule: Module {
 
       Prop("media") { (view: DocumentFieldView, media: [MediaRecord]?) in
         view.takeMedia(media ?? [])
+      }
+
+      Prop("comments") { (view: DocumentFieldView, comments: [CommentMarkRecord]?) in
+        view.takeComments(comments ?? [])
+      }
+
+      Prop("commentAct") { (view: DocumentFieldView, act: FormatActRecord?) in
+        view.commentAct = act
       }
 
       Prop("look") { (view: DocumentFieldView, look: LookRecord) in

@@ -1,4 +1,4 @@
-# description-media.yaml -- a description's table, file, picture and diagram drawn in its field as its page reads them, the table as its grid, a PDF as its card, a picture at its own place in its line, and a Mermaid diagram as its picture under its head, while the words are edited in place.
+# description-media.yaml -- a description's comment counts, table, file, picture and diagram drawn in its field as its page reads them, a block's count of open threads at its first line's end, the table as its grid, a PDF as its card, a picture at its own place in its line, and a Mermaid diagram as its picture under its head, while the words are edited in place.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -9,7 +9,8 @@ env:
 # Launched on the host's Inbox fixture, as every flow is, so no server is
 # reached; the fixture's Teammate invitations holds a table, then a PDF,
 # "Invite flow spec", and a picture, "The invite page", and, as
-# `descriptionDiagram` asks of this flow alone, ends with a Mermaid diagram.
+# `descriptionDiagram` asks of this flow alone, ends with a Mermaid diagram
+# under a heading an open thread is on.
 - launchApp:
     clearState: true
     arguments:
@@ -26,6 +27,21 @@ env:
     element: "Teammate invitations"
 - tapOn: "Teammate invitations"
 - assertVisible: "Created by .*"
+# At rest, the follow-up pull request's chip, which `descriptionDiagram`
+# stands merged, draws and is heard by its state, in its state's color.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: ".*#131.*"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: description-media-chip
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Only an admin can add.*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
 # A press on the words puts the description in its field, as
 # `description-edit.yaml` presses them.
 - runFlow:
@@ -54,6 +70,32 @@ env:
       id: "description-words"
     timeout: 10000
 - waitForAnimationToEnd
+# A line typed in Context, far above the diagram's heading, which holds an
+# open thread as `descriptionDiagram` asks: the heading's count stays beside
+# the heading, on its block, rather than on the place it stood in the words
+# before the typing moved them.
+- inputText: "A line typed above. "
+- pressKey: Enter
+- inputText: "And another."
+- waitForAnimationToEnd
+# The words stay one element of their own beside the pictures, cells and
+# counts the field lists, which reads them and takes keys: the lines just
+# typed through it stand in its words.
+- assertVisible:
+    id: "description-words"
+    text: "(?s).*A line typed above.*And another.*"
+# The count of the open thread on Context, the description's first block,
+# stands at its line's trailing edge in the field, as the read rows stand it,
+# heard as its count of comments. Note that the page stands at its top once
+# the read rows give way to the field, so Context's count, the first of the
+# two, is reached scrolling down.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "1 comment"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: description-media-comments
 # The field draws the table as its grid, each cell read as its words, where
 # it once drew a card of the table's first line.
 - runFlow:
@@ -90,5 +132,9 @@ env:
 - extendedWaitUntil:
     visible: "Diagram"
     timeout: 10000
+# The diagram's heading still stands its count, just over the diagram's head.
+- assertVisible:
+    text: "1 comment"
+    above: "Diagram"
 - waitForAnimationToEnd
 - takeScreenshot: description-media-diagram

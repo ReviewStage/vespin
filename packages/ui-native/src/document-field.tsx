@@ -14,7 +14,7 @@ import {
   type ListMarker,
   LOCKED_KIND,
   type LockedKind,
-  writtenDocument,
+  writtenPieces,
 } from "@repo/features/document-blocks";
 import { drawnPictureAddresses } from "@repo/features/drawn-pictures";
 import { markdownTree, markdownTreeKept } from "@repo/features/markdown-tree";
@@ -44,6 +44,16 @@ import {
 import { useChipMarkOf } from "./chip-mark.js";
 import type { ChipMarkOf } from "./chip-mark-model.js";
 import { type DiagramDrawing, DiagramRenderer, useDiagramPictures } from "./diagram.js";
+import {
+  anchoredSpans,
+  type BlockSpan,
+  blockThreads,
+  type DocumentComments,
+  keptWrites,
+  readSpans,
+  type WrittenSpans,
+  writtenSpans,
+} from "./document-field-comments.js";
 import { editedBlocks, editedLines, type FieldLine, fieldLines } from "./document-field-model.js";
 import {
   FORMAT_ACT,
@@ -154,6 +164,13 @@ interface DrawnBlocks {
 /** No diagram asked for. */
 const NO_CODES: readonly string[] = [];
 
+/** Comment, as the field's edit menu offers it on a block, in the panel's words and glyph. */
+const COMMENT_ACT: NativeFormatAct = {
+  act: FORMAT_ACT.COMMENT,
+  title: "Comment",
+  glyph: GLYPH.COMMENT,
+};
+
 /** A picture's words in its Markdown, `![words](address)`, its escapes read. */
 const PICTURE_WORDS = /^!\[((?:\\.|[^\\\]])*)\]/u;
 
@@ -208,6 +225,8 @@ interface DocumentFieldProps {
   readonly opensAt?: DocumentFieldOpening | undefined;
   /** How the document's pictures are drawn, each as the media it names in its own line, as the read rows draw it; none draws each as a pill of its words. */
   readonly media?: DocumentMedia | undefined;
+  /** The document's open comment threads, whose counts stand beside its blocks, and Comment in its edit menu; none stands none. */
+  readonly comments?: DocumentComments | undefined;
 }
 
 /** What the field last told: the Markdown it wrote, the Markdown that was written against, and its lines as the blocks it wrote read them. */
@@ -215,6 +234,8 @@ interface Told {
   readonly markdown: string;
   readonly base: string;
   readonly lines: readonly FieldLine[];
+  /** Where each block stands in the field's last few writes against `base`, newest first, the write of `markdown` among them. */
+  readonly written: readonly WrittenSpans[];
 }
 
 /** What the field tells after a change: its lines, and how many changes it has made. */
@@ -505,6 +526,7 @@ function FieldWords({
   keepClear,
   opensAt,
   media,
+  comments,
 }: DocumentFieldProps) {
   const colors = useColors();
   const native = useRef<NativeDocumentFieldDoors>(null);
@@ -578,6 +600,29 @@ function FieldWords({
     [media, drawn, read, diagramOf],
   );
 
+  // Where each block stands in the Markdown the lines stand on, and the counts of the threads on each.
+  const opened = useMemo(
+    (): WrittenSpans => ({ markdown: base, spans: readSpans(read) }),
+    [base, read],
+  );
+
+  // Where each block stands in the Markdown the threads were anchored against: the one the field opened on, or one of its own writes since; none where the field wrote no such Markdown, whose threads it stands no count of rather than one beside the wrong block.
+  const anchored = useMemo(
+    (): readonly BlockSpan[] | undefined =>
+      comments === undefined
+        ? undefined
+        : anchoredSpans(comments.markdown, opened, own ? told.written : []),
+    [comments, opened, own, told],
+  );
+
+  const threaded = useMemo(
+    () =>
+      comments === undefined || anchored === undefined
+        ? undefined
+        : blockThreads(anchored, comments),
+    [anchored, comments],
+  );
+
   const look = {
     text: colors.TEXT,
     placeholder: colors.TEXT_MUTED,
@@ -642,9 +687,24 @@ function FieldWords({
 
     const edited = editedBlocks(told.lines.map((line) => toldLine(line, files)));
     // Note that the document is written against the Markdown whose blocks were last handed, which the lines' sources name.
-    const markdown = writtenDocument(handed.markdown, edited, files, read);
+    const pieces = writtenPieces(handed.markdown, edited, files, read);
+
+    // Note that the field keeps where each block was written, so a thread the service anchored against this save finds its block by the block, never by the offsets the field opened on, which typing above it moves.
+    const wrote = writtenSpans(
+      pieces,
+      edited.map((block) => block.from),
+    );
+
+    const { markdown } = wrote;
+    const base = handed.markdown;
     setSeen(told.changes);
-    setTold({ markdown, base: handed.markdown, lines: editedLines(edited) });
+
+    setTold((before) => ({
+      markdown,
+      base,
+      lines: editedLines(edited),
+      written: keptWrites(wrote, before?.base === base ? before.written : []),
+    }));
 
     if (markdown !== value) onChange(markdown);
   };
@@ -736,6 +796,15 @@ function FieldWords({
       onHeight={fitsWords ? ({ nativeEvent }) => setHeight(nativeEvent.height) : undefined}
       value={handed.value}
       media={held}
+      comments={threaded?.marks}
+      commentAct={comments === undefined ? undefined : COMMENT_ACT}
+      onCommentOpen={({ nativeEvent }) => threaded?.opens.get(nativeEvent.block)?.()}
+      onCommentAsk={({ nativeEvent }) => {
+        const span = anchored?.find((each) => each.block === nativeEvent.block);
+
+        if (span !== undefined)
+          comments?.onComment({ from: span.from, to: span.to, quote: nativeEvent.quote });
+      }}
       look={look}
       placeholder={placeholder}
       editable={editable}

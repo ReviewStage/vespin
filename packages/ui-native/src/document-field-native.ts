@@ -44,6 +44,13 @@ export interface NativeMedia {
   readonly height?: number | undefined;
 }
 
+/** The count of a block's open comment threads: the block of the document as read, how many, and how VoiceOver hears the count. */
+export interface NativeCommentMark {
+  readonly block: number;
+  readonly count: number;
+  readonly heard: string;
+}
+
 /** A run of a table's cell: words with their looks and the address they link to. */
 export interface NativeTableRun {
   readonly text: string;
@@ -124,6 +131,8 @@ export const FORMAT_ACT = {
   ORDERED_LIST: "ordered-list",
   TASK_LIST: "task-list",
   QUOTE: "quote",
+  /** A new comment thread on the selection's block, which the edit menu offers apart from the format acts. */
+  COMMENT: "comment",
 } as const;
 
 export type FormatAct = (typeof FORMAT_ACT)[keyof typeof FORMAT_ACT];
@@ -178,6 +187,18 @@ interface NativeDocumentFieldProps {
   readonly look: NativeLook;
   /** What each picture the lines name holds, handed apart from the words, since a picture lands after them. */
   readonly media?: readonly NativeMedia[] | undefined;
+  /** The count of each block's open comment threads, by the block of the document as read its lines came from. */
+  readonly comments?: readonly NativeCommentMark[] | undefined;
+  /** Comment, as the edit menu offers it on the selection's block; none offers none. */
+  readonly commentAct?: NativeFormatAct | undefined;
+  /** A block's count pressed, by the block of the document as read. */
+  readonly onCommentOpen?:
+    | ((event: NativeSyntheticEvent<{ readonly block: number }>) => void)
+    | undefined;
+  /** Comment pressed in the edit menu, on the selection's block, with the words it quotes. */
+  readonly onCommentAsk?:
+    | ((event: NativeSyntheticEvent<{ readonly block: number; readonly quote: string }>) => void)
+    | undefined;
   readonly placeholder?: string | undefined;
   readonly editable?: boolean | undefined;
   readonly formats?: NativeFormats | undefined;
