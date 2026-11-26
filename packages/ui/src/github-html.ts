@@ -464,6 +464,13 @@ export function renderingPictures(html: string, dark: boolean): readonly Renderi
   return picturesUnder(renderingTree(html), undefined, dark);
 }
 
+/** An address with no theme's mark at its end, as a picture of one theme alone is asked for once its theme is matched (`pictureFor`). */
+function withoutThemeMark(src: string): string {
+  const mark = Object.values(THEME_ONLY).find((each) => src.endsWith(each));
+
+  return mark === undefined ? src : src.slice(0, -mark.length);
+}
+
 /** The addresses a node and those under it name, each as its author wrote it beside where GitHub's rendering reads it from. */
 function addressesUnder(node: HtmlNode, into: Map<string, string>): void {
   const written = node.properties?.dataCanonicalSrc;
@@ -471,7 +478,7 @@ function addressesUnder(node: HtmlNode, into: Map<string, string>): void {
 
   // Note that a `<source>`'s one candidate is its address, as the parsed tree holds a `srcset` as a list.
   if (written !== undefined && written !== null && read !== undefined && read !== null) {
-    into.set(String(written), String(read));
+    into.set(withoutThemeMark(String(written)), String(read));
   }
 
   for (const child of node.children ?? []) addressesUnder(child, into);
@@ -480,7 +487,7 @@ function addressesUnder(node: HtmlNode, into: Map<string, string>): void {
 /**
  * Each picture's address as its author wrote it in the markdown, beside the
  * one GitHub's rendering reads it from (`data-canonical-src`, GitHub's image
- * proxy's), so a place drawing the markdown itself, a description's editor
+ * proxy's), keyed with no theme's mark as a picture is asked for, so a place drawing the markdown itself, a description's editor
  * say, reads each picture where the rendering does.
  */
 export function renderedAddresses(html: string): ReadonlyMap<string, string> {
