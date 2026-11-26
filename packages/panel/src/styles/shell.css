@@ -11,8 +11,9 @@
    it is written (`mobile-bar.tsx`). What stays here is what utilities say
    badly: the sheet laid on the window's frame and the custom properties it
    is measured by, the selectors that read the room and the shell's state
-   (`:has()`), the drag regions, the frame's translucency, and the panes'
-   slide.
+   (the marks its pages hold on it, `shell-marks.tsx`, rather than a
+   `:has()` over what they draw), the drag regions, the frame's
+   translucency, and the panes' slide.
 
    The panel lays it just before desktop.css (index.css), which restages
    these elements for each of the window's own screens. Anything else that
@@ -226,11 +227,8 @@
    hidden, between visits (`desktop-shell.tsx`) is no page standing, so a
    page with tabs is any but the Inbox's, or the Inbox while it is shown. */
 :where(:root):not([data-ui-room="narrow"])
-  .desktop-shell
-  > .desktop-main:not(
-    :has(.desktop-task:not([data-page="inbox"])),
-    [data-inbox-shown="true"]
-  )::before,
+  .desktop-shell:not([data-task-page])
+  > .desktop-main:not([data-inbox-shown="true"])::before,
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > :is(.desktop-settings, .desktop-version-history)
@@ -346,11 +344,8 @@
 }
 
 :where(:root):not([data-ui-room="narrow"])
-  .desktop-shell
-  > .desktop-main:not(
-    :has(.desktop-task:not([data-page="inbox"])),
-    [data-inbox-shown="true"]
-  )::before,
+  .desktop-shell:not([data-task-page])
+  > .desktop-main:not([data-inbox-shown="true"])::before,
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > .desktop-main
@@ -503,16 +498,15 @@
 
    Note that a box on the way down that disqualifies a bar is written
    `… :where(.ui-pane-bar, .ui-toolbar)`, never `… *`, though both name the
-   bar itself, because Chromium files these rules' `:has()` and
-   `:nth-child(of S)` under one invalidation set each, shared by every rule
+   bar itself, because Chromium files these rules' `:nth-child(of S)`
+   under one invalidation set, shared by every rule
    that uses them, and a `*` there turns that set into "everything below":
    inserting one element into the page, or a menu or a tooltip into the
    body, then restyled the whole window (about 2,700 elements) rather than
    a few dozen. The `:where()` keeps the weight a `*` had. */
 :where(:root):not([data-ui-room="narrow"])
   :is(
-    .desktop-shell
-      > .desktop-main:not(:has(.desktop-task:not([data-page="inbox"])), [data-inbox-shown="true"]),
+    .desktop-shell:not([data-task-page]) > .desktop-main:not([data-inbox-shown="true"]),
     .desktop-shell
       > .desktop-main
       .desktop-task
@@ -533,11 +527,7 @@
     .ui-toolbar:nth-child(1 of :not([hidden]))
   ):not(
     :is(
-        .desktop-shell
-          > .desktop-main:not(
-            :has(.desktop-task:not([data-page="inbox"])),
-            [data-inbox-shown="true"]
-          ),
+        .desktop-shell:not([data-task-page]) > .desktop-main:not([data-inbox-shown="true"]),
         .desktop-shell
           > .desktop-main
           .desktop-task

@@ -160,6 +160,7 @@ import {
   phoneFindGroups,
   type TaskHeadBack,
 } from "./phone-head.js";
+import { SHELL_MARK, useShellMark } from "./shell-marks.js";
 import {
   listedAgentOf,
   SIDE_PANEL_HOLDER,
@@ -272,6 +273,8 @@ function TaskPage({
   column: React.ReactNode;
   children?: React.ReactNode;
 }): React.JSX.Element {
+  useShellMark(SHELL_MARK.TASK_PAGE);
+
   return (
     <div
       ref={areaRef}
@@ -306,6 +309,8 @@ function TaskTabsRow({
   hidden: boolean;
   children: React.ReactNode;
 }): React.JSX.Element {
+  useShellMark(hidden ? undefined : SHELL_MARK.AGENTS_ROW);
+
   return (
     <div className={hidden ? undefined : "task-tabs contents"} hidden={hidden}>
       {children}

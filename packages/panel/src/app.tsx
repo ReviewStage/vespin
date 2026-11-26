@@ -33,6 +33,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -309,6 +310,23 @@ export function App(): React.JSX.Element {
       </OpenAiKeyProvider>
     </TimeTicks>
   );
+}
+
+/**
+ * Says a capture run on the body as well as on the stage, so a hint, a menu,
+ * the palette, or a toast drawn at the body's end beside the stage holds
+ * still too (base.css). Note that the body says it rather than being asked
+ * with `:has()` whether the stage does, because a `:has()` on the body is
+ * checked again, by a walk of the whole window, whenever an element is added
+ * anywhere in it.
+ */
+function useCaptureOnBody(capture: boolean): void {
+  useLayoutEffect(() => {
+    if (!capture) return undefined;
+    document.body.setAttribute("data-capture", "true");
+
+    return () => document.body.removeAttribute("data-capture");
+  }, [capture]);
 }
 
 function AppWindow(): React.JSX.Element {
@@ -967,6 +985,9 @@ function AppWindow(): React.JSX.Element {
 
   // Nothing is drawn over a state the window has not been told, nor over a
   // runtime that could not answer for the settings every row reads.
+  // The body says a capture run as the stage does, for what is drawn at the body's end beside the stage (base.css).
+  useCaptureOnBody(run?.captureMode === true);
+
   if (run === undefined || !settingsHeld) return <div />;
 
   return (
