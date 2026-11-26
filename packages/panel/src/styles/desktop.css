@@ -1549,15 +1549,6 @@ body,
   border-left: 0;
 }
 
-/* Shutting, it gives the document its room at once and slides out over it. */
-.side-panel[data-leaving="close"] {
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  right: 0;
-  bottom: 0;
-}
-
 /* A drag the edge's snap took away from under the pointer is still the
    edge's (`@repo/ui`'s ResizeEdge marks the root), so the whole window wears
    its cursor and selects nothing. Note that this stays out of the layers,

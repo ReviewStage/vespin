@@ -52,7 +52,6 @@ import { useOpenLink } from "../tasks/use-open-link.js";
 import { type MenuAction, rowMenu } from "./action-menu.js";
 import { AUTOMATION_ROW_META } from "./automation-list-frame.js";
 import { RUNS_PANEL_WIDTH, type RunsPanel } from "./folded-groups.js";
-import { usePaneSlide } from "./pane-motion.js";
 import { PhoneFindButton, PhoneHead } from "./phone-head.js";
 import type { RunsRead } from "./use-automation-runs.js";
 
@@ -343,9 +342,7 @@ const FORM_RESERVE = 480;
  * The runs panel: the runs (`RunsBody`) on the page's right. Its left
  * edge resizes it as the side panel's does, and a
  * drag past its least width folds it away; nothing stands while it is folded.
- * It comes and goes as the window's panes do (`usePaneSlide`): in from the
- * page's right edge as it is shown, and out past it as it is folded, held
- * drawn, out of the layout and out of reach, until that slide has played.
+ * It comes and goes at once as it is shown and folded.
  */
 export function AutomationRunsPanel({
   panel,
@@ -364,18 +361,11 @@ export function AutomationRunsPanel({
     onToggleCollapsed: panel.onToggle,
   });
 
-  const slide = usePaneSlide(panel.open);
-
-  if (!slide.drawn) return null;
+  if (!panel.open) return null;
 
   return (
     <div
-      ref={(node) => {
-        slide.pane.current = node;
-      }}
-      className="automation-runs-pane relative flex min-h-0 max-w-automation-runs flex-none data-leaving:absolute data-leaving:inset-y-0 data-leaving:right-0 data-leaving:bg-ground"
-      data-leaving={slide.leaving ? "" : undefined}
-      inert={slide.leaving}
+      className="automation-runs-pane relative flex min-h-0 max-w-automation-runs flex-none"
       style={{ width: panel.width }}
     >
       <ResizeEdge edge={edge} />
