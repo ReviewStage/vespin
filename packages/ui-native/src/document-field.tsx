@@ -14,7 +14,7 @@ import {
   type ListMarker,
   LOCKED_KIND,
   type LockedKind,
-  writtenDocument,
+  writtenPieces,
 } from "@repo/features/document-blocks";
 import { drawnPictureAddresses } from "@repo/features/drawn-pictures";
 import { markdownTree, markdownTreeKept } from "@repo/features/markdown-tree";
@@ -171,7 +171,9 @@ export interface CommentPlace {
 
 /** A document's open comment threads, as the field stands their counts beside its blocks, as the read rows do, and starts one from its edit menu. */
 export interface DocumentComments {
-  /** Each open thread on the words, oldest first: where its quoted words start in the Markdown, and what opens it. */
+  /** The Markdown the threads' anchors are offsets into: the description as the service last saved it, which moves each anchor with its words on every save. */
+  readonly markdown: string;
+  /** Each open thread on the words, oldest first: where its quoted words start in `markdown`, and what opens it. */
   readonly threads: readonly { readonly at: number; readonly onOpen: () => void }[];
   /** How a block's count of threads is heard. */
   readonly heard: (count: number) => string;
@@ -179,18 +181,43 @@ export interface DocumentComments {
   readonly onComment: (place: CommentPlace) => void;
 }
 
-/** Where each block of the document as read stands in the Markdown it was read from, its sources joined being the Markdown exactly (`documentBlocks`). */
-function blockSpans(
-  blocks: readonly DocumentBlock[],
-): readonly { readonly from: number; readonly to: number }[] {
+/** Where a block stands in a Markdown the field read or wrote: its piece, and the block of the document as read it came from, which the field's lines name it by; none for a block made in the field. */
+interface BlockSpan {
+  readonly from: number;
+  readonly to: number;
+  readonly block: number | undefined;
+}
+
+/** A Markdown the field wrote, and where each block stands in it. */
+interface WrittenSpans {
+  readonly markdown: string;
+  readonly spans: readonly BlockSpan[];
+}
+
+/** How many of its own writes the field keeps the blocks' places of, so threads the service anchored against a save a few keys back still find their blocks. */
+const KEPT_WRITES = 8;
+
+/** Where each of `pieces` stands, end to end, each naming its block. */
+function piecesSpans(
+  pieces: readonly string[],
+  blocks: readonly (number | undefined)[],
+): readonly BlockSpan[] {
   let at = 0;
 
-  return blocks.map((block) => {
+  return pieces.map((piece, index) => {
     const from = at;
-    at += block.source.length;
+    at += piece.length;
 
-    return { from, to: at };
+    return { from, to: at, block: blocks[index] };
   });
+}
+
+/** Where each block of the document as read stands in the Markdown it was read from, its sources joined being the Markdown exactly (`documentBlocks`). */
+function readSpans(blocks: readonly DocumentBlock[]): readonly BlockSpan[] {
+  return piecesSpans(
+    blocks.map((block) => block.source),
+    blocks.map((_, index) => index),
+  );
 }
 
 /** The counts a field stands beside its blocks, and the opener of each block's oldest thread, by the block. */
@@ -200,17 +227,14 @@ interface BlockThreads {
 }
 
 /** Each block's count of the threads on its words, and the oldest's opener, by the block. */
-function blockThreads(
-  spans: readonly { readonly from: number; readonly to: number }[],
-  comments: DocumentComments,
-): BlockThreads {
+function blockThreads(spans: readonly BlockSpan[], comments: DocumentComments): BlockThreads {
   const counts = new Map<number, number>();
   const opens = new Map<number, () => void>();
 
   for (const thread of comments.threads) {
-    const block = spans.findIndex((span) => thread.at >= span.from && thread.at < span.to);
+    const block = spans.find((span) => thread.at >= span.from && thread.at < span.to)?.block;
 
-    if (block === -1) continue;
+    if (block === undefined) continue;
     counts.set(block, (counts.get(block) ?? 0) + 1);
 
     if (!opens.has(block)) opens.set(block, thread.onOpen);
@@ -288,6 +312,8 @@ interface Told {
   readonly markdown: string;
   readonly base: string;
   readonly lines: readonly FieldLine[];
+  /** Where each block stands in the field's last few writes against `base`, newest first, the write of `markdown` among them. */
+  readonly written: readonly WrittenSpans[];
 }
 
 /** What the field tells after a change: its lines, and how many changes it has made. */
@@ -653,11 +679,24 @@ function FieldWords({
   );
 
   // Where each block stands in the Markdown the lines stand on, and the counts of the threads on each.
-  const spans = useMemo(() => blockSpans(read), [read]);
+  const opened = useMemo(() => readSpans(read), [read]);
+
+  // Where each block stands in the Markdown the threads were anchored against: the one the field opened on, or one of its own writes since; none where the field wrote no such Markdown, whose threads it stands no count of rather than one beside the wrong block.
+  const anchored = useMemo((): readonly BlockSpan[] | undefined => {
+    if (comments === undefined) return undefined;
+
+    if (comments.markdown === base) return opened;
+    const written = own ? told.written : [];
+
+    return written.find((each) => each.markdown === comments.markdown)?.spans;
+  }, [comments, base, opened, own, told]);
 
   const threaded = useMemo(
-    () => (comments === undefined ? undefined : blockThreads(spans, comments)),
-    [spans, comments],
+    () =>
+      comments === undefined || anchored === undefined
+        ? undefined
+        : blockThreads(anchored, comments),
+    [anchored, comments],
   );
 
   const look = {
@@ -724,9 +763,27 @@ function FieldWords({
 
     const edited = editedBlocks(told.lines.map((line) => toldLine(line, files)));
     // Note that the document is written against the Markdown whose blocks were last handed, which the lines' sources name.
-    const markdown = writtenDocument(handed.markdown, edited, files, read);
+    const pieces = writtenPieces(handed.markdown, edited, files, read);
+    const markdown = pieces.join("");
+
+    // Note that the field keeps where each block was written, so a thread the service anchored against this save finds its block by the block, never by the offsets the field opened on, which typing above it moves.
+    const spans = piecesSpans(
+      pieces,
+      edited.map((block) => block.from),
+    );
+
+    const base = handed.markdown;
     setSeen(told.changes);
-    setTold({ markdown, base: handed.markdown, lines: editedLines(edited) });
+
+    setTold((before) => ({
+      markdown,
+      base,
+      lines: editedLines(edited),
+      written: [{ markdown, spans }, ...(before?.base === base ? before.written : [])].slice(
+        0,
+        KEPT_WRITES,
+      ),
+    }));
 
     if (markdown !== value) onChange(markdown);
   };
@@ -822,9 +879,10 @@ function FieldWords({
       commentAct={comments === undefined ? undefined : COMMENT_ACT}
       onCommentOpen={({ nativeEvent }) => threaded?.opens.get(nativeEvent.block)?.()}
       onCommentAsk={({ nativeEvent }) => {
-        const span = spans[nativeEvent.block];
+        const span = anchored?.find((each) => each.block === nativeEvent.block);
 
-        if (span !== undefined) comments?.onComment({ ...span, quote: nativeEvent.quote });
+        if (span !== undefined)
+          comments?.onComment({ from: span.from, to: span.to, quote: nativeEvent.quote });
       }}
       look={look}
       placeholder={placeholder}

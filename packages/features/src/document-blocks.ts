@@ -693,41 +693,53 @@ export function printBlock(block: BlockContent): string {
 }
 
 /**
- * The document written back from the blocks the editor hands: a block whose
+ * The document written back from the blocks the editor hands, as each
+ * block's piece of it in order, their join the document: a block whose
  * content is still what it was read as is its exact source, and a changed or
  * new one is printed (`printBlock`) with a blank line after it, the last
  * keeping the document's own ending. A document written with CR LF line
  * endings has its printed blocks written with them too. A caller writing the
  * same document again and again, as an editor does on each key, hands the
  * blocks it already read (`read`), so the document is not parsed again.
+ * Note that each piece stands where its block does, so a caller learns where
+ * each block it handed was written, as a field placing a comment's count by
+ * the block its anchor falls in does.
  */
+export function writtenPieces(
+  markdown: string,
+  edited: readonly EditedBlock[],
+  files: ReadonlySet<string> = new Set(),
+  read: readonly DocumentBlock[] = documentBlocks(markdown, files),
+): readonly string[] {
+  const ending = markdown.includes(CRLF) ? CRLF : "\n";
+  // Note that the blank lines closing the document are found by trimming rather than by a pattern, which would try every run of spaces in a long document again from each of its characters.
+  const close = markdown.slice(markdown.trimEnd().length);
+
+  return edited.map((block, index) => {
+    const original = block.from === undefined ? undefined : read[block.from];
+    const last = index === edited.length - 1;
+
+    // Note that an untouched block is its exact source where it stands as it stood, and else only its blank lines after it change, so a block added after the document's last, or a last one deleted, still leaves one blank line between blocks.
+    if (original !== undefined && contentKey(original) === contentKey(block)) {
+      const ended = block.from === read.length - 1;
+
+      if (ended === last) return original.source;
+
+      return original.source.trimEnd() + (last ? close : BLOCK_GAP.replaceAll("\n", ending));
+    }
+
+    const printed = printBlock(block) + (last ? close.replaceAll(CRLF, "\n") : BLOCK_GAP);
+
+    return ending === CRLF ? printed.replaceAll("\n", CRLF) : printed;
+  });
+}
+
+/** The document written back from the blocks the editor hands: their pieces (`writtenPieces`) joined. */
 export function writtenDocument(
   markdown: string,
   edited: readonly EditedBlock[],
   files: ReadonlySet<string> = new Set(),
   read: readonly DocumentBlock[] = documentBlocks(markdown, files),
 ): string {
-  const ending = markdown.includes(CRLF) ? CRLF : "\n";
-  // Note that the blank lines closing the document are found by trimming rather than by a pattern, which would try every run of spaces in a long document again from each of its characters.
-  const close = markdown.slice(markdown.trimEnd().length);
-
-  return edited
-    .map((block, index) => {
-      const original = block.from === undefined ? undefined : read[block.from];
-      const last = index === edited.length - 1;
-
-      // Note that an untouched block is its exact source where it stands as it stood, and else only its blank lines after it change, so a block added after the document's last, or a last one deleted, still leaves one blank line between blocks.
-      if (original !== undefined && contentKey(original) === contentKey(block)) {
-        const ended = block.from === read.length - 1;
-
-        if (ended === last) return original.source;
-
-        return original.source.trimEnd() + (last ? close : BLOCK_GAP.replaceAll("\n", ending));
-      }
-
-      const printed = printBlock(block) + (last ? close.replaceAll(CRLF, "\n") : BLOCK_GAP);
-
-      return ending === CRLF ? printed.replaceAll("\n", CRLF) : printed;
-    })
-    .join("");
+  return writtenPieces(markdown, edited, files, read).join("");
 }

@@ -3163,6 +3163,7 @@ function InlineDescriptionSection({
   // The open threads on the words, whose counts stand beside the field's blocks as the read rows stand them, a press opening the oldest, and Comment in the field's edit menu, which starts one on the block, as a long press on a read row does.
   const comments = useMemo(
     (): DocumentComments => ({
+      markdown: body,
       threads: threads.filter(threadOpen).flatMap((thread) =>
         thread.anchor === undefined
           ? []
@@ -3184,7 +3185,7 @@ function InlineDescriptionSection({
           params: { task: task.id, from: `${from}`, to: `${to}`, quote },
         }),
     }),
-    [threads, router, onOwnTab, task.id],
+    [body, threads, router, onOwnTab, task.id],
   );
 
   // Note that what an `@` offers docks over the keyboard on a pushed page, so the caret's line keeps clear of it as of the keyboard; a split view's column ends over the offer at its foot, which the field clears on its own, and no dock stands around it there.

@@ -9,7 +9,8 @@ env:
 # Launched on the host's Inbox fixture, as every flow is, so no server is
 # reached; the fixture's Teammate invitations holds a table, then a PDF,
 # "Invite flow spec", and a picture, "The invite page", and, as
-# `descriptionDiagram` asks of this flow alone, ends with a Mermaid diagram.
+# `descriptionDiagram` asks of this flow alone, ends with a Mermaid diagram
+# under a heading an open thread is on.
 - launchApp:
     clearState: true
     arguments:
@@ -53,6 +54,14 @@ env:
     visible:
       id: "description-words"
     timeout: 10000
+- waitForAnimationToEnd
+# A line typed in Context, far above the diagram's heading, which holds an
+# open thread as `descriptionDiagram` asks: the heading's count stays beside
+# the heading, on its block, rather than on the place it stood in the words
+# before the typing moved them.
+- inputText: "A line typed above. "
+- pressKey: Enter
+- inputText: "And another."
 - waitForAnimationToEnd
 # The count of the open thread on Context, the description's first block,
 # stands at its line's trailing edge in the field, as the read rows stand it,
@@ -101,5 +110,9 @@ env:
 - extendedWaitUntil:
     visible: "Diagram"
     timeout: 10000
+# The diagram's heading still stands its count, just over the diagram's head.
+- assertVisible:
+    text: "1 comment"
+    above: "Diagram"
 - waitForAnimationToEnd
 - takeScreenshot: description-media-diagram
