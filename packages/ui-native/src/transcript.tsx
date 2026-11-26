@@ -93,6 +93,9 @@ const SENT_BY_YOU = "You";
 /** How far a sent line stands from the line of its run beside it, so a run's bubbles stand 2 pt apart, as Messages draws a sender's run; runs stand `SPACE.ROW` twice apart. */
 const RUN_GAP = 1;
 
+/** How far a chat's message pads above, within its sender's run, and below, so a run's messages stand 8 pt apart, as the panel's channel spaces them; a run opens `SPACE.ROW` above its first. */
+const CHANNEL_RUN_GAP = SPACE.TIGHT;
+
 /** How far a row a fold or a group holds stands in, for each step it is held. */
 const DEPTH_INSET = 18;
 
@@ -401,7 +404,10 @@ function ChannelSaid({
     <View
       style={[
         styles.row,
-        { paddingTop: item.joinsAbove ? RUN_GAP : SPACE.ROW, paddingBottom: RUN_GAP },
+        {
+          paddingTop: item.joinsAbove ? CHANNEL_RUN_GAP : SPACE.ROW,
+          paddingBottom: CHANNEL_RUN_GAP,
+        },
       ]}
     >
       {bare ? (
