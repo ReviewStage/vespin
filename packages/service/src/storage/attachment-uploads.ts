@@ -49,6 +49,14 @@ import { BlobStore, type BlobStoreFailure, type PresignedUpload } from "./blob-s
  */
 export const SANDBOX_UPLOAD_SECONDS = 120;
 
+/**
+ * How long after an upload settles its tombstones wait before the sweep may
+ * purge them: past the last moment a presigned URL it handed out may still
+ * land an upload, with margin for the clocks of the service, the database,
+ * and the store.
+ */
+const UPLOAD_LANDING_SECONDS = 2 * SANDBOX_UPLOAD_SECONDS;
+
 /** How many times a failed tombstone write is tried again before the uploads are left to stand, logged. */
 const SETTLE_RETRIES = 2;
 
@@ -221,7 +229,7 @@ export function storeSandboxPhoneCopy(
 function settle(
   uploads: readonly AttachmentUpload[],
 ): Effect.Effect<void, never, DatabaseServices> {
-  return tombstoneUnwrittenUploads(uploads).pipe(
+  return tombstoneUnwrittenUploads(uploads, UPLOAD_LANDING_SECONDS).pipe(
     Effect.retry(Schedule.recurs(SETTLE_RETRIES)),
     Effect.catch((failure) =>
       Effect.logError(`Attachment uploads left unsettled: ${failure._tag}`),

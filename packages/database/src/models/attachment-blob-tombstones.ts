@@ -27,7 +27,7 @@
  * tombstones twice, which drops nothing the second time.
  */
 
-import { and, asc, eq, inArray, isNull, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, notExists, or, sql } from "drizzle-orm";
 import { Effect } from "effect";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { attachment } from "../schemas/attachment.js";
@@ -65,20 +65,24 @@ export function readAttachmentBlobTombstones(
         .select({ key: attachmentBlobTombstone.key, version: tombstoneVersion })
         .from(attachmentBlobTombstone)
         .where(
-          notExists(
-            db
-              .select({ id: attachment.id })
-              .from(attachment)
-              .where(
-                and(
-                  eq(attachment.id, attachmentIdOfKey),
-                  or(
-                    isNull(attachment.blobKey),
-                    eq(attachment.blobKey, attachmentBlobTombstone.key),
-                    eq(attachment.phoneBlobKey, attachmentBlobTombstone.key),
+          and(
+            // A tombstone dated ahead stands for an upload that may still land (`tombstoneUnwrittenUploads`).
+            lte(attachmentBlobTombstone.createdAt, sql`clock_timestamp()`),
+            notExists(
+              db
+                .select({ id: attachment.id })
+                .from(attachment)
+                .where(
+                  and(
+                    eq(attachment.id, attachmentIdOfKey),
+                    or(
+                      isNull(attachment.blobKey),
+                      eq(attachment.blobKey, attachmentBlobTombstone.key),
+                      eq(attachment.phoneBlobKey, attachmentBlobTombstone.key),
+                    ),
                   ),
                 ),
-              ),
+            ),
           ),
         )
         .orderBy(asc(attachmentBlobTombstone.createdAt), asc(attachmentBlobTombstone.key))
@@ -130,12 +134,17 @@ export interface AttachmentUpload {
  * for a phone that landed but was not kept, which the sweep deletes within
  * the minute, since the row keeps its bytes in the store. An upload records
  * only a key it may write (`attachment-uploads.ts`), never one it only
- * reserved, which holds no object. An object the row names stays. It runs once the write's transaction has ended, so
+ * reserved, which holds no object. An object the row names stays. Note
+ * that each tombstone is dated `landingSeconds` ahead, past the last moment
+ * an upload by a presigned URL may still land, and the sweep reads none
+ * before its date, because a sandbox handed the URL may upload after the
+ * call that handed it failed. It runs once the write's transaction has ended, so
  * an upload whose row landed after all, a commit answered by a failure
  * among them, keeps its objects.
  */
 export function tombstoneUnwrittenUploads(
   uploads: readonly AttachmentUpload[],
+  landingSeconds: number,
 ): TombstoneEffect<void> {
   if (uploads.length === 0) return Effect.void;
 
@@ -156,12 +165,18 @@ export function tombstoneUnwrittenUploads(
     const keys = uploads.flatMap((upload) => upload.keys.filter((key) => !named.has(key)));
 
     if (keys.length === 0) return;
+    const due = sql`clock_timestamp() + make_interval(secs => ${landingSeconds})`;
 
     yield* Database.use((db) =>
       db
         .insert(attachmentBlobTombstone)
-        .values(keys.map((key) => ({ key })))
-        .onConflictDoNothing(),
+        .values(keys.map((key) => ({ key, createdAt: due })))
+        .onConflictDoUpdate({
+          target: attachmentBlobTombstone.key,
+          set: {
+            createdAt: sql`greatest(${attachmentBlobTombstone.createdAt}, excluded.created_at)`,
+          },
+        }),
     );
   });
 }

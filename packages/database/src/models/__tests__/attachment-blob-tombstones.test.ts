@@ -142,10 +142,13 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
           blobKey: writtenKey,
         });
 
-        yield* tombstoneUnwrittenUploads([
-          { id: written.id, keys: [writtenKey] },
-          { id: unwritten, keys: [unwrittenKey] },
-        ]);
+        yield* tombstoneUnwrittenUploads(
+          [
+            { id: written.id, keys: [writtenKey] },
+            { id: unwritten, keys: [unwrittenKey] },
+          ],
+          0,
+        );
 
         const tombstoned = (yield* readAttachmentBlobTombstones(1_000)).filter(
           (tombstone) => tombstone.key === writtenKey || tombstone.key === unwrittenKey,
@@ -178,7 +181,7 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
           blobKey,
         });
 
-        yield* tombstoneUnwrittenUploads([{ id: kept.id, keys: [blobKey, phoneKey] }]);
+        yield* tombstoneUnwrittenUploads([{ id: kept.id, keys: [blobKey, phoneKey] }], 0);
 
         const tombstoned = yield* db
           .select({ key: attachmentBlobTombstone.key })
@@ -198,6 +201,24 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
           .filter((key) => key === blobKey || key === phoneKey);
 
         assert.deepEqual(purgeable, [phoneKey]);
+      }),
+  );
+
+  it.effect(
+    "an unwritten upload's tombstone is not read while a URL handed out for it may still land an upload",
+    () =>
+      Effect.gen(function* () {
+        const pending = `attachments/${randomUUID()}`;
+        const due = `attachments/${randomUUID()}`;
+
+        yield* tombstoneUnwrittenUploads([{ id: randomUUID(), keys: [pending] }], 3_600);
+        yield* tombstoneUnwrittenUploads([{ id: randomUUID(), keys: [due] }], 0);
+
+        const read = (yield* readAttachmentBlobTombstones(100_000))
+          .map((tombstone) => tombstone.key)
+          .filter((key) => key === pending || key === due);
+
+        assert.deepEqual(read, [due]);
       }),
   );
 });

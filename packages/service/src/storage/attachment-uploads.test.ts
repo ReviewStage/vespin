@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { readAttachmentBlobTombstones } from "@repo/database/models/attachment-blob-tombstones";
 import { storedAttachmentColumns } from "@repo/database/models/attachment-body";
 import { attachment } from "@repo/database/schemas/attachment";
 import { attachmentBlobTombstone } from "@repo/database/schemas/attachment-blob-tombstone";
@@ -12,7 +11,7 @@ import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
 import { getTestDB } from "@repo/database/testing";
 import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
 import { pngBytes } from "@repo/wire/testing";
-import { like } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { Effect, Exit, Layer } from "effect";
 import { memoryBlobStore } from "../testing/blob-store-fake.js";
 import { putAttachment, withAttachmentUploads } from "./attachment-uploads.js";
@@ -42,7 +41,16 @@ it.layer(Layer.merge(getTestDB(), blobs.layer))("a new attachment's uploads", (i
 
       assert.ok(Exit.isFailure(failed));
       assert.ok(blobKey !== undefined && blobs.objects.has(blobKey));
-      assert.ok((yield* readAttachmentBlobTombstones(10_000)).some((one) => one.key === blobKey));
+      const db = yield* Database;
+      const key = blobKey;
+
+      // Note that the table is read whole, because the sweep reads the tombstone only once no URL handed out for the upload may still land.
+      const tombstoned = yield* db
+        .select({ key: attachmentBlobTombstone.key })
+        .from(attachmentBlobTombstone)
+        .where(eq(attachmentBlobTombstone.key, key));
+
+      assert.equal(tombstoned.length, 1);
     }),
   );
 
