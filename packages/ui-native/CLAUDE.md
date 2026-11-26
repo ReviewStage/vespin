@@ -464,8 +464,10 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   window, as the panel's head stands Merge under the title, a large button
   as wide as its words (`MergeActRow`), and a split button where the
   repository merges more than one way, its chevron choosing the way as the
-  panel's merge box does; and the rest of its acts in the bar's ⋯, an act
-  that asks first asking in `ConfirmAsk`. The bar holds no press of words,
+  panel's merge box does; its title edited from a tap on it and where it
+  stands changed from its state chip, as the panel's title and pill change
+  them, an act that asks first asking in `ConfirmAsk`; and in the bar's ⋯
+  only Copy GitHub link and Open on GitHub, as the panel's toolbar ⋯. The bar holds no press of words,
   which pushed the page's path out of a compact bar.
 - **The tab bar** is `NativeTabs`: each tab labeled in every window, since a
   compact window's icons alone read as empty (the developer, Nov 23, 2026),
