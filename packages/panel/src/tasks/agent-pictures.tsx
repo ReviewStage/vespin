@@ -554,16 +554,19 @@ export function CallPictures({
   tool,
   input,
   output,
+  runnerKept,
   place = CALL_PICTURES_PLACE.UNDER_ROW,
 }: {
   tool: string;
   input: Parameters<typeof calledPicturesOf>[1];
   output: Parameters<typeof calledPicturesOf>[2];
+  /** The pictures the call's runner kept beside the transcript, the part's `pictures`. */
+  runnerKept?: readonly KeptPicture[] | undefined;
   place?: CallPicturesPlace | undefined;
 }): ReactNode {
   const door = useContext(AgentPicturesContext);
   const { open, viewer } = useViewer(door);
-  const called = calledPicturesOf(tool, input, output);
+  const called = calledPicturesOf(tool, input, output, runnerKept);
   const recorded = recordedVideosOf(tool, output);
 
   if (door === undefined || (called.length === 0 && recorded.length === 0)) return null;

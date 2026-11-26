@@ -788,7 +788,14 @@ export function ToolCallView({
           ) : undefined
         }
       />
-      {inBody ? null : <CallPictures tool={part.tool} input={part.input} output={part.output} />}
+      {inBody ? null : (
+        <CallPictures
+          tool={part.tool}
+          input={part.input}
+          output={part.output}
+          runnerKept={part.pictures}
+        />
+      )}
       <ComputerPermissionNote tool={part.tool} output={part.output} />
       <MachineRefusalCard tool={part.tool} output={part.output} />
       {part.outOfMemory === undefined ? null : <OutOfMemoryOffer outOfMemory={part.outOfMemory} />}
