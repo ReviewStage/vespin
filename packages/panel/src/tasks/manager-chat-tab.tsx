@@ -197,17 +197,20 @@ interface RowThread {
   readonly summary: ReactNode;
   /** Opens the thread, which its menu's Reply in thread presses; none in a thread's tab. */
   readonly onOpen: (() => void) | undefined;
+  /** Whether this message's thread stands open beside the chat. */
+  readonly open: boolean;
 }
 
 function threadOf(message: ManagerChatLiveMessage, doors: ChatDoors): RowThread {
   const { thread } = doors;
 
-  if (thread === undefined) return { action: null, summary: null, onOpen: undefined };
+  if (thread === undefined) return { action: null, summary: null, onOpen: undefined, open: false };
   const root = message.threadRoot ?? message.id;
   const onOpen = () => thread.onOpen(root);
 
   return {
     onOpen,
+    open: thread.open === root,
     action: <ThreadReplyAction onOpen={onOpen} />,
     summary: (
       <ThreadSummary
@@ -350,6 +353,7 @@ function ManagerMessage({
         name={doors.manager.name}
         at={sentTime(message.createdAt)}
         continues={!place.opens}
+        open={thread.open}
         contextMenu={menu.contextMenu}
         actions={
           // Note that a message of files alone has no words to copy, so it offers its reactions, its thread, and its work alone.
@@ -442,6 +446,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
             name={<ActorRef actor={sender} nameOnly byName />}
             at={sentTime(message.createdAt)}
             continues={!place.opens}
+            open={thread.open}
             contextMenu={menu.contextMenu}
             actions={
               // Note that a message of files alone has no words to copy, so it offers its reactions and its thread alone.
