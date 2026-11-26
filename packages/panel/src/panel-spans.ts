@@ -156,6 +156,18 @@ let keystrokeObserver: PerformanceObserver | undefined;
 /** When each row press not yet timed happened, as its event's time stamp, which its timing's start is. */
 const awaitedPresses: number[] = [];
 
+/**
+ * The epoch's time of a moment on the page's clock, by the wall's clock now.
+ * Note that the origin is read now rather than taken from
+ * `performance.timeOrigin`, because the page's clock stops while the Mac
+ * sleeps and the wall's does not, so after a sleep that origin is behind by
+ * the sleep's length, and a span timed from it misses the long frames the
+ * desktop matches it against on the wall's clock.
+ */
+function epochOf(pageTime: number): number {
+  return Date.now() - performance.now() + pageTime;
+}
+
 /** The span a keystroke on `target` is timed under: the timed box it was pressed in, if any. */
 function timedBoxOf(target: Node | null): KeystrokeSpanName | undefined {
   if (target === null) return undefined;
@@ -181,7 +193,7 @@ function recordKeystrokes(list: PerformanceObserverEntryList): void {
     const name = timedBoxOf(entry.target);
 
     if (name === undefined) continue;
-    const startedAt = performance.timeOrigin + entry.startTime;
+    const startedAt = epochOf(entry.startTime);
     const delay = entry.processingStart - entry.startTime;
     const processing = entry.processingEnd - entry.processingStart;
     recordPanelSpan({
@@ -244,7 +256,7 @@ function recordRowPresses(list: PerformanceObserverEntryList): void {
 
     if (awaited === -1) continue;
     awaitedPresses.splice(awaited, 1);
-    const startedAt = performance.timeOrigin + entry.startTime;
+    const startedAt = epochOf(entry.startTime);
     const delay = entry.processingStart - entry.startTime;
     const processing = entry.processingEnd - entry.processingStart;
     // Note that a timing's duration is rounded to 8 ms while its handlers' end is not, so what is left past them is held at zero.

@@ -66,7 +66,10 @@ export const outsideTransaction = <A, E>(
  * The deployment's listener over the services the report sends through,
  * read once as the layer is built: the agents' sessions as the deployment acting for the
  * agent's account, GitHub, which a send to an agent on a repository asks
- * whether its starter still reaches it, and the workspace's Slack bot; and
+ * whether its starter still reaches it, the workspace's Slack bot, and the
+ * Blob store the pictures a turn showed are read from for Slack, which the
+ * runtime must build this layer over (`BlobStore` answers unconfigured
+ * where nothing sets it); and
  * the deployment's APNs sender where the layer is built over one, read
  * optionally, so a runtime without one pushes nothing.
  */

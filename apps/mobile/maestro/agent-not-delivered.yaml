@@ -51,9 +51,12 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     notVisible: "Not delivered.*"
     timeout: 5000
+# Note that the words are read from the text view inside the field, since the
+# field's id stands on the pill field's own view, whose text is empty.
 - assertVisible:
-    id: "composer-field"
     text: "Show the invite's expiry in the email too\\."
+    childOf:
+      id: "composer-field"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-undelivered-edited

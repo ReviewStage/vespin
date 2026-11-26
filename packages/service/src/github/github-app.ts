@@ -10,8 +10,9 @@
  * (`GET /app/installations/{id}`) and mints its tokens (`POST
  * /app/installations/{id}/access_tokens`). A listing is read on a token
  * minted for the listing alone (`GET /installation/repositories`); a
- * repository is the workspace's only where that listing holds it, and only
- * then is a token minted for it: contents read for a checkout or a file,
+ * repository is the workspace's only where the installation was given it,
+ * which a token minted for its metadata alone says (GitHub refuses the mint
+ * otherwise), and only then is a token minted for it: contents read for a checkout or a file,
  * contents and pull requests read for what a coding agent published, and
  * contents and pull requests write for its branch and pull request, with
  * what reads its pull request's CI beside the last two where the
@@ -277,6 +278,9 @@ const TOKEN_LIFE = {
   READ: Duration.minutes(10),
   SANDBOX: Duration.minutes(45),
 } as const;
+
+/** GitHub's answer to a mint naming a repository its installation was not given (https://docs.github.com/en/rest/apps/apps#create-an-installation-access-token-for-an-app). */
+const MINT_UNREACHED_STATUS = 422;
 
 /** The mint as GitHub takes it: the repositories by name, none for every one, and the permissions the token is cut to. */
 interface InstallationTokenRequest {
@@ -652,7 +656,7 @@ export interface GitHubAppService {
    * workspace's installation reaches it, and else where the member's own
    * token does (`member`, none for an automation), with which of the two;
    * or why not. Only an installation on the owner can reach it, and the
-   * listing is read only as far as the repository. The installation's why:
+   * repository is read on its own, never paged to. The installation's why:
    * none connected, one GitHub no longer runs or that was suspended, one on
    * another account than the owner, one on the owner never given the
    * repository, or one given all of the owner's that still does not list
@@ -1308,10 +1312,9 @@ function installationsOnToken(
   );
 }
 
-/** The repositories an installation token reaches, every page of them, or as far as the one named where one is. */
+/** The repositories an installation token reaches, every page of them. */
 function repositoriesOnInstallationToken(
   client: GitHubClient,
-  named?: string,
 ): Effect.Effect<readonly GitHubRepository[], GitHubFailure> {
   return Effect.map(
     githubRead(
@@ -1319,12 +1322,7 @@ function repositoriesOnInstallationToken(
         client.paginate(
           "GET /installation/repositories",
           { per_page: PAGING.PER_PAGE },
-          {
-            maxPages: PAGING.MAX_PAGES,
-            ...(named !== undefined && {
-              enough: (items) => items.some((one) => sameName(one.full_name, named)),
-            }),
-          },
+          { maxPages: PAGING.MAX_PAGES },
         ),
         (items) => ({ data: items }),
       ),
@@ -1708,12 +1706,55 @@ function githubAppServiceOver(
       return { onOwner: Option.none<GitHubInstallation>(), running, lapsedOnOwner };
     });
 
-  /** The installation's repositories, every one or as far as the one named, read on a token minted for the listing alone. */
-  const repositoriesOf = (reached: GitHubInstallation, named?: string) =>
+  /** The installation's repositories, every one, read on a token minted for the listing alone. */
+  const repositoriesOf = (reached: GitHubInstallation) =>
     Effect.flatMap(
       mint(reached.id, { permissions: INSTALLATION_TOKEN_PERMISSIONS.LIST }, TOKEN_LIFE.READ),
-      (minted) => repositoriesOnInstallationToken(minted.client, named),
+      (minted) => repositoriesOnInstallationToken(minted.client),
     );
+
+  /**
+   * The one repository named, where the installation was given it: read on
+   * a token minted for that repository alone, which GitHub refuses (422)
+   * for a name the installation does not reach, and answered under the name
+   * asked; none where GitHub refuses the mint so, or reads no such
+   * repository (404). Note that we mint for the name rather than read it on
+   * the listing's token, because an installation token reads any public
+   * repository, so only the mint says the installation was given it; and
+   * that we read the one repository rather than page the listing to it,
+   * because an installation of a few hundred repositories took seconds to
+   * page through, one request out at a time.
+   */
+  const givenRepositoryOf = (reached: GitHubInstallation, fullName: string) =>
+    Effect.gen(function* () {
+      const parts = repositoryParts(fullName);
+
+      const minted = yield* mint(
+        reached.id,
+        { repositories: [parts.repo], permissions: INSTALLATION_TOKEN_PERMISSIONS.LIST },
+        TOKEN_LIFE.READ,
+      ).pipe(
+        Effect.map(Option.some),
+        Effect.catchTag("GitHubRejected", (refused) =>
+          refused.status === MINT_UNREACHED_STATUS
+            ? Effect.succeed(Option.none<GitHubBearer>())
+            : Effect.fail(refused),
+        ),
+      );
+
+      if (Option.isNone(minted)) return Option.none<GitHubRepository>();
+
+      const read = yield* readOptional(
+        githubRead(
+          minted.value.client.request("GET /repos/{owner}/{repo}", parts),
+          RepositorySchema,
+        ),
+      );
+
+      return Option.filter(Option.map(read, repositoryOf), (repository) =>
+        sameName(repository.fullName, fullName),
+      );
+    });
 
   /** Every running installation's repositories, read whole, with the installations themselves; none where none runs. */
   const workspaceListing = (organizationId: string) =>
@@ -1799,8 +1840,8 @@ function githubAppServiceOver(
    * The repository and the installation it is reached through, where the
    * workspace's installation on its owner reaches it, or why it does not:
    * only an installation of this workspace on the owner can reach it, never
-   * another workspace's, and the listing is read only as far as the page the
-   * repository is on. With none on the owner, the workspace's connection
+   * another workspace's, and the repository is read on a token minted for
+   * it alone (`givenRepositoryOf`). With none on the owner, the workspace's connection
    * lapsed where the one on the owner or every one it holds no longer runs,
    * and is on another account otherwise, named where it holds one alone.
    */
@@ -1838,11 +1879,11 @@ function githubAppServiceOver(
       }
 
       const onOwner = found.onOwner.value;
-      const isNamed = (repository: GitHubRepository) => sameName(repository.fullName, fullName);
-      const repositories = yield* repositoriesOf(onOwner, fullName);
-      const repository = repositories.find(isNamed);
+      const given = yield* givenRepositoryOf(onOwner, fullName);
 
-      if (repository !== undefined) {
+      if (Option.isSome(given)) {
+        const repository = given.value;
+
         // Note that the id is recorded under the name it is reached by, so a rename GitHub reports later relabels it.
         if (repository.id !== undefined) {
           yield* noteGitHubRepository({

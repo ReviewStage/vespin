@@ -1,0 +1,44 @@
+# page-edge-scroll.yaml -- scrolls a page holding a tall text view until `ELEMENT` shows, down unless `DIRECTION` is UP, by drags at the window's leading edge, which also lower the keyboard of a page that lowers it on a drag.
+#
+# Note that the drags run 2% across the window, in the page's own margin,
+# because a drag at the window's middle, where `scrollUntilVisible` swipes,
+# lands on a text view taller than the window can hold, which then scrolls
+# its own words while the page stands still; whether it did depended on
+# where the page stood, so the steps after it passed in one appearance and
+# failed in the other. Note too that each drag starts at the window's
+# middle or above it, clear of a keyboard standing over its foot, and that
+# each swipe's points are written out whole, because Maestro reads a swipe's
+# percentages as numbers when it loads the flow, before any `${}` in them is
+# filled in.
+appId: dev.vespin.ios
+env:
+  DIRECTION: ${DIRECTION || 'DOWN'}
+---
+- runFlow:
+    when:
+      true: ${DIRECTION == 'UP'}
+    commands:
+      - repeat:
+          times: 12
+          while:
+            notVisible: "${ELEMENT}"
+          commands:
+            - swipe:
+                start: "2%, 25%"
+                end: "2%, 50%"
+                duration: 800
+            - waitForAnimationToEnd
+- runFlow:
+    when:
+      true: ${DIRECTION != 'UP'}
+    commands:
+      - repeat:
+          times: 12
+          while:
+            notVisible: "${ELEMENT}"
+          commands:
+            - swipe:
+                start: "2%, 50%"
+                end: "2%, 25%"
+                duration: 800
+            - waitForAnimationToEnd

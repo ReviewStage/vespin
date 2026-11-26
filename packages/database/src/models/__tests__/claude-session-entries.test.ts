@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
+import { claudeSessionEntries } from "../../schemas/claude-session-entry.js";
 import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import { getTestDB, plansOf, startTask } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
@@ -16,6 +18,7 @@ import {
   listSessionEntrySubkeys,
   loadSessionEntries,
   loadSessionEntryPage,
+  markSessionsForResume,
   type SessionEntryPage,
 } from "../claude-session-entries.js";
 import { deleteConversations } from "../conversation-delete.js";
@@ -38,12 +41,61 @@ const entry = (uuid: string) => ({ type: "user", uuid, message: { role: "user", 
 /** A session's root: its first entry, the user's, with no parent. */
 const root = (uuid: string) => ({ ...entry(uuid), parentUuid: null });
 
+/** An entry of the kind given, standing alone in its chain. */
+const said = (type: string, uuid: string) => ({ ...entry(uuid), type, parentUuid: null });
+
+/** A compaction preserving the message given, which lists in `allUuids` a message never written, as the CLI's do. */
+const compaction = (uuid: string, kept: string) => ({
+  ...said("system", uuid),
+  subtype: "compact_boundary",
+  compactMetadata: {
+    preservedMessages: { anchorUuid: "s", uuids: [kept], allUuids: [kept, "unwritten"] },
+  },
+});
+
+/**
+ * A session compacted twice, its latest compaction preserving the message
+ * given: its whole transcript, and what a resume from that compaction loads
+ * where the message is stored, the title before it kept.
+ */
+function compactedSession(preserved: string) {
+  const title = { type: "custom-title", customTitle: "Invitations", sessionId: SESSION };
+
+  const before = [
+    root("a"),
+    said("assistant", "b"),
+    compaction("k1", "b"),
+    title,
+    said("user", "c"),
+  ];
+
+  const after = [said("assistant", "d"), compaction("k2", preserved), said("user", "s")];
+
+  return { before, after, whole: [...before, ...after], resumed: [title, ...after] };
+}
+
+/** A compacted session appended in two batches, as the SDK mirrors it. */
+const appendCompacted = (
+  userId: string,
+  conversationId: string,
+  compacted: ReturnType<typeof compactedSession>,
+) =>
+  Effect.andThen(
+    appendSessionEntries(userId, conversationId, MAIN, compacted.before),
+    appendSessionEntries(userId, conversationId, MAIN, compacted.after),
+  );
+
 /** A key's whole transcript as the account reads it, none read as no entries. */
 const loaded = (userId: string, conversationId: string, key: typeof MAIN | typeof SUBAGENT) =>
   loadSessionEntries(userId, conversationId, key).pipe(Effect.map(Option.getOrElse(() => [])));
 
 /** A key's transcript read page by page from its first, each page's entries in its own list. */
-const paged = (userId: string, conversationId: string, key: typeof MAIN | typeof SUBAGENT) =>
+const paged = (
+  userId: string,
+  conversationId: string,
+  key: typeof MAIN | typeof SUBAGENT,
+  options: { readonly fromLatestCompaction?: boolean } = {},
+) =>
   Effect.gen(function* () {
     const pages: Array<ReadonlyArray<unknown>> = [];
     let after: number | null = null;
@@ -54,6 +106,7 @@ const paged = (userId: string, conversationId: string, key: typeof MAIN | typeof
         conversationId,
         key,
         after,
+        options,
       );
 
       pages.push(page.entries);
@@ -224,6 +277,58 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
       }),
   );
 
+  it.effect.each([
+    { found: true, from: "the earliest message its latest compaction preserves" },
+    {
+      found: false,
+      from: "its first entry, where a message the compaction preserves is not stored",
+    },
+  ])(
+    "a resume from the latest compaction loads the transcript from $from, every other kind kept",
+    ({ found }) =>
+      Effect.gen(function* () {
+        const { userId, conversationId } = yield* openAgent;
+        const compacted = compactedSession(found ? "d" : "lost");
+        yield* appendCompacted(userId, conversationId, compacted);
+
+        assert.deepEqual(
+          yield* paged(userId, conversationId, MAIN, { fromLatestCompaction: true }),
+          [found ? compacted.resumed : compacted.whole],
+        );
+      }),
+  );
+
+  it.effect(
+    "a session stored before the marks resumes whole until the sweep has marked it, then from its latest compaction",
+    () =>
+      Effect.gen(function* () {
+        const { userId, conversationId } = yield* openAgent;
+        const compacted = compactedSession("d");
+        yield* appendCompacted(userId, conversationId, compacted);
+        const fromLatestCompaction = { fromLatestCompaction: true };
+
+        // A row from before the marks carries none, and no queue names its session until the sweep's scan finds it.
+        yield* Effect.flatMap(Database, (db) =>
+          db
+            .update(claudeSessionEntries)
+            .set({ resumeRole: null, entryUuid: null, resumeFrom: null })
+            .where(eq(claudeSessionEntries.conversationId, conversationId)),
+        );
+        assert.deepEqual(yield* paged(userId, conversationId, MAIN, fromLatestCompaction), [
+          compacted.whole,
+        ]);
+
+        // Note that each sweep scans one session and marks a few rows, so the session is found and marked across several.
+        const bounds = { sessionsPerSweep: 1, rowsPerSweep: 3, rowsPerBatch: 2 };
+
+        while ((yield* markSessionsForResume(bounds)) > 0);
+
+        assert.deepEqual(yield* paged(userId, conversationId, MAIN, fromLatestCompaction), [
+          compacted.resumed,
+        ]);
+      }),
+  );
+
   it.effect(
     "a page of a transcript takes each entry off the key's index, sorting only the page",
     () =>
@@ -239,6 +344,15 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
           // Note that the one sort is the page's own order, never a step's over the rest of the session.
           assert.equal(plan.match(/Sort Key/g)?.length, 1);
         }
+
+        // A resume's start is read off the same index, from the transcript's end back.
+        const [start] = yield* plansOf(
+          loadSessionEntryPage(`user-${randomUUID()}`, randomUUID(), MAIN, null, {
+            fromLatestCompaction: true,
+          }),
+        );
+
+        assert.match(start?.plan ?? "", /Index Scan Backward using claude_session_entries_key_idx/);
       }),
   );
 

@@ -27,6 +27,9 @@ import type { ReactNode } from "react";
 /** A group of automations, one owner's, a page section below the one before it. */
 const AUTOMATION_GROUP = "automation-group [.automation-group+&]:mt-page-section-gap";
 
+/** What a group's count counts, said after its figure to a reader. */
+const AUTOMATIONS_NOUN = "automations";
+
 /** An automation's or a run's metadata at its row's end, in a line of its own. */
 export const AUTOMATION_ROW_META =
   "automation-row-meta inline-flex items-center gap-block-gap align-top";
@@ -83,6 +86,7 @@ export function AutomationGroupList({
   nameMasked = true,
   headed,
   fold,
+  count,
   children,
 }: {
   name: string;
@@ -91,6 +95,8 @@ export function AutomationGroupList({
   headed: boolean;
   /** How a headed group folds under its heading; left out, its rows always stand. */
   fold?: GroupFold | undefined;
+  /** How many rows a headed group holds, after its name, as a phone's list counts them; none where it counts nothing. */
+  count?: number | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   const rows = <List label={name}>{children}</List>;
@@ -101,6 +107,7 @@ export function AutomationGroupList({
         heading={GROUP_HEADING.H2}
         label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
         fold={fold}
+        count={count === undefined ? undefined : { value: count, noun: AUTOMATIONS_NOUN }}
       >
         {rows}
       </GroupHeader>
@@ -158,8 +165,9 @@ export function AutomationOwnerFrame({
 /**
  * The list while it is first read, in its own list and rows: each row's
  * clock tile, its name over what fires it, its owner and its next run in their
- * columns, a narrow room's rows naming neither, and its switch, so the list
- * lands where the blocks stood. The rows open nothing.
+ * columns, and its switch, a narrow room's rows naming neither and ending in
+ * a chevron, as a phone's rows do, so the list lands where the blocks stood.
+ * The rows open nothing.
  */
 export function AutomationListSkeleton({ narrow }: { narrow: boolean }): React.JSX.Element {
   return (
@@ -183,7 +191,12 @@ export function AutomationListSkeleton({ narrow }: { narrow: boolean }): React.J
               />
             )
           }
-          actions={<SettingsControlSkeleton control={SETTINGS_SKELETON_CONTROL.SWITCH} />}
+          actions={
+            narrow ? undefined : (
+              <SettingsControlSkeleton control={SETTINGS_SKELETON_CONTROL.SWITCH} />
+            )
+          }
+          chevron={narrow}
         />
       ))}
     </AutomationGroupList>

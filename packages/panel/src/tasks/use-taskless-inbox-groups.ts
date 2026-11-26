@@ -13,6 +13,7 @@
 
 import type { AgentPageAnswerView } from "@repo/features/agent-view";
 import type { ListedAgent } from "@repo/features/agent-wire";
+import { inboxRowsOf } from "@repo/features/inbox-digest";
 import {
   agentHolder,
   type InboxAgentHolder,
@@ -20,6 +21,8 @@ import {
   type InboxHolderAgent,
   inboxGroup,
 } from "@repo/features/inbox-list-model";
+import type { InboxItem } from "@repo/features/inbox-wire";
+import { sameManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { inArray, useLiveQuery } from "@tanstack/react-db";
@@ -59,14 +62,15 @@ function sameAgent(a: InboxHolderAgent, b: InboxHolderAgent): boolean {
     a.model === b.model &&
     a.workspaceId === b.workspaceId &&
     a.repository === b.repository &&
-    a.face?.character === b.face?.character &&
-    a.face?.color === b.face?.color
+    sameManagerFace(a.face, b.face)
   );
 }
 
 /** The agents on no task the Inbox lists, and where the account's feed they are told in stands. */
 export interface TasklessInboxGroups {
   readonly groups: readonly InboxGroup<InboxAgentHolder>[];
+  /** Each agent's whole items as the feed holds them, by the agent's id, for a surface drawing a thread itself; none until it first answers. */
+  readonly whole: Readonly<Record<string, readonly InboxItem[]>> | undefined;
   /** Whether the feed, or the read naming an agent it holds items of, has not answered yet, so an agent's items may still be on their way. */
   readonly pending: boolean;
   /** Whether the feed refused, so the list offers to read it again whether or not a task holds items. */
@@ -174,9 +178,9 @@ export function useTasklessInboxGroups(
       const agent = was !== undefined && sameAgent(was, named) ? was : named;
       kept.current.set(agentId, agent);
 
-      return [inboxGroup(agentHolder(agent), items)];
+      return [inboxGroup(agentHolder(agent), inboxRowsOf(items))];
     });
   }, [fed, workspaceId, byId, pages, models]);
 
-  return { groups, pending: feed.isPending || naming, failed: feed.isError };
+  return { groups, whole: fed, pending: feed.isPending || naming, failed: feed.isError };
 }

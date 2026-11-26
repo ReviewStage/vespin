@@ -229,6 +229,7 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     nextRunAt: automation.nextRunAt?.getTime() ?? null,
     lastRun: lastRun ?? null,
     createdAt: automation.createdAt.getTime(),
+    updatedAt: automation.updatedAt.getTime(),
     scope: automation.scope,
     repositories: automation.repositories,
     target:

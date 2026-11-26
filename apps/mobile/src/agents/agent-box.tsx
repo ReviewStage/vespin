@@ -13,6 +13,7 @@
  * the agent for itself is how the thread's composer fell behind the agent's.
  */
 
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { MCP_SERVER_LABEL } from "@repo/features/words";
@@ -33,9 +34,9 @@ import {
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { type ReactNode, useState } from "react";
+import { useDevicePlatform } from "../tasks/use-start.js";
 import { type AgentMode, useAgentMode } from "./use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "./use-agent-model.js";
-import { useAgentPlaceGlyph } from "./use-agent-place.js";
 import { type AgentServers, useAgentServers } from "./use-agent-servers.js";
 import { type AgentCommandsPlace, useAgentCommandsPlace } from "./use-agent-tools.js";
 
@@ -89,10 +90,11 @@ function AgentMachineChip({
   agent,
   commands,
 }: {
-  readonly agent: Pick<FollowedAgent, "machine" | "mac" | "workspaceId">;
+  readonly agent: Pick<FollowedAgent, "machine" | "mac">;
   readonly commands: AgentCommandsPlace | undefined;
 }) {
-  const symbol = useAgentPlaceGlyph(agent);
+  const platform = useDevicePlatform(agent.mac?.deviceId);
+  const symbol = runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform });
 
   const menu =
     commands === undefined || commands.machines.length === 0

@@ -32,7 +32,13 @@
  *   caret and the selection alone marking it, the press's mark kept before
  *   it and the trail and the menu's box giving way to it; once a key ends
  *   the edit, the focus goes back to whichever holds the title, the press or
- *   the menu's box.
+ *   the menu's box. Where the lead holds a control of the edit's own, as a
+ *   Manager's face well whose picker changes its face beside its name
+ *   (`holding`), the focus going to the lead, or into the layer its control
+ *   hung, a picker drawn in a portal and the colors floating from it, ends
+ *   nothing, as a group head's editor keeps it (`GroupHeaderEditor`); the
+ *   caller ends it through its handle (`ref`) when a press away put that
+ *   layer away.
  * - `detail` follows the title on its last baseline: quiet words saying
  *   what the page is beside its name, on one line
  *   that gives way, cut short, before the title does.
@@ -90,7 +96,7 @@
  */
 
 import { Predicate } from "effect";
-import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { type ReactNode, type Ref, type RefObject, useLayoutEffect, useRef } from "react";
 import { NotFoundIcon } from "../../icons/lucide-glyphs.js";
 import { said } from "../../said.js";
 import { ReplayMask, ReplayWords } from "../../session-replay-marks.js";
@@ -98,20 +104,34 @@ import { type TitleSeat, useWrapWhenCut } from "../../use-wrap-when-cut.js";
 import { BREADCRUMBS_VARIANT, Breadcrumbs } from "../breadcrumbs/breadcrumbs.js";
 import type { Crumb } from "../breadcrumbs/crumb.js";
 import { EmptyState, type EmptyStateAction } from "../empty-state/empty-state.js";
-import { INLINE_EDIT_LOOK, InlineEdit, type InlineEditEnd } from "../inline-edit/inline-edit.js";
+import {
+  INLINE_EDIT_LOOK,
+  InlineEdit,
+  type InlineEditEnd,
+  type InlineEditHandle,
+} from "../inline-edit/inline-edit.js";
 import { FILL_ELEMENT, Fill } from "../layout/layout.js";
 import type { ContextMenuProps } from "../menu/context-menu.js";
 import { ONE_LINE_ELEMENT, OneLine } from "../one-line/one-line.js";
 import { Tooltip, wholeWordsHint } from "../tooltip/hint.js";
 import {
+  TOOLBAR_CORNERS,
   TOOLBAR_INSET,
   TOOLBAR_LOOK,
+  type ToolbarCorners,
   ToolbarFrame,
   type ToolbarInset,
   type ToolbarLook,
 } from "./toolbar-frame.js";
 
-export { TOOLBAR_INSET, TOOLBAR_LOOK, type ToolbarInset, type ToolbarLook };
+export {
+  TOOLBAR_CORNERS,
+  TOOLBAR_INSET,
+  TOOLBAR_LOOK,
+  type ToolbarCorners,
+  type ToolbarInset,
+  type ToolbarLook,
+};
 
 /** What the not-found state calls the thing it could not show. */
 export const NOT_FOUND_THING = {
@@ -219,6 +239,14 @@ export interface ToolbarTitlePress {
 export interface ToolbarTitleEdit {
   readonly label: string;
   readonly maxLength?: number | undefined;
+  /**
+   * Whether a layer the lead's control hung stands, as a face well's picker,
+   * which the focus goes into and out of without ending the edit; given at
+   * all, the lead is the edit's own, so the focus going to it ends nothing.
+   */
+  readonly holding?: boolean | undefined;
+  /** The field's handle: `leave`, which the caller ends the edit through when a press away put the lead's layer away, and the field the layer hands the focus back to. */
+  readonly ref?: Ref<InlineEditHandle> | undefined;
   readonly onEnd: (end: InlineEditEnd) => void;
 }
 
@@ -258,6 +286,8 @@ export interface ToolbarProps {
   readonly end?: ToolbarInset | undefined;
   /** How the slots are laid: the window's, or a phone's one control a corner with the title centered; the window's where none is named. */
   readonly look?: ToolbarLook | undefined;
+  /** How wide a phone's corners stand: one control each where none is named, or as wide as the wider corner's controls; read only by a phone's look. */
+  readonly corners?: ToolbarCorners | undefined;
   /** What the bar heads (`task`), which names it to the page's own rules and its tests as `task-head`. */
   readonly place?: string | undefined;
   /** Whether the bar is a container its slots' rules answer the width of (`@container ui-toolbar`), so a control folds before the title or tabs beside it do. */
@@ -275,6 +305,7 @@ function ToolbarTitle({
   press,
   menu,
   edit,
+  within,
 }: {
   title: ReactNode;
   /** Whether a title in words shows in a screen recording (`titleReplayUnmasked`). */
@@ -285,6 +316,8 @@ function ToolbarTitle({
   menu?: ToolbarTitleMenu | undefined;
   /** The title's rename in place, while it stands (`titleEdit`). */
   edit?: ToolbarTitleEdit | undefined;
+  /** The boxes beside the field the edit owns, the focus going into which ends nothing (`holding`). */
+  within?: readonly RefObject<HTMLElement | null>[] | undefined;
 }): React.JSX.Element {
   if (!Predicate.isString(title)) return <>{title}</>;
 
@@ -297,6 +330,9 @@ function ToolbarTitle({
           maxLength={edit.maxLength}
           look={INLINE_EDIT_LOOK.FIELD}
           editing
+          holding={edit.holding}
+          within={within}
+          ref={edit.ref}
           onEnd={edit.onEnd}
         />
       </ReplayWords>
@@ -465,6 +501,7 @@ export function Toolbar({
   start,
   end,
   look,
+  corners,
   place,
   measure,
   folded,
@@ -473,6 +510,7 @@ export function Toolbar({
   const frame = useRef<HTMLElement>(null);
   const wrapped = useWrapWhenCut(frame, HEADING_SEAT, wrapHeading === true);
   const heading = useRef<HTMLDivElement>(null);
+  const leading = useRef<HTMLDivElement>(null);
   const refocus = useRef(false);
   // Note that an edit a key ended hands the focus back to what holds the title once it is drawn again, as a tab's rename does, which is kept here because the title is drawn afresh as its menu's box comes back.
   useLayoutEffect(() => {
@@ -492,6 +530,9 @@ export function Toolbar({
           },
         };
 
+  // Note that the lead is the edit's own only where it holds the edit's control, so a way back pressed mid-edit still keeps what was typed.
+  const within = titleEdit?.holding === undefined ? undefined : [leading];
+
   // Note that a title being renamed stands alone, its trail and its menu giving way to its field.
   const crumbs = trail !== undefined && trail.length > 0 && titleEdit === undefined;
 
@@ -502,12 +543,17 @@ export function Toolbar({
       start={start}
       end={end}
       look={look}
+      corners={corners}
       place={place}
       measure={measure}
       folded={folded}
       wrapHeading={wrapHeading}
     >
-      {said(lead) ? <div className={LEAD}>{lead}</div> : null}
+      {said(lead) ? (
+        <div ref={leading} className={LEAD}>
+          {lead}
+        </div>
+      ) : null}
       <div ref={heading} className="ui-toolbar-heading">
         <TitleMenu
           menu={titlePress === undefined && titleEdit === undefined ? titleMenu : undefined}
@@ -541,6 +587,7 @@ export function Toolbar({
               press={titlePress}
               menu={titleMenu}
               edit={edit}
+              within={within}
             />
           ) : pickUp !== undefined && pickUp.name !== "" ? (
             <ReplayMask>

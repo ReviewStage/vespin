@@ -12,7 +12,6 @@ import {
   cn,
   NOTE_LINE_LOOK,
   NoteLine,
-  Shimmer,
   TIME_LOOK,
   Time,
   Tooltip,
@@ -26,7 +25,7 @@ import { TurnCard } from "./turn-card.js";
  * working-time.tsx -- how long an agent has been working: the count a working line draws, and the line a finished turn ends on.
  *
  * The count is the line's, never a row of its own: a transcript's
- * shimmering "Working…" says it after the word, and a running subagent's
+ * quiet "Working…" says it after the word, and a running subagent's
  * row says it beside its spinner. The count is a `Time` look that ticks each second only
  * while some count stands on screen. Once a
  * turn has finished, the count gives way to one quiet line at its end
@@ -34,8 +33,7 @@ import { TurnCard } from "./turn-card.js";
  * turn: "Worked for 1m 18s · Today, 3:42 PM", the day worded as a call's
  * header words it, and the turn's card on hover (`turn-card.tsx`). The two
  * read as one line in two states, so they share a type, a color, and the
- * room above them, the finished line only without the shimmer: both are
- * the transcript's quiet note line (`NoteLine`), selectable, as the
+ * room above them: both are the transcript's quiet note line (`NoteLine`), selectable, as the
  * transcript around them is.
  */
 
@@ -112,7 +110,7 @@ export function WorkedFor({
   );
 }
 
-/** The shimmering line a transcript ends on while its agent works, saying what it is doing and counting how long where the run's start is known. */
+/** The quiet line a transcript ends on while its agent works, saying what it is doing and counting how long where the run's start is known. */
 export function WorkingLine({
   startedAt,
   words = WORKING_LINE,
@@ -122,7 +120,7 @@ export function WorkingLine({
   startedAt: number | undefined;
   /** What the agent is doing, as far as its transcript shows it: "Working…" unless said otherwise. */
   words?: string;
-  /** What stands after the words without their light, as the chip of the machine they name; none where nothing does. */
+  /** What stands after the words, as the chip of the machine they name; none where nothing does. */
   after?: ReactNode;
   /** What is said aloud where `after` says more than the words: the whole line in words; the words themselves where none. */
   heard?: string;
@@ -132,11 +130,11 @@ export function WorkingLine({
   return (
     <NoteLine look={NOTE_LINE_LOOK.INSET} selectable data-working="">
       {after === undefined ? (
-        <Shimmer>{words}</Shimmer>
+        words
       ) : (
         // Note that the words and what follows them share one run of text, so the space between them stands as a sentence's does.
         <span>
-          <Shimmer>{words.trimEnd()}</Shimmer> {after}
+          {words.trimEnd()} {after}
         </span>
       )}
       {startedAt === undefined ? null : <WorkingTime startedAt={startedAt} />}

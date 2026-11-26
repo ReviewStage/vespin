@@ -11,8 +11,9 @@
    it is written (`mobile-bar.tsx`). What stays here is what utilities say
    badly: the sheet laid on the window's frame and the custom properties it
    is measured by, the selectors that read the room and the shell's state
-   (`:has()`), the drag regions, the frame's translucency, and the panes'
-   slide.
+   (the marks its pages hold on it, `shell-marks.tsx`, rather than a
+   `:has()` over what they draw), the drag regions, the frame's
+   translucency, and the panes' slide.
 
    The panel lays it just before desktop.css (index.css), which restages
    these elements for each of the window's own screens. Anything else that
@@ -147,21 +148,6 @@
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
 }
 
-/* How far a sheet's card reaches past its box, set on the sheet for one pane
-   motion (`pane-motion.tsx`) and taken by its card alone: registered as not
-   inherited, so setting it draws nothing else the sheet holds again. */
-@property --sheet-reach-left {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-
-@property --sheet-reach-right {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-
 /* A whole-window place whose drawing failed (Settings, a version history)
    leaves its boundary's one failure (`@repo/ui`'s `ReloadState`) where its
    columns stood, so it spans them both and stands in the window's middle
@@ -172,20 +158,12 @@
 
 /* Sidebar ----------------------------------------------------------------- */
 
-/* Folding the sidebar away moves it rather than narrowing it: the work column
-   takes the window at once and the sidebar slides off the left edge, on
-   transform and opacity alone, so neither column re-wraps a line on the
-   way, while the work's sheet uncovers itself from the sidebar's edge as it
-   goes and what it holds glides to its new place, on the same beat
-   (pane-motion.tsx), so neither draws over the other. Unfolding is the same
-   slide back in, the sheet covered back from where it stood to the column
-   already narrowed. The transition below is the floating sidebar's alone: a
-   fold plays its own motion and stops this one. Only the plans' shell
-   folds, so Settings always keeps its page list. The shell clips what slides past its edges with `clip` rather
-   than `hidden`, because `hidden` makes it a scroll container: a panel sliding
-   in from past the right edge is room that focus or scrollIntoView would
-   scroll the whole window sideways into and leave it there. Every shell
-   clips, Settings' and a version history's too. */
+/* Folding the sidebar away moves it off the left edge and the work column
+   takes the window, both at once. Only a sidebar floating open slides, below. Only the plans' shell folds, so Settings always keeps its
+   page list. The shell clips what lies past its edges with `clip` rather than
+   `hidden`, because `hidden` makes it a scroll container: room that focus or
+   scrollIntoView would scroll the whole window sideways into and leave it
+   there. Every shell clips, Settings' and a version history's too. */
 .desktop-shell {
   overflow: clip;
 }
@@ -249,11 +227,8 @@
    hidden, between visits (`desktop-shell.tsx`) is no page standing, so a
    page with tabs is any but the Inbox's, or the Inbox while it is shown. */
 :where(:root):not([data-ui-room="narrow"])
-  .desktop-shell
-  > .desktop-main:not(
-    :has(.desktop-task:not([data-page="inbox"])),
-    [data-inbox-shown="true"]
-  )::before,
+  .desktop-shell:not([data-task-page])
+  > .desktop-main:not([data-inbox-shown="true"])::before,
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > :is(.desktop-settings, .desktop-version-history)
@@ -369,11 +344,8 @@
 }
 
 :where(:root):not([data-ui-room="narrow"])
-  .desktop-shell
-  > .desktop-main:not(
-    :has(.desktop-task:not([data-page="inbox"])),
-    [data-inbox-shown="true"]
-  )::before,
+  .desktop-shell:not([data-task-page])
+  > .desktop-main:not([data-inbox-shown="true"])::before,
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > .desktop-main
@@ -396,13 +368,7 @@
   > .side-panel::before {
   position: absolute;
   z-index: -1;
-  /* A sheet a pane change narrowed draws its card out to where its edge
-     stood, under the frame that follows the pane in (`pane-motion.tsx`). */
-  --sheet-reach-left: inherit;
-  --sheet-reach-right: inherit;
-
-  inset: var(--desktop-bar-height) calc(-1 * var(--sheet-reach-right)) 0
-    calc(-1 * var(--sheet-reach-left));
+  inset: var(--desktop-bar-height) 0 0 0;
   content: "";
   pointer-events: none;
 }
@@ -532,16 +498,15 @@
 
    Note that a box on the way down that disqualifies a bar is written
    `… :where(.ui-pane-bar, .ui-toolbar)`, never `… *`, though both name the
-   bar itself, because Chromium files these rules' `:has()` and
-   `:nth-child(of S)` under one invalidation set each, shared by every rule
+   bar itself, because Chromium files these rules' `:nth-child(of S)`
+   under one invalidation set, shared by every rule
    that uses them, and a `*` there turns that set into "everything below":
    inserting one element into the page, or a menu or a tooltip into the
    body, then restyled the whole window (about 2,700 elements) rather than
    a few dozen. The `:where()` keeps the weight a `*` had. */
 :where(:root):not([data-ui-room="narrow"])
   :is(
-    .desktop-shell
-      > .desktop-main:not(:has(.desktop-task:not([data-page="inbox"])), [data-inbox-shown="true"]),
+    .desktop-shell:not([data-task-page]) > .desktop-main:not([data-inbox-shown="true"]),
     .desktop-shell
       > .desktop-main
       .desktop-task
@@ -562,11 +527,7 @@
     .ui-toolbar:nth-child(1 of :not([hidden]))
   ):not(
     :is(
-        .desktop-shell
-          > .desktop-main:not(
-            :has(.desktop-task:not([data-page="inbox"])),
-            [data-inbox-shown="true"]
-          ),
+        .desktop-shell:not([data-task-page]) > .desktop-main:not([data-inbox-shown="true"]),
         .desktop-shell
           > .desktop-main
           .desktop-task
@@ -625,9 +586,6 @@
   position: relative;
   z-index: 1;
   width: var(--sidebar-width);
-  transition:
-    transform var(--ui-duration-pane) var(--ui-motion-pane),
-    opacity var(--ui-duration-pane) var(--ui-motion-pane);
 }
 
 /* Open beside a wide room's work, the sidebar stands beneath the work rather
@@ -647,9 +605,10 @@
   transform: translateX(-100%);
 }
 
-/* A folded sidebar floats open over the work rather than beside it, on the
-   same slide that folds it, so the work under it neither moves nor re-wraps
-   (`sidebar-collapse.ts`). It stands over the work's own layers, the panel
+/* A folded sidebar floats open over the work rather than beside it, sliding in,
+   so the work under it neither moves nor re-wraps (`sidebar-collapse.ts`). The
+   slide is the floating state's alone: folding and unfolding the pinned
+   sidebar, and putting a float away, land at once. It stands over the work's own layers, the panel
    filling the window among them, and under the title bar's buttons that
    follow it; its shadow parts it from the work as a popover's does. */
 .desktop-shell[data-sidebar-overlay="peek"] .desktop-sidebar,
@@ -658,6 +617,9 @@
   box-shadow: var(--ui-menu-shadow);
   opacity: 1;
   transform: none;
+  transition:
+    transform var(--ui-duration-pane) var(--ui-motion-pane),
+    opacity var(--ui-duration-pane) var(--ui-motion-pane);
 }
 
 /* Beside a wide room's work, the folded sidebar floats as a pane of glass

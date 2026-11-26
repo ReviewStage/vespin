@@ -38,7 +38,7 @@ import { andList, orList } from "./words.js";
  * doubt, so the list falls into the workspace's automations, then the
  * account's personal ones, and each row names its owner besides. Inside
  * each, the automations stand in the order the reader chose, by when each
- * was made, its name, its latest run, or its next, the newest made first
+ * was made or last changed, its name, its latest run, or its next, the newest made first
  * until they choose, and a tie falls to the newest made. A schedule
  * is said in words where its cron is one the picker writes, and as its cron
  * otherwise, a one-time one as the date and time it runs on, read off its
@@ -170,6 +170,8 @@ const OWNER_ORDER = [AUTOMATION_SCOPE.WORKSPACE, AUTOMATION_SCOPE.PERSONAL] as c
 export const AUTOMATIONS_ORDER = {
   /** The newest made first, as the service lists them. */
   CREATED: "created",
+  /** The one changed latest first, one from a service that says no change as made. */
+  UPDATED: "updated",
   /** By name, A to Z. */
   NAME: "name",
   /** The one that ran latest first, one that never ran last. */
@@ -186,6 +188,7 @@ export const DEFAULT_AUTOMATIONS_ORDER: AutomationsOrder = AUTOMATIONS_ORDER.CRE
 /** What each order is called, on View options' Order by. */
 export const AUTOMATIONS_ORDER_WORDS = {
   [AUTOMATIONS_ORDER.CREATED]: "Created",
+  [AUTOMATIONS_ORDER.UPDATED]: "Last updated",
   [AUTOMATIONS_ORDER.NAME]: "Name",
   [AUTOMATIONS_ORDER.LAST_RUN]: "Last run",
   [AUTOMATIONS_ORDER.NEXT_RUN]: "Next run",
@@ -420,6 +423,11 @@ function dueAt(automation: AutomationSummary): number | undefined {
   return next.kind === AUTOMATION_NEXT.AT ? next.at : undefined;
 }
 
+/** When an automation was last changed, or made where its service says no change. */
+function changedAt(automation: AutomationSummary): number {
+  return automation.updatedAt ?? automation.createdAt;
+}
+
 /** Two automations the newest made first. */
 function byNewest(a: AutomationSummary, b: AutomationSummary): number {
   return b.createdAt - a.createdAt;
@@ -430,6 +438,8 @@ function byOrder(order: AutomationsOrder): (a: AutomationSummary, b: AutomationS
   switch (order) {
     case AUTOMATIONS_ORDER.CREATED:
       return byNewest;
+    case AUTOMATIONS_ORDER.UPDATED:
+      return (a, b) => changedAt(b) - changedAt(a) || byNewest(a, b);
     case AUTOMATIONS_ORDER.NAME:
       return (a, b) => a.name.localeCompare(b.name) || byNewest(a, b);
     case AUTOMATIONS_ORDER.LAST_RUN:

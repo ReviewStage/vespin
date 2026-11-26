@@ -46,9 +46,13 @@ export const IOS_APP_LINK_COMPONENTS: readonly AppLinkComponent[] = [
   { "/": "/*/agent/*/inbox/*", comment: "A thread on an agent's Inbox." },
   { "/": "/*/agent/*/page/*", comment: "A page an older link names under its agent." },
   {
+    "/": "/*/agent/*/message/*",
+    comment: "A message of an agent's, such as one of a Manager's chat, landed on in its page.",
+  },
+  {
     "/": "/*/agent/*/*",
     exclude: true,
-    comment: "An agent's workers, changes, and messages, which the web draws.",
+    comment: "An agent's workers and changes, which the web draws.",
   },
   { "/": "/*/agent/*", comment: "An agent, under its task or its workspace." },
   { "/": "/*/task/*/page/*", comment: "A page an agent showed on a task." },
@@ -105,6 +109,7 @@ type IosRoutedPlace = Extract<
       | typeof LINK_DESTINATION.TASK
       | typeof LINK_DESTINATION.PAGE
       | typeof LINK_DESTINATION.AGENT
+      | typeof LINK_DESTINATION.MESSAGE
       | typeof LINK_DESTINATION.PERSON;
   }
 >;
@@ -180,6 +185,8 @@ export function iosAppRouteOf(place: LinkDestination, workspace?: string): strin
       return iosPageRoute(place, workspace);
     case LINK_DESTINATION.AGENT:
       return iosAgentRoute(place.agentId);
+    case LINK_DESTINATION.MESSAGE:
+      return iosAgentMessageRoute(place.agentId, place.messageId);
     case LINK_DESTINATION.PERSON:
       return iosPersonRoute(place.userId);
     default:
@@ -213,6 +220,16 @@ function iosPersonRoute(userId: string): string {
 /** The app's route for an agent's page: its transcript and its composer. */
 export function iosAgentRoute(agentId: string): string {
   return `${IOS_ROUTE.AGENT}/${encodeURIComponent(agentId)}`;
+}
+
+/** The query an agent's route names a message by, which its page brings into view and lights, or opens the chat thread it stands in to. */
+const IOS_AGENT_MESSAGE_PARAM = "message";
+
+/** The app's route for one of an agent's messages, as a link names it: the agent's page, landed on the message (`IOS_AGENT_MESSAGE_PARAM`). */
+function iosAgentMessageRoute(agentId: string, messageId: string): string {
+  const query = new URLSearchParams({ [IOS_AGENT_MESSAGE_PARAM]: messageId });
+
+  return `${iosAgentRoute(agentId)}?${query}`;
 }
 
 /**

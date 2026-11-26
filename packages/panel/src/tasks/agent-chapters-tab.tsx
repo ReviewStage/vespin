@@ -36,6 +36,7 @@ import {
   FILL_FLOW,
   Fill,
   GAP,
+  HarnessMark,
   HoverCard,
   HoverCardHead,
   HoverCardNote,
@@ -91,9 +92,7 @@ import { useAccountPreferences } from "../account-choices.js";
 import type { ActResult } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ActionMenu } from "../desktop/action-menu.js";
-import { PANE_EDGE, usePaneSlide } from "../desktop/pane-motion.js";
 import { failureShown, unreadShown } from "../failure-report.js";
-import { HarnessMark } from "../harness-marks.js";
 import { SettingsPageLink } from "../open-settings.js";
 import { refusalToast } from "../settings/row-write.js";
 import {
@@ -171,8 +170,8 @@ import { TranscriptWords } from "./transcript-blocks.js";
  * risk in words are a reader's alone. A chapter is viewed once each of its files is
  * marked viewed on GitHub, the marks Files changed sets, so a file two
  * chapters hold is shared by both. The rail stands beside the chapter while
- * the panel has room for it, slid in and out by its toggle as the tree is
- * (`usePaneSlide`), and folds to a strip of one mark a chapter while
+ * the panel has room for it, shown and hidden by its toggle as the tree is,
+ * and folds to a strip of one mark a chapter while
  * hidden; a panel too narrow floats it over the chapter instead, put away
  * by a choice in it or Escape. "Other changes" bears no risk and is always
  * last.
@@ -335,24 +334,14 @@ function ChaptersCredit({ model }: { model: string }): React.JSX.Element {
 
 /** The rail's own pane beside the chapter, which the chapters' rows stand in, over its foot. */
 function ChapterRailFrame({
-  pane,
-  leaving = false,
   foot,
   children,
 }: {
-  pane?: React.Ref<HTMLElement> | undefined;
-  leaving?: boolean;
   foot?: ReactNode;
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <nav
-      ref={pane}
-      className="chapter-rail"
-      aria-label={CHAPTERS_WORDS.RAIL}
-      data-leaving={leaving ? "" : undefined}
-      inert={leaving}
-    >
+    <nav className="chapter-rail" aria-label={CHAPTERS_WORDS.RAIL}>
       <ChapterRailList>{children}</ChapterRailList>
       {foot}
     </nav>
@@ -627,8 +616,6 @@ function ChapterRail({
   at,
   stale,
   viewed,
-  pane,
-  leaving,
   over,
   foot,
   onChoose,
@@ -638,8 +625,6 @@ function ChapterRail({
   /** Whether the chapters were made for an older head, whose lines and threads the files now read cannot count. */
   stale: boolean;
   viewed: (paths: readonly string[]) => boolean;
-  pane: React.Ref<HTMLElement>;
-  leaving: boolean;
   /** What the rail floating over the chapter is handed; none draws it beside the chapter. */
   over: RailOver | undefined;
   /** What stands under the rows: which model told the chapters. */
@@ -681,11 +666,7 @@ function ChapterRail({
   );
 
   if (over === undefined) {
-    return (
-      <ChapterRailFrame pane={pane} leaving={leaving} foot={foot}>
-        {list}
-      </ChapterRailFrame>
-    );
+    return <ChapterRailFrame foot={foot}>{list}</ChapterRailFrame>;
   }
 
   return (
@@ -810,7 +791,6 @@ function ChaptersReading({
   const at = Math.min(chosen, chapters.length - 1);
   const [beside, setBeside] = useState(true);
   const [over, setOver] = useState(false);
-  const slide = usePaneSlide(beside, PANE_EDGE.LEFT);
   // The chapter's own tree starts hidden, the rail standing in its room; its width is the panel's for every tree.
   const [filesOpen, setFilesOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(true);
@@ -934,7 +914,7 @@ function ChaptersReading({
     <Fill
       ref={setRoot}
       className="chapters-view"
-      data-rail-beside={String(slide.drawn)}
+      data-rail-beside={String(beside)}
       data-rail-over={over ? "open" : "closed"}
       onKeyDown={onKeyDown}
     >
@@ -954,10 +934,8 @@ function ChaptersReading({
           at={at}
           viewed={viewed}
           stale={stale}
-          pane={slide.pane}
-          leaving={slide.leaving}
           over={
-            !narrow && slide.drawn
+            !narrow && beside
               ? undefined
               : { open: over, onClose: () => setOver(false), toggle: [overBox, stripBox] }
           }

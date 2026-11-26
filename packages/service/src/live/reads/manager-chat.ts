@@ -6,11 +6,13 @@
  * (`agentReachableBy`), newest first, before the `seq` the read names where
  * it names one. The account's membership of the Manager's workspace is
  * joined, so a member taken out of the workspace stops hearing the chat at
- * once rather than at the next seal. It reads no clock, as a live read
- * must (`live-statement.ts`).
+ * once rather than at the next seal. Each message carries its reactions as
+ * lists of one length, each kind given in `MANAGER_CHAT_REACTION`'s
+ * order, how many gave it, whether the account did, and its emoji. It reads no clock, as a live read must
+ * (`live-statement.ts`).
  *
- * It is woken by a message written, edited, or deleted, and by the
- * Manager's own row, all of which name the agent, and by the account's
+ * It is woken by a message written, edited, or deleted, a reaction given
+ * or taken off, and by the Manager's own row, all of which name the agent, and by the account's
  * membership, which names the account.
  */
 
@@ -20,20 +22,25 @@ import { agentReachableBy } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { member } from "@repo/database/schemas/auth";
 import { managerChatMessage } from "@repo/database/schemas/manager-chat-message";
+import { managerChatReaction } from "@repo/database/schemas/manager-chat-reaction";
 import { TOPIC } from "@repo/database/sync/notification";
 import {
   agentSync,
   githubPersonalTokenSync,
   githubRepositoryReadSync,
   managerChatMessageSync,
+  managerChatReactionSync,
   memberSync,
 } from "@repo/database/sync/tables";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   MANAGER_CHAT_PAGE,
+  MANAGER_CHAT_REACTION,
   MANAGER_CHAT_READ,
   type ManagerChatAttachment,
+  type ManagerChatReaction,
 } from "@repo/features/manager-chat-live";
+import { MANAGER_CHAT_REACTION_FACES } from "@repo/features/manager-chat-view";
 import { and, desc, eq, lt, type SQL, sql } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
@@ -49,7 +56,58 @@ function beforeOf(before: string): SQL | undefined {
   return SEQ.test(before) ? lt(managerChatMessage.seq, Number(before)) : sql`false`;
 }
 
-/** The page's messages, one past the page, as `readManagerChatPage` reads them. */
+/** The kinds of reaction in the order a message carries them, written into the statement as SQL, which an order takes no array parameter for. */
+const REACTION_ORDER = sql`array[${sql.join(
+  Object.values(MANAGER_CHAT_REACTION).map((kind) => sql.raw(`'${kind}'`)),
+  sql`, `,
+)}]`;
+
+/** Each kind's emoji, written into the statement as SQL, a kind the service takes as `kind` reads. */
+const REACTION_EMOJI = sql`case ${managerChatReaction.kind} ${sql.join(
+  Object.values(MANAGER_CHAT_REACTION).map(
+    (kind) =>
+      sql`when ${sql.raw(`'${kind}'`)} then ${sql.raw(`'${MANAGER_CHAT_REACTION_FACES[kind].emoji}'`)}`,
+  ),
+  sql` `,
+)} else '' end`;
+
+/** The lists a message's reactions are delivered in, by the column of its grouped read each takes. */
+const REACTION_LIST = {
+  KINDS: "kind",
+  COUNTS: "count",
+  REACTED: "reacted",
+  EMOJI: "emoji",
+} as const;
+
+/**
+ * One list of the message's reactions, a kind's `field` at each place:
+ * the kinds given, how many gave each, whether the account did, or each
+ * kind's emoji, each in `REACTION_ORDER`, so the lists line up; none given is an empty
+ * list. Note that each is an `array(...)` of a grouped read rather than a
+ * JSON aggregate, which Postgres marks only stable.
+ */
+function reactionListOf<Value>(
+  userId: string,
+  field: (typeof REACTION_LIST)[keyof typeof REACTION_LIST],
+) {
+  return sql<Value[]>`array(
+    select ${sql.identifier(field)}
+    from (
+      select
+        ${managerChatReaction.kind} as kind,
+        count(*)::int as count,
+        coalesce(bool_or(${managerChatReaction.reactorUserId} = ${userId}), false) as reacted,
+        ${REACTION_EMOJI} as emoji
+      from ${managerChatReaction}
+      where ${managerChatReaction.agentId} = ${managerChatMessage.agentId}
+        and ${managerChatReaction.messageId} = ${managerChatMessage.id}
+      group by ${managerChatReaction.kind}
+    ) as given
+    order by array_position(${REACTION_ORDER}, given.kind)
+  )`;
+}
+
+/** The page's messages, one past the page, as `readManagerChatPage` reads them, each with its reactions. */
 function messagesStatement(userId: string, agentId: string, before: string) {
   return liveRowsStatement(
     MANAGER_CHAT_READ.parts.messages,
@@ -69,6 +127,10 @@ function messagesStatement(userId: string, agentId: string, before: string) {
         broadcast: managerChatMessage.broadcast,
         turnId: sql<string | null>`${managerChatMessage.turnId}`,
         lineId: sql<string | null>`${managerChatMessage.lineId}`,
+        reactionKinds: reactionListOf<ManagerChatReaction>(userId, REACTION_LIST.KINDS),
+        reactionCounts: reactionListOf<number>(userId, REACTION_LIST.COUNTS),
+        reactionsReacted: reactionListOf<boolean>(userId, REACTION_LIST.REACTED),
+        reactionEmoji: reactionListOf<string>(userId, REACTION_LIST.EMOJI),
       },
       instants: { createdAt: managerChatMessage.createdAt, editedAt: managerChatMessage.editedAt },
     },
@@ -100,6 +162,7 @@ function messagesStatement(userId: string, agentId: string, before: string) {
 export const managerChatRead = bindLiveRead(MANAGER_CHAT_READ, {
   reads: [
     managerChatMessageSync,
+    managerChatReactionSync,
     agentSync,
     memberSync,
     githubPersonalTokenSync,

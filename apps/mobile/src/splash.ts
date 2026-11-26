@@ -1,17 +1,19 @@
 // splash.ts -- the launch splash, held over the app from its first module until its first screen has drawn, and let go then, or at a deadline.
 
+import { atForeground, foregroundAfter } from "@repo/runtime/effect";
 import { hide, preventAutoHideAsync, setOptions } from "expo-splash-screen";
 import { useSyncExternalStore } from "react";
 import { LAUNCH_PHASE, noteLaunchPhase } from "./launch-phases.js";
+import { foregroundClock } from "./launch-state.js";
 
-/** The longest the splash stands, so a host that never answers can't hold it forever. */
+/** The longest the splash stands in front, so a host that never answers can't hold it forever. */
 const SPLASH_DEADLINE_MS = 10_000;
 
 /** How long the splash takes to fade into the first screen. */
 const SPLASH_FADE_MS = 200;
 
-/** The deadline that lets the splash go if nothing else does. */
-let deadline: ReturnType<typeof setTimeout> | undefined;
+/** Stops the deadline that lets the splash go if nothing else does; nothing before it is set. */
+let stopDeadline: () => void = () => undefined;
 
 /** Whether the splash has been let go this launch. */
 let released = false;
@@ -28,19 +30,26 @@ function saidOnConsole(cause: Error): void {
  * Holds the native splash past expo-router's own hide, which comes a frame
  * after its navigation is ready, long before the host's first reading draws
  * a screen. Note that it's called once, as the root module loads, and that
- * the deadline lets the splash go on its own after 10 seconds.
+ * the deadline lets the splash go on its own after 10 seconds of the app's
+ * foreground clock (`launch-state.ts`), so a launch woken in the background
+ * still holds it once it comes to the front.
  */
 export function holdSplash(): void {
   setOptions({ fade: true, duration: SPLASH_FADE_MS });
   preventAutoHideAsync().catch(saidOnConsole);
-  deadline = setTimeout(releaseSplash, SPLASH_DEADLINE_MS);
+
+  stopDeadline = atForeground(
+    foregroundClock,
+    foregroundAfter(foregroundClock.now(), SPLASH_DEADLINE_MS),
+    releaseSplash,
+  );
 }
 
 /** Lets the splash go, fading into whatever stands under it, noted as the launch's screens drawn; a second call does nothing. */
 export function releaseSplash(): void {
   if (released) return;
   released = true;
-  clearTimeout(deadline);
+  stopDeadline();
   noteLaunchPhase(LAUNCH_PHASE.SCREENS);
   hide();
 

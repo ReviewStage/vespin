@@ -1,12 +1,10 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
-  actOnDescriptionCommentThread,
   DESCRIPTION_COMMENT_OUTCOME,
   type DescriptionCommentOutcome,
   descriptionCommentStamps,
   readDescriptionCommentThread,
   readDescriptionCommentThreads,
-  startDescriptionCommentThread,
   withdrawDescriptionCommentAsk,
 } from "@repo/database/models/description-comments";
 import { readPageById } from "@repo/database/models/task-pages";
@@ -48,6 +46,10 @@ import {
   handCommentAskOver,
   reviewAskMessage,
 } from "./comment-ask.js";
+import {
+  actOnDescriptionCommentThread,
+  startDescriptionCommentThread,
+} from "./description-comment-writes.js";
 
 /**
  * description-comments-procedures.ts -- a description's comment threads for the desktop: read them as they change, start one, and answer, edit, resolve, reopen, or delete one.

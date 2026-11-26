@@ -18,7 +18,7 @@ import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vitest";
 import { recordedFailure } from "../../testing/reported-failure.js";
-import { ERROR_STATE_PLACEMENT, ErrorState, RetryOffered, RetryRowLabel } from "./error-state.js";
+import { ERROR_STATE_PLACEMENT, ErrorState, RetryRowLabel, ServiceReached } from "./error-state.js";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -95,7 +95,7 @@ test("a failure with no Retry, or given one where Retry is not offered, says its
 
   const unoffered = mountAlert(
     createElement(
-      RetryOffered.Provider,
+      ServiceReached.Provider,
       { value: false },
       createElement(ErrorState, { failure: FAILURE, onRetry: () => undefined, children: LINE }),
     ),

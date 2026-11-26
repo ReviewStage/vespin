@@ -15,12 +15,17 @@ import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-fac
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { TASK_REGION } from "@repo/features/tasks-model";
-import { AgentPlaceholderIcon, DocumentIcon, PlusIcon, TaskStatusMark } from "@repo/ui";
+import {
+  AgentPlaceholderIcon,
+  DocumentIcon,
+  HarnessMark,
+  PlusIcon,
+  TaskStatusMark,
+} from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { EntityGlyph } from "../entities/entity-glyph.js";
-import { HarnessMark } from "../harness-marks.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import type { TaskListRows } from "../task-list-collections.js";
 import { providerOf } from "./agent-model.js";

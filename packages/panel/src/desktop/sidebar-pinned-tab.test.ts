@@ -319,7 +319,7 @@ describe("a pinned Pull request tab's card", () => {
     await settled();
     const tabCard = document.querySelector(".ui-tooltip-card [data-pull-request-card]");
     assert.match(tabCard?.textContent ?? "", /Newer title/u);
-    assert.match(tabCard?.textContent ?? "", /3 files/u);
+    assert.match(tabCard?.textContent ?? "", /\+4 −1/u);
     assert.match(tabCard?.textContent ?? "", /Expiry job/u);
     assert.equal(card(), null, "no pin card stands beside it");
     assert.deepEqual(reads, []);

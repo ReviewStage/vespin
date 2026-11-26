@@ -14,6 +14,7 @@ import type {
   UsageLimitNotice,
 } from "@repo/wire/ui-messages";
 import type { UIMessage } from "ai";
+import type { KeptPicture } from "../conversation-picture-wire.js";
 import type { OutOfMemory } from "../out-of-memory-wire.js";
 import type { TurnFilesSummaryView } from "../turn-files-wire.js";
 import type { RunModelUsage, RunStatus, RunUsage, TurnFailure } from "./requests.js";
@@ -162,6 +163,8 @@ export type ToolCallSettlement = (
 ) & {
   /** Where the kernel killed the call's command for want of memory, the sandbox's memory as it ran (`out-of-memory-wire.ts`). */
   readonly outOfMemory?: OutOfMemory;
+  /** The pictures the answer carried that its runner kept beside the transcript apart from its events, in order, where it kept any (`conversation-picture-wire.ts`). */
+  readonly pictures?: readonly KeptPicture[];
 };
 
 /** What every event of the stream carries beside its own fields. */

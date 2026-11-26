@@ -15,7 +15,10 @@
  * handler answers one, where oRPC would describe it.
  *
  * Every answer, a refusal and an unmatched path's among them, is also marked
- * as this origin's alone (`SAME_ORIGIN_ANSWER`).
+ * as this origin's alone (`SAME_ORIGIN_ANSWER`). A matched answer, a
+ * refusal's among them, that leaves soon after its request carries the
+ * cookies Better Auth answered the request's browser session read with, and
+ * is then never kept by a shared cache (`auth/session-cookies.ts`).
  *
  * Every body is counted once, as it is read, against the matched
  * procedure's own cap (`bodyCap` in `@repo/features/contract`), or the
@@ -35,7 +38,8 @@ import { presentedClient } from "@repo/features/client-identity";
 import { getBodyCap, RETIRED_TASK_PATHS } from "@repo/features/contract";
 import { FUNCTION_BODY_LIMIT_BYTES } from "@repo/features/request-body-limit";
 import { HTTP_METHOD } from "@repo/wire";
-import type { Context } from "effect";
+import { Context } from "effect";
+import { answeredWithSessionCookies, SessionCookies } from "../auth/session-cookies.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { HOSTED_REFUSAL, type HostedRefusal, hostUpgradeNeeded } from "../http/http-effect.js";
 import type { WebServices } from "../runtime.js";
@@ -247,11 +251,16 @@ export function hostedFetch(router: HostedRouter): HostedFetch {
       );
     }
 
+    // Note that each request has its own place for the cookies its session read answers with (`auth/session-cookies.ts`).
+    const kept: string[] = [];
+    const asked = Context.add(services, SessionCookies, { kept });
+
     const { matched, response } = await handler.handle(request, {
-      context: { "effect/context": services, "effect/wrap": hostedRefusalWrap(services), request },
+      context: { "effect/context": asked, "effect/wrap": hostedRefusalWrap(asked), request },
     });
 
-    if (matched) return sameOriginOnly(settled(response));
+    if (matched) return sameOriginOnly(answeredWithSessionCookies(settled(response), kept));
+
     const { pathname } = new URL(request.url);
 
     if (RETIRED_TASK_PATHS.some((retired) => retired.test(pathname))) {

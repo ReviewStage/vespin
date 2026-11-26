@@ -1,6 +1,5 @@
 import { type ReactNode, useId } from "react";
 import { ICON_SIZE } from "../../icons/icons.js";
-import type { CodexArt } from "../../marks/harness-mark.js";
 import { MarkOrb } from "../../marks/mark-orb.js";
 import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { TEXT_LINK_HEIGHT, TextLink } from "../text-link/text-link.js";
@@ -53,7 +52,6 @@ export function LandingSection({
   more,
   scene,
   aside,
-  codexArt,
 }: {
   title: ReactNode;
   lead: ReactNode;
@@ -62,8 +60,6 @@ export function LandingSection({
   scene: LandingScene;
   /** What stands under the words, such as `LandingFacts`. */
   aside?: ReactNode;
-  /** Codex's picture as the site serves it, which a scene naming Codex draws its mark from. */
-  codexArt?: CodexArt | undefined;
 }): React.JSX.Element {
   const titleId = `${useId()}title`;
   const field = SCENE_FIELD[scene];
@@ -71,7 +67,7 @@ export function LandingSection({
   const stage = (
     <div className="ui-landing-stage" data-scene={scene}>
       {field === null ? null : <LandingField pattern={field} />}
-      <LandingSceneView scene={scene} codexArt={codexArt} />
+      <LandingSceneView scene={scene} />
     </div>
   );
 

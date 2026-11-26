@@ -611,6 +611,22 @@ function forgetCursor(held: HeldTranscript): Effect.Effect<void> {
 }
 
 /**
+ * `held` as no follow stands on it any longer: what it holds is no longer
+ * known to be caught up, so a window that holds it again waits on the next
+ * follow's page, while one holding it beside a follow that stands reads its
+ * word as caught up at once.
+ */
+function letGo(held: HeldTranscript): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    const rows = held.rows();
+
+    if (rows?.word?.caughtUp !== true) return Effect.void;
+
+    return held.answered({ ...rows, word: { ...rows.word, caughtUp: false } });
+  });
+}
+
+/**
  * The transcript followed until interrupted, each page laid on what the
  * windows hold of it (`held`) as it is read: where they hold a window to
  * read on from, it stands drawn and nothing is read before the page past
@@ -631,6 +647,8 @@ function forgetCursor(held: HeldTranscript): Effect.Effect<void> {
  * and let go, so a follow after it reads anew; a page the service did not
  * answer is told as such and read again after `resealWait`, doubling while
  * the pages go unanswered in a row, or as soon as the service answers again.
+ * A follow interrupted, let go or closed, leaves what it held no longer
+ * caught up (`letGo`).
  */
 export function followTranscript<Key>(
   follows: TranscriptFollows<Key>,
@@ -640,6 +658,8 @@ export function followTranscript<Key>(
 ): Effect.Effect<void> {
   return Effect.scoped(
     Effect.gen(function* () {
+      // Note that a follow let go says its transcript is no longer caught up, so caught up on the slice means a follow stands and has read to the end.
+      yield* Effect.addFinalizer(() => letGo(held));
       /** The queue revision the last page read past a cursor was read at, which its queue is at least as new as, and every page told after it carries. */
       let revision: number | undefined;
       const followedAt = yield* Clock.currentTimeMillis;

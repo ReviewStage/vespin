@@ -15,7 +15,16 @@
  * a person's message to a Manager's chat (`POST /api/agents/{id}/chat-messages`),
  * written to the chat beside the line the same steer hands the Manager,
  * under the same reach a message takes, which opens no turn: a delegation's
- * message names the caller's lines it is, and starts its turn on them.
+ * message names the caller's lines it is, and starts its turn on them. And a
+ * member's reaction given a message of a Manager's chat, or taken off it
+ * (`POST /api/agents/{id}/chat-messages/{message}/reactions`), under the
+ * reach a message to the chat takes, which opens no turn either. And a
+ * member's edit of their own message of a Manager's chat
+ * (`PATCH /api/agents/{id}/chat-messages/{message}`), its words changed in
+ * place, which tells the Manager in a line of its own naming the words
+ * before and after, steering its turn or opening one as a message does, and
+ * takes it back to no earlier point: nothing of its chat or transcript is
+ * dropped.
  *
  * Every row a read touches is one of a workspace the caller is a member of:
  * an agent or a task of any other workspace answers exactly as one that
@@ -44,7 +53,15 @@ import { type Agent, readAgent, readVisibleAgent } from "@repo/database/models/a
 import { childTitlesOf } from "@repo/database/models/child-titles";
 import { readRewoundRevision } from "@repo/database/models/conversation-rewind";
 import { childConversationId } from "@repo/database/models/ids";
-import { readManagerChatMessageByKey } from "@repo/database/models/manager-chat-messages";
+import {
+  editManagerChatMessage,
+  readManagerChatMessage,
+  readManagerChatMessageByKey,
+} from "@repo/database/models/manager-chat-messages";
+import {
+  MANAGER_CHAT_REACTION_OUTCOME,
+  reactManagerChat,
+} from "@repo/database/models/manager-chat-reactions";
 import { listProviderKeyRows } from "@repo/database/models/provider-key-store";
 import { listStandingVoiceCalls } from "@repo/database/models/voice-calls";
 import {
@@ -56,6 +73,7 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import {
   AGENT_BOUNDS,
   AGENT_CURSOR_START,
+  AGENT_KIND,
   AGENT_STATUS,
   type AgentMessagesAnswer,
   type AgentNewestAnswer,
@@ -68,10 +86,11 @@ import {
   TRANSCRIPT_PARTS_QUERY,
 } from "@repo/features/agent-wire";
 import { TRANSCRIPT_NOW_QUERY } from "@repo/features/live-wire";
+import { isOfferedReaction, MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import { PROVIDER_KEY_KIND } from "@repo/features/provider-key-wire";
 import { isRecord } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Effect, Option, Result, Schema } from "effect";
+import { DateTime, Effect, Option, Result, Schema } from "effect";
 import { unparsedWire } from "../core.js";
 import {
   HOSTED_REFUSAL,
@@ -80,10 +99,10 @@ import {
   pathUuid,
   type UserIdResolver,
 } from "../http/http-effect.js";
-import { accountMiddleware, type HostedContext, hosted } from "../orpc/base.js";
+import { accountMiddleware, type HostedContext, heldReadMiddleware, hosted } from "../orpc/base.js";
 import { admitsPlanWriter, controlsAgent } from "./agent-reach.js";
 import { queueOnPage } from "./coder-host/agent-queue.js";
-import { chatOfLine } from "./coder-host/manager-chat-line.js";
+import { chatEditLine, chatOfLine } from "./coder-host/manager-chat-line.js";
 import { cutMessage, wholePartOf } from "./coder-host/part-cut.js";
 import { changeAgentQueue } from "./coder-host/queue-change.js";
 import { spokenLineMetadata } from "./coder-host/spoken-line.js";
@@ -98,6 +117,7 @@ import {
   delegationPast,
   NO_TITLE_AWAITED,
   NO_TITLE_EDGE,
+  type ReadGate,
   type TitleAwaited,
   type TitleEdge,
   type TranscriptNewest,
@@ -375,10 +395,12 @@ const tooLongMiddleware = middlewareGen<HostedContext>(function* ({ next }, inpu
 /** The messages resource: its five held reads, the two transcripts read back from their end, the two writes on their paths, and the two part reads, each to a signed-in caller. */
 export function messagesProcedures(seams: MessagesProcedureSeams) {
   const signedIn = hosted.messages.use(accountMiddleware(seams.resolveUserId));
+  // The two transcript reads that hold on `wait` read the session as a held read (`heldReadMiddleware`).
+  const held = hosted.messages.use(heldReadMiddleware).use(accountMiddleware(seams.resolveUserId));
   const writer = storeWriter({ tools: CODER_TOOL_SET });
 
   return {
-    agent: signedIn.agent.effect(function* ({ input, context }) {
+    agent: held.agent.effect(function* ({ input, context }) {
       const after = (yield* cursorNamed(input.after)) ?? AGENT_CURSOR_START;
       const { agent, target } = yield* reachedAgent(context.userId, input.id);
       const titleAwaited = titleAwaitedOf(target);
@@ -506,6 +528,90 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
           : { agent: summary, txid, messageId };
       }),
 
+    chatReact: hosted.messages
+      .use(accountMiddleware(seams.resolveUserId))
+      .chatReact.effect(function* ({ input, context }) {
+        const { agent } = yield* reachedAgent(context.userId, input.params.id);
+
+        // Note that a reaction takes the reach a message to the chat takes, though it opens no turn: the member writes to the agent its payer funds.
+        if (agent.kind !== AGENT_KIND.MANAGER) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+        if (!controlsAgent(context.userId, agent)) {
+          return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+        }
+
+        yield* admitsPlanWriter(context.userId, agent);
+        const { kind } = input.body;
+
+        // Note that the service takes 👍 and 👎 alone until every client it serves reads any kind.
+        if (!isOfferedReaction(kind)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
+        const outcome = yield* hostedStoreOrUnavailable(
+          reactManagerChat(context.userId, {
+            agentId: agent.id,
+            messageId: input.params.message,
+            by: MANAGER_CHAT_AUTHOR.PERSON,
+            kind,
+            reacted: input.body.reacted,
+            now: yield* DateTime.nowAsDate,
+          }),
+        );
+
+        if (outcome.status === MANAGER_CHAT_REACTION_OUTCOME.NO_MESSAGE) {
+          return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+        }
+
+        return { changed: outcome.changed };
+      }),
+
+    chatEdit: hosted.messages
+      .use(accountMiddleware(seams.resolveUserId))
+      .use(tooLongMiddleware)
+      .chatEdit.effect(function* ({ input, context }) {
+        const { userId } = context;
+        const { agent } = yield* reachedAgent(userId, input.params.id);
+
+        if (agent.kind !== AGENT_KIND.MANAGER) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+        if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+
+        const standing = Option.getOrUndefined(
+          yield* hostedStoreOrUnavailable(
+            readManagerChatMessage(userId, agent.id, input.params.message),
+          ),
+        );
+
+        if (standing === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+        // Note that a message is its author's alone to edit, never a teammate's nor the Manager's own.
+        if (
+          standing.authorKind !== MANAGER_CHAT_AUTHOR.PERSON ||
+          standing.authorUserId !== userId
+        ) {
+          return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+        }
+
+        const { text, clientKey } = input.body;
+
+        if (standing.text === text) return { changed: false };
+
+        // Note that the Manager is told before the words change, under the edit's key, so an edit sent again after the words landed answers unchanged, and one whose words did not land tells it once and lands.
+        yield* steerMemberWords(writer, userId, agent, chatEditLine(standing, text, clientKey));
+
+        const edited = yield* hostedStoreOrUnavailable(
+          editManagerChatMessage(userId, {
+            agentId: agent.id,
+            messageId: standing.id,
+            text,
+            now: yield* DateTime.nowAsDate,
+          }),
+        );
+
+        if (Option.isNone(edited)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+        return { changed: true };
+      }),
+
     recordVoiceLine: hosted.messages
       .use(accountMiddleware(seams.resolveUserId))
       .recordVoiceLine.effect(function* ({ input, context }) {
@@ -554,7 +660,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       return { queue: yield* changeAgentQueue(context.userId, agent, input.body) };
     }),
 
-    agentWorker: signedIn.agentWorker.effect(function* ({ input, context }) {
+    agentWorker: held.agentWorker.effect(function* ({ input, context }) {
       const after = (yield* cursorNamed(input.after)) ?? AGENT_CURSOR_START;
       const callId = yield* callNamed(input.call);
       const now = readsNow(input.wait);
@@ -653,13 +759,14 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       const standing = { createdAt: agent.createdAt, blank: startedBlank(agent) };
 
       // The title and the calls are read after the page's rows, as the forward read's are, so one that landed while the rows were read is told rather than lost to a follow that starts after it.
-      const afterRows = Effect.all(
-        {
-          titled: readAgent(context.userId, agent.id),
-          calls: standingCallsOf(context.userId, agent.id),
-        },
-        { concurrency: "unbounded" },
-      );
+      const afterRows = (gate: ReadGate) =>
+        Effect.all(
+          {
+            titled: gate(readAgent(context.userId, agent.id)),
+            calls: gate(standingCallsOf(context.userId, agent.id)),
+          },
+          { concurrency: "unbounded" },
+        );
 
       const newest = yield* hostedStoreOrUnavailable(
         transcriptNewest(target, CODER_TOOL_SET, standing, afterRows, agent),
@@ -718,7 +825,9 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
 
       // The title is read after the page's rows, since it lands beside the worker's start, which the page's reads may span.
       const newest = yield* hostedStoreOrUnavailable(
-        transcriptNewest(worker, CODER_TOOL_SET, started, childTitlesOf(target, [conversationId])),
+        transcriptNewest(worker, CODER_TOOL_SET, started, (gate) =>
+          gate(childTitlesOf(target, [conversationId])),
+        ),
       );
 
       const title = newest.afterRows.get(conversationId) ?? null;

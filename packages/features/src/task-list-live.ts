@@ -997,6 +997,9 @@ function agentSummaryOf(
     ...(row.kind === AGENT_KIND.MANAGER && row.readThrough !== undefined
       ? { readThrough: row.readThrough }
       : undefined),
+    ...(row.kind === AGENT_KIND.MANAGER && row.markedUnread === true
+      ? { markedUnread: true as const }
+      : undefined),
     ...(row.kind === AGENT_KIND.MANAGER && row.face !== undefined && row.face !== null
       ? { face: row.face }
       : undefined),

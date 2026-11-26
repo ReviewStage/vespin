@@ -756,10 +756,11 @@ it.layer(SUITE)("an automation's runs", (it) => {
         assert.deepEqual(sent, { status: AUTOMATION_RUN_STATUS.STARTED, agentId: first });
 
         // Its agent deleted, the target let go, as one made with none chosen stands: the run starts one, which it keeps.
+        const changed = new Date("2026-10-15T12:00:00Z");
         yield* Database.use((db) =>
           db
             .update(automationTable)
-            .set({ targetAgentId: null })
+            .set({ targetAgentId: null, updatedAt: changed })
             .where(eq(automationTable.id, fresh.id)),
         );
         const opened = agentSessions.opened.length;
@@ -771,6 +772,11 @@ it.layer(SUITE)("an automation's runs", (it) => {
           Option.getOrThrow(yield* readAutomationToRun(fresh.id)).targetAgentId,
           adopted,
           "the automation keeps the agent its first run started",
+        );
+        assert.deepEqual(
+          Option.getOrThrow(yield* readAutomationToRun(fresh.id)).updatedAt,
+          changed,
+          "a run changes the automation no later, as Last updated orders it",
         );
         const kept = Option.getOrThrow(yield* readAgent(owner, adopted));
         assert.equal(

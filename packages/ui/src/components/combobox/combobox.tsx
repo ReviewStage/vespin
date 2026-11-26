@@ -4,7 +4,6 @@ import { useId, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { cn } from "../../cn.js";
 import { CheckIcon, ChevronRightIcon } from "../../icons/lucide-glyphs.js";
 import { offsetWithin } from "../../offset-within.js";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import {
   COMBOBOX_EMPTY,
@@ -230,9 +229,7 @@ export function ComboboxOptionItem({
       {...place}
       {...engine}
       // Note that an option that cannot be chosen now takes no press, whatever the engine handed it.
-      onClick={
-        option.disabled === true ? undefined : pulseOnPress(engine.onClick, PRESS_PULSE.QUIET)
-      }
+      onClick={option.disabled === true ? undefined : engine.onClick}
       {...(option.replayMasked === true ? REPLAY_MASKED : undefined)}
       data-row-menu={more === undefined ? undefined : ""}
       data-menu-open={more?.expanded === true ? "true" : undefined}

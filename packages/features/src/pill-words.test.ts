@@ -8,6 +8,8 @@ import {
   PILL_RUN,
   pillRuns,
   runsMarkdown,
+  typedPillRuns,
+  typedRunsMarkdown,
 } from "./pill-words.js";
 
 const HELD = new Set(["Picture 1", "spec.pdf"]);
@@ -109,5 +111,19 @@ describe("pillRuns", () => {
       },
     });
     expect(runsMarkdown(runs)).toBe(markdown);
+  });
+});
+
+describe("typedPillRuns", () => {
+  it("keeps a held picture's marker typed as words from becoming its pill, sending it escaped as the panel's box does", () => {
+    const typed = [
+      { kind: PILL_RUN.WORDS, text: "typed [Picture 1] beside " },
+      { kind: PILL_RUN.PILL, pill: filePill("Picture 1") },
+    ] as const;
+
+    const markdown = typedRunsMarkdown(typed);
+
+    expect(markdown).toBe("typed \\[Picture 1] beside [Picture 1]");
+    expect(typedPillRuns(markdown, HELD)).toEqual(typed);
   });
 });

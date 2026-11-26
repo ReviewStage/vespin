@@ -9,7 +9,7 @@ import {
   entityOfMention,
   entityWordHeard,
 } from "@repo/features/entity-kind";
-import { isPictureName, writtenMarkers } from "@repo/features/file-marker";
+import { escapedMarkers, isPictureName, writtenMarkers } from "@repo/features/file-marker";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import {
   LINK_DESTINATION,
@@ -44,6 +44,7 @@ import type {
   Root,
   RootContent,
   Table,
+  Text,
 } from "mdast";
 
 /**
@@ -240,9 +241,17 @@ const ALIGN: Readonly<Record<NonNullable<Table["align"]>[number] & string, Colum
 /** The definitions a reference link or picture is read through, by its identifier as CommonMark folds one. */
 type Definitions = ReadonlyMap<string, Definition>;
 
+/** A marker spelled in the words: where its bracket stands, and whether a backslash escapes it into words. */
+interface SpelledMarker {
+  readonly at: number;
+  readonly escaped: boolean;
+}
+
 interface Reader {
   readonly reading: MarkdownReading;
   readonly definitions: Definitions;
+  /** Every marker spelled outside code in the words read, in order; none where no picture is drawn by its marker. */
+  readonly spelled?: readonly SpelledMarker[] | undefined;
 }
 
 function folded(identifier: string): string {
@@ -462,21 +471,57 @@ function wordsRun(text: string, marks: WordMarks): MarkdownRun[] {
   return text === "" ? [] : [{ kind: MARKDOWN_RUN.WORDS, text, ...marks }];
 }
 
+/** Every marker spelled outside code in the words, in order, each escaped where a backslash makes it words (`@repo/features/file-marker`). */
+function spelledMarkers(words: string): readonly SpelledMarker[] {
+  const written = writtenMarkers(words).map((marker) => ({ at: marker.start, escaped: false }));
+  // Note that an escaped marker's place is its backslash's, so its bracket stands one after.
+  const escaped = escapedMarkers(words).map((marker) => ({ at: marker.start + 1, escaped: true }));
+
+  return [...written, ...escaped].sort((first, second) => first.at - second.at);
+}
+
+/**
+ * Whether each of a text node's `count` markers was escaped into words
+ * where it was written. Note that the tree hands the words with their
+ * escapes read, so `\[Picture 1]` arrives as `[Picture 1]`; its markers are
+ * matched in order with those spelled in its place in the words, and where
+ * the two do not count alike none is taken as escaped.
+ */
+function escapedInWords(node: Text, count: number, reader: Reader): readonly boolean[] {
+  const start = node.position?.start.offset;
+  const end = node.position?.end.offset;
+
+  if (reader.spelled === undefined || start === undefined || end === undefined) return [];
+  const inPlace = reader.spelled.filter((marker) => marker.at >= start && marker.at < end);
+
+  return inPlace.length === count ? inPlace.map((marker) => marker.escaped) : [];
+}
+
 /**
  * A run of words with each marker of a picture the message carries as its
  * chip, the words around it kept, and every other marker its words, as the
  * panel draws a sent message's. Note that words in code never come here, so
- * a marker in code stays the code's words, as `fileMarkers` reads it.
+ * a marker in code stays the code's words, as `fileMarkers` reads it, and a
+ * marker escaped into words, `\[Picture 1]`, stays its words too, as a
+ * marker typed in a message box is sent.
  */
-function wordsWithPictures(text: string, marks: WordMarks, reader: Reader): MarkdownRun[] {
+function wordsWithPictures(
+  node: Text,
+  text: string,
+  marks: WordMarks,
+  reader: Reader,
+): MarkdownRun[] {
   const { pictures } = reader.reading;
 
   if (pictures === undefined) return wordsRun(text, marks);
   const runs: MarkdownRun[] = [];
+  const markers = writtenMarkers(text);
+  const escaped = escapedInWords(node, markers.length, reader);
   let at = 0;
 
-  for (const marker of writtenMarkers(text)) {
-    if (!isPictureName(marker.name) || !pictures.has(marker.name)) continue;
+  for (const [index, marker] of markers.entries()) {
+    if (escaped[index] === true || !isPictureName(marker.name) || !pictures.has(marker.name))
+      continue;
     runs.push(...wordsRun(text.slice(at, marker.start), marks));
     runs.push({ kind: MARKDOWN_RUN.PICTURE, name: marker.name });
     at = marker.end;
@@ -496,7 +541,9 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
       if (node.type === "html" && reader.reading.hidesHtml === true) return [];
       const text = reader.reading.typed === true ? node.value : node.value.replace(SOFT_BREAK, " ");
 
-      return node.type === "html" ? wordsRun(text, marks) : wordsWithPictures(text, marks, reader);
+      return node.type === "html"
+        ? wordsRun(text, marks)
+        : wordsWithPictures(node, text, marks, reader);
     }
 
     case "inlineCode":
@@ -758,5 +805,7 @@ export function markdownBlocks(words: string, reading: MarkdownReading): readonl
   if (markdownTooDeep(words)) return [{ kind: MARKDOWN_BLOCK.CODE, text: words }];
   const tree = markdownTree(words);
 
-  return blocksOf(tree.children, { reading, definitions: definitionsIn(tree) });
+  const spelled = reading.pictures === undefined ? undefined : spelledMarkers(words);
+
+  return blocksOf(tree.children, { reading, definitions: definitionsIn(tree), spelled });
 }

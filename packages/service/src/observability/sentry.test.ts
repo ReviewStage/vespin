@@ -92,6 +92,30 @@ it.effect(
 );
 
 it.effect(
+  "a presigned Blob URL an error or a log line quotes leaves naming its object, its grant redacted",
+  () =>
+    Effect.gen(function* () {
+      const sentry = recordingSentry();
+      // Note that the grant is built rather than written, because an event carries the source lines around its throw.
+      const grant = ["never", "reported"].join("-");
+      const url = `https://store.private.blob.vercel-storage.com/attachments/7f0c?vercel-blob-delegation=${grant}&vercel-blob-signature=${grant}`;
+
+      yield* Effect.gen(function* () {
+        yield* Effect.logWarning(`the read of ${url} failed`);
+        yield* Effect.exit(Effect.withErrorReporting(Effect.fail(new TypeError(`fetch ${url}`))));
+      }).pipe(Effect.provide(Logger.layer([sentryLogger])), Effect.provide(sentry.layer));
+
+      const sent = [...sentOfType(sentry.sent, "event"), ...sentOfType(sentry.sent, "log")].map(
+        (item) => item.text,
+      );
+
+      assert.equal(sent.length, 2);
+      assert.ok(sent.every((text) => text.includes("/attachments/7f0c")));
+      assert.ok(sent.every((text) => !text.includes(grant)));
+    }),
+);
+
+it.effect(
   "a report and a log line made for an account name it as Sentry's user, and nowhere else",
   () =>
     Effect.gen(function* () {

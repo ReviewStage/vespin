@@ -39,25 +39,32 @@
   }
 
   /* A trail keeps the leading of the line that holds it, so its chips stand
-     as they do in its holder's words, and is centered on its glyph's seat. */
+     as they do in its holder's words, and is centered on its glyph's seat.
+     A trail and a step alike are laid out across as a call's row is
+     (line-button.tsx's row): the glyph set in by the row's hairline inset and
+     the words a glyph's gap past it, so both stand in the rows' columns,
+     while a trail's words and chips keep a tight gap between them. */
   .ui-note-line:is([data-look="trail"], [data-look="step"]) {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: var(--ui-tight-gap);
+    padding-inline: var(--ui-space-4);
     color: var(--ui-color-text-muted);
     font-size: var(--ui-type-caption-size);
   }
 
+  .ui-note-line:is([data-look="trail"], [data-look="step"]) > .ui-glyph-slot {
+    margin-inline-end: calc(var(--ui-icon-gap) - var(--ui-tight-gap));
+  }
+
   /* A step stands among a transcript's rows at a row's height, its words on
-     the row's center, so it keeps the rows' rhythm, and is laid out across
-     as a call's row is (line-button.tsx's row): its glyph set in by the
-     row's hairline inset and its words a glyph's gap past it, so its glyph
-     and words stand in the rows' columns. */
+     the row's center, so it keeps the rows' rhythm. Its words wrap beside
+     their glyph rather than under it, since a step is one glyph and one
+     sentence, not a row of chips. */
   .ui-note-line[data-look="step"] {
+    flex-wrap: nowrap;
     min-height: var(--ui-control-height);
-    padding-inline: var(--ui-space-4);
-    gap: var(--ui-icon-gap);
   }
 
   .ui-note-line[data-fill] {

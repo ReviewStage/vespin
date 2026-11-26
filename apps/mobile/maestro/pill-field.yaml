@@ -44,18 +44,22 @@ appId: dev.vespin.ios
 # table and a diagram, which the phone does not edit, as cards. The Markdown
 # it writes is shown under it, each block it was handed kept as its exact
 # source, so the table stands as it was written.
-- runFlow: subflows/lower-keyboard.yaml
-- scrollUntilVisible:
-    element:
-      id: "document-field"
-    direction: DOWN
-    centerElement: true
+# Note that the page is scrolled through `page-edge-scroll.yaml`, by drags
+# in its margin, because the description's field is taller than the window
+# and a drag on it scrolls its own words rather than the page; and that the
+# Markdown under the field stands below the window whenever the field is
+# in sight, so each check of it comes once the keyboard is lowered and the
+# page scrolled down to it, which the same drags do.
+- runFlow:
+    file: subflows/page-edge-scroll.yaml
+    env:
+      ELEMENT: "Clear description"
 - waitForAnimationToEnd
 - takeScreenshot: document-field
-- swipe:
-    from:
-      id: "document-field"
-    direction: UP
+- runFlow:
+    file: subflows/page-edge-scroll.yaml
+    env:
+      ELEMENT: "(?s).*\\| Role \\| May withdraw \\|\\n\\| - \\| - \\|.*"
 - waitForAnimationToEnd
 - takeScreenshot: document-field-cards
 - assertVisible: "(?s).*\\| Role \\| May withdraw \\|\\n\\| - \\| - \\|.*"
@@ -64,42 +68,64 @@ appId: dev.vespin.ios
 # each named by the panel's words. Cleared, the field is typed into from its
 # first line: Bold pressed with nothing selected gives the words typed next
 # its look, and Turn into's Heading 1 turns their line into a heading, each
-# written as the panel writes it.
-- scrollUntilVisible:
-    element: "Clear description"
-    direction: UP
+# written as the panel writes it. Note that each section goes back up to the
+# description's acts by drags in the margin too, until the act over Clear
+# description shows, so Clear description and the field's middle, where the
+# field is pressed, stand clear on the window.
+- runFlow:
+    file: subflows/page-edge-scroll.yaml
+    env:
+      ELEMENT: "Mention Ada in the description"
+      DIRECTION: UP
 - tapOn: "Clear description"
 - tapOn:
     id: "document-field"
 - tapOn: "Bold"
 - inputText: "Ship"
-- assertVisible: "(?s).*\\*\\*Ship\\*\\*.*"
 - tapOn: "Turn into"
 - tapOn: "Heading 1"
-- assertVisible: "(?s).*# \\*\\*Ship\\*\\*.*"
 - takeScreenshot: document-field-formatted
+- runFlow:
+    file: subflows/page-edge-scroll.yaml
+    env:
+      ELEMENT: "(?s).*# \\*\\*Ship\\*\\*.*"
+- assertVisible: "(?s).*# \\*\\*Ship\\*\\*.*"
 # A description's `@` word opens a mention offer as the message box's does:
 # the field tells the word the caret stands in, which the page's Mention
 # names, and a pick puts the person's pill in its place, written as the panel
 # writes a mention.
-- scrollUntilVisible:
-    element: "Clear description"
-    direction: UP
+- runFlow:
+    file: subflows/page-edge-scroll.yaml
+    env:
+      ELEMENT: "Mention Ada in the description"
+      DIRECTION: UP
 - tapOn: "Clear description"
 - tapOn:
     id: "document-field"
 - inputText: "Ask @Ad"
 - tapOn: "Mention Ada in the description for @Ad"
-- assertVisible: "(?s).*Ask \\[@Ada Lovelace\\]\\(https://vespin.dev/stage/person/u-ada\\).*"
 - takeScreenshot: document-field-mention
+- runFlow:
+    file: subflows/page-edge-scroll.yaml
+    env:
+      ELEMENT: "(?s).*Ask \\[@Ada Lovelace\\]\\(https://vespin.dev/stage/person/u-ada\\).*"
+- assertVisible: "(?s).*Ask \\[@Ada Lovelace\\]\\(https://vespin.dev/stage/person/u-ada\\).*"
 # A list's item moves under the item before it, and back out, from the
 # bar's Indent and Outdent, as Tab and Shift-Tab move it in Notes and
 # Notion; the bar stands them only while the caret is in a list item, in
 # Strikethrough's and Code's place, which step into its Turn into. A nested
-# item is written two spaces in, under its parent's words.
-- scrollUntilVisible:
-    element: "Clear description"
-    direction: UP
+# item is written two spaces in, under its parent's words. A Return on an
+# empty nested item takes it a step back out, as a Return on an empty item
+# leaves a list in Notes and Notion. Note that the Markdown is read once, at
+# the end, so the keyboard stands throughout: Model and Ship stand nested
+# only by Indent, Spec a top-level item only by the Return on the empty
+# nested item under Model, and Next back out only by Outdent, where the
+# Return after Ship would have kept it nested.
+- runFlow:
+    file: subflows/page-edge-scroll.yaml
+    env:
+      ELEMENT: "Mention Ada in the description"
+      DIRECTION: UP
 - tapOn: "Clear description"
 - tapOn:
     id: "document-field"
@@ -110,26 +136,23 @@ appId: dev.vespin.ios
 - pressKey: Enter
 - inputText: "Model"
 - tapOn: "Indent"
-- assertVisible: "(?s).*- [^\\n]*Plan\\n  - Model.*"
 - takeScreenshot: document-field-nested
-- tapOn: "Outdent"
-- assertVisible: "(?s).*- [^\\n]*Plan\\n- Model.*"
-# A Return on an empty nested item takes it a step back out, as a Return
-# on an empty item leaves a list in Notes and Notion, at the words' end as
-# anywhere.
-- tapOn: "Indent"
 - pressKey: Enter
+- pressKey: Enter
+- inputText: "Spec"
 - pressKey: Enter
 - inputText: "Ship"
+- tapOn: "Indent"
+- pressKey: Enter
+- inputText: "Next"
+- tapOn: "Outdent"
 - takeScreenshot: document-field-nested-out
-# Note that the field now stands three lines tall over the keyboard, which
-# can hide the Markdown under it, so the keyboard is lowered and the page
-# scrolled to the Markdown; the Markdown is then waited on until it reads
-# as the field wrote it, since the field writes its words once a frame.
-- runFlow: subflows/lower-keyboard.yaml
-- scrollUntilVisible:
-    element: "(?s).*- [^\\n]*Plan\\n.*"
-    direction: DOWN
+# The field writes its words once a frame, so the Markdown is waited on
+# until it reads as the field wrote it.
+- runFlow:
+    file: subflows/page-edge-scroll.yaml
+    env:
+      ELEMENT: "(?s).*- [^\\n]*Plan\\n.*"
 - extendedWaitUntil:
-    visible: "(?s).*- [^\\n]*Plan\\n  - Model[^\\n]*\\n- +Ship.*"
+    visible: "(?s).*- [^\\n]*Plan\\n  - Model[^\\n]*\\n- +Spec[^\\n]*\\n  - Ship[^\\n]*\\n- +Next.*"
     timeout: 10000

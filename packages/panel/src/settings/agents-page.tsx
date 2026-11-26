@@ -36,6 +36,7 @@ import {
   CHOICE_BAR_LOOK,
   ChoiceBar,
   ErrorState,
+  HarnessMark,
   SavedTick,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
@@ -54,7 +55,6 @@ import { useCallback, useState } from "react";
 import { useAgentDefault, useOfferedModels } from "../account-choices.js";
 import { actMutation } from "../act-mutations.js";
 import { refusalShown, unreadShown } from "../failure-report.js";
-import { HarnessMark } from "../harness-marks.js";
 import { modelsRetryMutation } from "../live-reads.js";
 import { OPEN_SETTINGS_LABEL } from "../open-settings.js";
 import { MODE_GLYPH } from "../tasks/agent-approvals.js";

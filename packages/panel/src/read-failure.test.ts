@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { RepositoryChangesAnswerView } from "@repo/features/pull-request-view";
+import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   DESCRIPTION_ACTOR,
   type DescriptionRevisionLine,
@@ -12,13 +13,17 @@ import {
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { UPDATE_STATUS } from "@repo/settings/update";
+import { ErrorState } from "@repo/ui";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
+import { ServiceReachedByWindow } from "./connection.js";
 import { DesktopInbox } from "./desktop/desktop-inbox.js";
 import { DesktopVersionHistory, taskVersionSubject } from "./desktop/desktop-version-history.js";
+import { OfflineMark } from "./desktop/offline-mark.js";
 import { SIDEBAR_OVERLAY } from "./desktop/sidebar-collapse.js";
+import { failureShown } from "./failure-report.js";
 import { PANEL_TAB } from "./panel-tabs.js";
 import { AgentAuthSection } from "./settings/agent-auth-section.js";
 import { WorkspacePage } from "./settings/workspace-page.js";
@@ -35,6 +40,7 @@ import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { handHostReads, handState, stateWith } from "./testing/app-state.js";
 import { ChangesTabReading } from "./testing/changes-tab.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
+import { THRESHOLD } from "./testing/desktop-inbox.js";
 import { drawnSidebar } from "./testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "./testing/document-task.js";
 import { overEveryTask } from "./testing/history-rows.js";
@@ -87,7 +93,7 @@ afterEach(() => {
 /** The Inbox's address, where it stands. */
 const INBOX_AT = "/personal/inbox";
 
-/** Draws a surface into the page under a window's router, standing at `at` where one is named, and lets every read it asked for answer. */
+/** Draws a surface into the page under a window's router and its connection, as the window's stage stands it, standing at `at` where one is named, and lets every read it asked for answer. */
 async function mount(surface: React.ReactElement, at?: string): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.append(container);
@@ -98,7 +104,11 @@ async function mount(surface: React.ReactElement, at?: string): Promise<HTMLElem
     at === undefined ? undefined : createMemoryHistory({ initialEntries: [at] }),
   );
 
-  act(() => root.render(router.provide(withQueryClient(surface))));
+  act(() =>
+    root.render(
+      router.provide(withQueryClient(createElement(ServiceReachedByWindow, null, surface))),
+    ),
+  );
   await settle();
 
   return container;
@@ -246,6 +256,62 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
       true,
       "the read landed, so nothing fails",
     ),
+  );
+});
+
+test("the Inbox's reads failing while the app does not reach the service keep the rows it holds with no line under them, and the Offline mark alone says why", async () => {
+  handState({}, { network: { online: true, reachable: false } });
+  // The feed held one item before its read again failed for the service not answering, as did the task list's below.
+  handHostReads({
+    items: { rows: { [INBOX_SCOPE_KIND.TASK]: { [TASK.id]: [THRESHOLD] } }, failed: true },
+    inbox: { ...stateWith({}, {}).inbox, tasks: [{ taskId: TASK.id, items: 1, updatedAt: 2 }] },
+  });
+
+  // The task list, which the Inbox's failure goes by too, held its task before its read again failed.
+  const tasks = tasksControl({ tasks: [TASK], listFailed: true });
+
+  const page = await mount(
+    createElement(
+      "div",
+      null,
+      createElement(OfflineMark),
+      overEveryTask(tasks, createElement(DesktopInbox, { tasks })),
+    ),
+    INBOX_AT,
+  );
+
+  // Note that the mark and the failed feed reach the window in one document, so once the mark stands the list has drawn the failure too.
+  await vi.waitFor(() =>
+    assert.ok(page.querySelector('.offline-mark[aria-label="Offline"]'), "the mark says it"),
+  );
+  await settle();
+  assert.ok(page.textContent?.includes(THRESHOLD.title), "the item held still stands");
+  assert.equal(page.querySelector('[role="alert"]') === null, true, "no surface says it again");
+  assert.doesNotMatch(page.textContent ?? "", /could not be read/u);
+});
+
+test("a Start that got no answer while the app does not reach the service still says so beside the Offline mark, since nothing sends it again", async () => {
+  handState({}, { network: { online: true, reachable: false } });
+
+  const page = await mount(
+    createElement(
+      "div",
+      null,
+      createElement(OfflineMark),
+      createElement(ErrorState, {
+        failure: failureShown({ surface: FAILURE_SURFACE.AGENT_START, cause: UNANSWERED }),
+        children: "The agent could not be started.",
+      }),
+    ),
+  );
+
+  await vi.waitFor(() =>
+    assert.ok(page.querySelector('.offline-mark[aria-label="Offline"]'), "the mark says it"),
+  );
+  await settle();
+  assert.equal(
+    page.querySelector('[role="alert"]')?.textContent,
+    "The agent could not be started.",
   );
 });
 

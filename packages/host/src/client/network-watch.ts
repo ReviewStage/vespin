@@ -2,7 +2,8 @@
  * network-watch.ts -- whether this machine can reach the service, as the platform's online events and the service's calls answer it, kept in the document.
  */
 import { ServiceReach, type ServiceReachState } from "@repo/features";
-import { Clock, Effect, Layer, type Scope, Stream, SubscriptionRef } from "effect";
+import { ForegroundClock } from "@repo/runtime/effect";
+import { Effect, Layer, type Scope, Stream, SubscriptionRef } from "effect";
 import { type AppState, networkConnected } from "../app-state.js";
 import type { AppStateStore } from "./app-state-store.js";
 
@@ -14,9 +15,14 @@ import type { AppStateStore } from "./app-state-store.js";
  */
 export const serviceReachLayer: Layer.Layer<ServiceReach> = Layer.effect(
   ServiceReach,
-  Effect.flatMap(Clock.currentTimeMillis, (answeredAt) =>
-    SubscriptionRef.make<ServiceReachState>({ reachable: true, answeredAt }),
-  ),
+  Effect.gen(function* () {
+    const foreground = yield* ForegroundClock;
+
+    return yield* SubscriptionRef.make<ServiceReachState>({
+      reachable: true,
+      answeredAt: foreground.now(),
+    });
+  }),
 );
 
 export interface NetworkWatchDependencies {

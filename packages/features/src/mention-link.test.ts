@@ -1099,6 +1099,7 @@ test("a date is written in the app's own form, a day, a time with its offset, or
     { kind: MENTION_KIND.DATE, start: "2026-10-20T15:00-07:00" },
     { kind: MENTION_KIND.DATE, start: "2026-10-20T15:00+05:30", end: "2026-10-20T17:00+05:30" },
     { kind: MENTION_KIND.DATE, start: "2026-10-20", end: "2026-10-24" },
+    { kind: MENTION_KIND.DATE, start: "2026-11-26T12:29:06-08:00", end: "2026-11-26T21:00:00.5Z" },
   ];
 
   assert.deepEqual(
@@ -1108,6 +1109,7 @@ test("a date is written in the app's own form, a day, a time with its offset, or
       "mention://date/2026-10-20T15:00-07:00",
       "mention://date/2026-10-20T15:00+05:30/2026-10-20T17:00+05:30",
       "mention://date/2026-10-20/2026-10-24",
+      "mention://date/2026-11-26T12:29:06-08:00/2026-11-26T21:00:00.5Z",
     ],
   );
 

@@ -7,7 +7,6 @@ import {
   Menu,
   Section,
   Button as SwiftUIButton,
-  Text,
   Toggle,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -30,6 +29,7 @@ import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, letterTileGlyph } from "./glyph.js";
 import { actContent, menuActContent } from "./glyph-label.js";
 import type { MenuPhotoFile } from "./row-menu-model.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

@@ -15,7 +15,6 @@ import { cn } from "../../cn.js";
 import { isComposingKey } from "../../composing-key.js";
 import { cssCustomProperties } from "../../css.js";
 import { CheckIcon, ChevronRightIcon } from "../../icons/lucide-glyphs.js";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import {
   DROPDOWN_MENU_ITEM,
@@ -37,6 +36,7 @@ import {
   POPOVER_WIDTH,
   type PopoverWidth,
 } from "../anchored-popover/anchored-popover.js";
+import { iconPickerChoiceOf } from "../icon-picker/icon-picker.js";
 import { OneLine } from "../one-line/one-line.js";
 import { ROVING_STOP, rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { SCROLL_FADE, SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
@@ -114,7 +114,10 @@ import { useTouchHold } from "./touch-hold.js";
  * headed by what it acts on, its rows the menu's own at a finger's height,
  * a submenu or a panel opened in its place with a way back, and its
  * shortcuts left off. The room is read as the menu is hung, so one standing open stays
- * what it opened as.
+ * what it opened as. A page of the menu's own groups (`MenuPage`), a
+ * phone's More, opens in the sheet's place as a submenu does, and its own
+ * submenus and panels open in its place in turn; a floating menu, which has
+ * the room, draws the page's groups in its place instead, ruled apart.
  */
 
 /** Which way from the point it hangs at a menu grows: rightward from it, or leftward to it. */
@@ -303,12 +306,65 @@ export interface MenuPanel {
   panel: (doors: MenuPanelDoors) => React.ReactNode;
 }
 
-/** One line of a menu: an action, a submenu of them, or a panel its owner draws. */
-export type MenuEntry = MenuAction | MenuSubmenu | MenuPanel;
+/**
+ * An item that opens a page of the menu's own groups, as a phone's More
+ * gathers what its menu offers less often: in a phone's sheet it opens in
+ * the sheet's place, its submenus and panels opening in its place in turn;
+ * a floating menu draws its groups where it stands, ruled apart, since it
+ * has the room to.
+ */
+export interface MenuPage {
+  label: string;
+  /** Whether its label names a person's thing, kept masked in a screen recording even in a menu that unmasks its own (`replayUnmasked`). */
+  replayMasked?: boolean | undefined;
+  icon?: React.JSX.Element;
+  groups: readonly (readonly MenuEntry[])[];
+}
+
+/** One line of a menu: an action, a submenu of them, a panel its owner draws, or a page of its own groups. */
+export type MenuEntry = MenuAction | MenuSubmenu | MenuPanel | MenuPage;
+
+/** One line a floating menu draws, its pages' groups drawn in their place (`inlinePages`). */
+type FloatingEntry = Exclude<MenuEntry, MenuPage>;
 
 /** Whether an entry opens a panel its owner draws rather than acting or opening a menu of items. */
 function isPanel(entry: MenuEntry): entry is MenuPanel {
   return "panel" in entry;
+}
+
+/** Whether an entry opens a page of the menu's own groups. */
+function isPage(entry: MenuEntry): entry is MenuPage {
+  return "groups" in entry;
+}
+
+/**
+ * The groups a floating menu draws: each page's groups in the page's place,
+ * the entries of its group before and after it standing as groups of their
+ * own around them, so the rules still part every group.
+ */
+function inlinePages(
+  groups: readonly (readonly MenuEntry[])[],
+): readonly (readonly FloatingEntry[])[] {
+  const drawn: FloatingEntry[][] = [];
+
+  for (const group of groups) {
+    let run: FloatingEntry[] = [];
+
+    for (const entry of group) {
+      if (!isPage(entry)) {
+        run.push(entry);
+        continue;
+      }
+
+      if (run.length > 0) drawn.push(run);
+      run = [];
+      drawn.push(...inlinePages(entry.groups).map((each) => [...each]));
+    }
+
+    if (run.length > 0) drawn.push(run);
+  }
+
+  return drawn;
 }
 
 /** What tells an entry from the others of its group, as a list's key: an action's own key where it names one, else its label. */
@@ -677,6 +733,7 @@ function keyedEntryOf(
     .find(
       (entry): entry is MenuAction | MenuSubmenu =>
         !isPanel(entry) &&
+        !isPage(entry) &&
         !("disabled" in entry && entry.disabled === true) &&
         entry.pressedBy?.(event) === true,
     );
@@ -685,9 +742,11 @@ function keyedEntryOf(
 /**
  * Whether a press landed on the card an item of one of `menus` hangs, or on
  * a card hung from a control on that card, as a person named on an agent's
- * card hangs their own. Each card stands apart from the menu, portaled to
- * the body, so it is traced back through the control it hangs from
- * (`hintedControlOf`), card by card, until one stands in a menu.
+ * card hangs their own, or on the colors an icon picker's choice floats in
+ * a panel, as a Manager's face's do. Each stands apart from the menu,
+ * portaled to the body, so it is traced back through the control it hangs
+ * from (`hintedControlOf`, `iconPickerChoiceOf`), one by one, until one
+ * stands in a menu.
  */
 function onItemCard(target: Node | null, menus: readonly (HTMLElement | null)[]): boolean {
   const seen = new Set<Node>();
@@ -695,7 +754,7 @@ function onItemCard(target: Node | null, menus: readonly (HTMLElement | null)[])
 
   while (on !== null && !seen.has(on)) {
     seen.add(on);
-    const control = hintedControlOf(on);
+    const control = hintedControlOf(on) ?? iconPickerChoiceOf(on);
 
     if (control === undefined) return false;
 
@@ -925,13 +984,13 @@ function Carded({
  * hint. A setting is a checkbox item, which says whether it is on.
  */
 /** One line of a group: an entry standing alone, or the run of actions that name one row. */
-type GroupLine =
-  | { readonly entry: MenuEntry }
+type GroupLine<E extends MenuEntry> =
+  | { readonly entry: E }
   | { readonly row: string; readonly actions: readonly MenuAction[] };
 
 /** A group's lines, from its top: each run of actions next to each other that name the same row drawn as one line. */
-function groupLines(group: readonly MenuEntry[]): GroupLine[] {
-  const lines: GroupLine[] = [];
+function groupLines<E extends MenuEntry>(group: readonly E[]): GroupLine<E>[] {
+  const lines: GroupLine<E>[] = [];
 
   for (const entry of group) {
     const row = "onSelect" in entry ? entry.row : undefined;
@@ -1015,8 +1074,6 @@ export function MenuItem({
     );
   }
 
-  const pressed = pulseOnPress(onChoose, PRESS_PULSE.QUIET);
-
   const shared = {
     nativeButton: true,
     // Note that a dimmed item is a disabled button outright, as it was,
@@ -1036,7 +1093,7 @@ export function MenuItem({
     closeOnClick: false,
     onClick: (event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
       event.preventBaseUIHandler();
-      pressed(event);
+      onChoose();
     },
   } as const;
 
@@ -1115,7 +1172,7 @@ function SteeredItem({
     "data-detail": secondLine(action) ? "true" : undefined,
     onMouseDown: (event: React.MouseEvent) => event.preventDefault(),
     onMouseMove: off ? undefined : steered.onHover,
-    onClick: off ? undefined : pulseOnPress(onChoose, PRESS_PULSE.QUIET),
+    onClick: off ? undefined : onChoose,
   } as const;
 
   // A setting is a switch for the keyboard and the reader, whatever its end draws.
@@ -1374,11 +1431,11 @@ function Submenu({
         data-open={open ? "true" : undefined}
         {...{ [SUBMENU_ITEM_ATTRIBUTE]: entry.label }}
         endClassName={endSlot(entry.hint !== undefined, false)}
-        onClick={pulseOnPress((event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
+        onClick={(event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
           // Note that Base UI's own press would take focus back to the item after it went into the submenu.
           event.preventBaseUIHandler();
           enter();
-        }, PRESS_PULSE.QUIET)}
+        }}
         onKeyDown={(event: BaseUIEvent<React.KeyboardEvent<HTMLElement>>) => {
           if (event.key !== "ArrowRight") return;
           event.preventDefault();
@@ -1462,9 +1519,18 @@ function namedItemOf(
 /** What in a panel may take the keyboard as it opens, after its search field. */
 const PANEL_CONTROL = 'button, [href], [tabindex]:not([tabindex="-1"])';
 
+/** Whether the focus stands in `panel`, or in the colors an icon picker's choice in it floats (`iconPickerChoiceOf`), portaled to the body. */
+function focusIn(panel: HTMLElement): boolean {
+  const focused = document.activeElement;
+
+  if (focused === null) return false;
+
+  return panel.contains(focused) || panel.contains(iconPickerChoiceOf(focused) ?? null);
+}
+
 /** Takes the keyboard into `panel`, where its own drawing has not already: its search field first, then its first control, else the panel. */
 function focusInto(panel: HTMLElement): void {
-  if (panel.contains(document.activeElement)) return;
+  if (focusIn(panel)) return;
 
   const start =
     panel.querySelector<HTMLElement>('input:not([type="hidden"]), textarea') ??
@@ -1551,10 +1617,10 @@ function PanelItem({
       data-popup-open={open ? "" : undefined}
       {...{ [PANEL_ATTRIBUTE]: entry.label }}
       closeOnClick={false}
-      onClick={pulseOnPress((event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
+      onClick={(event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
         event.preventBaseUIHandler();
         onEnter();
-      }, PRESS_PULSE.QUIET)}
+      }}
       onKeyDown={(event: BaseUIEvent<React.KeyboardEvent<HTMLElement>>) => {
         if (event.key !== "ArrowRight") return;
         event.preventDefault();
@@ -1780,7 +1846,10 @@ function FloatingMenu({
   openOnChecked = false,
   openOn,
   onClose,
-}: MenuProps): React.JSX.Element {
+}: Omit<MenuProps, "groups"> & {
+  /** Its groups, each page's drawn in its place (`inlinePages`). */
+  groups: readonly (readonly FloatingEntry[])[];
+}): React.JSX.Element {
   const { id, placement, opener, leaving, ref: hold } = menu;
   const element = useRef<HTMLDivElement | null>(null);
   // Note that the popup is held in state too, because Base UI's portal draws it a render after the menu's own.
@@ -2016,7 +2085,7 @@ function FloatingMenu({
   );
 
   /** One entry standing alone on its line: a panel's item, a submenu, or an action. */
-  const entryLine = (entry: MenuEntry) =>
+  const entryLine = (entry: FloatingEntry) =>
     isPanel(entry) ? (
       <PanelItem
         key={entry.label}
@@ -2174,7 +2243,7 @@ function SheetItem({
     "data-detail": secondLine(action) ? "true" : undefined,
     [SUBMENU_ATTRIBUTE]: submenu,
     ...rovingItem(),
-    onClick: pulseOnPress(onChoose, PRESS_PULSE.QUIET),
+    onClick: onChoose,
     onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
       if (submenu === undefined || event.key !== "ArrowRight") return;
       event.preventDefault();
@@ -2322,6 +2391,50 @@ function SheetPanel({
   );
 }
 
+/** The pages a sheet stands on as it opens: the submenu asked, or none. */
+function openedOn(openOn: string | undefined): readonly string[] {
+  return openOn === undefined ? [] : [openOn];
+}
+
+/** What a sheet draws on the pages standing: the last that opens (none on the menu's own rows), its rows, and the name of the page it goes back to, none where that is the menu's own. */
+interface SheetPage {
+  readonly page: MenuSubmenu | MenuPanel | MenuPage | undefined;
+  readonly rows: readonly (readonly MenuEntry[])[];
+  readonly above: string | undefined;
+}
+
+/**
+ * The page a sheet stands on, walked from the menu's groups through each
+ * page standing by its name: a submenu's items, a page's groups, or a
+ * panel, past which nothing opens. A name its page no longer offers ends
+ * the walk where it stands.
+ */
+function sheetPage(
+  groups: readonly (readonly MenuEntry[])[],
+  opened: readonly string[],
+): SheetPage {
+  let standing: SheetPage = { page: undefined, rows: groups, above: undefined };
+
+  for (const label of opened) {
+    const { page, rows } = standing;
+
+    if (page !== undefined && isPanel(page)) break;
+
+    const next = rows
+      .flat()
+      .find(
+        (entry): entry is MenuSubmenu | MenuPanel | MenuPage =>
+          !("onSelect" in entry) && entry.label === label,
+      );
+
+    if (next === undefined) break;
+    const nextRows = isPanel(next) ? [] : isPage(next) ? next.groups : [next.items];
+    standing = { page: next, rows: nextRows, above: page?.label };
+  }
+
+  return standing;
+}
+
 /**
  * The menu as a phone's sheet, in the frame every menu's sheet stands in
  * (`MenuSheetFrame`): a dialog risen from the window's foot over the dimmed
@@ -2352,14 +2465,9 @@ function MenuSheet({
   replayUnmasked = false,
 }: MenuProps): React.JSX.Element {
   const { id, opener, leaving, ref: hold } = menu;
-  // Note that the submenu standing is held by its name and read from `groups` each render, so a value that stays reads and toggles as its owner now draws it.
-  const [opened, setOpened] = useState<string | undefined>(openOn);
-
-  const page = groups
-    .flat()
-    .find(
-      (entry): entry is MenuSubmenu | MenuPanel => !("onSelect" in entry) && entry.label === opened,
-    );
+  // Note that the pages standing are held by their names and read from `groups` each render, so a value that stays reads and toggles as its owner now draws it.
+  const [opened, setOpened] = useState<readonly string[]>(openedOn(openOn));
+  const { page, rows, above } = sheetPage(groups, opened);
 
   // The submenu just left, whose row takes focus back.
   const backTo = useRef<string | undefined>(undefined);
@@ -2369,7 +2477,7 @@ function MenuSheet({
   if (wasLeaving !== leaving) {
     setWasLeaving(leaving);
 
-    if (!leaving) setOpened(openOn);
+    if (!leaving) setOpened(openedOn(openOn));
   }
 
   const roving = useRovingKeys<HTMLDivElement>({ stop: ROVING_STOP.NONE });
@@ -2392,14 +2500,14 @@ function MenuSheet({
     if (list === null || leaving) return;
 
     const back =
-      opened === undefined && backTo.current !== undefined
-        ? [...list.querySelectorAll<HTMLElement>(`[${SUBMENU_ATTRIBUTE}]`)].find(
+      backTo.current === undefined
+        ? undefined
+        : [...list.querySelectorAll<HTMLElement>(`[${SUBMENU_ATTRIBUTE}]`)].find(
             (row) => row.getAttribute(SUBMENU_ATTRIBUTE) === backTo.current,
-          )
-        : undefined;
+          );
 
     backTo.current = undefined;
-    (back ?? startOf(list, openOnChecked && opened === undefined))?.focus({ preventScroll: true });
+    (back ?? startOf(list, openOnChecked && opened.length === 0))?.focus({ preventScroll: true });
   }, [list, opened, leaving, openOnChecked]);
 
   // Note that a choice that stays may take its own row away (Retry turning
@@ -2415,8 +2523,10 @@ function MenuSheet({
 
   const back = () => {
     backTo.current = page?.label;
-    setOpened(undefined);
+    setOpened((standing) => standing.slice(0, -1));
   };
+
+  const open = (label: string) => setOpened((standing) => [...standing, label]);
 
   // Note that a value a filter toggles leaves the sheet standing, so several
   // are chosen in one visit; and that any other choice hands focus back to
@@ -2441,7 +2551,9 @@ function MenuSheet({
 
   const title = subject?.name ?? label;
   const name = page?.label ?? title;
-  const detail = page === undefined ? subject?.detail : title;
+  // Note that a page under another is said under the one it goes back to, as the first page is said under what the menu acts on.
+  const backName = above ?? title;
+  const detail = page === undefined ? subject?.detail : backName;
   // Note that the head shows only where it names the menu itself or a submenu of its own words, because a subject is the caller's thing, as the floating menu keeps it.
   const headUnmasked = replayUnmasked && subject === undefined && page?.replayMasked !== true;
 
@@ -2455,7 +2567,7 @@ function MenuSheet({
       detail={detail}
       replayUnmasked={headUnmasked}
       mark={subject?.mark}
-      back={page === undefined ? undefined : { label: title, onBack: back }}
+      back={page === undefined ? undefined : { label: backName, onBack: back }}
       onAway={away}
     >
       {page !== undefined && isPanel(page) ? (
@@ -2479,7 +2591,7 @@ function MenuSheet({
                     {heading}
                   </div>
                 )}
-                <SheetRows groups={groups} onChoose={choose} onOpen={setOpened} />
+                <SheetRows groups={groups} onChoose={choose} onOpen={open} />
                 {footer === undefined ? null : (
                   <div className={MENU_FOOTER} role="none">
                     {footer}
@@ -2487,7 +2599,7 @@ function MenuSheet({
                 )}
               </>
             ) : (
-              <SheetRows groups={[page.items]} onChoose={choose} onOpen={setOpened} />
+              <SheetRows groups={rows} onChoose={choose} onOpen={open} />
             )}
           </div>
         </ScrollArea>
@@ -2508,7 +2620,11 @@ export function Menu(props: MenuProps): React.JSX.Element {
 
   return (
     <MenuReplayUnmasked value={props.replayUnmasked === true}>
-      {sheet ? <MenuSheet {...props} /> : <FloatingMenu {...props} />}
+      {sheet ? (
+        <MenuSheet {...props} />
+      ) : (
+        <FloatingMenu {...props} groups={inlinePages(props.groups)} />
+      )}
     </MenuReplayUnmasked>
   );
 }

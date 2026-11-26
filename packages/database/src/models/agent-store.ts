@@ -1660,6 +1660,7 @@ const AgentsOfWorkspaceSchema = Schema.Struct({
   automation: Schema.NullOr(Schema.Boolean),
   automationId: Schema.NullOr(Schema.String),
   taskStatus: Schema.NullOr(taskStatusSchema),
+  pullRequest: Schema.NullOr(Schema.Struct({ repository: Schema.String, number: Schema.Number })),
   except: Schema.NullOr(Schema.String),
   around: Schema.NullOr(AgentAroundSchema),
   offset: Schema.Number,
@@ -1696,6 +1697,22 @@ function ofAutomation(automationId: string): SQL {
   );
 }
 
+/** The condition that the agent linked the repository's pull request numbered (`agent_pull_request`), as a delivery about it finds the agent. */
+function linkedPullRequest(pullRequest: { readonly repository: string; readonly number: number }) {
+  return exists(
+    queryBuilder
+      .select({ one: agentPullRequest.agentId })
+      .from(agentPullRequest)
+      .where(
+        and(
+          eq(agentPullRequest.agentId, agentTable.id),
+          namesDeliveredRepository(agentPullRequest.repository, pullRequest.repository),
+          eq(agentPullRequest.number, pullRequest.number),
+        ),
+      ),
+  );
+}
+
 /** The condition that an agent is one of the workspace's the account reaches, narrowed as the request asks. */
 function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
   const { userId, organizationId, repository, taskId, words, except } = request;
@@ -1724,6 +1741,7 @@ function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
         ),
     taskId === null ? undefined : eq(agentTable.taskId, taskId),
     words === null ? undefined : agentNamed(words),
+    request.pullRequest === null ? undefined : linkedPullRequest(request.pullRequest),
     except === null ? undefined : ne(agentTable.id, except),
     // Note that a repository is matched as GitHub matches one, its case aside.
     repository === null
@@ -2602,6 +2620,8 @@ interface WorkspaceAgentsAsked {
   readonly automationId?: string;
   /** Only the agents on a task standing at this status. */
   readonly taskStatus?: TaskStatus;
+  /** Only the agents that linked this pull request, by its repository and number. */
+  readonly pullRequest?: { readonly repository: string; readonly number: number };
   /** The one agent left out, the one asking. */
   readonly except?: string;
   /** The agent whose own come first: those on its task, its starter, and those it started. */
@@ -2627,6 +2647,7 @@ function workspaceRequest(userId: string, organizationId: string, options: Works
     automation: options.automation ?? null,
     automationId: options.automationId ?? null,
     taskStatus: options.taskStatus ?? null,
+    pullRequest: options.pullRequest ?? null,
     except: options.except ?? null,
     around: options.around ?? null,
     offset: options.offset ?? 0,
@@ -2640,7 +2661,7 @@ function workspaceRequest(userId: string, organizationId: string, options: Works
  * around the one `around` names before the rest, an archived one
  * left out unless `includeArchived` asks, the one `except` names left out,
  * only those on the repository named where one is, on the plan named
- * where one is, and whose shown name (`agentName`) or task's name holds each of
+ * where one is, that linked the pull request named where one is, and whose shown name (`agentName`) or task's name holds each of
  * the words where some are given, the first `offset` passed over, and at most `limit`; a workspace the account is not in has
  * none.
  */
