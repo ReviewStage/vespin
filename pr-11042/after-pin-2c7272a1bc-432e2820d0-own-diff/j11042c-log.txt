@@ -1,0 +1,15 @@
+-- j11042c: main pinned to 2c7272a1bc: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to 628809e169
+== bundle PJj11042c base 628809e169
+  built 628809e169 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app, main 2c7272a1bc
+ipad27-light-automations:  
+ipad27-light-zinbox-bar: fails 0 shots 2 
+ipad27-light-automation-editor: fails 0 shots 2 
+iphone-light-automations: fails 0 shots 12 
+iphone-light-zinbox-bar: fails 0 shots 2 
+iphone-light-automation-editor: fails 0 shots 2 

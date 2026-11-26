@@ -1,0 +1,49 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow automations
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+    Assert that "${TAB}" is visible... COMPLETED
+    Tap on "${TAB}", Index: -1... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Weekly digest" is visible... COMPLETED
+Assert that "Fix failing checks" is visible... COMPLETED
+Assert that "Check each deploy" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot automations-list... COMPLETED
+Tap on "View options"... COMPLETED
+Tap on "Order by"... COMPLETED
+Assert that "Last run" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot automations-order... COMPLETED
+Tap on "Name"...Exception in thread "Thread-5" java.lang.IllegalStateException: An error was encountered processing the command (domain=com.apple.CoreSimulator.SimError, code=405):
+Unable to lookup in current state: Shutting Down
+
+	at util.CommandLineUtils.runCommand(CommandLineUtils.kt:50)
+	at util.CommandLineUtils.runCommand$default(CommandLineUtils.kt:16)
+	at util.LocalSimulatorUtils.terminate(LocalSimulatorUtils.kt:186)
+	at device.SimctlIOSDevice.stop(SimctlIOSDevice.kt:102)
+	at device.SimctlIOSDevice.close(SimctlIOSDevice.kt:201)
+	at xcuitest.installer.LocalXCTestInstaller.close(LocalXCTestInstaller.kt:253)
+	at xcuitest.XCTestDriverClient.close(XCTestDriverClient.kt:224)
+	at ios.xctest.XCTestIOSDevice.close(XCTestIOSDevice.kt:197)
+	at ios.LocalIOSDevice.close(LocalIOSDevice.kt:151)
+	at maestro.drivers.IOSDriver.close$lambda$4(IOSDriver.kt:105)
+	at maestro.utils.Metrics.measured(Metrics.kt:48)
+	at maestro.utils.Metrics.measured$default(Metrics.kt:42)
+	at maestro.drivers.IOSDriver.close(IOSDriver.kt:101)
+	at maestro.Maestro.close(Maestro.kt:606)
+	at maestro.cli.session.MaestroSessionManager$MaestroSession.close(MaestroSessionManager.kt:471)
+	at maestro.cli.session.MaestroSessionManager.newSession$lambda$2(MaestroSessionManager.kt:129)
+	at kotlin.concurrent.ThreadsKt$thread$thread$1.run(Thread.kt:30)
