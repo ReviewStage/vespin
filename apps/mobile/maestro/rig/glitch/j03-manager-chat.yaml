@@ -1,0 +1,42 @@
+# j03-manager-chat.yaml -- the Tasks tab's first switch, a Manager's chat opened, a message sent, its thread opened and answered, Back with the keyboard up, and the chat opened again.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox-large
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- runFlow: { file: ../../subflows/tab.yaml, env: { TAB: Tasks } }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: "Release manager"
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- tapOn: { id: "composer-field" }
+- runFlow: { file: _pause.yaml, env: { MS: "800" } }
+- inputText: { text: "What's left before it ships?", optional: true }
+- tapOn: { text: "Send", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- runFlow: { file: ../../subflows/lower-keyboard.yaml }
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- tapOn: { text: "[0-9]+ repl(y|ies)", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }
+- tapOn: { id: "composer-field", optional: true }
+- inputText: { text: "Thanks.", optional: true }
+- tapOn: { text: "Send", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+# Back with the keyboard still up (STAG-4374's path, kept for its frames).
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+# The chat again, warm.
+- tapOn: { text: "Release manager", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "3000" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }

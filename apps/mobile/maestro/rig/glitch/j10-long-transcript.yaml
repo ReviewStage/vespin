@@ -1,0 +1,24 @@
+# j10-long-transcript.yaml -- the orchestrator with ~3,000 transcript entries, written to while it is open: opened at launch, scrolled back and forth, the composer raised, and Jump to latest.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: agent-long-run
+      agent: 4c8e2a6b-1d3f-4e5a-9b7c-2d4e6f8a0b1c
+- runFlow: { file: _pause.yaml, env: { MS: "8000" } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _pause.yaml, env: { MS: "3000" } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { text: "Jump to latest", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "composer-field", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- inputText: { text: "Status?", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- runFlow: { file: ../../subflows/lower-keyboard.yaml }
+- runFlow: { file: _pause.yaml, env: { MS: "3000" } }

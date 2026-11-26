@@ -1,0 +1,36 @@
+# busy-a.yaml -- the busy account's launch as a person meets it, driven inside busy-account.sh's window: the Inbox scrolled as it fills, a row opened and Back, the Tasks tab's first switch, a row opened there, then Home. The app is already launched by the rig; this flow never launches it.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- extendedWaitUntil:
+    visible: { id: "inbox-tab" }
+    timeout: 60000
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _pause.yaml, env: { MS: "800" } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+# The third row from the top, by its place: the busy account's words are invented.
+- tapOn: { point: "50%, 34%" }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { point: "50%, 46%" }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { id: "tasks-tab" }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _pause.yaml, env: { MS: "800" } }
+- tapOn: { point: "50%, 40%" }
+- runFlow: { file: _pause.yaml, env: { MS: "3000" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { id: "inbox-tab" }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- pressKey: Home

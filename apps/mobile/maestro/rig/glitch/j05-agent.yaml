@@ -1,0 +1,29 @@
+# j05-agent.yaml -- an agent's page reached from a thread's menu, its transcript scrolled back, the composer raised and lowered, and Back twice.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox-large
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- tapOn: "Recorded the invite flow"
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { text: "More", index: -1, optional: true }
+- tapOn: { text: "Open agent", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "3000" } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { id: "composer-field", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- inputText: { text: "Also check the resend link.", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "800" } }
+- runFlow: { file: ../../subflows/lower-keyboard.yaml }
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }

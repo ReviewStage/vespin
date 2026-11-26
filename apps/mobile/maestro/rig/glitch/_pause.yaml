@@ -1,0 +1,7 @@
+# _pause.yaml -- waits about MS milliseconds with nothing pressed, by waiting on a word no screen holds; the wait's own miss is optional.
+appId: dev.vespin.ios
+---
+- extendedWaitUntil:
+    visible: "zz-glitch-sweep-never-drawn"
+    timeout: ${MS}
+    optional: true

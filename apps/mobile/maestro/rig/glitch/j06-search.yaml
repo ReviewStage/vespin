@@ -1,0 +1,29 @@
+# j06-search.yaml -- Search opened, words typed at a person's pace, a result opened and Back (do the words and results stand?), the words changed, and away to the Inbox and back.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox-large
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- tapOn: { id: "search-tab", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- tapOn: { text: "Search Vespin", optional: true }
+- inputText: { text: "inv", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "400" } }
+- inputText: { text: "ite", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }
+- tapOn: { text: "Teammate invitations", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- eraseText: 6
+- inputText: { text: "rounding", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }
+- tapOn: { id: "inbox-tab", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1200" } }
+- tapOn: { id: "search-tab", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }

@@ -1,0 +1,14 @@
+# busy-b.yaml -- the busy account brought back after its gap (the rig brings it forward): a row tapped about 4 s later, as Charles's slow Manager open was, then the Tasks tab and a row there.
+appId: dev.vespin.ios
+---
+- runFlow: { file: _pause.yaml, env: { MS: "4000" } }
+- tapOn: { point: "50%, 34%" }
+- runFlow: { file: _pause.yaml, env: { MS: "8000" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { id: "tasks-tab" }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { point: "50%, 40%" }
+- runFlow: { file: _pause.yaml, env: { MS: "6000" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }

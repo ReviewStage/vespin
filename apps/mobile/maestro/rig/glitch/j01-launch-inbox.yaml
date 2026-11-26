@@ -1,0 +1,30 @@
+# j01-launch-inbox.yaml -- a cold launch to the Inbox on the 600-thread fixture, a person's scroll down and back, then a second launch over the store the first one kept.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox-large
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _pause.yaml, env: { MS: "800" } }
+# Back to the top by the status bar, as a person does.
+- tapOn:
+    point: "50%, 1%"
+    optional: true
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+# A second launch, its store kept, as a phone launches most days.
+- stopApp
+- launchApp:
+    arguments:
+      fixture: inbox-large
+- runFlow: { file: _pause.yaml, env: { MS: "6000" } }

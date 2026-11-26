@@ -1,0 +1,44 @@
+# j04-tasks-task.yaml -- the Tasks list scrolled, a task opened from partway down and its page scrolled, Back (does the list keep its place?), another task, and a switch away and back.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox-large
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- runFlow: { file: ../../subflows/tab.yaml, env: { TAB: Tasks } }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- scrollUntilVisible:
+    element: "Teammate invitations"
+    direction: DOWN
+    optional: true
+- runFlow: { file: _pause.yaml, env: { MS: "800" } }
+- tapOn: { text: "Teammate invitations", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- runFlow: { file: _flick.yaml, env: { DIR: up } }
+- tapOn: { text: "Weekly digest email", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+# Away to the Inbox and back: does Tasks keep its place?
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _pause.yaml, env: { MS: "800" } }
+- runFlow: { file: ../../subflows/tab.yaml, env: { TAB: Inbox } }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- runFlow: { file: ../../subflows/tab.yaml, env: { TAB: Tasks } }
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }

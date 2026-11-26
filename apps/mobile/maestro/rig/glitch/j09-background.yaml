@@ -1,0 +1,33 @@
+# j09-background.yaml -- a thread open, the app sent Home for a minute and brought back: does the thread stand, and does the Inbox answer a tap at once after Back?
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox-large
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- tapOn: "Recorded the invite flow"
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }
+- pressKey: Home
+- runFlow: { file: _pause.yaml, env: { MS: "60000" } }
+- launchApp:
+    stopApp: false
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "800" } }
+- runFlow: { file: _flick.yaml, env: { DIR: down } }
+- runFlow: { file: _pause.yaml, env: { MS: "800" } }
+- runFlow: { file: ../../subflows/tab.yaml, env: { TAB: Tasks } }
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- pressKey: Home
+- runFlow: { file: _pause.yaml, env: { MS: "60000" } }
+- launchApp:
+    stopApp: false
+- runFlow: { file: _pause.yaml, env: { MS: "500" } }
+- tapOn: { text: "Weekly digest email", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "3000" } }

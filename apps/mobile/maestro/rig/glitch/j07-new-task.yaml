@@ -1,0 +1,26 @@
+# j07-new-task.yaml -- New task's sheet with the keyboard, a repository picked, the sheet closed and opened again (does the draft stand?), and closed.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox-large
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- tapOn: "New task"
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- inputText: { text: "Let a workspace owner revoke a pending invite.", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "800" } }
+- runFlow: { file: ../../subflows/lower-keyboard.yaml }
+- tapOn: { text: "ada/relay", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1200" } }
+- tapOn: { text: "ada/ledger", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1200" } }
+- runFlow: { file: ../../subflows/close-sheet.yaml }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: "New task"
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- runFlow: { file: ../../subflows/close-sheet.yaml }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }

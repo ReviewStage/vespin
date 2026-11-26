@@ -1,0 +1,33 @@
+# j08-double-tap.yaml -- a row tapped twice in quick succession, as an impatient thumb does, in the Inbox and in Tasks: one push or two?
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox-large
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn:
+    text: "Recorded the invite flow"
+    repeat: 2
+    delay: 150
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- runFlow: { file: ../../subflows/tab.yaml, env: { TAB: Tasks } }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn:
+    text: "Weekly digest email"
+    repeat: 2
+    delay: 150
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }

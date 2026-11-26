@@ -1,0 +1,19 @@
+# _flick.yaml -- one flick of the list as a thumb makes it, DIR down or up the content.
+appId: dev.vespin.ios
+---
+- runFlow:
+    when:
+      true: ${DIR == 'down'}
+    commands:
+      - swipe:
+          start: "50%, 78%"
+          end: "50%, 28%"
+          duration: 220
+- runFlow:
+    when:
+      true: ${DIR == 'up'}
+    commands:
+      - swipe:
+          start: "50%, 28%"
+          end: "50%, 78%"
+          duration: 220

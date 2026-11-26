@@ -1,0 +1,37 @@
+# j02-thread-answer.yaml -- open a thread, Back, open it again warm, reply in it, then answer an ask and come Back to the Inbox.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox-large
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- tapOn: "Recorded the invite flow"
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1200" } }
+# The same thread again, warm.
+- tapOn: "Recorded the invite flow"
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }
+# A reply, if the thread holds a composer.
+- tapOn: { id: "composer-field", optional: true }
+- inputText: { text: "Looks right, thanks.", optional: true }
+- tapOn: { text: "Send", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+# An ask answered.
+- scrollUntilVisible:
+    element: "Who can withdraw an invite\\?"
+    direction: DOWN
+    optional: true
+- tapOn: { text: "Who can withdraw an invite\\?", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2000" } }
+- tapOn: { text: "Both, Recommended.*", optional: true }
+- tapOn: { text: "Send", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "2500" } }
+- tapOn: { id: "BackButton", optional: true }
+- runFlow: { file: _pause.yaml, env: { MS: "3000" } }
