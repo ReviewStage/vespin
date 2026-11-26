@@ -324,12 +324,14 @@ own ID.
 
 The Vespin iOS app records how you use it too, every time you open it,
 signed in or not: a video of its screens and where you touched them, never
-your other apps. Everything on the screen is masked before a recording
-leaves your iPhone or iPad: every word, field, symbol, and drawing, and
-every picture but the app's own icons, is replaced by a box of its color, and a web page, a video, a PDF, or a
-browser sheet shown in the app is always covered, so a recording shows the
-app's layout and your touches, never what you or anyone else wrote or
-showed. Each recording also carries the same trail an iOS error report
+your other apps. The app masks the screen before a recording leaves your
+iPhone or iPad: the text, fields, symbols, drawings, and pictures it shows,
+but the app's own icons, are replaced by boxes of their color, and a web
+page, a video, a PDF, or a browser sheet shown in the app is always covered,
+so a recording is meant to show the app's layout and your touches, never what
+you or anyone else wrote or showed. The masking finds what to cover by how
+iOS draws it, so something drawn in a way it does not recognize could leave
+unmasked; we check the app's screens against it. Each recording also carries the same trail an iOS error report
 carries (see Error and performance data). It is sent to Sentry, not PostHog,
 and is filed under no account, so it cannot be tied to you by your name or
 email, or found and erased with your account; Sentry keeps it until its
@@ -337,7 +339,9 @@ retention ends.
 
 Turning off Settings › Account › "Share usage data" stops the counts, the
 recordings, and the Sentry reports described below from that Mac, browser,
-iPhone, or iPad, at once and without restarting the app; turning it back on resumes them.
+iPhone, or iPad, at once and without restarting the app; turning it back on
+resumes them. On an iPhone or iPad, a few seconds of recording or a report
+already waiting to be sent when you turn it off may still go as it stops.
 
 ### Error and performance data
 
@@ -656,8 +660,8 @@ data with:
   attachment bytes), Neon (database), PostHog (usage
   data, screen recordings, feedback, and setup answers), Sentry (error and
   performance monitoring, and the iOS app's screen recordings), Resend (email:
-  for onboarding emails and product updates, Resend is told your email address, your first name, when you signed up, whether
-  you accepted a workspace invitation, and on which days you started a task),
+  for onboarding emails and product updates, Resend is told your email
+  address, your first name, when you signed up, whether you accepted a workspace invitation, and on which days you started a task),
   Metronome (billing: each workspace's id and what each of its agents' cloud
   sandbox sessions cost, which Metronome totals into the workspace's monthly
   usage), Stripe (billing: the card and billing details a workspace's owner or
@@ -786,8 +790,8 @@ can also act directly in the app:
   the Mac app's or the web app's feature counts, screen recordings, and
   Sentry error, crash, and performance reports, at once, and the iOS app's
   feature counts, screen recordings, and Sentry reports. It is set per Mac,
-  per browser, and per iPhone or iPad, is on by default in the Vespin you download, and does not
-  stop the counts the Service makes of work done through it, or the Sentry
+  per browser, and per iPhone or iPad, is on by default in the Vespin you
+  download, and does not stop the counts the Service makes of work done through it, or the Sentry
   reports the Service and a host machine send of their own work.
 - **Commands on your Mac:** set Settings › This Mac › "Let agents run commands
   on this Mac" to Never.

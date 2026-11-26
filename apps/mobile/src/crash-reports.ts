@@ -37,15 +37,19 @@
  * through the filter above.
  *
  * It records every session as Sentry's mobile replay, fully masked, as the
- * desktop's and the web's replays are (`packages/panel/src/session-replay.ts`):
- * every word, field, symbol and vector, and every picture the app did not
- * ship with, is drawn as a box of its color in its place, and a web view, a video, a PDF and a Safari sheet
+ * desktop's and the web's replays are
+ * (`packages/panel/src/session-replay.ts`): every word, field, symbol and
+ * vector, and every picture the app did not ship with, is drawn as a box of
+ * its color in its place, and a web view, a video, a PDF and a Safari sheet
  * always are, so what leaves is the screens' layout and where they were
- * touched, never a person's words or pictures (`REPLAY_MASKING`). Nothing is
- * unmasked, since `@repo/ui-native` has no mark for the app's own words as
- * `@repo/ui`'s `ReplayUnmask` is; a request's details stay out of it, as no
- * address is allowed one; and a replay, like every report, names no account.
- * It stands and stops with the SDK, so the same switch holds it.
+ * touched, never a person's words or pictures (`REPLAY_MASKING`). Note that
+ * the SDK finds what to mask by the class iOS draws it with, so a way of
+ * drawing it does not know leaves unmasked: a new kind of view is checked in
+ * a replay before it ships. Nothing is unmasked, since `@repo/ui-native` has
+ * no mark for the app's own words as `@repo/ui`'s `ReplayUnmask` is; a
+ * request's details stay out of it, as no address is allowed one; and a
+ * replay, like every report, names no account. It stands and stops with the
+ * SDK, so the same switch holds it.
  *
  * Every event names the build's release and build number, the names
  * `release-ios.yml` uploads the build's Hermes source maps and dSYMs under
@@ -246,8 +250,9 @@ function startCrashReports(): void {
  * Holds the SDK to this device's choice to share usage data, as the host
  * reads it: kept for the next launch's native start, and the SDK closed, its
  * native half with it, where it reads off, or started again where it reads
- * on after a close. Note that a close drops what the SDK holds unsent, such
- * as this launch's trace, since nothing goes out once the choice is off.
+ * on after a close. Note that a close records nothing more and drops this
+ * launch's trace, but the native half flushes as it closes, so a replay
+ * segment or report already queued may still go out (`PRIVACY.md` says so).
  */
 function shareCrashReports(shares: boolean): void {
   crashReportsModule.keepSharesUsageData(shares);
