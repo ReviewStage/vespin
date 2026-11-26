@@ -1424,6 +1424,10 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
 
   if (search.trim() !== "") {
     if (found.length === 0) {
+      // Note that the list found nothing says so only once the service's search of the words typed has answered too, since a task past the list comes only with it.
+      if (listing.searching)
+        return <EmptyState title={READING_TASKS} symbol={GLYPH.SEARCH} loading />;
+
       return (
         (treeEmpty(tree) ? notRead(read, onRefresh) : undefined) ?? (
           <EmptyState
