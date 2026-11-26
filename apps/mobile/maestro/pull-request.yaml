@@ -324,7 +324,7 @@ env:
 - tapOn:
     id: "BackButton"
 - extendedWaitUntil:
-    visible: "Changes requested"
+    visible: "Changes were requested.*"
     timeout: 10000
 - scrollUntilVisible:
     element: "Expire an invite after seven days.*"
