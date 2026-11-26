@@ -179,10 +179,11 @@ export function useManagerChatLooks(
   const markUnread = useCallback(
     (messageId: string, sentAt: number) => {
       if (agentId === undefined) return;
+      const before = stay;
       markedUnread.current = true;
       setStay({ agentId, newAfter: unreadThroughOf(sentAt), newOverOwn: true });
 
-      write(
+      void write(
         () =>
           acts[ACT_KIND.AGENTS_MARK_READ]({
             agentId,
@@ -194,9 +195,16 @@ export function useManagerChatLooks(
             "failure" in answer ? messageFailureWords(answer.failure) : undefined,
           unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
         },
-      );
+      ).then((went) => {
+        if (went) return;
+
+        // Note that a mark the service did not take is let go, as the host lets its drawn mark go, and the looks held meanwhile are caught up by one.
+        markedUnread.current = false;
+        setStay((standing) => (standing.agentId === agentId ? before : standing));
+        acts[ACT_KIND.AGENTS_MARK_READ]({ agentId, readMark: READ_MARK.SEEN }).catch(lookRefused);
+      });
     },
-    [acts, agentId, write],
+    [acts, agentId, stay, write],
   );
 
   const current = stay.agentId === agentId;

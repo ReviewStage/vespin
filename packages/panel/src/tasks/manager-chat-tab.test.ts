@@ -175,6 +175,8 @@ async function drawChat(
     readonly findable?: boolean;
     /** What a reaction pressed is answered with, once it settles; refused at once where none is named. */
     readonly reactAnswer?: Promise<FakeActAnswer>;
+    /** Whether the service refuses Mark as unread. */
+    readonly unreadRefused?: boolean;
   } = {},
 ) {
   const manager = held.manager ?? MANAGER;
@@ -208,6 +210,10 @@ async function drawChat(
 
       if (request.kind === ACT_KIND.AGENTS_MARK_READ) {
         marks.push(request.payload);
+
+        if (held.unreadRefused === true && request.payload.readMark === READ_MARK.UNREAD) {
+          return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." });
+        }
 
         return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { agent: manager } });
       }
@@ -432,6 +438,7 @@ test("New stands over the first message after the mark the page opened on, the r
   assert.equal(newOver(container), "Thanks.");
   act(() => root.unmount());
   roots.splice(roots.indexOf(root), 1);
+  await settleQueries();
 
   assert.deepEqual(marks, [
     { agentId: MANAGER.id, readMark: READ_MARK.READ },
@@ -441,6 +448,36 @@ test("New stands over the first message after the mark the page opened on, the r
       unreadFrom: { messageId: "mine", sentAt: 3_000 },
     },
   ]);
+});
+
+test("a Mark as unread the service refuses lets New go back to where it stood, and the page's looks go on", async () => {
+  const { container, root, marks } = await drawChat(
+    [row("first", 1, "On it."), row("second", 2, "Shipped.")],
+    { manager: { ...MANAGER, readThrough: 1_500, saidAt: 2_000 }, unreadRefused: true },
+  );
+
+  const words =
+    [...container.querySelectorAll(".ui-channel-message-words")].find(
+      (each) => each.textContent === "On it.",
+    ) ?? assert.fail("the message stands");
+
+  act(() => {
+    words.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
+    );
+  });
+  act(() => menuItem("Mark as unread").click());
+  await settleQueries();
+
+  assert.equal(newOver(container), "Shipped.");
+  act(() => root.unmount());
+  roots.splice(roots.indexOf(root), 1);
+  await settleQueries();
+
+  assert.deepEqual(
+    marks.map((mark) => mark.readMark),
+    [READ_MARK.READ, READ_MARK.UNREAD, READ_MARK.SEEN, READ_MARK.SEEN],
+  );
 });
 
 test("a chat the reader marked unread from their own last line opens with New over it", async () => {
