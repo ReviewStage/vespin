@@ -14,13 +14,15 @@
  * (`ThreadReplies`): the faces of who answered and how many replies, in the
  * accent's ink, which opens the thread. The thread stands in a tab of the
  * side panel beside the channel: the message it answers, then the replies
- * under a rule that counts them (`ThreadRule`).
+ * under a rule that counts them (`ThreadRule`). The first message after
+ * the reader's mark of the channel stands under a rule in the accent's ink
+ * that says New (`NewMessagesRule`), as a channel's New line does.
  *
  * It is drawn in the Tailwind theme's utilities.
  */
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
-import { repliesWords } from "@repo/features/manager-chat-view";
+import { CHAT_NEW_WORDS, repliesWords } from "@repo/features/manager-chat-view";
 import type { ReactNode } from "react";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { OneLine } from "../one-line/one-line.js";
@@ -142,6 +144,16 @@ export function ThreadRule({ count }: { count: number }): React.JSX.Element | nu
     <div className="ui-thread-rule flex items-center gap-ui-8 px-ui-8 py-ui-6 text-caption text-muted-foreground">
       <span className="flex-none">{repliesWords(count)}</span>
       <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+/** The rule over the first message after the reader's mark of the channel, in the accent's ink, saying New at its end. */
+export function NewMessagesRule(): React.JSX.Element {
+  return (
+    <div className="ui-new-messages-rule flex items-center gap-ui-8 px-ui-8 pb-ui-6 text-caption font-ui-semibold text-accent-ink">
+      <span className="h-px flex-1 bg-accent-ink" />
+      <span className="flex-none">{CHAT_NEW_WORDS}</span>
     </div>
   );
 }

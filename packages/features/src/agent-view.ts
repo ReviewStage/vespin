@@ -1115,10 +1115,17 @@ export const agentPinParamsSchema = EffectSchema.Struct({
 
 export type AgentPinParams = typeof agentPinParamsSchema.Type;
 
-/** A look at a Manager's chat, as the window names it to move the reader's own mark (`read-mark.ts`). */
+/** A message of a Manager's chat Mark unread is asked from: its id, which the service reads it by, and when it was sent, which the reader's mark is drawn just before until the service answers. */
+export const agentUnreadFromSchema = EffectSchema.Struct({
+  messageId: EffectSchema.NonEmptyString,
+  sentAt: countedNumber,
+});
+
+/** A look at a Manager's chat, or Mark unread from one of its messages (`unreadFrom`), as the window names it to move the reader's own mark (`read-mark.ts`). */
 export const agentMarkReadParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   readMark: readMarkSchema,
+  unreadFrom: EffectSchema.optionalKey(agentUnreadFromSchema),
 });
 
 export type AgentMarkReadParams = typeof agentMarkReadParamsSchema.Type;
