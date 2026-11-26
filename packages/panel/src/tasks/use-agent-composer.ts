@@ -13,6 +13,7 @@ import {
   type AgentTranscriptMessage,
   type AgentTurn,
   agentAttachmentsSchema,
+  agentAttachmentTypeOf,
   hasWordsOrFiles,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure, remedyLabel } from "@repo/features/failure-remedy";
@@ -220,7 +221,13 @@ function filesHeld(
 
     if (read?.kind !== PICTURE_STATE.READY) return [];
 
-    return [{ name, mediaType, data: read.url.slice(read.url.indexOf(",") + 1) }];
+    return [
+      {
+        name,
+        mediaType: agentAttachmentTypeOf(mediaType),
+        data: read.url.slice(read.url.indexOf(",") + 1),
+      },
+    ];
   });
 
   return Option.getOrElse(
