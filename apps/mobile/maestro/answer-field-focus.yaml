@@ -1,0 +1,41 @@
+# answer-field-focus.yaml -- an ask's number field in the box under its thread keeps the keyboard once it rises: tapped, the decimal pad stands, still stands after the box settles, and takes the digit typed into the field.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Note that the launch sets the text a size up (XL), so the ask's fields
+# fit the box's head with the keyboard down and overflow its share once it
+# rises: the head must then scroll in place without drawing its fields anew,
+# which had let the field go of the keyboard the moment it took it.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryXL
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 30000
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Invite limits"
+- extendedWaitUntil:
+    visible:
+      id: "answer-field-Invites a member may send a day"
+    timeout: 5000
+- tapOn:
+    id: "answer-field-Invites a member may send a day"
+- extendedWaitUntil:
+    visible: "space|[Dd]elete"
+    timeout: 15000
+# The pad still stands once the box has settled over it, and the digit
+# typed lands in the field.
+- waitForAnimationToEnd
+- assertVisible: "space|[Dd]elete"
+- inputText: "7"
+- assertVisible:
+    id: "answer-field-Invites a member may send a day"
+    text: "7"
+- assertVisible: "space|[Dd]elete"
+- takeScreenshot: answer-field-focus
