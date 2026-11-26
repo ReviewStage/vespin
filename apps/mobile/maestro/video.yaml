@@ -21,15 +21,17 @@ env:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
       mediaOrigin: ${MEDIA_ORIGIN}
-# The page opens at its newest row, so the recording stands above it; its
-# caption is centered (`scroll-to.yaml`), so the recording above it stands
-# whole below the bar, and each swipe may wait out a page that never holds
-# still, such as the system's own wait while the player reads over HTTP.
+# The page opens at its newest row, so the recording stands above it. Note
+# that the page is drawn down in slow steps until the player itself, named by
+# its caption and its length once it can play, stands clear under the bar
+# (`scroll-to.yaml`'s `BELOW`), because a centered scroll ends on one more
+# whole swipe, which on an iPad left the recording under the bar, where the
+# tap landed on the bar and scrolled the page to its top instead.
 - runFlow:
     file: subflows/scroll-to.yaml
     env:
-      ELEMENT: "Accepting an invite.*"
-      DIRECTION: UP
+      ELEMENT: "Accepting an invite, \\d+:\\d\\d"
+      BELOW: "Build teammate invitations"
 - extendedWaitUntil:
     visible:
       id: "video-player"
