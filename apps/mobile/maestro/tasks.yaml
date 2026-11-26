@@ -420,6 +420,7 @@ env:
     element: "Permanently delete"
     direction: DOWN
 - waitForAnimationToEnd
+- takeScreenshot: task-more-menu-end
 # Note that the tap is never retried, because a retry once the menu has
 # closed lands behind the question and puts it away.
 - tapOn:
