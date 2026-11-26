@@ -4,7 +4,6 @@ DROP TRIGGER IF EXISTS "app_sync_write" ON "manager_chat_reaction";
 --> statement-breakpoint
 ALTER TABLE "manager_chat_reaction" ADD COLUMN "emoji" text;--> statement-breakpoint
 UPDATE "manager_chat_reaction" SET "emoji" = CASE "kind" WHEN 'thumbsup' THEN '👍' WHEN 'thumbsdown' THEN '👎' END;--> statement-breakpoint
-ALTER TABLE "manager_chat_reaction" ALTER COLUMN "emoji" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "manager_chat_reaction" DROP CONSTRAINT "manager_chat_reaction_kind", ADD CONSTRAINT "manager_chat_reaction_kind" CHECK ("kind" <> '' and "emoji" <> '');
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_manager_chat_reaction"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$

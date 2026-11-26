@@ -88,7 +88,7 @@ function reactionListOf<Value>(
         ${managerChatReaction.kind} as kind,
         count(*)::int as count,
         coalesce(bool_or(${managerChatReaction.reactorUserId} = ${userId}), false) as reacted,
-        min(${managerChatReaction.emoji}) as emoji,
+        coalesce(min(${managerChatReaction.emoji}), '') as emoji,
         min(${managerChatReaction.createdAt}) as given_at
       from ${managerChatReaction}
       where ${managerChatReaction.agentId} = ${managerChatMessage.agentId}

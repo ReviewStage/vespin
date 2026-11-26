@@ -33,8 +33,8 @@ export const managerChatReaction = pgTable(
     reactorUserId: text("reactor_user_id").references(() => user.id, { onDelete: "cascade" }),
     /** Slack's name for its emoji, as the reaction is kept (`reactionOfName`). */
     kind: text("kind").notNull(),
-    /** The emoji the kind names, as Slack's table spells it. */
-    emoji: text("emoji").notNull(),
+    /** The emoji the kind names, as Slack's table spells it; null on a 👍 or 👎 a service before it gave, which every reader draws by its kind. */
+    emoji: text("emoji"),
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
