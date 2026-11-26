@@ -44,7 +44,9 @@
  * as a popover: a tap on what is no control of its own, a line of words or
  * a mark, opens it at once and another tap closes it; on a control, whose
  * tap is still its own press and a link's still goes where it leads, a long
- * press opens it instead, and its release presses nothing. A control whose
+ * press opens it instead, and its release presses nothing. A control held
+ * from its press (`aria-disabled`), whose tap works nothing, opens it on a
+ * tap as words do. A control whose
  * long press opens its context menu keeps that press for the menu. A tap
  * anywhere but on the hint or its control, Escape, and a scroll that moves
  * its control close it.
@@ -231,6 +233,13 @@ interface Standing {
  * card hangs their own.
  */
 const standing: Standing[] = [];
+
+/** Whether a tap on `element` works a control of its own: one it stands in, unless that control is held from its press (`aria-disabled`), whose tap then opens its hint as words' does. */
+function tapWorksControl(element: Element): boolean {
+  const control = element.closest(OWN_CONTROL);
+
+  return control !== null && control.getAttribute("aria-disabled") !== "true";
+}
 
 /** Takes down every tooltip standing over the `depth` beneath it, the topmost first, other than the one asking (`own`). */
 function takeDownOver(depth: number, own: string): void {
@@ -1066,9 +1075,7 @@ export function Tooltip({
       // Note that an inner control holds for the hint because its tap does not open it.
       const pressed = event.target instanceof Element ? event.target : control;
 
-      if (pressed.closest(OWN_CONTROL) === null || pressed.closest(LONG_PRESS_MENU) !== null) {
-        return;
-      }
+      if (!tapWorksControl(pressed) || pressed.closest(LONG_PRESS_MENU) !== null) return;
 
       hold.start(event, () => show(control, true));
     },
@@ -1085,9 +1092,9 @@ export function Tooltip({
       if (!tapped || label === undefined || event.defaultPrevented) return;
       // Note that a control inside the words, a choice bar the hint names, takes its own tap too.
       const { target } = event;
-      const onControl = target instanceof Element && target.closest(OWN_CONTROL) !== null;
+      const onControl = target instanceof Element && tapWorksControl(target);
 
-      if (onControl || event.currentTarget.closest(OWN_CONTROL) !== null) return;
+      if (onControl || tapWorksControl(event.currentTarget)) return;
       // Note that the tap is spent here, so a message holding the words shows no actions for it.
       event.preventDefault();
       show(event.currentTarget, true);

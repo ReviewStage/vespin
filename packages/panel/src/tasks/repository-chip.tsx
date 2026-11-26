@@ -5,7 +5,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { CHOOSE_REPOSITORY, NO_REPOSITORY } from "@repo/features/task-list-model";
 import { repositoryFailureNote } from "@repo/features/tasks-model";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
-import { countWords, orList, readingWords } from "@repo/features/words";
+import { countWords, orList, readingWords, TERM } from "@repo/features/words";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { EVERY_WORKSPACE } from "@repo/host/app-state";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
@@ -17,6 +17,12 @@ import {
   ChipName,
   type ChipWidth,
   ErrorState,
+  HOVER_CARD_ROW_LOOK,
+  HoverCard,
+  HoverCardList,
+  HoverCardNote,
+  HoverCardRow,
+  HoverCardRule,
   MARK_PROVIDER,
   MenuNoteRow,
   type MenuRow,
@@ -632,7 +638,56 @@ interface ChipStanding {
 }
 
 export function RepositoryChip(props: RepositoryMenuProps & ChipStanding): React.JSX.Element {
-  return <MenuChip {...props} menu={useRepositoryMenu(props)} named={props.value !== null} />;
+  const menu = useRepositoryMenu(props);
+
+  // Note that a held chip hangs no card, so the pill saying why it is held stands alone.
+  return (
+    <MenuChip
+      {...props}
+      menu={props.held === undefined ? menu : { ...menu, card: undefined }}
+      named={props.value !== null}
+    />
+  );
+}
+
+/**
+ * The card a chip naming several repositories hangs: how many it names, as
+ * a task's card heads a relation's tasks, over one row for each in order,
+ * its owner's picture and its whole `owner/name`, scrolling past a few rows'
+ * height (`HoverCardList`), and, where the chip is held, why under a rule.
+ */
+function RepositoriesCard({
+  repositories,
+  pictures,
+  held,
+}: {
+  repositories: readonly string[];
+  pictures: boolean;
+  held: string | undefined;
+}): React.JSX.Element {
+  const words = countWords(repositories.length, TERM.REPOSITORY);
+
+  return (
+    <HoverCard>
+      <HoverCardRow look={HOVER_CARD_ROW_LOOK.DETAIL} glyph={<GLYPH.REPOSITORY />} label={words} />
+      <HoverCardList label={words}>
+        {repositories.map((repository) => (
+          <li key={repository}>
+            <HoverCardRow
+              glyph={<RepositoryPicture repository={repository} pictures={pictures} />}
+              label={<ReplayMask>{repository}</ReplayMask>}
+            />
+          </li>
+        ))}
+      </HoverCardList>
+      {held === undefined ? null : (
+        <>
+          <HoverCardRule />
+          <HoverCardNote>{held}</HoverCardNote>
+        </>
+      )}
+    </HoverCard>
+  );
 }
 
 /**
@@ -640,7 +695,8 @@ export function RepositoryChip(props: RepositoryMenuProps & ChipStanding): React
  * same list as the one-pick chip's: each pick checked, the menu standing
  * open between presses, and a second press on a pick letting it go. The
  * first picked stays first, which is the one the chip names, the rest
- * counted after it, and its hint names every pick in order.
+ * counted after it, and its card lists every pick in order, one to a row
+ * (`RepositoriesCard`), saying why where the chip is held.
  */
 export function RepositoriesChip(
   props: ChipStanding & {
@@ -673,7 +729,14 @@ export function RepositoriesChip(
     label: rest > 0 ? `${listing.label} +${rest}` : listing.label,
     hint: values.length === 0 ? undefined : values.join(", "),
     glyph: listing.glyph,
-    card: undefined,
+    card:
+      values.length === 0 || place.open ? undefined : (
+        <RepositoriesCard
+          repositories={values}
+          pictures={props.chooser.pictures}
+          held={props.held}
+        />
+      ),
     menu: repositoryMenu(place, {
       ...listing.menu,
       value: undefined,
@@ -728,9 +791,11 @@ export function CheckedRepositoryChip(props: {
  * The chip a repository's menu drops from, in its place's look, and the
  * menu itself: the first pick's owner picture, or the glyph standing for
  * none, and its words, masked in a screen recording where they name a
- * repository; its hint names every pick while the menu is shut. Note that a
- * held chip is `aria-disabled` rather than disabled, because a disabled
- * button hears no pointer, and its hint says why.
+ * repository; its hint names every pick while the menu is shut, and the
+ * card the menu hangs then stands in the hint's place. Note that a held chip
+ * is `aria-disabled` rather than disabled, because a disabled button hears
+ * no pointer, and its hint says why, as its card does where it hangs one,
+ * the hint then naming every pick after why.
  */
 function MenuChip(
   props: ChipStanding & {
@@ -740,13 +805,13 @@ function MenuChip(
   },
 ): React.JSX.Element {
   const { held, menu } = props;
+  const hint = menu.open ? undefined : menu.hint;
+  // Note that a held chip hanging a card says why and then every pick, since its words are what a reader hears in the card's place.
+  const label = held === undefined ? hint : menu.card === undefined ? held : `${held} ${hint}`;
 
   return (
     <div className="repository-chip relative min-w-0" data-place={props.place} ref={menu.room}>
-      <Tooltip
-        label={held ?? (menu.open ? undefined : menu.hint)}
-        card={held === undefined ? menu.card : undefined}
-      >
+      <Tooltip label={label} card={menu.card}>
         <Chip
           look={PLACE_LOOK[props.place]}
           width={props.width}
