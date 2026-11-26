@@ -1,0 +1,11 @@
+EXCEPTION (549eae8b 23:21 UTC Nov 25, Charles's bug): main JS over Vmain14 (natives from 938bbc656d), missing #10759 AgentsLiveActivity.swift and #10966 ClaudeMark/OpenAIMark assets
+pinned to e21a6792ed
+== bundle PJjdock549 base e21a6792ed
+  built e21a6792ed base app Vmain16.app (main 421be4a154 + #10993 936942335d natives (vjnatsend2's build, rig 630bfe41ae); natively equal to main 89a3ff78f0 (natguard 03:23 UTC Nov 26))
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-manager-chat-dock: fails 1 shots 5 Assert that "Chat line 6 keeps.*", Above id: composer-field is visible... FAILED
+  iphone-light-manager-chat-dock around the failure: Take screenshot manager-chat-from-thread-first... COMPLETED|Wait for animation to end within 5000 ms... COMPLETED|Take screenshot manager-chat-from-thread... COMPLETED|Assert that "space" is not visible... COMPLETED|Assert that "Chat line 6 keeps.*", Above id: composer-field is visible... FAILED||
+  bounds in hierarchy-after.json: Chat line 6 keeps the chat running well  [52,668][386,709]; Chat line 6 keeps the chat running well  [52,668][386,709]; composer-field [26,449][384,471]
