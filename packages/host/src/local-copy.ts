@@ -36,7 +36,7 @@ import type {
 } from "@repo/sync";
 import { Effect, Exit, type Path, Result, Scope, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
-import { type KeptWords, keptWordsInMemory } from "./kept-words.js";
+import { type HeardWords, heardWords, type KeptWords, keptWordsInMemory } from "./kept-words.js";
 import {
   forgetLocalDatabase,
   LocalDatabaseDriver,
@@ -90,8 +90,8 @@ export interface LocalCopy {
   readonly forget: Effect.Effect<void>;
   /** Whether the platform keeps collections on disk beside the database (`LocalDatabaseDriverSeam.collections`), as the iPhone does, which keeps the Inbox lean. */
   readonly keepsCollections: boolean;
-  /** The words the kept Inbox messages say, in the database open now, or in memory while none keeps them. */
-  readonly words: KeptWords;
+  /** The words the kept Inbox messages say, in the database open now, or in memory while none keeps them, each write heard. */
+  readonly words: HeardWords;
 }
 
 /** The stores over one open database, and the scope it closes with. */
@@ -147,14 +147,8 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
     collections: () => opened?.collections,
   };
 
-  /** Note that each call is handed to the words open as it runs, so a sign-in opens them without the follow or a search being handed them anew. */
-  const wordsNow = () => opened?.words ?? unopenedWords;
-
-  const words: KeptWords = {
-    replaced: (rows) => wordsNow().replaced(rows),
-    rewritten: (threadIds, rows) => wordsNow().rewritten(threadIds, rows),
-    threadsSaying: (tokens) => wordsNow().threadsSaying(tokens),
-  };
+  // Note that each call is handed to the words open as it runs, so a sign-in opens them without the follow or a search being handed them anew.
+  const words = heardWords(() => opened?.words ?? unopenedWords);
 
   const open = (accountId: string, refused: RefusedMessages) =>
     Effect.gen(function* () {

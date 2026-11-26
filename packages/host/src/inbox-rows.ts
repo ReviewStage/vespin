@@ -30,7 +30,7 @@ import { eq, type IR, isUndefined, not, or, type Ref } from "@tanstack/db";
 import type { InboxHoldings } from "./app-state-reads.js";
 import { INBOX_THREAD, type PlacedInboxRow, threadRowOf } from "./inbox-collections.js";
 import { INBOX_MESSAGE, type ThreadMessage } from "./inbox-messages.js";
-import { type KeptWords, keptWordsInMemory } from "./kept-words.js";
+import { type HeardWords, heardWords, keptWordsInMemory } from "./kept-words.js";
 
 export type { PlacedInboxRow } from "./inbox-collections.js";
 
@@ -80,6 +80,8 @@ export interface InboxRowsSource {
   readonly threadsSaying: (
     tokens: readonly string[],
   ) => Promise<ReadonlyMap<string, readonly string[]>>;
+  /** Hears each write of the kept messages' words once it lands, so a search standing asks again; answers how to stop hearing. */
+  readonly wordsMoved: (heard: () => void) => () => void;
 }
 
 /** The Inbox kind's rows over the pool `pool` names, its messages' words searched in `words`; in memory where none is handed, as a host keeping no local database keeps them. */
@@ -90,13 +92,17 @@ export function inboxRowsSource(
     ) => StandingRows<Row> | undefined;
     readonly watch: (heard: () => void) => () => void;
   },
-  words: KeptWords = keptWordsInMemory(),
+  words?: HeardWords,
 ): InboxRowsSource {
+  const memory = keptWordsInMemory();
+  const kept = words ?? heardWords(() => memory);
+
   return {
     standing: () => pool.standing(INBOX_THREAD),
     messages: () => pool.standing(INBOX_MESSAGE)?.collection,
     watch: pool.watch,
-    threadsSaying: words.threadsSaying,
+    threadsSaying: kept.threadsSaying,
+    wordsMoved: kept.heard,
   };
 }
 

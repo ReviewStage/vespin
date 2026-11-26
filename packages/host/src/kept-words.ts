@@ -81,6 +81,12 @@ export interface KeptWords {
   ) => Promise<ReadonlyMap<string, readonly string[]>>;
 }
 
+/** The words kept, and each of their writes heard once it lands, so a search standing reads them again. */
+export interface HeardWords extends KeptWords {
+  /** Hears each write of the words once it lands, failed or not; answers how to stop hearing. */
+  readonly heard: (listener: () => void) => () => void;
+}
+
 /** No thread says what was typed. */
 const NONE_SAYING: ReadonlyMap<string, readonly string[]> = new Map();
 
@@ -190,6 +196,29 @@ export async function keptWordsIn(database: KeptWordsDatabase): Promise<KeptWord
           }),
         );
       });
+    },
+  };
+}
+
+/** The words `now` answers as each call runs, each write heard once it lands. */
+export function heardWords(now: () => KeptWords): HeardWords {
+  const listeners = new Set<() => void>();
+
+  const told = (write: Promise<void>) =>
+    write.finally(() => {
+      for (const listener of listeners) listener();
+    });
+
+  return {
+    replaced: (rows) => told(now().replaced(rows)),
+    rewritten: (threadIds, rows) => told(now().rewritten(threadIds, rows)),
+    threadsSaying: (tokens) => now().threadsSaying(tokens),
+    heard: (listener) => {
+      listeners.add(listener);
+
+      return () => {
+        listeners.delete(listener);
+      };
     },
   };
 }

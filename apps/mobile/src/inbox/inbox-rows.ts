@@ -148,8 +148,9 @@ const NONE_SEARCHED: ReadonlyMap<string, readonly string[]> = new Map();
  * Each thread whose kept messages say any of `tokens`, with those they say,
  * as the kept words find them in SQLite off the JavaScript thread
  * (`InboxRowsSource.threadsSaying`), so a keystroke waits on no read of the
- * messages. A search typed anew asks anew, and the answer to one it
- * replaced is let go unheard, so typing never draws an older search's. None
+ * messages. A search typed anew asks anew, as it does each time the kept
+ * words are written while it stands, and the answer to one it replaced is
+ * let go unheard, so typing never draws an older search's. None
  * where nothing is typed, and none found before the first answer.
  */
 export function useSearchedWords(
@@ -157,6 +158,11 @@ export function useSearchedWords(
 ): ReadonlyMap<string, readonly string[]> {
   const source = useInboxRowsSource();
   const [searched, setSearched] = useState(NONE_SEARCHED);
+  const [written, wrote] = useReducer((count: number) => count + 1, 0);
+  const typed = tokens.length > 0;
+
+  // Note that a search standing hears each write of the kept words, so a message that lands saying a word typed brings its thread in as it lands.
+  useEffect(() => (typed ? source.wordsMoved(wrote) : undefined), [source, typed]);
 
   useEffect(() => {
     let current = true;
@@ -176,7 +182,7 @@ export function useSearchedWords(
     return () => {
       current = false;
     };
-  }, [source, tokens]);
+  }, [source, tokens, written]);
 
   return tokens.length === 0 ? NONE_SEARCHED : searched;
 }
