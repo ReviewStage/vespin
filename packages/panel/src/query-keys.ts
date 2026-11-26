@@ -91,6 +91,8 @@ export const QUERY_ROOT = {
   PICTURE: "picture",
   /** The section icon picker's wholes loaded on demand (`desktop/section-icon-picker.tsx`), Lucide's, by which; the emoji are `@repo/ui`'s (`useEmojiGroups`). */
   SECTION_ICONS: "section-icons",
+  /** Slack's names for every emoji, loaded as a Manager chat message's reaction picker first picks one (`tasks/manager-chat-reactions.tsx`). */
+  SLACK_EMOJI: "slack-emoji",
   /** A person's page: how many of their tasks and agents the service counts, their newest read into the task list (`desktop/person-page.tsx`). */
   PERSON_PAGE: "person-page",
 } as const;

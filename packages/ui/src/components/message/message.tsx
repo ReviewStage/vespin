@@ -47,9 +47,9 @@ const NO_HOVER = "(hover: none)";
 /** The turn, the group its actions answer. */
 const FRAME = "ui-message group/message";
 
-/** The bar, hidden and taking no pointer until the turn, its keyboard, or its hover card asks it up, its marks spaced on a coarse pointer so their finger-wide presses never overlap. */
+/** The bar, hidden and taking no pointer until the turn, its keyboard, its hover card, or its owner while a picker it hangs stands (`held`) asks it up, its marks spaced on a coarse pointer so their finger-wide presses never overlap. */
 const ACTIONS =
-  "ui-message-actions pointer-events-none flex flex-none items-center gap-ui-2 pointer-coarse:gap-ui-20 opacity-0 transition-opacity duration-(--ui-duration-hover) ease-motion-exit focus-within:pointer-events-auto focus-within:opacity-100 has-[[aria-describedby]]:pointer-events-auto has-[[aria-describedby]]:opacity-100 group-hover/message:pointer-events-auto group-hover/message:opacity-100 no-hover:group-data-[actions-shown=true]/message:pointer-events-auto no-hover:group-data-[actions-shown=true]/message:opacity-100";
+  "ui-message-actions pointer-events-none flex flex-none items-center gap-ui-2 pointer-coarse:gap-ui-20 opacity-0 transition-opacity duration-(--ui-duration-hover) ease-motion-exit focus-within:pointer-events-auto focus-within:opacity-100 has-[[aria-describedby]]:pointer-events-auto has-[[aria-describedby]]:opacity-100 data-[held=true]:pointer-events-auto data-[held=true]:opacity-100 group-hover/message:pointer-events-auto group-hover/message:opacity-100 no-hover:group-data-[actions-shown=true]/message:pointer-events-auto no-hover:group-data-[actions-shown=true]/message:opacity-100";
 
 /** An action waiting to be drawn: the box of the compact icon button it stands in for (`icon-compact`), drawn nothing in. */
 const HELD_ACTION = "ui-message-action-held inline-flex size-6 flex-none";
@@ -151,6 +151,17 @@ export function HeldMessageAction({ children }: { children: ReactNode }): ReactN
  * sent it and when. Hidden, the bar takes no pointer, so the words above it
  * stay selectable.
  */
-export function MessageActions({ children }: { children?: ReactNode }): React.JSX.Element {
-  return <div className={ACTIONS}>{children}</div>;
+export function MessageActions({
+  held = false,
+  children,
+}: {
+  /** Whether it stands shown whatever the pointer and the focus do, as while a picker it hangs stands open. */
+  held?: boolean | undefined;
+  children?: ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className={ACTIONS} data-held={held ? "true" : undefined}>
+      {children}
+    </div>
+  );
 }

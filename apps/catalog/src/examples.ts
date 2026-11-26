@@ -117,6 +117,7 @@ import { PROGRESS_RINGS_EXAMPLE } from "./examples/progress-rings";
 import { PROSE_EXAMPLE } from "./examples/prose";
 import { PROVIDER_BUTTONS_EXAMPLE } from "./examples/provider-buttons";
 import { PUBLIC_PAGE_EXAMPLE } from "./examples/public-page";
+import { REACTION_PICKER_EXAMPLE } from "./examples/reaction-picker";
 import { READABLE_CONTROLS_EXAMPLE } from "./examples/readable-controls";
 import { RECT_FLOAT_EXAMPLE } from "./examples/rect-float";
 import { REMOTE_SURFACE_EXAMPLE } from "./examples/remote-surface";
@@ -285,6 +286,7 @@ export const EXAMPLES: readonly Example[] = [
   MANAGER_FACES_EXAMPLE,
   ICON_PICKER_EXAMPLE,
   MANAGER_FACE_PICKER_EXAMPLE,
+  REACTION_PICKER_EXAMPLE,
   SELECTION_EXAMPLE,
   ROVING_KEYS_EXAMPLE,
   MENU_EXAMPLE,
