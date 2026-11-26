@@ -562,19 +562,26 @@ test("a Manager's page on a phone stands on its chat, a message's thread summed 
   assert.equal(page.querySelector("[role='tablist']"), null, "no row of views stands");
 });
 
-test("a wide Manager's page opens a message's thread inside Messages beside the chat, not in the panel, and its close shuts it", async () => {
+test("a wide Manager's page opens a message's thread inside Messages beside the chat, not in the panel, and its close and Escape shut it", async () => {
   const manager = managerWithThread();
   const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
   const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
   const container = await mountAgentPage(history, tasks);
 
-  const summary =
-    [...container.querySelectorAll<HTMLElement>("button")].find((button) =>
-      /1 reply/u.test(button.textContent ?? ""),
-    ) ?? assert.fail("the message sums its thread");
+  /** Opens the thread from the summary under its message. */
+  const openThread = async () => {
+    const summary =
+      [...container.querySelectorAll<HTMLElement>("button")].find((button) =>
+        /1 reply/u.test(button.textContent ?? ""),
+      ) ?? assert.fail("the message sums its thread");
 
-  act(() => summary.click());
-  await settleQueries();
+    act(() => summary.click());
+    await settleQueries();
+  };
+
+  const threadShown = () => container.querySelector(".agent-page section[aria-label='Thread']");
+
+  await openThread();
 
   const thread =
     container.querySelector<HTMLElement>(".agent-page section[aria-label='Thread']") ??
@@ -594,11 +601,15 @@ test("a wide Manager's page opens a message's thread inside Messages beside the 
 
   act(() => close.click());
   await settleQueries();
-  assert.equal(
-    container.querySelector(".agent-page section[aria-label='Thread']"),
-    null,
-    "the thread is shut",
-  );
+  assert.equal(threadShown(), null, "the close shuts the thread");
+
+  await openThread();
+  assert.notEqual(threadShown(), null, "the thread opens again");
+  act(() => {
+    assert.ok(runAppCommand(APP_COMMAND.CLOSE_THREAD), "Escape closes the thread");
+  });
+  await settleQueries();
+  assert.equal(threadShown(), null, "Escape shuts the thread");
 });
 
 test("a Manager's Inbox tab lists its threads as the window's Inbox's view chooses, offering that view's menu", async () => {

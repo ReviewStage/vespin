@@ -30,7 +30,7 @@
  * the chat parted by an edge it is dragged by, as Slack opens one beside
  * its channel (`SideSplit`), headed by its own bar with its close; where
  * Messages is too narrow for both, the chat hides and the thread fills it
- * under ‹ Messages, which closes it. While Messages shows, the page marks itself a chat (`data-chat`), so
+ * under ‹ Messages, which closes it, as its × and Escape do. While Messages shows, the page marks itself a chat (`data-chat`), so
  * both sides' bubbles stand at one width, and take the column in a phone's
  * room, as desktop.css says. The agent is read from the task list where
  * it carries it, and else once by its id.
@@ -687,6 +687,11 @@ function OwnAgentPage({
   });
 
   const closeThread = () => setBesideThread(undefined);
+  // Note that Escape closes the thread while it stands, the page shown and its keys not the panel's, as the window's Escape closes the nearest thing open.
+  useAppCommand(
+    APP_COMMAND.CLOSE_THREAD,
+    split.open && tasks.shown && !sideFocused ? closeThread : undefined,
+  );
 
   const threadPane =
     summary === undefined || besideThread === undefined ? null : (
@@ -706,7 +711,7 @@ function OwnAgentPage({
           title={TAB_WORDS.THREAD}
           titleReplayUnmasked
           end={
-            <Tooltip label={THREAD_PANE_WORDS.CLOSE}>
+            <Tooltip label={THREAD_PANE_WORDS.CLOSE} command={APP_COMMAND.CLOSE_THREAD}>
               <IconButton
                 icon={<GLYPH.CLOSE />}
                 label={THREAD_PANE_WORDS.CLOSE}
