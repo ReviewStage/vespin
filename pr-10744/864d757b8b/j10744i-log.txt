@@ -1,8 +1,8 @@
 -- j10744i: main pinned to 2c7272a1bc: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
 EXCEPTION (the Manager 23:16 UTC Nov 25): flow-only PR over Vmain14 (natives from 938bbc656d), missing #10759 AgentsLiveActivity.swift and #10966 ClaudeMark/OpenAIMark assets
-pinned to dee094f11a
-== bundle PJj10744i base dee094f11a
-  built dee094f11a base app Vmain-current.app ()
+pinned to da6f5bbd9b
+== bundle PJj10744i base da6f5bbd9b
+  built da6f5bbd9b base app Vmain-current.app ()
   install 0
   typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
   export 0 (simulator-bundle.sh)
