@@ -13,6 +13,7 @@ CREATE TABLE "manager_chat_reaction" (
 	CONSTRAINT "manager_chat_reaction_kind" CHECK ("kind" in ('thumbsup', 'thumbsdown'))
 );
 --> statement-breakpoint
+CREATE INDEX "manager_chat_reaction_of_message" ON "manager_chat_reaction" ("agent_id","message_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "manager_chat_reaction_member" ON "manager_chat_reaction" ("agent_id","message_id","kind","reactor_user_id") WHERE "reactor_user_id" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "manager_chat_reaction_manager" ON "manager_chat_reaction" ("agent_id","message_id","kind") WHERE "reactor_user_id" is null;--> statement-breakpoint
 CREATE INDEX "manager_chat_reaction_user" ON "manager_chat_reaction" ("reactor_user_id") WHERE "reactor_user_id" is not null;--> statement-breakpoint

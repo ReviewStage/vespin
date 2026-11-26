@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "03862619-dbff-4ec4-a924-497bcc075b05",
+  "id": "2da49c92-416f-4061-bab5-8ac99709a148",
   "prevIds": ["0ea7db80-1623-40e3-959e-96a1322bdc5e"],
   "ddl": [
     {
@@ -18591,6 +18591,34 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "manager_chat_message"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "agent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "message_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "manager_chat_reaction_of_message",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "manager_chat_reaction"
     },
     {
       "nameExplicit": true,

@@ -43,7 +43,9 @@ export const managerChatReaction = pgTable(
       columns: [table.agentId, table.messageId],
       foreignColumns: [managerChatMessage.agentId, managerChatMessage.id],
     }).onDelete("cascade"),
-    // Note that a member gives a message each kind once, and so does the Manager, which names no member; each partial index leads with the message, which every read names.
+    // A message's reactions, read by every page of the chat and found by its delete, whoever gave them, which neither partial index below serves.
+    index("manager_chat_reaction_of_message").on(table.agentId, table.messageId),
+    // Note that a member gives a message each kind once, and so does the Manager, which names no member.
     uniqueIndex("manager_chat_reaction_member")
       .on(table.agentId, table.messageId, table.kind, table.reactorUserId)
       .where(sql`${table.reactorUserId} is not null`),
