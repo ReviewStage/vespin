@@ -1,0 +1,11 @@
+pinned to 3f1c2fc764
+== bundle PJjpr11015 base 3f1c2fc764
+  built 3f1c2fc764 base app Vmain16.app (main 421be4a154 + #10993 936942335d natives (vjnatsend2's build, rig 630bfe41ae); natively equal to main 89a3ff78f0 (natguard 03:23 UTC Nov 26))
+  install 0
+  typecheck mobile 1 ui-native 1 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    packages/ui-native/src/composer.tsx(15,1): error TS1185: Merge conflict marker encountered.
+    packages/ui-native/src/composer.tsx(17,1): error TS1185: Merge conflict marker encountered.
+    packages/ui-native/src/composer.tsx(21,1): error TS1185: Merge conflict marker encountered.
+  type errors in 1 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 1 (simulator-bundle.sh)
+  signed 1
