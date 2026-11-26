@@ -58,10 +58,12 @@ import {
   Server,
   ShieldUser,
   Split,
+  StepForward,
   Target,
   Unplug,
   Users,
   Video,
+  WifiOff,
   Zap,
 } from "lucide-react";
 import React from "react";
@@ -224,6 +226,8 @@ export const GLYPH = {
   // States.
   // The link to the service lost, as the banner saying so wears it; never an act's.
   CONNECTION_LOST: lucideGlyph(Unplug),
+  // This machine offline or the service out of reach, as the Offline mark wears it, and what a place with nothing held says while it stands.
+  OFFLINE: lucideGlyph(WifiOff),
   DONE: MarkDoneIcon,
   // A thing resolved, a comment thread or an Inbox item, and the Resolve that does it: one mark for the act and the state it leaves, never Close's ×.
   RESOLVED: CircleCheckIcon,
@@ -265,6 +269,8 @@ export const GLYPH = {
   COMPACT: lucideGlyph(FoldVertical),
   // A harness's session let go, the next message opening a fresh one in the same agent (`/clear`).
   NEW_SESSION: lucideGlyph(Eraser),
+  // A turn cut off before it ended, by its runner or its provider going away, and carried on by itself.
+  CARRY_ON: lucideGlyph(StepForward),
   // What a row is dragged by to put it in another place.
   DRAG_HANDLE: lucideGlyph(GripVertical),
   OPEN_EXTERNALLY: ExternalIcon,

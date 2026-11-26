@@ -60,6 +60,7 @@ import { eq } from "drizzle-orm";
 import { Clock, Effect, Fiber, Layer, Option, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import {
   GITHUB_FIXTURE_BOT,
   githubReaching,
@@ -176,10 +177,11 @@ const untilQueued = (userId: string, deviceId: string) =>
     return Option.getOrThrow(Option.fromNullishOr(line));
   });
 
-/** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches, nor the Terminal's wake of one. */
+/** GitHub unreached, sandboxes kept in memory, which a Mac's agent never reaches, nor the Terminal's wake of one, and the Blob store a file kept from a Mac is put in. */
 const NO_REACH = Layer.mergeAll(
   NO_GITHUB,
   memorySandbox().layer,
+  memoryBlobStore().layer,
   // SAFETY: a Mac's agent has no sandbox to wake, so no call of it is ever made.
   Layer.succeed(AgentSandbox, {} as AgentSandboxService),
 );

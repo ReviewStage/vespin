@@ -1,6 +1,6 @@
 // page-header.tsx -- the heading a detail page opens with under its bar: its title, its fields as chips, and a line.
 
-import { HStack, Text, VStack } from "@expo/ui/swift-ui";
+import { HStack, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
   font,
@@ -12,6 +12,7 @@ import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { useAccessibilitySize } from "./accessibility.js";
 import { FieldChip, type FieldMenu, FollowingChip, PriorityChip, StatusChip } from "./button.js";
 import type { Face } from "./marks.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

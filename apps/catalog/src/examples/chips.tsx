@@ -14,6 +14,8 @@ import {
   Inline,
   MARK_PROVIDER,
   ProviderMark,
+  ReactionChip,
+  ReactionRow,
   STATUS_TONE,
   Stack,
   StaticChip,
@@ -28,7 +30,7 @@ import { CatalogSection } from "../section";
 /**
  * chips.tsx -- each chip look at rest, with a mark and a chevron, with its
  * menu open, unavailable, and with a long name in a narrow column; a row of
- * filters, one pressed at a time; a row of compact counts, one pressed and
+ * filters, one pressed at a time; a row of reactions, one pressed and
  * one busy; each tone, and each in a compact pill beside a badge of its size; an
  * outline chip and a toned static chip standing in a row of buttons at their
  * height; each width; a chip drawn as
@@ -84,20 +86,37 @@ function CountedFilters(): React.JSX.Element {
   );
 }
 
-/** A row of compact counts, a pull request's reactions: the reader's own pressed, and one whose change is out. */
+/** A row of reactions, a pull request's or a Manager chat message's: the reader's own pressed, one whose change is out, and one that may not be pressed. */
 function CompactRow(): React.JSX.Element {
+  const [mine, setMine] = useState(true);
+
   return (
-    <Inline gap={GAP.TIGHT}>
-      <Chip look={CHIP_LOOK.FILTER} size={CHIP_SIZE.COMPACT} aria-pressed>
-        👍 12
-      </Chip>
-      <Chip look={CHIP_LOOK.FILTER} size={CHIP_SIZE.COMPACT} aria-pressed={false}>
-        🚀 1
-      </Chip>
-      <Chip look={CHIP_LOOK.FILTER} size={CHIP_SIZE.COMPACT} aria-pressed={false} busy disabled>
-        👀 2
-      </Chip>
-    </Inline>
+    <ReactionRow>
+      <ReactionChip
+        emoji="👍"
+        count={mine ? 12 : 11}
+        label={mine ? "You and 11 others reacted with thumbs up" : "11 reacted with thumbs up"}
+        reacted={mine}
+        onPress={() => setMine(!mine)}
+      />
+      <ReactionChip
+        emoji="🚀"
+        count={1}
+        label="1 reacted with rocket"
+        reacted={false}
+        onPress={() => undefined}
+      />
+      <ReactionChip
+        emoji="👀"
+        count={2}
+        label="2 reacted with eyes"
+        reacted={false}
+        onPress={() => undefined}
+        busy
+        disabled
+      />
+      <ReactionChip emoji="🎉" count={3} label="You and 2 others reacted with hooray" reacted />
+    </ReactionRow>
   );
 }
 
@@ -166,7 +185,7 @@ function Chips(): React.JSX.Element {
       <CatalogSection id="chips-counted-filters" title="Filters with the count they leave out">
         <CountedFilters />
       </CatalogSection>
-      <CatalogSection id="chips-compact" title="Compact counts">
+      <CatalogSection id="chips-compact" title="Reactions">
         <CompactRow />
       </CatalogSection>
       <CatalogSection id="chips-tones" title="Tones">

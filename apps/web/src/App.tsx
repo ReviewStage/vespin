@@ -1,5 +1,4 @@
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { PANEL_ASSET_BASE } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { EntityGlyph } from "@repo/panel/entities/entity-glyph";
 import {
@@ -29,13 +28,6 @@ import {
   SiteNavigation,
   WEB_APP_URL,
 } from "./SiteChrome";
-
-/** Codex's mark as the panel's own files serve it, which the keys scene draws Codex's row with. */
-const CODEX_ART = {
-  oneX: `${PANEL_ASSET_BASE}marks/codex-16.png`,
-  twoX: `${PANEL_ASSET_BASE}marks/codex-32.png`,
-  threeX: `${PANEL_ASSET_BASE}marks/codex-48.png`,
-};
 
 /** The people the landing's mockups are drawn for: our own, their pictures served by the site. */
 const LANDING_CAST = {
@@ -153,7 +145,6 @@ export function App(): React.JSX.Element {
         lead="Run agents on your Codex or Claude plan, or bring your own API keys."
         more={{ label: "Connect an agent", href: `${DOCS_URL}/install#connect-an-agent` }}
         scene={LANDING_SCENE.KEYS}
-        codexArt={CODEX_ART}
       />
       <LandingSection
         title="Check in from anywhere."

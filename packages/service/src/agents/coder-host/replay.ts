@@ -64,6 +64,7 @@ import {
   type HostedRefusal,
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
+import { attachmentBytes } from "../../storage/attachment-bytes.js";
 import {
   type FittedSteps,
   fitReplay,
@@ -526,11 +527,14 @@ const sourceFileOf = (source: Agent, file: FileUIPart, name: string) =>
 
     // A video or a sound clip an agent showed is no file a message carries, so a Start names it as not attached.
     if (Option.isNone(picture) || isPlayedType(picture.value.contentType)) return undefined;
+    const bytes = yield* attachmentBytes(picture.value.body);
+
+    if (Option.isNone(bytes)) return undefined;
 
     return {
       name,
       mediaType: picture.value.contentType,
-      data: Buffer.from(picture.value.bytes).toString("base64"),
+      data: Buffer.from(bytes.value).toString("base64"),
     } satisfies AgentAttachment;
   });
 

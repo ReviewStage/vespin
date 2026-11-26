@@ -46,6 +46,20 @@ test("a console line that prints the URL is dropped", () => {
   assert.equal(withoutAccessTokens(breadcrumb), null);
 });
 
+test("the desktop host's fetch of a presigned Blob URL it was redirected to is dropped", () => {
+  const breadcrumb = {
+    category: "fetch",
+    type: "http",
+    data: {
+      method: "GET",
+      url: "https://store.private.blob.vercel-storage.com/attachments/7f0c?vercel-blob-delegation=grant&vercel-blob-signature=never-reported",
+      status_code: 200,
+    },
+  };
+
+  assert.equal(withoutAccessTokens(breadcrumb), null);
+});
+
 test("a breadcrumb carrying no token is kept as it was", () => {
   const breadcrumb = {
     category: "fetch",

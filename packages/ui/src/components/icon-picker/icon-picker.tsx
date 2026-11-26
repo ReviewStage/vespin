@@ -1,5 +1,8 @@
-import { type ReactNode, type RefObject, useRef } from "react";
-import { IconButton } from "../button/button.js";
+import type { PopoverRoot } from "@base-ui/react/popover";
+import { type ReactNode, type RefObject, useEffect, useRef } from "react";
+import { Popover, PopoverContent } from "../../shadcn/popover.js";
+import { ICON_BUTTON_SIZE, IconButton } from "../button/button.js";
+import { ROVING_ORIENTATION, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { ScrollArea } from "../scroll-area/scroll-area.js";
 import { SearchField } from "../search-field/search-field.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
@@ -16,9 +19,11 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * choice that took focus becomes the stop, so Tab out and back lands where
  * the arrows left it. The arrow down from the search enters the grid, and
  * Enter in the search presses the first choice drawn, so a search typed
- * and entered picks what it found first. What an owner hangs over a choice
- * (a section glyph's colors) wears `ICON_PICKER_ASIDE`, so it is no choice
- * of the grid's.
+ * and entered picks what it found first. What a choice opens (a section
+ * glyph's colors) floats from it (`IconPickerFlyout`) in a portal on the
+ * window's layer, placed by the window's edges rather than the grid's, so
+ * the scrolling grid never cuts it: it turns and slides to fit what is seen
+ * of the window, over the picker's own choices where it must.
  */
 
 /** How many choices stand in one row of the grid, which `grid-cols-section-icons` lays out alike; the arrows step a row by it. */
@@ -32,14 +37,12 @@ const GRID_STEPS = new Map([
   ["ArrowDown", GRID_COLUMNS],
 ]);
 
-/** The class of what an owner hangs over a choice, whose buttons are no choices of the grid's. */
-export const ICON_PICKER_ASIDE = "ui-icon-picker-aside";
+/** Base UI's reason for Escape putting a popover away. */
+const ESCAPE_KEY = "escape-key" satisfies PopoverRoot.ChangeEventReason;
 
-/** The grid's choices under `root`, in order, what hangs over them left out. */
+/** The grid's choices under `root`, in order. */
 function gridChoices(root: Element, selector = "button"): HTMLButtonElement[] {
-  return [...root.querySelectorAll<HTMLButtonElement>(selector)].filter(
-    (choice) => choice.closest(`.${ICON_PICKER_ASIDE}`) === null,
-  );
+  return [...root.querySelectorAll<HTMLButtonElement>(selector)];
 }
 
 /** Moves focus through the choices with the arrows, from whichever holds it, a row's width up and down. */
@@ -64,12 +67,8 @@ function stepGrid(event: React.KeyboardEvent<HTMLFieldSetElement>): void {
 function standTabStop(event: React.FocusEvent<HTMLFieldSetElement>): void {
   const focused = event.target;
 
-  if (
-    !(focused instanceof HTMLButtonElement) ||
-    focused.closest(`.${ICON_PICKER_ASIDE}`) !== null
-  ) {
-    return;
-  }
+  // Note that a flyout's choices are heard here too, since React carries a portal's events up the tree that drew it, but they stand outside the grid.
+  if (!(focused instanceof HTMLButtonElement) || !event.currentTarget.contains(focused)) return;
 
   for (const stop of gridChoices(event.currentTarget, 'button:not([tabindex="-1"])')) {
     stop.tabIndex = -1;
@@ -78,14 +77,208 @@ function standTabStop(event: React.FocusEvent<HTMLFieldSetElement>): void {
   focused.tabIndex = 0;
 }
 
+/** What a choice floats while it stands open: its name for a reader, its choices, and where Escape or a press away puts it. */
+export interface IconPickerFlyout {
+  readonly label: string;
+  /** Its choices, each an `IconButton` marked `roving`, laid out five to a row. */
+  readonly content: ReactNode;
+  readonly onClose: () => void;
+}
+
+/** The flyouts standing in the window, each its popup and the choice it floats from, the newest last. */
+const standingFlyouts: { readonly popup: HTMLElement; readonly choice: HTMLElement }[] = [];
+
+/**
+ * The choice the flyout `node` stands in floats from, the newest where
+ * flyouts stand over one another; none where `node` stands in no flyout. A
+ * surface that closes when a press or the focus leaves it, as a menu's
+ * panel holding a picker does, traces a flyout back through it, since the
+ * flyout stands apart from the picker, portaled to the body.
+ */
+export function iconPickerChoiceOf(node: Node): HTMLElement | undefined {
+  return standingFlyouts.findLast((each) => each.popup.contains(node))?.choice;
+}
+
+/** Counts `popup` among the flyouts standing, floating from `choice`, until the returned call takes it out. */
+function standFlyout(popup: HTMLElement, choice: HTMLElement): () => void {
+  const entry = { popup, choice };
+  standingFlyouts.push(entry);
+
+  return () => {
+    const at = standingFlyouts.indexOf(entry);
+
+    if (at !== -1) standingFlyouts.splice(at, 1);
+  };
+}
+
+/** The layer a dialog's card stands in, which a flyout over it stands above. */
+const DIALOG_LAYER = "dialog";
+
+/**
+ * The layer a flyout from `choice` stands in: the one the picker it stands
+ * in was hung on, or over a dialog's card where the picker stands in one
+ * hung on none, as a phone's menu sheet holding a Manager's faces is.
+ */
+function layerAround(choice: HTMLElement | null): string | undefined {
+  const hung = choice?.closest("[data-layer]")?.getAttribute("data-layer");
+
+  if (hung != null) return hung;
+
+  return choice?.closest('[aria-modal="true"]') == null ? undefined : DIALOG_LAYER;
+}
+
+/**
+ * Whether a change asks a flyout away for the press or the focus going to
+ * its own choice, which the choice's press answers. Note that the focus is
+ * heard too, because an engine that focuses a pressed button moves it there
+ * before the click, and closing then would let the click open it again.
+ */
+function towardChoice(
+  details: PopoverRoot.ChangeEventDetails,
+  choice: HTMLElement | null,
+): boolean {
+  const event = details.event;
+  const to = event instanceof FocusEvent ? event.relatedTarget : event?.target;
+
+  return to instanceof Node && choice?.contains(to) === true;
+}
+
+/**
+ * The flyout a choice floats, on Base UI's popover, a child of the
+ * picker's own, so a press inside it is no press away from the picker. Its
+ * pressed choice, or else its first, takes the focus the moment it opens;
+ * the arrows walk its choices; and Escape puts it away, the focus going back
+ * to the choice it floats from, as a press away or the focus leaving does,
+ * the focus staying where it went, and another choice's flyout taking its
+ * place keeps the focus there.
+ */
+function ChoiceFlyout({
+  choice,
+  flyout,
+}: {
+  choice: RefObject<HTMLButtonElement | null>;
+  flyout: IconPickerFlyout;
+}): React.JSX.Element {
+  const row = useRef<HTMLDivElement | null>(null);
+  const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.BOTH });
+
+  const start = () =>
+    row.current?.querySelector<HTMLElement>('button[aria-pressed="true"]') ??
+    row.current?.querySelector<HTMLElement>("button") ??
+    true;
+
+  // Note that the row takes the focus the moment it stands rather than on the next frame, as Base UI would, because a key pressed in that frame would land on the choice or the search and close it.
+  const landed = useRef(false);
+  // Whether Escape put it away, which hands the focus back to its choice; a press away or the focus leaving already put the focus where it went, and another choice's flyout taking its place keeps the focus it took.
+  const escaped = useRef(false);
+  // Whether it still stands. Note that Base UI hears the focus leave a moment after it went, so a flyout another choice's took the place of may ask to close once it is gone, which would close the one that replaced it.
+  const standing = useRef(true);
+  useEffect(() => {
+    standing.current = true;
+
+    return () => {
+      standing.current = false;
+    };
+  }, []);
+  const close = useRef(flyout.onClose);
+  close.current = flyout.onClose;
+  // Whether it is counted among the flyouts standing, which it is from the moment its row stands, before it takes the focus, so a surface hearing the focus leave for it can trace it back.
+  const counted = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    const popup = row.current?.parentElement;
+
+    if (counted.current === undefined && popup != null && choice.current !== null) {
+      counted.current = standFlyout(popup, choice.current);
+    }
+
+    return () => {
+      counted.current?.();
+      counted.current = undefined;
+    };
+  }, [choice]);
+
+  // Note that Escape with the focus back on its choice closes it alone, heard on the choice before it reaches the window, where the picker's popover would close as well.
+  useEffect(() => {
+    const button = choice.current;
+
+    if (button === null) return undefined;
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !standing.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      close.current();
+    };
+
+    button.addEventListener("keydown", onKey);
+
+    return () => button.removeEventListener("keydown", onKey);
+  }, [choice]);
+
+  const stand = (element: HTMLDivElement | null) => {
+    row.current = element;
+    roving.ref(element);
+
+    // Note that the popup the row stands in is what is counted, so a press on its edge around the row is the flyout's too.
+    const popup = element?.parentElement;
+
+    if (counted.current === undefined && popup != null && choice.current !== null) {
+      counted.current = standFlyout(popup, choice.current);
+    }
+
+    if (element === null || landed.current) return;
+    landed.current = true;
+    const landing = start();
+
+    if (landing !== true) landing.focus({ preventScroll: true });
+  };
+
+  return (
+    <Popover
+      open
+      onOpenChange={(next, details) => {
+        const byEscape = details.reason === ESCAPE_KEY;
+
+        // Note that Escape always closes it, the focus standing on its choice included.
+        const kept = !byEscape && towardChoice(details, choice.current);
+
+        if (next || !standing.current || kept) return;
+        escaped.current = byEscape;
+        flyout.onClose();
+      }}
+    >
+      <PopoverContent
+        anchor={choice}
+        layer={layerAround(choice.current)}
+        aria-label={flyout.label}
+        initialFocus={start}
+        finalFocus={() => (escaped.current ? choice.current : false)}
+      >
+        <div
+          ref={stand}
+          data-roving={roving["data-roving"]}
+          role="toolbar"
+          aria-label={flyout.label}
+          className="ui-icon-picker-flyout grid grid-cols-5 gap-tight-gap p-tight-gap"
+          onKeyDown={roving.onKeyDown}
+          onFocus={roving.onFocus}
+        >
+          {flyout.content}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /**
  * One choice in the grid: a button pressed while it is the one chosen, the
- * grid's tab stop where `stop`, and, where a press hangs something over it
- * rather than choosing (`popup`), saying so. Note that it says it hangs
- * something but not whether that stands open, because flipping
- * `aria-expanded` restyles every box a `:has([aria-expanded])` rule
- * reaches, some two thousand cells among them, for a quarter of a second;
- * what it hangs takes the focus as it opens, which says it instead.
+ * grid's tab stop where `stop`, and, where a press floats something from it
+ * rather than choosing (`popup`), saying so, and floating `flyout` while it
+ * stands open. Note that it says it floats something but not whether that
+ * stands open, because flipping `aria-expanded` restyles every box a
+ * `:has([aria-expanded])` rule reaches, some two thousand cells among them,
+ * for a quarter of a second; the flyout takes the focus as it opens, which
+ * says it instead.
  */
 export function IconPickerChoice({
   label,
@@ -93,6 +286,7 @@ export function IconPickerChoice({
   stop,
   face,
   popup = false,
+  flyout,
   onPress,
 }: {
   label: string;
@@ -100,17 +294,26 @@ export function IconPickerChoice({
   stop: boolean;
   face: ReactNode;
   popup?: boolean | undefined;
+  /** What it floats while it stands open; nothing while none does. */
+  flyout?: IconPickerFlyout | undefined;
   onPress: () => void;
 }): React.JSX.Element {
+  const button = useRef<HTMLButtonElement | null>(null);
+
   return (
-    <IconButton
-      icon={face}
-      label={label}
-      pressed={pressed}
-      tabbable={stop}
-      aria-haspopup={popup ? "dialog" : undefined}
-      onClick={onPress}
-    />
+    <>
+      <IconButton
+        ref={button}
+        icon={face}
+        size={ICON_BUTTON_SIZE.PICKER}
+        label={label}
+        pressed={pressed}
+        tabbable={stop}
+        aria-haspopup={popup ? "dialog" : undefined}
+        onClick={onPress}
+      />
+      {flyout === undefined ? null : <ChoiceFlyout choice={button} flyout={flyout} />}
+    </>
   );
 }
 

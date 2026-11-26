@@ -16,7 +16,6 @@ import {
   renameAgent,
   updateAgentBranch,
 } from "@repo/database/models/agent-store";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import { rewindConversation } from "@repo/database/models/conversation-rewind";
 import { registerDevice } from "@repo/database/models/device-store";
 import { childConversationId } from "@repo/database/models/ids";
@@ -61,6 +60,7 @@ import {
   VOICE_SPEAKER,
   type VoiceSpeaker,
 } from "@repo/features/agent-wire";
+import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { INBOX_IMAGE_TYPE, inboxAnswerSchema } from "@repo/features/inbox-wire";
 import { transcriptNowAnswerSchema } from "@repo/features/live-wire";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
@@ -75,10 +75,12 @@ import {
   taskStartAnswerSchema,
   UNTITLED_TASK_NAME,
 } from "@repo/features/task-wire";
+import { MP4_TYPE, WEBM_TYPE } from "@repo/features/video-signature";
 import { EXPERIMENT } from "@repo/settings";
 import { TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
+import { mp4Bytes, webmBytes } from "@repo/wire/testing";
 import { and, eq, sql } from "drizzle-orm";
-import { DateTime, Duration, Effect, Option } from "effect";
+import { Clock, DateTime, Duration, Effect, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import {
@@ -96,6 +98,8 @@ import {
 import { SERVER_EVENT } from "../events/server-events.js";
 import { LINK_OUTCOME, linkInstallation } from "../github/github-installations.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
+import { ATTACHMENT_BLOB_VARIANT, attachmentBlobPath } from "../storage/attachment-blob-paths.js";
+import { keepPictureBytesOne } from "../storage/attachment-keeps.js";
 import {
   AGENT_GITHUB_IMAGE,
   AGENT_MESSAGES,
@@ -471,8 +475,9 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         );
         assert.deepEqual(reachRequests(github.sent.slice(asked), installation.id), {
           installationReads: 1,
-          listings: 1,
-          listingMints: 1,
+          repositoryReads: 1,
+          reachMints: 1,
+          listings: 0,
           repositoryMints: 0,
         });
       }),
@@ -1231,8 +1236,9 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         assert.deepEqual(warm, cold);
         assert.deepEqual(reachRequests(github.sent.slice(asked), installation.id), {
           installationReads: 1,
-          listings: 1,
-          listingMints: 1,
+          repositoryReads: 1,
+          reachMints: 1,
+          listings: 0,
           repositoryMints: 1,
         });
 
@@ -1692,7 +1698,7 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
     "a picture a tool answered an agent or its worker is served as its bytes, not to be sniffed, not to be cached, and never to run as a page, to whoever may read the agent, and through its own transcript alone",
     () =>
       Effect.gen(function* () {
-        const { owner, other, task, ask, fetch } = yield* openTask();
+        const { owner, other, task, ask, fetch, blobs } = yield* openTask();
         const { agent, target } = yield* startedAgent(owner, task.id, ask);
         const callId = "call-worker";
         const workerConversation = childConversationId(target.conversationId, callId);
@@ -1703,19 +1709,24 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
           kind: CONVERSATION_KIND.CHILD,
           parentConversationId: target.conversationId,
         });
-        const agentPicture = Option.getOrThrow(yield* keepConversationPicture(target, picture(1)));
 
-        const workerPicture = Option.getOrThrow(
-          yield* keepConversationPicture(
-            { userId: owner, conversationId: workerConversation },
-            picture(2),
-          ),
+        const agentPicture = Option.getOrThrow(
+          yield* keepPictureBytesOne(target, picture(1)).pipe(Effect.provide(blobs.layer)),
         );
 
+        const workerPicture = Option.getOrThrow(
+          yield* keepPictureBytesOne(
+            { userId: owner, conversationId: workerConversation },
+            picture(2),
+          ).pipe(Effect.provide(blobs.layer)),
+        );
+
+        // Note that each read is a browser's, which is piped the bytes, since a native reader is sent to the store.
         const at = (bearer: string | undefined, pictureId: string, call?: string) =>
           request(AGENT_PICTURE, bearer, {
             id: agent.id,
             picture: pictureId,
+            fetchMode: "cors",
             ...(call === undefined ? undefined : { call }),
           });
 
@@ -1758,6 +1769,59 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
         yield* joinWorkspace(task.workspaceId, other);
         const teammate = yield* fetch(at(other, agentPicture.id));
         assert.equal(teammate.status, HOSTED_HTTP_STATUS.OK, "a member of the agent's workspace");
+      }),
+  );
+
+  it.effect(
+    "a recording whose bytes and phone copy stand in the Blob store sends a native reader to the copy it plays for five minutes, pipes its WebM to a browser, and is none to another account",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, task, ask, fetch, blobs } = yield* openTask();
+        const { agent, target } = yield* startedAgent(owner, task.id, ask);
+        const webm = webmBytes(1280, 800);
+        const mp4 = mp4Bytes(1280, 800);
+
+        const recording = Option.getOrThrow(
+          yield* keepPictureBytesOne(target, {
+            bytes: webm,
+            contentType: CONVERSATION_MEDIA_TYPE.WEBM,
+            width: 1280,
+            height: 800,
+            mp4Bytes: mp4,
+          }).pipe(Effect.provide(blobs.layer)),
+        );
+
+        const blobKey = attachmentBlobPath(recording.id);
+        const phoneBlobKey = attachmentBlobPath(recording.id, ATTACHMENT_BLOB_VARIANT.PHONE);
+
+        const at = (bearer: string, init: { accept?: string; fetchMode?: string } = {}) =>
+          request(AGENT_PICTURE, bearer, { id: agent.id, picture: recording.id, ...init });
+
+        const sentTo = (served: Response) => {
+          assert.equal(served.status, HOSTED_HTTP_STATUS.FOUND);
+          assert.equal(served.headers.get("cache-control"), "private, no-store");
+
+          return new URL(served.headers.get("location") ?? "").pathname;
+        };
+
+        const now = yield* Clock.currentTimeMillis;
+        assert.equal(sentTo(yield* fetch(at(owner, { accept: MP4_TYPE }))), `/${phoneBlobKey}`);
+        assert.equal(sentTo(yield* fetch(at(owner))), `/${blobKey}`);
+        assert.deepEqual(
+          blobs.presigned.map((minted) => minted.validUntil - now),
+          [5 * 60 * 1000, 5 * 60 * 1000],
+        );
+
+        const browser = yield* fetch(at(owner, { fetchMode: "cors" }));
+        assert.equal(browser.status, HOSTED_HTTP_STATUS.OK);
+        assert.equal(browser.headers.get("content-type"), WEBM_TYPE);
+        assert.equal(browser.headers.get("x-content-type-options"), "nosniff");
+        assert.deepEqual(new Uint8Array(yield* Effect.promise(() => browser.arrayBuffer())), webm);
+
+        assert.deepEqual(
+          yield* ask(at(other, { accept: MP4_TYPE })),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+        );
       }),
   );
 

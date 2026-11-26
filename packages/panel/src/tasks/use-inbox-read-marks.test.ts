@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -166,11 +167,11 @@ function marks() {
     },
     mark: (target: InboxItem, unread: boolean, saying?: MarkSaying) =>
       act(() => {
-        void held().onMark(target, unread, saying);
+        void held().onMark(inboxRowOf(target), unread, saying);
       }),
     /** What each toast standing says, leaving out those on their way out. */
     toasts: () => standingToastWords(),
-    markAll: (items: readonly InboxItem[]) => act(() => held().onMarkAll(items)),
+    markAll: (items: readonly InboxItem[]) => act(() => held().onMarkAll(items.map(inboxRowOf))),
   };
 }
 
@@ -244,7 +245,7 @@ test("a refused mark from a caller that says the refusal itself toasts nothing, 
   const hook = marks();
   let answered: boolean | undefined;
   act(() => {
-    void hook.marks.onMark(item(X, false), true, { quiet: true }).then((mark) => {
+    void hook.marks.onMark(inboxRowOf(item(X, false)), true, { quiet: true }).then((mark) => {
       answered = mark.kept;
     });
   });

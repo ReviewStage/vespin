@@ -83,6 +83,8 @@ import {
   type MachineAllowedAppsAnswerView,
   type MachineAskAnsweredView,
   type MachineChangeParams,
+  type ManagerChatEditAnswerView,
+  type ManagerChatReactAnswerView,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type MemorySaveAnswerView,
@@ -199,6 +201,12 @@ import {
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
 import type { MachineAskAnswerRequest } from "./machine-ask-wire.js";
+import {
+  type ManagerChatEditRequest,
+  type ManagerChatReactRequest,
+  managerChatEditRequestSchema,
+  managerChatReactRequestSchema,
+} from "./manager-chat-live.js";
 import { type ManagerCreateRequest, managerCreateRequestSchema } from "./manager-wire.js";
 import { MEMORY_QUERY } from "./memory-wire.js";
 import {
@@ -1212,6 +1220,50 @@ export class HostedAgentClient {
     );
   }
 
+  /**
+   * Gives a message of a Manager's chat the account's reaction, or takes it
+   * off, as `reacted` asks, answering whether it changed what stood; a
+   * reaction the service would refuse by shape is refused here without
+   * traveling.
+   */
+  chatReact(
+    agentId: string,
+    messageId: string,
+    request: ManagerChatReactRequest,
+  ): Effect.Effect<ManagerChatReactAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(managerChatReactRequestSchema)(request));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(
+      this.#hosted.messages.chatReact,
+      { params: { id: agentId, message: messageId }, body: admitted },
+      { deadline: HOSTED_DEADLINE.STEER },
+    );
+  }
+
+  /**
+   * Edits one of the account's own messages of a Manager's chat in place,
+   * telling the Manager where the words changed, answering whether they
+   * did; an edit the service would refuse by shape is refused here without
+   * traveling.
+   */
+  chatEdit(
+    agentId: string,
+    messageId: string,
+    request: ManagerChatEditRequest,
+  ): Effect.Effect<ManagerChatEditAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(managerChatEditRequestSchema)(request));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(
+      this.#hosted.messages.chatEdit,
+      { params: { id: agentId, message: messageId }, body: admitted },
+      { deadline: HOSTED_DEADLINE.STEER },
+    );
+  }
+
   /** Changes one agent's queue of messages waiting behind its turn, answering the queue as it then stands; a change the service would refuse by shape is refused here without traveling. */
   changeQueue(
     agentId: string,
@@ -1379,16 +1431,19 @@ export class HostedAgentClient {
     );
   }
 
-  /** Moves the account's own read mark of a Manager's chat, under the idempotency key given where one is, answering the agent as it then stands. */
+  /** Moves the account's own read mark of a Manager's chat, back to just before the message `unreadFrom` names where it names one, under the idempotency key given where one is, answering the agent as it then stands. */
   markRead(
     agentId: string,
     readMark: ReadMark,
     key?: string,
+    unreadFrom?: string,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    const body = unreadFrom === undefined ? { readMark } : { readMark, unreadFrom };
+
     return Effect.map(
       hostedCall(
         this.#hosted.agents.change,
-        { params: { id: agentId }, body: { readMark } },
+        { params: { id: agentId }, body },
         { as: AGENT_NOT_FOUND_RENAMES, ...keyed(key) },
       ),
       rowWritten,

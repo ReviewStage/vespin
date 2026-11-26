@@ -14,6 +14,9 @@ import {
 } from "../native/microphone-route";
 import type { DesktopConfig } from "./desktop-config";
 
+/** How often the microphone is read while System Settings stands open over the app, as Settings reads computer use's grants. */
+const MICROPHONE_AWAY_READ_MS = 1000;
+
 /** Electron's media-access status word, read as one this build names; Electron documents no other. */
 const readMicrophoneStatusWord = Schema.decodeUnknownSync(
   Schema.Literals(Object.values(MICROPHONE_STATUS)),
@@ -40,6 +43,14 @@ export interface NativeNode extends DesktopService {
    */
   refreshMicrophoneStatus: () => MicrophoneStatus;
   requestMicrophone: () => Promise<MicrophoneStatus>;
+  /**
+   * Reads the microphone every second until the app comes to the front
+   * again, as System Settings opens over it, so a grant the developer makes
+   * there is seen while they are still behind it; one that turns it on
+   * calls `onGranted` and ends the read. A window covered that long is told
+   * no document, so the come-forward is main's to do here.
+   */
+  watchMicrophoneUntilActive: (onGranted: () => void) => void;
   microphoneRouteWatcher: () => MicrophoneRouteWatch | undefined;
 }
 
@@ -52,6 +63,7 @@ export interface NativeNode extends DesktopService {
 export function createNativeNode(dependencies: NativeNodeDependencies): NativeNode {
   const { config, state } = dependencies;
   let microphoneRouteWatcher: MicrophoneRouteWatch | undefined;
+  let microphoneAwayRead: ReturnType<typeof setInterval> | undefined;
 
   /** One write of what this machine's own devices answer, into the one document. */
   function writeAudio(patch: {
@@ -84,10 +96,21 @@ export function createNativeNode(dependencies: NativeNodeDependencies): NativeNo
     return status;
   }
 
-  /** The microphone read again as the app comes to the front, where the developer may have changed it in System Settings; written only where it moved, so a return tells the windows nothing new. */
-  function microphoneOnActive(): void {
+  /** The microphone read again where the developer may have changed it in System Settings; written only where it moved, so a read tells the windows nothing new. */
+  function rereadMicrophone(): void {
     if (readMicrophoneStatus() !== state.snapshot().audio.microphoneStatus)
       refreshMicrophoneStatus();
+  }
+
+  function stopMicrophoneAwayRead(): void {
+    clearInterval(microphoneAwayRead);
+    microphoneAwayRead = undefined;
+  }
+
+  /** The microphone read again as the app comes to the front, which ends any read while it was away. */
+  function microphoneOnActive(): void {
+    stopMicrophoneAwayRead();
+    rereadMicrophone();
   }
 
   return {
@@ -104,6 +127,22 @@ export function createNativeNode(dependencies: NativeNodeDependencies): NativeNo
       }
 
       return refreshMicrophoneStatus();
+    },
+    watchMicrophoneUntilActive: (onGranted) => {
+      if (config.platform !== "darwin") return;
+      stopMicrophoneAwayRead();
+      microphoneAwayRead = setInterval(() => {
+        const was = state.snapshot().audio.microphoneStatus;
+        rereadMicrophone();
+
+        const granted =
+          was !== MICROPHONE_STATUS.GRANTED &&
+          state.snapshot().audio.microphoneStatus === MICROPHONE_STATUS.GRANTED;
+
+        if (!granted) return;
+        stopMicrophoneAwayRead();
+        onGranted();
+      }, MICROPHONE_AWAY_READ_MS);
     },
     microphoneRouteWatcher: () => microphoneRouteWatcher,
     start: async () => {
@@ -124,6 +163,7 @@ export function createNativeNode(dependencies: NativeNodeDependencies): NativeNo
     },
     stop: async () => {
       app.removeListener("did-become-active", microphoneOnActive);
+      stopMicrophoneAwayRead();
       microphoneRouteWatcher?.stop();
       microphoneRouteWatcher = undefined;
     },

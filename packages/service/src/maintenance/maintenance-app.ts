@@ -1,4 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
+import { markSessionsForResume } from "@repo/database/models/claude-session-entries";
 import { markAwayDevices, markCommandsAwayDevices } from "@repo/database/models/device-store";
 import { pruneMachineAsks } from "@repo/database/models/machine-command-ask-store";
 import { pruneSyncLog } from "@repo/database/models/sync-log";
@@ -18,7 +19,15 @@ import { type CronMonitor, sentryCronCheckIns } from "../observability/sentry.js
 import { releaseHeldPushes } from "../push/inbox-pushes.js";
 import { refreshLiveActivities } from "../push/live-activities.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
-import { MAINTENANCE_SWEEP, MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
+import { moveAttachmentsToBlob } from "../storage/attachment-blob-backfill.js";
+import { purgeAttachmentBlobs } from "../storage/attachment-blob-purge.js";
+import { BlobStore } from "../storage/blob-store.js";
+import { moveJournalImages } from "../storage/journal-image-move.js";
+import {
+  MAINTENANCE_SWEEP,
+  MAINTENANCE_SWEEP_PATH,
+  TRANSCRIPT_MARK_BACKFILL,
+} from "./maintenance-bounds.js";
 import { handleMaintenanceSweep } from "./maintenance-sweep.js";
 
 /** The sweep as Sentry's Crons watches it: three minutes in a row missed, late, or failed open an issue. */
@@ -42,6 +51,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
   const environment = yield* HostedEnvironment;
   // The reap asks the agents' machines where their runners stand, over the deployment's own client.
   const http = yield* HttpClient.HttpClient;
+  const blobs = yield* BlobStore;
 
   return yield* handleMaintenanceSweep({
     request,
@@ -60,6 +70,15 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
       markCommandsAwayDevices(now, Duration.toMillis(MACHINE_LISTENER_FRESH)),
     pruneMachineAsks,
     releaseSandboxes: releaseUnusedSandboxes,
+    purgeAttachmentBlobs: () => Effect.provideService(purgeAttachmentBlobs(), BlobStore, blobs),
+    moveAttachmentsToBlob: () => Effect.provideService(moveAttachmentsToBlob(), BlobStore, blobs),
+    moveJournalImages: () => Effect.provideService(moveJournalImages(), BlobStore, blobs),
+    markTranscriptsForResume: () =>
+      markSessionsForResume({
+        sessionsPerSweep: TRANSCRIPT_MARK_BACKFILL.SESSIONS_PER_SWEEP,
+        rowsPerSweep: TRANSCRIPT_MARK_BACKFILL.ROWS_PER_SWEEP,
+        rowsPerBatch: TRANSCRIPT_MARK_BACKFILL.ROWS_PER_BATCH,
+      }),
   });
 });
 

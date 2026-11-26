@@ -8,7 +8,6 @@ import {
   Label,
   Menu,
   Spacer,
-  Text,
   Toggle,
   VStack,
   ZStack,
@@ -109,6 +108,7 @@ import {
 import { previewTree, type RowPreview } from "./row-preview-model.js";
 import { searchedTitleMarkdown } from "./searched-title-model.js";
 import { sparedMarksDropped } from "./task-row-fit-model.js";
+import { Text } from "./text.js";
 import { type BrandColors, STATUS_TONE, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, ROW_INSET, SPACE } from "./tokens/space.js";
 import type { StatusTone } from "./tokens/status-tone.js";

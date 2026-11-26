@@ -30,6 +30,7 @@ import {
   COPY_FIELD_WIDTH,
   ConfirmDialog,
   CopyField,
+  HarnessMark,
   MARK_PROVIDER,
   OutsideLink,
   OutsideSteps,
@@ -62,7 +63,6 @@ import { actMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
-import { HarnessMark } from "../harness-marks.js";
 import { mcpClientsQuery, mcpClientsRetryMutation } from "../live-reads.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";

@@ -29,11 +29,13 @@
  * The decision (`carryOnDecision`) resumes only where every one of these
  * holds: the agent is not archived; the turn was cut off, not failed for a
  * reason of its own (`cutOffReasonOf`); it had started, since a turn still
- * queued lost no work and its line is resent with the next message; no
- * line of it, taken or still awaiting it, is itself a carry-on, so a Mac
- * that dies at every resume carries on once and then fails as before, and
- * so does a launch that ends before it takes any line, as one that fails
- * on a line an earlier launch left it does; and it was
+ * queued lost no work and its line is resent with the next message; fewer
+ * than `CARRY_ON.LIMIT` carry-ons stand since the agent last answered
+ * (`carryOnsUnanswered`), a carry-on still awaiting a turn among them, so a
+ * runner that dies at every resume, even a launch that ends before it takes
+ * any line, as one that fails on a line an earlier launch left it does, is
+ * carried on a few times and then fails as before, while an agent that
+ * works between its runner's losses is carried on every time; and it was
  * settled within the window (`CARRY_ON.WINDOW`): an hour covers a reboot,
  * an update, and a laptop closed over a break, with the sweep's own lag
  * inside it, while a Mac back a day later would revive every agent it ran
@@ -45,6 +47,7 @@
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { carryOnsUnanswered } from "@repo/database/models/agent-carry-ons";
 import { agentQueueNow, pauseAgentQueue } from "@repo/database/models/agent-queue-store";
 import {
   type Agent,
@@ -59,13 +62,7 @@ import {
   ownDeviceHost,
 } from "@repo/database/models/device-agent-store";
 import { hostLastSeen } from "@repo/database/models/device-store";
-import {
-  cutOffTurnLines,
-  type LostLine,
-  storeWriter,
-  turnOpeningLine,
-  turnWaitingLines,
-} from "@repo/database/models/writer";
+import { cutOffTurnLines, storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { AGENT_MACHINE, DEVICE_LEASE } from "@repo/features/agent-wire";
@@ -91,6 +88,8 @@ export type CarryOnServices = DatabaseServices | HttpClient.HttpClient | GitHubA
 const CARRY_ON = {
   /** How long after its settle a cut-off turn is still carried on, as the header says. */
   WINDOW: Duration.hours(1),
+  /** How many carry-ons in a row the agent may answer nothing after before a cut-off turn is left failed, as the header says. */
+  LIMIT: 3,
 } as const;
 
 /** What comes after a cut-off turn: a carry-on sent, the queued message handed on in its place, either once its Mac is back, or nothing. */
@@ -118,8 +117,8 @@ export interface CarryOnInput {
   readonly agent: Pick<Agent, "archivedAt" | "machine">;
   /** The agent's newest turn; none before its first. */
   readonly turn: CarryOnTurn | undefined;
-  /** Whether a line of the turn, the one that opened it or one still awaiting it, is a carry-on. */
-  readonly carriedOn: boolean;
+  /** How many carry-on lines stand since the agent last answered (`carryOnsUnanswered`). */
+  readonly unanswered: number;
   /** Whether a message stands queued behind the turn. */
   readonly queued: boolean;
   /** Whether the agent's Mac is away past its lease, as its row says; unsaid reads as not, as a sandboxed agent's is. */
@@ -216,8 +215,8 @@ export function carryOnDecision(input: CarryOnInput): CarryOnDecision {
   // A turn that never started lost no work: its line is resent with the next message.
   if (turn.startedAt === null) return { outcome: CARRY_ON_OUTCOME.NONE };
 
-  // A carry-on cut off in its turn is not carried on again, so a crash at every resume never loops.
-  if (input.carriedOn) return { outcome: CARRY_ON_OUTCOME.NONE };
+  // Carry-ons the agent answered nothing after stop at the limit, so a runner that dies at every resume never loops.
+  if (input.unanswered >= CARRY_ON.LIMIT) return { outcome: CARRY_ON_OUTCOME.NONE };
   const settledAt = turn.settledAt?.getTime() ?? input.now;
 
   if (input.now - settledAt > Duration.toMillis(CARRY_ON.WINDOW)) {
@@ -232,14 +231,7 @@ export function carryOnDecision(input: CarryOnInput): CarryOnDecision {
   return { outcome: CARRY_ON_OUTCOME.RESUME, reason };
 }
 
-/** The channel the line names, where its row keeps one. */
-function channelOf(line: LostLine): string | undefined {
-  const { metadata } = line;
-
-  return metadata != null && "channel" in metadata ? metadata.channel : undefined;
-}
-
-/** The decision over the agent and its newest turn as they stand, the turn's lines, the queue, and the Mac's own row read for it. */
+/** The decision over the agent and its newest turn as they stand, the carry-ons it answered nothing after, the queue, and the Mac's own row read for it. */
 export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(function* (
   agent: Agent,
   turn: AgentLatestTurn | undefined,
@@ -247,14 +239,11 @@ export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(fu
   const now = yield* Clock.currentTimeMillis;
 
   if (cutOffReasonOf(agent, turn) === undefined || turn === undefined) {
-    return carryOnDecision({ agent, turn, carriedOn: false, queued: false, now });
+    return carryOnDecision({ agent, turn, unanswered: 0, queued: false, now });
   }
 
   const target = { userId: agent.userId, conversationId: agent.conversationId };
-  const opener = yield* turnOpeningLine(target, turn.id);
-  // Note that a launch that ended before it took a line leaves the carry-on that opened the turn awaiting it.
-  const awaiting = yield* turnWaitingLines(target, turn.id);
-  const lines = [...Option.toArray(opener), ...awaiting];
+  const unanswered = yield* carryOnsUnanswered(target);
   const queue = yield* agentQueueNow(agent.id);
 
   const hostAway =
@@ -265,7 +254,7 @@ export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(fu
   return carryOnDecision({
     agent,
     turn,
-    carriedOn: lines.some((line) => channelOf(line) === MESSAGE_CHANNEL.CARRY_ON),
+    unanswered,
     queued: queue.messages.length > 0,
     hostAway,
     now,

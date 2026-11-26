@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, expect, test } from "vitest";
 import {
   COMMAND_FILTER,
+  COMMAND_PRESENTATION,
   CommandDialog,
   type CommandDialogProps,
   type CommandGroup,
@@ -314,4 +315,27 @@ test("the palette opens again with its words cleared", () => {
   act(() => button("Search").click());
   expect(field().value).toBe("");
   expect(rows()).toHaveLength(4);
+});
+
+test("on a page, Return on a heading's press is the press's own, never choosing the row lit", () => {
+  const heard = openPalette(
+    (each) =>
+      groupsFor(each).map((group) => ({
+        ...group,
+        act: { label: "Show all", heard: `Show all ${group.id}`, onPress: () => undefined },
+      })),
+    { presentation: COMMAND_PRESENTATION.PAGE },
+  );
+
+  const showAll = document.querySelector<HTMLButtonElement>('button[aria-label="Show all tasks"]');
+  expect(showAll).not.toBeNull();
+
+  act(() => {
+    showAll?.focus();
+    showAll?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+  });
+
+  expect(heard.chosen).toEqual([]);
 });

@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import {
-  DESCRIPTION_ATTACHMENT_KEEP,
-  keepDescriptionAttachment,
-} from "@repo/database/models/description-attachments";
+import { DESCRIPTION_ATTACHMENT_KEEP } from "@repo/database/models/description-attachments";
 import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
@@ -13,8 +10,10 @@ import { descriptionAttachmentAddress } from "@repo/features/description-attachm
 import { PICTURE_MEDIA_TYPE, PICTURE_TYPE, type Picture } from "@repo/features/picture-wire";
 import { unparsedWire } from "@repo/wire";
 import { webmBytes } from "@repo/wire/testing";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { Base64 } from "effect/encoding";
+import { keepDescriptionFileBytes } from "../storage/attachment-keeps.js";
+import { memoryBlobStore } from "../testing/blob-store-fake.js";
 import type { DescriptionBinding } from "./description-notes.js";
 import {
   lookNamedOnly,
@@ -61,7 +60,7 @@ const openPicturedTasks = Effect.gen(function* () {
   yield* joinWorkspace(workspace, teammate);
   const task = yield* createTask(owner, { organizationId: workspace, name: "Invites" });
   const other = yield* createTask(owner, { organizationId: workspace, name: "Billing" });
-  const kept = yield* keepDescriptionAttachment(teammate, task.id, PICTURE);
+  const kept = yield* keepDescriptionFileBytes(teammate, task.id, PICTURE);
 
   if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT)
     return assert.fail("the picture was not kept");
@@ -81,7 +80,10 @@ const noPdfWrite: PdfWrite = () => Effect.die(new Error("a PDF was written"));
 const look = (call: DescriptionBinding, address: string) =>
   runLookAtPicture(call, unparsedWire({ address }), noPdfWrite);
 
-it.layer(getTestDB())("look_at_picture", (it) => {
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+it.layer(Layer.merge(getTestDB(), blobs.layer))("look_at_picture", (it) => {
   it.effect("a member's look answers the picture, its type and its bytes", () =>
     Effect.gen(function* () {
       const { owner, taskId, address } = yield* openPicturedTasks;
@@ -172,7 +174,7 @@ it.layer(getTestDB())("look_at_picture", (it) => {
       Effect.gen(function* () {
         const { owner, taskId } = yield* openPicturedTasks;
 
-        const kept = yield* keepDescriptionAttachment(owner, taskId, played);
+        const kept = yield* keepDescriptionFileBytes(owner, taskId, played);
 
         if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT)
           return assert.fail("the file was not kept");

@@ -171,7 +171,9 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
           tintColor={colors.TEXT}
           accessibilityLabel={SKILLS_LINE.ADD_SKILL}
           onPress={() => router.push(SETTINGS_ROUTE.SKILL_ADD)}
-        />
+        >
+          {SKILLS_LINE.ADD_SKILL}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
       <ConfirmAsk

@@ -19,8 +19,8 @@ interface Grant {
 }
 
 const PAGES = {
-  granted: { badge: "Connected", title: "Connected to Example", body: "Close this tab." },
-  notGranted: { badge: "Not connected", title: "Sign-in didn’t complete", body: "Try again." },
+  granted: { title: "Connected to Example", body: "Close this tab." },
+  notGranted: { title: "Sign-in didn’t complete", body: "Try again." },
 } as const;
 
 const REASON = {

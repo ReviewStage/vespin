@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { inboxAttachmentAddress } from "./inbox-attachment-link.js";
+import { type InboxRow, inboxRowOf } from "./inbox-digest.js";
 import {
   agentThreadsLine,
   INBOX_MEDIA,
@@ -214,8 +215,8 @@ function posted(
   status: InboxItem["status"],
   postedAt: number,
   updatedAt: number,
-): InboxItem {
-  return {
+): InboxRow {
+  return inboxRowOf({
     id,
     agentId,
     key: id,
@@ -226,7 +227,7 @@ function posted(
     status,
     postedAt,
     updatedAt,
-  };
+  });
 }
 
 describe("agentThreadsLine", () => {

@@ -576,7 +576,7 @@ export function pageAccounts(agent: Agent): readonly string[] {
     : summaryAccounts(agent);
 }
 
-/** One agent as its own page reads it, its status read at `now`, with the agents started from it and the Mac it runs on. */
+/** One agent as its own page reads it, its status read at `now`, with the agents started from it, the Mac it runs on, and every repository it works in, its own first. */
 export function agentPage(
   agent: Agent,
   standing: AgentTurnStanding,
@@ -584,6 +584,7 @@ export function agentPage(
   names: ReadonlyMap<string, string>,
   continuedBy: readonly AgentStartedFromIt[] = [],
   macs: ReadonlyMap<string, NamedMachine> = NO_MACS,
+  repositories: readonly string[] = agent.repository === null ? [] : [agent.repository],
 ): AgentPage {
   return {
     id: agent.id,
@@ -595,6 +596,7 @@ export function agentPage(
       : { origin: originOf(agent.automationOrigin, names) }),
     workspaceId: agent.organizationId,
     repository: agent.repository,
+    repositories,
     ...(agent.branch === null ? undefined : { branch: agent.branch }),
   };
 }

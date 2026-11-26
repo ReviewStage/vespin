@@ -61,6 +61,7 @@ import { TestClock } from "effect/testing";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
+import { memoryBlobStore } from "../testing/blob-store-fake.js";
 import { wokenOnHub } from "../testing/sync-woken.js";
 import {
   computerScreenshot,
@@ -218,7 +219,10 @@ const untilQueued = (userId: string) =>
     while (!(yield* machineCommandsWaiting(userId, since, kinds))) yield* Effect.yieldNow;
   });
 
-it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+it.layer(Layer.merge(getTestDB(), blobs.layer))("a command run on the developer's Mac", (it) => {
   it.effect("the held read answers the queued command, and the result posted is kept", () =>
     Effect.gen(function* () {
       yield* account("user-mac");
@@ -807,7 +811,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           assert.equal(answer.path, `/workspace/.agent/attachments/${saved[0]?.name}`);
           const kept = yield* readConversationPicture(row.id, answer.picture.id);
           assert.ok(Option.isSome(kept), "kept beside the transcript");
-          assert.deepEqual(kept.value.bytes, video);
+          assert.deepEqual(blobs.bytesOf(kept.value.body), video);
         }),
       ),
   );

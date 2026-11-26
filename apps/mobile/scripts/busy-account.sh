@@ -79,9 +79,15 @@ database="$host/accounts/$ACCOUNT/local.sqlite"
 }
 rm -f "$database-wal" "$database-shm"
 if ((empty)); then
-    rm -f "$database"
+    # Note that a store reset leaves the stored kinds' database gone too, which the signed-in launch may have made.
+    rm -f "$database" "$host/accounts/$ACCOUNT/collections.sqlite"*
 else
     cp "$seed/accounts/$ACCOUNT/local.sqlite" "$database"
+    # Note that a build that keeps its Inbox stored reads it from the database of stored kinds beside the local copy, which the seed keeps whole at its sync id, so the launch catches up past it.
+    collections="$host/accounts/$ACCOUNT/collections.sqlite"
+    rm -f "$collections" "$collections-wal" "$collections-shm"
+    cp "$seed/accounts/$ACCOUNT/collections.sqlite" "$collections"
+    chmod 600 "$collections"
 fi
 rm -rf "$host/busy-account"
 cp -R "$seed/busy-account" "$host/busy-account"

@@ -14,7 +14,7 @@ export interface NativePill {
 }
 
 /** A run of the words as the view takes it: plain words, or one pill. */
-type NativeRun = { readonly text: string } | { readonly pill: NativePill };
+export type NativeRun = { readonly text: string } | { readonly pill: NativePill };
 
 /** The words handed to the view, and how many of its changes JavaScript had heard as it handed them, so words typed since are never set back. */
 export interface NativeValue {
@@ -32,9 +32,14 @@ export interface NativeLook {
   readonly pillGlyph: ColorValue;
 }
 
-/** What the view tells as its words or its caret move: the Markdown, the caret's line before and after it, each pill as the object character, where the caret stands in the drawn words, whether words are selected, and how many changes have been typed. */
+/** A run of the words as the view tells it: plain words as typed, or one pill by the Markdown it stands for. */
+export type NativeToldRun =
+  | { readonly text: string }
+  | { readonly pill: { readonly markdown: string } };
+
+/** What the view tells as its words or its caret move: its runs, the caret's line before and after it, each pill as the object character, where the caret stands in the drawn words, whether words are selected, and how many changes have been typed. */
 export interface NativeWords {
-  readonly markdown: string;
+  readonly runs: readonly NativeToldRun[];
   readonly before: string;
   readonly after: string;
   readonly caret: number;
@@ -48,8 +53,18 @@ export interface NativeWord {
   readonly text: string;
 }
 
+/** The words a send took out of the view: its runs, as it tells them, and the count of changes the emptying stands at. */
+export interface NativeTaken {
+  readonly runs: readonly NativeToldRun[];
+  readonly changes: number;
+}
+
 /** The doors the view opens to JavaScript through its ref. */
 export interface NativePillFieldDoors {
+  /** Takes the words out of the view for a send, in one step where every key lands, so a second send finds it empty. */
+  take(): Promise<NativeTaken>;
+  /** Lays words a send did not take back in the view, ahead of anything typed since. */
+  putBack(runs: readonly NativeRun[]): Promise<void>;
   /** Puts the pills in place of the `@` word a pick names, found again by its words where it moved, or at the caret where none is named or found, each with a space after it. */
   insertPills(pills: readonly NativePill[], word: NativeWord | undefined): Promise<void>;
   /** Writes plain words in place of the `@` word a pick names, found as `insertPills` finds it. */

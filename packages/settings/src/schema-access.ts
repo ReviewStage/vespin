@@ -440,14 +440,14 @@ export function settingRowsForPage(
 /** One row of a page's section as the page draws it: whether it stands now, and whether it comes and goes with how the settings stand (its own `visible` condition). */
 export interface DrawnSchemaSettingRow extends SchemaSettingRow {
   readonly shown: boolean;
-  /** Whether the row stands only while its condition holds, so a page reveals it (unrolled in as it comes, rolled up as it goes) rather than drawing it at once. */
+  /** Whether the row stands only while its condition holds, so a page reveals it (`Reveal`) rather than drawing it as a plain row. */
   readonly revealed: boolean;
 }
 
 /**
  * Every row one section of one page draws, as `settingRowsForPage` lists
  * them, and beside them the rows whose condition does not hold now, not
- * shown, so a page can roll them up as they go and unroll them as they come.
+ * shown, so a page can reveal them as they come and go.
  * Note that a row is listed hidden only once the account is drawn, because
  * a row whose condition reads the account would otherwise arrive as the
  * page's first draw lands, and that draw replays nothing.

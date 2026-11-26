@@ -66,7 +66,7 @@ function rowsOf(drawing: HTMLElement): { kind: string | null; text: string | nul
 test("GitHub's rendering of a suggested change draws as its removed line over its added ones, marks off, indentation and the empty line kept, under its heading and in no table", async () => {
   const drawing = await drawn(
     createElement(GitHubWords, {
-      html: SUGGESTED_CHANGE_HTML,
+      source: { html: SUGGESTED_CHANGE_HTML },
       picture: (src, alt) => createElement(GitHubPictureLink, { src, alt }),
     }),
   );

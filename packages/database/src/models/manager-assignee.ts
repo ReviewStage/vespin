@@ -8,6 +8,11 @@
  * pull requests open as they always did, or for an assignee no longer a
  * member of the agent's workspace, so taking someone out of the workspace
  * stops their account being used at once.
+ *
+ * Note that a Manager's start is already the asker's account (`turnAsker`),
+ * so this reads something only for an agent of the Manager's owner: one
+ * started in a turn the owner asked for or no member asked for, such as a
+ * wakeup's, or one started before Managers acted for whoever asked.
  */
 
 import { AGENT_KIND } from "@repo/features/agent-wire";

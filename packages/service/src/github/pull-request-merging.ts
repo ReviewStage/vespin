@@ -1,11 +1,13 @@
 /**
  * pull-request-merging.ts -- how an open pull request may be merged, as its merge box offers it, read from GitHub's GraphQL API on the token the overview reads on.
  *
- * One query reads what the REST pull request does not carry: the merge
- * methods the repository allows, whether it allows auto-merge, whether the
- * pull request's base is merged through a merge queue and where it stands
- * in it, whether auto-merge is on for it and by which method, its head
- * commit, what its required reviews say, and its head's checks as one word.
+ * Its fields read what the REST pull request does not carry, asked in a
+ * query of their own or on the first page of the overview's stack listing
+ * (`pull-requests.ts`): the merge methods the repository allows, whether it
+ * allows auto-merge, whether the pull request's base is merged through a
+ * merge queue and where it stands in it, whether auto-merge is on for it
+ * and by which method, its head commit, what its required reviews say, and
+ * its head's checks as one word.
  * It runs on the installation token the App minted for the agent's one
  * repository (`github-app.ts`'s `repositoryPullRequestToken`), as every
  * other overview read does, on that token's `@repo/github` client. An
@@ -26,9 +28,13 @@ import type { GitHubFailure } from "@repo/github";
 import { Effect, Option, Schema } from "effect";
 import type { GitHubBearer } from "./github-app.js";
 
-const MERGING_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) {
-    mergeCommitAllowed
+/**
+ * The fields the merge box reads of the repository, under `$number`: asked
+ * in their own query (`MERGING_QUERY`) or beside another read of the same
+ * repository, as the stack's listing asks them on its first page, so the
+ * overview spends one GraphQL request on both (`pull-requests.ts`).
+ */
+export const MERGING_FIELDS = `mergeCommitAllowed
     squashMergeAllowed
     rebaseMergeAllowed
     autoMergeAllowed
@@ -39,39 +45,42 @@ const MERGING_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
       autoMergeRequest { mergeMethod }
       reviewDecision
       commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-    }
+    }`;
+
+const MERGING_QUERY = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    ${MERGING_FIELDS}
   }
 }`;
 
-const MergingAnswerSchema = Schema.Struct({
-  repository: Schema.NullOr(
+/** The repository's fields `MERGING_FIELDS` asks, as GitHub answers them. */
+export const MergingFieldsSchema = Schema.Struct({
+  mergeCommitAllowed: Schema.Boolean,
+  squashMergeAllowed: Schema.Boolean,
+  rebaseMergeAllowed: Schema.Boolean,
+  autoMergeAllowed: Schema.Boolean,
+  pullRequest: Schema.NullOr(
     Schema.Struct({
-      mergeCommitAllowed: Schema.Boolean,
-      squashMergeAllowed: Schema.Boolean,
-      rebaseMergeAllowed: Schema.Boolean,
-      autoMergeAllowed: Schema.Boolean,
-      pullRequest: Schema.NullOr(
-        Schema.Struct({
-          headRefOid: Schema.String,
-          isMergeQueueEnabled: Schema.Boolean,
-          mergeQueueEntry: Schema.NullOr(Schema.Struct({ position: Schema.Number })),
-          autoMergeRequest: Schema.NullOr(
-            Schema.Struct({ mergeMethod: Schema.NullOr(Schema.String) }),
-          ),
-          reviewDecision: Schema.NullOr(Schema.String),
-          commits: Schema.Struct({
-            nodes: Schema.Array(
-              Schema.Struct({
-                commit: Schema.Struct({
-                  statusCheckRollup: Schema.NullOr(Schema.Struct({ state: Schema.String })),
-                }),
-              }),
-            ),
+      headRefOid: Schema.String,
+      isMergeQueueEnabled: Schema.Boolean,
+      mergeQueueEntry: Schema.NullOr(Schema.Struct({ position: Schema.Number })),
+      autoMergeRequest: Schema.NullOr(Schema.Struct({ mergeMethod: Schema.NullOr(Schema.String) })),
+      reviewDecision: Schema.NullOr(Schema.String),
+      commits: Schema.Struct({
+        nodes: Schema.Array(
+          Schema.Struct({
+            commit: Schema.Struct({
+              statusCheckRollup: Schema.NullOr(Schema.Struct({ state: Schema.String })),
+            }),
           }),
-        }),
-      ),
+        ),
+      }),
     }),
   ),
+});
+
+const MergingAnswerSchema = Schema.Struct({
+  repository: Schema.NullOr(MergingFieldsSchema),
 });
 
 /** GitHub's word for each merge method, as GraphQL spells it. */
@@ -96,26 +105,10 @@ const GITHUB_ROLLUP = new Map<string, CheckSummary>([
   ["ERROR", CHECK_SUMMARY.FAILING],
 ]);
 
-/**
- * How the pull request may be merged, read on the token; none where the
- * repository or the pull request reads as none. Note that the methods are
- * the repository's own settings alone: a ruleset narrowing them on the base
- * is GitHub's to refuse, in its own words, when a merge names one.
- */
-export const pullRequestMerging = /* @__PURE__ */ Effect.fn("web/pullRequestMerging")(function* (
-  bearer: GitHubBearer,
-  fullName: string,
-  number: number,
-): Effect.fn.Return<Option.Option<PullRequestMerging>, GitHubFailure> {
-  const [owner = "", name = ""] = fullName.split("/");
-
-  const answer = yield* bearer.client.graphql(
-    MERGING_QUERY,
-    { owner, name, number },
-    MergingAnswerSchema,
-  );
-
-  const repository = answer.repository;
+/** How the pull request may be merged, as the repository's merge fields answer it; none where the repository or the pull request reads as none. */
+export function mergingOf(
+  repository: typeof MergingFieldsSchema.Type | null,
+): Option.Option<PullRequestMerging> {
   const pull = repository?.pullRequest;
 
   if (repository === null || pull === null || pull === undefined) return Option.none();
@@ -142,6 +135,29 @@ export const pullRequestMerging = /* @__PURE__ */ Effect.fn("web/pullRequestMerg
     checks:
       rollup === undefined ? CHECK_SUMMARY.NONE : (GITHUB_ROLLUP.get(rollup) ?? CHECK_SUMMARY.NONE),
   });
+}
+
+/**
+ * How the pull request may be merged, read on the token in a query of its
+ * own; none where the repository or the pull request reads as none. Note
+ * that the methods are the repository's own settings alone: a ruleset
+ * narrowing them on the base is GitHub's to refuse, in its own words, when
+ * a merge names one.
+ */
+export const pullRequestMerging = /* @__PURE__ */ Effect.fn("web/pullRequestMerging")(function* (
+  bearer: GitHubBearer,
+  fullName: string,
+  number: number,
+): Effect.fn.Return<Option.Option<PullRequestMerging>, GitHubFailure> {
+  const [owner = "", name = ""] = fullName.split("/");
+
+  const answer = yield* bearer.client.graphql(
+    MERGING_QUERY,
+    { owner, name, number },
+    MergingAnswerSchema,
+  );
+
+  return mergingOf(answer.repository);
 });
 
 /** The operation's name, which tells this read apart from the merge box's own. */

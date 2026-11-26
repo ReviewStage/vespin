@@ -6,13 +6,15 @@
  * where it can be posted from, and the video as the transcript kept it,
  * which the transcript plays, or why it was not kept and its size. The
  * video is kept as a picture is (`keepConversationPicture`), under the same
- * bounds, deleted with its conversation, and never handed to the model.
+ * bounds, deleted with its conversation, and never handed to the model: its
+ * bytes in the Blob store, uploaded there by the sandbox that recorded it
+ * where it did, or put there here (`../storage/attachment-keeps.ts`).
  * The words a refusal says are shared where both tools mean the same, so
  * an agent reads one set; each tool adds its own for what is its alone.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
+import type { StoredAttachment } from "@repo/database/models/attachment-body";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import {
   type CONVERSATION_MEDIA_TYPE,
@@ -22,6 +24,8 @@ import {
 import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { Effect, Option } from "effect";
 import { logStoreFailure } from "../http/store-failure.js";
+import { keepPictureBytes, keepStoredPictures, sha256Hex } from "../storage/attachment-keeps.js";
+import { withAttachmentUploads } from "../storage/attachment-uploads.js";
 
 /** Why a recording did not start or stop, in words the model can act on, wherever both tools mean the same. */
 export const RECORDING_WORDS = {
@@ -40,13 +44,40 @@ export function recordingTooLarge(maxBytes: number): string {
 /** The types a recording is kept as: a browser's WebM, or a Mac's H.264 MP4. */
 type RecordingType = typeof CONVERSATION_MEDIA_TYPE.WEBM | typeof CONVERSATION_MEDIA_TYPE.MP4;
 
-/** A stopped recording's video: its bytes, the type they were checked to be, its size, and a WebM's MP4 copy where one was made. */
+/** A stopped recording's video: its bytes, the type they were checked to be, its size, and a WebM's MP4 copy where one was made; or, where the sandbox that recorded it uploaded it, where it stands in the Blob store, its copy with it. */
 export interface RecordingVideo<Type extends RecordingType> {
   readonly bytes: Uint8Array;
   readonly contentType: Type;
   readonly width: number;
   readonly height: number;
   readonly mp4Bytes?: Uint8Array | undefined;
+  readonly stored?: StoredAttachment | undefined;
+}
+
+/** The recording kept beside the transcript as a picture is: from where its sandbox stored it, or put in the store here. */
+function keptVideo<Type extends RecordingType>(
+  transcript: ConversationTarget,
+  video: RecordingVideo<Type>,
+) {
+  const { stored, ...bytes } = video;
+
+  const kept =
+    stored === undefined
+      ? keepPictureBytes(transcript, [bytes])
+      : keepStoredPictures(transcript, [
+          {
+            stored,
+            sha256: sha256Hex(video.bytes),
+            contentType: video.contentType,
+            width: video.width,
+            height: video.height,
+          },
+        ]);
+
+  return Effect.map(
+    withAttachmentUploads(kept),
+    Option.flatMap(([one]) => Option.fromNullishOr(one)),
+  );
 }
 
 /** What a stop says of its recording beside the video: how long it ran, its caption, and where it stays until the next recording, where it does. */
@@ -90,7 +121,7 @@ export function keepRecording<Type extends RecordingType>(
 
   if (take.path !== undefined) told.path = take.path;
 
-  return keepConversationPicture(transcript, video).pipe(
+  return keptVideo(transcript, video).pipe(
     Effect.tapError(logStoreFailure),
     Effect.mapError(() => RECORDING_WORDS.UNKEPT),
     Effect.map(

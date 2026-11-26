@@ -27,7 +27,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import {
   Table,
   TableBody,
@@ -574,8 +573,6 @@ function DataTableRow<Row extends RowData>({
         press
           ? (event) => {
               if (onOwnControl(event)) return;
-              // Note that a row runs the card's width, so its press leaves its fill and rule standing.
-              pulsePress(event.currentTarget, PRESS_PULSE.FLUSH);
               press(row.original);
             }
           : undefined

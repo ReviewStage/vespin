@@ -257,7 +257,7 @@ test("a file change's update marks the lines Codex's diff changed, a file delete
   );
 
   const line = container.querySelector("summary") ?? assert.fail("the call is a fold's line");
-  assert.ok(line.textContent?.includes(`${CHECKOUT}/src/b.ts +1`), line.textContent ?? "");
+  assert.ok(line.textContent?.includes(`${CHECKOUT}/src/b.ts +1 more`), line.textContent ?? "");
   act(() => line.click());
 
   const marked = (kind: string) =>

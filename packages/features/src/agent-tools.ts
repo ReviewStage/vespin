@@ -115,6 +115,8 @@ export const AGENT_TOOL = {
   READ_CHAT_MESSAGES: "chat_read_messages",
   READ_CHAT_THREAD: "chat_read_thread",
   SEARCH_CHAT: "chat_search",
+  // A Manager's reaction added to a message of its chat, or taken off it.
+  REACT_CHAT: "chat_react",
   // The retired runtime's own durable pause, which a coding agent took before it checked on its checks or a deploy again.
   SLEEP: "sleep",
 } as const;

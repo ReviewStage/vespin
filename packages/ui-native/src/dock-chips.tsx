@@ -1,6 +1,6 @@
 // dock-chips.tsx -- what stands over an agent's composer as one row of glass capsules, each a count and a noun, a press opening what it holds, with the one it opened standing under the row.
 
-import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, ScrollView, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   accessibilityHint,
@@ -18,6 +18,7 @@ import {
 import type { ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { type Glyph, glyphImage, type MarkLook } from "./glyph.js";
+import { Text } from "./text.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

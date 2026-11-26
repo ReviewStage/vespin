@@ -12,6 +12,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSections, TaskSectionWrite } from "@repo/features/task-section-wire";
+import { applySectionWrite } from "@repo/features/task-section-writes";
 import {
   NO_TASK_SECTIONS,
   placeWrites,
@@ -32,16 +33,19 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { STATUS_TONE } from "@repo/ui";
+import { createTransaction } from "@tanstack/react-db";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { askKept, firstNotKept, KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { useMutationCalls } from "../mutation-calls.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import { pressRows, ROW_WRITE } from "../undo-stack.js";
 import {
   appStateIn,
   appStateQuery,
+  drawAhead,
   selectFixtureStaged,
   selectListedTasks,
 } from "../use-app-state.js";
@@ -113,6 +117,36 @@ const selectRepositoryPins = (state: AppStateSnapshot): readonly RepositoryPin[]
 /** The account's pins of agents on a plan, as the window lists them. */
 const selectTaskAgentPins = (state: AppStateSnapshot): readonly TaskAgentPin[] =>
   selectListedTasks(state).taskAgentPins ?? NO_TASK_AGENT_PINS;
+
+/** The document with `writes` laid over the sections its task list keeps, as main lays them once it takes them. */
+function withSectionWrites(
+  state: AppStateSnapshot,
+  writes: readonly TaskSectionWrite[],
+  now: number,
+): AppStateSnapshot {
+  const sections = writes.reduce(
+    (laid, write) => applySectionWrite(laid, write, now),
+    state.tasks.taskSections ?? NO_TASK_SECTIONS,
+  );
+
+  return { ...state, tasks: { ...state.tasks, taskSections: sections } };
+}
+
+/** The document with each agent's pin `moves` places standing at its new place. */
+function withAgentPinMoves(state: AppStateSnapshot, moves: readonly PinMove[]): AppStateSnapshot {
+  const placed = new Map(moves.flatMap((move) => (move.agent ? [[move.id, move.position]] : [])));
+  const pins = state.tasks.taskAgentPins;
+
+  if (placed.size === 0 || pins === undefined) return state;
+
+  const moved = pins.map((pin) => {
+    const position = placed.get(pin.agentId);
+
+    return position === undefined ? pin : { ...pin, pinPosition: position };
+  });
+
+  return { ...state, tasks: { ...state.tasks, taskAgentPins: moved } };
+}
 
 /** The pin and section writes a surface sends. */
 export interface PinWrites {
@@ -187,6 +221,7 @@ function usePinViews(): PinViews {
  */
 export function useSectionWrites(): PinWrites["onWriteSections"] {
   const toast = useToast();
+  const client = useQueryClient();
   const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const { mutateAsync: sendSections } = useMutationCalls(actMutation(ACT_KIND.TASKS_WRITE_SECTION));
 
@@ -194,7 +229,11 @@ export function useSectionWrites(): PinWrites["onWriteSections"] {
     const [first, ...rest] = writes;
 
     if (first === undefined || fixture) return;
-    askKept(sendSections({ writes: [first, ...rest] })).then((changed) => {
+    const asked = askKept(sendSections({ writes: [first, ...rest] }));
+    const now = Date.now();
+    // Note that the sections are drawn as written at once, since main's state reaches the window a few frames after it is asked.
+    drawAhead(client, (state) => withSectionWrites(state, writes, now), asked);
+    asked.then((changed) => {
       if (changed.kept) return;
       toast({
         replayUnmasked: true,
@@ -307,6 +346,7 @@ export function usePinWrites(typedNames: () => TaskNames): PinWrites {
   const agentPinDoors = useTaskRowDoors(ROW_WRITE.AGENT_PIN.kind, typedNames);
   const sendTaskPin = taskPinDoors.send;
   const sendAgentPin = agentPinDoors.send;
+  const collections = useTaskListCollections();
 
   const { mutateAsync: sendRepositoryPin } = useMutationCalls(
     actMutation(ACT_KIND.TASKS_PIN_REPOSITORY),
@@ -387,7 +427,22 @@ export function usePinWrites(typedNames: () => TaskNames): PinWrites {
       });
     });
 
-    Promise.all(asked).then((answers) => {
+    const settled = Promise.all(asked);
+    // Note that the pins are drawn at their new places at once, since main's state reaches the window a few frames after it is asked: an agent's over the document, a plan's over its row, each until its ask settles.
+    drawAhead(client, (state) => withAgentPinMoves(state, moves), settled);
+    const plans = moves.filter((move) => !move.agent && collections.tasks.has(move.id));
+
+    if (plans.length > 0) {
+      createTransaction({ mutationFn: () => settled }).mutate(() => {
+        for (const { id, position } of plans) {
+          collections.tasks.update(id, (task) => {
+            task.pinPosition = position;
+          });
+        }
+      });
+    }
+
+    settled.then((answers) => {
       const asked = answers.filter((answer) => answer !== undefined);
 
       if (asked.every((answer) => answer.kept)) return;

@@ -12,6 +12,7 @@ import {
 import { EXPERIMENT } from "@repo/settings";
 import {
   AVATAR_SIZE,
+  HarnessMark,
   HOVER_CARD_ROW_LOOK,
   HoverCardRow,
   RepositoryPicture,
@@ -25,7 +26,6 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useOfferedModels } from "../account-choices.js";
 import { DRAFT_PLACE, useDraftWriter } from "../composer-drafts.js";
-import { HarnessMark } from "../harness-marks.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { providerOf } from "./agent-model.js";

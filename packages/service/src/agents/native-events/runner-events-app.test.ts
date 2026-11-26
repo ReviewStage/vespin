@@ -7,6 +7,7 @@ import {
   APPROVAL_DECISION,
   RUNNER_END,
   RUNNER_EVENT,
+  RUNNER_KEPT_PICTURE_KEY,
   type RunnerEvent,
 } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
@@ -30,6 +31,7 @@ import {
   recordAgentRunnerToken,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries, holdsSession } from "@repo/database/models/claude-session-entries";
+import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import {
   listProviderKeyRows,
   type ProviderKeyRow,
@@ -56,8 +58,16 @@ import {
 import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { TURN_STATUS, valueFromJsonText, type WireRecord, type WireValue } from "@repo/wire";
+import {
+  isRecord,
+  isWireString,
+  TURN_STATUS,
+  valueFromJsonText,
+  type WireRecord,
+  type WireValue,
+} from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import { pngBytes } from "@repo/wire/testing";
 import {
   COMPACTED_PART,
   GOAL_EVENT,
@@ -80,6 +90,7 @@ import {
 import { type AfterResponse, keptAfterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import { NO_GITHUB } from "../../testing/github-app-fake.js";
 import { agentFailureOf } from "../coder-host/status.js";
 import { titleAgent } from "../coder-host/title.js";
@@ -95,6 +106,7 @@ import {
   type RunnerEventsOptions,
   runnerEventsApp,
 } from "./runner-events-app.js";
+import { RUNNER_PICTURES_PATH, runnerPicturesApp } from "./runner-pictures-app.js";
 
 /** The attributes an error reporter is handed beside the failure it reports. */
 type ReportedAttributes = Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"];
@@ -168,6 +180,41 @@ const standingWith = (
   });
 
 const standing = standingWith({});
+
+/** The Blob store the pictures route keeps its pictures in. */
+const blobs = memoryBlobStore();
+
+/** The pictures route over the test's store, as a function answers it: one picture's bytes posted under a bearer. */
+const keepingPictures = Effect.gen(function* () {
+  const services = Layer.mergeAll(
+    Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
+    Layer.succeed(Database, yield* Database),
+    Layer.succeed(Clock.Clock, yield* Clock.Clock),
+    blobs.layer,
+  );
+
+  const web = HttpRouter.toWebHandler(
+    runnerPicturesApp().pipe(HttpRouter.provideRequest(services)),
+    { disableLogger: true },
+  );
+
+  yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+
+  return (bearer: string, bytes: Uint8Array) =>
+    Effect.promise(async () => {
+      const response = await web.handler(
+        new Request(`${ORIGIN}${RUNNER_PICTURES_PATH}`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${bearer}` },
+          body: Buffer.from(bytes),
+        }),
+      );
+
+      const body: WireRecord = await response.json();
+
+      return { status: response.status, body };
+    });
+});
 
 /** What each harness's agent is started on. */
 const HARNESS = {
@@ -1649,6 +1696,102 @@ it.layer(SUITE)("the runner events route", (it) => {
           ["tool-Read", "output-available", "shot.png\n[image]"],
           ["tool-look_at_picture", "output-available", { status: "looked" }],
         ]);
+      }),
+  );
+
+  it.effect(
+    "a picture a runner keeps apart is kept beside its agent's transcript and named on the CLI call whose answer carried it, its words still standing in for it",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const keep = yield* keepingPictures;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const png = pngBytes(4, 3);
+
+        const kept = yield* keep(agent.bearer, png);
+        const picture = kept.body.picture;
+
+        assert.equal(kept.status, HOSTED_HTTP_STATUS.OK);
+        assert.ok(isRecord(picture) && isWireString(picture.id), "the answer names the picture");
+
+        assert.deepEqual(
+          { ...picture, id: undefined },
+          { id: undefined, mediaType: "image/png", width: 4, height: 3, byteCount: png.byteLength },
+        );
+
+        const stored = yield* readConversationPicture(agent.target.conversationId, picture.id);
+        assert.deepEqual(blobs.bytesOf(Option.getOrThrow(stored).body), png);
+
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "assistant",
+            message: {
+              id: "msg_1",
+              content: [{ type: "tool_use", id: "toolu_read", name: "Read", input: {} }],
+            },
+            ...top,
+          },
+          {
+            type: "user",
+            message: {
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: "toolu_read",
+                  content: [
+                    { type: "text", text: "shot.png" },
+                    { type: "image", [RUNNER_KEPT_PICTURE_KEY]: picture },
+                  ],
+                },
+              ],
+            },
+            ...top,
+          },
+        ];
+
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const events = messagesOfTurn.map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, events);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+        const read = rows.at(-1)?.parts.find((part) => part.type === "tool-Read");
+
+        assert.deepEqual(read === undefined ? undefined : drawn(read), [
+          "tool-Read",
+          "output-available",
+          "shot.png\n[image]",
+        ]);
+
+        assert.deepEqual(
+          read !== undefined && "resultProviderMetadata" in read
+            ? read.resultProviderMetadata
+            : undefined,
+          { app: { pictures: [picture] } },
+        );
+      }),
+  );
+
+  it.effect(
+    "bytes a runner posts as a picture that are none are answered why, and kept nowhere",
+    () =>
+      Effect.gen(function* () {
+        const keep = yield* keepingPictures;
+        const agent = yield* agentWithBearer;
+        const bytes = new TextEncoder().encode("<svg onload=alert(1)>");
+        const before = blobs.objects.size;
+
+        const answered = yield* keep(agent.bearer, bytes);
+
+        assert.deepEqual(answered, {
+          status: HOSTED_HTTP_STATUS.OK,
+          body: { omitted: "unsupported", byteCount: bytes.byteLength },
+        });
+
+        assert.equal(blobs.objects.size, before);
       }),
   );
 

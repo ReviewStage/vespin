@@ -63,7 +63,7 @@ export function onPhone(element: React.ReactNode): OnPhoneResult {
       press: (label, opener = document.body) => {
         const found = find(label);
         act(() => {
-          if ("items" in found || "panel" in found) return;
+          if ("items" in found || "panel" in found || "groups" in found) return;
 
           if ("onAsk" in found) found.onAsk(opener);
           else found.onSelect();

@@ -45,8 +45,8 @@ fi
 # `/effect`, `/client`, `/act-port`, `/service-layer`, `/agent-notices` and
 # `/task-code`, which the web app runs the host in a tab through, `/acts`,
 # `/app-state`, `/bridge` and `/contract`, which the panel reads, and
-# `/app-state-reads`, `/fixture-stage`, `/fixture-inbox`, `/follow-stream` and
-# `/task-code-remote`, which the Expo app runs the host on Hermes through
+# `/app-state-reads`, `/inbox-rows`, `/fixture-stage`, `/fixture-inbox`,
+# `/follow-stream` and `/task-code-remote`, which the Expo app runs the host on Hermes through
 # beside them (`packages/host/AGENTS.md`). Their graphs name no `node:` module, no `ws`, no
 # `electron`, no `@repo/host/node` or `@repo/features/node`, and no `Buffer` or `process` global, and
 # what needs one sits behind
@@ -88,6 +88,7 @@ node --input-type=module -e '
         "contract/index.ts",
         "task-code.ts",
         "app-state-reads.ts",
+        "inbox-rows.ts",
         "fixture-stage.ts",
         "fixture-inbox.ts",
         "follow-stream.ts",
@@ -178,6 +179,11 @@ pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-provider-marks.t
 # at work rendered from @repo/ui's ManagerFace into @repo/ui-native's assets;
 # --check fails if one drifted.
 pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-manager-faces.ts --check
+
+# The loopback sign-in page the desktop and the CLI serve is @repo/ui's
+# AuthPage, rendered with its sheet, face, and favicon into
+# @repo/credentials' generated module; --check fails if it drifted.
+pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/loopback-page.ts --check
 
 # The constants clients build /api/ URLs from are the other half of that
 # table: a path constant can outlive its route and nothing fails until

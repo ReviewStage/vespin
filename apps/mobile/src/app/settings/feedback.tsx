@@ -245,7 +245,9 @@ export default function FeedbackScreen() {
           accessibilityLabel={sending ? FEEDBACK_WORDS.SENDING : FEEDBACK_WORDS.SEND}
           disabled={sending || pictures.reading || message.trim() === ""}
           onPress={send}
-        />
+        >
+          {sending ? FEEDBACK_WORDS.SENDING : FEEDBACK_WORDS.SEND}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <ConfirmAsk
         title={DISCARD_WORDS.QUESTION}

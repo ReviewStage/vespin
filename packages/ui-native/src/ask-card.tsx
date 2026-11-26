@@ -7,7 +7,6 @@ import {
   Picker,
   Spacer,
   Button as SwiftUIButton,
-  Text,
   TextField,
   type TextFieldRef,
   Toggle,
@@ -46,6 +45,7 @@ import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { ProblemLine } from "./problem-line.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

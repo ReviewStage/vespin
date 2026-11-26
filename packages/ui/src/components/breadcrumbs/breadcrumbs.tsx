@@ -5,7 +5,6 @@ import {
   type ReactNode,
   useState,
 } from "react";
-import { pulseOnPress } from "../../press-pulse.js";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -249,7 +248,7 @@ function CrumbControl({
   const control =
     onPress === undefined ? (
       <BreadcrumbPage
-        className={`flex min-w-0 items-center gap-breadcrumb-gap ${LOOK[variant].words}`}
+        className={`flex min-w-0 items-center gap-icon-gap-regular ${LOOK[variant].words}`}
         aria-current={current}
       >
         <CrumbFace glyph={crumb.glyph} label={label} end={crumb.end} />
@@ -261,7 +260,7 @@ function CrumbControl({
         aria-current={current}
         aria-haspopup={crumb.popup}
         aria-expanded={crumb.popup === undefined ? undefined : crumb.expanded === true}
-        onClick={pulseOnPress((event) => onPress(event.currentTarget))}
+        onClick={(event) => onPress(event.currentTarget)}
         {...withContextMenu(crumb.menu?.contextMenu, {})}
         onKeyDown={crumb.menu?.keyMenu}
       >

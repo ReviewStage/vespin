@@ -93,6 +93,7 @@ export {
   type ComposerSendAs,
   DICTATION_PHASE,
   type DictationPhase,
+  wordsHandedBack,
 } from "./composer.js";
 
 export {
@@ -107,6 +108,8 @@ export {
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
+
+export type { ComposerSend } from "./composer-press.js";
 
 export {
   ConversationEntryRow,
@@ -328,12 +331,12 @@ export {
 export {
   BotTag,
   githubFace,
-  MARK_FACE,
-  type MarkFace,
+  type HeadReviewer,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,
   PullRequestHead,
+  type RowCount,
   WriteNoteRow,
 } from "./pull-request-page.js";
 
@@ -374,6 +377,8 @@ export {
   unassignedChoice,
 } from "./row-menu-model.js";
 
+export { RowPickContext } from "./row-open.js";
+
 export {
   agentPreview,
   latestStep,
@@ -407,6 +412,7 @@ export {
   type FormSpacing,
   LOADING_ROW_LOOK,
   LoadingRow,
+  MEMBER_ROW_LOOK,
   MemberRow,
   type MemberRowAct,
   MenuRow,

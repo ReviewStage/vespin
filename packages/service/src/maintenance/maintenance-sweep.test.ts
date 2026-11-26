@@ -37,6 +37,10 @@ interface Recorded {
   commandsAway: number[];
   machineAsks: number[];
   sandboxReleases: number[];
+  attachmentBlobs: number[];
+  attachmentsMoved: number[];
+  journalImages: number[];
+  transcriptMarks: number[];
 }
 
 function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
@@ -52,6 +56,10 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     commandsAway: [],
     machineAsks: [],
     sandboxReleases: [],
+    attachmentBlobs: [],
+    attachmentsMoved: [],
+    journalImages: [],
+    transcriptMarks: [],
   };
 
   const options: MaintenanceSweepOptions = {
@@ -124,6 +132,30 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
 
         return { due: 0, published: 0 };
       }),
+    purgeAttachmentBlobs: (now) =>
+      Effect.sync(() => {
+        recorded.attachmentBlobs.push(now);
+
+        return 0;
+      }),
+    moveAttachmentsToBlob: (now) =>
+      Effect.sync(() => {
+        recorded.attachmentsMoved.push(now);
+
+        return 0;
+      }),
+    moveJournalImages: (now) =>
+      Effect.sync(() => {
+        recorded.journalImages.push(now);
+
+        return 0;
+      }),
+    markTranscriptsForResume: (now) =>
+      Effect.sync(() => {
+        recorded.transcriptMarks.push(now);
+
+        return 0;
+      }),
     ...overrides,
   };
 
@@ -158,6 +190,10 @@ it.effect("a deployment without CRON_SECRET answers unavailable and sweeps nothi
       commandsAway: [],
       machineAsks: [],
       sandboxReleases: [],
+      attachmentBlobs: [],
+      attachmentsMoved: [],
+      journalImages: [],
+      transcriptMarks: [],
     });
   }),
 );
@@ -184,6 +220,10 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       commandsAway: [],
       machineAsks: [],
       sandboxReleases: [],
+      attachmentBlobs: [],
+      attachmentsMoved: [],
+      journalImages: [],
+      transcriptMarks: [],
     });
     assert.deepEqual(missing.recorded, {
       syncLog: [],
@@ -197,6 +237,10 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       commandsAway: [],
       machineAsks: [],
       sandboxReleases: [],
+      attachmentBlobs: [],
+      attachmentsMoved: [],
+      journalImages: [],
+      transcriptMarks: [],
     });
   }),
 );
@@ -224,6 +268,10 @@ it.effect(
         commandsAway: [instant],
         machineAsks: [instant],
         sandboxReleases: [instant],
+        attachmentBlobs: [instant],
+        attachmentsMoved: [instant],
+        journalImages: [instant],
+        transcriptMarks: [instant],
       });
     }),
 );

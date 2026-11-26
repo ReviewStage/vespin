@@ -13,6 +13,7 @@
  */
 
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import type { InboxFields } from "@repo/features/inbox-digest";
 import { isUnread } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
@@ -104,9 +105,9 @@ const INBOX_WRITE = {
 /** Presses of the inbox's writes: each reads its items as the window holds them, before the act is sent, for an entry its caller keeps once the service answers. */
 export interface InboxPresses {
   /** The items' reminders, set for `until` or cleared where it is null. */
-  readonly remind: (items: readonly InboxItem[], until: number | null) => PressedRows;
+  readonly remind: (items: readonly InboxFields[], until: number | null) => PressedRows;
   /** The items' read marks, read or unread as `unread` says. */
-  readonly mark: (items: readonly InboxItem[], unread: boolean) => PressedRows;
+  readonly mark: (items: readonly InboxFields[], unread: boolean) => PressedRows;
 }
 
 /** The inbox's presses, their items read off the window's document and their inverses sent on its own mutations. */

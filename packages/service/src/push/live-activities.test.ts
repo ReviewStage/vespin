@@ -489,8 +489,43 @@ it.layer(getTestDB())("a member's live activity", (it) => {
         assert.deepEqual(events(sender.sent), ["start"]);
 
         yield* TestClock.adjust("15 minutes");
+        // Note that the first turn is eight hours old by now, past what the activity shows, so a fresh one keeps it wanted.
+        yield* runningAgent(member, "Ship the refresh");
         yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
         assert.deepEqual(events(sender.sent), ["start", "start"]);
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
+  it.effect(
+    "a turn eight hours old leaves the activity, which ends once only such turns run",
+    () => {
+      const sender = recordingApnsSender();
+
+      return Effect.gen(function* () {
+        const member = yield* openUser;
+        const { phone } = yield* phoneOf(member);
+        yield* runningAgent(member, "Watch the release");
+        yield* TestClock.adjust("7 hours");
+        const fresh = yield* runningAgent(member, "Fix the refresh");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        const activityToken = token();
+        yield* registerLiveActivityToken(
+          member,
+          phone,
+          LIVE_ACTIVITY_TOKEN.ACTIVITY,
+          activityToken,
+        );
+        assert.equal(said(sender.sent[0]).aps["content-state"]?.running, 2);
+
+        yield* TestClock.adjust("1 hour");
+        yield* fresh.settle;
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        assert.deepEqual(events(sender.sent), ["start", "end"]);
+        const end = said(sender.sent[1]).aps;
+        assert.deepEqual(end["content-state"], { running: 0, waiting: 0, agents: [] });
+        // Note that it leaves the lock screen at once, since the turn still runs and "Done" would say it finished.
+        assert.equal(end["dismissal-date"], end.timestamp);
       }).pipe(Effect.provide(sender.layer));
     },
   );

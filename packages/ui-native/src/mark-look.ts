@@ -13,22 +13,20 @@ export const TILE_GLYPH_SCALE = 0.5;
 
 /**
  * The share of an agent's tile its harness's mark stands at. Note that it
- * is larger than a glyph's, because a mark is a picture with its own margins
- * (Clawd is wider than tall, so its square canvas leaves room above and
- * below it), and at a glyph's share it read as a speck at a row's size.
+ * is larger than a glyph's, because a mark is a picture with its own margins,
+ * and at a glyph's share it read as a speck at a row's size.
  */
 export const TILE_MARK_SCALE = 0.72;
 
 /**
  * The image sets each harness's mark is drawn from, which the app's config
- * writes into its asset catalog (`apps/mobile/app.config.ts`): Claude Code's
- * Clawd from the brand's path in its own clay, Codex's picture from the
- * files the panel serves, and Cursor's cube from the brand's path in the
- * row's ink, each as the panel's `HarnessMark` draws it.
+ * writes into its asset catalog (`apps/mobile/app.config.ts`) from the
+ * brand's paths: Claude's spark in its own clay, and OpenAI's blossom and
+ * Cursor's cube in the row's ink, each as the panel's `HarnessMark` draws it.
  */
 export const HARNESS_MARK_ASSET = {
-  [MODEL_PROVIDER.ANTHROPIC]: "ClawdMark",
-  [MODEL_PROVIDER.OPENAI]: "CodexMark",
+  [MODEL_PROVIDER.ANTHROPIC]: "ClaudeMark",
+  [MODEL_PROVIDER.OPENAI]: "OpenAIMark",
   [MODEL_PROVIDER.CURSOR]: "CursorMark",
 } as const satisfies Record<ModelProvider, string>;
 

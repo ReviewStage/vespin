@@ -119,7 +119,6 @@ import {
   claimRunSlackDelivery,
   type RunSlackDelivery,
 } from "@repo/database/models/automation-store";
-import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import { heardFromAnotherAccount } from "@repo/database/models/machine-command-store";
 import { readMessageByClientId } from "@repo/database/models/message-reads";
 import {
@@ -191,7 +190,9 @@ import { HostedEnvironment } from "../environment.js";
 import { workspaceRepository } from "../github/workspace-repository.js";
 import { afterResponse } from "../http/after-response.js";
 import { HOSTED_API_ERROR } from "../http/http.js";
+import { logStoreFailure } from "../http/store-failure.js";
 import { messageAsMember } from "../inbox/inbox-procedures.js";
+import { readConversationPictureBytes } from "../storage/attachment-bytes.js";
 import {
   SlackBot,
   type SlackMessageContent,
@@ -1213,7 +1214,11 @@ const shownUploads = Effect.fnUntraced(function* (
 
   for (const { picture, name, caption } of shown.slice(0, TURN_UPLOADS)) {
     if (picture === undefined) continue;
-    const kept = yield* readConversationPicture(conversationId, picture.id);
+
+    // A store that could not be read is written down by its own kind, a store the deployment names none of as an error.
+    const kept = yield* readConversationPictureBytes(conversationId, picture.id).pipe(
+      Effect.tapError(logStoreFailure),
+    );
 
     if (Option.isNone(kept)) continue;
     const file = `${name}.${MEDIA_EXTENSION[kept.value.contentType]}`;

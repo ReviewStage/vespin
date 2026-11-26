@@ -128,7 +128,7 @@ import {
   VisuallyHidden,
 } from "@repo/ui";
 import { actorName } from "@repo/ui/actor-model";
-import { renderingText } from "@repo/ui/github-html";
+import { renderedAddresses, renderingText } from "@repo/ui/github-html";
 import {
   ExternalLinkIcon,
   GLYPH,
@@ -305,7 +305,7 @@ import {
   useLandedThread,
   useWindowThreadReveal,
 } from "./thread-reveal.js";
-import { type GitHubPictureDrawer, GitHubWords, TranscriptWords } from "./transcript-blocks.js";
+import { type GitHubPictureDrawer, GitHubWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
 import { usePlaceStanding } from "./use-link-standing.js";
 import { linkPressOf, type OpenHere, OpenHereFirst, useOpenLink } from "./use-open-link.js";
@@ -1012,7 +1012,7 @@ function Anchored({ children }: { children: ReactNode }): ReactNode {
   return open === undefined ? children : <OpenHereFirst open={open}>{children}</OpenHereFirst>;
 }
 
-/** Words GitHub rendered, or, where it rendered none the read could carry, the words as markdown. */
+/** Words GitHub rendered, or, where it rendered none the read could carry, the words as markdown, drawn through the same steps (`GitHubWords`). */
 function EntryWords({
   entry,
   picture,
@@ -1030,7 +1030,7 @@ function EntryWords({
       <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
         <EntryPictures html={entry.html}>
           <Anchored>
-            <GitHubWords html={entry.html} picture={picture} taskTick={taskTick} />
+            <GitHubWords source={{ html: entry.html }} picture={picture} taskTick={taskTick} />
           </Anchored>
         </EntryPictures>
         {note}
@@ -1041,7 +1041,7 @@ function EntryWords({
   return entry.body === "" ? null : (
     <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
       <Anchored>
-        <TranscriptWords text={entry.body} />
+        <GitHubWords source={{ markdown: entry.body }} picture={picture} />
       </Anchored>
     </div>
   );
@@ -2201,12 +2201,37 @@ function DescriptionWords({
     <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
       <EntryPictures html={html}>
         <Anchored>
-          <GitHubWords html={html} picture={picture} taskTick={taskTick} />
+          <GitHubWords source={{ html }} picture={picture} taskTick={taskTick} />
         </Anchored>
       </EntryPictures>
       {note}
     </div>
   );
+}
+
+/**
+ * A block of the description the editor keeps as written, its HTML say,
+ * drawn as GitHub renders it (`GitHubWords`), so an HTML comment stands
+ * hidden and a bot's buttons as their pictures while the description is
+ * open; each picture read where GitHub's rendering reads it.
+ */
+function DescriptionRawBlock({
+  source,
+  html,
+  picture,
+}: {
+  source: string;
+  html: string;
+  picture: GitHubPictureDrawer;
+}): React.JSX.Element {
+  const addresses = useMemo(() => renderedAddresses(html), [html]);
+
+  const rendered = useCallback<GitHubPictureDrawer>(
+    (src, ...rest) => picture(addresses.get(src) ?? src, ...rest),
+    [addresses, picture],
+  );
+
+  return <GitHubWords source={{ markdown: source }} picture={rendered} />;
 }
 
 /** The description, as the pull request's read carries it, edited in place where the member may edit it (`./pull-request-description.tsx`), with the reactions it wears once the conversation's read, which carries them, lands; a skeleton while its read is out, and nothing where it failed, whose failure stands under the title. */
@@ -2253,6 +2278,9 @@ function DescriptionPart({
           pullRequest={part.value}
           body={part.value.body}
           drawn={words}
+          drawRaw={(source) => (
+            <DescriptionRawBlock source={source} html={part.value.html} picture={picture} />
+          )}
           onRead={onRead}
         />
       ) : (

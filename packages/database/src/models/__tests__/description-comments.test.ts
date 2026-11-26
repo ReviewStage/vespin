@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import {
-  AGENT_ATTACHMENT_TYPE,
-  AGENT_BOUNDS,
-  type AgentAttachment,
-} from "@repo/features/agent-wire";
+import { AGENT_ATTACHMENT_TYPE, AGENT_BOUNDS } from "@repo/features/agent-wire";
 import {
   DESCRIPTION_COMMENT_ACTION,
   DESCRIPTION_COMMENT_ACTOR,
@@ -22,7 +18,13 @@ import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
-import { getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
+import {
+  blobKeyOf,
+  getTestDB,
+  joinWorkspace,
+  openWorkspace,
+  storedAttachmentOf,
+} from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
 import { readDescriptionAttachment } from "../description-attachments.js";
 import {
@@ -33,6 +35,7 @@ import {
   moveDescriptionCommentAnchors,
   readDescriptionCommentFile,
   readDescriptionCommentThreads,
+  type StoredCommentFile,
   startDescriptionCommentThread,
 } from "../description-comments.js";
 import { writePage } from "../task-pages.js";
@@ -102,7 +105,11 @@ const member = (userId: string): DescriptionCommentWriterRef => ({
 });
 
 /** A thread started on the first place `words` stands in `text`. */
-function startOn(text: string, words: string, comment: string): DescriptionCommentStartRequest {
+function startOn(
+  text: string,
+  words: string,
+  comment: string,
+): Omit<DescriptionCommentStartRequest, "attachments"> {
   const from = text.indexOf(words);
   assert.ok(from >= 0);
 
@@ -722,12 +729,12 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
               {
                 name: "expiry.txt",
                 mediaType: AGENT_ATTACHMENT_TYPE.TEXT,
-                data: Buffer.from(notes).toString("base64"),
+                stored: storedAttachmentOf(notes.length),
               },
               {
                 name: "flow.pdf",
                 mediaType: AGENT_ATTACHMENT_TYPE.PDF,
-                data: Buffer.from("%PDF-1.4\n").toString("base64"),
+                stored: storedAttachmentOf(9),
               },
             ],
           }),
@@ -756,7 +763,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
 
         const kept = Option.getOrThrow(yield* readDescriptionCommentFile(owner, taskId, fileId));
         assert.equal(kept.contentType, AGENT_ATTACHMENT_TYPE.TEXT);
-        assert.deepEqual([...kept.bytes], [...notes]);
+        assert.equal(blobKeyOf(kept.body), `attachments/${fileId}`);
         assert.ok(Option.isNone(yield* readDescriptionCommentFile(outsider, taskId, fileId)));
         // A comment's file is no picture of the description's.
         assert.ok(Option.isNone(yield* readDescriptionAttachment(owner, taskId, fileId)));
@@ -779,10 +786,10 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
 
-        const text = (name: string) => ({
+        const text = (name: string): StoredCommentFile => ({
           name,
           mediaType: AGENT_ATTACHMENT_TYPE.TEXT,
-          data: Buffer.from(`${name}\n`).toString("base64"),
+          stored: storedAttachmentOf(name.length + 1),
         });
 
         const started = threadOf(
@@ -800,7 +807,10 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
         const idOf = (thread: DescriptionCommentThread, name: string) =>
           thread.entries[0]?.files?.find((file) => file.name === name)?.attachmentId ?? "";
 
-        const edit = (words: string, files: { keep?: string[]; attachments?: AgentAttachment[] }) =>
+        const edit = (
+          words: string,
+          files: { keep?: string[]; attachments?: StoredCommentFile[] },
+        ) =>
           actOnDescriptionCommentThread(member(teammate), taskId, started.id, {
             action: DESCRIPTION_COMMENT_ACTION.EDIT,
             entry,

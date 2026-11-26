@@ -6,7 +6,6 @@ import {
   useImperativeHandle,
   useLayoutEffect,
   useRef,
-  useState,
 } from "react";
 import { isComposingKey } from "../../composing-key.js";
 import { said } from "../../said.js";
@@ -19,6 +18,7 @@ import {
   DisclosureScope,
   useDisclosureFold,
 } from "../disclosure/disclosure.js";
+import { GLYPH_PLACE_CONTROL } from "../glyph-slot/glyph-slot.js";
 import { INLINE_EDIT_FIELD, INLINE_EDIT_LOOK } from "../inline-edit/inline-edit.js";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { NAV_COUNT_SHOWN, type NavCount } from "../nav-item/nav-item.js";
@@ -41,11 +41,8 @@ import { Tooltip } from "../tooltip/hint.js";
  *
  * A group that folds (`fold`) is pressed on its head, which says whether the
  * group stands open in `aria-expanded`. The fold is a Disclosure's
- * (`useDisclosureFold`): a press that opens unrolls the rows as they fade in,
- * a press that closes rolls them up as they fade, the rows it last drew held
- * through that exit though its holder hands none once folded, and the
- * chevron is the Disclosure's own, turning on the one turn every fold makes
- * (disclosure.css), all timed on the motion tokens reduced motion zeroes. The
+ * (`useDisclosureFold`): a press shows or hides the rows at once, and the
+ * chevron is the Disclosure's own, standing turned while open. The
  * glyph gives way to the chevron while the head is hovered or has the
  * keyboard; a head with no glyph draws its chevron at rest, so a fold always
  * says it folds. A fold its holder keeps, as the sidebar keeps which groups
@@ -74,8 +71,7 @@ import { Tooltip } from "../tooltip/hint.js";
  * label alone does not say the whole of it hangs a hint (`tooltip`), both
  * over the head's lead and never over the rows under it. A group that folds
  * may leave rows standing under its head while it is folded (`standing`), as
- * the sidebar leaves the open task, drawn once the fold's fade is done, and
- * out of the way while the rows it was keeping come back.
+ * the sidebar leaves the open task, drawn in the rows' place while folded.
  *
  * A head may stick to the top of its scroller while its rows scroll beneath
  * it (`head`), or stand nowhere, its rows alone and folding nothing, as an
@@ -229,14 +225,25 @@ const LEAD_HEIGHT = {
   [GROUP_LOOK.SECTION]: "h-control",
 } as const satisfies Record<GroupLook, string>;
 
-/** An editing head's lead, laid out as a head's lead with nothing to press, and its field, bare in the group role's type in the label's place. */
+/**
+ * An editing head's lead, laid out as a head's lead with nothing to press,
+ * as tall as the place its head holds (`EDITING_PLACE`) and in the label's
+ * ink, and its field, bare in the group role's type in the label's place.
+ * The glyph's control stands in the glyph's own footprint
+ * (`GLYPH_PLACE_CONTROL`), so the field stands where the label stood.
+ */
 const EDITOR = {
-  LEAD: "ui-group-header-editor-lead flex h-control min-w-0 flex-auto items-center gap-icon-gap px-row-inset text-group font-group text-foreground",
-  /* The glyph's control is a compact button, a step wider than the glyph, so it overhangs the cell by that step and the field stands where the label stood. Note that it is let out of a button's own cap at its holder's width, which would squeeze it to the cell and push its glyph off the glyph's place by its edge. */
-  GLYPH:
-    "ui-group-header-editor-glyph grid min-h-control-icon min-w-control-icon flex-none place-items-center *:-m-ui-4 *:max-w-none",
+  LEAD: "ui-group-header-editor-lead flex min-w-0 flex-auto items-center self-stretch gap-icon-gap px-row-inset text-group font-group text-muted-foreground",
+  GLYPH: `ui-group-header-editor-glyph grid min-h-control-icon min-w-control-icon flex-none place-items-center ${GLYPH_PLACE_CONTROL}`,
   FIELD: `${INLINE_EDIT_FIELD} data-[look=well]:min-w-0 data-[look=well]:flex-auto`,
 } as const;
+
+/**
+ * Where a head being named stands: the head's own place, as tall as its
+ * lead in its look, sticking and spanning the grid as the head does, so
+ * nothing above or below it moves as the edit opens and ends.
+ */
+const EDITING_PLACE = "ui-group-header-editing flex min-w-0 *:flex-auto";
 
 /** A head that folds is pressed as a row is, so it wears a row's hover; and it gives the one press cursor, the Mac's arrow on the desktop as a Mac's list does, the hand on the web. */
 const PRESSED_AS_ROW = {
@@ -511,7 +518,7 @@ export function GroupHeader({
   fold?: GroupFold | undefined;
   /** How the head reads: as a row, or as a heading set apart over the rows, the sidebar's; a row unless it says so. */
   look?: GroupLook;
-  /** What a folded group leaves drawn under its head once its rows have faded; nothing is drawn while the group stands open. */
+  /** What a folded group leaves drawn under its head in its rows' place; nothing is drawn while the group stands open. */
   standing?: ReactNode;
   /** The head's hover hint, where the label alone does not say the whole of it. */
   tooltip?: string | undefined;
@@ -538,18 +545,13 @@ export function GroupHeader({
   // Note that a group with no head has nothing to press, so it folds nothing.
   const folds = fold !== undefined && headed;
 
-  const { state, details } = useDisclosureFold(
+  const { state } = useDisclosureFold(
     fold !== undefined && "defaultOpen" in fold ? fold.defaultOpen : true,
     fold !== undefined && "open" in fold ? fold : undefined,
   );
 
-  // Note that the rows a fold last drew are held through its exit, because a holder that hands none the moment it folds would take them out before they fade.
-  const [drewn, setDrewn] = useState(children);
-
-  if (folds && state.open && drewn !== children) setDrewn(children);
-  const body = folds && !state.open ? drewn : children;
   // Note that a group with no rows draws no body, so its fold names none.
-  const rows = (!folds || state.drawn) && said(body);
+  const rows = (!folds || state.open) && said(children);
   const Heading = heading;
 
   // Note that a narrow column counts an open group only under the pointer, because its head has no room to spare for a figure at rest.
@@ -609,11 +611,19 @@ export function GroupHeader({
         data-look={look === GROUP_LOOK.HEADING ? look : undefined}
         data-head={head === GROUP_HEAD.STICKS ? head : undefined}
         data-rows={subgrid ? rowsStand : undefined}
-        data-disclosure={folds ? details["data-disclosure"] : undefined}
       >
         {/* Note that the head is the root's first child whether or not it stands, so its rows stay the same element as it comes and goes. */}
         {!headed ? null : said(editing) ? (
-          editing
+          <div
+            className={[
+              EDITING_PLACE,
+              LEAD_HEIGHT[look],
+              head === GROUP_HEAD.STICKS ? STICKS : "",
+              subgrid ? SUBGRID.HEAD : "",
+            ].join(" ")}
+          >
+            {editing}
+          </div>
         ) : (
           <div
             className={[
@@ -633,19 +643,17 @@ export function GroupHeader({
             ) : null}
           </div>
         )}
-        {/* Note that the rows are the root's own child, the body disclosure.css unrolls and fades. */}
+        {/* Note that the rows are the root's own child, the fold's body. */}
         {rows ? (
           <div
-            ref={folds ? state.body : undefined}
             id={rowsId}
             className={`ui-disclosure-body ${subgrid ? SUBGRID.BODY : ""}`}
             data-inset="none"
-            inert={folds && state.leaving}
           >
-            {body}
+            {children}
           </div>
         ) : null}
-        {folds && !state.drawn && said(standing) ? standing : null}
+        {folds && !state.open && said(standing) ? standing : null}
       </div>
     </DisclosureScope>
   );

@@ -134,6 +134,7 @@ import {
   type OfferedModel,
   validateModelChoice,
 } from "../providers/model-catalog.js";
+import type { BlobStoreFailure } from "../storage/blob-store.js";
 import { taskChangeAsked, taskChangeSettled, taskChangeWritten } from "../tasks/task-change.js";
 import { followerReadingsOf } from "../tasks/task-following.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
@@ -1947,7 +1948,7 @@ const startedReading = (agent: Agent, offered: readonly OfferedModel[], ownTask:
 
 /** A store that could not be read is the one refusal, logged for the operator and said to the model. */
 export const orStoreRefusal = <R>(
-  effect: Effect.Effect<WireRecord, StoreFailure, R>,
+  effect: Effect.Effect<WireRecord, StoreFailure | BlobStoreFailure, R>,
 ): Effect.Effect<WireRecord, never, R> =>
   Effect.catch(effect, (failure) =>
     Effect.as(logStoreFailure(failure), agentToolRejected(AGENT_TOOL_REFUSAL.STORE)),
@@ -2689,11 +2690,10 @@ const runsOnOfStart = Effect.fnUntraced(function* (
 });
 
 /**
- * The account a start makes its agent under. A Manager's fresh start, where
- * its workspace has Managers act for whoever asked on, is the account of the
- * member whose line opened the Manager's turn under way (`turnAsker`), so
- * their payer, machines, skills, and GitHub identity carry the work and the
- * agent is theirs; a turn no member opened has no asker, and the Manager's
+ * The account a start makes its agent under. A Manager's fresh start is the
+ * account of the member whose line opened the Manager's turn under way
+ * (`turnAsker`), so their payer, machines, skills, and GitHub identity carry
+ * the work and the agent is theirs; a turn no member opened has no asker, and the Manager's
  * owner stands in. Every other start is the caller's own: a coding agent on
  * a task acts for its starter, and a start from another agent lands where
  * that agent stands, which the caller reads as itself.
@@ -2704,10 +2704,6 @@ const startAccountOf = (caller: AgentCaller, from: AgentStartFrom | undefined) =
     const owner = callerUserId(caller);
 
     if (calling?.kind !== AGENT_KIND.MANAGER || from !== undefined) return owner;
-
-    if (!(yield* experimentOnIn(calling.organizationId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER))) {
-      return owner;
-    }
 
     return yield* turnAsker({ userId: calling.userId, conversationId: calling.conversationId });
   });

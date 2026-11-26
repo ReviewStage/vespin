@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { cn } from "../../cn.js";
-import { pulseOnPress } from "../../press-pulse.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { cappedCount } from "../count-figure/count-figure.js";
 
@@ -105,7 +104,7 @@ export function BarItem({
       aria-expanded={expanded}
       inert={inert}
       onPointerDown={onPointerDown}
-      onClick={pulseOnPress(onPress)}
+      onClick={onPress}
     >
       <span className="relative flex [&_svg]:size-ui-20" aria-hidden="true">
         {icon}
@@ -155,7 +154,7 @@ export function BarAction({
       className={BAR_ACTION}
       aria-label={label}
       disabled={disabled}
-      onClick={pulseOnPress(onPress)}
+      onClick={onPress}
     >
       <span className="flex" aria-hidden="true">
         {icon}

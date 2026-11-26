@@ -13,6 +13,7 @@ import {
   type PlanStatus,
 } from "./native-moments.js";
 import {
+  blocksAnswer,
   FAILURE_CHARS,
   PICTURE_STAND_IN,
   runnerMoments,
@@ -238,10 +239,6 @@ const readImageView = Schema.decodeUnknownOption(
   Schema.Struct({ ...ITEM_FIELDS, path: Schema.String }),
 );
 
-const readTextBlock = Schema.decodeUnknownOption(
-  Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
-);
-
 const readPlan = Schema.decodeUnknownOption(
   Schema.Struct({
     explanation: Schema.optionalKey(Schema.NullOr(Schema.String)),
@@ -314,25 +311,6 @@ interface Answered extends Call {
   readonly failed: boolean;
 }
 
-/**
- * An MCP result's text: our own tool's first text block alone
- * (`workspaceAnswerText`), so the JSON the tool answered reads whole; any
- * other server's text blocks joined, a stand-in taking the place of a
- * picture's bytes.
- */
-function mcpAnswerText(content: readonly WireValue[], workspaceTool: boolean): string {
-  if (workspaceTool) return workspaceAnswerText(content);
-
-  return content
-    .flatMap((block) =>
-      Option.match(readTextBlock(block), {
-        onSome: ({ text }) => [text],
-        onNone: () => [PICTURE_STAND_IN],
-      }),
-    )
-    .join("\n");
-}
-
 type StoredMcpCallResult = { readonly name: string; readonly input: UnparsedWireValue };
 
 /**
@@ -361,25 +339,27 @@ function mcpCall(item: WireValue): Option.Option<Answered> {
     const workspaceTool = WORKSPACE_MCP_SERVER_NAMES.has(call.server);
     const args = call.arguments ?? {};
 
-    const text =
-      call.error?.message ??
-      (call.result === undefined || call.result === null
-        ? ""
-        : mcpAnswerText(call.result.content, workspaceTool));
-
+    const content = call.result?.content ?? [];
     const stored = storedMcpCall(call, args);
+    const failure = call.error?.message;
+    const read = blocksAnswer(content);
+
+    // Our own tool's answer is its first text block alone, so the JSON it answered reads whole; any other's blocks read with their pictures.
+    const answer: Answered["answer"] = workspaceTool
+      ? {
+          workspaceTool: true,
+          name: stored.name,
+          text: failure ?? workspaceAnswerText(content),
+          watched: watchedOfMeta(call.result?._meta),
+        }
+      : failure === undefined
+        ? { workspaceTool: false, text: read.text, output: read.text, pictures: read.pictures }
+        : { workspaceTool: false, text: failure, output: failure, pictures: read.pictures };
 
     return {
       callId: call.id,
       ...stored,
-      answer: workspaceTool
-        ? {
-            workspaceTool: true,
-            name: stored.name,
-            text,
-            watched: watchedOfMeta(call.result?._meta),
-          }
-        : { workspaceTool: false, text, output: text },
+      answer,
       failed:
         call.error !== undefined && call.error !== null ? true : FAILED_STATUSES.has(call.status),
     };

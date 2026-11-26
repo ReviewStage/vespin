@@ -2144,7 +2144,6 @@ export function AgentChangesTab({
           over={room.docked ? undefined : room.over}
           narrow={room.narrow}
           pane={room.beside.pane}
-          leaving={room.beside.leaving}
           width={tree.width?.width}
           edge={edge}
         />
@@ -2339,7 +2338,6 @@ export function TurnChangesTab({
           over={room.docked ? undefined : room.over}
           narrow={room.narrow}
           pane={room.beside.pane}
-          leaving={room.beside.leaving}
           width={tree.width?.width}
           edge={edge}
         />

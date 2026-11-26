@@ -7,7 +7,6 @@ import {
   RNHostView,
   Spacer,
   Button as SwiftUIButton,
-  Text,
   VStack,
   ZStack,
 } from "@expo/ui/swift-ui";
@@ -81,6 +80,7 @@ import { type PageFollowing, PageHeader, type StandingMenus } from "./page-heade
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
 import type { RowPreview } from "./row-preview-model.js";
+import { Text } from "./text.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

@@ -440,7 +440,8 @@ export interface CommentReply {
   /** The pictures the reply carries, attached from Photos, as the panel's comment field attaches files. */
   readonly pictures: AttachedPictures;
   readonly sendable: boolean;
-  readonly send: () => void;
+  /** Sends the words Send took out of the field, answering whether it took them (`ComposerSend`). */
+  readonly send: (typed: string) => boolean;
   readonly note: string | undefined;
 }
 
@@ -490,29 +491,28 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
   const pictures = useAttachedPictures(setNote);
 
   return useMemo(() => {
-    const send = () => {
-      const kept = words.trim();
+    const send = (typed: string): boolean => {
+      const kept = typed.trim();
 
       // Note that a picture still being read holds the send back, since it would land in the field after the reply had gone without it.
-      if (kept === "" || pictures.reading) return;
+      if (kept === "" || pictures.reading) return false;
 
       // A picture past a bound holds the send back, saying why, as an agent's composer does.
       if (pictures.refusal !== undefined) {
         setNote(pictures.refusal);
         buzz(BUZZ.WARNING);
 
-        return;
+        return false;
       }
 
       const files = pictures.files ?? [];
       const again = sameSend(sent.current, kept, files) ? sent.current : undefined;
       const key = again?.key ?? randomUUID();
 
-      if (out.current.has(key)) return;
+      if (out.current.has(key)) return false;
       out.current.add(key);
       sent.current = { words: kept, files, key };
       setNote(undefined);
-      setWords("");
       // The pictures go with the words, and come back with them where the reply is refused.
       const carried = pictures.take();
 
@@ -548,6 +548,8 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
           if (went && sent.current?.key === key) sent.current = undefined;
         })
         .finally(() => out.current.delete(key));
+
+      return true;
     };
 
     return {
@@ -628,7 +630,11 @@ export interface CommentStart {
   /** The pictures the thread's first comment carries, attached from Photos. */
   readonly pictures: AttachedPictures;
   readonly sendable: boolean;
-  readonly send: (refused: (start: RefusedStart, noticed: boolean) => void) => string | undefined;
+  /** Starts the thread on the words Send took out of the field, answering its id, or none where it did not take them. */
+  readonly send: (
+    typed: string,
+    refused: (start: RefusedStart, noticed: boolean) => void,
+  ) => string | undefined;
   readonly note: string | undefined;
 }
 
@@ -736,8 +742,11 @@ export function useCommentStart(
   );
 
   return useMemo(() => {
-    const send = (refused: (start: RefusedStart, noticed: boolean) => void): string | undefined => {
-      const kept = words.trim();
+    const send = (
+      typed: string,
+      refused: (start: RefusedStart, noticed: boolean) => void,
+    ): string | undefined => {
+      const kept = typed.trim();
 
       // Note that a picture still being read holds the start back, since it would land after the thread had gone without it.
       if (

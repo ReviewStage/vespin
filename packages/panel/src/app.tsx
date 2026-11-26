@@ -20,7 +20,7 @@ import {
   type SettingsView,
 } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { Announcer, cssCustomProperties, RetryOffered, TimeTicks } from "@repo/ui";
+import { Announcer, cssCustomProperties, TimeTicks } from "@repo/ui";
 import { playCompletionSound } from "@repo/ui/completion-sound";
 import { useLinkOpener } from "@repo/ui/held-link";
 import { LINK_ROUTE, linkRoute } from "@repo/ui/link-route";
@@ -33,6 +33,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -49,7 +50,7 @@ import { useAutomationsRoute } from "./automations-route.js";
 import { useBillingShown, useOpenTaskBilling } from "./billing.js";
 import { StandingCallProvider } from "./call/standing-call.js";
 import { useDraftsOwner } from "./composer-drafts.js";
-import { useConnected } from "./connection.js";
+import { ServiceReachedByWindow } from "./connection.js";
 import { CommandPalette } from "./desktop/command-palette.js";
 import { DesktopShell } from "./desktop/desktop-shell.js";
 import { ListedAutomations } from "./desktop/listed-automations.js";
@@ -309,6 +310,23 @@ export function App(): React.JSX.Element {
       </OpenAiKeyProvider>
     </TimeTicks>
   );
+}
+
+/**
+ * Says a capture run on the body as well as on the stage, so a hint, a menu,
+ * the palette, or a toast drawn at the body's end beside the stage holds
+ * still too (base.css). Note that the body says it rather than being asked
+ * with `:has()` whether the stage does, because a `:has()` on the body is
+ * checked again, by a walk of the whole window, whenever an element is added
+ * anywhere in it.
+ */
+function useCaptureOnBody(capture: boolean): void {
+  useLayoutEffect(() => {
+    if (!capture) return undefined;
+    document.body.setAttribute("data-capture", "true");
+
+    return () => document.body.removeAttribute("data-capture");
+  }, [capture]);
 }
 
 function AppWindow(): React.JSX.Element {
@@ -953,8 +971,6 @@ function AppWindow(): React.JSX.Element {
     ],
   );
 
-  const connected = useConnected();
-
   // A narrow room's page of Settings is a step after its list, which its way back steps back to (`places/narrow-backs.ts`).
   const settingsBack = useSteadyDoor(() =>
     backs.list(ROUTED_PLACE.SETTINGS, settingsPlace.listAddress, settingsPlace.list),
@@ -967,6 +983,9 @@ function AppWindow(): React.JSX.Element {
 
   // Nothing is drawn over a state the window has not been told, nor over a
   // runtime that could not answer for the settings every row reads.
+  // The body says a capture run as the stage does, for what is drawn at the body's end beside the stage (base.css).
+  useCaptureOnBody(run?.captureMode === true);
+
   if (run === undefined || !settingsHeld) return <div />;
 
   return (
@@ -985,8 +1004,8 @@ function AppWindow(): React.JSX.Element {
                         <ListedAutomations tasks={tasks}>
                           {/* A maintainer's sign-in as the member, said above the stage on the web. */}
                           <ViewingAs />
-                          {/* A failure offers no Retry while the app does not reach the service, whose reads start again once it does. */}
-                          <RetryOffered value={connected}>
+                          {/* A failure offers no Retry while the app does not reach the service, and a read that failed for it says nothing beside the Offline mark; its reads start again once it does. */}
+                          <ServiceReachedByWindow>
                             <div
                               ref={stage.ref}
                               className="app-stage"
@@ -1038,14 +1057,17 @@ function AppWindow(): React.JSX.Element {
                               {/* The plans, the open plan's agents and files, every command the
           window can run now, and the settings, behind ⌘K, past the sign-in
           alone. */}
-                              <SettingsPalette
-                                available={!accountGated}
-                                tab={tab}
-                                onTabChange={changeTab}
-                                tasks={tasks}
-                                links={copyLink}
-                                doors={settingsDoors}
-                              />
+                              {/* In the stage's room, which a phone draws as its Search tab's page. */}
+                              <ShellRoomContext value={room}>
+                                <SettingsPalette
+                                  available={!accountGated}
+                                  tab={tab}
+                                  onTabChange={changeTab}
+                                  tasks={tasks}
+                                  links={copyLink}
+                                  doors={settingsDoors}
+                                />
+                              </ShellRoomContext>
                               {/* The screens stood on last, Back's steps across every task, behind ⌃Tab, on a desktop app past the sign-in; in the stage's room, which names a phone's places as it stands them. */}
                               <ShellRoomContext value={room}>
                                 <TabSwitcher
@@ -1055,7 +1077,7 @@ function AppWindow(): React.JSX.Element {
                                 />
                               </ShellRoomContext>
                             </div>
-                          </RetryOffered>
+                          </ServiceReachedByWindow>
                         </ListedAutomations>
                       </GitHubConnectProvider>
                     </RepositoryRemedyProvider>
