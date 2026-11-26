@@ -10,8 +10,8 @@
 // widest reading and reads hours and minutes once the screen dims. The
 // count stands by the panel's working mark while agents work, held still
 // since a Live Activity runs no animation of its own (`WorkingMark`), and
-// by its done mark once none does, centered then, since nothing stands
-// beside it, in the working blue or the done green, and copper
+// by its done mark once none does, on the Lock Screen in the same row and
+// place, in the working blue or the done green, and copper
 // (`Attention`) marks only what wants the member: the asks waiting, the
 // compact presentation's Inbox glyph, and the keyline while one waits. Nothing in it is a link, so no row or region opens a page of
 // the app: a person swipes it away more often than they open it, and a
@@ -98,21 +98,18 @@ struct ActivityContentView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(8)
     default:
-      if state.running > 0 {
-        VStack(alignment: .leading, spacing: 10) {
-          HStack {
-            CountLabel(state: state)
-            Spacer()
-            WaitingLabel(state: state)
-          }
+      // Note that once none works the header stands alone, in the same row as while agents work, so the done mark and the asks stand where the count and the asks stood, centered top to bottom by the even padding.
+      VStack(alignment: .leading, spacing: 10) {
+        HStack {
+          CountLabel(state: state)
+          Spacer()
+          WaitingLabel(state: state)
+        }
+        if state.running > 0 {
           AgentList(state: state)
         }
-        .padding(16)
-      } else {
-        DoneHeader(state: state)
-          .frame(maxWidth: .infinity, alignment: .center)
-          .padding(16)
       }
+      .padding(16)
     }
   }
 }
@@ -134,7 +131,7 @@ struct CountLabel: View {
   }
 }
 
-/// The header once none works: the done mark and its words, with any ask still waiting beside them, centered, since no rows stand under it.
+/// The expanded island's header once none works: the done mark and its words, with any ask still waiting beside them, in the island's center, since no rows stand under it.
 struct DoneHeader: View {
   let state: AgentsActivityAttributes.ContentState
 
