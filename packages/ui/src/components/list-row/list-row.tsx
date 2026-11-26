@@ -27,6 +27,7 @@ import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { CARD_CORNER, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
+import { GLYPH_PLACE_CONTROL } from "../glyph-slot/glyph-slot.js";
 import { withContextMenu } from "../menu/context-menu.js";
 import { useLinkAddress } from "../menu/link-address.js";
 import { rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
@@ -71,7 +72,9 @@ export type { ListSelection } from "../selection/list-selection.js";
  * inside it, because a button holds no button: each is a control of its own,
  * reached by Tab after the row and pressed without pressing the row. A row
  * that opens nothing is no control at all. The leading mark is decoration,
- * hidden from a reader, since the title says what the row is. The row owns
+ * hidden from a reader, since the title says what the row is, unless it is
+ * a control of its own (`leadingControl`), as a Manager's face well is while
+ * a row that opens nothing is renamed. The row owns
  * every length in it and takes no class or style.
  *
  * A keyboard-driven list (arrows or j/k between rows, a key to act on the
@@ -416,14 +419,14 @@ const MAIN_BUTTON_CLASS = `${MAIN_CLASS} cursor-press disabled:cursor-default`;
 /**
  * The leading mark, muted, a glyph at a control's glyph size and an avatar
  * at its own; a provider's mark keeps the text's color, a brand mark being
- * the provider's identity, not a muted glyph.
+ * the provider's identity, not a muted glyph. A control that takes the
+ * glyph's place while the row is edited stands in the glyph's own footprint
+ * (`GLYPH_PLACE_CONTROL`), so the row's words stay where they stood.
  */
-const LEADING_CLASS =
-  "ui-list-row-leading col-[leading] me-icon-gap inline-flex text-muted-foreground [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon";
+const LEADING_CLASS = `ui-list-row-leading col-[leading] me-icon-gap inline-flex text-muted-foreground [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon ${GLYPH_PLACE_CONTROL}`;
 
 /** The leading mark of a row in a tone (`tone`), in the tone's ink rather than muted. */
-const LEADING_TONED_CLASS =
-  "ui-list-row-leading col-[leading] me-icon-gap inline-flex text-tone-ink [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon";
+const LEADING_TONED_CLASS = `ui-list-row-leading col-[leading] me-icon-gap inline-flex text-tone-ink [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon ${GLYPH_PLACE_CONTROL}`;
 
 /** The row's end, its metadata and its chevron, at the end of its track, so it lines up with the acts that share it. */
 const END_CLASS =
@@ -646,6 +649,7 @@ export function List({
 /** One row of a `List`: `title` over `description`, `meta` at its end, `actions` beside it. */
 export function ListRow({
   leading,
+  leadingControl = false,
   title,
   titleReplayMasked = false,
   description,
@@ -696,6 +700,8 @@ export function ListRow({
 }: {
   /** A mark before the title (an avatar, a status's glyph), drawn as decoration. */
   leading?: ReactNode;
+  /** Whether `leading` is a control of its own, which a reader reaches, rather than decoration: a face well in a row being renamed, which opens nothing meanwhile. */
+  leadingControl?: boolean | undefined;
   /** What the row is, which its name opens with. */
   title: ReactNode;
   /** Whether the title names a person's thing, a task's or a repository's name, kept masked in a screen recording even where the row stands under `ReplayUnmask`; a title in words stays measured as words. */
@@ -978,7 +984,7 @@ export function ListRow({
       {said(mark) ? (
         <span
           className={tone === undefined ? LEADING_CLASS : LEADING_TONED_CLASS}
-          aria-hidden="true"
+          aria-hidden={leadingControl && checked === undefined ? undefined : "true"}
         >
           {mark}
         </span>

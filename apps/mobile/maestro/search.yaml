@@ -1,4 +1,4 @@
-# search.yaml -- the Search tab: what it says before anything is typed, the tasks, Inbox items, and agents a query finds, each in its own section, a task opened from them, what it says where nothing matches, and the task opened standing under Recent once nothing is typed.
+# search.yaml -- the Search tab: what it says before anything is typed, a place a query finds as a "Go to …" command, the tasks, Inbox items, and agents a query finds, each in its own section, a task opened from them, what it says where nothing matches, and the task opened standing under Recent once nothing is typed.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -40,6 +40,13 @@ appId: dev.vespin.ios
 - inputText: "zzqx"
 - assertVisible: "No results for “zzqx”"
 - takeScreenshot: search-no-results
+# A place found once something is typed stands under Commands as "Go to …",
+# as ⌘K finds it, where Go to stood before anything was typed.
+- eraseText
+- inputText: "settings"
+- assertVisible: "Commands"
+- assertVisible: "Go to settings"
+- takeScreenshot: search-go-to
 # The task "Ledger rounding" leads Tasks, its agent "Fix ledger rounding"
 # stands under Agents, and a task the words do not name is left out.
 - eraseText

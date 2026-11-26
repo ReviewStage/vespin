@@ -87,3 +87,18 @@ export const JOURNAL_IMAGE_MOVE = {
   /** How long a sweep holds the rows it takes: past the longest any sweep may run, so a row is only taken again from one that ended. */
   CLAIM_MILLIS: 2 * MAINTENANCE_SWEEP.MAX_DURATION_SECONDS * 1000,
 } as const;
+
+/**
+ * The one-off marking of the agents' stored CLI transcript rows from before
+ * the resume marks (`@repo/database`'s `markSessionsForResume`). Note that
+ * a row is read where it is stored and only its mark written, about a
+ * second for a batch, so a sweep's worth keeps to seconds of its minute;
+ * production's 3.3 million rows in 3,416 sessions are about 170 sweeps,
+ * the sessions appended to latest marked first.
+ */
+export const TRANSCRIPT_MARK_BACKFILL = {
+  /** How many rows one sweep reads at most. */
+  ROWS_PER_SWEEP: 20_000,
+  /** How many rows one statement reads and marks. */
+  ROWS_PER_BATCH: 2_000,
+} as const;

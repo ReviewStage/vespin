@@ -85,7 +85,7 @@ import {
 } from "./runs-on.js";
 import { SkillFiles } from "./skill-chip.js";
 import type { SkillWithFile } from "./skill-ref.js";
-import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
+import { TaskMentions, useTasklessMentions } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 import {
   type AgentAsk,
@@ -585,21 +585,14 @@ export function NewTaskComposer({
 
   const canStart = !devicesUnread && unpaid === undefined && filled;
   // What an `@` and a `/` offer: the chosen repository's, read through the workspace, as on an agent's page no task holds.
-  const readMentionAgents = useMentionAgentsReader(workspaceId, relatable, newTask.models);
   const reader = useMentionedReader();
-  const slug = workspace?.slug;
-  const { onShowMention } = newTask;
 
-  const mentions = useMemo(
-    () =>
-      workspaceId === undefined
-        ? undefined
-        : tasklessMentions(
-            { workspace: slug ?? workspaceId, workspaceId, repository },
-            onShowMention,
-            readMentionAgents,
-          ),
-    [workspaceId, slug, repository, onShowMention, readMentionAgents],
+  const mentions = useTasklessMentions(
+    workspaceId === undefined
+      ? undefined
+      : { workspace: workspace?.slug ?? workspaceId, workspaceId, repository },
+    { tasks: relatable, models: newTask.models },
+    newTask.onShowMention,
   );
 
   // A `/` offers no skill while the Skills experiment is off.

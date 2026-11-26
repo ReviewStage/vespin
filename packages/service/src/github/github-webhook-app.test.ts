@@ -149,6 +149,9 @@ function relayRepository(pull: PullRequestFixture, ref: string) {
     if (!url.pathname.startsWith(base)) return undefined;
     const path = url.pathname.slice(base.length);
 
+    // The repository's own record is GitHub's, read as its installation was given it.
+    if (path === "") return undefined;
+
     if (path === "/pulls") return Response.json([pullJson()]);
 
     if (path === "/pulls/41") return Response.json(pullJson());

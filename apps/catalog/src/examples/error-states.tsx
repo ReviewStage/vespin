@@ -5,6 +5,8 @@
  * remedy, Remove, or Dismiss beside Retry, one whose place failed to draw,
  * the product's mark over its sentence and Reload, one on a toolbar short of
  * room, long words and a long remedy in a pane narrower than the line,
+ * a read alone in its region while the app is offline, which stands only
+ * the quiet note that the place comes back with the connection,
  * a list's foot that is itself the retry, and a failure's Retry on its own
  * beside its words, named for what it reads again.
  */
@@ -17,6 +19,7 @@ import {
   Inline,
   RetryButton,
   RetryRowLabel,
+  ServiceReached,
   TEXT_BUTTON_LINES,
   Text,
   TextButton,
@@ -59,6 +62,19 @@ function ErrorStates(): React.JSX.Element {
           >
             The changes could not be read.
           </ErrorState>
+        </div>
+      </CatalogSection>
+      <CatalogSection id="error-state-offline" title="Alone in its region, offline">
+        <div className="catalog-frame catalog-region catalog-error-region">
+          <ServiceReached value={false}>
+            <ErrorState
+              failure={{ ...CATALOG_FAILURE, saidByConnection: true }}
+              placement={ERROR_STATE_PLACEMENT.CENTERED}
+              onRetry={stay}
+            >
+              The changes could not be read.
+            </ErrorState>
+          </ServiceReached>
         </div>
       </CatalogSection>
       <CatalogSection id="error-state-reload" title="A place that failed to draw">

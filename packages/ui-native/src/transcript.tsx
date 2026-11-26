@@ -32,6 +32,7 @@ import {
   type ChannelFaces,
   ChannelMessage,
   NewRule,
+  SenderPress,
   ThreadReplies,
   ThreadRule,
 } from "./channel-row.js";
@@ -315,7 +316,13 @@ function ChannelSaid({
         ];
 
   const message = (
-    <ChannelMessage sender={sender} faces={faces} opens={!item.joinsAbove} stamp={item.stamp}>
+    <ChannelMessage
+      sender={sender}
+      faces={faces}
+      opens={!item.joinsAbove}
+      stamp={item.stamp}
+      onOpenLink={drawing.onOpenLink}
+    >
       {/* Note that a message's pictures name who sent it and when in their viewer's bar, and each of them and its files leads its long press with Reply in thread, as Messages leads a photo's with Reply, so a message of files alone opens its thread too. */}
       <HeldLeadProvider acts={threadAct}>
         <PictureOriginProvider origin={{ by: sender.name, at: item.at }}>
@@ -751,6 +758,35 @@ function OriginFrom({
   );
 }
 
+/**
+ * Who sent a line, over its bubble: their name in semibold, heard as the
+ * line's heading, and where it names a page (`address`), a tap that opens
+ * it (`SenderPress`), as a press on the panel's sender opens their page, an
+ * agent's, or a GitHub account's.
+ */
+function SenderName({
+  name,
+  address,
+  onOpenLink,
+}: {
+  readonly name: string;
+  readonly address: string | undefined;
+  readonly onOpenLink: (address: string) => void;
+}) {
+  const colors = useColors();
+
+  return (
+    <SenderPress name={name} address={address} onOpenLink={onOpenLink}>
+      <Text
+        accessibilityRole="header"
+        style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "600", color: colors.TEXT }}
+      >
+        {name}
+      </Text>
+    </SenderPress>
+  );
+}
+
 /** A webhook call's body under the prompt it rode in with, folded under its own line, as the caller sent it. */
 function OriginBody({ body }: { readonly body: string }) {
   const colors = useColors();
@@ -1052,12 +1088,11 @@ function TranscriptRow({
             <OriginFrom parts={item.from} onOpenLink={drawing.onOpenLink} />
           )}
           {item.sender === undefined || item.joinsAbove ? null : (
-            <Text
-              accessibilityRole="header"
-              style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "600", color: colors.TEXT }}
-            >
-              {item.sender}
-            </Text>
+            <SenderName
+              name={item.sender}
+              address={item.senderAddress}
+              onOpenLink={drawing.onOpenLink}
+            />
           )}
           {/* Note that the pictures a line carried that its words name none of stand over its words at its end, as Messages and the panel stand a message's photos over its bubble: one by the media's one rule, several as a set side by side; a picture its words name stands where they name it, as its chip. */}
           {/* Note that a line's pictures name who sent it and when in their viewer's bar, the reader's own as theirs. */}
