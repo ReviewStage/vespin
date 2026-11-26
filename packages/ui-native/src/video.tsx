@@ -4,10 +4,12 @@ import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { playheadText } from "@repo/features/time-format";
 import { Predicate } from "effect";
 import { useEvent } from "expo";
+import { SymbolView } from "expo-symbols";
 import { useVideoPlayer, type VideoPlayer, type VideoSource, VideoView } from "expo-video";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { GLYPH, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
 import { MediaBox } from "./media-box.js";
@@ -20,8 +22,9 @@ import {
   usePictureRef,
 } from "./picture-source.js";
 import { Press } from "./press.js";
+import { BRAND_COLOR } from "./tokens/brand-colors.js";
 import { useColors } from "./tokens/colors.js";
-import { RADIUS, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { ROLE_SIZE } from "./tokens/type.js";
 
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
@@ -46,6 +49,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: SPACE.ROW,
     gap: SPACE.TIGHT,
+  },
+  playMark: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   // Note that at an accessibility size an unplayable well grows with its words rather than holding the film's shape, which would cut them off.
   grown: { aspectRatio: undefined, minHeight: 120, overflow: "visible" },
@@ -123,6 +135,7 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
   const source = usePictureRef(ref);
   const player = useVideoPlayer(playerSource(source));
   const view = useRef<VideoView>(null);
+  const [full, setFull] = useState(false);
   const { status } = useEvent(player, "statusChange", { status: player.status });
   // Note that a track the player read before this listens is taken as it stands, since its change has already gone by.
   const { videoTrack } = useEvent(player, "videoTrackChange", { videoTrack: player.videoTrack });
@@ -208,30 +221,47 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
   }
 
   // Note that the player stands as one element, its name, which opens it full screen, as a video in Messages does, because the system's inline player nests a dozen views under it, and a thread's video in an iPad's split view stood past the depth XCTest can serialize (Foundation's "Too many nested arrays or dictionaries"), so no flow could read that screen.
-  // Note that the system's own controls stand from the first frame, its play button, scrubber, full screen, and Picture in Picture over the video at rest, as Messages and Photos draw one, and that the system draws its own wait while the video loads.
+  // Note that a video stands in its message as its still first frame under the system's play mark, and a tap opens it in the system's own player full screen with every control there, play, the scrubber, and Picture in Picture, as Messages opens one (the developer, Nov 26, 2026), because at a message's width the system's inline controls leave full screen and Picture in Picture out of their bar. The controls stand only while it is full screen, since inline they would take the tap.
   const runs = length === undefined ? undefined : playheadText(length * 1000);
+  const open = () => void view.current?.enterFullscreen();
 
   return (
     <MediaBox frame={frame}>
       <HeldMenu acts={acts}>
-        <View
-          style={[styles.frame, tiled]}
-          accessible
-          accessibilityLabel={runs === undefined ? label : `${label}, ${runs}`}
-          accessibilityHint={OPENS_FULL_SCREEN}
-          onAccessibilityTap={() => void view.current?.enterFullscreen()}
-          testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
-        >
-          <VideoView
-            ref={view}
-            player={player}
-            nativeControls
-            contentFit="contain"
-            fullscreenOptions={{ enable: true }}
-            allowsPictureInPicture
-            style={[StyleSheet.absoluteFill, { backgroundColor: colors.WELL }]}
-          />
-        </View>
+        <Press onPress={open} accessible={false}>
+          <View
+            style={[styles.frame, tiled]}
+            accessible
+            accessibilityLabel={runs === undefined ? label : `${label}, ${runs}`}
+            accessibilityHint={OPENS_FULL_SCREEN}
+            onAccessibilityTap={open}
+            testID={status === "readyToPlay" ? VIDEO_PLAYER_ID : undefined}
+          >
+            <VideoView
+              ref={view}
+              player={player}
+              nativeControls={full}
+              onFullscreenEnter={() => setFull(true)}
+              onFullscreenExit={() => {
+                // Note that the video pauses as full screen closes, so its still stands again under its mark rather than playing on behind it, as Messages leaves one.
+                player.pause();
+                setFull(false);
+              }}
+              contentFit="contain"
+              fullscreenOptions={{ enable: true }}
+              allowsPictureInPicture
+              style={[StyleSheet.absoluteFill, { backgroundColor: colors.WELL }]}
+            />
+            {/* Note that the mark stands in white in either theme, as the system's stands over a video, since it is drawn over the video's frame, never the page. */}
+            <View style={styles.playMark} pointerEvents="none">
+              <SymbolView
+                name={glyphSymbol(GLYPH.VIDEO_PLAY)}
+                size={MARK_SIZE.VIDEO_PLAY}
+                tintColor={BRAND_COLOR.LIGHT.ON_ACCENT}
+              />
+            </View>
+          </View>
+        </Press>
       </HeldMenu>
     </MediaBox>
   );

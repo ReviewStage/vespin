@@ -47,6 +47,8 @@ export const MARK_SIZE = {
    * wider than the ⋯ beside it.
    */
   COLUMN_BAR_FACE: 26,
+  /** The play mark over a video's still, as large as a press iOS asks for, as Messages and Photos stand theirs. */
+  VIDEO_PLAY: 44,
 } as const;
 
 /** The least a press stands as, in points, as Apple's guidelines ask of a target, whatever size its mark is drawn at. */

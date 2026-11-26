@@ -69,20 +69,11 @@ env:
       id: "video-player"
     timeout: 15000
 - assertNotVisible: ".*can't play here.*"
-# The video stands at rest on its first frame under the system's own
-# controls, its length said in its name, as Messages marks one, so it never
-# reads as a picture; a tap plays it in place under the same controls. Note
-# that the player stands to VoiceOver, and so to this flow, as one element
-# (`video.tsx`), so its playing is read by eye from the screenshot rather
-# than asserted, and that the flow waits a bounded time rather than for the
-# screen to settle, since a playing video never settles.
+# The video stands at rest as its still first frame, its length said in its
+# name, so it never reads as a picture; a tap opens it in the system's player
+# full screen, which `video.yaml` shoots.
 - assertVisible: "invite-flow.*, \\d+:\\d\\d"
 - takeScreenshot: inbox-video
-- tapOn:
-    id: "video-player"
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: inbox-video-playing
 # A file that is neither a picture nor a video, the test plan's PDF, stands
 # after its message as its chip, its name over its kind and size once read; a
 # press opens it full screen, its pages drawn in a web view under a bar with
