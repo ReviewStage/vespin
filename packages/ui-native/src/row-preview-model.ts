@@ -381,7 +381,7 @@ function toneGlyph(
   return { kind: PREVIEW_NODE.GLYPH, ...previewGlyph(glyph), ink: look.tone(tone), style };
 }
 
-/** The working mark, two pixels chasing round a 3×3 grid, its side scaled, as `WorkingMark` draws it. */
+/** The working mark, two pixels standing mid-chase round a 3×3 grid, its side scaled, as `WorkingMark` draws it. */
 function workingMark(look: PreviewLook): PreviewNode {
   return {
     kind: PREVIEW_NODE.WORKING,

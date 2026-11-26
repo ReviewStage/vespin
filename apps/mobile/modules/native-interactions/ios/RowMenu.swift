@@ -717,25 +717,11 @@ private struct PreviewFace: View {
   }
 }
 
-/// The working mark, as `WorkingMark` drew it: two pixels chasing round a 3×3 grid on a 200 ms beat, each tailed by a fainter one, over the faint track; held on its resting frame where the reader reduces motion.
+/// The working mark, as `WorkingMark` draws it: two pixels standing mid-chase round a 3×3 grid, each tailed by a fainter one, over the faint track, still, as the panel's is.
 private struct PreviewWorkingMark: View {
   let node: PreviewNodeData
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-  /// How long a step of the beat lasts: the panel's 200 ms (`working-beat.ts`).
-  private static let beat: TimeInterval = 0.2
 
   var body: some View {
-    if reduceMotion {
-      grid(beat: 0)
-    } else {
-      TimelineView(.periodic(from: .now, by: Self.beat)) { context in
-        grid(beat: Int(context.date.timeIntervalSinceReferenceDate / Self.beat))
-      }
-    }
-  }
-
-  private func grid(beat: Int) -> some View {
     let side = CGFloat(node.side ?? 0)
     let track = node.track ?? []
     let opacity = node.opacity
@@ -744,7 +730,7 @@ private struct PreviewWorkingMark: View {
         square(index, shade: opacity?.track ?? 0)
       }
       ForEach(Array((node.dots ?? []).enumerated()), id: \.offset) { _, dot in
-        square(dot.restsOn + beat, shade: dot.tail ? opacity?.tail ?? 0 : opacity?.lead ?? 0)
+        square(dot.restsOn, shade: dot.tail ? opacity?.tail ?? 0 : opacity?.lead ?? 0)
       }
     }
     .frame(width: side, height: side, alignment: .topLeading)

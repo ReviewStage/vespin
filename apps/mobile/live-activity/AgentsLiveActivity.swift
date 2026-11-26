@@ -263,10 +263,8 @@ struct StateMark: View {
 /// The panel's working mark (`@repo/ui`'s `WorkingMark`): eight 3 pt cells
 /// lapped round a 3×3 grid 2 pt apart in a 16 pt side, faint, and two
 /// chasers each with a fainter tail, in the ink around it. Note that it
-/// stands on the panel's resting frame, mid-lap, which lights four cells
-/// and reads as working, since a Live Activity is drawn once for each
-/// update rather than frame by frame, as the app holds its own mark still
-/// where the reader reduces motion.
+/// stands on the panel's one frame, mid-lap, which lights four cells and
+/// reads as working, as the panel's and the app's own marks stand still.
 struct WorkingMark: View {
   private static let cell: CGFloat = 3
   private static let pitch: CGFloat = 5

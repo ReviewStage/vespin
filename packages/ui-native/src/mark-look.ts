@@ -57,7 +57,7 @@ export const WORKING_TRACK = [
   [0, 1],
 ] as const;
 
-/** The pixels that move: each chaser and the fainter tail one cell behind it, with the track cell each rests on when still and steps on from, as the panel's are. */
+/** The pixels the mark lights: each chaser and the fainter tail one cell behind it, with the track cell each stands on, as the panel's are. */
 export const WORKING_DOTS = [
   { restsOn: 1, tail: false },
   { restsOn: 0, tail: true },
