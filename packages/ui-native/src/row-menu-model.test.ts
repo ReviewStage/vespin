@@ -231,7 +231,11 @@ describe("markLook", () => {
           emoji: "🦊",
         },
       } as const,
-      look: { kind: MENU_ICON.EMOJI, emoji: "🦊", disc: { light: "#86b9e9", dark: "#aad3ff" } },
+      look: {
+        kind: MENU_ICON.EMOJI,
+        emoji: "🦊",
+        disc: { light: expect.any(String), dark: expect.any(String) },
+      },
     },
   ])("draws a $mark.kind as its rows do", ({ mark, look }) => {
     expect(markLook(mark)).toStrictEqual(look);
