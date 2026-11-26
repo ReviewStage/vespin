@@ -5,9 +5,18 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import {
+  MANAGER_CHAT_REACTION,
+  type ManagerChatReactionCount,
+  type ManagerChatReactionPress,
+} from "@repo/features/manager-chat-live";
+import {
+  CHAT_ADD_REACTION_WORDS,
   CHAT_EDIT_WORDS,
   CHAT_THREAD_WORDS,
+  chatReactionEmoji,
+  chatReactionWords,
   chatWorkWords,
+  MANAGER_CHAT_REACTION_FACES,
 } from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
@@ -70,6 +79,9 @@ import { PictureSet } from "./picture-set.js";
 import { LoaderImage, PICTURE_FIT, type PictureRef, usePictureRef } from "./picture-source.js";
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
+import { ReactionChips } from "./reaction-chips.js";
+import { ReactionPickerSheet } from "./reaction-picker.js";
+import { CHOICE_MARK, type LongPressGroup } from "./row-menu-model.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
@@ -312,12 +324,108 @@ function bubbleWordsWidth(column: number, room = 0): number {
   return Math.floor((rowWidth(column) - room) * BUBBLE_SHARE) - BUBBLE_PADDING.HORIZONTAL * 2;
 }
 
+/** What the press in a message's Add reaction that opens the picker over every emoji is called. */
+const MORE_EMOJI = "More emoji…";
+
+/** The reactions a message's Add reaction offers first, in the order they stand: 👍, then 👎. */
+const OFFERED_REACTIONS = Object.values(MANAGER_CHAT_REACTION);
+
+/** Whether the reader gave `kind` among `reactions`. */
+function reactedWith(reactions: readonly ManagerChatReactionCount[], kind: string): boolean {
+  return reactions.some((reaction) => reaction.kind === kind && reaction.reacted);
+}
+
+/**
+ * A chat message's Add reaction, as its long press menu offers it, after
+ * its own acts as a comment's stands: 👍 and 👎 as the panel's actions offer
+ * them, each ticked where the reader gave it, a press giving it or taking it
+ * back, then More emoji…, which opens the picker over every emoji; none
+ * where the message takes no reaction, such as a line on its way.
+ */
+function reactionGroups(
+  item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.SAID }>,
+  drawing: RowDrawing,
+): readonly LongPressGroup[] {
+  const { reactions } = item;
+  const react = drawing.onReact;
+  const pick = drawing.onPickReaction;
+
+  if (reactions === undefined || react === undefined || pick === undefined) return [];
+  const messageId = item.place.row;
+
+  return [
+    [
+      {
+        label: CHAT_ADD_REACTION_WORDS,
+        symbol: GLYPH.REACT,
+        choices: OFFERED_REACTIONS.map((kind) => {
+          const reacted = reactedWith(reactions, kind);
+          const face = MANAGER_CHAT_REACTION_FACES[kind];
+
+          return {
+            label: face.press,
+            mark: { kind: CHOICE_MARK.EMOJI, emoji: face.emoji },
+            on: reacted,
+            onPress: () => react({ messageId, kind, reacted: !reacted }),
+          };
+        }),
+        actions: [
+          {
+            label: MORE_EMOJI,
+            symbol: GLYPH.REACT,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => pick(messageId),
+          },
+        ],
+      },
+    ],
+  ];
+}
+
+/** The reactions a chat message was given, under it, each chip a press that gives the reader's own or takes it back; nothing where it was given none or takes none. */
+function ChatReactionChips({
+  item,
+  drawing,
+}: {
+  readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.SAID }>;
+  readonly drawing: RowDrawing;
+}) {
+  const reactions = item.reactions ?? [];
+  const react = drawing.onReact;
+
+  if (react === undefined || reactions.length === 0) return null;
+
+  return (
+    <ReactionChips
+      reactions={reactions.map((reaction) => ({
+        key: reaction.kind,
+        emoji: chatReactionEmoji(reaction),
+        count: reaction.count,
+        label: chatReactionWords(reaction),
+        reacted: reaction.reacted,
+      }))}
+      onPress={(kind) => {
+        const reaction = reactions.find((each) => each.kind === kind);
+
+        if (reaction === undefined) return;
+        react({
+          messageId: item.place.row,
+          kind,
+          reacted: !reaction.reacted,
+          emoji: reaction.emoji,
+        });
+      }}
+    />
+  );
+}
+
 /**
  * A message of a Manager's chat as a channel's row (`ChannelMessage`): its
  * sender's face, name, and time where it opens their run, then what it
  * carried, its pictures and files, then its words, held for its menu,
- * which leads with Reply in thread where the channel opens threads, the
- * mark of words edited since it was sent run on after them, and under them the
+ * which leads with Reply in thread where the channel opens threads and
+ * ends in Add reaction, the mark of words edited since it was sent run on
+ * after them, then the reactions it was given, and under them the
  * summary of its thread's replies, which opens it, as the panel's channel
  * stands each message whoever sent it.
  */
@@ -336,6 +444,7 @@ function ChannelSaid({
   const open = drawing.onOpenChatThread;
   const thread = open === undefined ? undefined : item.thread;
   const wordless = item.words.trim() === "";
+  const reacting = reactionGroups(item, drawing);
 
   const threadAct: readonly HeldAct[] =
     thread === undefined || open === undefined
@@ -391,6 +500,7 @@ function ChannelSaid({
           // Note that every message offers its link, the Manager's as much as a person's, as the panel's menu offers Copy link; every message leads with Reply in thread, then what the page offers every chat message, such as Edit.
           link={drawing.messageLink?.(item.place.row)}
           more={[...threadAct, ...(drawing.messageMore?.(item) ?? [])]}
+          groups={reacting}
           width={width}
         >
           <View>
@@ -410,6 +520,7 @@ function ChannelSaid({
           </View>
         </MessageMenu>
       )}
+      <ChatReactionChips item={item} drawing={drawing} />
       {thread === undefined || open === undefined ? null : (
         <ThreadReplies thread={thread} faces={faces} onOpen={open} />
       )}
@@ -428,7 +539,7 @@ function ChannelSaid({
       ]}
     >
       {bare ? (
-        <HeldMenu acts={threadAct} width={rowWidth(drawing.column)}>
+        <HeldMenu acts={threadAct} groups={reacting} width={rowWidth(drawing.column)}>
           {message}
         </HeldMenu>
       ) : (
@@ -1059,6 +1170,10 @@ interface RowDrawing {
   readonly channel?: ChannelFaces | undefined;
   /** Opens a Manager chat message's thread, by the message it hangs on, from Reply in thread or the summary of its replies; none where the chat opens no thread, as on a thread's own page. */
   readonly onOpenChatThread?: ((root: string) => void) | undefined;
+  /** Gives the reader's reaction to a Manager chat message or takes it back, from its chips and its Add reaction; none where messages take no reaction. */
+  readonly onReact?: ((press: ManagerChatReactionPress) => void) | undefined;
+  /** Opens the picker over every emoji for a Manager chat message, by its id, from its More emoji…; the transcript's own. */
+  readonly onPickReaction?: ((messageId: string) => void) | undefined;
 }
 
 /** A message whose acts the transcript draws: a sent line, held for its menu, and a finished turn's foot. */
@@ -1164,6 +1279,17 @@ function workActs(
       onPress: () => drawing.onToggle(item),
     },
   ];
+}
+
+/** The line of a Manager's chat a message stands as among `items`, by its id; none where no line of it stands. */
+function saidAt(
+  items: readonly TranscriptItem[],
+  messageId: string,
+): Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.SAID }> | undefined {
+  for (const item of items)
+    if (item.kind === TRANSCRIPT_ITEM.SAID && item.place.row === messageId) return item;
+
+  return undefined;
 }
 
 /** One of the transcript's rows, as its kind draws it. */
@@ -1645,7 +1771,7 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
   );
 }
 
-type AgentTranscriptProps = Omit<RowDrawing, "now" | "column"> & {
+type AgentTranscriptProps = Omit<RowDrawing, "now" | "column" | "onPickReaction"> & {
   /** The rows, oldest first (`transcriptItems`). */
   readonly items: readonly TranscriptItem[];
   /** What stands over the oldest row, such as the agent's head. */
@@ -1807,6 +1933,11 @@ export function AgentTranscript({
     AccessibilityInfo.sendAccessibilityEvent(row, "focus");
   }, []);
 
+  // The message whose More emoji… opened the picker over every emoji, by its id; none while the picker stands away.
+  const [picking, setPicking] = useState<string | undefined>(undefined);
+  const picked = picking === undefined ? undefined : saidAt(items, picking);
+  const react = drawing.onReact;
+
   const placeCall = useCallback(
     (callId: string, row: HostInstance | null) => {
       if (row === null) {
@@ -1833,6 +1964,7 @@ export function AgentTranscript({
       following.current = false;
       drawing.onToggle(item);
     },
+    onPickReaction: setPicking,
   };
 
   // Note that the list waits for its own width, so no row is ever laid out unbounded, and its first render, which starts from its newest row, has the rows to start from.
@@ -2046,6 +2178,23 @@ export function AgentTranscript({
           }}
         />
       ) : null}
+      {react === undefined ? null : (
+        <ReactionPickerSheet
+          presented={picked !== undefined}
+          given={
+            new Set(
+              (picked?.reactions ?? []).filter((each) => each.reacted).map((each) => each.kind),
+            )
+          }
+          onPick={({ emoji, name }, given) => {
+            setPicking(undefined);
+
+            if (picking !== undefined)
+              react({ messageId: picking, kind: name, reacted: !given, emoji });
+          }}
+          onDismiss={() => setPicking(undefined)}
+        />
+      )}
     </View>
   );
 }

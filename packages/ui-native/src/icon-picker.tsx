@@ -1,4 +1,4 @@
-// icon-picker.tsx -- the app's one icon picker on iOS, as the panel's `IconPicker` is the desktop's: a sheet with a search over named groups of choices, each a picture in a grid, the one chosen ringed in copper.
+// icon-picker.tsx -- the app's one icon picker on iOS, as the panel's `IconPicker` is the desktop's: a sheet with a search over named groups of choices, each a picture or an emoji in a grid, the ones chosen ringed in copper.
 
 import {
   BottomSheet,
@@ -22,6 +22,7 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
+  font,
   foregroundStyle,
   frame,
   navigationBarTitleDisplayMode,
@@ -50,16 +51,18 @@ const CHOICE_SIDE = 32;
 const RING_GAP = 3;
 const RING_WIDTH = 2;
 
+/** How large an emoji stands in its choice's side, so its face fills the side as a picture does. */
+const EMOJI_SHARE = 0.85;
+
 /** What the sheet's bar names its act. */
 const DONE = "Done";
 
-/** One choice of the picker: what tells it apart, its name, which it is heard as, the picture of the asset catalog it is drawn as, and whether it is the one chosen. */
+/** One choice of the picker: what tells it apart, its name, which it is heard as, what it is drawn as (a picture of the asset catalog, or an emoji), and whether it is chosen. */
 type IconPickerChoice = {
   readonly key: string;
   readonly label: string;
-  readonly picture: string;
   readonly picked: boolean;
-};
+} & ({ readonly picture: string } | { readonly emoji: string });
 
 /** A named group of the picker's choices, such as a character's faces. */
 type IconPickerGroup = {
@@ -84,7 +87,7 @@ type IconPickerSheetProps = {
   readonly onPick: (key: string) => void;
 };
 
-/** One choice to press: its picture, ringed in copper while it is the one chosen, heard as its name and as selected where it is. */
+/** One choice to press: its picture or its emoji, ringed in copper while it is chosen, heard as its name and as selected where it is. */
 function Choice({
   choice,
   onPick,
@@ -117,10 +120,14 @@ function Choice({
           }),
         ]}
       >
-        <Image
-          assetName={choice.picture}
-          modifiers={[resizable(), frame({ width: side, height: side })]}
-        />
+        {"picture" in choice ? (
+          <Image
+            assetName={choice.picture}
+            modifiers={[resizable(), frame({ width: side, height: side })]}
+          />
+        ) : (
+          <Text modifiers={[font({ size: side * EMOJI_SHARE })]}>{choice.emoji}</Text>
+        )}
       </ZStack>
     </SwiftUIButton>
   );

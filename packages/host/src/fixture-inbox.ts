@@ -2226,9 +2226,10 @@ const MANAGER_THREAD_ROOT = "7b2d40e8";
  * Manager's answer, which the chat sums as "2 replies" under it. First
  * of all stands a picture the account sent with no words with its ask,
  * whose own long press opens its thread. The Manager gave the account's
- * ask its 👍, the account and Grace gave its first answer theirs, and the
- * account gave its 👍 to the answer in the thread. The account edited its
- * ask a minute after sending it, which it says after its words.
+ * ask its 👍, the account and Grace gave its first answer theirs, Grace
+ * its 🎉 and the Manager its 👀, and the account gave its 👍 to the
+ * answer in the thread. The account edited its ask a minute after sending
+ * it, which it says after its words.
  */
 const MANAGER_CHAT: AppManagerChat = {
   messages: [
@@ -2296,7 +2297,11 @@ const MANAGER_CHAT: AppManagerChat = {
       lineId: null,
       createdAt: MANAGER_STARTED + 2 * MINUTE,
       editedAt: null,
-      reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 2, reacted: true }],
+      reactions: [
+        { kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 2, reacted: true },
+        { kind: "tada", count: 1, reacted: false, emoji: "🎉" },
+        { kind: "eyes", count: 1, reacted: false, emoji: "👀" },
+      ],
     },
     {
       id: "e0f5a612",
@@ -3897,7 +3902,7 @@ const ANSWERS: StagedAnswers = {
     return { agent: held, messageId: clientKey };
   },
   // Note that a reaction to a message of the release Manager's chat is kept for the run, so the chat stands with it as it would once its read carries it; the panel's run stages its document again on it (`tasks-fixture-loader.ts`).
-  [ACT_KIND.AGENTS_CHAT_REACT]: ({ agentId, messageId, kind, reacted }) => {
+  [ACT_KIND.AGENTS_CHAT_REACT]: ({ agentId, messageId, kind, reacted, emoji }) => {
     if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     const message = reactedManagerChat().messages.find((each) => each.id === messageId);
     const mine = message?.reactions?.find((each) => each.kind === kind)?.reacted ?? false;
@@ -3906,7 +3911,8 @@ const ANSWERS: StagedAnswers = {
       (each) => each.messageId !== messageId || each.kind !== kind,
     );
 
-    managerChatPresses = [...others, { messageId, kind, reacted }];
+    // Note that the press keeps the emoji it was given by, as the service stores it beside the kind, so a kind new to the message draws by its emoji once the chat stands with it.
+    managerChatPresses = [...others, { messageId, kind, reacted, emoji }];
 
     return { changed: message !== undefined && mine !== reacted };
   },

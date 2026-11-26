@@ -172,6 +172,7 @@ import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
+import { useChatReact } from "../agents/use-chat-react.js";
 import { useChatFaces, useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import {
@@ -884,6 +885,8 @@ const AgentConversation = memo(function AgentConversation({
   const chatFaces = useChatFaces(chat ? shown : undefined, readerId);
   const chatHeld = useManagerChat(id, chat);
   const chatPage = chatHeld?.rows;
+  // The reader's reactions to the chat's messages, each drawn at once over the messages it reads.
+  const reacting = useChatReact(id);
 
   // The calls the agent holds for the member's answer, whose folds stand open so their rows draw them; a subagent's call has no row of its own.
   const pending = agent?.pendingApprovals;
@@ -903,12 +906,12 @@ const AgentConversation = memo(function AgentConversation({
   const chatView = useMemo(
     () =>
       chat && chatPage !== undefined
-        ? managerChatView(chatPage.messages, messages ?? [], {
+        ? managerChatView(reacting.drawn(chatPage.messages), messages ?? [], {
             running,
             sending: chatPage.sending ?? [],
           })
         : undefined,
-    [chat, chatPage, messages, running],
+    [chat, chatPage, reacting, messages, running],
   );
 
   // Note that a Manager's chat is its rows alone, with the work of each turn a press away, read from the transcript held beside it.
@@ -1390,6 +1393,7 @@ const AgentConversation = memo(function AgentConversation({
         messageMore={messageActs.more}
         channel={chatFaces?.faces}
         onOpenChatThread={chat ? openChatThread : undefined}
+        onReact={chat ? reacting.react : undefined}
         onOpenThread={openThread}
         undelivered={undelivered}
         onOpenPullRequest={(item) => openPullRequest(item.url)}

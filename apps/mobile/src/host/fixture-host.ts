@@ -348,6 +348,14 @@ function keepChatSend(
   stageFixture(state);
 }
 
+/** Lays the document again once the run took a reaction to a Manager chat's message, which the fixture keeps for the run (`@repo/host/fixture-inbox`), so the chat stands with it as its next read would carry it; nothing for any other act. */
+function keepChatReaction(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+): void {
+  if (kind === ACT_KIND.AGENTS_CHAT_REACT) stageFixture(state);
+}
+
 /** The document with each message the run sent a Manager's chat standing as the newest of its rows, as the chat's next read carries it. */
 function chatSentAppState(
   state: AppStateSnapshot,
@@ -985,6 +993,8 @@ export function fixtureActs(
         // Note that a message the run took for a Manager's chat lands as its row at once, a reply in its thread's, as the chat's next read carries it.
         // SAFETY: as above.
         keepChatSend(state, kind as PortActKind, payload);
+        // SAFETY: as above.
+        keepChatReaction(state, kind as PortActKind);
 
         return Promise.resolve(staged.answer);
       };

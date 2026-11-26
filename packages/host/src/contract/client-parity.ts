@@ -143,9 +143,6 @@ const IOS = {
   MANAGER_PEOPLE: notYet(
     "iOS's Manager Settings has no People section yet, so a Manager's followers are listed and changed on the desktop and the web",
   ),
-  MANAGER_CHAT_REACTIONS: notYet(
-    "iOS's Manager chat draws a message's words and thread alone for now, so its 👍 and 👎 are given on the desktop and the web",
-  ),
   MENTION_APPS: notYet(
     "iOS's composers offer skills after a `/` and no `@` list yet, so no app is offered to mention",
   ),
@@ -309,7 +306,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_MANAGER_CHAT_OLDER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MESSAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHAT_SEND]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_CHAT_REACT]: panel(IOS.MANAGER_CHAT_REACTIONS),
+  [PORT_ACT_KIND.AGENTS_CHAT_REACT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHAT_EDIT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHOOSE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_RENAME]: EVERYWHERE,

@@ -388,6 +388,7 @@ export function MessageMenu({
   at,
   link,
   more = [],
+  groups,
   width,
   children,
 }: {
@@ -398,6 +399,8 @@ export function MessageMenu({
   readonly link?: string | undefined;
   /** What it offers of its own after Copy link, in the panel's order, such as Edit. */
   readonly more?: readonly HeldAct[] | undefined;
+  /** Groups the menu holds after its acts, each set apart by a divider, such as a Manager chat message's Add reaction. */
+  readonly groups?: readonly LongPressGroup[] | undefined;
   /** The width it stands in where the caller knows it before it is laid out (`HeldMenu`'s `width`). */
   readonly width?: number | undefined;
   readonly children: ReactElement;
@@ -413,7 +416,12 @@ export function MessageMenu({
     );
 
   return (
-    <HeldMenu acts={acts} title={at === undefined ? undefined : dayAndTimeText(at)} width={width}>
+    <HeldMenu
+      acts={acts}
+      groups={groups}
+      title={at === undefined ? undefined : dayAndTimeText(at)}
+      width={width}
+    >
       {children}
     </HeldMenu>
   );
@@ -574,11 +582,14 @@ export function HeldSwiftMenu({
  */
 export function HeldMenu({
   acts,
+  groups = [],
   title,
   width: known,
   children,
 }: {
   readonly acts: readonly HeldAct[];
+  /** Groups the menu holds after the held views' own acts, each set apart by a divider, such as a Manager chat message's Add reaction. */
+  readonly groups?: readonly LongPressGroup[] | undefined;
   /** What heads the menu, such as when a message was sent. */
   readonly title?: string | undefined;
   /** The width the held views stand in where the caller knows it before they are laid out, as a transcript's row does, so they are bounded from their first frame; else the width the menu measures where it stands. */
@@ -589,12 +600,12 @@ export function HeldMenu({
   // Note that a width known up front bounds the views on their first layout, since one measured comes a frame later, and the views laid out unbounded in that frame stood one line wide past the screen, their host's height a step behind their words.
   const width = known ?? measured;
 
-  if (acts.length === 0) return children;
+  if (acts.length === 0 && groups.length === 0) return children;
 
   return (
     <View style={styles.host} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       <InlineHost matchContents={{ vertical: true }} style={styles.host}>
-        <HeldSwiftMenu acts={acts} title={title}>
+        <HeldSwiftMenu acts={acts} groups={groups} title={title}>
           <RNHostView matchContents={{ vertical: true }}>
             <View style={width === undefined ? undefined : { width }}>{children}</View>
           </RNHostView>
