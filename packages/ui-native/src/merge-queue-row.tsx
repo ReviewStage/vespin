@@ -13,7 +13,7 @@ import { useMinute } from "./minute.js";
 import { CHECK_SUMMARY_LOOK } from "./pull-request-look.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The room between the marks at the line's end, as a task's row stands its own. */
@@ -56,7 +56,7 @@ function ChecksMark({ checks }: { readonly checks: MergeQueueRowProps["checks"] 
   if (look === undefined && checks.count === undefined) return null;
 
   return (
-    <HStack spacing={SPACE.GLYPH_GAP}>
+    <HStack spacing={GLYPH_GAP.COMPACT}>
       {look === undefined ? null : <ToneGlyph glyph={look.symbol} tone={look.tone} hidden />}
       {checks.count === undefined ? null : (
         <Text

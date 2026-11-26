@@ -12,7 +12,7 @@ import { GLYPH, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The role of the act that takes a message away, which the system draws in red. */
@@ -46,7 +46,7 @@ export function UndeliveredMark({ line }: { readonly line: UndeliveredLine }) {
     : UNDELIVERED_WORDS.NOT_DELIVERED;
 
   const label = (
-    <HStack spacing={SPACE.GLYPH_GAP}>
+    <HStack spacing={GLYPH_GAP.COMPACT}>
       <Image
         {...glyphImage(GLYPH.FAILED)}
         size={MARK_SIZE.GLYPH - 2}

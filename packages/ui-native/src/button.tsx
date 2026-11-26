@@ -53,7 +53,7 @@ import {
 } from "./marks.js";
 import { Text } from "./text.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How a button stands: filled for the one act a screen is for, outlined beside it, words alone, or Liquid Glass over content. */
@@ -401,7 +401,7 @@ export function FieldChip(props: FieldChipProps) {
   const { menu } = props;
 
   const words = (
-    <HStack spacing={SPACE.GLYPH_GAP}>
+    <HStack spacing={GLYPH_GAP.COMPACT}>
       {fieldMark(props, colors, glyphSize)}
       <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
     </HStack>
@@ -570,7 +570,7 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
   const colors = useColors();
 
   const words = (
-    <HStack spacing={SPACE.GLYPH_GAP}>
+    <HStack spacing={GLYPH_GAP.COMPACT}>
       {faces.length === 0 ? null : (
         <HStack spacing={-FACE_OVERLAP}>
           {faces.map((face, at) => (

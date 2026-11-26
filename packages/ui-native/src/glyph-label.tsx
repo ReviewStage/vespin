@@ -6,7 +6,7 @@ import type { ReactElement, ReactNode } from "react";
 import { type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { type ChoiceLook, MENU_ICON, type MenuPhotoFile } from "./row-menu-model.js";
 import { Text } from "./text.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE } from "./tokens/space.js";
 import type { StatusTone } from "./tokens/status-tone.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -161,7 +161,7 @@ export function PickOption({
 
 /**
  * A menu picker's picked value as its row stands it closed: its head beside
- * its words, `SPACE.GLYPH_GAP` apart, or its words alone, in `ink`. Note
+ * its words, `GLYPH_GAP.ROW` apart, or its words alone, in `ink`. Note
  * that it stands in place of the picked option's own label, because a menu
  * picker reads that label into the system's button, which stands an image
  * flush against its words where no symbol's own margins part them, such as
@@ -188,7 +188,7 @@ export function PickedValue({
   if (look === undefined) return words;
 
   return (
-    <HStack spacing={SPACE.GLYPH_GAP}>
+    <HStack spacing={GLYPH_GAP.ROW}>
       {look.kind === MENU_ICON.GLYPH ? (
         <GlyphImage glyph={look.glyph} color={look.tone === undefined ? ink : toneInk(look.tone)} />
       ) : (

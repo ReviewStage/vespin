@@ -38,7 +38,7 @@ import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
 import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
 import { Text } from "./text.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What joins a pull request's branches, the one it merges from after the one it merges into, as GitHub writes it. */
@@ -119,7 +119,7 @@ function Branch({ name, wraps }: { readonly name: string; readonly wraps: boolea
   const colors = useColors();
 
   return (
-    <HStack spacing={SPACE.GLYPH_GAP}>
+    <HStack spacing={GLYPH_GAP.COMPACT}>
       <ToneGlyph
         glyph={GLYPH.BRANCH}
         tone={STATUS_TONE.NEUTRAL}
@@ -161,7 +161,7 @@ function OpenedLine({ opened, wraps }: { readonly opened: Opened; readonly wraps
       : `${verb} · merged ${agoText(opened.mergedAt, now)}`;
 
   return (
-    <HStack spacing={SPACE.GLYPH_GAP}>
+    <HStack spacing={GLYPH_GAP.COMPACT}>
       {by === undefined ? null : (
         <Avatar name={by.name} picture={by.picture} kind={by.kind} size={face} />
       )}
@@ -419,7 +419,7 @@ export function MarkRow({
       ink={colors.TEXT_BODY}
       end={
         leads ? (
-          <HStack spacing={SPACE.GLYPH_GAP}>
+          <HStack spacing={GLYPH_GAP.COMPACT}>
             {glyph}
             {said}
           </HStack>

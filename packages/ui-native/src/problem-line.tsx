@@ -6,7 +6,7 @@ import { GLYPH } from "./glyph.js";
 import { GlyphImage } from "./glyph-label.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { GLYPH_GAP } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /**
@@ -27,7 +27,7 @@ export function ProblemLine({
 
   return (
     <HStack
-      spacing={SPACE.GLYPH_GAP}
+      spacing={GLYPH_GAP.COMPACT}
       alignment="firstTextBaseline"
       modifiers={id === undefined ? [] : [accessibilityIdentifier(id)]}
     >

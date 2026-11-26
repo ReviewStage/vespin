@@ -50,7 +50,7 @@ import { MANAGER_FACE_SEAT, ManagerFace, TaskStatusMark } from "./marks.js";
 import type { MenuLead } from "./row-menu-model.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /**
@@ -447,7 +447,7 @@ export function PathTitle({
   const faceSize = useScaledSize(MARK_SIZE.GLYPH);
 
   const title = (
-    <HStack spacing={SPACE.GLYPH_GAP}>
+    <HStack spacing={GLYPH_GAP.REGULAR}>
       {manager !== undefined ? (
         <ManagerFace face={manager} size={faceSize} seat={MANAGER_FACE_SEAT.WORDS} />
       ) : status === undefined ? null : (

@@ -4,22 +4,30 @@
 export const SPACE = {
   /** The least gap: between two pieces that read as one, such as a count's two halves or a line under another. */
   TIGHT: 4,
-  /**
-   * Between a glyph, a mark, a face, or a picture and the words it leads,
-   * wherever a view of ours stands the two side by side: a chip's, a row's
-   * line, a picked value's. It is iOS's system spacing between siblings
-   * (UIKit's `NSLayoutConstraint.systemSpacing`, SwiftUI's default stack
-   * spacing), and `@repo/ui`'s `--ui-icon-gap`, so the pair stands as a
-   * native `Label` stands it. A system menu or a button's `Label` lays its
-   * own out.
-   */
-  GLYPH_GAP: 8,
   /** Between a row's columns. */
   ROW: 10,
   /** A screen's edge: where a row's mark, a page's words, and a pill row start. */
   EDGE: 16,
   /** Around a block of words on a page. */
   PAGE: 20,
+} as const;
+
+/**
+ * Between a glyph, a mark, a face, or a picture and the words it leads,
+ * wherever a view of ours stands the two side by side, stepped by the size
+ * the pair stands at, as the panel's gap steps by its component's size: the
+ * smaller the words, the closer their mark. Its largest step is iOS's system
+ * spacing between siblings (UIKit's `NSLayoutConstraint.systemSpacing`,
+ * SwiftUI's default stack spacing), where a native `Label` in a row stands
+ * its icon. A system menu or a button's own `Label` lays its own out.
+ */
+export const GLYPH_GAP = {
+  /** A compact chip or badge, and a row's small meta line in the footnote or subheadline style: runs-on, a pull request's number, a comment count, a time, an Inbox row's ask line. */
+  COMPACT: 4,
+  /** A regular piece in the body style: a button, a capsule, a path, a group header. */
+  REGULAR: 6,
+  /** A row's words beside the mark or face that leads them, and a picker's picked value. */
+  ROW: 8,
 } as const;
 
 /**

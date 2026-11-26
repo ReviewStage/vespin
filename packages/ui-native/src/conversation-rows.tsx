@@ -22,7 +22,7 @@ import { BotTag } from "./pull-request-page.js";
 import type { RowAction, RowSubmenu } from "./row-menu-model.js";
 import { Text } from "./text.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The most of an entry's Markdown its folded preview reads, so a long comment's preview costs no more than a short one's. */
@@ -180,7 +180,7 @@ export function ConversationEntryRow({
       after={by.bot === true ? <BotTag /> : undefined}
       ink={colors.TEXT}
       end={
-        <HStack spacing={SPACE.GLYPH_GAP}>
+        <HStack spacing={GLYPH_GAP.COMPACT}>
           {standing === undefined ? null : (
             <ToneGlyph
               glyph={standing.mark.symbol}

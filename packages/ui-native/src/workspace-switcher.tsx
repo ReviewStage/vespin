@@ -31,7 +31,7 @@ import { actContent, menuActContent } from "./glyph-label.js";
 import type { MenuPhotoFile } from "./row-menu-model.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 import { tileHue } from "./workspace-tile-model.js";
@@ -141,7 +141,7 @@ function SwitcherFace({
   // Note that the named face heads the sidebar's list rather than a bar, so it grows with Dynamic Type as the rows under it do.
   return (
     <HStack
-      spacing={SPACE.GLYPH_GAP}
+      spacing={GLYPH_GAP.REGULAR}
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
       <WorkspaceTile workspace={chosen} size={tile} />

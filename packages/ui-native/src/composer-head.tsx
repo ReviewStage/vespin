@@ -19,7 +19,7 @@ import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar, AvatarPhoto, HarnessMark, MANAGER_FACE_SEAT, ManagerFace } from "./marks.js";
 import { Text } from "./text.js";
 import { toneColor, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** A picture's thumbnail over a composer's field, as Messages draws one: a square cropped from it, its corners rounded as a card's; a pasted text file stands as a tile of the same size. */
@@ -351,7 +351,7 @@ function MentionCrumbRow({ crumb }: { readonly crumb: MentionCrumb }) {
         ]}
       >
         <Image {...glyphImage(GLYPH.BACK)} size={size} color={colors.TEXT_MUTED} />
-        <HStack spacing={SPACE.GLYPH_GAP}>
+        <HStack spacing={GLYPH_GAP.REGULAR}>
           <Image {...glyphImage(crumb.glyph)} size={size} color={colors.TEXT_MUTED} />
           <Text
             modifiers={[
@@ -544,7 +544,7 @@ export function EditingLine({ onCancel }: { readonly onCancel: () => void }) {
   const glyph = useScaledSize(MARK_SIZE.GLYPH);
 
   return (
-    <HStack spacing={SPACE.GLYPH_GAP}>
+    <HStack spacing={GLYPH_GAP.ROW}>
       <Image {...glyphImage(GLYPH.EDIT_MESSAGE)} size={glyph} color={colors.TEXT_MUTED} />
       <Text
         modifiers={[

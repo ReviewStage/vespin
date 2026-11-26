@@ -21,7 +21,7 @@ import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { AgentTile } from "./marks.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What a composer offers of calls: Talk at rest, in Send's place while its field is empty, or the call's presses before Send while a call into its agent stands. */
@@ -196,7 +196,7 @@ export function CallCardRow({
       >
         {/* Note that the shape stands on the label's row, the Spacer's blank run included, since a plain button takes a press only where its label is hit. */}
         <HStack
-          spacing={SPACE.GLYPH_GAP}
+          spacing={GLYPH_GAP.ROW}
           modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
         >
           <AgentTile

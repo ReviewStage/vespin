@@ -71,7 +71,7 @@ import {
 import { Text } from "./text.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { readWorkingBeat, subscribeWorkingBeat } from "./working-beat.js";
 import { tileHue } from "./workspace-tile-model.js";
@@ -729,7 +729,7 @@ export function SubTaskProgress({
   const size = useScaledSize(MARK_SIZE.GLYPH - 2);
 
   return (
-    <HStack spacing={SPACE.GLYPH_GAP} modifiers={[accessibilityHidden(true)]}>
+    <HStack spacing={GLYPH_GAP.COMPACT} modifiers={[accessibilityHidden(true)]}>
       <Gauge
         value={total > 0 ? done / total : 0}
         modifiers={[
