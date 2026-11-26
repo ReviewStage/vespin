@@ -131,13 +131,16 @@ import type { MachineLine } from "@repo/features/machine-live";
 import {
   MANAGER_CHAT_AUTHOR,
   MANAGER_CHAT_REACTION,
+  type ManagerChatEditPress,
   type ManagerChatReactionPress,
+  withEditPress,
   withReactionPress,
 } from "@repo/features/manager-chat-live";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
   type ManagerFace,
+  sameManagerFace,
 } from "@repo/features/manager-face";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
@@ -2254,7 +2257,8 @@ const MANAGER_THREAD_ROOT = "7b2d40e8";
  * of all stands a picture the account sent with no words with its ask,
  * whose own long press opens its thread. The Manager gave the account's
  * ask its 👍, the account and Grace gave its first answer theirs, and the
- * account gave its 👍 to the answer in the thread.
+ * account gave its 👍 to the answer in the thread. The account edited its
+ * ask a minute after sending it, which it says after its words.
  */
 const MANAGER_CHAT: AppManagerChat = {
   messages: [
@@ -2338,7 +2342,7 @@ const MANAGER_CHAT: AppManagerChat = {
       turnId: MANAGER_TURN,
       lineId: "fixture-manager-ask",
       createdAt: MANAGER_STARTED,
-      editedAt: null,
+      editedAt: MANAGER_STARTED + MINUTE,
       reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 1, reacted: false }],
     },
     {
@@ -2369,9 +2373,14 @@ const MANAGER_CHAT: AppManagerChat = {
 /** The account's reactions given the release Manager's chat or taken off it in this run, oldest pressed first, which the chat stands with, as the service would. */
 let managerChatPresses: readonly ManagerChatReactionPress[] = [];
 
-/** The release Manager's chat with the account's reactions in this run drawn on it. */
+/** The account's edits of its own messages of the release Manager's chat in this run, oldest saved first, which the chat stands with, as the service would. */
+let managerChatEdits: readonly ManagerChatEditPress[] = [];
+
+/** The release Manager's chat with the account's edits and reactions in this run drawn on it. */
 function reactedManagerChat(): AppManagerChat {
-  return { messages: managerChatPresses.reduce(withReactionPress, MANAGER_CHAT.messages) };
+  const edited = managerChatEdits.reduce(withEditPress, MANAGER_CHAT.messages);
+
+  return { messages: managerChatPresses.reduce(withReactionPress, edited) };
 }
 
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
@@ -3290,18 +3299,13 @@ const CHANGED_FIELDS = [
   "title",
 ] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face" | "archived">[];
 
-/** Whether every field of the change already stands on the agent, a face by its character and color. */
+/** Whether every field of the change already stands on the agent, a face by its character, color, and emoji. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
   const { face, archived } = change;
 
   if (archived !== undefined && archived !== (agent.archivedAt !== undefined)) return false;
 
-  if (
-    face !== undefined &&
-    (face.character !== agent.face?.character || face.color !== agent.face?.color)
-  ) {
-    return false;
-  }
+  if (face !== undefined && !sameManagerFace(face, agent.face)) return false;
 
   return CHANGED_FIELDS.every((key) => {
     const value = change[key];
@@ -3938,6 +3942,20 @@ const ANSWERS: StagedAnswers = {
 
     return { changed: message !== undefined && mine !== reacted };
   },
+  // Note that an edit of one of the account's own messages of the release Manager's chat is kept for the run, as a reaction is, so the chat stands with its words as edited.
+  [ACT_KIND.AGENTS_CHAT_EDIT]: ({ agentId, messageId, text }) => {
+    if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const message = reactedManagerChat().messages.find((each) => each.id === messageId);
+
+    if (message === undefined || message.authorUserId !== ADA.userId) {
+      return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    }
+
+    if (message.text === text) return { changed: false };
+    managerChatEdits = [...managerChatEdits, { messageId, text, editedAt: MANAGER_STARTED + HOUR }];
+
+    return { changed: true };
+  },
   [ACT_KIND.AGENTS_QUEUE]: ({ agentId }) => {
     if (stagedAgent(agentId) === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
@@ -4051,14 +4069,33 @@ const ANSWERS: StagedAnswers = {
   },
   // The invitations task's repository's skills, as the service finds them.
   [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
-  // The invitations task's repository's tree, read whole as an `@` reads its files and folders; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
+  // The invitations task's repository's tree, read whole as an `@` reads its files and folders, through the task or, as the Manager's box reads it, through the workspace; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
   [ACT_KIND.TASKS_TREE]: (asked) =>
-    "taskId" in asked &&
-    asked.taskId === TASK.INVITES &&
     asked.recursive === true &&
-    asked.path === ""
+    asked.path === "" &&
+    ("taskId" in asked
+      ? asked.taskId === TASK.INVITES
+      : asked.repository === INVITES_TREE.repository)
       ? { folder: INVITES_TREE }
       : { failure: TASK_CALL_FAILURE.UNANSWERED },
+  // The machines of the workspace's members an `@` offers: Ada's own, the one away offline.
+  [ACT_KIND.WORKSPACE_MACHINES_READ]: () => ({
+    machines: HOSTS.flatMap((host) =>
+      host.platform === undefined
+        ? []
+        : [
+            {
+              id: host.id,
+              name: host.name,
+              platform: host.platform,
+              userId: ADA.userId,
+              online: host.away !== true,
+            },
+          ],
+    ),
+  }),
+  // Ada's machines always allow no app, so an `@` offers none of theirs.
+  [ACT_KIND.HOSTS_ALLOWED_APPS]: () => ({ machines: [] }),
   [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
     const held = stagedAgent(agentId);
 

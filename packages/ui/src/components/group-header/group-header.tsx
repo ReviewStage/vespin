@@ -18,6 +18,7 @@ import {
   DisclosureScope,
   useDisclosureFold,
 } from "../disclosure/disclosure.js";
+import { GLYPH_PLACE_CONTROL } from "../glyph-slot/glyph-slot.js";
 import { INLINE_EDIT_FIELD, INLINE_EDIT_LOOK } from "../inline-edit/inline-edit.js";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { NAV_COUNT_SHOWN, type NavCount } from "../nav-item/nav-item.js";
@@ -224,14 +225,25 @@ const LEAD_HEIGHT = {
   [GROUP_LOOK.SECTION]: "h-control",
 } as const satisfies Record<GroupLook, string>;
 
-/** An editing head's lead, laid out as a head's lead with nothing to press, and its field, bare in the group role's type in the label's place. */
+/**
+ * An editing head's lead, laid out as a head's lead with nothing to press,
+ * as tall as the place its head holds (`EDITING_PLACE`) and in the label's
+ * ink, and its field, bare in the group role's type in the label's place.
+ * The glyph's control stands in the glyph's own footprint
+ * (`GLYPH_PLACE_CONTROL`), so the field stands where the label stood.
+ */
 const EDITOR = {
-  LEAD: "ui-group-header-editor-lead flex h-control min-w-0 flex-auto items-center gap-icon-gap px-row-inset text-group font-group text-foreground",
-  /* The glyph's control is a compact button, a step wider than the glyph, so it overhangs the cell by that step and the field stands where the label stood. Note that it is let out of a button's own cap at its holder's width, which would squeeze it to the cell and push its glyph off the glyph's place by its edge. */
-  GLYPH:
-    "ui-group-header-editor-glyph grid min-h-control-icon min-w-control-icon flex-none place-items-center *:-m-ui-4 *:max-w-none",
+  LEAD: "ui-group-header-editor-lead flex min-w-0 flex-auto items-center self-stretch gap-icon-gap px-row-inset text-group font-group text-muted-foreground",
+  GLYPH: `ui-group-header-editor-glyph grid min-h-control-icon min-w-control-icon flex-none place-items-center ${GLYPH_PLACE_CONTROL}`,
   FIELD: `${INLINE_EDIT_FIELD} data-[look=well]:min-w-0 data-[look=well]:flex-auto`,
 } as const;
+
+/**
+ * Where a head being named stands: the head's own place, as tall as its
+ * lead in its look, sticking and spanning the grid as the head does, so
+ * nothing above or below it moves as the edit opens and ends.
+ */
+const EDITING_PLACE = "ui-group-header-editing flex min-w-0 *:flex-auto";
 
 /** A head that folds is pressed as a row is, so it wears a row's hover; and it gives the one press cursor, the Mac's arrow on the desktop as a Mac's list does, the hand on the web. */
 const PRESSED_AS_ROW = {
@@ -602,7 +614,16 @@ export function GroupHeader({
       >
         {/* Note that the head is the root's first child whether or not it stands, so its rows stay the same element as it comes and goes. */}
         {!headed ? null : said(editing) ? (
-          editing
+          <div
+            className={[
+              EDITING_PLACE,
+              LEAD_HEIGHT[look],
+              head === GROUP_HEAD.STICKS ? STICKS : "",
+              subgrid ? SUBGRID.HEAD : "",
+            ].join(" ")}
+          >
+            {editing}
+          </div>
         ) : (
           <div
             className={[

@@ -1590,6 +1590,7 @@ it.effect(
       yield* followedOnce(harness);
       const { asked, transcripts, live } = harness;
       assert.deepEqual(ids(harness.held().at(-1)), ["m-1:0", "m-2:0"], "let go, it stays held");
+      assert.equal(harness.held().at(-1)?.word?.caughtUp, false, "but no longer caught up");
 
       // Written while no window held it.
       const away = pageNow("3:0", { holds: false, text: "Written while away." });
@@ -1604,8 +1605,11 @@ it.effect(
       yield* harness.acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
       yield* settled;
       const laid = transcripts().slice(laidBefore);
-      assert.equal(laid[0]?.asked, askedBefore, "what was held stands before any read");
-      assert.equal(laid[0]?.rows?.word?.caughtUp, false, "not caught up until read on");
+      // Note that what was held stands on the slice as it was let go, so nothing is laid before the read on from its cursor.
+      assert.ok(
+        laid.every((each) => each.asked > askedBefore),
+        "what was held stands before any read",
+      );
       assert.deepEqual(ids(laid.at(-1)?.rows), ["m-1:0", "m-2:0", "m-3:0"]);
       assert.deepEqual(asked.slice(askedBefore), [
         `messages-now:${AGENT_ID}:2:0`,

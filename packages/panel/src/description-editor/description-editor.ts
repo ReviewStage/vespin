@@ -40,6 +40,7 @@ import {
   type MentionDrawer,
   type PlacedPicture,
   type PlacedWords,
+  type RawDrawer,
   rootAria,
   sameAria,
   type TaskBoxDrawer,
@@ -55,7 +56,7 @@ import {
   documentTook,
   type HeldSources,
   lineEndingOf,
-  RawBlock,
+  rawBlockNode,
   sourcesOf,
   withLf,
   withLineEnding,
@@ -454,6 +455,7 @@ export function markdownExtensions(
   drawCodeHeader?: CodeHeaderDrawer | undefined,
   colorCode?: CodeColorer | undefined,
   drawDiagram?: DiagramDrawer | undefined,
+  drawRaw?: RawDrawer | undefined,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
     blockquote: false,
@@ -480,7 +482,7 @@ export function markdownExtensions(
     drawnTaskItem(drawTaskBox),
     TableKit,
     pictureNode(pictures),
-    RawBlock,
+    rawBlockNode(drawRaw),
     mentionNode(drawMention),
     SoftBreak,
     linkLook(namesChip),
@@ -745,6 +747,7 @@ export function mountDescriptionEditor(
     onLeaveUp,
     mentions,
     drawDiagram,
+    drawRaw,
     drawTaskBox,
     drawCodeHeader,
     colorCode,
@@ -763,6 +766,7 @@ export function mountDescriptionEditor(
     drawCodeHeader,
     colorCode,
     drawDiagram,
+    drawRaw,
   );
 
   const manager = documentManager(extensions);

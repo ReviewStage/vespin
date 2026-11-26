@@ -47,7 +47,6 @@ import {
   INBOX_REPLY,
   INBOX_STATUS,
   type InboxItem,
-  type InboxItemHome,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
 import {
@@ -79,6 +78,12 @@ import {
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import { INBOX_ATTENTION, INBOX_REACH, INBOX_WHOLE, type InboxReach } from "@repo/host/inbox-rows";
+import {
+  HOME_READ,
+  type HomeRead,
+  threadLookedFor,
+  threadStanding,
+} from "@repo/host/inbox-thread-standing";
 import { BUZZ, heldValue, useHeldValue } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
@@ -101,7 +106,7 @@ import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { useInboxGroupsIn, useInboxWholeGroupsIn } from "./inbox-groups.js";
+import { useInboxGroupsIn, useInboxGroupsRead, useInboxWholeGroupsIn } from "./inbox-groups.js";
 import { useSearchedWords, useThreadMessages } from "./inbox-rows.js";
 import { useInboxRunFolds } from "./inbox-runs.js";
 import { useInboxShown } from "./inbox-shown.js";
@@ -396,7 +401,10 @@ type UseInboxThreadResult = {
  * whose task the task list has not read yet stands as still reading, and as
  * refused where that read failed, rather than as missing; once the list is
  * read, one still with no holder is missing, as a holder an older service
- * leaves out is. Note too that every
+ * leaves out is. Where the phone keeps the Inbox on disk, the feed stands
+ * as still reading until the screen's own query of the kept items answered
+ * (`threadStanding`), so a thread still loading from disk is never looked
+ * for elsewhere or called missing. Note too that every
  * workspace's threads are searched, not only the chosen workspace's the list
  * shows, so a link to a thread of another workspace still opens it.
  *
@@ -420,7 +428,7 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   );
 
   const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
-  const read = useInboxGroupsIn(undefined, reach);
+  const read = useInboxGroupsRead(undefined, reach);
   const wholeRead = useInboxWholeGroupsIn(undefined);
   const messages = useThreadMessages(id);
   const stored = told?.stored === true;
@@ -430,14 +438,14 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
     () =>
       !stored
         ? wholeRead
-        : read.flatMap((group) => {
+        : read.groups.flatMap((group) => {
             const row = group.items.find((item) => item.id === id);
 
             return row === undefined
               ? []
               : [{ holder: group.holder, items: [wholeOf(row, messages ?? NO_MESSAGES)] }];
           }),
-    [stored, wholeRead, read, messages, id],
+    [stored, wholeRead, read.groups, messages, id],
   );
 
   const groups = useSendsDrawn(threaded);
@@ -458,14 +466,19 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 
   const inFeed = useMemo(() => listedIn(groups, id), [groups, id]);
 
-  // Note that only a thread the answered feed does not hold is looked for, so a thread still read, or one whose task is still read, waits as it did.
-  const lookedFor =
-    id !== undefined && inFeed === undefined && !held && answered === INBOX_FEED.ANSWERED;
+  // Note that the feed is answered for this thread only once the screen's own read of the items kept on disk answered too, so a thread still loading is neither looked for nor missing.
+  const reads = {
+    feed: answered,
+    rowsRead: read.read,
+    held,
+    tasks: tasksRead,
+    inFeed: inFeed !== undefined,
+  };
+
+  const lookedFor = id !== undefined && threadLookedFor(reads);
 
   const { home, again } = useItemHome(id, lookedFor);
   const found = home === undefined || Predicate.isString(home) ? undefined : home;
-  // Note that a thread on no task, a Manager's, has no task's inbox to read it from, so one the feed does not hold is not found rather than read forever.
-  const homeless = found !== undefined && found.taskId === null;
   const homed = useHomeGroups(found?.taskId ?? undefined);
   const outside = useSendsDrawn(homed.groups);
   const shown = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
@@ -479,26 +492,11 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
     [shown, inFeed, stored, messages],
   );
 
-  const feed = !lookedFor
-    ? listed !== undefined || !held || tasksRead === TASKS_READ.READY
-      ? answered
-      : tasksRead === TASKS_READ.FAILED
-        ? INBOX_FEED.FAILED
-        : INBOX_FEED.READING
-    : listed !== undefined || home === HOME_READ.MISSING || homeless
-      ? answered
-      : home === undefined
-        ? INBOX_FEED.READING
-        : home === HOME_READ.FAILED
-          ? INBOX_FEED.FAILED
-          : homed.read !== INBOX_FEED.ANSWERED
-            ? homed.read
-            : // Note that a task's inbox read before the task list holds its task waits on that list, as a thread of the feed does.
-              tasksRead === TASKS_READ.READY
-              ? answered
-              : tasksRead === TASKS_READ.FAILED
-                ? INBOX_FEED.FAILED
-                : INBOX_FEED.READING;
+  const feed = threadStanding(reads, {
+    drawn: listed !== undefined,
+    home,
+    homeInbox: homed.read,
+  });
 
   // Try again reads anew what failed: where the thread stands, its task's own inbox, or the feed and the task list that hold it.
   const retry = () => {
@@ -548,15 +546,6 @@ function listedIn(
 
 /** What the read of where a thread stands is kept under, by the thread's id. */
 const ITEM_HOME_KEY = "inbox-item-home";
-
-/** Where a thread stands where the service named no place for it: not readable by the account, or not answered. */
-const HOME_READ = {
-  MISSING: "missing",
-  FAILED: "failed",
-} as const;
-
-/** Where a thread stands, as the service said: its task and agent, or that the account may not read it, or that no answer came. */
-type HomeRead = InboxItemHome | (typeof HOME_READ)[keyof typeof HOME_READ];
 
 /** Where a thread stands as read once, and how to read it again. */
 interface ItemHome {

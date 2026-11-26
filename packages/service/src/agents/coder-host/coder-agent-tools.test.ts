@@ -1436,7 +1436,7 @@ async function managerOn(userId: string, workspaceId: string): Promise<CallingAg
   return { ...target, sessionId: session };
 }
 
-test("start_agent from a Manager, with Managers act for whoever asked on, starts the agent as the member whose line opened its turn, refuses one whose asker pays for none of the model rather than paying as the owner, and with it off starts the owner's", async () => {
+test("start_agent from a Manager starts the agent as the member whose line opened its turn, and refuses one whose asker pays for none of the model rather than paying as the owner", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const owner = agents.caller.userId;
   const asker = agents.teammates.userId;
@@ -1447,7 +1447,6 @@ test("start_agent from a Manager, with Managers act for whoever asked on, starts
   const manager = await managerOn(owner, workspaceId);
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), manager, agentSessions.services);
-  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, true);
 
   const start = (callId: string) =>
     call(
@@ -1473,10 +1472,6 @@ test("start_agent from a Manager, with Managers act for whoever asked on, starts
     reason:
       "Not started: an agent you start is Test User's, who asked for this turn, and no subscription or API key of theirs pays for that model, and Vespin's key pays for no agent. Start it on a model whose provider they connected, or tell them to connect one in Settings › Agents.",
   });
-
-  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, false);
-  const owners = await storedStart(owner, await start("call-off"));
-  assert.equal(owners.userId, owner);
 });
 
 test("start_agent leaves an unassigned backlog task's assignee and status as they stood", async () => {

@@ -165,7 +165,9 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
           accessibilityLabel={ADD_MEMORY}
           disabled={memories === undefined}
           onPress={() => router.push(SETTINGS_ROUTE.MEMORY_EDIT)}
-        />
+        >
+          {ADD_MEMORY}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen ground={SCREEN_GROUND.GROUPED}>{body}</Screen>
       <ConfirmAsk

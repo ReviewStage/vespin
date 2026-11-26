@@ -295,6 +295,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_CHAT_SEND: "agents.chat.send",
   /** A member's 👍 or 👎 given a message of a Manager's chat, or taken off it, which the panel draws at once and the chat's next read carries: whether it changed what stood, or why it was not taken. */
   AGENTS_CHAT_REACT: "agents.chatReact",
+  /** A member's edit of their own message of a Manager's chat, its words changed in place and the Manager told, which the panel draws at once and the chat's next read carries: whether the words changed, or why it was not taken. */
+  AGENTS_CHAT_EDIT: "agents.chatEdit",
   AGENTS_CHOOSE: "agents.choose",
   AGENTS_RENAME: "agents.rename",
   AGENTS_SERVERS: "agents.servers",
@@ -1202,6 +1204,7 @@ export const PORT_ACT_USE = {
   AGENTS_MESSAGE: ACT_USE.WRITE,
   AGENTS_CHAT_SEND: ACT_USE.WRITE,
   AGENTS_CHAT_REACT: ACT_USE.WRITE,
+  AGENTS_CHAT_EDIT: ACT_USE.WRITE,
   AGENTS_CHOOSE: ACT_USE.WRITE,
   AGENTS_RENAME: ACT_USE.WRITE,
   AGENTS_SERVERS: ACT_USE.WRITE,

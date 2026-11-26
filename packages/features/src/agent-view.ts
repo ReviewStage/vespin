@@ -63,7 +63,10 @@ import {
   liveActivityTokenRequestSchema,
 } from "./live-activity-wire.js";
 import { machineAskAnswerRequestSchema } from "./machine-ask-wire.js";
-import { managerChatReactRequestSchema } from "./manager-chat-live.js";
+import {
+  managerChatEditRequestSchema,
+  managerChatReactRequestSchema,
+} from "./manager-chat-live.js";
 import {
   MEMORY_QUERY,
   memoryIdSchema,
@@ -859,6 +862,20 @@ export const managerChatReactAnswerViewSchema = answerView(messagesContract.chat
 
 export type ManagerChatReactAnswerView = typeof managerChatReactAnswerViewSchema.Type;
 
+/** A member's edit of their own message of a Manager's chat, as the window asks it: the Manager, the message, and the edit as the service takes it (`managerChatEditRequestSchema`). */
+export const managerChatEditParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  messageId: EffectSchema.NonEmptyString,
+  ...managerChatEditRequestSchema.fields,
+});
+
+export type ManagerChatEditParams = typeof managerChatEditParamsSchema.Type;
+
+/** A member's edit of a message of a Manager's chat, as the host hears the service answer it: whether it changed the words, or why it was not taken. */
+export const managerChatEditAnswerViewSchema = answerView(messagesContract.chatEdit);
+
+export type ManagerChatEditAnswerView = typeof managerChatEditAnswerViewSchema.Type;
+
 /**
  * One change of an agent's queue, as the window asks it: the agent, the
  * change, and for a message queued or edited with files, the ids the window
@@ -1115,10 +1132,17 @@ export const agentPinParamsSchema = EffectSchema.Struct({
 
 export type AgentPinParams = typeof agentPinParamsSchema.Type;
 
-/** A look at a Manager's chat, as the window names it to move the reader's own mark (`read-mark.ts`). */
+/** A message of a Manager's chat Mark unread is asked from: its id, which the service reads it by, and when it was sent, which the reader's mark is drawn just before until the service answers. */
+export const agentUnreadFromSchema = EffectSchema.Struct({
+  messageId: EffectSchema.NonEmptyString,
+  sentAt: countedNumber,
+});
+
+/** A look at a Manager's chat, or Mark unread from one of its messages (`unreadFrom`), as the window names it to move the reader's own mark (`read-mark.ts`). */
 export const agentMarkReadParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   readMark: readMarkSchema,
+  unreadFrom: EffectSchema.optionalKey(agentUnreadFromSchema),
 });
 
 export type AgentMarkReadParams = typeof agentMarkReadParamsSchema.Type;

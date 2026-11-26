@@ -1,6 +1,6 @@
 // agent-ask.e2e.ts -- a member answers the ask a scripted agent's turn ended on, from the agent's page, and the agent's next turn takes the answer.
 
-import { expect, test } from "../support/signed-in.js";
+import { expect, test } from "../support/held-turn.js";
 
 const TASK_NAME = "Answer an ask";
 
@@ -13,7 +13,8 @@ test.use({ memberAsk: { taskName: TASK_NAME, credential: true, setupFinished: tr
  * options not answerable there, or the answer never reaching the agent. The
  * member starts an agent on the ask script's cue (`[script:ask]`,
  * `scripted-agent-sessions.ts`), whose turn says it needs a decision and
- * posts a decide ask with Blue and Green. The member opens the ask from the
+ * posts a decide ask with Blue and Green, after holding its turn running
+ * until the journey lets it go (`heldTurn`). The member opens the ask from the
  * agent's own Inbox dock, picks Green, and sends. Only the scripted session
  * writes "Thanks for the answer.", and only on the message the answer hands
  * it, so that turn in the transcript says the answer reached the agent.
@@ -21,6 +22,7 @@ test.use({ memberAsk: { taskName: TASK_NAME, credential: true, setupFinished: tr
 test("a member answers the agent's ask on its page and the agent's next turn takes it", async ({
   page,
   signedIn,
+  heldTurn,
 }) => {
   expect(signedIn.taskId).toBeDefined();
 
@@ -43,6 +45,10 @@ test("a member answers the agent's ask on its page and the agent's next turn tak
     .getByRole("listitem")
     .filter({ hasText: "I need one decision before I go on." });
 
+  // Note that the turn is held before its ask, because on CI the Start, the agent's boot, and the poll that delivers its end took longer than one 5s `expect`: the words standing beside "Working…" say it reached the panel, and the fold is waited on only once the turn is let go.
+  await expect(asking).toContainText("Working…");
+  await heldTurn.letGo();
+
   await expect(asking.getByText(/^Worked for /)).toBeVisible();
   await expect(asking.getByRole("group").filter({ hasText: QUESTION })).toBeVisible();
 
@@ -64,5 +70,6 @@ test("a member answers the agent's ask on its page and the agent's next turn tak
     .getByRole("listitem")
     .filter({ hasText: "Thanks for the answer. I will go on with it." });
 
+  await expect(heard).toBeVisible();
   await expect(heard.getByText(/^Worked for /)).toBeVisible();
 });

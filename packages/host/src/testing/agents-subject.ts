@@ -16,6 +16,7 @@ import {
   type AgentQueueAnswerView,
   type DevicePresenceAnswerView,
   type HostDoneAnswerView,
+  type ManagerChatEditAnswerView,
   type ManagerChatReactAnswerView,
   type MemoriesAnswerView,
   type MemorySaveAnswerView,
@@ -336,6 +337,8 @@ function fakeService() {
   let chatSendGate: Effect.Effect<void> = Effect.void;
   // What a reaction to a message of a Manager's chat answers; taken, changing what stood, from the start.
   let reactAnswer: ManagerChatReactAnswerView = { changed: true };
+  // What an edit of a message of a Manager's chat answers; taken, its words changed.
+  const editAnswer: ManagerChatEditAnswerView = { changed: true };
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -627,6 +630,12 @@ function fakeService() {
         asked.push(`chatReact:${agentId}:${messageId}:${request.kind}:${request.reacted}`);
 
         return reactAnswer;
+      }),
+    chatEdit: (agentId, messageId, request) =>
+      Effect.sync(() => {
+        asked.push(`chatEdit:${agentId}:${messageId}:${request.text}`);
+
+        return editAnswer;
       }),
     chatSend: (agentId, request) =>
       Effect.andThen(

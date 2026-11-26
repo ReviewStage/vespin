@@ -20,13 +20,32 @@
  * never resumed (`../../../service/src/agents/coder-host/runner-sessions.ts`).
  * Nor is a session the SDK dropped a batch of (`markSessionBroken`), whose
  * entries hold a gap however they begin.
+ *
+ * A resume may load a main transcript from its latest compaction rather
+ * than its first entry (`loadSessionEntryPage`'s `fromLatestCompaction`):
+ * Claude Code builds the conversation it hands the model from that
+ * compaction on, with the messages it preserves from before it, so the
+ * conversation entries before those are left out of the load and every
+ * other kind is kept, as the CLI keeps them when it reads a large
+ * transcript itself. Each row is marked for that as it is appended
+ * (`../schemas/claude-session-entry.ts`), and a compaction is given the row
+ * a resume may start from once the messages it preserves are found among
+ * the stored ones; where one is not, none, and a resume loads the whole
+ * transcript as before.
  */
 
 import { and, asc, desc, eq, inArray, isNotNull, isNull, max, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
-import { claudeBrokenSessions, claudeSessionEntries } from "../schemas/claude-session-entry.js";
+import {
+  claudeBrokenSessions,
+  claudeSessionEntries,
+  claudeSessionMarkBackfill,
+  claudeSessionMarkScan,
+  RESUME_ROLE,
+  type ResumeRole,
+} from "../schemas/claude-session-entry.js";
 import { conversations } from "../schemas/storage.js";
 
 type EntryEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -41,6 +60,50 @@ type EntryEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
  */
 const PAGE_ENTRIES = 1_000;
 const PAGE_BYTES = 2 * 1024 * 1024;
+
+/** The projects Codex's and Cursor's runners keep their stores under, as they key them (`@repo/agent-runner`'s `RUNNER_TRANSCRIPTS`), whose rows are no Claude Code conversation. */
+const CODEX_PROJECT = "codex";
+const CURSOR_PROJECT = "cursor";
+
+/** The entry kinds Claude Code reads as its conversation (its `transcript` kind), which a resume from a compaction leaves out before the compaction's start. */
+const CONVERSATION_TYPES: ReadonlySet<unknown> = new Set([
+  "user",
+  "assistant",
+  "system",
+  "attachment",
+]);
+
+/** A Claude Code compaction's own entry, as the CLI writes it. */
+const COMPACTION = { TYPE: "system", SUBTYPE: "compact_boundary" } as const;
+
+/**
+ * What a compaction says it preserves from before it, as the CLI reads it:
+ * the messages it lists, or where it lists none, the ends of the segment
+ * it walks, whose earliest is its head, since a message is always appended
+ * after its parent. Note that its `allUuids` are not read, as the CLI does
+ * not, since they may name messages never written.
+ */
+const CompactionSchema = Schema.Struct({
+  compactMetadata: Schema.optionalKey(
+    Schema.Struct({
+      preservedMessages: Schema.optionalKey(Schema.Struct({ uuids: Schema.Array(Schema.String) })),
+      preservedSegment: Schema.optionalKey(
+        Schema.Struct({ headUuid: Schema.String, tailUuid: Schema.String }),
+      ),
+    }),
+  ),
+});
+
+const decodeCompaction = Schema.decodeUnknownOption(CompactionSchema);
+
+/** A Claude Code entry's own uuid, which a compaction names the messages it preserves by. */
+const decodeUuid = Schema.decodeUnknownOption(Schema.Struct({ uuid: Schema.String }));
+
+/** How a row is marked for a resume from a compaction (`resumeMarks`). */
+interface ResumeMarks {
+  readonly resumeRole: ResumeRole;
+  readonly entryUuid: string | null;
+}
 
 /** One transcript line, opaque but for its `type`, as the SDK's `SessionStoreEntry` is. */
 const EntrySchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -87,6 +150,14 @@ const sessionRows = (conversationId: string, projectKey: string, sessionId: stri
     eq(claudeSessionEntries.sessionId, sessionId),
   );
 
+/** A queued session's row in the backfill. */
+const backfillRow = (conversationId: string, projectKey: string, sessionId: string) =>
+  and(
+    eq(claudeSessionMarkBackfill.conversationId, conversationId),
+    eq(claudeSessionMarkBackfill.projectKey, projectKey),
+    eq(claudeSessionMarkBackfill.sessionId, sessionId),
+  );
+
 const findConversation = SqlSchema.findOneOption({
   Request: Schema.Struct(OwnerFields),
   Result: Schema.Struct({ id: Schema.String }),
@@ -100,20 +171,81 @@ const findConversation = SqlSchema.findOneOption({
     ),
 });
 
-const insertEntries = SqlSchema.void({
+const insertEntries = SqlSchema.findAll({
   Request: Schema.Struct({ ...KeyFields, entries: Schema.Array(EntrySchema) }),
+  Result: Schema.Struct({ id: Schema.Number, entryUuid: Schema.NullOr(Schema.String) }),
   execute: ({ conversationId, projectKey, sessionId, subpath, entries }) =>
     Database.use((db) =>
-      db.insert(claudeSessionEntries).values(
-        entries.map((entry) => ({
-          conversationId,
-          projectKey,
-          sessionId,
-          subpath,
-          entry,
-          opens: opensTranscript(projectKey, subpath, entry),
-        })),
-      ),
+      db
+        .insert(claudeSessionEntries)
+        .values(
+          entries.map((entry) => ({
+            conversationId,
+            projectKey,
+            sessionId,
+            subpath,
+            entry,
+            opens: opensTranscript(projectKey, subpath, entry),
+            ...resumeMarks(projectKey, entry),
+          })),
+        )
+        .returning({ id: claudeSessionEntries.id, entryUuid: claudeSessionEntries.entryUuid }),
+    ),
+});
+
+/**
+ * A compaction given the row a resume may start from: the earliest of its
+ * own row and the messages it preserves from before it, where every one of
+ * them is stored in its session's main transcript; none where one is not.
+ * Note that the messages are found by their uuid among the session's rows
+ * before the compaction, which reads no entry.
+ */
+const resolveCompaction = SqlSchema.void({
+  Request: Schema.Struct({ id: Schema.Number, preserved: Schema.Array(Schema.String) }),
+  execute: ({ id, preserved }) =>
+    Effect.flatMap(
+      SqlClient.SqlClient,
+      (client) => client`
+        update claude_session_entries compaction set resume_from = (
+          select case when count(distinct kept.entry_uuid) = ${preserved.length}
+            then least(compaction.id, min(kept.id)) end
+          from claude_session_entries kept
+          where kept.conversation_id = compaction.conversation_id
+            and kept.project_key = compaction.project_key
+            and kept.session_id = compaction.session_id
+            and kept.subpath is null
+            and kept.id < compaction.id
+            and ${preserved.length > 0 ? client`kept.entry_uuid in ${client.in([...preserved])}` : client`false`}
+        )
+        where compaction.id = ${id}`,
+    ),
+});
+
+/**
+ * Where a resume of the key's main transcript may start: its latest
+ * compaction's start, none where it has none or its start is unknown.
+ * Note that it is read off the key's index from the transcript's end back,
+ * in the index's own order, so it reads the rows since that compaction
+ * alone; and that it answers only a row id, which the page's walk reads
+ * within the account's own conversation.
+ */
+const findResumeStart = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    projectKey: Schema.String,
+    sessionId: Schema.String,
+  }),
+  Result: Schema.Struct({ resumeFrom: Schema.NullOr(Schema.NumberFromString) }),
+  execute: ({ conversationId, projectKey, sessionId }) =>
+    Effect.flatMap(
+      SqlClient.SqlClient,
+      (client) => client`
+        select stored.resume_from::text as "resumeFrom" from claude_session_entries stored
+          where stored.conversation_id = ${conversationId}
+            and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
+            and stored.subpath is null
+            and stored.resume_role = ${RESUME_ROLE.COMPACTION}
+          order by stored.subpath desc, stored.id desc limit 1`,
     ),
 });
 
@@ -149,16 +281,23 @@ const findEntries = SqlSchema.findAll({
  * conversation, which its first step checks.
  */
 const findPage = SqlSchema.findAll({
-  Request: Schema.Struct({ ...KeyFields, after: Schema.NullOr(Schema.Number) }),
+  Request: Schema.Struct({
+    ...KeyFields,
+    after: Schema.NullOr(Schema.Number),
+    startFrom: Schema.Number,
+  }),
   Result: Schema.Struct({
     id: Schema.NumberFromString,
     entry: Schema.NullOr(Schema.fromJsonString(EntrySchema)),
   }),
-  execute: ({ userId, conversationId, projectKey, sessionId, subpath, after }) =>
+  execute: ({ userId, conversationId, projectKey, sessionId, subpath, after, startFrom }) =>
     Effect.flatMap(SqlClient.SqlClient, (client) => {
       // Note that the subpath is matched and ordered by as the key's index holds it, so each step reads one entry rather than the rest of the session.
       const ofSubpath =
         subpath === null ? client`stored.subpath is null` : client`stored.subpath = ${subpath}`;
+
+      // A conversation entry before the resume's start is passed over by its mark alone, its entry never read.
+      const inResume = client`(stored.id >= ${startFrom} or stored.resume_role is null or stored.resume_role = ${RESUME_ROLE.OTHER})`;
 
       return client`
         with recursive walk(id, n, running) as (
@@ -170,6 +309,7 @@ const findPage = SqlSchema.findAll({
               and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
               and ${ofSubpath}
               and stored.id > ${after ?? 0}
+              and ${inResume}
             order by stored.subpath, stored.id limit 1)
           union all
           (select step.id, walk.n + 1, walk.running + octet_length(step.entry::text)
@@ -179,6 +319,7 @@ const findPage = SqlSchema.findAll({
                   and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
                   and ${ofSubpath}
                   and stored.id > walk.id
+                  and ${inResume}
                 order by stored.subpath, stored.id limit 1
             ) step
             where walk.n <= ${PAGE_ENTRIES} and (walk.n = 1 or walk.running <= ${PAGE_BYTES}))
@@ -189,6 +330,230 @@ const findPage = SqlSchema.findAll({
           from walk join claude_session_entries stored on stored.id = walk.id
           order by walk.id`;
     }),
+});
+
+/** The one row the backfill's scan keeps its place in (`claude_session_mark_scan`). */
+const MARK_SCAN = "resume_marks";
+
+/** How far the backfill's scan has come: the last session it queued, and whether it passed the last; none before its first sweep. */
+const findMarkScan = SqlSchema.findOneOption({
+  Request: Schema.Struct({}),
+  Result: Schema.Struct({
+    afterConversationId: Schema.String,
+    afterProjectKey: Schema.String,
+    afterSessionId: Schema.String,
+    done: Schema.Boolean,
+  }),
+  execute: () =>
+    Database.use((db) =>
+      db
+        .select({
+          afterConversationId: claudeSessionMarkScan.afterConversationId,
+          afterProjectKey: claudeSessionMarkScan.afterProjectKey,
+          afterSessionId: claudeSessionMarkScan.afterSessionId,
+          done: claudeSessionMarkScan.done,
+        })
+        .from(claudeSessionMarkScan)
+        .where(eq(claudeSessionMarkScan.scan, MARK_SCAN)),
+    ),
+});
+
+const MarkScanPlace = Schema.Struct({
+  afterConversationId: Schema.String,
+  afterProjectKey: Schema.String,
+  afterSessionId: Schema.String,
+});
+
+/**
+ * The next Claude Code sessions past the place given, in the key index's
+ * order, each queued for the backfill where its main transcript's first row
+ * carries no mark, as every row from before the marks does and none since;
+ * answers the last session read and how many were. Note that each session
+ * is found by one probe of the key index past the last (a skip scan), so a
+ * session's rows are never read but its first and newest, and that the
+ * statement writes only the queue, which no request reads.
+ */
+const queueNextSessions = SqlSchema.findAll({
+  Request: Schema.Struct({ after: Schema.NullOr(MarkScanPlace), sessions: Schema.Number }),
+  Result: Schema.Struct({ ...MarkScanPlace.fields, read: Schema.Number }),
+  execute: ({ after, sessions }) =>
+    Effect.flatMap(SqlClient.SqlClient, (client) => {
+      const claudeCode = client`stored.subpath is null and stored.project_key not in ${client.in([CODEX_PROJECT, CURSOR_PROJECT])}`;
+
+      const past =
+        after === null
+          ? client`true`
+          : client`(stored.conversation_id, stored.project_key, stored.session_id) > (${after.afterConversationId}::uuid, ${after.afterProjectKey}, ${after.afterSessionId})`;
+
+      // Note that each probe is the key index's own order, so it reads the next session's first entry alone.
+      const ofSession = client`stored.conversation_id = scanned.conversation_id and stored.project_key = scanned.project_key and stored.session_id = scanned.session_id and stored.subpath is null`;
+
+      return client`
+        with recursive scanned(conversation_id, project_key, session_id, n) as (
+          (select stored.conversation_id, stored.project_key, stored.session_id, 1
+            from claude_session_entries stored
+            where ${claudeCode} and ${past}
+            order by stored.conversation_id, stored.project_key, stored.session_id limit 1)
+          union all
+          (select next.conversation_id, next.project_key, next.session_id, scanned.n + 1
+            from scanned, lateral (
+              select stored.conversation_id, stored.project_key, stored.session_id
+                from claude_session_entries stored
+                where ${claudeCode}
+                  and (stored.conversation_id, stored.project_key, stored.session_id)
+                    > (scanned.conversation_id, scanned.project_key, scanned.session_id)
+                order by stored.conversation_id, stored.project_key, stored.session_id limit 1
+            ) next
+            where scanned.n < ${sessions})
+        ), queued as (
+          insert into claude_session_mark_backfill (conversation_id, project_key, session_id, newest)
+            select scanned.conversation_id, scanned.project_key, scanned.session_id,
+                (select max(stored.id) from claude_session_entries stored where ${ofSession})
+              from scanned
+              where (select stored.resume_role from claude_session_entries stored where ${ofSession}
+                order by stored.subpath, stored.id limit 1) is null
+            on conflict do nothing
+        )
+        select scanned.conversation_id::text as "afterConversationId",
+          scanned.project_key as "afterProjectKey", scanned.session_id as "afterSessionId",
+          scanned.n as read
+          from scanned order by scanned.n desc limit 1`;
+    }),
+});
+
+const saveMarkScan = SqlSchema.void({
+  Request: Schema.Struct({ ...MarkScanPlace.fields, done: Schema.Boolean }),
+  execute: (place) =>
+    Database.use((db) =>
+      db
+        .insert(claudeSessionMarkScan)
+        .values({ scan: MARK_SCAN, ...place })
+        .onConflictDoUpdate({ target: claudeSessionMarkScan.scan, set: place }),
+    ),
+});
+
+const finishMarkScan = SqlSchema.void({
+  Request: Schema.Struct({}),
+  execute: () =>
+    Database.use((db) =>
+      db
+        .update(claudeSessionMarkScan)
+        .set({ done: true })
+        .where(eq(claudeSessionMarkScan.scan, MARK_SCAN)),
+    ),
+});
+
+/** The session the backfill marks next: the latest appended first, with the last of its rows marked. */
+const findNextBackfill = SqlSchema.findOneOption({
+  Request: Schema.Struct({}),
+  Result: Schema.Struct({
+    conversationId: Schema.String,
+    projectKey: Schema.String,
+    sessionId: Schema.String,
+    markedThrough: Schema.Number,
+  }),
+  execute: () =>
+    Database.use((db) =>
+      db
+        .select({
+          conversationId: claudeSessionMarkBackfill.conversationId,
+          projectKey: claudeSessionMarkBackfill.projectKey,
+          sessionId: claudeSessionMarkBackfill.sessionId,
+          markedThrough: claudeSessionMarkBackfill.markedThrough,
+        })
+        .from(claudeSessionMarkBackfill)
+        .orderBy(desc(claudeSessionMarkBackfill.newest))
+        .limit(1),
+    ),
+});
+
+const BackfillKeyFields = {
+  conversationId: Schema.String,
+  projectKey: Schema.String,
+  sessionId: Schema.String,
+};
+
+/**
+ * The next rows of a queued session's main transcript past the one given,
+ * each still unmarked marked as an append marks it (`resumeMarks`), read
+ * off the key's index in its order; answers the last row taken and how
+ * many were. Note that the marks are written in one statement, each entry
+ * read where it is stored, so no entry leaves the database.
+ */
+const markBackfillRows = SqlSchema.findAll({
+  Request: Schema.Struct({ ...BackfillKeyFields, after: Schema.Number, rows: Schema.Number }),
+  Result: Schema.Struct({ through: Schema.NullOr(Schema.NumberFromString), taken: Schema.Number }),
+  execute: ({ conversationId, projectKey, sessionId, after, rows }) =>
+    Effect.flatMap(SqlClient.SqlClient, (client) => {
+      const conversation = client`(stored.entry->>'type' in ${client.in([...CONVERSATION_TYPES].map(String))} and jsonb_typeof(stored.entry->'uuid') = 'string')`;
+
+      return client`
+        with batch as (
+          select stored.id from claude_session_entries stored
+            where stored.conversation_id = ${conversationId}
+              and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
+              and stored.subpath is null
+              and stored.id > ${after}
+            order by stored.subpath, stored.id limit ${rows}
+        ), marked as (
+          update claude_session_entries stored set
+            resume_role = case
+              when not ${conversation} then ${RESUME_ROLE.OTHER}
+              when stored.entry->>'type' = ${COMPACTION.TYPE} and stored.entry->>'subtype' = ${COMPACTION.SUBTYPE}
+                then ${RESUME_ROLE.COMPACTION}
+              else ${RESUME_ROLE.CONVERSATION} end,
+            entry_uuid = case when ${conversation} then stored.entry->>'uuid' end
+          from batch
+          where stored.id = batch.id and stored.resume_role is null
+          returning stored.id
+        )
+        select max(batch.id)::text as through, count(*)::int as taken from batch`;
+    }),
+});
+
+/** A session's latest compaction: its row and what it says it preserves, read alone. */
+const findLatestCompaction = SqlSchema.findOneOption({
+  Request: Schema.Struct(BackfillKeyFields),
+  Result: Schema.Struct({
+    id: Schema.NumberFromString,
+    compaction: Schema.fromJsonString(EntrySchema),
+  }),
+  execute: ({ conversationId, projectKey, sessionId }) =>
+    Effect.flatMap(
+      SqlClient.SqlClient,
+      (client) => client`
+        select stored.id::text as id,
+          jsonb_build_object('compactMetadata', stored.entry->'compactMetadata')::text as compaction
+          from claude_session_entries stored
+          where stored.conversation_id = ${conversationId}
+            and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
+            and stored.subpath is null
+            and stored.resume_role = ${RESUME_ROLE.COMPACTION}
+          order by stored.subpath desc, stored.id desc limit 1`,
+    ),
+});
+
+const advanceBackfill = SqlSchema.void({
+  Request: Schema.Struct({ ...BackfillKeyFields, through: Schema.Number }),
+  execute: ({ conversationId, projectKey, sessionId, through }) =>
+    Database.use((db) =>
+      db
+        .update(claudeSessionMarkBackfill)
+        .set({
+          markedThrough: sql`greatest(${claudeSessionMarkBackfill.markedThrough}, ${through})`,
+        })
+        .where(backfillRow(conversationId, projectKey, sessionId)),
+    ),
+});
+
+const dropBackfill = SqlSchema.void({
+  Request: Schema.Struct(BackfillKeyFields),
+  execute: ({ conversationId, projectKey, sessionId }) =>
+    Database.use((db) =>
+      db
+        .delete(claudeSessionMarkBackfill)
+        .where(backfillRow(conversationId, projectKey, sessionId)),
+    ),
 });
 
 const findSessions = SqlSchema.findAll({
@@ -273,6 +638,9 @@ const copyEntries = SqlSchema.void({
             subpath: claudeSessionEntries.subpath,
             entry: claudeSessionEntries.entry,
             opens: claudeSessionEntries.opens,
+            // Note that a compaction's start is not copied, since it names a row of the source's, so a copy resumes whole until its next compaction.
+            resumeRole: claudeSessionEntries.resumeRole,
+            entryUuid: claudeSessionEntries.entryUuid,
             createdAt: claudeSessionEntries.createdAt,
           })
           .from(claudeSessionEntries)
@@ -342,9 +710,6 @@ const findOpening = SqlSchema.findOneOption({
     ),
 });
 
-/** The project a Cursor agent's store is kept under, as its runner keys it (`@repo/agent-runner`'s `RUNNER_TRANSCRIPTS.CURSOR_PROJECT`). */
-const CURSOR_PROJECT = "cursor";
-
 /**
  * Whether the entry opens its transcript: a Claude Code session's root,
  * the main transcript's user entry with no parent, which every later entry
@@ -362,6 +727,124 @@ function opensTranscript(projectKey: string, subpath: string | null, entry: Sess
   if (projectKey === CURSOR_PROJECT) return subpath === null && entry.type === "agent";
 
   return subpath === null && entry.type === "user" && entry.parentUuid === null;
+}
+
+/** Whether the entry is a Claude Code compaction's own. */
+function isCompaction(entry: SessionEntry): boolean {
+  return entry.type === COMPACTION.TYPE && entry.subtype === COMPACTION.SUBTYPE;
+}
+
+/**
+ * How a row is marked for a resume from a compaction as it is inserted: a
+ * Claude Code conversation entry with its uuid, a compaction among them,
+ * and every other kind, Codex's and Cursor's rows among them, as one a
+ * resume always keeps. Note that a conversation entry with no uuid is kept
+ * too, since nothing could name it as preserved.
+ */
+function resumeMarks(projectKey: string, entry: SessionEntry): ResumeMarks {
+  const claudeCode = projectKey !== CODEX_PROJECT && projectKey !== CURSOR_PROJECT;
+  const uuid = Option.map(decodeUuid(entry), (read) => read.uuid);
+
+  if (!claudeCode || !CONVERSATION_TYPES.has(entry.type) || Option.isNone(uuid)) {
+    return { resumeRole: RESUME_ROLE.OTHER, entryUuid: null };
+  }
+
+  return {
+    resumeRole: isCompaction(entry) ? RESUME_ROLE.COMPACTION : RESUME_ROLE.CONVERSATION,
+    entryUuid: uuid.value,
+  };
+}
+
+/** The uuids of the messages a compaction preserves from before it; none where its metadata does not read, so no resume starts from it. */
+function preservedOf(entry: SessionEntry): Option.Option<readonly string[]> {
+  return Option.map(decodeCompaction(entry), ({ compactMetadata }) => {
+    const listed = compactMetadata?.preservedMessages;
+    const segment = compactMetadata?.preservedSegment;
+
+    if (listed !== undefined) return [...new Set(listed.uuids)];
+
+    return segment === undefined ? [] : [...new Set([segment.headUuid, segment.tailUuid])];
+  });
+}
+
+/**
+ * Each compaction an append inserted given where a resume may start from
+ * it (`resolveCompaction`). Note that one whose start is not found keeps
+ * none, which loads its transcript whole, so the append stands whatever
+ * the lookup met.
+ */
+function resolvedCompactions(
+  inserted: ReadonlyArray<{ readonly id: number; readonly entryUuid: string | null }>,
+  entries: readonly SessionEntry[],
+): EntryEffect<void> {
+  const compactions = new Map<string, SessionEntry>();
+
+  for (const entry of entries) {
+    const uuid = decodeUuid(entry);
+
+    if (isCompaction(entry) && Option.isSome(uuid)) compactions.set(uuid.value.uuid, entry);
+  }
+
+  return Effect.forEach(
+    inserted,
+    (row) => {
+      const preserved = Option.flatMap(
+        Option.fromNullishOr(row.entryUuid === null ? undefined : compactions.get(row.entryUuid)),
+        preservedOf,
+      );
+
+      return Option.isNone(preserved)
+        ? Effect.void
+        : resolveCompaction({ id: row.id, preserved: preserved.value }).pipe(
+            Effect.catch(() =>
+              Effect.logWarning("a compaction's resume start was not stored; it resumes whole"),
+            ),
+          );
+    },
+    { discard: true },
+  );
+}
+
+/** A fully marked session's latest compaction given its start, as an append gives it; nothing where it has none. */
+function resolveLatestCompaction(session: {
+  readonly conversationId: string;
+  readonly projectKey: string;
+  readonly sessionId: string;
+}): EntryEffect<void> {
+  return Effect.flatMap(findLatestCompaction(session), (latest) => {
+    const preserved = Option.flatMap(latest, (row) => preservedOf(row.compaction));
+
+    return Option.isSome(latest) && Option.isSome(preserved)
+      ? resolveCompaction({ id: latest.value.id, preserved: preserved.value })
+      : Effect.void;
+  });
+}
+
+/** The backfill's scan moved on by the sessions given, from where it stood; answers how many it read, none once it has passed the last. */
+function scanForUnmarkedSessions(sessions: number): EntryEffect<number> {
+  return Effect.gen(function* () {
+    const scan = yield* findMarkScan({});
+
+    if (Option.isSome(scan) && scan.value.done) return 0;
+
+    const after = Option.match(scan, {
+      onNone: () => null,
+      onSome: ({ done: _, ...place }) => place,
+    });
+
+    const [last] = yield* queueNextSessions({ after, sessions });
+
+    if (last === undefined) {
+      yield* finishMarkScan({});
+
+      return 0;
+    }
+
+    const { read, ...place } = last;
+    yield* saveMarkScan({ ...place, done: read < sessions });
+
+    return read;
+  });
 }
 
 /** A key's fields as the requests take them: no subpath as null. */
@@ -388,7 +871,9 @@ export function appendSessionEntries(
     const own = yield* findConversation({ userId, conversationId });
 
     if (Option.isNone(own)) return;
-    yield* insertEntries({ ...keyFields(userId, conversationId, key), entries });
+    const inserted = yield* insertEntries({ ...keyFields(userId, conversationId, key), entries });
+
+    if (key.subpath === undefined) yield* resolvedCompactions(inserted, entries);
   });
 }
 
@@ -411,14 +896,32 @@ export function loadSessionEntries(
  * in the order they were appended, held to a page's count and bytes, and the
  * cursor the next page is read after, none where the page holds the last.
  * A page holds at least one entry wherever one stands past the cursor.
+ * From the latest compaction (`fromLatestCompaction`), a main transcript's
+ * conversation entries before that compaction's start are left out, and
+ * every other kind kept; a transcript with no such start loads whole.
  */
 export function loadSessionEntryPage(
   userId: string,
   conversationId: string,
   key: SessionEntryKey,
   after: number | null,
+  options: { readonly fromLatestCompaction?: boolean } = {},
 ): EntryEffect<SessionEntryPage> {
-  return findPage({ ...keyFields(userId, conversationId, key), after }).pipe(
+  const fields = keyFields(userId, conversationId, key);
+
+  const startFrom =
+    options.fromLatestCompaction === true && fields.subpath === null
+      ? Effect.map(findResumeStart(fields), (found) =>
+          Option.getOrElse(
+            Option.flatMapNullishOr(found, (row) => row.resumeFrom),
+            () => 0,
+          ),
+        )
+      : Effect.succeed(0);
+
+  return Effect.flatMap(startFrom, (start) =>
+    findPage({ ...fields, after, startFrom: start }),
+  ).pipe(
     Effect.map((rows) => {
       // Note that only the walk's last row can be past the page, so its entries are the rows that carry one.
       const kept: Array<{ readonly id: number; readonly entry: SessionEntry }> = [];
@@ -521,4 +1024,52 @@ export function copySessionEntries(
     }),
     copyBreaks(request),
   );
+}
+
+/** How much of the backfill one sweep does: the most sessions its scan queues, the most rows it marks, and the most one statement marks. */
+export interface MarkBackfillBounds {
+  readonly sessionsPerSweep: number;
+  readonly rowsPerSweep: number;
+  readonly rowsPerBatch: number;
+}
+
+/**
+ * One sweep's worth of the backfill of rows stored before the resume marks
+ * (`claude_session_mark_backfill`). The scan queues the next stored
+ * sessions holding such rows, a sweep's worth at a time, until it has
+ * passed the last (`queueNextSessions`). Then the queued sessions are taken
+ * the latest appended first, each marked a batch at a time past the last
+ * row it marked, so a sweep cut short loses no more than its batch. A
+ * session whose last row is marked has its latest compaction given its
+ * start, as an append gives it (`resolvedCompactions`), and leaves the
+ * queue. Every statement is its own, outside any migration, and none writes
+ * a row a request writes. Answers how many sessions it scanned and rows it
+ * read; none once the scan is done and the queue empty.
+ */
+export function markSessionsForResume(bounds: MarkBackfillBounds): EntryEffect<number> {
+  return Effect.gen(function* () {
+    const scanned = yield* scanForUnmarkedSessions(bounds.sessionsPerSweep);
+    let read = 0;
+
+    while (read < bounds.rowsPerSweep) {
+      const next = yield* findNextBackfill({});
+
+      if (Option.isNone(next)) break;
+      const { markedThrough, ...session } = next.value;
+      const rows = Math.min(bounds.rowsPerBatch, bounds.rowsPerSweep - read);
+      const [batch] = yield* markBackfillRows({ ...session, after: markedThrough, rows });
+      const taken = batch?.taken ?? 0;
+      read += taken;
+
+      if (taken === rows && batch?.through !== null && batch?.through !== undefined) {
+        yield* advanceBackfill({ ...session, through: batch.through });
+        continue;
+      }
+
+      yield* resolveLatestCompaction(session);
+      yield* dropBackfill(session);
+    }
+
+    return scanned + read;
+  });
 }

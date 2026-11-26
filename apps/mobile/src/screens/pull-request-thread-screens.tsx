@@ -192,7 +192,9 @@ export function PullRequestThreadScreen() {
             }
             disabled={writes.pending !== undefined}
             onPress={settle}
-          />
+          >
+            {thread.resolved ? THREAD_ACT_WORDS.REOPEN : THREAD_ACT_WORDS.RESOLVE}
+          </Stack.Toolbar.Button>
         </Stack.Toolbar>
       )}
       {thread === undefined ? (

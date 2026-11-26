@@ -10,6 +10,7 @@ import { useIsFocused } from "expo-router";
 import { useLayoutEffect, useRef } from "react";
 import { AppState } from "react-native";
 import { useHostCount } from "./host/host-provider.js";
+import { lastTapAt } from "./taps.js";
 
 /** The build number this build was released as (`CFBundleVersion`), which a switch is read beside; none where the build names none. */
 const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
@@ -17,29 +18,8 @@ const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
 /** How long before the tab heard it came forward the touch that chose it may have ended; one earlier chose nothing here. */
 const TAP_WITHIN_MS = 3000;
 
-/** The input entries a tap ends with, as React Native's event timing names them. */
-const TAP_ENDS: ReadonlySet<string> = new Set(["touchend", "pointerup", "click"]);
-
-/** The least wait event timing tells of, in milliseconds: the spec's floor, so a switch slow enough to matter is always heard. */
-const EVENT_TIMING_FLOOR_MS = 16;
-
-/** When the latest tap ended, on the performance clock, as the touch itself was stamped where it landed; none before one has. */
-let lastTapAt: number | undefined;
-
 /** The tabs counted, or let go uncounted, since this launch, each once. */
 const settledTabs = new Set<ProductSurface>();
-
-/** The Event Timing spec's own option, the least wait an event's entry is kept for, which TypeScript's DOM lib leaves out. */
-interface EventTimingInit extends PerformanceObserverInit {
-  readonly durationThreshold?: number;
-}
-
-/** The taps watched for: every input entry the floor keeps, from the bundle's start. */
-const EVENT_WATCH: EventTimingInit = {
-  type: "event",
-  buffered: true,
-  durationThreshold: EVENT_TIMING_FLOOR_MS,
-};
 
 /** A switch being timed: when its tap ended, when JavaScript first rendered the tab in front, and when its first frame drew. */
 interface Switching {
@@ -47,15 +27,6 @@ interface Switching {
   readonly heardAt: number;
   startAt: number | undefined;
 }
-
-// Note that taps are heard from the bundle's start, since event timing stamps each touch as it landed, before JavaScript runs anything for it, which is what lets a switch be timed from the finger rather than from when JavaScript heard it.
-const tapWatch = new PerformanceObserver((list) => {
-  for (const entry of list.getEntries()) {
-    if (TAP_ENDS.has(entry.name)) lastTapAt = Math.max(lastTapAt ?? 0, entry.startTime);
-  }
-});
-
-tapWatch.observe(EVENT_WATCH);
 
 /**
  * Counts, once a launch, the first time the tab `surface` comes forward
@@ -79,7 +50,7 @@ export function useTabDrawnCount(surface: ProductSurface, rowsShown: boolean): v
   useLayoutEffect(() => {
     if (!inFront || settledTabs.has(surface)) return;
     settledTabs.add(surface);
-    const tapAt = lastTapAt;
+    const tapAt = lastTapAt();
 
     if (tapAt === undefined || renderedAt - tapAt > TAP_WITHIN_MS) return;
     const timing: Switching = { tapAt, heardAt: renderedAt, startAt: undefined };

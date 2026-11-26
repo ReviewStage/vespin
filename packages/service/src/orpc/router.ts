@@ -152,7 +152,7 @@ import {
   type WorkspaceSandboxSizeProcedureSeams,
   workspaceSandboxSizeProcedures,
 } from "../workspace-sandbox-size/workspace-sandbox-size-procedures.js";
-import { hosted } from "./base.js";
+import { hostedRoot } from "./base.js";
 import type { HostedRouter } from "./handler.js";
 
 /** What the resources ask of the deployment: one line per resource, in alphabetical order. */
@@ -208,7 +208,7 @@ export function hostedRouter(seams: HostedRouterSeams): HostedRouter {
   // One cache of the kept published answers for every resource that reads them or lets them go.
   const published = { ...seams, published: instancePublishedCache() };
 
-  return hosted.router({
+  return hostedRoot.router({
     account: accountProcedures(seams),
     admin: adminProcedures(seams),
     agentBrowserTabs: agentBrowserTabsProcedures(seams),

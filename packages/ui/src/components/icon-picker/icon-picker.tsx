@@ -1,7 +1,7 @@
 import type { PopoverRoot } from "@base-ui/react/popover";
 import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 import { Popover, PopoverContent } from "../../shadcn/popover.js";
-import { IconButton } from "../button/button.js";
+import { ICON_BUTTON_SIZE, IconButton } from "../button/button.js";
 import { ROVING_ORIENTATION, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { ScrollArea } from "../scroll-area/scroll-area.js";
 import { SearchField } from "../search-field/search-field.js";
@@ -85,9 +85,46 @@ export interface IconPickerFlyout {
   readonly onClose: () => void;
 }
 
-/** The layer a flyout from `choice` stands in: the one the picker it stands in was hung on, over a dialog's card where that was. */
+/** The flyouts standing in the window, each its popup and the choice it floats from, the newest last. */
+const standingFlyouts: { readonly popup: HTMLElement; readonly choice: HTMLElement }[] = [];
+
+/**
+ * The choice the flyout `node` stands in floats from, the newest where
+ * flyouts stand over one another; none where `node` stands in no flyout. A
+ * surface that closes when a press or the focus leaves it, as a menu's
+ * panel holding a picker does, traces a flyout back through it, since the
+ * flyout stands apart from the picker, portaled to the body.
+ */
+export function iconPickerChoiceOf(node: Node): HTMLElement | undefined {
+  return standingFlyouts.findLast((each) => each.popup.contains(node))?.choice;
+}
+
+/** Counts `popup` among the flyouts standing, floating from `choice`, until the returned call takes it out. */
+function standFlyout(popup: HTMLElement, choice: HTMLElement): () => void {
+  const entry = { popup, choice };
+  standingFlyouts.push(entry);
+
+  return () => {
+    const at = standingFlyouts.indexOf(entry);
+
+    if (at !== -1) standingFlyouts.splice(at, 1);
+  };
+}
+
+/** The layer a dialog's card stands in, which a flyout over it stands above. */
+const DIALOG_LAYER = "dialog";
+
+/**
+ * The layer a flyout from `choice` stands in: the one the picker it stands
+ * in was hung on, or over a dialog's card where the picker stands in one
+ * hung on none, as a phone's menu sheet holding a Manager's faces is.
+ */
 function layerAround(choice: HTMLElement | null): string | undefined {
-  return choice?.closest("[data-layer]")?.getAttribute("data-layer") ?? undefined;
+  const hung = choice?.closest("[data-layer]")?.getAttribute("data-layer");
+
+  if (hung != null) return hung;
+
+  return choice?.closest('[aria-modal="true"]') == null ? undefined : DIALOG_LAYER;
 }
 
 /**
@@ -145,6 +182,20 @@ function ChoiceFlyout({
   }, []);
   const close = useRef(flyout.onClose);
   close.current = flyout.onClose;
+  // Whether it is counted among the flyouts standing, which it is from the moment its row stands, before it takes the focus, so a surface hearing the focus leave for it can trace it back.
+  const counted = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    const popup = row.current?.parentElement;
+
+    if (counted.current === undefined && popup != null && choice.current !== null) {
+      counted.current = standFlyout(popup, choice.current);
+    }
+
+    return () => {
+      counted.current?.();
+      counted.current = undefined;
+    };
+  }, [choice]);
 
   // Note that Escape with the focus back on its choice closes it alone, heard on the choice before it reaches the window, where the picker's popover would close as well.
   useEffect(() => {
@@ -167,6 +218,13 @@ function ChoiceFlyout({
   const stand = (element: HTMLDivElement | null) => {
     row.current = element;
     roving.ref(element);
+
+    // Note that the popup the row stands in is what is counted, so a press on its edge around the row is the flyout's too.
+    const popup = element?.parentElement;
+
+    if (counted.current === undefined && popup != null && choice.current !== null) {
+      counted.current = standFlyout(popup, choice.current);
+    }
 
     if (element === null || landed.current) return;
     landed.current = true;
@@ -247,6 +305,7 @@ export function IconPickerChoice({
       <IconButton
         ref={button}
         icon={face}
+        size={ICON_BUTTON_SIZE.PICKER}
         label={label}
         pressed={pressed}
         tabbable={stop}
