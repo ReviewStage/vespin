@@ -26,6 +26,7 @@ import { GLYPH, SmileIcon } from "@repo/ui/icons";
 import { ManagerFaceMenuPanel } from "@repo/ui/manager-face-picker";
 import { type InlineRename, useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { pressMutation } from "../act-mutations.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
@@ -69,9 +70,11 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * whole from the service; Rename, which opens its name's field where the
  * surface draws its name, while neither it nor what it stands under is
  * archived (its tab keeps Pin tab among its tab's keeping), and for a
- * Manager beside it, on the same terms, Change face ›, the app's icon
- * picker over every face beside the item, a pick saved at once, and
- * Settings…, its card that changes its model and effort too
+ * Manager beside it, on the same terms, Change face, which opens the name's
+ * field with the face beside it as a well, its picker open, where the
+ * surface draws its face there (`FACE_IN.EDITOR`, `AgentFaceEdit`), or the
+ * app's icon picker over every face beside the item where it draws none
+ * (`FACE_IN.PANEL`), a pick saved at once either way, and Settings…, its card that changes its model and effort too
  * (`manager-settings-dialog.tsx`); Show terminal,
  * where the platform runs one, and none for an archived agent, whose sandbox
  * takes no shell, which for a local agent opens the Mac's own Terminal in
@@ -91,8 +94,22 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * task's draft tab, started through the same control.
  */
 
-/** What a Manager's menu calls the panel its face is picked in. */
+/** What a Manager's menu calls the act its face is picked by. */
 const CHANGE_FACE = "Change face";
+
+/**
+ * Where a surface's Change face picks a Manager's face: in the name's field
+ * it opens, the face beside it drawn as a well with its picker open, where
+ * the surface draws the face beside the name (a sidebar row, the page's
+ * bar); or in a panel beside the menu's item, where it draws no face there
+ * to stand the well in (a phone's head, a pinned tab).
+ */
+export const FACE_IN = {
+  EDITOR: "editor",
+  PANEL: "panel",
+} as const;
+
+export type FaceIn = (typeof FACE_IN)[keyof typeof FACE_IN];
 
 /** What the agent menu's one copy of its words is called, and the two ways it copies them. */
 const COPY_TRANSCRIPT = "Copy transcript";
@@ -113,7 +130,7 @@ export interface AgentMenuDoors {
   onCopy?: ((copy: TranscriptCopy) => void) | undefined;
   /** Opens the agent's name's field where the surface draws its name. */
   onRename?: (() => void) | undefined;
-  /** Change face ›, a Manager's face picked in a panel beside its item, a pick saved at once (`@repo/ui`'s `ManagerFaceMenuPanel`). */
+  /** Change face, a Manager's: the name's field opened with the face's picker beside it (`FACE_IN.EDITOR`, `AgentFaceEdit`), or the picker in a panel beside its item (`FACE_IN.PANEL`, `@repo/ui`'s `ManagerFaceMenuPanel`), a pick saved at once. */
   changeFace?: MenuEntry | undefined;
   /** Opens the agent's Settings card, a Manager's, where its model and effort are changed too (`manager-settings-dialog.tsx`). */
   onSettings?: (() => void) | undefined;
@@ -141,7 +158,7 @@ export interface AgentMenuDoors {
  * The agent's menu, built once for every surface that draws it, in the
  * groups every menu of the window keeps: Copy link, Open in new tab in a
  * browser, and the transcript's two
- * copies; Rename, and Change face › and Settings… for a Manager; Show terminal,
+ * copies; Rename, and Change face and Settings… for a Manager; Show terminal,
  * Show browser and Run › where a phone offers them, Open in task, for an agent drawn
  * apart from its task, and Open in Slack, for one started from Slack;
  * Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
@@ -288,6 +305,18 @@ export interface ShownShell {
   readonly kind?: TerminalKind | undefined;
 }
 
+/**
+ * A Manager's face being picked in its name's field (`FACE_IN.EDITOR`):
+ * whether the picker stands open, which the surface's face well holds and
+ * hears (`ManagerFaceWell`'s `open` and `onOpenChange`), and the pick, saved
+ * at once, which puts the picker away and leaves the name's field open.
+ */
+export interface AgentFaceEdit {
+  readonly picking: boolean;
+  readonly onPicking: (open: boolean) => void;
+  readonly onPick: (face: ManagerFace) => void;
+}
+
 /** An agent's actions as a surface draws them: its doors, its rename where it is renamed, and the questions its Archive and its delete ask through, drawn beside them. */
 export interface AgentActions {
   readonly doors: AgentDoors;
@@ -295,8 +324,10 @@ export interface AgentActions {
   readonly subject: ShortcutSubject;
   /** Opens the agent in a tab of its own, which a middle-click on its row takes; none where the window opens no tabs. */
   readonly openInTab: (() => void) | undefined;
-  /** The rename its Rename opens; none while what it stands under is archived. */
+  /** The rename its Rename and a Manager's Change face open, whose end puts the face's picker away too; none while what it stands under is archived. */
   readonly rename: InlineRename | undefined;
+  /** A Manager's face picked in its name's field, while Change face opens it there (`FACE_IN.EDITOR`); none otherwise. */
+  readonly face: AgentFaceEdit | undefined;
   readonly dialog: React.JSX.Element;
 }
 
@@ -400,9 +431,13 @@ export function useAgentActions(
     readonly run?: MenuSubmenu | undefined;
     /** Closes what shows the agent, its tab or its page, once its delete landed. */
     readonly onDeleted?: (() => void) | undefined;
+    /** Where a Manager's Change face picks its face (`FaceIn`): in a panel beside the item where none is named. */
+    readonly faceIn?: FaceIn | undefined;
   },
 ): AgentActions {
   const { label, shown, terminals, onOpenBrowser, run, onDeleted } = input;
+  const faceIn = input.faceIn ?? FACE_IN.PANEL;
+  const [picking, setPicking] = useState(false);
   const subject = shortcutSubject(SHORTCUT_SUBJECT.AGENT, agent.id);
   // Note that a surface builds the agent's menu on its draw, so it is drawn again as the keys acting on the agent change.
   useShortcutTargetOn(subject);
@@ -478,16 +513,52 @@ export function useAgentActions(
     });
   };
 
+  // Note that a face is picked only while its name's field stands, so ending the field puts the picker away too, and a plain Rename opens it with none.
+  const renamed: InlineRename = {
+    ...rename,
+    begin: () => {
+      setPicking(false);
+      rename.begin();
+    },
+    end: (name) => {
+      setPicking(false);
+      rename.end(name);
+    },
+  };
+
+  const faced = manager && renamable;
+  const editsFace = faced && faceIn === FACE_IN.EDITOR;
+
+  const face: AgentFaceEdit | undefined = editsFace
+    ? {
+        picking: picking && rename.editing,
+        onPicking: setPicking,
+        onPick: (next) => {
+          changeFace(next);
+          setPicking(false);
+        },
+      }
+    : undefined;
+
   const read = agentTranscriptRead(agents.readTranscript, agent.id, label, agent.brief);
   const slackUrl = agent.source?.kind === AGENT_SOURCE.SLACK ? agent.source.url : undefined;
 
   return {
     doors: {
       onCopy: copied(read),
-      onRename: renamable ? rename.begin : undefined,
-      changeFace:
-        manager && agents.onUnarchive === undefined
+      onRename: renamable ? renamed.begin : undefined,
+      changeFace: !faced
+        ? undefined
+        : editsFace
           ? {
+              label: CHANGE_FACE,
+              icon: <SmileIcon />,
+              onSelect: () => {
+                rename.begin();
+                setPicking(true);
+              },
+            }
+          : {
               label: CHANGE_FACE,
               icon: <SmileIcon />,
               width: POPOVER_WIDTH.FIT,
@@ -495,14 +566,13 @@ export function useAgentActions(
                 <ManagerFaceMenuPanel
                   face={agent.face}
                   recent={RECENT_MANAGER_FACES}
-                  onChange={(face) => {
-                    changeFace(face);
+                  onChange={(next) => {
+                    changeFace(next);
                     close();
                   }}
                 />
               ),
-            }
-          : undefined,
+            },
       onSettings: manager && agents.onUnarchive === undefined ? settings.ask : undefined,
       // Note that an archived agent's sandbox takes no shell, so it offers no terminal.
       onOpenTerminal: agent.archivedAt !== undefined ? undefined : terminal,
@@ -525,7 +595,8 @@ export function useAgentActions(
     },
     subject,
     openInTab,
-    rename: renamable ? rename : undefined,
+    rename: renamable ? renamed : undefined,
+    face,
     dialog: (
       <>
         {archive.dialog}
