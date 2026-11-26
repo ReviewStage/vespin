@@ -2119,25 +2119,41 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
   },
 ];
 
-/** The threads a fixture run started on the invites task's description, by id, so a reply or a resolve on one finds it as it does a staged thread. */
-const STARTED_THREADS = new Map<string, DescriptionCommentThread>();
+/**
+ * The threads a fixture run wrote on the invites task's description, by id,
+ * each as the run last left it: one it started, or a staged one it replied
+ * to, resolved, or reopened. Note that the run's answers are given before
+ * the act reaches the host, so no declared write draws them; the comments
+ * slice lays them over the staged threads instead (`stagedComments`).
+ */
+const RUN_THREADS = new Map<string, DescriptionCommentThread>();
+
+/** How many times the run has written a thread, so a comments slice laid before the latest write is laid again rather than read from the cache. */
+let runThreadWrites = 0;
 
 /** The number the next entry the run writes is given its id by, a kept reply or a resolve's or reopen's line, past every id the fixture stages, so each is keyed apart. */
 let nextReplyId = 1000;
 
-/** Keeps a started thread as it now stands, moved on a revision, and answers it. */
-function keepStarted(thread: DescriptionCommentThread): DescriptionCommentThread {
-  const kept = { ...thread, revision: thread.revision + 1, updatedAt: Date.now() };
+/** Keeps a thread the run wrote as it now stands, and answers it. */
+function keepRunThread(thread: DescriptionCommentThread): DescriptionCommentThread {
+  RUN_THREADS.set(thread.id, thread);
+  runThreadWrites += 1;
 
-  STARTED_THREADS.set(kept.id, kept);
-
-  return kept;
+  return thread;
 }
 
-/** Each held comments slice with the reference journey's description threads laid over it, one object for each. */
+/** Keeps a thread the run changed, moved on a revision, and answers it. */
+function keepChanged(thread: DescriptionCommentThread): DescriptionCommentThread {
+  return keepRunThread({ ...thread, revision: thread.revision + 1, updatedAt: Date.now() });
+}
+
+/** Each held comments slice with the reference journey's description threads laid over it, and how many thread writes of the run it holds, so a write since lays it again. */
 const STAGED_COMMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
-  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS]
+  {
+    readonly writes: number;
+    readonly laid: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS];
+  }
 >();
 
 function stagedComments(
@@ -2146,23 +2162,31 @@ function stagedComments(
   const held = state[LIVE_READ.DESCRIPTION_COMMENTS];
   const staged = STAGED_COMMENTS.get(held);
 
-  if (staged !== undefined) return staged;
+  if (staged?.writes === runThreadWrites) return staged.laid;
 
-  // Note that a thread a fixture run started stands after the staged ones, as the host drew it, so the new comment's thread opens on its page.
-  const started = (held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows ?? []).filter(
+  // Note that each staged thread stands as the run last left it, then each thread the run started, in the order it started them, then any other the host drew.
+  const standing = INVITES_THREADS.map((thread) => RUN_THREADS.get(thread.id) ?? thread);
+
+  const started = [...RUN_THREADS.values()].filter(
     (thread) => !INVITES_THREADS.some((each) => each.id === thread.id),
+  );
+
+  const drawn = (held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows ?? []).filter(
+    (thread) =>
+      !RUN_THREADS.has(thread.id) && !INVITES_THREADS.some((each) => each.id === thread.id),
   );
 
   const laid = {
     ...held,
     [COMMENT_SUBJECT.DESCRIPTION]: {
       ...held[COMMENT_SUBJECT.DESCRIPTION],
-      [TASK.INVITES]: { rows: [...INVITES_THREADS, ...started] },
+      [TASK.INVITES]: { rows: [...standing, ...started, ...drawn] },
     },
   };
 
-  STAGED_COMMENTS.set(held, laid);
-  STAGED_COMMENTS.set(laid, laid);
+  const entry = { writes: runThreadWrites, laid };
+  STAGED_COMMENTS.set(held, entry);
+  STAGED_COMMENTS.set(laid, entry);
 
   return laid;
 }
@@ -4055,7 +4079,7 @@ const ANSWERS: StagedAnswers = {
   // Note that a description's edit is taken as the service takes one, though nothing here moves, so the page draws the description it held.
   [ACT_KIND.TASKS_EDIT]: () => ({ saved: true }),
   [ACT_KIND.TASKS_DELETE]: () => true,
-  // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose, so a flow sees the thread open with the words as its first comment.
+  // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose and kept on the comments slice, so a flow sees the thread open with the words as its first comment.
   [ACT_KIND.TASKS_COMMENT_START]: ({ taskId, start }) => {
     if (taskId !== TASK.INVITES || !("scope" in start)) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
@@ -4084,22 +4108,18 @@ const ANSWERS: StagedAnswers = {
       revision: 1,
     };
 
-    STARTED_THREADS.set(thread.id, thread);
-
-    return { thread };
+    return { thread: keepRunThread(thread) };
   },
-  // Note that a reply is taken as the service takes one, on a staged thread or one the run started, answered with its thread as it then stands, though nothing here moves.
+  // Note that a reply, a resolve, or a reopen is taken as the service takes one, on a staged thread or one the run started, answered with its thread as it then stands and kept on the comments slice, so the thread's page and its task's Comments draw it moved.
   [ACT_KIND.TASKS_COMMENT_ACT]: ({ taskId, threadId, action }) => {
     const thread =
-      INVITES_THREADS.find((each) => each.id === threadId) ?? STARTED_THREADS.get(threadId);
+      RUN_THREADS.get(threadId) ?? INVITES_THREADS.find((each) => each.id === threadId);
 
     if (taskId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
     }
 
-    const started = STARTED_THREADS.has(thread.id);
-
-    // Note that a resolve or a reopen answers the thread at the status asked, with its line by Ada at the end, as the service answers one, so the host never draws it back as it stood; a thread the run started keeps it, with its replies, so a later answer carries them.
+    // Note that a resolve or a reopen answers the thread at the status asked, with its line by Ada at the end, as the service answers one, so the host never draws it back as it stood.
     if (
       action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE ||
       action.action === DESCRIPTION_COMMENT_ACTION.REOPEN
@@ -4120,14 +4140,14 @@ const ANSWERS: StagedAnswers = {
         entries: [...thread.entries, line],
       };
 
-      return { thread: started ? keepStarted(settled) : settled };
+      return { thread: keepChanged(settled) };
     }
 
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
 
-    // Note that a reply kept on a started thread takes an id of its own, since the thread's rows are keyed by their entries' ids; a staged thread's one reply, never kept, keeps its fixed id.
+    // Note that each kept reply takes an id of its own, since the thread's rows are keyed by their entries' ids.
     const reply = {
-      id: started ? fixtureId(nextReplyId++) : fixtureId(306),
+      id: fixtureId(nextReplyId++),
       kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
       writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
       words: action.words,
@@ -4136,7 +4156,7 @@ const ANSWERS: StagedAnswers = {
 
     const replied = { ...thread, entries: [...thread.entries, reply] };
 
-    return { thread: started ? keepStarted(replied) : replied };
+    return { thread: keepChanged(replied) };
   },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
