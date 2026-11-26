@@ -921,38 +921,40 @@ function ThreadCard({
       padding={CARD_PADDING.FLUSH}
       data-prototype-feed-card={thread.id}
     >
-      <div className="relative z-2 flex min-w-0 items-center gap-icon-gap px-card-head-inline pt-card-head-block">
-        <UnreadMark unread={unread} />
-        <HolderGlyph place={thread.place} />
-        <span className="flex min-w-0 flex-1 items-baseline gap-icon-gap">
-          <TextButton tone={TEXT_BUTTON_TONE.QUIET} onClick={doors.onOpenPlace}>
-            {holderName(thread.place)}
-          </TextButton>
-          <OneLine className={unread ? "font-ui-semibold text-foreground" : "text-foreground"}>
-            {thread.title}
-          </OneLine>
-        </span>
-        {due || reminder !== undefined ? (
-          <span className="flex flex-none items-center gap-ui-4 text-caption text-muted-foreground">
-            <GlyphSlot size={ICON_SIZE.SMALL}>
-              <AlarmClockIcon aria-hidden="true" />
-            </GlyphSlot>
-            {due ? "Reminder" : remindWords(reminder ?? 0, Date.now())}
+      <div className="isolate">
+        <div className="relative z-2 flex min-w-0 items-center gap-icon-gap px-card-head-inline pt-card-head-block">
+          <UnreadMark unread={unread} />
+          <HolderGlyph place={thread.place} />
+          <span className="flex min-w-0 flex-1 items-baseline gap-icon-gap">
+            <TextButton tone={TEXT_BUTTON_TONE.QUIET} onClick={doors.onOpenPlace}>
+              {holderName(thread.place)}
+            </TextButton>
+            <OneLine className={unread ? "font-ui-semibold text-foreground" : "text-foreground"}>
+              {thread.title}
+            </OneLine>
           </span>
-        ) : null}
-        <RemindButton onAt={doors.onRemind} />
-        {unread ? <MarkReadButton onPress={doors.onRead} /> : null}
-      </div>
-      <div className="flex min-w-0 flex-col gap-tight-gap px-card-head-inline pt-ui-8 pb-card-head-block">
-        <ThreadBody
-          key={`${thread.id}-${shownFrom}`}
-          standing={standing}
-          shownFrom={shownFrom}
-          onView={manager ? doors.onView : undefined}
-          onMarkUnreadFrom={doors.onMarkUnreadFrom}
-          readInboxImage={doors.readInboxImage}
-        />
-        <ReplyBox onSend={(text) => reply(standing, text)} />
+          {due || reminder !== undefined ? (
+            <span className="flex flex-none items-center gap-ui-4 text-caption text-muted-foreground">
+              <GlyphSlot size={ICON_SIZE.SMALL}>
+                <AlarmClockIcon aria-hidden="true" />
+              </GlyphSlot>
+              {due ? "Reminder" : remindWords(reminder ?? 0, Date.now())}
+            </span>
+          ) : null}
+          <RemindButton onAt={doors.onRemind} />
+          {unread ? <MarkReadButton onPress={doors.onRead} /> : null}
+        </div>
+        <div className="flex min-w-0 flex-col gap-tight-gap px-card-head-inline pt-ui-8 pb-card-head-block">
+          <ThreadBody
+            key={`${thread.id}-${shownFrom}`}
+            standing={standing}
+            shownFrom={shownFrom}
+            onView={manager ? doors.onView : undefined}
+            onMarkUnreadFrom={doors.onMarkUnreadFrom}
+            readInboxImage={doors.readInboxImage}
+          />
+          <ReplyBox onSend={(text) => reply(standing, text)} />
+        </div>
       </div>
     </Card>
   );
