@@ -107,6 +107,26 @@ it.effect(
     }).pipe(Effect.scoped),
 );
 
+it.effect(
+  "a kind held in memory draws its writes in a collection of its own too, holding a write's row by the time the watchers hear",
+  () =>
+    Effect.gen(function* () {
+      const pool = yield* entityPool({ mintKey: () => "key-1", replayRefused: Effect.void });
+      yield* standing(pool);
+
+      // Note that the phone reads a kind from memory where its database would not open, laying the writes over it from this collection as it does over one kept on disk.
+      const names = () => [...(pool.standing(ROW)?.drawn.values() ?? [])].map((row) => row.name);
+      const heard: string[][] = [];
+      const stop = pool.watch(() => heard.push(names()));
+      const write = yield* Effect.forkChild(pool.write(MAKES, { id: "1", name: "Made", runs: 0 }));
+      yield* settled;
+      stop();
+
+      assert.deepEqual(heard[0], ["Made"]);
+      yield* Fiber.interrupt(write);
+    }).pipe(Effect.scoped),
+);
+
 it.effect("two reads hold one row, which leaves the pool only once the last lets it go", () =>
   Effect.gen(function* () {
     const pool = yield* entityPool();

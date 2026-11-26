@@ -21,7 +21,6 @@ vespin agent start [flags] <task>
 | `--effort string` | The reasoning effort, with `--model` |
 | `--cloud` | Run in the cloud |
 | `--on string` | Run on one of your devices, by its name or id |
-| `--machine string` | Run on one of the machines the workspace owns, by its name or id |
 | `--branch string` | The branch to clone the agent's checkout at, already on GitHub (default: the repository's default branch) |
 | `--follow` | Stream the agent's turn until it ends |
 | `--wait` | Wait until the turn ends; the exit code says how |
@@ -29,9 +28,6 @@ vespin agent start [flags] <task>
 ```sh
 # An agent in the cloud, on a branch already on GitHub
 vespin agent start ACME-42 --branch fix/login --cloud
-
-# An agent on one of the machines the workspace owns
-vespin agent start ACME-42 --machine build-box
 
 # An agent on a prompt from stdin, waited on
 echo "Add a test for the redirect" | vespin agent start ACME-42 -F - --wait
@@ -57,7 +53,6 @@ vespin agent continue [flags] <agent>
 | `--effort string` | The reasoning effort, with `--model` |
 | `--cloud` | Run in the cloud |
 | `--on string` | Run on one of your devices, by its name or id (default: where the agent runs) |
-| `--machine string` | Run on one of the machines the workspace owns, by its name or id (default: where the agent runs) |
 | `--follow` | Stream the agent's turn until it ends |
 | `--wait` | Wait until the turn ends; the exit code says how |
 

@@ -77,12 +77,7 @@ import {
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
-import {
-  DEVICE_ARCH,
-  DEVICE_PLATFORM,
-  DEVICE_SETUP,
-  MACHINE_NETWORK,
-} from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import type { HostLine } from "@repo/features/host-live";
 import { HOST_PAIRING_CALL_FAILURE } from "@repo/features/host-pairing-view";
@@ -189,7 +184,6 @@ import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
 } from "@repo/features/workspace-invitation-wire";
-import type { WorkspaceMachineLine } from "@repo/features/workspace-machine-view";
 import {
   WORKSPACE_ROLE,
   type Workspace,
@@ -1409,14 +1403,13 @@ const MANAGER_MEMORIES: readonly MemorySummary[] = [
 /** The code of the one pairing waiting on the account, as a machine's link names it (`maestro/settings-machine-connect.yaml`). */
 const PENDING_PAIRING_CODE = "BCDFGHJK";
 
-/** The machine waiting on that code, as it named itself, when its code lapses, ten minutes after the fixture landed, and the workspace the account owns that it may connect it to. */
+/** The machine waiting on that code, as it named itself, and when its code lapses: ten minutes after the fixture landed. */
 const PENDING_PAIRING: HostPairingAnswer = {
   name: "Ada's Mac mini",
   platform: DEVICE_PLATFORM.DARWIN,
   arch: DEVICE_ARCH.ARM64,
   ip: "203.0.113.7",
   expiresAt: LANDED + 10 * 60_000,
-  workspaces: [{ id: FIXTURE_WORKSPACE.id, name: FIXTURE_WORKSPACE.name }],
 };
 
 /** A pairing's read, approve, or deny, as the service answers it: the waiting machine for its code, and no pending pairing for any other. */
@@ -1439,37 +1432,6 @@ const HOSTS: readonly HostLine[] = [
     platform: DEVICE_PLATFORM.LINUX,
     calledIn: true,
     away: true,
-  },
-];
-
-/**
- * The machines Ada's workspace owns, which every member's agents may run on,
- * as Settings › Machines lists them under her own and Runs on offers them:
- * a Linux box online whose agents may reach its private network, and a Mac
- * set aside for it still pulling its agent image, which takes no agent yet.
- * Relay, the team a flow switches to, owns none.
- */
-const WORKSPACE_MACHINES: readonly WorkspaceMachineLine[] = [
-  {
-    id: "5c0f6c84-2a7e-4d1b-9e3f-0b8d6a4c2e71",
-    name: "build-01",
-    platform: DEVICE_PLATFORM.LINUX,
-    arch: DEVICE_ARCH.X64,
-    connectedBy: ADA.userId,
-    network: MACHINE_NETWORK.PRIVATE_ALLOWED,
-    calledIn: true,
-    away: false,
-  },
-  {
-    id: "5c0f6c84-2a7e-4d1b-9e3f-0b8d6a4c2e72",
-    name: "Team Mac Studio",
-    platform: DEVICE_PLATFORM.DARWIN,
-    arch: DEVICE_ARCH.ARM64,
-    connectedBy: ADA.userId,
-    network: MACHINE_NETWORK.PUBLIC_ONLY,
-    setup: DEVICE_SETUP.PREPARING,
-    calledIn: true,
-    away: false,
   },
 ];
 
@@ -2934,10 +2896,6 @@ export function inboxAppState(
       [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
     },
     [LIVE_READ.WORKSPACE_INVITATIONS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INVITATIONS } },
-    [LIVE_READ.WORKSPACE_MACHINES]: {
-      [FIXTURE_IDS.WORKSPACE]: { rows: WORKSPACE_MACHINES },
-      [TEAM_WORKSPACE.id]: { rows: [] },
-    },
     [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
       workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),
     ),

@@ -78,7 +78,6 @@ import {
   OneLine,
   ProviderMark,
   RollingNumber,
-  Shimmer,
   Stack,
   TEXT_ELEMENT,
   TEXT_LINK_LOOK,
@@ -1226,7 +1225,7 @@ function CutWords({
 
   return (
     <p data-part-reading="">
-      <Shimmer>{waiting}</Shimmer>
+      <span className="text-muted-foreground">{waiting}</span>
     </p>
   );
 }
@@ -2299,7 +2298,7 @@ function TurnFold({
     <FindDetailFolds>
       <Disclosure defaultOpen={open} data-turn-fold="" {...FIND_DETAIL}>
         <DisclosureSummary>
-          {running ? <Shimmer>{summary}</Shimmer> : <span>{summary}</span>}
+          <span className={running ? "text-muted-foreground" : undefined}>{summary}</span>
         </DisclosureSummary>
         <DisclosureBody>{children}</DisclosureBody>
       </Disclosure>

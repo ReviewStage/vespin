@@ -22,13 +22,6 @@ export const HOST_CONNECT_WORDS = {
   TITLE: "Connect a machine",
   READING: readingWords("the code"),
   MATCH: "Connect it only if you ran the command on it, and this code matches the one it shows.",
-  FOR: "Who it's for",
-  JUST_ME: "Just me",
-  JUST_ME_DETAIL: "Only your agents run on it.",
-  WORKSPACE_DETAIL: "Every member's agents run on it, each in a VM of its own.",
-  PRIVATE_NETWORK: "Let agents reach this machine's private network",
-  PRIVATE_NETWORK_DETAIL:
-    "Agents can reach the machine's LAN and VPN, such as a staging database. Leave it off to keep them to the internet.",
   CONNECT: "Connect",
   CONNECTING: "Connecting",
   DENY: "Deny",

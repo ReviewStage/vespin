@@ -375,6 +375,8 @@ export {
   unassignedChoice,
 } from "./row-menu-model.js";
 
+export { RowPickContext } from "./row-open.js";
+
 export {
   agentPreview,
   latestStep,

@@ -13,6 +13,7 @@ import {
   FailureNoticeProvider,
   KeepingProvider,
   NO_GROUND,
+  RowPickContext,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -24,7 +25,7 @@ import { useColorScheme } from "react-native";
 import { useComposerDraftsSignOut } from "../agents/composer-drafts.js";
 import { MachineAsks } from "../agents/machine-asks.js";
 import { useAppNotReadyCount } from "../app-ready.js";
-import { useCrashReports } from "../crash-reports.js";
+import { useCrashReports, withTapTraces } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useHostConnectLink } from "../host-connect-link.js";
@@ -37,6 +38,8 @@ import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useNewTaskDraftsSignOut } from "../new-task-draft.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { useResumeLoadCount } from "../resume-load.js";
+import { notePick } from "../row-picks.js";
 import { useRecentOpenedSignOut } from "../search/recent-opened.js";
 import { useSetupGate } from "../setup/use-setup-gate.js";
 import { useShareSheet } from "../share-sheet.js";
@@ -194,6 +197,7 @@ function GuardedScreens() {
 
   useAppNotReadyCount(signedIn && !updateNeeded);
   useLaunchLoadCount();
+  useResumeLoadCount();
   usePushRegistration(signedIn);
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);
@@ -334,12 +338,14 @@ function GuardedScreens() {
   );
 }
 
-/** The screens, under what their pictures', recordings', files', and messages' menus do, which says its failures in the notice above them. */
+/** The screens, under what their pictures', recordings', files', and messages' menus do, which says its failures in the notice above them, each row pick kept for the open it leads to (`row-picks.ts`). */
 function KeptScreens() {
   return (
     <KeepingProvider keeping={useKeeping()}>
       <ChipMarkProvider markOf={useChipMarks()}>
-        <GuardedScreens />
+        <RowPickContext value={notePick}>
+          <GuardedScreens />
+        </RowPickContext>
       </ChipMarkProvider>
     </KeepingProvider>
   );
@@ -352,9 +358,10 @@ function KeptScreens() {
  * color scheme, because expo-router's stack sets every navigation bar's
  * style from it, and with no theme given it read the light default, so in
  * dark every bar's buttons, its search field and the keyboard it raised
- * drew light beside the dark tab bar.
+ * drew light beside the dark tab bar. Every tap on it is traced
+ * (`withTapTraces`).
  */
-export default function RootLayout() {
+function RootLayout() {
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
@@ -371,3 +378,5 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+
+export default withTapTraces(RootLayout);
