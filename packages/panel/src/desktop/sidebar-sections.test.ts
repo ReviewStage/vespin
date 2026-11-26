@@ -1504,7 +1504,7 @@ test("a pin dragged below the next one reorders the pins", async () => {
   assert.ok((asked.moves[0]?.position ?? "") > second.pinPosition, "it sorts after Pin review");
 });
 
-test("a glyph found by searching asks its color under its row, the text's own named as the dark window draws it, and the color pressed there makes it the new section's and this Mac's most recent", async () => {
+test("a glyph found by searching asks its color in a flyout, the text's own named as the dark window draws it, and the color pressed there makes it the new section's and this Mac's most recent", async () => {
   document.documentElement.setAttribute("data-ui-theme", "dark");
   onTestFinished(() => document.documentElement.removeAttribute("data-ui-theme"));
   const writes: TaskSectionWrite[] = [];
@@ -1516,7 +1516,7 @@ test("a glyph found by searching asks its color under its row, the text's own na
   await act(async () => dialogButton("Telescope").click());
 
   const colors =
-    document.querySelector(".section-icon-colors") ?? assert.fail("the glyph's colors are asked");
+    document.querySelector(".ui-icon-picker-flyout") ?? assert.fail("the glyph's colors are asked");
 
   assert.equal(document.activeElement, colors.querySelector('[aria-label="White"]'));
   await act(async () => dialogButton("Teal").click());
@@ -1649,7 +1649,7 @@ test("Shift-Enter in the search presses the first glyph it found, as Enter does,
   assert.equal(red?.getAttribute("aria-label"), "Red");
   assert.ok(red instanceof HTMLElement);
   await press(red, "Escape");
-  assert.equal(document.querySelector(".section-icon-colors"), null);
+  assert.equal(document.querySelector(".ui-icon-picker-flyout"), null);
   assert.ok(dialogField("Search icons and emoji"), "Escape leaves the picker standing");
   await act(async () => dialogButton("Telescope").click());
   const focused = document.activeElement;
@@ -1718,7 +1718,7 @@ test("with a glyph's colors open, the arrows step the glyphs past them, and anot
 
   await act(async () => dialogButton("Star").click());
   assert.equal(document.activeElement?.getAttribute("aria-label"), "Black");
-  assert.equal(document.querySelectorAll(".section-icon-colors").length, 1);
+  assert.equal(document.querySelectorAll(".ui-icon-picker-flyout").length, 1);
 });
 
 test("a glyph pressed again while its colors stand open closes them, its press taking the focus first as a pointer's does", async () => {
@@ -1727,11 +1727,11 @@ test("a glyph pressed again while its colors stand open closes them, its press t
   await dialogPicker(sidebar);
   const folder = dialogButton("Folder");
   await act(async () => folder.click());
-  assert.ok(document.querySelector(".section-icon-colors"), "the colors are asked");
+  assert.ok(document.querySelector(".ui-icon-picker-flyout"), "the colors are asked");
   await act(async () => folder.focus());
   await act(async () => folder.click());
 
-  assert.equal(document.querySelector(".section-icon-colors"), null);
+  assert.equal(document.querySelector(".ui-icon-picker-flyout"), null);
 });
 
 test("an emoji typed into the search is offered first, one the grid leaves out included", async () => {

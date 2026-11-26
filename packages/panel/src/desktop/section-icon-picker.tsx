@@ -19,9 +19,7 @@ import {
   IconButton,
   IconPicker,
   IconPickerChoice,
-  IconPickerDrawer,
   IconPickerGroup,
-  type IconPickerGroupDrawer,
   NOTE_LINE_LOOK,
   NoteLine,
   PopoverIconButton,
@@ -82,11 +80,11 @@ import { QUERY_ROOT } from "../query-keys.js";
  * its color; Emoji offers every emoji by category. A search finds glyphs and
  * emoji alike, each under its kind, and an emoji typed or picked into it
  * (⌃⌘Space) is offered first, so one newer than the grid's still can be
- * chosen. An emoji pressed is chosen at once. A glyph pressed opens its
- * colors in a row of their own under its row (the grid's drawer), asked
- * every time, pushing the rows below down rather than hanging over them, so
- * neither the scrolling grid cuts them nor they cover a choice, on a phone's
- * narrow window as on the desktop's: the text's own
+ * chosen. An emoji pressed is chosen at once. A glyph pressed floats its
+ * colors from it, asked every time, as a submenu would, placed by the
+ * window's edges rather than the scrolling grid's (`IconPickerChoice`'s
+ * flyout), so on a phone's narrow window they turn, slide, and stand over
+ * the picker's own choices rather than being cut: the text's own
  * and the palette's, starting on the icon's own color where the glyph is the
  * icon chosen and on the color it was chosen in last where it is a recent
  * one; a color pressed there chooses the glyph in it, so a glyph is
@@ -354,47 +352,27 @@ function textInkLabel(): string {
 }
 
 /**
- * A pressed glyph's colors, in the drawer under its row: the glyph drawn in
- * each of them, the text's own first, which the window's theme draws white
- * or black as it draws the text, then the palette's, which answer the
- * theme too, one to each of the grid's columns. The one it starts on is
- * pressed and takes the focus as they open; the arrows walk them, a press
- * chooses the glyph in that color, and Escape puts them away, handing the
- * focus back to the glyph.
+ * A pressed glyph's colors, floated from it: the glyph drawn in each of
+ * them, the text's own first, which the window's theme draws white or black
+ * as it draws the text, then the palette's, which answer the theme too. The
+ * one it starts on is pressed and takes the focus as they open; a press
+ * chooses the glyph in that color.
  */
-function GlyphColors({
-  Glyph,
-  label,
-  starts,
-  onColor,
-  onClose,
-}: {
-  Glyph: LucideIcon | undefined;
-  label: string;
-  starts: TaskSectionIconColor | undefined;
-  onColor: (color: TaskSectionIconColor | undefined) => void;
-  onClose: () => void;
-}): React.JSX.Element {
-  return (
-    <div className="section-icon-colors">
-      <IconPickerDrawer label={`${label} color`} onClose={onClose}>
-        {GLYPH_COLORS.map((value) => (
-          <IconButton
-            key={value ?? "text"}
-            icon={
-              Glyph === undefined ? null : (
-                <Glyph data-icon-color={value} className={inkOf(value)} />
-              )
-            }
-            label={value === undefined ? textInkLabel() : COLOR_LABEL[value]}
-            pressed={value === starts}
-            roving
-            onClick={() => onColor(value)}
-          />
-        ))}
-      </IconPickerDrawer>
-    </div>
-  );
+function glyphColors(
+  Glyph: LucideIcon | undefined,
+  starts: TaskSectionIconColor | undefined,
+  onColor: (color: TaskSectionIconColor | undefined) => void,
+): React.JSX.Element[] {
+  return GLYPH_COLORS.map((value) => (
+    <IconButton
+      key={value ?? "text"}
+      icon={Glyph === undefined ? null : <Glyph data-icon-color={value} className={inkOf(value)} />}
+      label={value === undefined ? textInkLabel() : COLOR_LABEL[value]}
+      pressed={value === starts}
+      roving
+      onClick={() => onColor(value)}
+    />
+  ));
 }
 
 /** What a panel says in its grid's place while its set loads, failed to, or holds nothing the search found. */
@@ -432,10 +410,10 @@ function startingColor(
 }
 
 /**
- * One glyph's cell in `group`, in `color`, whose press opens its colors in
- * the drawer under its row, starting on `starts`. Note that it is drawn
- * again only where what it shows changed, so opening a glyph's colors draws
- * no cell again but the one pressed.
+ * One glyph's cell in `group`, in `color`, whose press floats its colors
+ * from it, starting on `starts`, while `open`. Note that it is drawn again
+ * only where what it shows changed, so opening a glyph's colors draws that
+ * one cell and not some two thousand around it.
  */
 const GlyphCell = memo(function GlyphCell({
   Glyph,
@@ -447,7 +425,10 @@ const GlyphCell = memo(function GlyphCell({
   color,
   starts,
   stop,
+  open,
   onOpen,
+  onColor,
+  onClose,
 }: {
   Glyph: LucideIcon | undefined;
   group: string;
@@ -459,7 +440,10 @@ const GlyphCell = memo(function GlyphCell({
   color: TaskSectionIconColor | undefined;
   starts: TaskSectionIconColor | undefined;
   stop: boolean;
+  open: boolean;
   onOpen: (opened: OpenedGlyph) => void;
+  onColor: (color: TaskSectionIconColor | undefined) => void;
+  onClose: () => void;
 }): React.JSX.Element {
   return (
     <IconPickerChoice
@@ -471,41 +455,23 @@ const GlyphCell = memo(function GlyphCell({
           <Glyph data-icon-color={color} className={inked ? inkOf(color) : undefined} />
         )
       }
+      popup
+      flyout={
+        open
+          ? { label: `${label} color`, content: glyphColors(Glyph, starts, onColor), onClose }
+          : undefined
+      }
       onPress={() => onOpen({ group, glyph, color: starts })}
     />
   );
 });
 
-/** The drawer of a group whose glyph at `after` stands open: that glyph's colors, starting where it opened them. */
-function colorsDrawer(
-  after: number,
-  Glyph: LucideIcon | undefined,
-  label: string,
-  opened: OpenedGlyph,
-  onColor: (color: TaskSectionIconColor | undefined) => void,
-  onClose: () => void,
-): IconPickerGroupDrawer {
-  return {
-    after,
-    content: (
-      <GlyphColors
-        key={opened.glyph}
-        Glyph={Glyph}
-        label={label}
-        starts={opened.color}
-        onColor={onColor}
-        onClose={onClose}
-      />
-    ),
-  };
-}
-
 /**
  * A group of glyphs, each in the chosen icon's color where it is that icon
- * and the text's own otherwise, `opened` showing its colors under its row
- * and `stop` the grid's tab stop. Note that it is drawn again only where
- * what it holds changed, so opening a glyph's colors walks the group it
- * stands in and not the other groups' some two thousand cells.
+ * and the text's own otherwise, `opened` floating its colors and `stop` the
+ * grid's tab stop. Note that it is drawn again only where what it holds
+ * changed, so opening a glyph's colors walks the group it stands in and
+ * not the other groups' some two thousand cells.
  */
 const GlyphGroup = memo(function GlyphGroup({
   name,
@@ -523,25 +489,15 @@ const GlyphGroup = memo(function GlyphGroup({
   choices: readonly { glyph: string; label: string }[];
   icon: TaskSectionIcon | undefined;
   /** The glyph whose colors stand open in this group; none where they stand in another, or nowhere. */
-  opened: OpenedGlyph | undefined;
+  opened: string | undefined;
   /** The glyph that is the grid's tab stop in this group; none where it stands in another. */
   stop: string | undefined;
   onOpen: (opened: OpenedGlyph) => void;
   onColor: (color: TaskSectionIconColor | undefined) => void;
   onClose: () => void;
 }): React.JSX.Element {
-  const at = opened === undefined ? -1 : choices.findIndex((one) => one.glyph === opened.glyph);
-  const open = choices[at];
-
   return (
-    <IconPickerGroup
-      name={name}
-      drawer={
-        opened === undefined || open === undefined
-          ? undefined
-          : colorsDrawer(at, lucideGlyph(icons, open.glyph), open.label, opened, onColor, onClose)
-      }
-    >
+    <IconPickerGroup name={name}>
       {choices.map((choice) => {
         const pressed = chosenGlyph(icon, choice.glyph);
 
@@ -557,7 +513,10 @@ const GlyphGroup = memo(function GlyphGroup({
             color={pressed && icon?.kind === TASK_SECTION_ICON_KIND.GLYPH ? icon.color : undefined}
             starts={startingColor(icon, choice.glyph, undefined)}
             stop={stop === choice.glyph}
+            open={opened === choice.glyph}
             onOpen={onOpen}
+            onColor={onColor}
+            onClose={onClose}
           />
         );
       })}
@@ -578,8 +537,8 @@ function stopIn(
 }
 
 /** The glyph whose colors stand open in `group`, none where they stand elsewhere. */
-function openedIn(group: string, opened: OpenedGlyph | undefined): OpenedGlyph | undefined {
-  return opened?.group === group ? opened : undefined;
+function openedIn(group: string, opened: OpenedGlyph | undefined): string | undefined {
+  return opened?.group === group ? opened.glyph : undefined;
 }
 
 /** One emoji's choice, which a press chooses at once. */
@@ -623,36 +582,11 @@ function recentChoice(
       color={one.color}
       starts={startingColor(props.icon, one.glyph, one.color)}
       stop={stop}
+      open={props.opened?.group === RECENT && props.opened.glyph === one.glyph}
       onOpen={props.onOpen}
+      onColor={props.onColor}
+      onClose={props.onCloseColors}
     />
-  );
-}
-
-/** The drawer of Recent where a glyph of it stands open: its colors under its row. */
-function recentDrawer(
-  icons: LucideIcons,
-  props: GridProps & { recent: readonly TaskSectionIcon[] },
-): IconPickerGroupDrawer | undefined {
-  const opened = openedIn(RECENT, props.opened);
-
-  const at =
-    opened === undefined
-      ? -1
-      : props.recent.findIndex(
-          (one) => one.kind === TASK_SECTION_ICON_KIND.GLYPH && one.glyph === opened.glyph,
-        );
-
-  const open = props.recent[at];
-
-  if (opened === undefined || open === undefined) return undefined;
-
-  return colorsDrawer(
-    at,
-    lucideGlyph(icons, opened.glyph),
-    iconLabel(open),
-    opened,
-    props.onColor,
-    props.onCloseColors,
   );
 }
 
@@ -692,7 +626,7 @@ const GlyphPanel = memo(function GlyphPanel(
   return (
     <>
       {props.recent.length === 0 ? null : (
-        <IconPickerGroup name={RECENT} drawer={recentDrawer(icons, props)}>
+        <IconPickerGroup name={RECENT}>
           {props.recent.map((one) =>
             recentChoice(icons, one, props, stopAt(chosenIcon(props.icon, one), one === first)),
           )}

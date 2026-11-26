@@ -1,4 +1,6 @@
-import { Children, type ReactNode, type RefObject, useLayoutEffect, useRef } from "react";
+import type { PopoverRoot } from "@base-ui/react/popover";
+import { type ReactNode, type RefObject, useRef } from "react";
+import { Popover, PopoverContent } from "../../shadcn/popover.js";
 import { IconButton } from "../button/button.js";
 import { ROVING_ORIENTATION, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { ScrollArea } from "../scroll-area/scroll-area.js";
@@ -18,11 +20,10 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * the arrows left it. The arrow down from the search enters the grid, and
  * Enter in the search presses the first choice drawn, so a search typed
  * and entered picks what it found first. What a choice opens (a section
- * glyph's colors) stands in a drawer under that choice's row, the whole
- * grid's width, pushing the rows below it down rather than hanging over
- * them, so the scrolling grid can never cut it and it covers no choice; it
- * wears `ICON_PICKER_ASIDE`, so it is no choice of the grid's, and lays its
- * own buttons out on the grid's columns (`IconPickerDrawer`).
+ * glyph's colors) floats from it (`IconPickerFlyout`) in a portal on the
+ * window's layer, placed by the window's edges rather than the grid's, so
+ * the scrolling grid never cuts it: it turns and slides to fit what is seen
+ * of the window, over the picker's own choices where it must.
  */
 
 /** How many choices stand in one row of the grid, which `grid-cols-section-icons` lays out alike; the arrows step a row by it. */
@@ -36,14 +37,12 @@ const GRID_STEPS = new Map([
   ["ArrowDown", GRID_COLUMNS],
 ]);
 
-/** The class of what stands in a group's drawer, whose buttons are no choices of the grid's. */
-export const ICON_PICKER_ASIDE = "ui-icon-picker-aside";
+/** Base UI's reason for a press away from a popover. */
+const OUTSIDE_PRESS = "outside-press" satisfies PopoverRoot.ChangeEventReason;
 
-/** The grid's choices under `root`, in order, what hangs over them left out. */
+/** The grid's choices under `root`, in order. */
 function gridChoices(root: Element, selector = "button"): HTMLButtonElement[] {
-  return [...root.querySelectorAll<HTMLButtonElement>(selector)].filter(
-    (choice) => choice.closest(`.${ICON_PICKER_ASIDE}`) === null,
-  );
+  return [...root.querySelectorAll<HTMLButtonElement>(selector)];
 }
 
 /** Moves focus through the choices with the arrows, from whichever holds it, a row's width up and down. */
@@ -68,12 +67,8 @@ function stepGrid(event: React.KeyboardEvent<HTMLFieldSetElement>): void {
 function standTabStop(event: React.FocusEvent<HTMLFieldSetElement>): void {
   const focused = event.target;
 
-  if (
-    !(focused instanceof HTMLButtonElement) ||
-    focused.closest(`.${ICON_PICKER_ASIDE}`) !== null
-  ) {
-    return;
-  }
+  // Note that a flyout's choices are heard here too, since React carries a portal's events up the tree that drew it, but they stand outside the grid.
+  if (!(focused instanceof HTMLButtonElement) || !event.currentTarget.contains(focused)) return;
 
   for (const stop of gridChoices(event.currentTarget, 'button:not([tabindex="-1"])')) {
     stop.tabIndex = -1;
@@ -82,116 +77,140 @@ function standTabStop(event: React.FocusEvent<HTMLFieldSetElement>): void {
   focused.tabIndex = 0;
 }
 
+/** What a choice floats while it stands open: its name for a reader, its choices, and where Escape or a press away puts it. */
+export interface IconPickerFlyout {
+  readonly label: string;
+  /** Its choices, each an `IconButton` marked `roving`, laid out five to a row. */
+  readonly content: ReactNode;
+  readonly onClose: () => void;
+}
+
+/** The layer a flyout from `choice` stands in: the one the picker it stands in was hung on, over a dialog's card where that was. */
+function layerAround(choice: HTMLElement | null): string | undefined {
+  return choice?.closest("[data-layer]")?.getAttribute("data-layer") ?? undefined;
+}
+
+/** Whether a change asks a flyout away for a press on its own choice, which the choice's press answers. */
+function pressOnChoice(
+  details: PopoverRoot.ChangeEventDetails,
+  choice: HTMLElement | null,
+): boolean {
+  const target = details.event?.target;
+
+  return (
+    details.reason === OUTSIDE_PRESS && target instanceof Node && choice?.contains(target) === true
+  );
+}
+
 /**
- * One choice in the grid: a button pressed while it is the one chosen, and
- * the grid's tab stop where `stop`. Note that a choice opening a drawer
- * says nothing of it, because flipping `aria-expanded` restyles every box
- * a `:has([aria-expanded])` rule reaches, some two thousand cells among
- * them, for a quarter of a second; the drawer takes the focus as it opens,
- * which says it instead.
+ * The flyout a choice floats, on Base UI's popover, a child of the
+ * picker's own, so a press inside it is no press away from the picker. Its
+ * pressed choice, or else its first, takes the focus as it opens; the
+ * arrows walk its choices; and Escape or a press away puts it away, the
+ * focus going back to the choice it floats from.
+ */
+function ChoiceFlyout({
+  choice,
+  flyout,
+}: {
+  choice: RefObject<HTMLButtonElement | null>;
+  flyout: IconPickerFlyout;
+}): React.JSX.Element {
+  const row = useRef<HTMLDivElement | null>(null);
+  const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.BOTH });
+
+  const start = () =>
+    row.current?.querySelector<HTMLElement>('button[aria-pressed="true"]') ??
+    row.current?.querySelector<HTMLElement>("button") ??
+    true;
+
+  return (
+    <Popover
+      open
+      onOpenChange={(next, details) => {
+        if (!next && !pressOnChoice(details, choice.current)) flyout.onClose();
+      }}
+    >
+      <PopoverContent
+        anchor={choice}
+        layer={layerAround(choice.current)}
+        aria-label={flyout.label}
+        initialFocus={start}
+        finalFocus={choice}
+      >
+        <div
+          ref={(element) => {
+            row.current = element;
+            roving.ref(element);
+          }}
+          data-roving={roving["data-roving"]}
+          role="toolbar"
+          aria-label={flyout.label}
+          className="ui-icon-picker-flyout grid grid-cols-5 gap-tight-gap p-tight-gap"
+          onKeyDown={roving.onKeyDown}
+          onFocus={roving.onFocus}
+        >
+          {flyout.content}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/**
+ * One choice in the grid: a button pressed while it is the one chosen, the
+ * grid's tab stop where `stop`, and, where a press floats something from it
+ * rather than choosing (`popup`), saying so, and floating `flyout` while it
+ * stands open. Note that it says it floats something but not whether that
+ * stands open, because flipping `aria-expanded` restyles every box a
+ * `:has([aria-expanded])` rule reaches, some two thousand cells among them,
+ * for a quarter of a second; the flyout takes the focus as it opens, which
+ * says it instead.
  */
 export function IconPickerChoice({
   label,
   pressed,
   stop,
   face,
+  popup = false,
+  flyout,
   onPress,
 }: {
   label: string;
   pressed: boolean;
   stop: boolean;
   face: ReactNode;
+  popup?: boolean | undefined;
+  /** What it floats while it stands open; nothing while none does. */
+  flyout?: IconPickerFlyout | undefined;
   onPress: () => void;
 }): React.JSX.Element {
+  const button = useRef<HTMLButtonElement | null>(null);
+
   return (
-    <IconButton icon={face} label={label} pressed={pressed} tabbable={stop} onClick={onPress} />
+    <>
+      <IconButton
+        ref={button}
+        icon={face}
+        label={label}
+        pressed={pressed}
+        tabbable={stop}
+        aria-haspopup={popup ? "dialog" : undefined}
+        onClick={onPress}
+      />
+      {flyout === undefined ? null : <ChoiceFlyout choice={button} flyout={flyout} />}
+    </>
   );
 }
 
-/**
- * What a group's drawer holds, a row of choices about the choice above it
- * (a glyph's colors), each an `IconButton` marked `roving`, laid out on the
- * grid's own columns. Its pressed choice, or else its first, takes the
- * focus as it opens; the arrows walk its choices, and Escape puts it away
- * (`onClose`), handing the focus back to what held it as it opened.
- */
-export function IconPickerDrawer({
-  label,
-  onClose,
-  children,
-}: {
-  /** What the row is called for a reader. */
-  label: string;
-  onClose: () => void;
-  children: ReactNode;
-}): React.JSX.Element {
-  const box = useRef<HTMLDivElement | null>(null);
-  const opener = useRef<Element | null>(null);
-  const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.BOTH });
-
-  // Note that the focus lands once the row stands, which scrolls the grid to show it where it opened below what is seen.
-  useLayoutEffect(() => {
-    opener.current = document.activeElement;
-    const pressed = box.current?.querySelector<HTMLElement>('button[aria-pressed="true"]');
-
-    (pressed ?? box.current?.querySelector<HTMLElement>("button"))?.focus();
-  }, []);
-
-  const keys = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "Escape") return roving.onKeyDown(event);
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (opener.current instanceof HTMLElement) opener.current.focus();
-    onClose();
-  };
-
-  return (
-    <div
-      ref={(element) => {
-        box.current = element;
-        roving.ref(element);
-      }}
-      data-roving={roving["data-roving"]}
-      role="toolbar"
-      aria-label={label}
-      className="ui-icon-picker-drawer-row grid grid-cols-section-icons gap-tight-gap"
-      onKeyDown={keys}
-      onFocus={roving.onFocus}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** What a group's choice opened: the choice, counted among the group's, and what stands in the drawer under its row. */
-export interface IconPickerGroupDrawer {
-  readonly after: number;
-  readonly content: ReactNode;
-}
-
-/** Where a drawer stands among `count` choices: after the last of the row that holds choice `after`. */
-function drawerAt(after: number, count: number): number {
-  return Math.min(count, (Math.floor(after / GRID_COLUMNS) + 1) * GRID_COLUMNS);
-}
-
-/**
- * A group of choices under its name, in the grid's rows of ten, and, where
- * a choice stands open (`drawer`), what it opened under that choice's row.
- */
+/** A group of choices under its name, in the grid's rows of ten. */
 export function IconPickerGroup({
   name,
-  drawer,
   children,
 }: {
   name: string;
-  /** What the choice at `after`, counted among the group's choices, opened; nothing where none stands open. */
-  drawer?: IconPickerGroupDrawer | undefined;
   children: ReactNode;
 }): React.JSX.Element {
-  const choices = Children.toArray(children);
-  const at = drawer === undefined ? choices.length : drawerAt(drawer.after, choices.length);
-
   return (
     <section
       className="ui-icon-picker-group [.ui-icon-picker-group+&]:mt-control-gap"
@@ -205,19 +224,7 @@ export function IconPickerGroup({
         {name}
       </Text>
       <div className="ui-icon-picker-grid grid grid-cols-section-icons gap-tight-gap">
-        {drawer === undefined
-          ? choices
-          : // Note that the drawer joins the choices' own list, so opening it moves no choice into a list of its own, which would draw it anew.
-            [
-              ...choices.slice(0, at),
-              <div
-                key="ui-icon-picker-drawer"
-                className={`ui-icon-picker-drawer ${ICON_PICKER_ASIDE} col-span-full rounded-control bg-well py-tight-gap`}
-              >
-                {drawer.content}
-              </div>,
-              ...choices.slice(at),
-            ]}
+        {children}
       </div>
     </section>
   );
