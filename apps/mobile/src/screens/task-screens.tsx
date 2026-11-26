@@ -1565,6 +1565,8 @@ interface TaskMenuDoors extends TaskRowDoors {
   readonly askDelete: (task: TaskSummary) => void;
   /** Copies words to the pasteboard, a failure said in the failure notice with Try again (`useKeeping`). */
   readonly copyWords: (words: string) => void;
+  /** Whether the task's workspace has descriptions on, which Copy description stands by. */
+  readonly descriptions: boolean;
   /** Opens Edit description, where the workspace's descriptions stand on; none where they stand off. */
   readonly editDescription: ((task: TaskSummary) => void) | undefined;
   readonly newSubTask: (task: TaskSummary) => void;
@@ -1669,8 +1671,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
     choices: [],
     actions: [],
     groups: [
-      // Note that the edit door stands where the workspace's descriptions stand on, as Copy description does.
-      { items: whereEntries(overview, doors.editDescription !== undefined, doors.copyWords) },
+      { items: whereEntries(overview, doors.descriptions, doors.copyWords) },
       {
         items: [
           {
@@ -1752,18 +1753,23 @@ function useNewAgent(): (task: TaskSummary) => void {
   return (task) => router.push({ pathname: "/start-agent", params: { task: task.id } });
 }
 
+/** Whether a workspace's descriptions stand on, which a task's Copy description, Edit description and Version history each stand by. */
+function useDescriptionsOn(workspaceId: string | undefined): boolean {
+  const { data: descriptions = false } = useQuery({
+    ...appStateQuery,
+    select: selectWorkspaceExperiment(workspaceId, EXPERIMENT.DESCRIPTIONS),
+  });
+
+  return descriptions;
+}
+
 /** Opens Edit description over a task where its workspace's descriptions stand on, as the panel's description opens to edit in place; none where they stand off. */
 function useEditDescriptionDoor(
   workspaceId: string | undefined,
 ): ((task: TaskSummary) => void) | undefined {
   const router = useRouter();
 
-  const { data: descriptions = false } = useQuery({
-    ...appStateQuery,
-    select: selectWorkspaceExperiment(workspaceId, EXPERIMENT.DESCRIPTIONS),
-  });
-
-  if (!descriptions) return undefined;
+  if (!useDescriptionsOn(workspaceId)) return undefined;
 
   return (task) => router.push({ pathname: EDIT_DESCRIPTION_ROUTE, params: { task: task.id } });
 }
@@ -3528,6 +3534,7 @@ function useTaskDetail(
   const read = useTasksRead();
   const asking = useAgentRowAsk();
   const keeping = useKeeping();
+  const descriptions = useDescriptionsOn(overview?.task.workspaceId);
   const { refreshTasks } = useInboxActs();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -3573,6 +3580,7 @@ function useTaskDetail(
             taskMenu(overview, {
               askDelete,
               copyWords: keeping.copyWords,
+              descriptions,
               newSubTask,
               history,
               editDescription,
@@ -3711,6 +3719,7 @@ export function TaskScreen() {
   const { refreshTasks } = useInboxActs();
   const asking = useAgentRowAsk();
   const keeping = useKeeping();
+  const descriptions = useDescriptionsOn(overview?.task.workspaceId);
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
   const editDoor = useEditDescriptionDoor(overview?.task.workspaceId);
@@ -3734,6 +3743,7 @@ export function TaskScreen() {
       : taskMenu(overview, {
           askDelete: deletion.askDelete,
           copyWords: keeping.copyWords,
+          descriptions,
           newSubTask,
           history,
           editDescription,
