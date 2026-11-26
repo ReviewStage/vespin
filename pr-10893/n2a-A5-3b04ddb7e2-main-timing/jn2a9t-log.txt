@@ -1,0 +1,47 @@
+pinned to fe0e6670df
+== bundle PJjn2a9t base fe0e6670df
+  built fe0e6670df base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2A-write-1x seed: rc 0
+n2A-write-1x fn2mark: 21 steps,  marked [Thread 218: decide how a partial cent rounds in the billing rounding] settled [Thread 204: decide how a partial cent rounds in the description editor]
+  n2A search: s1 [Thread 218] 11 steps ; s2 [Thread 204 on All] 14 steps 
+  n2A db after rows: at 1795687242502 file host/accounts/stub-account/collections.sqlite;tables: applied_tx collection_expected_keys leader_term c_d2vsyxy_1i collection_metadata persisted_index_registry cache_generation collection_registry t_d2vsyxy_1i cache_generation_claim collection_reset_epoch cache_generation_sequence collection_version ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:693dcc2f-1089-4447-b734-38579e6a2fc0|c_d2vsyxy_1i|t_d2vsyxy_1i|1|1795686922;
+  n2A written.json: status present, polled until 69613 ms after the relaunch: {"5eed0004-0000-4000-8000-0000003d09d9":{"carried":true,"unread":true},"5eed0004-0000-4000-8000-0000003d09cb":{"carried":true,"unread":false,"status":"closed","settledAt":1795687204293,"updatedAt":1795687204293,"revision":9}}
+  n2A times: second_launch_T=1795687144814 terminate_T=1795687209857 mark_end_T=1795687210002 relaunch_T=1795687210035 s1_end_T=1795687233068 s2_end_T=1795687270225 written_status_T=1795687279648 tries=0 
+  n2A tap/kill times: 
+  n2A db at the end: at 1795687279998 file host/accounts/stub-account/collections.sqlite;tables: applied_tx collection_expected_keys leader_term c_d2vsyxy_1i collection_metadata persisted_index_registry cache_generation collection_registry t_d2vsyxy_1i cache_generation_claim collection_reset_epoch cache_generation_sequence collection_version ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:693dcc2f-1089-4447-b734-38579e6a2fc0|c_d2vsyxy_1i|t_d2vsyxy_1i|1|1795686922;
+  n2A requests (inbox and writes): 3 lines; 
+n2A4-busy-3x-opens 3x: script rc 0, flow FAILED Tap on id: BackButton... FAILED, recording 35626253 bytes, trace ok, JS holds JS thread: 54744 running samples in the first 150 s (from its first sample); holds over 50 ms: 114, total 30630 ms, longest 4160 ms
+  open:drawn thread first busy_ms 200 start_ms 200 stand_ms 2000 read | raw busy 211 start 268 stand 2011 ms | at 1795687393853
+  open:drawn thread later busy_ms 0 start_ms 100 stand_ms 600 read | raw busy 90 start 134 stand 632 ms | at 1795687398713
+  open:drawn thread later busy_ms 0 start_ms 100 stand_ms 600 read | raw busy 90 start 142 stand 625 ms | at 1795687405636
+  open:drawn worst busy_ms rung 200 raw 211 ms, of 3 opens
+  n2A4-busy-3x-opens per-open trace: open1: tap at 14.43s, main 417 ms, JS 583 ms | open2: tap at 20.98s, main 424 ms, JS 872 ms | open3: tap at 27.91s, main 415 ms, JS 908 ms | open4: tap at 99.20s, main 819 ms, JS 289 ms
+  n2A4-busy-3x-opens tap -> first slide frame: open1: tap at 17.174s into the recording; first changed frame 17.973s, tap -> first slide frame 799 ms;open2: tap at 23.721s into the recording; first changed frame 24.132s, tap -> first slide frame 410 ms;open3: tap at 30.650s into the recording; first changed frame 31.032s, tap -> first slide frame 381 ms;open4: tap at 101.941s into the recording; first changed frame none;
+  JS in render..transitionStart: thread first: render 15.53s .. transitionStart 15.80s after the trace start (268 ms); JS running in it 260 ms; longest hold touching it 229 ms, 202 ms of it inside
+  JS in render..transitionStart: thread later: render 21.77s .. transitionStart 21.90s after the trace start (134 ms); JS running in it 132 ms; longest hold touching it 382 ms, 134 ms of it inside
+  JS in render..transitionStart: thread later: render 28.70s .. transitionStart 28.84s after the trace start (142 ms); JS running in it 132 ms; longest hold touching it 253 ms, 84 ms of it inside
+  JS in render..transitionStart: worst JS running inside render..transitionStart: 260 ms
+n2B2: A4's worst (raw busy, or the trace's JS overlap) 211 ms -> the open:drawn run on B2 4bffe349d1
+== bundle PJjn2a9B base 4bffe349d1
+  built 4bffe349d1 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2B2-busy-3x-opens 3x: script rc 0, flow FAILED Tap on id: BackButton... FAILED, recording 53636821 bytes, trace ok, JS holds JS thread: 60955 running samples in the first 150 s (from its first sample); holds over 50 ms: 97, total 37019 ms, longest 6153 ms
+  open:drawn thread first busy_ms 300 start_ms 1250 stand_ms 2000 held | raw busy 325 start 1480 stand 2015 ms | at 1795687697715
+  open:drawn thread later busy_ms 100 start_ms 400 stand_ms 900 held | raw busy 118 start 465 stand 948 ms | at 1795687703153
+  open:drawn thread later busy_ms 0 start_ms 200 stand_ms 700 held | raw busy 96 start 247 stand 729 ms | at 1795687709268
+  open:drawn worst busy_ms rung 300 raw 325 ms, of 3 opens
+  n2B2-busy-3x-opens per-open trace: open1: tap at 9.48s, main 397 ms, JS 488 ms | open2: tap at 15.60s, main 526 ms, JS 491 ms | open3: tap at 22.05s, main 631 ms, JS 386 ms | open4: tap at 92.48s, main 833 ms, JS 826 ms
+  n2B2-busy-3x-opens tap -> first slide frame: open1: tap at 12.251s into the recording; first changed frame 14.350s, tap -> first slide frame 2099 ms;open2: tap at 18.362s into the recording; first changed frame 19.452s, tap -> first slide frame 1089 ms;open3: tap at 24.813s into the recording; first changed frame 24.857s, tap -> first slide frame 43 ms;open4: tap at 95.242s into the recording; first changed frame none;
+  JS in render..transitionStart: thread first: render 10.40s .. transitionStart 11.88s after the trace start (1480 ms); JS running in it 436 ms; longest hold touching it 156 ms, 156 ms of it inside
+  JS in render..transitionStart: thread later: render 16.90s .. transitionStart 17.37s after the trace start (465 ms); JS running in it 183 ms; longest hold touching it 189 ms, 159 ms of it inside
+  JS in render..transitionStart: thread later: render 23.24s .. transitionStart 23.48s after the trace start (247 ms); JS running in it 132 ms; longest hold touching it 159 ms, 129 ms of it inside
+  JS in render..transitionStart: worst JS running inside render..transitionStart: 436 ms
