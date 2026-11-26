@@ -46,6 +46,7 @@ import type { CaretAtWord } from "./caret-at-word.js";
 import { type ComposerSend, pressSend } from "./composer-press.js";
 import {
   BAR_EDGE,
+  BAR_FOOT_GAP,
   BAR_GLASS,
   BAR_MARGIN,
   BAR_ROW_SPACING,
@@ -141,6 +142,9 @@ const FIELD_INSET = SPACE.TIGHT * 2 - BAR_EDGE;
 
 /** How far the field stands in from the bar's leading edge where no + leads it. */
 const FIELD_LEADING = SPACE.ROW + 4 - BAR_EDGE;
+
+/** How far a field standing over its row stands from the row, as the bar's own (`BAR_FOOT_GAP`), its words otherwise held apart from the row by the row's press frames alone. */
+const FIELD_ROW_GAP = BAR_FOOT_GAP;
 
 /** How far the field's words stand from Send's frame, which stands its round in by less than the row's spacing did. */
 const FIELD_TRAILING = SPACE.TIGHT;
@@ -694,8 +698,10 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   const send = onSend === undefined ? undefined : () => takeFor(onSend);
   const { onSave, onSteer } = props.saving ?? {};
 
+  // Note that a field standing over its row keeps no room under its last line, which with the bar's double step and the row's press frames stood about thirty points of air between the words and the row; it keeps a press's height, the least target, so a press anywhere on it still takes the keyboard.
   const room = padding({
-    vertical: FIELD_INSET,
+    top: FIELD_INSET,
+    bottom: rowed ? 0 : FIELD_INSET,
     trailing: FIELD_TRAILING,
     ...((rowed || (addMenu === undefined && onAdd === undefined)) && {
       leading: FIELD_LEADING,
@@ -1094,8 +1100,14 @@ export function ComposerFoot(props: ComposerProps) {
     ) : (
       <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
         {props.head === undefined ? null : <BarHead>{props.head}</BarHead>}
-        {pieces}
-        {rowed ? <ComposerRow props={props} parts={parts} /> : null}
+        {rowed ? (
+          <VStack alignment="leading" spacing={FIELD_ROW_GAP}>
+            {pieces}
+            <ComposerRow props={props} parts={parts} />
+          </VStack>
+        ) : (
+          pieces
+        )}
       </VStack>
     );
 
