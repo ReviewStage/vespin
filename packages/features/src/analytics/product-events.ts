@@ -58,7 +58,7 @@ export const PRODUCT_EVENT = {
   ROWS_DROPPED: "rows:dropped",
   /** A reply sent on an Inbox thread stood in its thread, counted once a send by how long that took from the press, on a rung, and whether it carried pictures. */
   REPLY_DRAWN: "reply:drawn",
-  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was held by long tasks (50 ms or more) before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew. */
+  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was held by long tasks (50 ms or more) before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew; and, for an open a list's row picked, how many row picks reached JavaScript since the last open, on a rung of `productLoadCount`, and how long from the touch that got through to the page's first render, on a rung of `productOpenMilliseconds`: never where a touch landed. */
   OPEN_DRAWN: "open:drawn",
   /** A tab of the iOS app chosen for the first time since launch, Tasks, counted once a launch by how long from the tap that chose it the app took to hear the switch, to draw the tab's first frame, and to draw its rows, each on a rung of `productOpenMilliseconds`, and its kind: never what it shows. */
   TAB_DRAWN: "tab:drawn",
@@ -177,6 +177,8 @@ export const PRODUCT_EVENT_PROPERTY = {
   LOAD_WINDOW: "load_window",
   KIND: "kind",
   SIZE_BUCKET: "size_bucket",
+  TAP_MS: "tap_ms",
+  PRESSES: "presses",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -942,6 +944,8 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: ProductLoadWindow;
   [PRODUCT_EVENT_PROPERTY.KIND]: ProductAttachmentKind;
   [PRODUCT_EVENT_PROPERTY.SIZE_BUCKET]: ProductAttachmentSize;
+  [PRODUCT_EVENT_PROPERTY.TAP_MS]: ProductOpenMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.PRESSES]: ProductLoadCount;
 }
 
 /**
@@ -979,6 +983,8 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.LONG_TASK_MS
   | typeof PRODUCT_EVENT_PROPERTY.COLD_READS
   | typeof PRODUCT_EVENT_PROPERTY.COLD_READ_MS
+  | typeof PRODUCT_EVENT_PROPERTY.TAP_MS
+  | typeof PRODUCT_EVENT_PROPERTY.PRESSES
 >;
 
 /** Every value each enumerable property may ever hold. */
@@ -1147,6 +1153,8 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
     PRODUCT_EVENT_PROPERTY.BUSY_MS,
     PRODUCT_EVENT_PROPERTY.PAGE_DATA,
+    PRODUCT_EVENT_PROPERTY.TAP_MS,
+    PRODUCT_EVENT_PROPERTY.PRESSES,
   ],
   [PRODUCT_EVENT.TAB_DRAWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.LAUNCH_LOAD]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
@@ -1381,6 +1389,8 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.LONG_TASK_MS]: loadMillisecondsReader,
   [PRODUCT_EVENT_PROPERTY.COLD_READS]: loadCountReader,
   [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: loadMillisecondsReader,
+  [PRODUCT_EVENT_PROPERTY.TAP_MS]: openReader,
+  [PRODUCT_EVENT_PROPERTY.PRESSES]: loadCountReader,
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE]: experimentScopeReader,
 };
 

@@ -13,6 +13,7 @@ import {
   FailureNoticeProvider,
   KeepingProvider,
   NO_GROUND,
+  RowPickContext,
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
@@ -37,6 +38,7 @@ import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useNewTaskDraftsSignOut } from "../new-task-draft.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { notePick } from "../row-picks.js";
 import { useRecentOpenedSignOut } from "../search/recent-opened.js";
 import { useSetupGate } from "../setup/use-setup-gate.js";
 import { useShareSheet } from "../share-sheet.js";
@@ -334,12 +336,14 @@ function GuardedScreens() {
   );
 }
 
-/** The screens, under what their pictures', recordings', files', and messages' menus do, which says its failures in the notice above them. */
+/** The screens, under what their pictures', recordings', files', and messages' menus do, which says its failures in the notice above them, each row pick kept for the open it leads to (`row-picks.ts`). */
 function KeptScreens() {
   return (
     <KeepingProvider keeping={useKeeping()}>
       <ChipMarkProvider markOf={useChipMarks()}>
-        <GuardedScreens />
+        <RowPickContext value={notePick}>
+          <GuardedScreens />
+        </RowPickContext>
       </ChipMarkProvider>
     </KeepingProvider>
   );

@@ -376,6 +376,8 @@ test("a page's open travels its waits on rungs with its kind and order, never wh
         [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "76",
         [PRODUCT_EVENT_PROPERTY.BUSY_MS]: 400,
         [PRODUCT_EVENT_PROPERTY.PAGE_DATA]: PRODUCT_PAGE_DATA.HELD,
+        [PRODUCT_EVENT_PROPERTY.TAP_MS]: 1500,
+        [PRODUCT_EVENT_PROPERTY.PRESSES]: 1,
         threadId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d",
       },
     }),
@@ -390,6 +392,8 @@ test("a page's open travels its waits on rungs with its kind and order, never wh
         [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "76",
         [PRODUCT_EVENT_PROPERTY.BUSY_MS]: 400,
         [PRODUCT_EVENT_PROPERTY.PAGE_DATA]: PRODUCT_PAGE_DATA.HELD,
+        [PRODUCT_EVENT_PROPERTY.TAP_MS]: 1500,
+        [PRODUCT_EVENT_PROPERTY.PRESSES]: 1,
       },
     },
   );
