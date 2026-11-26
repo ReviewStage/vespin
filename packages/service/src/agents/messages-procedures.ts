@@ -107,6 +107,7 @@ import {
   delegationPast,
   NO_TITLE_AWAITED,
   NO_TITLE_EDGE,
+  type ReadGate,
   type TitleAwaited,
   type TitleEdge,
   type TranscriptNewest,
@@ -694,13 +695,14 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       const standing = { createdAt: agent.createdAt, blank: startedBlank(agent) };
 
       // The title and the calls are read after the page's rows, as the forward read's are, so one that landed while the rows were read is told rather than lost to a follow that starts after it.
-      const afterRows = Effect.all(
-        {
-          titled: readAgent(context.userId, agent.id),
-          calls: standingCallsOf(context.userId, agent.id),
-        },
-        { concurrency: "unbounded" },
-      );
+      const afterRows = (gate: ReadGate) =>
+        Effect.all(
+          {
+            titled: gate(readAgent(context.userId, agent.id)),
+            calls: gate(standingCallsOf(context.userId, agent.id)),
+          },
+          { concurrency: "unbounded" },
+        );
 
       const newest = yield* hostedStoreOrUnavailable(
         transcriptNewest(target, CODER_TOOL_SET, standing, afterRows, agent),
@@ -759,7 +761,9 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
 
       // The title is read after the page's rows, since it lands beside the worker's start, which the page's reads may span.
       const newest = yield* hostedStoreOrUnavailable(
-        transcriptNewest(worker, CODER_TOOL_SET, started, childTitlesOf(target, [conversationId])),
+        transcriptNewest(worker, CODER_TOOL_SET, started, (gate) =>
+          gate(childTitlesOf(target, [conversationId])),
+        ),
       );
 
       const title = newest.afterRows.get(conversationId) ?? null;
