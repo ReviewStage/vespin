@@ -100,6 +100,7 @@ import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { ManagerThreadTab } from "../tasks/manager-chat-tab.js";
 import { ThreadDoorsProvider } from "../tasks/manager-chat-threads.js";
 import type { OpenFileLines } from "../tasks/mention-chip.js";
+import { useMessageAsked } from "../tasks/message-links.js";
 import { ManagerGlyph } from "../tasks/tab-look.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
@@ -514,6 +515,12 @@ function OwnAgentPage({
   const [chosenView, setView] = useState<ManagerView>(MANAGER_VIEW.MESSAGES);
   // Note that a page narrowed to a phone's room while another view stood goes back to the chat, which no row leads away from there.
   const view = tabbed ? chosenView : MANAGER_VIEW.MESSAGES;
+  // A link to one of the Manager's messages goes back to its chat, where the message is landed on.
+  const messageAsked = useMessageAsked(agent.id);
+
+  useEffect(() => {
+    if (messageAsked !== undefined) setView(MANAGER_VIEW.MESSAGES);
+  }, [messageAsked]);
   // The thread the Inbox tab shows beside its list; none while the list stands alone.
   const [chosenThread, setChosenThread] = useState<string | undefined>(undefined);
 

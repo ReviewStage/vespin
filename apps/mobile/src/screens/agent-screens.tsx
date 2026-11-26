@@ -35,7 +35,11 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
-import { managerChatView } from "@repo/features/manager-chat-view";
+import {
+  CHAT_LANDING,
+  chatMessageLanding,
+  managerChatView,
+} from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
@@ -139,6 +143,7 @@ import {
   appsDockMediaIds,
   useAgentDock,
 } from "../agents/agent-dock.js";
+import { useMessageLink } from "../agents/message-link.js";
 import {
   useAgentMedia,
   useAgentPullRequests,
@@ -267,23 +272,6 @@ function useAgentAddress(
       : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
-}
-
-/**
- * A message's address on vespin.dev under its agent, as the panel's Copy
- * link names one (`agentMessagePlace`), by the message's id; none before the
- * agent's workspace is known.
- */
-function useMessageLink(
-  agentId: string,
-  workspaceId: string | undefined,
-): ((messageId: string) => string | undefined) | undefined {
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const step = linkWorkspaceStep(workspaceId, workspaces);
-
-  if (step === undefined) return undefined;
-
-  return (messageId) => linkOf({ kind: LINK_DESTINATION.MESSAGE, agentId, messageId }, step);
 }
 
 /** An automation's address on vespin.dev, under the agent's workspace, which opens in Safari, since the phone draws no Automations; none before the workspace is known. */
@@ -731,18 +719,29 @@ export function AgentScreen() {
     suggestedBy,
     button,
     brief,
+    message,
   } = useLocalSearchParams<{
     id: string;
     suggestedBy?: string;
     button?: string;
     /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
     brief?: string;
+    /** The message a link names, which the page lands on (`IOS_AGENT_MESSAGE_PARAM`). */
+    message?: string;
   }>();
 
   const listed = useTaskListRow(useTaskListCollections().agents, id || undefined);
   useOpenDrawnCount(PRODUCT_SURFACE.AGENT, listed !== undefined);
 
-  return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} brief={brief} />;
+  return (
+    <AgentConversation
+      id={id}
+      suggestedBy={suggestedBy}
+      button={button}
+      brief={brief}
+      message={message}
+    />
+  );
 }
 
 /**
@@ -759,12 +758,15 @@ const AgentConversation = memo(function AgentConversation({
   suggestedBy,
   button,
   brief,
+  message,
 }: {
   readonly id: string;
   readonly suggestedBy?: string | undefined;
   readonly button?: string | undefined;
   /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
   readonly brief?: string | undefined;
+  /** The message a link names, which the page lands on once it holds it. */
+  readonly message?: string | undefined;
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -893,41 +895,44 @@ const AgentConversation = memo(function AgentConversation({
   // Note that the turn under way is the agent's newest while it may still write, whose work stands under the chat's working line rather than under a message.
   const running = writing ? (agent?.turnId ?? undefined) : undefined;
 
+  const chatView = useMemo(
+    () =>
+      chat && chatPage !== undefined
+        ? managerChatView(chatPage.messages, messages ?? [], {
+            running,
+            sending: chatPage.sending ?? [],
+          })
+        : undefined,
+    [chat, chatPage, messages, running],
+  );
+
   // Note that a Manager's chat is its rows alone, with the work of each turn a press away, read from the transcript held beside it.
   const chatItems = useMemo(
     () =>
-      chat && chatPage !== undefined
-        ? managerChatItems(
-            managerChatView(chatPage.messages, messages ?? [], {
-              running,
-              sending: chatPage.sending ?? [],
-            }),
-            messages ?? [],
-            {
-              writing,
-              readerId,
-              toggles,
-              now: Date.now(),
-              pullRequests,
-              wholePart: whole.read,
-              placeAddress,
-              waitingCalls,
-              sending: chatPage.sending,
-              managerName: chatFaces?.managerName,
-              readerName: chatFaces?.readerName,
-              // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
-              greeting:
-                shown !== undefined && chatPage.before === undefined
-                  ? managerGreeting(shown.title)
-                  : undefined,
-            },
-          )
+      chatView !== undefined && chatPage !== undefined
+        ? managerChatItems(chatView, messages ?? [], {
+            writing,
+            readerId,
+            toggles,
+            now: Date.now(),
+            pullRequests,
+            wholePart: whole.read,
+            placeAddress,
+            waitingCalls,
+            sending: chatPage.sending,
+            managerName: chatFaces?.managerName,
+            readerName: chatFaces?.readerName,
+            // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
+            greeting:
+              shown !== undefined && chatPage.before === undefined
+                ? managerGreeting(shown.title)
+                : undefined,
+          })
         : undefined,
     [
-      chat,
+      chatView,
       chatPage,
       messages,
-      running,
       writing,
       readerId,
       toggles,
@@ -1239,6 +1244,48 @@ const AgentConversation = memo(function AgentConversation({
   // Note that a chat message's thread opens on its own page pushed over the chat, on iPhone and iPad alike, as Slack's app pushes a thread.
   const openChatThread = (root: string) =>
     router.push({ pathname: onOwnTab("/tasks/agent/[id]/thread/[root]"), params: { id, root } });
+
+  // The message a link named that the page has landed on, so it lands once.
+  const landedOn = useRef<string | undefined>(undefined);
+
+  // Note that a link to one of the agent's messages lands on it once the page holds it, older pages read for it a page at a time, as the panel's does: a message of a Manager's chat on its row, or in the thread it stands in alone, pushed over the chat as Reply in thread opens it; a transcript's on its row.
+  useEffect(() => {
+    if (message === undefined || landedOn.current === message || shown === undefined) return;
+
+    const land = () => {
+      landedOn.current = message;
+      setReveal((was) => ({ messageId: message, serial: (was?.serial ?? 0) + 1 }));
+    };
+
+    const landing = chatView === undefined ? undefined : chatMessageLanding(chatView, message);
+
+    if (landing?.kind === CHAT_LANDING.CHAT) {
+      land();
+
+      return;
+    }
+
+    if (landing?.kind === CHAT_LANDING.THREAD) {
+      landedOn.current = message;
+      router.push({
+        pathname: onOwnTab("/tasks/agent/[id]/thread/[root]"),
+        params: { id, root: landing.root, message },
+      });
+
+      return;
+    }
+
+    // Note that a line someone sent during a turn is linked by its own row's id, the turn's rows by the turn's.
+    const held = items.some((item) => item.place.message === message || item.place.row === message);
+
+    if (!chat && held) {
+      land();
+
+      return;
+    }
+
+    if (older !== undefined && !older.reading && !older.failed) older.onRead();
+  }, [message, shown, chat, chatView, items, older, router, onOwnTab, id]);
 
   // Note that a pull request the agent's workspace is not read for yet opens on GitHub, which reads it whoever opened it.
   const openPullRequest = (url: string) => {

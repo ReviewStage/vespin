@@ -126,6 +126,36 @@ function isWork(part: AgentPart): boolean {
 /** The place of a message that stands in a run of its own. */
 export const CHAT_RUN_ALONE: ChatRunPlace = { opens: true, closes: true };
 
+/** Where a link to one of the chat's messages lands among the messages read (`chatMessageLanding`). */
+export const CHAT_LANDING = {
+  /** On its row at the chat's top. */
+  CHAT: "chat",
+  /** In its thread, where it is a reply standing there alone. */
+  THREAD: "thread",
+  /** Nowhere yet: it is not among the messages read, so it stands on an older page, or is gone. */
+  UNREAD: "unread",
+} as const;
+
+export type ChatLanding =
+  | { readonly kind: typeof CHAT_LANDING.CHAT }
+  | { readonly kind: typeof CHAT_LANDING.THREAD; readonly root: string }
+  | { readonly kind: typeof CHAT_LANDING.UNREAD };
+
+/**
+ * Where a link to one of the chat's messages, by its id, lands among the
+ * messages read: on its row at the chat's top, a reply also posted to the
+ * chat among them, as Slack lands one; in its thread, by the thread's root,
+ * where it is a reply standing there alone; or nowhere yet.
+ */
+export function chatMessageLanding(view: ManagerChatView, messageId: string): ChatLanding {
+  if (view.top.some((line) => line.message.id === messageId)) return { kind: CHAT_LANDING.CHAT };
+  const root = view.messages.find((line) => line.message.id === messageId)?.message.threadRoot;
+
+  return root === undefined || root === null
+    ? { kind: CHAT_LANDING.UNREAD }
+    : { kind: CHAT_LANDING.THREAD, root };
+}
+
 /** What a message's place in its sender's run is read from: who wrote it, and when. */
 type RunMark = Pick<ManagerChatLiveMessage, "authorKind" | "authorUserId" | "createdAt">;
 
