@@ -288,8 +288,8 @@ interface StripActivity {
 /**
  * What the panel leaves the document beside it, as desktop.css declares it
  * on the task's area: the panel is dragged no wider than the area less this,
- * and has no greatest width of its own. `.side-panel`'s `max-width` holds the
- * same room while the window narrows.
+ * and has no greatest width of its own. The task's grid holds the same room
+ * while the window narrows, its column no wider than the area less this.
  */
 const DOCUMENT_RESERVE_PROPERTY = "--document-reserve";
 
