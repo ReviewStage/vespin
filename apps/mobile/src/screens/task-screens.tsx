@@ -80,7 +80,6 @@ import {
   TASK_PRIORITY_ORDER,
   TASK_RELATION_KIND,
   TASK_STATUS,
-  type Task,
   type TaskRelationKind,
   type TaskStatus,
   type TaskSummary,
@@ -380,16 +379,6 @@ function copyTaskLink(task: TaskSummary, workspace: Workspace | undefined): void
     .then(() => buzz(BUZZ.SUCCESS))
     .catch((cause: unknown) => {
       console.error("The task's link could not be copied.", cause);
-      buzz(BUZZ.ERROR);
-    });
-}
-
-/** Copies a task's description as the Markdown the panel's Copy description puts on the clipboard, its name as a title over its words, with the system's tap of success, or says on the console why it could not. */
-function copyDescription(task: Task): void {
-  setStringAsync(descriptionMarkdown(task))
-    .then(() => buzz(BUZZ.SUCCESS))
-    .catch((cause: unknown) => {
-      console.error("The task's description could not be copied.", cause);
       buzz(BUZZ.ERROR);
     });
 }
@@ -1573,6 +1562,8 @@ function headPicture(group: TaskTreeGroup): string | undefined {
 /** What a task's ⋯ asks first, what opens New task for a sub-task of it, and what opens its Task relation sheet. */
 interface TaskMenuDoors extends TaskRowDoors {
   readonly askDelete: (task: TaskSummary) => void;
+  /** Copies words to the pasteboard, a failure said in the failure notice with Try again (`useKeeping`). */
+  readonly copyWords: (words: string) => void;
   /** Opens Edit description, where the workspace's descriptions stand on; none where they stand off. */
   readonly editDescription: ((task: TaskSummary) => void) | undefined;
   readonly newSubTask: (task: TaskSummary) => void;
@@ -1613,13 +1604,21 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
 }
 
 /** Copy description as a task's ⋯ offers it, as the panel's open task's menu does: none where the workspace's descriptions stand off or the description is not read yet. */
-function copyDescriptionActions(overview: TaskOverview, descriptions: boolean): BarMenu["actions"] {
+function copyDescriptionActions(
+  overview: TaskOverview,
+  descriptions: boolean,
+  copyWords: TaskMenuDoors["copyWords"],
+): BarMenu["actions"] {
   const { document } = overview;
 
   if (!descriptions || document === undefined) return [];
 
   return [
-    { label: COPY_DESCRIPTION, symbol: GLYPH.COPY, onPress: () => copyDescription(document) },
+    {
+      label: COPY_DESCRIPTION,
+      symbol: GLYPH.COPY,
+      onPress: () => copyWords(descriptionMarkdown(document)),
+    },
   ];
 }
 
@@ -1642,7 +1641,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
     choices: [],
     actions: [
       // Note that the edit door stands where the workspace's descriptions stand on, as Copy description does.
-      ...copyDescriptionActions(overview, doors.editDescription !== undefined),
+      ...copyDescriptionActions(overview, doors.editDescription !== undefined, doors.copyWords),
       {
         label: WORDS.COPY_LINK,
         symbol: GLYPH.LINK,
@@ -3512,6 +3511,7 @@ function useTaskDetail(
   const editDoor = useEditDescriptionDoor(overview?.task.workspaceId);
   const read = useTasksRead();
   const asking = useAgentRowAsk();
+  const keeping = useKeeping();
   const { refreshTasks } = useInboxActs();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -3556,6 +3556,7 @@ function useTaskDetail(
           menu: menuWithout(
             taskMenu(overview, {
               askDelete,
+              copyWords: keeping.copyWords,
               newSubTask,
               history,
               editDescription,
@@ -3693,6 +3694,7 @@ export function TaskScreen() {
   const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
   const asking = useAgentRowAsk();
+  const keeping = useKeeping();
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
   const editDoor = useEditDescriptionDoor(overview?.task.workspaceId);
@@ -3715,6 +3717,7 @@ export function TaskScreen() {
       ? undefined
       : taskMenu(overview, {
           askDelete: deletion.askDelete,
+          copyWords: keeping.copyWords,
           newSubTask,
           history,
           editDescription,
