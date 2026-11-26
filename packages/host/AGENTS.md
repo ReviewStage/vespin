@@ -110,6 +110,7 @@ window reads of the document (the selects and the follow the panel's
 `use-app-state.ts` re-exports), `@repo/host/fixture-inbox`, the Inbox
 fixture both the panel's fixture run and the app's lay over the document,
 `@repo/host/follow-stream`, the follow a screen holds a live read open
-by, and `@repo/host/task-code-remote`, for a block drawn plain. Every door named
+by, `@repo/host/inbox-rows`, the query a screen reads the Inbox's kept
+rows by where they are kept on disk, and `@repo/host/task-code-remote`, for a block drawn plain. Every door named
 here, and everything it imports, stays free of Node, which
 `scripts/repository-checks.sh` walks.

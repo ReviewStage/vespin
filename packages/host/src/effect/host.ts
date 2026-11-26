@@ -25,6 +25,7 @@ import { Context, Data, Deferred, Effect, Layer, Ref, type Scope, type Stream } 
 import type { Composer } from "../composer.js";
 import type { HostActTable } from "../host-acts.js";
 import type { HostConcern } from "../host-concerns.js";
+import type { InboxRowsSource } from "../inbox-rows.js";
 import type { TaskListMoved } from "../task-list-moved.js";
 import { layersInOrder } from "./composer.js";
 
@@ -112,6 +113,8 @@ export interface HostAssembly {
   readonly taskListMoves: Effect.Effect<Stream.Stream<TaskListMoved>, never, Scope.Scope>;
   /** Every agent on a task as the account's task list last drew it, the archived among them; none before it first drew: what the desktop counts the agents at work by. */
   readonly agentsListed: () => readonly ListedAgent[] | undefined;
+  /** The pool's Inbox kind as the iPhone's screens read it where its items are kept on disk (`inbox-rows.ts`). */
+  readonly inboxRows: InboxRowsSource;
 }
 
 export class HostAssemblyTag extends Context.Service<HostAssemblyTag, HostAssembly>()(
