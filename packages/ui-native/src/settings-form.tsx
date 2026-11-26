@@ -519,8 +519,8 @@ const ROW_PICTURE_SIDE = 28;
 
 /**
  * A row a press opens a picker from, as the panel's well opens its icon
- * picker: its words, then at its end what stands picked as its picture of
- * the asset catalog, such as a Manager's face, or `detail`'s muted words
+ * picker: its words, then at its end what stands picked as its picture,
+ * such as a Manager's face, or `detail`'s muted words
  * while nothing does, and the chevron. It is heard as its words, then what
  * stands.
  */
@@ -533,8 +533,8 @@ export function PictureRow({
   testId,
 }: {
   readonly label: string;
-  /** The picture of what stands picked; none while nothing does. */
-  readonly picture?: string | undefined;
+  /** The picture of what stands picked, drawn at the side it is handed; none while nothing does. */
+  readonly picture?: ((side: number) => ReactElement) | undefined;
   /** What stands picked, in words, such as "Blue planet". */
   readonly heard?: string | undefined;
   /** What the row says at its end while nothing stands picked. */
@@ -559,10 +559,7 @@ export function PictureRow({
                 <Text modifiers={[foregroundStyle(VALUE_INK)]}>{detail}</Text>
               )
             ) : (
-              <Image
-                assetName={picture}
-                modifiers={[resizable(), frame({ width: side, height: side })]}
-              />
+              picture(side)
             )
           }
         />

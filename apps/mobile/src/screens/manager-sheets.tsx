@@ -26,7 +26,8 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { type ComponentProps, useState } from "react";
+import { keepRecentFace, useRecentFaces } from "../agents/recent-faces.js";
 import { useFollowedAgent } from "../agents/use-agent.js";
 import { useAgentActions } from "../agents/use-agent-actions.js";
 import { useAgentModelPick } from "../agents/use-agent-model.js";
@@ -113,6 +114,22 @@ function SheetBar({
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
     </>
+  );
+}
+
+/** The face picker, offering the faces this phone picked last as Recent, and keeping each pick among them. */
+function FaceSheet({ onPick, ...sheet }: Omit<ComponentProps<typeof ManagerFaceSheet>, "recent">) {
+  const recent = useRecentFaces();
+
+  return (
+    <ManagerFaceSheet
+      {...sheet}
+      recent={recent}
+      onPick={(picked) => {
+        keepRecentFace(picked);
+        onPick(picked);
+      }}
+    />
   );
 }
 
@@ -291,7 +308,7 @@ export function NewManagerScreen() {
           </ListSection>
         </SettingsForm>
       </Screen>
-      <ManagerFaceSheet
+      <FaceSheet
         face={face}
         presented={facePicking}
         onDismiss={() => setFacePicking(false)}
@@ -381,7 +398,7 @@ export function ManagerSettingsScreen() {
           )}
         </SettingsForm>
       </Screen>
-      <ManagerFaceSheet
+      <FaceSheet
         face={agent?.face}
         presented={facePicking}
         onDismiss={() => setFacePicking(false)}

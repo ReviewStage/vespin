@@ -196,7 +196,7 @@ describe("menuTree", () => {
 });
 
 describe("markLook", () => {
-  // Note that a repository's owner stands on a tile's rounded square, a quarter of its side, as the panel draws it, never a person's circle, a harness's mark is fit to a glyph's square, and a Manager stands as its face at rest.
+  // Note that a repository's owner stands on a tile's rounded square, a quarter of its side, as the panel draws it, never a person's circle, a harness's mark is fit to a glyph's square, and a Manager stands as its face at rest, or its emoji on its color's disc.
   it.each([
     {
       mark: {
@@ -221,6 +221,17 @@ describe("markLook", () => {
         face: { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.BLUE },
       } as const,
       look: { kind: MENU_ICON.MARK, asset: "ManagerFaces/planet-rest-blue", sized: false },
+    },
+    {
+      mark: {
+        kind: CHOICE_MARK.MANAGER,
+        face: {
+          character: MANAGER_FACE_CHARACTER.PLANET,
+          color: MANAGER_FACE_COLOR.BLUE,
+          emoji: "🦊",
+        },
+      } as const,
+      look: { kind: MENU_ICON.EMOJI, emoji: "🦊", disc: { light: "#6cc4f5", dark: "#83d1fb" } },
     },
   ])("draws a $mark.kind as its rows do", ({ mark, look }) => {
     expect(markLook(mark)).toStrictEqual(look);

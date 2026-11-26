@@ -15,7 +15,7 @@
 import { managerCreateRefusalWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_KIND, type AgentRunsOnRequest, type ListedAgent } from "@repo/features/agent-wire";
-import type { ManagerFace } from "@repo/features/manager-face";
+import { type ManagerFace, sameManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
@@ -147,8 +147,7 @@ function sameAsk(one: ManagerAsk, other: ManagerAsk): boolean {
     placeIdOf(one.runsOn) === placeIdOf(other.runsOn) &&
     one.choice.model === other.choice.model &&
     one.choice.effort === other.choice.effort &&
-    one.face?.character === other.face?.character &&
-    one.face?.color === other.face?.color &&
+    sameManagerFace(one.face, other.face) &&
     one.repositories.length === other.repositories.length &&
     one.repositories.every((repository, at) => repository === other.repositories[at])
   );

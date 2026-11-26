@@ -242,6 +242,8 @@ export { managerFaceMenu } from "./manager-face-menu.js";
 
 export { ManagerFaceRow, ManagerFaceSheet } from "./manager-face-picker.js";
 
+export { recentFaces } from "./manager-face-picker-model.js";
+
 export { Markdown, type MarkdownFile, type MarkdownVideo, Picture } from "./markdown.js";
 
 export { markdownGithubPages, markdownReplyButtons, markdownShows } from "./markdown-model.js";
