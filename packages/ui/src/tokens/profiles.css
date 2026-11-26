@@ -73,6 +73,20 @@
   --ui-page-inset-narrow: var(--ui-space-24);
   /* Between two items of a list, close enough that they read as one. */
   --ui-list-gap: var(--ui-space-2);
+  /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
+     in place of a control's height, the body's size, and the list's and
+     section's gaps: how tall a row stands, the size of its words, the room
+     between two rows and between the places at its top, and the room over
+     each group. */
+  --ui-sidebar-row-height: var(--ui-control-height);
+  --ui-sidebar-text-size: var(--ui-type-body-size);
+  --ui-sidebar-row-gap: var(--ui-list-gap);
+  --ui-sidebar-places-gap: var(--ui-list-gap);
+  --ui-sidebar-group-gap: var(--ui-section-gap);
+  /* A task list's row: the room it keeps over and under a control's height. */
+  --ui-task-row-block: var(--ui-space-6);
+  /* How many lines an agent's empty box stands, before it grows with its words. */
+  --ui-composer-least-lines: 1;
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's
@@ -370,6 +384,20 @@
   --ui-page-inset-narrow: var(--ui-space-24);
   /* Between two items of a list, close enough that they read as one. */
   --ui-list-gap: var(--ui-space-2);
+  /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
+     in place of a control's height, the body's size, and the list's and
+     section's gaps: how tall a row stands, the size of its words, the room
+     between two rows and between the places at its top, and the room over
+     each group. */
+  --ui-sidebar-row-height: var(--ui-control-height);
+  --ui-sidebar-text-size: var(--ui-type-body-size);
+  --ui-sidebar-row-gap: var(--ui-list-gap);
+  --ui-sidebar-places-gap: var(--ui-list-gap);
+  --ui-sidebar-group-gap: var(--ui-section-gap);
+  /* A task list's row: the room it keeps over and under a control's height. */
+  --ui-task-row-block: var(--ui-space-6);
+  /* How many lines an agent's empty box stands, before it grows with its words. */
+  --ui-composer-least-lines: 1;
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's
