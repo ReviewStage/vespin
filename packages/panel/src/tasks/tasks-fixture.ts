@@ -111,10 +111,10 @@ function chosen(
 
 const FIXTURE_FIRST: Workspace = {
   id: FIXTURE_IDS.WORKSPACE,
-  name: "Ada Lovelace",
-  slug: "personal",
+  name: "acme",
+  slug: "acme-main",
   role: WORKSPACE_ROLE.OWNER,
-  github: { login: "ada", active: true },
+  github: { login: "acme", active: true },
   personal: true,
   // Every workspace experiment the account turned on in its own workspace, so the captures draw each feature.
   experiments: [
@@ -126,10 +126,10 @@ const FIXTURE_FIRST: Workspace = {
 
 const FIXTURE_TEAM: Workspace = {
   id: "workspace-acme",
-  name: "Acme",
-  slug: "acme",
+  name: "Harbor Labs",
+  slug: "harbor",
   role: WORKSPACE_ROLE.ADMIN,
-  github: { login: "acme", active: true },
+  github: { login: "harbor", active: true },
   experiments: [
     chosen(EXPERIMENT.DESCRIPTIONS, true, FIXTURE_PERSON.MAYA, "2026-09-01T09:00:00Z"),
     chosen(EXPERIMENT.MEMORY, true, FIXTURE_PERSON.ADA, "2026-10-23T15:00:00Z"),
@@ -206,7 +206,7 @@ const FIXTURE_TASK: Task = {
   name: FIXTURE_TASK_NAME,
   createdAt: CALL_AT - 2 * DAY - 2 * HOUR,
   updatedAt: CALL_AT,
-  repository: "ada/relay",
+  repository: "acme/relay",
   createdBy: FIXTURE_PERSON.ADA,
   status: TASK_STATUS.IN_PROGRESS,
   priority: TASK_PRIORITY.HIGH,
@@ -366,7 +366,7 @@ const FIXTURE_OTHER_TASKS: readonly TaskSummary[] = [
     name: "Billing export",
     createdAt: CALL_AT - 4 * DAY - 6 * HOUR,
     updatedAt: CALL_AT - DAY - 2 * HOUR,
-    repository: "ada/ledger",
+    repository: "acme/ledger",
     createdBy: FIXTURE_PERSON.THEO,
   },
   {
@@ -397,8 +397,8 @@ const FIXTURE_REPOSITORIES = new Map([
   [
     FIXTURE_FIRST.id,
     [
-      fixtureRepository("ada", "relay", "2026-10-07T16:20:00Z"),
-      fixtureRepository("ada", "ledger", "2026-10-01T09:00:00Z"),
+      fixtureRepository("acme", "relay", "2026-10-07T16:20:00Z"),
+      fixtureRepository("acme", "ledger", "2026-10-01T09:00:00Z"),
     ],
   ],
   [FIXTURE_TEAM.id, [fixtureRepository("acme", "relay", "2026-10-06T11:00:00Z")]],

@@ -54,6 +54,7 @@ import {
   REVIEW_DECISION,
   REVIEW_STATE,
 } from "@repo/features/agent-wire";
+import { INVITE_DIALOG_PNG } from "./shot-invite-dialog.js";
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER } from "@repo/features/page-wire";
@@ -121,7 +122,7 @@ import type { MainTab } from "./use-main-tabs.js";
 import type { SidePanelState, StagedSidePanel } from "./use-side-panel.js";
 
 /** The fixture task's repository (`tasks-fixture.ts`), which the agent works in. */
-const REPOSITORY = "ada/relay";
+const REPOSITORY = "acme/relay";
 
 /** The agent's id, its turn's, and its shell's. */
 export const FIXTURE_AGENT_ID = FIXTURE_IDS.AGENT;
@@ -143,7 +144,7 @@ const TURN_ID = "5d9f3b7c-2e4a-4f6b-8c8d-3e5f7a9b1c2d";
 const SHELL_ID = "6e0a4c8d-3f5b-4a7c-9d9e-4f6a8b0c2d3e";
 
 /** When the agent began, and its turn's steps after it, by the service's clock. */
-const STARTED_AT = Date.parse("2026-10-07T16:42:00Z");
+const STARTED_AT = Date.now() - 19 * 60_000;
 const MINUTE = 60_000;
 
 /** The pull request it opened, from its branch, and the commits its head and base stand at. */
@@ -158,7 +159,7 @@ const PULL_REQUEST = {
 } as const;
 
 /** The people on the pull request: the developer who started the agent, a teammate who approved it, and a review bot. */
-const ADA: GitHubPerson = { login: "ada", bot: false };
+const ADA: GitHubPerson = { login: "acme", bot: false };
 const GRACE: GitHubPerson = { login: "grace", bot: false };
 const REVIEW_BOT: GitHubPerson = { login: "review-bot[bot]", bot: true };
 const STATUS_BOT: GitHubPerson = { login: "status-bot[bot]", bot: true };
@@ -390,6 +391,25 @@ const WORK: AgentTranscriptMessage = {
       { filePath: "src/db/schema/memberships.ts" },
       { content: "export const memberships = pgTable(…)" },
     ),
+    {
+      ...toolPart(
+        "read_file",
+        "fixture-shot",
+        { filePath: "shots/invite-dialog.png" },
+        { content: "[image]" },
+      ),
+      resultProviderMetadata: {
+        app: {
+          pictures: [
+            { id: "shot-invite-dialog", mediaType: "image/png", width: 1280, height: 800, byteCount: 29705 },
+          ],
+        },
+      },
+    },
+    {
+      type: "text",
+      text: "The members page now lists the invite as pending. That is what I wanted; now the email.",
+    },
     toolPart(
       "apply_patch",
       "fixture-patch",
@@ -1222,7 +1242,7 @@ const FIXTURE_BUTTONS: ReadonlyMap<string, ReplyButtonView> = new Map([
         model: "anthropic/claude-sonnet-5.5",
         effort: "high",
       },
-      repository: "ada/relay",
+      repository: "acme/relay",
       sendTo: null,
       pressed: null,
     },
@@ -1238,7 +1258,7 @@ const FIXTURE_BUTTONS: ReadonlyMap<string, ReplyButtonView> = new Map([
         agentId: FIXTURE_BUTTON.DIGEST_AGENT,
         text: "Invitations now stand apart from members: count a pending invite as an invite, not a member.",
       },
-      repository: "ada/relay",
+      repository: "acme/relay",
       sendTo: {
         id: FIXTURE_BUTTON.DIGEST_AGENT,
         taskId: FIXTURE_IDS.TASK,
@@ -1261,7 +1281,7 @@ function pressedButton(button: ReplyButtonView): ReplyButtonView {
 
   return {
     ...button,
-    pressed: { at: Date.now(), by: "Ada Lovelace", byReader: true, agent: reached },
+    pressed: { at: Date.now(), by: "Dean Stratakos", byReader: true, agent: reached },
   };
 }
 
@@ -1286,7 +1306,7 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({
     failure: AGENT_CALL_FAILURE.NOT_FOUND,
   }),
-  [ACT_KIND.AGENTS_PICTURE]: () => longRunPicture(),
+  [ACT_KIND.AGENTS_PICTURE]: () => ({ contentType: "image/png", base64: INVITE_DIALOG_PNG }),
   // The last reply's buttons; a press is taken as the service takes one, though nothing here moves, so a reload draws them unpressed again.
   [ACT_KIND.AGENTS_REPLY_BUTTON]: ({ buttonId }) =>
     SENT_BUTTONS.get(buttonId) ??
@@ -1470,7 +1490,7 @@ function stagedTranscripts(held: AppTranscripts, transcript: AppTranscript): App
 
 /** The followers whose machines the agent's default may be set to. */
 const MACHINE_OWNERS = {
-  ADA: { userId: "user-ada", name: "Ada Lovelace" },
+  ADA: { userId: "user-ada", name: "Dean Stratakos" },
   MANUEL: { userId: "user-manuel", name: "Manuel Ruiz" },
 } as const;
 
@@ -1791,4 +1811,30 @@ export function agentActAnswer(
   const answer = ANSWERS[kind] as StagedAnswer<PortActKind> | undefined;
 
   return answer === undefined ? undefined : { answer: answer(payload, stage) };
+}
+
+// Throwaway: lay the window out for the changelog picture: the side panel shut and the first tool group open.
+if (typeof document !== "undefined") {
+  let opened = false;
+  let shut = false;
+
+  setInterval(() => {
+    if (!shut) {
+      const hide = document.querySelector<HTMLElement>('button[aria-label="Hide panel"]');
+
+      if (hide !== null) {
+        hide.click();
+        shut = true;
+      }
+    }
+
+    if (opened) return;
+    const group = [...document.querySelectorAll<HTMLElement>("*")].find(
+      (element) => element.children.length === 0 && element.textContent?.trim() === "2 tool calls",
+    );
+
+    if (group === undefined) return;
+    group.click();
+    opened = true;
+  }, 400);
 }
