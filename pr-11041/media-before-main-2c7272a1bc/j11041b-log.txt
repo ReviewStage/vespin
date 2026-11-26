@@ -1,0 +1,14 @@
+-- j11041b: main pinned to 2c7272a1bc: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to 2c7272a1bc
+== bundle PJj11041b base 2c7272a1bc
+  built 2c7272a1bc base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app, main 2c7272a1bc
+before flow:       77 lines, ends - takeScreenshot: description-media-table-before
+iphone-light-media-before: fails 3 shots 3     Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, wi
+  iphone-light-media-before around the failure: Assert that id: description-words is visible... COMPLETED|Wait for animation to end... COMPLETED|Run subflows/scroll-in.yaml...|  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...|    Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, wi|  Run flow when true is true... FAILED|
+ipad27-light-media-before: fails TIMEOUT (watchdog; steps 23, shots 4)     Assert that "${ELEMENT}" is visible... FAILED
+  ipad27-light-media-before around the failure:   Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...|    Repeat while "${ELEMENT}" is not visible (up to 40 times)...|      Swipe from (85%, 40%) to (85%, 65%) in 1200 ms... COMPLETED|    Repeat while "${ELEMENT}" is not visible (up to 40 times)... COMPLETED|    Assert that "${ELEMENT}" is visible... FAILED|  Run flow when true is true... FAILED|
