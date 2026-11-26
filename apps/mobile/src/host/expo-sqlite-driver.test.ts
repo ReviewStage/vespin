@@ -16,8 +16,8 @@ import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { LocalDatabaseDriver, openLocalDatabase } from "@repo/host/local-database";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
-import { Effect, Layer } from "effect";
-import type { SQLiteBindValue } from "expo-sqlite";
+import { Effect, Layer, Predicate } from "effect";
+import type { SQLiteBindParams, SQLiteBindValue } from "expo-sqlite";
 import { expect } from "vitest";
 import { expoFileSystem } from "./expo-file-system.js";
 import { expoSqliteDriver } from "./expo-sqlite-driver.js";
@@ -41,6 +41,60 @@ const nodeOpenDatabase: Parameters<typeof expoSqliteDriver>[0] = (name, _options
     },
     getAllSync: (source, params) => database.prepare(source).all(...nodeValues(params)),
     closeSync: () => database.close(),
+  };
+};
+
+/** The values a statement binds in order, as TanStack's persistence hands them, each boolean as the integer `expo-sqlite`'s native side binds it. */
+function listed(params: SQLiteBindParams): readonly SQLiteBindValue[] {
+  const values = Array.isArray(params) ? params : Object.values(params);
+
+  return values.map((value) => (Predicate.isBoolean(value) ? Number(value) : value));
+}
+
+/** One `node:sqlite` connection as `expo-sqlite`'s async API answers it: each call settled after it ran. */
+function nodeAsyncConnection(file: string) {
+  const database = new DatabaseSync(file);
+
+  return {
+    execAsync: async (source: string) => {
+      database.exec(source);
+    },
+    getAllAsync: async <T>(source: string, params: SQLiteBindParams = []) =>
+      // SAFETY: each statement TanStack's persistence reads names the columns of the row type it asks for.
+      database.prepare(source).all(...nodeValues(listed(params))) as T[],
+    runAsync: async (source: string, params: SQLiteBindParams = []) => {
+      const ran = database.prepare(source).run(...nodeValues(listed(params)));
+
+      return { lastInsertRowId: Number(ran.lastInsertRowid), changes: Number(ran.changes) };
+    },
+    closeAsync: async () => database.close(),
+  };
+}
+
+/** `expo-sqlite`'s `openDatabaseAsync` as its native side answers it: the file `name` in `directory`, an exclusive transaction on a connection of its own, as `expo-sqlite` opens one. */
+const nodeOpenDatabaseAsync: Parameters<typeof expoSqliteDriver>[1] = async (
+  name,
+  _options,
+  directory,
+) => {
+  const file = `${directory}/${name}`;
+
+  return {
+    ...nodeAsyncConnection(file),
+    withExclusiveTransactionAsync: async (task) => {
+      const transaction = nodeAsyncConnection(file);
+      await transaction.execAsync("BEGIN");
+
+      try {
+        await task(transaction);
+        await transaction.execAsync("COMMIT");
+      } catch (cause) {
+        await transaction.execAsync("ROLLBACK");
+        throw cause;
+      } finally {
+        await transaction.closeAsync();
+      }
+    },
   };
 };
 
@@ -106,7 +160,7 @@ class NodeFile {
 const device = Layer.mergeAll(
   expoFileSystem({ File: NodeFile, Directory: NodeDirectory }),
   NodePath.layer,
-  Layer.succeed(LocalDatabaseDriver, expoSqliteDriver(nodeOpenDatabase)),
+  Layer.succeed(LocalDatabaseDriver, expoSqliteDriver(nodeOpenDatabase, nodeOpenDatabaseAsync)),
 );
 
 it.effect("keeps a row written through the driver for the next open", () =>
