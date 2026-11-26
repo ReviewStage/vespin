@@ -417,3 +417,37 @@ it.effect(
       });
     }),
 );
+
+it.effect(
+  "a stored kind held in memory because no database opened keeps neither its rows nor its kept read's cursor in the rows store, so the next launch reads it whole",
+  () =>
+    Effect.gen(function* () {
+      const kept: string[] = [];
+
+      const reading = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const pool = yield* entityPool({
+            mintKey: () => "key",
+            replayRefused: Effect.void,
+            store: {
+              collections: () => undefined,
+              rows: {
+                answered: (answer) =>
+                  Effect.sync(() => {
+                    kept.push(answer.read);
+                  }),
+                loaded: () => Effect.succeed({ rows: [ADA], cursor: { at: "9" } }),
+              },
+            },
+          });
+
+          const owner = yield* standing(pool, { owns: true, kept: KEPT });
+          yield* owner.rows.answer([ADA, BO], { cursor: { at: "7" } });
+
+          return { stored: owner.rows.stored, loaded: owner.rows.loaded };
+        }),
+      );
+
+      assert.deepEqual({ ...reading, kept }, { stored: undefined, loaded: false, kept: [] });
+    }),
+);
