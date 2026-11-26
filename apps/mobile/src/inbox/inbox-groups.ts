@@ -8,15 +8,24 @@
  * own, and none of the account's other tasks. A thread on no task, a
  * Manager's, is grouped under the agent that posted it, read from the
  * list's agents by its id the same way, as the panel's Inbox lists it.
+ *
+ * Where the account's database keeps the Inbox's items (`InboxHoldings`'
+ * `stored`), as a signed-in phone's does, the document holds none of them:
+ * they are read through a live query over the pool's kept collection, as
+ * far as the screen's reach reads (`@repo/host/inbox-rows`), and grouped as
+ * the document's would be. A fixture run's, whose items the document holds,
+ * reads them there as before.
  */
 
 import type { InboxAnyHolder, InboxGroup } from "@repo/features/inbox-list-model";
 import { inboxGroupsIn, selectInboxHoldings } from "@repo/host/app-state-reads";
+import { INBOX_ATTENTION, type InboxReach, inboxHoldingsOfRows } from "@repo/host/inbox-rows";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRowsOf } from "../host/host-provider.js";
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
+import { useInboxRows } from "./inbox-rows.js";
 
 /** No holder grouped: what a read before the document lands answers. */
 const NO_GROUPS: readonly InboxGroup<InboxAnyHolder>[] = [];
@@ -27,14 +36,25 @@ const NO_HOLDERS: readonly string[] = [];
 /**
  * Every holder of Inbox items in the workspace `workspaceId` names, its
  * items open and settled alike, as the list model groups them
- * (`inboxGroupsIn`); every workspace's where none is named, and none before
- * the document lands. Grouped again only as the feed, what holds items, or
- * a task holding items moves.
+ * (`inboxGroupsIn`), as far as `reach` reads where they are kept on disk,
+ * what Open, Questions, and Reminders can list unless it says otherwise;
+ * every workspace's where none is named, and none before the document lands
+ * or the kept items are read. Grouped again only as the feed, what holds
+ * items, or a task holding items moves.
  */
 export function useInboxGroupsIn(
   workspaceId: string | undefined,
+  reach: InboxReach = INBOX_ATTENTION,
 ): readonly InboxGroup<InboxAnyHolder>[] {
-  const { data: holdings } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
+  const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
+  const rows = useInboxRows(told?.stored === true ? reach : undefined);
+
+  const holdings = useMemo(() => {
+    if (told?.stored !== true) return told;
+
+    return rows === undefined ? undefined : inboxHoldingsOfRows(rows, told);
+  }, [told, rows]);
+
   const { tasks, agents } = useTaskListCollections();
 
   const holders = useMemo(

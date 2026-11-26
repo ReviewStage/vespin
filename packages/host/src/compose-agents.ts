@@ -141,6 +141,7 @@ import {
   type InboxChange,
   type InboxWritten,
   inboxSent,
+  type PlacedInboxItem,
 } from "./inbox-collections.js";
 import {
   AgentPictureKey,
@@ -1113,7 +1114,7 @@ function composed(
       readonly input: Schema.Codec<Input, unknown>;
       readonly queued: (input: Input) => Answer;
     },
-  ): WriteDeclaration<InboxItem, InboxChange, Input, Answer> => ({
+  ): WriteDeclaration<PlacedInboxItem, InboxChange, Input, Answer> => ({
     kind: INBOX_ITEM,
     keys,
     change,

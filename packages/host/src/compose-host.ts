@@ -91,6 +91,7 @@ import {
   NOT_ON_THIS_PLATFORM,
   unavailableConcern,
 } from "./host-concerns.js";
+import { inboxRowsSource } from "./inbox-rows.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "./kept-content.js";
 import { shutdownStepsFlushingEvents } from "./lifecycle.js";
 import { liveSocketClient } from "./live-socket.js";
@@ -942,6 +943,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       nodes: kernel.nodes,
       concerns: new Set(Object.values(HOST_CONCERN).filter(running)),
       startOrder: HOST_START_ORDER.flatMap((name) => (running(name) ? [concerns[name]] : [])),
+      inboxRows: inboxRowsSource(pool),
       /**
        * The launch's own arming: where the account's capabilities already
        * stand open, the launch opens the gate exactly as a sign-in does; and
