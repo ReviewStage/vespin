@@ -250,7 +250,7 @@ function GuardedScreens() {
             name={SHEET_ROUTE.SETTINGS}
             options={{ presentation: sheetPresentation, title: "Settings" }}
           />
-          {/* Note that New task opens as a sheet at its full height, as Mail's compose does, so a swipe down closes it, held while it holds a draft, which its ✕ and the swipe ask about first (Discard draft or Save draft); New agent opens over the whole window in every window, as Messages, ChatGPT and Claude open a new conversation, on the page's plain ground, its composer docked on the keyboard. */}
+          {/* Note that New task opens as a sheet at its full height, as Mail's compose does, so a swipe down closes it, its draft kept for the next New task as the panel keeps it; New agent opens over the whole window in every window, as Messages, ChatGPT and Claude open a new conversation, on the page's plain ground, its composer docked on the keyboard. */}
           <Stack.Screen
             name={SHEET_ROUTE.START_TASK}
             options={{ presentation: sheetPresentation, title: "New task" }}

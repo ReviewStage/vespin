@@ -77,7 +77,13 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
-import { forgetNewTaskDraft, savedNewTaskDraft, saveNewTaskDraft } from "../new-task-draft.js";
+import {
+  forgetNewTaskDraft,
+  holdNewTaskPictures,
+  newTaskPictures,
+  savedNewTaskDraft,
+  saveNewTaskDraft,
+} from "../new-task-draft.js";
 import { useOnTab } from "../tab-route.js";
 import {
   inTree,
@@ -94,14 +100,9 @@ import {
   useStartTask,
 } from "../tasks/use-start.js";
 import { useTaskPlacing } from "../tasks/use-tasks.js";
-import { useAttachedPictures } from "../use-attached-pictures.js";
+import { type KeptPictures, useAttachedPictures } from "../use-attached-pictures.js";
 import { useDictation } from "../use-dictation.js";
-import {
-  DISCARD_WORDS,
-  type KeptWords,
-  SAVE_DRAFT_WORDS,
-  useKeptWords,
-} from "../use-kept-words.js";
+import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
 import { type MentionsOffered, useMentionOffer } from "../use-mention-offer.js";
 import { usePillField } from "../use-pill-field.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
@@ -174,48 +175,27 @@ const LANDING = {
 
 type Landing = (typeof LANDING)[keyof typeof LANDING];
 
-/** What a page that can keep its draft for later does with it: keeps it, where it holds words to keep, and lets a kept one go, as a discard does. */
-interface DraftSaving {
-  /** Keeps the draft's words for the next time the page opens; none where it holds no words, such as pictures alone, which are never kept. */
-  readonly save: (() => void) | undefined;
-  readonly discard: () => void;
-}
-
 /**
  * The page's bar: its name, and the system's ✕ at its leading edge (Cancel
  * to VoiceOver), as a new conversation's page closes; and the ask the ✕
  * raises while the page holds a draft, and the question Talk asks first
  * while another call stands. Start and Talk stand at the composer's end,
- * as Send and Talk do on an agent's page. Where the page can keep its draft
- * (`saving`), as New task can, the ✕ over a draft opens the system's menu
- * from the ✕ itself, Discard draft in red and Save draft, as Mail's compose
- * asks from its Cancel, and a swipe down the sheet held for the draft asks
- * the same two in the system's sheet, since nothing can open the ✕'s menu
- * for it.
+ * as Send and Talk do on an agent's page. A page that keeps its draft, as
+ * New task does, closes at once; one that keeps none asks Discard draft
+ * first (`useKeptWords`).
  */
 function SheetBar({
   title,
   kept,
   talk,
-  saving,
 }: {
   readonly title: string;
   readonly kept: KeptWords;
   /** Talk where the page offers it, whose question stands here; none where it offers none. */
   readonly talk?: NewAgentTalk | undefined;
-  /** What keeps the draft for later and lets a kept one go, where the page can keep one; the ✕ asks Discard draft alone where none is given. */
-  readonly saving?: DraftSaving | undefined;
 }) {
   const colors = useColors();
   const close = useCloseSheet(kept);
-  const save = saving?.save;
-
-  // Note that the draft is let go before the sheet closes, so the swipe the stack holds for it never stops the close a pick asked for.
-  const closeAfter = (then: () => void) => {
-    then();
-    kept.release();
-    close();
-  };
 
   // Note that the options are made once for their title and colors, because the stack sets a screen's options again whenever a new object comes, which a key typed would make.
   const options = useMemo(
@@ -236,50 +216,21 @@ function SheetBar({
       <Stack.Screen options={options} />
       <Stack.Toolbar placement="left">
         {/* Note that the page closes with the system's ✕, as a new conversation's page does, its word kept for VoiceOver. */}
-        {saving !== undefined && kept.drafted ? (
-          <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.CLOSE)} accessibilityLabel={WORDS.CANCEL}>
-            <Stack.Toolbar.Label>{WORDS.CANCEL}</Stack.Toolbar.Label>
-            <Stack.Toolbar.MenuAction destructive onPress={() => closeAfter(saving.discard)}>
-              {DISCARD_WORDS.DISCARD}
-            </Stack.Toolbar.MenuAction>
-            {save === undefined ? null : (
-              <Stack.Toolbar.MenuAction onPress={() => closeAfter(save)}>
-                {SAVE_DRAFT_WORDS.SAVE}
-              </Stack.Toolbar.MenuAction>
-            )}
-          </Stack.Toolbar.Menu>
-        ) : (
-          <Stack.Toolbar.Button
-            icon={glyphSymbol(GLYPH.CLOSE)}
-            accessibilityLabel={WORDS.CANCEL}
-            onPress={close}
-          >
-            {WORDS.CANCEL}
-          </Stack.Toolbar.Button>
-        )}
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          onPress={close}
+        >
+          {WORDS.CANCEL}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       {talk === undefined ? null : <ConfirmAsk destructive {...talk.switching} />}
-      {/* Note that where the draft can be saved, the ask names no question, as Mail's asks only Delete Draft or Save Draft. */}
       <ConfirmAsk
-        title={save === undefined ? DISCARD_WORDS.QUESTION : undefined}
+        title={DISCARD_WORDS.QUESTION}
         act={DISCARD_WORDS.DISCARD}
         destructive
-        second={
-          save === undefined
-            ? undefined
-            : {
-                label: SAVE_DRAFT_WORDS.SAVE,
-                onPress: () => {
-                  save();
-                  kept.discard();
-                },
-              }
-        }
         presented={kept.asking}
-        onAct={() => {
-          saving?.discard();
-          kept.discard();
-        }}
+        onAct={kept.discard}
         onDismiss={kept.stay}
       />
     </>
@@ -1224,19 +1175,27 @@ function useStartedIn(
     });
 }
 
+/** New task's draft as it is kept: where its pictures are held, and what lets it go once the task starts. */
+interface KeptNewTask {
+  /** Where its pictures are held; none where no draft is kept. */
+  readonly pictures: KeptPictures | undefined;
+  readonly forget: () => void;
+}
+
 /**
- * New task's draft kept for later in `workspaceId`, the workspace the task
- * would start in: the words saved there fill the empty field once that
- * workspace is known, and what keeps the words typed and lets the saved ones
- * go. Note that none is read or kept where `workspaceId` is undefined, such
- * as under a share draft, whose own words stand, or before a sub-task's
- * parent is read.
+ * New task's draft kept in `workspaceId`, the workspace the task would start
+ * in, as the panel keeps it (`composer-drafts.ts`): the words saved there
+ * fill the empty field once that workspace is known, the words typed are
+ * kept as they change and let go once the field is emptied, and the
+ * pictures are held beside them. Note that none is read or kept where
+ * `workspaceId` is undefined, such as under a share draft, whose own words
+ * stand, or before a sub-task's parent is read.
  */
-function useSavedDraft(
+function useKeptNewTask(
   workspaceId: string | undefined,
   prompt: string,
   setPrompt: (words: string) => void,
-): DraftSaving {
+): KeptNewTask {
   const filled = useRef(false);
 
   useEffect(() => {
@@ -1247,16 +1206,32 @@ function useSavedDraft(
     if (saved !== undefined && prompt === "") setPrompt(saved);
   }, [workspaceId, prompt, setPrompt]);
 
-  // Note that each file's marker is left out of what is kept, because the pictures it names are never kept, so a draft of pictures alone has nothing to save.
+  // Note that each file's marker is left out of the words kept, because the pictures it names outlast no relaunch, and the field places a held picture's marker again as it opens.
   const words = wordsWithoutMarkers(prompt).trim();
+  // Note that the words the field opened on are not kept again, so an empty field opening never lets go the draft it is about to be filled with.
+  const kept = useRef(words);
+
+  useEffect(() => {
+    if (workspaceId === undefined || words === kept.current) return;
+    kept.current = words;
+
+    if (words === "") forgetNewTaskDraft(workspaceId);
+    else saveNewTaskDraft(workspaceId, words);
+  }, [workspaceId, words]);
 
   return {
-    save:
-      workspaceId === undefined || words === ""
+    pictures:
+      workspaceId === undefined
         ? undefined
-        : () => saveNewTaskDraft(workspaceId, words),
-    discard: () => {
-      if (workspaceId !== undefined) forgetNewTaskDraft(workspaceId);
+        : {
+            held: newTaskPictures(workspaceId),
+            keep: (pictures) => holdNewTaskPictures(workspaceId, pictures),
+          },
+    forget: () => {
+      if (workspaceId === undefined) return;
+
+      forgetNewTaskDraft(workspaceId);
+      holdNewTaskPictures(workspaceId, []);
     },
   };
 }
@@ -1305,18 +1280,30 @@ export function NewTaskScreen({
   const [modelsShown, setModelsShown] = useState(false);
   const startTask = useStartedIn(useStartTask(workspaceId), workspaceId, section);
   const [note, setNote] = useState<string | undefined>(undefined);
-  const pictures = useAttachedPictures(setNote, draft?.pictures);
-  // Note that a share draft's pictures are read as the sheet opens, and nothing starts until they are in, so its words never go without them.
-  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
-  const kept = useKeptWords(drafted);
-  const { starting, go } = useClosingStart(kept, setNote, LANDING.TASK);
 
   // Note that Create with an agent keeps no draft, as the desktop keeps its words apart from New task's, so neither one's words open in the other.
-  const saving = useSavedDraft(
+  const keeping = useKeptNewTask(
     draft === undefined && !forAutomation ? workspaceId : undefined,
     prompt,
     setPrompt,
   );
+
+  const pictures = useAttachedPictures(setNote, draft?.pictures, undefined, keeping.pictures);
+  // Note that a draft's pictures held before the workspace was known, as a sub-task's parent read after the sheet opened, are laid back once it is, ahead of any attached meanwhile, since the holder takes its keeper's pictures only as it opens.
+  const keptAtOpen = useRef(keeping.pictures !== undefined);
+  const restore = keeping.pictures;
+
+  useEffect(() => {
+    if (keptAtOpen.current || restore === undefined) return;
+    keptAtOpen.current = true;
+
+    if (restore.held.length > 0) pictures.putBack(restore.held);
+  }, [restore, pictures]);
+  // Note that a share draft's pictures are read as the sheet opens, and nothing starts until they are in, so its words never go without them.
+  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
+  // Note that a draft kept closes the sheet at once, as the panel's New task closes with no question; one kept nowhere asks first.
+  const kept = useKeptWords(drafted && keeping.pictures === undefined);
+  const { starting, go } = useClosingStart(kept, setNote, LANDING.TASK);
 
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
@@ -1370,7 +1357,8 @@ export function NewTaskScreen({
       return false;
     }
 
-    saving.discard();
+    // Note that a start a picture past its bound refuses keeps the draft, since the sheet stays with it.
+    if (pictures.refusal === undefined) keeping.forget();
 
     return go(
       () =>
@@ -1417,7 +1405,6 @@ export function NewTaskScreen({
         title={forAutomation ? CREATE_WITH_AGENT_WORDS.TITLE : WORDS.NEW_TASK}
         kept={kept}
         talk={forAutomation ? undefined : talk}
-        saving={forAutomation ? undefined : saving}
       />
       <StartModelSheet
         pick={pick}

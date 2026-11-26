@@ -11,11 +11,6 @@ export const DISCARD_WORDS = {
   DISCARD: "Discard draft",
 } as const;
 
-/** What a page that can keep its draft for later offers beside Discard draft, as Mail's Save Draft does. */
-export const SAVE_DRAFT_WORDS = {
-  SAVE: "Save draft",
-} as const;
-
 /** What the ask before an edit of words already saved goes says, as iOS's own editors ask it. */
 export const DISCARD_CHANGES_WORDS = {
   QUESTION: "Discard changes?",
