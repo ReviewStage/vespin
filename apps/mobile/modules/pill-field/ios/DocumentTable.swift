@@ -158,11 +158,14 @@ final class TableAttachment: NSTextAttachment {
   let table: TableModel
   let grid: TableGrid
   let look: Look
+  /// The views the field reaches as elements beside its words, which the table's view joins, so VoiceOver reads its cells.
+  weak var standing: NSHashTable<UIView>?
 
-  init(table: TableModel, look: Look) {
+  init(table: TableModel, look: Look, standing: NSHashTable<UIView>) {
     self.table = table
     grid = TableGrid(table, look: look)
     self.look = look
+    self.standing = standing
     super.init(data: nil, ofType: nil)
     accessibilityLabel = "Table"
   }
@@ -192,7 +195,9 @@ final class TableAttachment: NSTextAttachment {
 final class TableViewProvider: NSTextAttachmentViewProvider {
   override func loadView() {
     guard let attachment = textAttachment as? TableAttachment else { return }
-    view = TableView(grid: attachment.grid, look: attachment.look)
+    let shown = TableView(grid: attachment.grid, look: attachment.look)
+    attachment.standing?.add(shown)
+    view = shown
   }
 
   override func attachmentBounds(

@@ -640,6 +640,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   private let textView = UITextView(usingTextLayoutManager: true)
   /// What each picture the lines name holds, which JavaScript hands apart from the words, since a picture lands after them.
   private let media = MediaShelf()
+  /// The tables standing in the words, each a container of its cells, which VoiceOver reaches beside the words.
+  private let tables = NSHashTable<UIView>.weakObjects()
   /// The page the field stands in scrolling, which tells each picture whether it stands near the window.
   private var pageScrolled: NSKeyValueObservation?
   private let placeholderLabel = UILabel()
@@ -950,7 +952,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// The views standing in the words that VoiceOver reaches beside them.
   private func standingViews() -> [UIView] {
-    media.shownViews()
+    media.shownViews() + tables.allObjects
   }
 
   /// Takes what each picture the lines name holds, drawing again only the pictures that changed.
@@ -1253,7 +1255,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
         case .media(let run):
           piece.append(NSAttributedString(attachment: MediaAttachment(run: run, look: look, shelf: media)))
         case .table(let table):
-          piece.append(NSAttributedString(attachment: TableAttachment(table: table, look: look)))
+          piece.append(NSAttributedString(attachment: TableAttachment(table: table, look: look, standing: tables)))
         }
       }
 
