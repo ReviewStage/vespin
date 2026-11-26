@@ -18,7 +18,9 @@ import { Tooltip } from "../tooltip/hint.js";
  * away from it and its button, or the focus leaving it puts it away, the
  * focus going back to the button; the owner is told when a press away put it
  * away (`away`), since the focus has already gone where that press took it,
- * which no blur says again once the panel is gone. Note that a press on the button while the
+ * which no blur says again once the panel is gone. A finger's press puts it
+ * away as the finger lands, so its `away` is said once the press's click
+ * lands, the focus by then where the press took it. Note that a press on the button while the
  * panel stands is the button's alone, which closes it, rather than also a
  * press away, which would close it only for the button's own press to open
  * it again. A button given a `hint` raises it as the window's hover pill,
@@ -43,6 +45,28 @@ function layerOf(button: HTMLElement | null): PopoverLayer {
 /** Base UI's reason for a press away from the panel. */
 const OUTSIDE_PRESS = "outside-press" satisfies PopoverRoot.ChangeEventReason;
 
+/** The event a press ends on, by which the focus stands where the press took it. */
+const PRESS_END = "click";
+
+/**
+ * Runs `landed` once the press under way has ended, its click heard; never
+ * where the press is taken back, as a finger that scrolls instead is.
+ */
+function afterPress(landed: () => void): void {
+  const end = () => {
+    document.removeEventListener(PRESS_END, heard, true);
+    document.removeEventListener("pointercancel", end, true);
+  };
+
+  const heard = () => {
+    end();
+    landed();
+  };
+
+  document.addEventListener(PRESS_END, heard, true);
+  document.addEventListener("pointercancel", end, true);
+}
+
 /** Whether a change asks the panel away for a press on its own button, which the button's press answers. */
 function pressOnButton(
   details: PopoverRoot.ChangeEventDetails,
@@ -58,7 +82,7 @@ function pressOnButton(
 /**
  * A glyph button named `label` and the panel named `title` it hangs while
  * `open`, holding `children`; the focus lands on `initialFocus` as it opens,
- * or the panel itself.
+ * or the panel itself, and on `finalFocus` as it is put away, or the button.
  */
 export function PopoverIconButton({
   icon,
@@ -71,6 +95,7 @@ export function PopoverIconButton({
   disabled,
   hint,
   initialFocus,
+  finalFocus,
   ref,
   children,
 }: {
@@ -88,6 +113,8 @@ export function PopoverIconButton({
   /** The hover pill the button raises, which says why where it is unavailable; none where its glyph says enough. */
   hint?: string | undefined;
   initialFocus?: RefObject<HTMLElement | null> | undefined;
+  /** Where the focus goes as the panel is put away, as a name's field beside a face well takes it back; the button where none is given or it answers none. */
+  finalFocus?: (() => HTMLElement | null | undefined) | undefined;
   ref?: RefObject<HTMLButtonElement | null> | undefined;
   children: ReactNode;
 }): React.JSX.Element {
@@ -116,7 +143,17 @@ export function PopoverIconButton({
         open={open}
         onOpenChange={(next, details) => {
           if (!next && pressOnButton(details, button.current)) return;
-          onOpenChange(next, !next && details.reason === OUTSIDE_PRESS);
+          const away = !next && details.reason === OUTSIDE_PRESS;
+
+          // Note that a finger puts the panel away as it lands, before the press has moved the focus, so `away` is said once its click lands, where the focus then stands; a mouse's press puts it away on its click already.
+          if (away && details.event?.type !== PRESS_END) {
+            onOpenChange(false, false);
+            afterPress(() => onOpenChange(false, true));
+
+            return;
+          }
+
+          onOpenChange(next, away);
         }}
       >
         <PopoverContent
@@ -124,7 +161,7 @@ export function PopoverIconButton({
           layer={layerOf(button.current)}
           aria-label={title}
           initialFocus={initialFocus ?? true}
-          finalFocus={button}
+          finalFocus={finalFocus === undefined ? button : () => finalFocus() ?? button.current}
         >
           {children}
         </PopoverContent>

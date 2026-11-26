@@ -77,8 +77,13 @@ function laidOver(tasks: TasksModule, inbox: InboxModule): TasksFixture {
     fixtureActAnswer: (run, kind, payload) => {
       const staged = inbox.inboxActAnswer(run.profile, kind, payload);
 
-      // Note that a reaction the Inbox's Manager chat keeps moves its stage, so the window stages its document again to draw it.
-      if (staged !== undefined && kind === ACT_KIND.AGENTS_CHAT_REACT) fixtureMoved();
+      // Note that a reaction or an edit the Inbox's Manager chat keeps moves its stage, so the window stages its document again to draw it.
+      if (
+        staged !== undefined &&
+        (kind === ACT_KIND.AGENTS_CHAT_REACT || kind === ACT_KIND.AGENTS_CHAT_EDIT)
+      ) {
+        fixtureMoved();
+      }
 
       return staged ?? tasks.fixtureActAnswer(run, kind, payload);
     },

@@ -26,7 +26,12 @@
 import { presentedClient } from "@repo/features/client-identity";
 import "@orpc/experimental-effect/extensions/effect";
 import { middlewareGen, type WithEffectContext } from "@orpc/experimental-effect";
-import { implement, type MergedContext, type RouterImplementerWithMiddlewares } from "@orpc/server";
+import {
+  implement,
+  type MergedContext,
+  type RouterImplementer,
+  type RouterImplementerWithMiddlewares,
+} from "@orpc/server";
 import type { ResponseHeadersHandlerPluginContext } from "@orpc/server/plugins";
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { HostPrincipal } from "@repo/database/models/device-agent-store";
@@ -191,11 +196,22 @@ function forAccount(context: HostedContext, userId: string): WithEffectContext<W
 /** The context every hosted procedure runs in: the request's, with the web runtime's services, as a resource's declared type names it. */
 export type HostedProcedureContext = MergedContext<HostedContext, WithEffectContext<WebServices>>;
 
+/**
+ * The hosted contract implemented with no middleware of its own, which the
+ * router of every resource is assembled on (`hostedRouter`). Note that the
+ * router is never assembled on `hosted` itself, because a router built on an
+ * implementer puts that implementer's middlewares before every procedure
+ * again, so each procedure, already built from `hosted`, would run
+ * `procedureTraced` twice and open two server spans for one call.
+ */
+export const hostedRoot: RouterImplementer<HostedContract, HostedContext> =
+  implement(hostedContract).$context<HostedContext>();
+
 export const hosted: RouterImplementerWithMiddlewares<
   HostedContract,
   HostedContext,
   WithEffectContext<WebServices>
-> = implement(hostedContract).$context<HostedContext>().use(procedureTraced);
+> = hostedRoot.use(procedureTraced);
 
 /**
  * A read whose answer is held until its rows move: its services lose the

@@ -239,6 +239,7 @@ function SheetBar({
         {/* Note that the page closes with the system's ✕, as a new conversation's page does, its word kept for VoiceOver. */}
         {saving !== undefined && kept.drafted ? (
           <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.CLOSE)} accessibilityLabel={WORDS.CANCEL}>
+            <Stack.Toolbar.Label>{WORDS.CANCEL}</Stack.Toolbar.Label>
             <Stack.Toolbar.MenuAction destructive onPress={() => closeAfter(saving.discard)}>
               {DISCARD_WORDS.DISCARD}
             </Stack.Toolbar.MenuAction>
@@ -253,7 +254,9 @@ function SheetBar({
             icon={glyphSymbol(GLYPH.CLOSE)}
             accessibilityLabel={WORDS.CANCEL}
             onPress={close}
-          />
+          >
+            {WORDS.CANCEL}
+          </Stack.Toolbar.Button>
         )}
       </Stack.Toolbar>
       {talk === undefined ? null : <ConfirmAsk destructive {...talk.switching} />}

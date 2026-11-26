@@ -23,6 +23,7 @@ import {
 } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
+import type { ManagerFace } from "@repo/features/manager-face";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW, type TasksSkillsParams } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -58,7 +59,12 @@ import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { ACME, SHOW_KEY, WHOSE_KEY } from "../testing/desktop-inbox.js";
 import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
-import { pushedTranscripts, tasksControl } from "../testing/tasks-control.js";
+import {
+  agentsControl,
+  pushedTranscripts,
+  taskAgentsOf,
+  tasksControl,
+} from "../testing/tasks-control.js";
 import { AgentRoutePage } from "./desktop-agent-page.js";
 
 const MANAGER: ListedAgent = {
@@ -322,6 +328,74 @@ test("a Manager's page stands Settings as a button beside its ⋯, which opens i
   act(() => settings.click());
   await settleQueries();
   assert.ok(document.querySelector('[role="dialog"]'), "Settings opens the Manager's card");
+});
+
+test("a Manager's ⋯ Change face opens its name's field with the face's picker in the bar's lead, whose colors end nothing, and a face picked there is changed with the focus back in the name", async () => {
+  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const faced: { agentId: string; face: ManagerFace }[] = [];
+
+  const manager: ListedAgent = {
+    ...MANAGER,
+    kind: AGENT_KIND.MANAGER,
+    face: { character: "ghost", color: "yellow" },
+  };
+
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+
+  const tasks = tasksControl({
+    shown: true,
+    workspace: ACME,
+    listedAgents: [manager],
+    agents: taskAgentsOf(
+      agentsControl({
+        onFace: (agentId, face) => {
+          faced.push({ agentId, face });
+
+          return Promise.resolve({ agent: { ...manager, face } });
+        },
+      }),
+    ),
+  });
+
+  const container = await mountAgentPage(history, tasks);
+
+  const more =
+    container.querySelector<HTMLElement>('button[aria-label="Agent actions"]') ??
+    assert.fail("the head stands its ⋯");
+
+  act(() => more.click());
+
+  const change =
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.startsWith("Change face"),
+    ) ?? assert.fail("the ⋯ offers Change face");
+
+  await act(async () => change.click());
+  const field = () => container.querySelector<HTMLInputElement>('input[aria-label="Agent name"]');
+
+  assert.ok(field(), "the title is its field");
+
+  const cat =
+    document.querySelector<HTMLButtonElement>('button[aria-label="Cat"]') ??
+    assert.fail("the face's picker stands open beside the name");
+
+  await act(async () => cat.click());
+
+  const purple =
+    document.querySelector<HTMLButtonElement>('.ui-icon-picker-flyout [aria-label="Purple"]') ??
+    assert.fail("the cat floats its colors");
+
+  assert.ok(field(), "the colors floating end nothing");
+  await act(async () => purple.click());
+  await vi.waitFor(() =>
+    assert.deepEqual(faced, [{ agentId: MANAGER.id, face: { character: "cat", color: "purple" } }]),
+  );
+  await vi.waitFor(() =>
+    assert.equal(document.activeElement, field(), "the name takes the focus back"),
+  );
 });
 
 test("a page a Manager's words link opens in the panel beside its chat, read on its task, as a task's page opens one, the Manager's page still standing", async () => {

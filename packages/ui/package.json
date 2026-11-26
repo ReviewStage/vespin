@@ -100,7 +100,8 @@
     "recharts": "catalog:",
     "remark-gfm": "4.0.1",
     "streamdown": "2.7.1",
-    "tailwind-merge": "3.7.1"
+    "tailwind-merge": "3.7.1",
+    "unicode-emoji-json": "0.9.0"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",

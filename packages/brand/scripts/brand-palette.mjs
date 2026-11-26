@@ -241,21 +241,19 @@ export const IDENTITY = {
 };
 
 // A Manager's face (@repo/ui's ManagerFace): the soft fills a React Kawaii
-// character's body is drawn in, one to each of @repo/features/manager-face's
-// MANAGER_FACE_COLOR. The character's own features are drawn near black, so
-// each fill is light enough to hold them, a touch deeper on the light ground
-// so the body's edge still shows on white. Each is its light fill, then its
-// dark.
+// character's body, or an emoji's disc, is drawn in, one to each of
+// @repo/features/manager-face's MANAGER_FACE_COLOR. Each is FILE_ICON's ink
+// of the same word, a section icon's color, mixed toward white as
+// color-mix(in oklab, <ink> 58%, white) mixes it, so a face wears a section's
+// color soft enough to hold the character's near-black features. Peach, no
+// longer offered, takes orange's fills. Each is its light fill, then its dark.
 export const MANAGER_FACE = {
-  YELLOW: ["#f9c74f", "#ffd882"],
-  GREEN: ["#8fd47a", "#a6e191"],
-  BLUE: ["#6cc4f5", "#83d1fb"],
-  PINK: ["#f78fcb", "#fda7dc"],
-  PURPLE: ["#b08cff", "#c5a6ff"],
-  PEACH: ["#ff9a6c", "#ffb08a"],
-  // Note that these are FILE_ICON's inks of the same words mixed toward
-  // white, as color-mix(in oklab, <ink> 58%, white) mixes them, so a face
-  // wears a section icon's color soft enough to hold the features.
+  YELLOW: ["#e7ce8d", "#ffe7a5"],
+  GREEN: ["#8ac893", "#a7e3ad"],
+  BLUE: ["#86b9e9", "#aad3ff"],
+  PINK: ["#ee8ea0", "#ffabbc"],
+  PURPLE: ["#ce8fdc", "#e9abf5"],
+  PEACH: ["#eab08a", "#ffcba3"],
   RED: ["#f08f89", "#ffaba3"],
   ORANGE: ["#eab08a", "#ffcba3"],
   TEAL: ["#8ecbd0", "#ace5ea"],

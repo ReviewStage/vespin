@@ -63,6 +63,7 @@ import {
   Unplug,
   Users,
   Video,
+  WifiOff,
   Zap,
 } from "lucide-react";
 import React from "react";
@@ -225,6 +226,8 @@ export const GLYPH = {
   // States.
   // The link to the service lost, as the banner saying so wears it; never an act's.
   CONNECTION_LOST: lucideGlyph(Unplug),
+  // This machine offline or the service out of reach, as the Offline mark wears it, and what a place with nothing held says while it stands.
+  OFFLINE: lucideGlyph(WifiOff),
   DONE: MarkDoneIcon,
   // A thing resolved, a comment thread or an Inbox item, and the Resolve that does it: one mark for the act and the state it leaves, never Close's ×.
   RESOLVED: CircleCheckIcon,

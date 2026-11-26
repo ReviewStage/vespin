@@ -456,8 +456,8 @@ function agentsStatement(
           true | null
         >`case when ${agentBootTable.phase} = ${BOOT_PHASE.BUILDING} then true else null end`,
         sandboxRunsUntil: SANDBOX_RUNS_UNTIL_OF_AGENT,
-        // Note that no window marks an agent unread by hand, so it never stands marked.
-        markedUnread: sql<boolean>`false`,
+        // Note that only Mark as unread on a Manager's chat marks an agent unread by hand (`agent-chat-reads.ts`).
+        markedUnread: sql<boolean>`coalesce(${agentRead.markedUnread}, false)`,
       },
       instants: {
         archivedAt: agentTable.archivedAt,

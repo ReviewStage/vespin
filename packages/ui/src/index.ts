@@ -194,6 +194,10 @@ export * from "./components/hover-card/hover-card.js";
 
 export * from "./components/icon-picker/icon-picker.js";
 
+export * from "./components/icon-picker/icon-picker-colors.js";
+
+export * from "./components/icon-picker/icon-picker-emoji.js";
+
 export * from "./components/inline-edit/inline-edit.js";
 
 export * from "./components/inline-edit/renamable-name.js";

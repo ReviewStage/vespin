@@ -1,5 +1,5 @@
 /**
- * manager-chat-messages.ts -- a Manager's chat: write a message, grow a call's line in place, read one by its id, its key, or its line, a page of the chat, a thread, or what matches words, and delete what a rewind dropped.
+ * manager-chat-messages.ts -- a Manager's chat: write a message, grow a call's line in place, edit a person's own message in place, read one by its id, its key, or its line, a page of the chat, a thread, or what matches words, and delete what a rewind dropped.
  *
  * Every read and write is made as an account that reaches the Manager
  * (`agentReachableBy`), a Manager standing on no task, so no account reads
@@ -343,6 +343,44 @@ const growMessageText = SqlSchema.findAll({
     ),
 });
 
+/** A person's own message's words changed in place and marked edited when, kept well formed as every write keeps them; none where no message of the chat the account reaches is theirs under the id. */
+const editOwnText = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...ChatKeySchema.fields,
+    id: Schema.String,
+    text: Schema.String,
+    now: Schema.Date,
+  }),
+  Result: ManagerChatMessageSchema,
+  execute: ({ userId, agentId, id, text, now }) =>
+    Database.use((db) =>
+      db
+        .update(managerChatMessage)
+        .set({ text: wellFormedText(text), editedAt: now })
+        .where(
+          and(
+            eq(managerChatMessage.agentId, agentId),
+            eq(managerChatMessage.id, id),
+            eq(managerChatMessage.authorKind, MANAGER_CHAT_AUTHOR.PERSON),
+            eq(managerChatMessage.authorUserId, userId),
+            exists(
+              queryBuilder
+                .select({ one: agentTable.id })
+                .from(agentTable)
+                .where(
+                  and(
+                    eq(agentTable.id, managerChatMessage.agentId),
+                    eq(agentTable.kind, AGENT_KIND.MANAGER),
+                    agentReachableBy(userId),
+                  ),
+                ),
+            ),
+          ),
+        )
+        .returning(MESSAGE_COLUMNS),
+    ),
+});
+
 const deleteDropped = SqlSchema.void({
   Request: Schema.Struct({
     ...ChatKeySchema.fields,
@@ -537,6 +575,31 @@ export function readManagerChatMessage(
   id: string,
 ): AgentStoreEffect<Option.Option<ManagerChatMessage>> {
   return Effect.map(findMessages({ userId, agentId, ids: [id] }), (rows) =>
+    Option.fromNullishOr(rows[0]),
+  );
+}
+
+/** A member's edit of their own message of the Manager's chat: the message, by its id, its words as they now stand, and when. */
+export interface ManagerChatEdit {
+  readonly agentId: string;
+  readonly messageId: string;
+  readonly text: string;
+  readonly now: Date;
+}
+
+/**
+ * The account's own message of the Manager's chat with its words changed to
+ * those given and marked edited, answered as it now stands; none where the
+ * account does not reach the chat, or the message under the id is no
+ * message of theirs: another person's, the Manager's own, or none.
+ */
+export function editManagerChatMessage(
+  userId: string,
+  edit: ManagerChatEdit,
+): AgentStoreEffect<Option.Option<ManagerChatMessage>> {
+  const { agentId, messageId, text, now } = edit;
+
+  return Effect.map(editOwnText({ userId, agentId, id: messageId, text, now }), (rows) =>
     Option.fromNullishOr(rows[0]),
   );
 }

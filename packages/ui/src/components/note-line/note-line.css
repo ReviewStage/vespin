@@ -59,8 +59,11 @@
   }
 
   /* A step stands among a transcript's rows at a row's height, its words on
-     the row's center, so it keeps the rows' rhythm. */
+     the row's center, so it keeps the rows' rhythm. Its words wrap beside
+     their glyph rather than under it, since a step is one glyph and one
+     sentence, not a row of chips. */
   .ui-note-line[data-look="step"] {
+    flex-wrap: nowrap;
     min-height: var(--ui-control-height);
   }
 

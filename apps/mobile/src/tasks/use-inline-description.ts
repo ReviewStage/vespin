@@ -31,7 +31,6 @@ import {
   pendingSave,
 } from "@repo/features/description-edit-model";
 import { KEEP_MINE, lastEditConflict } from "@repo/features/description-edit-words";
-import { mentionPill } from "@repo/features/pill-words";
 import type { TasksEditAnswer } from "@repo/features/tasks-view";
 import { ACT_UNREACHED_WORDS } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
@@ -56,7 +55,7 @@ import {
   problemOf,
   refusalOf,
 } from "../screens/description-edit-screens.js";
-import { useMentionOffer } from "../use-mention-offer.js";
+import { useDocumentMentions } from "../use-document-mentions.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** How long typing rests before the words save, as the panel's editor waits (`SAVE_PAUSE`). */
@@ -199,7 +198,6 @@ export function useInlineDescription(
   const live = useRef(editor);
   const field = useRef<DocumentFieldHandle | null>(null);
   const [opening, setOpening] = useState<DocumentFieldOpening | undefined>(undefined);
-  const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
   // Whether the page still stands, so a Try again after it went sends nothing it no longer holds.
   const standing = useRef(true);
 
@@ -213,13 +211,10 @@ export function useInlineDescription(
     setEditor(next);
   };
 
-  const mentions = useMentionOffer(
+  const { mentions: offered, onAtWord } = useDocumentMentions(
     { workspaceId, taskId, description: editing ? editor.draft : undefined },
-    {
-      word: editing ? atWord : undefined,
-      pick: (mention) => field.current?.pick(mentionPill(mention.name, mention.target)),
-      rewrite: (words) => field.current?.rewrite(words),
-    },
+    field,
+    editing,
   );
 
   const conflict =
@@ -374,16 +369,6 @@ export function useInlineDescription(
     if (editorCloses(live.current)) setEditing(false);
   };
 
-  const offered: DocumentPageMentions | undefined =
-    mentions === undefined
-      ? undefined
-      : {
-          groups: mentions.groups,
-          empty: mentions.empty,
-          crumb: mentions.crumb,
-          onPick: mentions.pick,
-        };
-
   // Note that the page's bar and dock read what the section publishes, so neither draws the page again.
   useEffect(() => {
     chrome.publish({ editing, mentions: offered });
@@ -414,7 +399,7 @@ export function useInlineDescription(
     onChange: (words) => update(editorTyped(live.current, words)),
     editable: editor.sending === undefined || !editor.closing,
     problem: problemOf(editor, conflict?.note),
-    onAtWord: setAtWord,
+    onAtWord,
     mentions: offered,
   };
 }

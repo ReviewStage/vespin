@@ -337,12 +337,12 @@ export {
 export {
   BotTag,
   githubFace,
-  MARK_FACE,
-  type MarkFace,
+  type HeadReviewer,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,
   PullRequestHead,
+  type RowCount,
   WriteNoteRow,
 } from "./pull-request-page.js";
 
@@ -416,6 +416,7 @@ export {
   type FormSpacing,
   LOADING_ROW_LOOK,
   LoadingRow,
+  MEMBER_ROW_LOOK,
   MemberRow,
   type MemberRowAct,
   MenuRow,

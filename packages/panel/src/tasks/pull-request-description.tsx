@@ -196,6 +196,7 @@ export function PullRequestDescription({
   pullRequest,
   body,
   drawn,
+  drawRaw,
   onRead,
 }: {
   pullRequest: AgentOverviewPullRequest;
@@ -203,6 +204,8 @@ export function PullRequestDescription({
   body: string;
   /** GitHub's rendering of it; none where it has none. */
   drawn: ReactNode | undefined;
+  /** Draws a block of it the editor keeps as written, its HTML say, as GitHub renders it, so the open editor reads as the drawn description does. */
+  drawRaw: (source: string) => ReactNode;
   onRead: ReadAgain;
 }): React.JSX.Element {
   const { number } = pullRequest;
@@ -414,6 +417,7 @@ export function PullRequestDescription({
         label={DESCRIPTION_WORDS.LABEL}
         roomLabel={DESCRIPTION_WORDS.ROOM}
         placeholder={DESCRIPTION_WORDS.PLACEHOLDER}
+        drawRaw={drawRaw}
         // Note that the words wear the drawn description's own classes, so nothing moves as it opens or closes.
         className={`${MARKDOWN_CLASS.FLOW} transcript-markdown pull-request-description-text`}
         roomClassName="pull-request-words pull-request-description min-w-0 select-text text-body-size leading-reading text-foreground"

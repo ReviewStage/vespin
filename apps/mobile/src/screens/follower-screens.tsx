@@ -83,7 +83,9 @@ export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
           icon={glyphSymbol(GLYPH.CLOSE)}
           accessibilityLabel={WORDS.CANCEL}
           onPress={() => router.back()}
-        />
+        >
+          {WORDS.CANCEL}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
     </>
   );

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import type { ApprovalAnswerRequest } from "@repo/features/agent-approval-wire";
 import {
   AGENT_CALL_FAILURE,
+  type AgentMarkReadParams,
   type ManagerChatReactParams,
   type ManagerChatSending,
 } from "@repo/features/agent-view";
@@ -17,6 +18,7 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { CHAT_REACTION_REFUSED_WORDS } from "@repo/features/manager-chat-view";
+import { READ_MARK } from "@repo/features/read-mark";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -55,7 +57,9 @@ import { ThreadDoorsProvider } from "./manager-chat-threads.js";
  * away from the Manager's first message of the turn, and found by ⌘F; a call the Manager holds for an answer standing at the chat's
  * foot with its answers; Retry sending a refused message again with its
  * files; a 👍 drawn under its message from its press until its ask settles; and a thread opening beside the chat, as the page's side panel
- * opens it, its box the chat's own composer replying in it. Synthetic words.
+ * opens it, its box the chat's own composer replying in it; and New over
+ * the first message after the reader's mark, which Mark as unread moves
+ * back and holds there as the page closes. Synthetic words.
  */
 
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
@@ -171,6 +175,8 @@ async function drawChat(
     readonly findable?: boolean;
     /** What a reaction pressed is answered with, once it settles; refused at once where none is named. */
     readonly reactAnswer?: Promise<FakeActAnswer>;
+    /** The message whose Mark as unread the service refuses, by its id. */
+    readonly unreadRefused?: string;
   } = {},
 ) {
   const manager = held.manager ?? MANAGER;
@@ -188,6 +194,8 @@ async function drawChat(
   const reacted: ManagerChatReactParams[] = [];
   // Each person's page a press opened, by their account.
   const people: string[] = [];
+  // Each move of the reader's mark of the chat, as the window asked it.
+  const marks: AgentMarkReadParams[] = [];
 
   fakeActs({
     act: (request) => {
@@ -199,6 +207,16 @@ async function drawChat(
       }
 
       if (request.kind === ACT_KIND.AGENTS_MANAGER_CHAT_OLDER) older.push(request.payload.before);
+
+      if (request.kind === ACT_KIND.AGENTS_MARK_READ) {
+        marks.push(request.payload);
+
+        if (request.payload.unreadFrom?.messageId === held.unreadRefused) {
+          return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." });
+        }
+
+        return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { agent: manager } });
+      }
 
       if (request.kind === ACT_KIND.AGENTS_CHAT_REACT) {
         reacted.push(request.payload);
@@ -279,7 +297,7 @@ async function drawChat(
   });
   await settleQueries();
 
-  return { container, sent, carried, answered, threads, keys, older, reacted, people };
+  return { container, root, sent, carried, answered, threads, keys, older, reacted, people, marks };
 }
 
 /** Each row a scope draws, the greeting aside: its sender's name where its run opens, and its words. */
@@ -380,13 +398,119 @@ test("a message's menu, a right-click or a long press, leads with Reply in threa
   const items = [...document.querySelectorAll<HTMLElement>("[role='menuitem']")];
   assert.deepEqual(
     items.map((item) => item.textContent),
-    ["Reply in thread", "Copy"],
+    ["Reply in thread", "Copy", "Mark as unread"],
   );
 
   act(() => items[0]?.click());
   await settleQueries();
 
   assert.ok(container.querySelector("[data-thread-tab]"), "the thread opens beside the chat");
+});
+
+/** The words of the row New stands over, none where it stands nowhere. */
+function newOver(container: Element): string | null | undefined {
+  return container
+    .querySelector(".ui-new-messages-rule")
+    ?.parentElement?.querySelector(".ui-channel-message-words")?.textContent;
+}
+
+test("New stands over the first message after the mark the page opened on, the reader's own aside, and Mark as unread on their own last line moves the mark back to just before it, New with it, and holds it there as the page closes", async () => {
+  const { container, root, marks } = await drawChat(
+    [row("first", 1, "On it."), row("second", 2, "Shipped."), row("mine", 3, "Thanks.", DEAN)],
+    { manager: { ...MANAGER, readThrough: 1_500, saidAt: 2_000 } },
+  );
+
+  assert.equal(newOver(container), "Shipped.");
+
+  const words =
+    [...container.querySelectorAll(".ui-channel-message-words")].find(
+      (each) => each.textContent === "Thanks.",
+    ) ?? assert.fail("the message stands");
+
+  act(() => {
+    words.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
+    );
+  });
+  act(() => menuItem("Mark as unread").click());
+  await settleQueries();
+
+  assert.equal(newOver(container), "Thanks.");
+  act(() => root.unmount());
+  roots.splice(roots.indexOf(root), 1);
+  await settleQueries();
+
+  assert.deepEqual(marks, [
+    { agentId: MANAGER.id, readMark: READ_MARK.READ },
+    {
+      agentId: MANAGER.id,
+      readMark: READ_MARK.UNREAD,
+      unreadFrom: { messageId: "mine", sentAt: 3_000 },
+    },
+  ]);
+});
+
+test("a Mark as unread the service refuses lets New go back to where it stood: to an earlier mark the stay holds, which stays held, and else to where the page opened, its looks going on", async () => {
+  /** Marks the message holding `text` unread from its menu. */
+  const markUnreadOn = async (container: Element, text: string) => {
+    const words =
+      [...container.querySelectorAll(".ui-channel-message-words")].find(
+        (each) => each.textContent === text,
+      ) ?? assert.fail("the message stands");
+
+    act(() => {
+      words.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
+      );
+    });
+    act(() => menuItem("Mark as unread").click());
+    await settleQueries();
+  };
+
+  const rows = [row("first", 1, "On it."), row("second", 2, "Shipped.")];
+  // The chat opens read, with no New.
+  const manager = { ...MANAGER, readThrough: 2_500, saidAt: 2_000 };
+
+  // Marked unread from the second message, then refused on the first: New goes back over the second, held as the page closes.
+  const earlier = await drawChat(rows, { manager, unreadRefused: "first" });
+  await markUnreadOn(earlier.container, "Shipped.");
+  await markUnreadOn(earlier.container, "On it.");
+  const heldOver = newOver(earlier.container);
+  act(() => earlier.root.unmount());
+  roots.splice(roots.indexOf(earlier.root), 1);
+  await settleQueries();
+
+  // Refused with nothing marked before: New goes back to where the page opened, nowhere, and its looks go on.
+  const alone = await drawChat(rows, { manager, unreadRefused: "first" });
+  await markUnreadOn(alone.container, "On it.");
+  const openedOver = newOver(alone.container);
+  act(() => alone.root.unmount());
+  roots.splice(roots.indexOf(alone.root), 1);
+  await settleQueries();
+
+  assert.deepEqual(
+    [
+      heldOver,
+      earlier.marks.map((mark) => mark.readMark),
+      openedOver,
+      alone.marks.map((mark) => mark.readMark),
+    ],
+    [
+      "Shipped.",
+      [READ_MARK.READ, READ_MARK.UNREAD, READ_MARK.UNREAD],
+      undefined,
+      [READ_MARK.READ, READ_MARK.UNREAD, READ_MARK.SEEN, READ_MARK.SEEN],
+    ],
+  );
+});
+
+test("a chat the reader marked unread from their own last line opens with New over it", async () => {
+  const { container } = await drawChat(
+    [row("first", 1, "On it."), row("mine", 2, "Thanks.", DEAN)],
+    { manager: { ...MANAGER, readThrough: 1_999, saidAt: 1_000, markedUnread: true } },
+  );
+
+  assert.equal(newOver(container), "Thanks.");
 });
 
 test("a person's picture stands as its chip where their words name it, not as a marker over a copy of it, and each line they typed stays its own", async () => {

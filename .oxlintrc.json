@@ -73,6 +73,7 @@
     "vespin/archive-through-agent-change": "error",
     "vespin/ask-beside-screen": "error",
     "vespin/async-press-needs-busy": "error",
+    "vespin/bar-item-titled": "error",
     "vespin/enforce-delete-with-where": "error",
     "vespin/enforce-update-with-where": "error",
     "vespin/github-through-module": "error",
