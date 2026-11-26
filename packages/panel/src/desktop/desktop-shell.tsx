@@ -15,6 +15,7 @@ import {
   DetailPage,
   DrawerScrim,
   IconButton,
+  joinRefs,
   NOT_FOUND_THING,
   NotFound,
   PAGE_FRAME,
@@ -105,7 +106,7 @@ import { PersonPageSkeleton } from "./person-frame.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead, phoneBar, type TaskHeadBack } from "./phone-head.js";
 import { PLACE_LIST, PLACE_PAGE, PLACE_SPLIT } from "./place-columns.js";
-import { ShellMarks } from "./shell-marks.js";
+import { ShellMarks, useShellMarks } from "./shell-marks.js";
 import { SidePanelChord, SidePanelToggle, usePanelToggleRoom } from "./side-panel.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
 import { homeTaskCardOf } from "./task-card.js";
@@ -1141,6 +1142,9 @@ export function ShellPlaces(): React.JSX.Element {
   const { account } = settings;
   useFocusHandedBack(focusHolder);
   const bar = useBarStanding(tasks);
+  // The marks the pages hold on the shell (`shell-marks.tsx`), worn on its element.
+  const marks = useShellMarks();
+  const shellRef = useMemo(() => joinRefs(shell, marks.ref), [shell, marks.ref]);
   const inboxOpen = bar.inbox.open;
   const boardOpen = bar.place === ROUTED_PLACE.BOARD;
   const inboxItemShown = bar.inbox.chosen !== undefined;
@@ -1165,7 +1169,7 @@ export function ShellPlaces(): React.JSX.Element {
 
   return (
     <div
-      ref={shell}
+      ref={shellRef}
       className="desktop-shell"
       data-room={room}
       data-sidebar-collapsed={String(placed.collapsed)}
@@ -1173,7 +1177,7 @@ export function ShellPlaces(): React.JSX.Element {
       data-panel-toggle={String(panelToggle && room !== SHELL_ROOM.NARROW)}
       data-mobile-bar={String(barShown)}
     >
-      <ShellMarks shell={shell}>
+      <ShellMarks hold={marks.hold}>
         <DesktopSidebar
           sidebar={placed}
           history={history}
