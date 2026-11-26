@@ -7,7 +7,8 @@
 // UIKit's keyboard layout guide follows the keyboard through that drag, the
 // suggestion strip's growth and a form sheet's own lift, so the lift is read
 // here at each layout pass, inside the keyboard's own animation, after it
-// settles, and on each frame drawn while the keyboard stands, and set on the
+// settles, and on each frame drawn while a drag may pull it or it falls with
+// no notice the dock heard, stopping once it stands still, and set on the
 // bar as a transform, which React Native's layout leaves alone. A view that
 // stops being the bar, as a page goes back with the keyboard up, is set down
 // before Fabric can draw it anew elsewhere still lifted. The bar is the last
@@ -95,8 +96,11 @@ final class KeyboardDockView: ExpoView {
   private var looksLeft = edgeLooks
   private var lookPending = false
 
-  /// Follows the keyboard each frame while it stands, since a drag that pulls it down moves the layout guide without asking this view for a layout pass.
+  /// Follows the keyboard each frame while it moves with no notice of its own, as a drag pulls it down under the finger, which moves the layout guide without asking for a layout pass, and as it falls under a page come back to after its notice went.
   private var frames: CADisplayLink?
+
+  /// The overlap the last frame drawn read, so the frames stop once the keyboard stands still; none while no frame is followed.
+  private var framed: CGFloat?
 
   /// What last took the keyboard, read as the keyboard moves, whose input accessory the bar is lifted over too.
   private weak var typing: UIResponder?
@@ -109,7 +113,6 @@ final class KeyboardDockView: ExpoView {
     let center = NotificationCenter.default
     center.addObserver(self, selector: #selector(keyboardWillMove), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
     center.addObserver(self, selector: #selector(keyboardDidMove), name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
-    center.addObserver(self, selector: #selector(keyboardDidShow), name: UIResponder.keyboardDidShowNotification, object: nil)
     center.addObserver(self, selector: #selector(keyboardDidHide), name: UIResponder.keyboardDidHideNotification, object: nil)
   }
 
@@ -131,12 +134,6 @@ final class KeyboardDockView: ExpoView {
     follow()
   }
 
-  /// Follows the keyboard frame by frame while it stands.
-  @objc private func keyboardDidShow() {
-    typing = FirstResponder.current()
-    followFrames()
-  }
-
   /// Starts following the keyboard each frame, where it is not already followed.
   private func followFrames() {
     guard frames == nil, window != nil else { return }
@@ -145,26 +142,45 @@ final class KeyboardDockView: ExpoView {
     frames = link
   }
 
-  @objc private func keyboardDidHide() {
+  /// Stops following the keyboard each frame.
+  private func stopFrames() {
     frames?.invalidate()
     frames = nil
+    framed = nil
+  }
+
+  @objc private func keyboardDidHide() {
+    stopFrames()
     follow()
   }
 
-  /// Reads the keyboard on each frame drawn, moving the bar alone. Note that the window is laid out first, so its guide's frame is the keyboard's of this frame rather than the last layout pass's, and that JavaScript is not told each frame's overlap, since every frame of a drag drew the whole transcript anew; it hears the overlap where the keyboard settles.
+  /// Follows the keyboard frame by frame while a finger drags the content over a keyboard standing over the dock, since an interactive drag may pull the keyboard down with it.
+  @objc private func contentPanned(_ pan: UIPanGestureRecognizer) {
+    guard pan.state == .began || pan.state == .changed, (told ?? 0) > 0 else { return }
+    followFrames()
+  }
+
+  /// Reads the keyboard on each frame drawn, moving the bar alone, and stops once two frames in a row read it standing still, so a keyboard at rest costs no layout pass a frame; a drag's next move starts the frames again, and a move UIKit announces is followed by its notice. Note that the window is laid out first, so its guide's frame is the keyboard's of this frame rather than the last layout pass's, and that JavaScript is not told each frame's overlap, since every frame of a drag drew the whole transcript anew; it hears the overlap where the keyboard settles.
   @objc private func frameDrawn() {
     framing = true
     window?.layoutIfNeeded()
-    follow()
+    let overlap = follow()
     framing = false
+
+    guard let was = framed, abs(was - overlap) < overlapStep else {
+      framed = overlap
+      return
+    }
+
+    stopFrames()
+    follow()
   }
 
   /// Follows the keyboard as the dock comes into a window with the keyboard already standing, as a page does when the one over it goes back, or a start page whose field took the keyboard as it opened; stops following as it leaves.
   override func didMoveToWindow() {
     super.didMoveToWindow()
     guard let window else {
-      frames?.invalidate()
-      frames = nil
+      stopFrames()
       setDown()
       return
     }
@@ -174,7 +190,7 @@ final class KeyboardDockView: ExpoView {
     window.keyboardLayoutGuide.usesBottomSafeArea = false
     typing = FirstResponder.current()
     follow()
-    // Note that the keyboard is followed frame by frame wherever it stands over the dock as it comes in, as one falling under a page come back to, or the suggestion strip growing over a start page's field.
+    // Note that a keyboard standing over the dock as it comes in is followed frame by frame until it stands still, since one falling under a page come back to announced its fall before the dock could hear it.
     if (told ?? 0) > 0 { followFrames() }
   }
 
@@ -232,6 +248,7 @@ final class KeyboardDockView: ExpoView {
     letEdgeGo()
     edge.edge = .bottom
     edge.scrollView = scroller
+    scroller.panGestureRecognizer.addTarget(self, action: #selector(contentPanned(_:)))
     scroller.bottomEdgeEffect.style = .soft
     // Note that its top edge fades softly under the navigation bar too, as Messages fades a conversation, since the stack's own scroll edge option reaches only the first scroll view down its first children, which a docked screen's content need not be.
     scroller.topEdgeEffect.style = .soft
@@ -260,6 +277,7 @@ final class KeyboardDockView: ExpoView {
     guard let held = edge.scrollView else { return }
     held.bottomEdgeEffect.style = .automatic
     held.topEdgeEffect.style = .automatic
+    held.panGestureRecognizer.removeTarget(self, action: #selector(contentPanned(_:)))
     edge.view?.removeInteraction(edge)
     edge.scrollView = nil
     looksLeft = edgeLooks
@@ -278,9 +296,10 @@ final class KeyboardDockView: ExpoView {
     }
   }
 
-  /// Lifts the bar by how far the keyboard stands over this view's foot, less the bottom safe area the bar already stands clear of, and tells JavaScript the overlap where the keyboard has settled or is announced to move, never on a frame drawn.
-  private func follow() {
-    guard window != nil else { return }
+  /// Lifts the bar by how far the keyboard stands over this view's foot, less the bottom safe area the bar already stands clear of, and tells JavaScript the overlap where the keyboard has settled or is announced to move, never on a frame drawn; answers the overlap read.
+  @discardableResult
+  private func follow() -> CGFloat {
+    guard window != nil else { return 0 }
     let overlap = max(0, bounds.maxY - keyboardTop())
     let lift = max(0, overlap - safeAreaInsets.bottom)
 
@@ -293,16 +312,17 @@ final class KeyboardDockView: ExpoView {
     // Note that a frame drawn only checks the content's scroll view still stands, which costs nothing, while a layout pass looks for it again where it does not.
     if framing { keepEdge() } else { standAsEdge() }
 
-    guard !framing else { return }
+    guard !framing else { return overlap }
 
     // Note that a step to or from no overlap is always told, however small, so the content never keeps room for a keyboard that has gone, and so is a new bottom safe area, which the bar pads its foot by.
     let inset = safeAreaInsets.bottom
     let insetMoved = toldInset.map { abs($0 - inset) >= overlapStep } ?? true
 
-    if !insetMoved, let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return }
+    if !insetMoved, let was = told, abs(was - overlap) < overlapStep, (was == 0) == (overlap == 0) { return overlap }
     told = overlap
     toldInset = inset
     onOverlap(["overlap": overlap, "inset": inset])
+    return overlap
   }
 }
 
