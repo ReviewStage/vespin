@@ -77,6 +77,7 @@
     "vespin/enforce-delete-with-where": "error",
     "vespin/enforce-update-with-where": "error",
     "vespin/github-through-module": "error",
+    "vespin/live-query-through-window": "error",
     "vespin/no-browser-form-validation": "error",
     "vespin/no-direct-view-storage": "error",
     "vespin/no-document-press-listener": "error",

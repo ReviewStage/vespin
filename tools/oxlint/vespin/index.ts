@@ -9,6 +9,7 @@ import { enforceDeleteWithWhereRule } from "./rules/enforce-delete-with-where.ts
 import { enforceUpdateWithWhereRule } from "./rules/enforce-update-with-where.ts";
 import { entityChoiceThroughHelperRule } from "./rules/entity-choice-through-helper.ts";
 import { githubThroughModuleRule } from "./rules/github-through-module.ts";
+import { liveQueryThroughWindowRule } from "./rules/live-query-through-window.ts";
 import { noBrowserFormValidationRule } from "./rules/no-browser-form-validation.ts";
 import { noDirectViewStorageRule } from "./rules/no-direct-view-storage.ts";
 import { noDocumentPressListenerRule } from "./rules/no-document-press-listener.ts";
@@ -58,6 +59,7 @@ const antiSlopPlugin = eslintCompatPlugin({
     "entity-choice-through-helper": entityChoiceThroughHelperRule,
     "enforce-update-with-where": enforceUpdateWithWhereRule,
     "github-through-module": githubThroughModuleRule,
+    "live-query-through-window": liveQueryThroughWindowRule,
     "no-browser-form-validation": noBrowserFormValidationRule,
     "no-direct-view-storage": noDirectViewStorageRule,
     "no-document-press-listener": noDocumentPressListenerRule,

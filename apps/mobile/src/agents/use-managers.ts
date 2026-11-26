@@ -23,14 +23,16 @@ import { placeIdOf } from "@repo/features/runs-on-places";
 import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { type FollowedAgent, selectWorkspaceExperiment } from "@repo/host/app-state-reads";
+import { windowRows } from "@repo/host/read-window";
 import { EXPERIMENT } from "@repo/settings";
 import type { ChannelFaces } from "@repo/ui-native";
-import { and, eq, isNull, isUndefined, useLiveQuery } from "@tanstack/react-db";
+import { and, eq, isNull, isUndefined } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
+import { useWindow } from "../host/use-window.js";
 import { useMemberFaces } from "../member-pictures.js";
 import { startRefusalWords } from "../tasks/use-start.js";
 import { useWrite } from "../use-write.js";
@@ -64,26 +66,25 @@ export function useWorkspaceManagers(workspaceId: string | undefined): readonly 
   const listed = useManagersListed(workspaceId);
   const { agents } = useTaskListCollections();
 
-  const held = useLiveQuery((q) =>
-    !listed || workspaceId === undefined
-      ? undefined
-      : q
-          .from({ agent: agents })
-          .where(({ agent }) =>
-            and(
-              eq(agent.kind, AGENT_KIND.MANAGER),
-              isNull(agent.taskId),
-              eq(agent.workspaceId, workspaceId),
-              isUndefined(agent.archivedAt),
+  const held = windowRows(
+    useWindow((q) =>
+      !listed || workspaceId === undefined
+        ? undefined
+        : q
+            .from({ agent: agents })
+            .where(({ agent }) =>
+              and(
+                eq(agent.kind, AGENT_KIND.MANAGER),
+                isNull(agent.taskId),
+                eq(agent.workspaceId, workspaceId),
+                isUndefined(agent.archivedAt),
+              ),
             ),
-          ),
-  ).data;
+    ),
+  );
 
   return useMemo(
-    () =>
-      held === undefined || workspaceId === undefined
-        ? NO_MANAGERS
-        : workspaceManagersOf(held, workspaceId),
+    () => (workspaceId === undefined ? NO_MANAGERS : workspaceManagersOf(held, workspaceId)),
     [held, workspaceId],
   );
 }
