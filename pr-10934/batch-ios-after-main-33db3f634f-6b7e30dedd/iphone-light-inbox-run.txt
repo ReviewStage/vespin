@@ -1,0 +1,194 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane C) - iOS 27.2 - D479E601-B915-45AA-99C5-5295A84F641E
+ > Flow .kbd-inbox
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Assert that id: workspace-switcher is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-list... COMPLETED
+Tap on "More"... COMPLETED
+Assert that "Mark all as read" is visible... COMPLETED
+Assert that "Questions.*" is visible... COMPLETED
+Take screenshot inbox-more... COMPLETED
+Run subflows/dismiss.yaml...
+  Tap on point (${POINT})... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/dismiss.yaml... COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that ".*walked the invite flow.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-thread... COMPLETED
+Tap on "The invite page"... COMPLETED
+Assert that id: picture-viewer-close is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-picture... COMPLETED
+Tap on id: picture-viewer-close... COMPLETED
+Scrolling DOWN until "invite-flow.webm.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that id: video-player is visible... COMPLETED
+Assert that ".*can't play here.*" is not visible... COMPLETED
+Assert that "invite-flow.*, \d+:\d\d" is visible... COMPLETED
+Take screenshot inbox-video... COMPLETED
+Tap on "invite-flow.*, \d+:\d\d"... COMPLETED
+Assert that "invite-flow.*, \d+:\d\d" is not visible... COMPLETED
+Take screenshot inbox-video-playing... COMPLETED
+Run subflows/scroll-to.yaml...
+  Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE != ''} is true...
+    Scrolling DOWN until "${ELEMENT}", Above id: ${ABOVE} is visible with speed 40, visibility percentage 100%, timeout 60000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end within 5000 ms... COMPLETED
+Run subflows/scroll-to.yaml... COMPLETED
+Take screenshot inbox-file... COMPLETED
+Tap on "invite-test-plan.pdf, PDF.*"... COMPLETED
+Assert that id: QLOverlayDoneButtonAccessibilityIdentifier is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-pdf... COMPLETED
+Run flow when id: QLOverlayDoneButtonAccessibilityIdentifier is not visible...
+Run flow when id: QLOverlayDoneButtonAccessibilityIdentifier is not visible... SKIPPED
+Tap on id: QLOverlayDoneButtonAccessibilityIdentifier... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that id: QLOverlayDoneButtonAccessibilityIdentifier is not visible... COMPLETED
+Run subflows/bar-act.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Tap on "More"... COMPLETED
+  Run flow when true is true... COMPLETED
+Run subflows/bar-act.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-thread-more... COMPLETED
+Tap on "Remind me"... COMPLETED
+Assert that "Pick a date and time…" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-thread-remind... COMPLETED
+Tap on point (50%, 90%)... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Pick a date and time…" is not visible... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+        Tap on id: BackButton... COMPLETED
+      Run flow when id: BackButton is visible and id: inbox-tab is not visible... COMPLETED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+  Swipe from (8%, 27%) to (38%, 27%) in 900 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+  Take screenshot inbox-swipe... COMPLETED
+  Tap on "Mark as .*"... COMPLETED
+  Wait for animation to end... COMPLETED
+  Swipe from (80%, 27%) to (48%, 27%) in 900 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "Resolve" is visible... COMPLETED
+  Take screenshot inbox-swipe-trailing... COMPLETED
+  Tap on point (10%, 27%)... COMPLETED
+  Wait for animation to end... COMPLETED
+Run flow when true is true... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Swipe from (50%, 60%) to (50%, 35%) in 800 ms... COMPLETED
+      Run flow when "acceptInvite can add a member twice", Above id: search-tab is not visible and true is true... COMPLETED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Assert that "Mark as read" is visible... COMPLETED
+Take screenshot inbox-preview... COMPLETED
+Tap on "Mark as read"... COMPLETED
+Run flow when "Recorded the invite flow" is not visible...
+Run flow when "Recorded the invite flow" is not visible... SKIPPED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Swipe from (50%, 60%) to (50%, 35%) in 800 ms... COMPLETED
+      Run flow when "Recorded the invite flow", Above id: search-tab is not visible and true is true... COMPLETED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Tap on "Remind me"... COMPLETED
+Assert that "Pick a date and time…" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-remind... COMPLETED
+Tap on "In 1 hour.*"... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+  Assert that "Recorded the invite flow" is not visible... COMPLETED
+Run flow when true is true... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+Run flow when false is true... SKIPPED
+Tap on "More"... COMPLETED
+Tap on "Reminders"... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Assert that "Reminder .*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-reminders... COMPLETED
+Tap on "More"... COMPLETED
+Tap on "Open.*"... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "More"... COMPLETED
+Tap on "All"... COMPLETED
+Scrolling DOWN until "Which day the digest goes out" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-all... COMPLETED
+Tap on "More"... COMPLETED
+Tap on "Open.*"... COMPLETED
+Run flow when "Search inbox" is not visible...
+  Tap on "Search", Above "Tab Bar"... COMPLETED
+Run flow when "Search inbox" is not visible... COMPLETED
+Tap on "Search inbox"... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+  Tap on "Continue"... COMPLETED
+Run flow when "Speed up your typing.*" is visible... COMPLETED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text digest... COMPLETED
+Assert that "Verify the digest's sender domain" is visible... COMPLETED
+Assert that "Invite limits" is not visible... COMPLETED
+Take screenshot inbox-search... COMPLETED
