@@ -332,10 +332,11 @@ so a recording is meant to show the app's layout and your touches, never what
 you or anyone else wrote or showed. The masking finds what to cover by how
 iOS draws it, so something drawn in a way it does not recognize could leave
 unmasked; we check the app's screens against it. Each recording also carries the same trail an iOS error report
-carries (see Error and performance data). It is sent to Sentry, not PostHog,
-and is filed under no account, so it cannot be tied to you by your name or
-email, or found and erased with your account; Sentry keeps it until its
-retention ends.
+carries (see Error and performance data), and, as with those reports, Sentry
+receives your IP address and keeps the rough location it names. It is sent to
+Sentry, not PostHog, and is filed under no account, so it cannot be tied to
+you by your name or email, or found and erased with your account; Sentry
+keeps it until its retention ends.
 
 Turning off Settings › Account › "Share usage data" stops the counts, the
 recordings, and the Sentry reports described below from that Mac, browser,
