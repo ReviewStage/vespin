@@ -48,7 +48,7 @@ import {
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard } from "@repo/features/time-format";
-import { type ReactElement, type ReactNode, useContext } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import type { RowQuestion } from "./asks.js";
@@ -76,7 +76,7 @@ import {
 } from "./list-row.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import { AgentTile, Avatar, type Face, FailedMark, ToneGlyph, WorkingMark } from "./marks.js";
-import { ServiceReached } from "./offline-read-model.js";
+import { useServiceReached } from "./offline-read-model.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
@@ -816,7 +816,7 @@ type FailedReadRowProps = {
 export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
   const colors = useColors();
   const inset = useRowInset();
-  const reached = useContext(ServiceReached);
+  const reached = useServiceReached();
 
   if (!reached) return null;
 

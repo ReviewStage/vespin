@@ -241,7 +241,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                   ? LEAVE_WORDS.OWNER_NO_ADMIN
                   : undefined
             }
-            footerTone={held?.members?.failed === true ? FOOTER_TONE.FAILURE : FOOTER_TONE.NOTE}
+            footerTone={held?.members?.failed === true ? FOOTER_TONE.READ_FAILED : FOOTER_TONE.NOTE}
           >
             {members === undefined && held?.members?.failed !== true ? (
               <LoadingRow words={readingWords("the members")} />
@@ -267,7 +267,9 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
                   ? WORKSPACE_READ_FAILED.INVITATIONS
                   : invite.said.join(" ") || undefined
               }
-              footerTone={FOOTER_TONE.FAILURE}
+              footerTone={
+                held?.invitations?.failed === true ? FOOTER_TONE.READ_FAILED : FOOTER_TONE.FAILURE
+              }
             >
               <ActionRow
                 label={INVITATION_WORDS.INVITE}

@@ -11,11 +11,10 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { useContext } from "react";
 import { useAccessibilitySize } from "./accessibility.js";
 import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
-import { emptyStateWords, ServiceReached } from "./offline-read-model.js";
+import { emptyStateWords, useServiceReached } from "./offline-read-model.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 
@@ -99,7 +98,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
-  const reached = useContext(ServiceReached);
+  const reached = useServiceReached();
 
   if (loading) return <LoadingState title={title} />;
 

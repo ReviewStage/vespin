@@ -49,12 +49,15 @@ import type { ReactElement, ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { addressWords } from "./address-words-model.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
+import { TRY_AGAIN_WORDS } from "./empty-state.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage, LookIcon } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
 import { actionButton, LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
 import { Avatar, FailedMark, HarnessMark, RepositoryPicture, WorkingMark } from "./marks.js";
+import { useServiceReached } from "./offline-read-model.js";
 import { ProblemLine } from "./problem-line.js";
+import { FOOTER_TONE, ListSection } from "./row-list.js";
 import { CHOICE_MARK, type ChoiceMark, markLook } from "./row-menu-model.js";
 import { Text } from "./text.js";
 import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
@@ -822,6 +825,33 @@ export function ActionRow({
         </VStack>
       </HStack>
     </SwiftUIButton>
+  );
+}
+
+/**
+ * A form's section whose read failed, with nothing else to show: its
+ * title, why under it, and Try again, as Settings says a list it could not
+ * load. While the phone does not reach the service (`ServiceReached`), it
+ * says only that the section is there once back online and offers no Try
+ * again, since the app's one offline notice already said why and the read
+ * starts again by itself (`FOOTER_TONE.READ_FAILED`).
+ */
+export function ReadFailedSection({
+  title,
+  words,
+  onRetry,
+}: {
+  readonly title: string;
+  /** Why it could not be read, such as "The connected apps could not be read." */
+  readonly words: string;
+  readonly onRetry: () => void;
+}) {
+  const reached = useServiceReached();
+
+  return (
+    <ListSection title={title} footer={words} footerTone={FOOTER_TONE.READ_FAILED}>
+      {reached ? <ActionRow label={TRY_AGAIN_WORDS} onPress={onRetry} /> : null}
+    </ListSection>
   );
 }
 

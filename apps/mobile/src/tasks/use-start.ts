@@ -69,7 +69,13 @@ import {
   selectModels,
   selectRepositoryList,
 } from "@repo/host/app-state-reads";
-import { CHOICE_MARK, type Glyph, type PickOption, runsOnGlyph } from "@repo/ui-native";
+import {
+  CHOICE_MARK,
+  type Glyph,
+  type PickOption,
+  runsOnGlyph,
+  useServiceReached,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useMemo, useState } from "react";
@@ -218,6 +224,7 @@ function useModelsRead(): AppHostRead<ModelsAnswer> | undefined {
 export function useModelPick(seed?: ModelChoice): ModelPick {
   const acts = useHostActs();
   const held = useModelsRead();
+  const reached = useServiceReached();
   const read = held?.rows;
   const { data: fallback } = useQuery({ ...appStateQuery, select: selectAgentDefault });
   const [picked, setPicked] = useState<ModelChoice | undefined>(seed);
@@ -259,7 +266,8 @@ export function useModelPick(seed?: ModelChoice): ModelPick {
           },
     // Note that a device still setting itself up takes no agent, so it is not offered.
     devices: (read?.macs ?? NO_DEVICES).filter((device) => device.setup === undefined),
-    failed: held?.failed === true && read === undefined ? MODELS_READ_FAILED : undefined,
+    // Note that a read that failed while the phone does not reach the service says nothing, since the app's one offline notice said why.
+    failed: reached && held?.failed === true && read === undefined ? MODELS_READ_FAILED : undefined,
     retry: () => {
       acts[ACT_KIND.AGENTS_MODELS_RETRY]().catch(retryRefused("the models"));
     },
@@ -344,12 +352,14 @@ export function useWorkspaceRepositories(workspaceId: string | undefined): Works
 
   const { data: rows } = useQuery({ ...appStateQuery, select });
   const { data: failed = false } = useQuery({ ...appStateQuery, select: failedSelect });
+  const reached = useServiceReached();
 
   return useMemo(
     () => ({
       listed: rows?.repositories.map(({ fullName }) => fullName) ?? NO_REPOSITORIES,
       read: rows !== undefined,
-      failed: failed && rows === undefined,
+      // Note that a read that failed while the phone does not reach the service says nothing, since the app's one offline notice said why.
+      failed: reached && failed && rows === undefined,
       retry: () => {
         if (workspaceId === undefined) return;
         acts[ACT_KIND.TASKS_REPOSITORIES_RETRY]({ workspaceId }).catch(
@@ -357,7 +367,7 @@ export function useWorkspaceRepositories(workspaceId: string | undefined): Works
         );
       },
     }),
-    [rows, failed, workspaceId, acts],
+    [rows, failed, reached, workspaceId, acts],
   );
 }
 

@@ -1,6 +1,6 @@
 // offline-read-model.ts -- what a place whose read failed says: its own failure and Try again while the phone reaches the service, or, while it does not, a quiet line that the place comes back with the connection, since the app's one offline notice already said why.
 
-import { createContext } from "react";
+import { createContext, useContext } from "react";
 import { GLYPH, type Glyph } from "./glyph.js";
 
 /**
@@ -8,7 +8,7 @@ import { GLYPH, type Glyph } from "./glyph.js";
  * service, in the panel's words for the same place (`@repo/ui`'s
  * `ErrorState`), under the glyph the offline notice wears.
  */
-const OFFLINE_READ = {
+export const OFFLINE_READ = {
   title: "Available when you're back online.",
   symbol: GLYPH.OFFLINE,
 } as const;
@@ -22,6 +22,11 @@ const OFFLINE_READ = {
  * is reached, so a failure is never hidden by a provider left out.
  */
 export const ServiceReached = createContext(true);
+
+/** Whether the phone reaches the service now (`ServiceReached`): what every place a read failed asks before it says so. */
+export function useServiceReached(): boolean {
+  return useContext(ServiceReached);
+}
 
 /** What an empty state says: its title, its glyph, its line, and whether it offers its act. */
 export interface EmptyStateWords {
