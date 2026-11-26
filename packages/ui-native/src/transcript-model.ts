@@ -262,6 +262,8 @@ export interface ChatSender {
   readonly manager: boolean;
   /** The person's account, which their picture is read by; none for the Manager or a person no account names. */
   readonly userId: string | undefined;
+  /** Where a press on their face or name opens: the person's page; none for the Manager, whose chat this is, or a person no account names. */
+  readonly address?: string | undefined;
 }
 
 /** The thread a message of a Manager's chat stands in, as its channel row offers it: the message it hangs on, which Reply in thread opens, and its replies summed under it where anyone answered. */
@@ -1496,14 +1498,22 @@ function chatWorkFold(
   ];
 }
 
-/** Who sent a message of the chat, as its row heads it. */
-function chatSenderOf(message: ManagerChatLine["message"]): ChatSender {
+/** Who sent a message of the chat, as its row heads it, and the page a press on a person's face or name opens where `reading` can name it. */
+function chatSenderOf(
+  message: ManagerChatLine["message"],
+  reading?: TranscriptReading | undefined,
+): ChatSender {
   const manager = message.authorKind === MANAGER_CHAT_AUTHOR.AGENT;
+  const userId = manager ? undefined : (message.authorUserId ?? undefined);
 
   return {
     name: message.authorName,
     manager,
-    userId: manager ? undefined : (message.authorUserId ?? undefined),
+    userId,
+    address:
+      userId === undefined
+        ? undefined
+        : reading?.placeAddress?.({ kind: LINK_DESTINATION.PERSON, userId }),
   };
 }
 
@@ -1563,7 +1573,7 @@ function chatLineItems(
     stamp: undefined,
     joinsAbove: false,
     joinsBelow: false,
-    channel: chatSenderOf(message),
+    channel: chatSenderOf(message, reading),
     thread: threads ? threadMarkOf(line, view) : undefined,
   } as const;
 
