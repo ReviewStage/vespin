@@ -221,6 +221,7 @@ import { type KeptPage, keptPagesAfter } from "./kept-pages.js";
 import { AgentMenuTab } from "./main-tabs.js";
 import { PULL_REQUEST_TAB, pullRequestTabLoaded, TURN_CHANGES_TAB } from "./pages-on-demand.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneFindGroups } from "./phone-head.js";
+import { SHELL_MARK, useShellMark } from "./shell-marks.js";
 import {
   type AddEntry,
   AddTabButton,
@@ -3446,6 +3447,8 @@ function PanelFrame({
 }): React.JSX.Element {
   const toggleRoom = useSelector(fullScreenRoomStore);
   const beside = besideToggle ? toggleRoom : null;
+  useShellMark(SHELL_MARK.SIDE_PANEL);
+  useShellMark(panel.fullScreen ? SHELL_MARK.FULL_SCREEN_PANEL : undefined);
 
   // Escape takes the panel out of filling the window, wherever it fills it: beside its document again, or shut by
   // its way back where the room holds it only full screen (`places/narrow-backs.ts`).

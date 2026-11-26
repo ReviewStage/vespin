@@ -254,15 +254,6 @@ body,
   -webkit-app-region: no-drag;
 }
 
-/* Note that the side panel of the Inbox kept hidden between visits (`desktop-shell.tsx`) stands nowhere. */
-.desktop-shell[data-sidebar-collapsed="true"][data-sidebar-overlay="closed"]:has(
-  .side-panel[data-full-screen="true"]:not([data-inbox-shown="false"] > [data-page="inbox"] *)
-) .title-bar-controls:not([data-edge]),
-.desktop-shell:has(.side-panel:not([data-inbox-shown="false"] > [data-page="inbox"] *))
-  .title-bar-controls[data-edge="end"] {
-  --title-bar-ground: var(--ui-color-ground);
-}
-
 /* Every page stands its top row on the frame (shell.css), so the toggle at
    the right and, while the sidebar is folded, the buttons at the left rest
    on the frame as those rows do, with no ground of their own. */
@@ -271,6 +262,17 @@ body,
   .desktop-shell[data-sidebar-collapsed="true"][data-sidebar-overlay="closed"]
   .title-bar-controls:not([data-edge]) {
   --title-bar-ground: transparent;
+}
+
+/* Over a side panel, though, they stand on the panel's ground. Note that
+   the side panel of the Inbox kept hidden between visits
+   (`desktop-shell.tsx`) stands nowhere, and holds no mark on the shell
+   (`shell-marks.tsx`); and that this follows the rule above, which it ties,
+   so it is the one that holds. */
+.desktop-shell[data-sidebar-collapsed="true"][data-sidebar-overlay="closed"][data-full-screen-panel]
+.title-bar-controls:not([data-edge]),
+.desktop-shell[data-side-panel] .title-bar-controls[data-edge="end"] {
+  --title-bar-ground: var(--ui-color-ground);
 }
 
 /* Where the side panel's toggle stands in from the window's right edge: at
@@ -636,7 +638,7 @@ body,
    title-bar middles tall. They rest on the frame as the tabs beside them do,
    with no ground of their own, the panel open or not. */
 :where(:root):not([data-ui-room="narrow"])
-  .desktop-shell:has(> .desktop-main .desktop-task > .task-tabs)
+  .desktop-shell[data-agents-row]
   > .title-bar-controls[data-edge="end"] {
   --title-bar-ground: transparent;
   top: calc(2 * var(--title-bar-middle));

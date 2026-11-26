@@ -118,6 +118,7 @@ import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
+import { SHELL_MARK, useShellMark } from "./shell-marks.js";
 import {
   SIDE_PANEL_HOLDER,
   SidePanel,
@@ -472,6 +473,7 @@ function OwnAgentPage({
   away: TaskHeadBack | undefined;
   staged: boolean;
 }): React.JSX.Element {
+  useShellMark(SHELL_MARK.TASK_PAGE);
   const { sidePanel } = tasks;
   const { onArea, focus, setFocus } = useColumnFocus(tasks.tabKeys, tasks.onTabKeysTaken);
   const { workspaceId, repository } = agent;
@@ -745,6 +747,8 @@ export function AgentRoutePage({
     if (taskId !== undefined) onShowAgent(taskId, agentId);
   }, [onShowAgent, taskId, agentId]);
   const back = away === undefined ? undefined : <PhoneBack back={away} />;
+  // Note that an agent found draws its own page, which holds the mark itself, and one missing draws no page.
+  useShellMark("missing" in found || "agent" in found ? undefined : SHELL_MARK.TASK_PAGE);
 
   if ("missing" in found) {
     return (
