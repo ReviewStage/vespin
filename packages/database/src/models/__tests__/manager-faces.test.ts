@@ -5,7 +5,7 @@ import { AGENT_KIND, type AgentKind } from "@repo/features/agent-wire";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
-  MANAGER_FACE_OFFERED_COLORS,
+  MANAGER_FACE_PICK_COLORS,
   type ManagerFace,
 } from "@repo/features/manager-face";
 import { eq } from "drizzle-orm";
@@ -25,9 +25,9 @@ import { archiveAgent, createAgent, updateManagerFaceCommitted } from "../agent-
  * accounts.
  */
 
-/** Every face the service gives: each character in each offered color. */
+/** Every face the service gives: each character in each color a face is given in, never `peach` and never an emoji. */
 const EVERY_FACE: readonly ManagerFace[] = Object.values(MANAGER_FACE_CHARACTER).flatMap(
-  (character) => MANAGER_FACE_OFFERED_COLORS.map((color) => ({ character, color })),
+  (character) => MANAGER_FACE_PICK_COLORS.map((color) => ({ character, color })),
 );
 
 const faceKey = (face: ManagerFace | null | undefined) =>
@@ -69,7 +69,7 @@ const openManager = (
 
 it.layer(getTestDB())("a new Manager's face", (it) => {
   it.effect(
-    "takes a face no standing Manager of its workspace wears, the last free one too, and an archived one's again",
+    "takes a face of the nine colors no standing Manager of its workspace wears, the last free one too, and an archived one's again",
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
@@ -84,6 +84,8 @@ it.layer(getTestDB())("a new Manager's face", (it) => {
         }
 
         const worn = new Set(made.map((agent) => faceKey(agent.face)));
+        const given = new Set(EVERY_FACE.map(faceKey));
+        assert.ok([...worn].every((face) => given.has(face)));
         const free = EVERY_FACE.find((face) => !worn.has(faceKey(face)));
         assert.equal(worn.size, EVERY_FACE.length - 1);
         assert.ok(free !== undefined);
@@ -100,6 +102,41 @@ it.layer(getTestDB())("a new Manager's face", (it) => {
         const next = yield* openManager(owner, workspaceId);
         assert.equal(faceKey(next.face), faceKey(archived.face));
       }),
+  );
+
+  it.effect("counts a Manager stored in peach as wearing orange, which peach is drawn as", () =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const owner = yield* openAccount;
+      const workspaceId = yield* openWorkspace(owner);
+
+      const orangeGhost = {
+        character: MANAGER_FACE_CHARACTER.GHOST,
+        color: MANAGER_FACE_COLOR.ORANGE,
+      };
+
+      const free = { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.TEAL };
+
+      // Every face is worn but the orange ghost, which a peach ghost wears, and one other.
+      const worn = [
+        ...EVERY_FACE.filter(
+          (face) => faceKey(face) !== faceKey(orangeGhost) && faceKey(face) !== faceKey(free),
+        ),
+        { character: MANAGER_FACE_CHARACTER.GHOST, color: MANAGER_FACE_COLOR.PEACH },
+      ];
+
+      for (const face of worn) {
+        const made = yield* openManager(owner, workspaceId);
+        yield* db.update(agentTable).set({ face }).where(eq(agentTable.id, made.id));
+      }
+
+      // Note that each new Manager's seed is its random id, so several are made, each archived before the next, for the walk to meet the orange ghost first.
+      for (let count = 0; count < 8; count++) {
+        const next = yield* openManager(owner, workspaceId);
+        assert.equal(faceKey(next.face), faceKey(free));
+        yield* archiveAgent(owner, next.id, true);
+      }
+    }),
   );
 
   it.effect(

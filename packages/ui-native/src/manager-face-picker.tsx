@@ -3,7 +3,7 @@
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_CHARACTER_NAME,
-  MANAGER_FACE_OFFERED_COLORS,
+  MANAGER_FACE_PICK_COLORS,
   MANAGER_FACES,
   type ManagerFace,
   managerFaceName,
@@ -79,7 +79,7 @@ export function ManagerFaceSheet({
     : Object.values(MANAGER_FACE_CHARACTER).map((character) => ({
         key: character,
         name: MANAGER_FACE_CHARACTER_NAME[character],
-        choices: MANAGER_FACE_OFFERED_COLORS.map((color) => faceChoice({ character, color }, face)),
+        choices: MANAGER_FACE_PICK_COLORS.map((color) => faceChoice({ character, color }, face)),
       }));
 
   return (
