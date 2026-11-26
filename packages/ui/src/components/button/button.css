@@ -54,6 +54,13 @@
     fill: currentcolor;
   }
 
+  /* An icon picker's cell draws its glyph, and an emoji, a step larger
+     than a control's, so a choice reads at a glance. */
+  .ui-button[data-size="picker"] svg {
+    width: var(--ui-icon-20);
+    height: var(--ui-icon-20);
+  }
+
   /* A finger's target: on a coarse pointer a button takes a press
      `--ui-touch-target` across at least, centered on it, while it draws at
      its own size, so a row's 24px mark keeps its glyph and its place. */

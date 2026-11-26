@@ -17,6 +17,7 @@ import {
   type ButtonVariant,
   CHOICE_BAR_LOOK,
   ChoiceBar,
+  ICON_BUTTON_SIZE,
   ICON_PICKER_ASIDE,
   IconButton,
   IconPicker,
@@ -424,6 +425,7 @@ function GlyphColors({
         {GLYPH_COLORS.map((value) => (
           <IconButton
             key={value ?? "text"}
+            size={ICON_BUTTON_SIZE.PICKER}
             ref={value === starts ? start : undefined}
             icon={
               Glyph === undefined ? null : (

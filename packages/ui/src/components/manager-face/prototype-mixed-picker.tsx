@@ -39,7 +39,7 @@ import { type RefObject, useEffect, useId, useRef, useState } from "react";
 import { type EmojiGroup, emojiGroups, findEmoji } from "../../section-icon-model.js";
 import { AnchoredPopover } from "../anchored-popover/anchored-popover.js";
 import { POPOVER_ALIGN, POPOVER_WIDTH } from "../anchored-popover/popover-place.js";
-import { IconButton } from "../button/button.js";
+import { ICON_BUTTON_SIZE, IconButton } from "../button/button.js";
 import { CHOICE_BAR_LOOK, ChoiceBar } from "../choice-bar/choice-bar.js";
 import {
   ICON_PICKER_ASIDE,
@@ -220,6 +220,7 @@ function FaceColors({
         {ASKED_COLORS.map((color) => (
           <IconButton
             key={color}
+            size={ICON_BUTTON_SIZE.PICKER}
             ref={color === starts ? start : undefined}
             icon={<ManagerFace face={{ ...face, color }} size={MANAGER_FACE_SIZE.ROW} raw />}
             label={MANAGER_FACE_COLOR_NAME[color]}

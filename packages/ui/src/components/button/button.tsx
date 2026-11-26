@@ -190,6 +190,8 @@ export type ButtonSize = (typeof BUTTON_SIZE)[keyof typeof BUTTON_SIZE];
 export const ICON_BUTTON_SIZE = {
   ...BUTTON_SIZE,
   LARGE: "large",
+  /** An icon picker's cell: a glyph or an emoji drawn larger than a control's, so a choice reads at a glance (`IconPickerChoice`). */
+  PICKER: "picker",
 } as const;
 
 export type IconButtonSize = (typeof ICON_BUTTON_SIZE)[keyof typeof ICON_BUTTON_SIZE];
@@ -306,6 +308,8 @@ function boxSize(
   const compact = size === BUTTON_SIZE.COMPACT;
 
   if (iconOnly && size === ICON_BUTTON_SIZE.LARGE) return "icon-large";
+
+  if (iconOnly && size === ICON_BUTTON_SIZE.PICKER) return "icon-picker";
 
   if (iconOnly) return compact ? "icon-compact" : "icon";
 

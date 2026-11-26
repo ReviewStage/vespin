@@ -783,16 +783,21 @@
     --ui-space-16
   ); /* the disc a press wears at its corner (`CornerBadge`) */
   --spacing-corner-badge-glyph: 10px; /* off-scale: the glyph on that disc */
-  --spacing-section-icon-scroll: 220px; /* off-scale: the icon grid's room, about seven rows */
-  --container-section-icon-picker: 340px; /* off-scale: ten icon buttons and the picker's insets */
+  --spacing-section-icon-scroll: 280px; /* off-scale: the icon grid's room, about seven rows */
+  --container-section-icon-picker: 420px; /* off-scale: ten icon buttons and the picker's insets */
+  --spacing-icon-picker-cell: 36px; /* off-scale: one icon picker cell, a glyph or emoji at 20px with room round it */
+  --text-icon-picker: var(
+    --ui-icon-20
+  ); /* an emoji in an icon picker's cell, as large as its glyphs */
+  --text-icon-picker--line-height: 1;
   --grid-template-columns-suggestion-cards: repeat(
     auto-fill,
     minmax(240px, 1fr)
   ); /* off-scale: a suggestion card's least width */
   --grid-template-columns-section-icons: repeat(
     10,
-    28px
-  ); /* off-scale: ten icon buttons, edge to edge */
+    var(--spacing-icon-picker-cell)
+  ); /* ten icon picker cells, edge to edge */
   /* An actor's mark (`@repo/panel`'s `actor-ref.tsx`): the opaque tile a
      member who left, and a pile's count, stand on, a step of ink over the
      ground, so the face a square overlaps never shows through it; the ground

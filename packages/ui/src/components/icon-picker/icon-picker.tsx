@@ -1,5 +1,5 @@
 import { type ReactNode, type RefObject, useRef } from "react";
-import { IconButton } from "../button/button.js";
+import { ICON_BUTTON_SIZE, IconButton } from "../button/button.js";
 import { ScrollArea } from "../scroll-area/scroll-area.js";
 import { SearchField } from "../search-field/search-field.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
@@ -106,6 +106,7 @@ export function IconPickerChoice({
     <IconButton
       icon={face}
       label={label}
+      size={ICON_BUTTON_SIZE.PICKER}
       pressed={pressed}
       tabbable={stop}
       aria-haspopup={popup ? "dialog" : undefined}
