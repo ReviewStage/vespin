@@ -144,6 +144,8 @@
     "./emoji-data": "./src/generated/emoji-data.js",
     "./emoji-model": "./src/emoji-model.js",
     "./emoji-wire": "./src/emoji-wire.js",
+    "./slack-emoji": "./src/slack-emoji.js",
+    "./slack-emoji-data": "./src/slack-emoji-data.js",
     "./manager-face": "./src/manager-face.js",
     "./manager-greeting": "./src/manager-greeting.js",
     "./manager-wire": "./src/manager-wire.js",

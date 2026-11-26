@@ -410,15 +410,29 @@ it.layer(getTestDB())("a coding agent's turn message", (it) => {
         );
 
         yield* runReactChat(callOf(agent), unparsedWire({ message_id: "p1", name: "thumbsup" }));
+        // Note that any emoji is given by a name Slack gives it, its colons or none.
+        yield* runReactChat(callOf(agent), unparsedWire({ message_id: "p1", name: ":tada:" }));
+
+        const unnamed = yield* runReactChat(
+          callOf(agent),
+          unparsedWire({ message_id: "p1", name: "no_such_emoji" }),
+        );
+
         assert.equal(reacted.status, ACTION_RESULT_STATUS.ACCEPTED);
+        assert.equal(unnamed.status, ACTION_RESULT_STATUS.REJECTED);
         assert.deepEqual(reactionsOn(yield* runReadChatMessages(callOf(agent), unparsedWire({}))), [
-          [{ name: "thumbsup", count: 1, users: ["you"] }],
+          [
+            { name: "thumbsup", count: 1, users: ["you"] },
+            { name: "tada", count: 1, users: ["you"] },
+          ],
         ]);
 
-        yield* runReactChat(
-          callOf(agent),
-          unparsedWire({ message_id: "p1", name: "thumbsup", remove: true }),
-        );
+        for (const name of ["thumbsup", "tada"]) {
+          yield* runReactChat(
+            callOf(agent),
+            unparsedWire({ message_id: "p1", name, remove: true }),
+          );
+        }
 
         assert.deepEqual(
           reactionsOn(yield* runReadChatThread(callOf(agent), unparsedWire({ message_id: "p1" }))),

@@ -12,8 +12,9 @@
  * words were edited since it was sent, which a read answers as they now
  * stand, as Slack's `edited` marks a message. The Manager
  * gives a reaction or takes its own off (`chat_react`), as Slack's
- * `reactions.add` and `reactions.remove` do; a reaction, a member's or its
- * own, opens no turn.
+ * `reactions.add` and `reactions.remove` do, of any emoji by a name Slack
+ * gives it (`reactionNamed`); a reaction, a member's or its own, opens no
+ * turn.
  *
  * Every read is the calling Manager's own chat, as its starter reaches it,
  * and nothing of another agent's or another workspace's.
@@ -36,13 +37,14 @@ import {
 } from "@repo/database/models/manager-chat-reactions";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_KIND } from "@repo/features/agent-wire";
-import { MANAGER_CHAT_AUTHOR, MANAGER_CHAT_REACTION } from "@repo/features/manager-chat-live";
+import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import type { WireRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
 import { DateTime, Effect, Option, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { type AgentCall, agentToolRejected, callerAgent } from "../agent-tools.js";
+import { reactionNamed } from "../reaction-emoji.js";
 
 /** How many messages a read answers where it names no limit, and the most it may name. */
 const CHAT_LIMIT = {
@@ -79,6 +81,7 @@ const CHAT_REFUSAL = {
   UNREADABLE: "Not read: the input does not match the tool's schema.",
   UNREAD: "Not read: your chat could not be read; try again.",
   UNREACTED: "Not reacted: your chat could not be written; try again.",
+  NO_EMOJI: (name: string) => `Not reacted: no emoji is named ${name}.`,
   BAD_CURSOR: "Not read: cursor is not one a previous read returned as next_cursor.",
   BAD_TIME: (field: string) => `Not read: ${field} is not a time in ISO 8601.`,
   UNKNOWN: (id: string) =>
@@ -165,8 +168,9 @@ const SEARCH_CHAT_INPUT = Schema.Struct({
 const REACT_CHAT_INPUT = Schema.Struct({
   message_id: describeWire(Schema.Trim.check(Schema.isNonEmpty()), "The id of the message."),
   name: describeWire(
-    Schema.Literals(Object.values(MANAGER_CHAT_REACTION)),
-    "The reaction: `thumbsup` or `thumbsdown`.",
+    Schema.Trim.check(Schema.isNonEmpty()),
+    "The emoji's name as Slack writes it, without colons, such as `thumbsup`, `eyes`, `tada`, or " +
+      "`white_check_mark`.",
   ),
   remove: Schema.optionalKey(
     describeWire(Schema.Boolean, "true to take your reaction off instead."),
@@ -537,11 +541,16 @@ export function runReactChat(
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   return readChatWith(call, input, Schema.decodeUnknownResult(REACT_CHAT_INPUT), (owner, react) =>
     Effect.gen(function* () {
+      const reaction = reactionNamed(react.name);
+
+      if (reaction === undefined) return agentToolRejected(CHAT_REFUSAL.NO_EMOJI(react.name));
+
       const outcome = yield* reactManagerChat(owner.userId, {
         agentId: owner.agentId,
         messageId: react.message_id,
         by: MANAGER_CHAT_AUTHOR.AGENT,
-        kind: react.name,
+        kind: reaction.name,
+        emoji: reaction.emoji,
         reacted: react.remove !== true,
         now: yield* DateTime.nowAsDate,
       });

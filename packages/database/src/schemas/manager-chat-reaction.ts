@@ -1,9 +1,4 @@
-import {
-  MANAGER_CHAT_AUTHOR,
-  MANAGER_CHAT_REACTION,
-  type ManagerChatAuthor,
-  type ManagerChatReaction,
-} from "@repo/features/manager-chat-live";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatAuthor } from "@repo/features/manager-chat-live";
 import { sql } from "drizzle-orm";
 import { check, foreignKey, index, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { literal, timestamptz } from "./_helpers.js";
@@ -12,12 +7,14 @@ import { user } from "./auth.js";
 import { managerChatMessage } from "./manager-chat-message.js";
 
 /**
- * manager-chat-reaction.ts -- one reaction given a message of a Manager's chat: 👍 or 👎, by a member or by the Manager itself.
+ * manager-chat-reaction.ts -- one reaction given a message of a Manager's chat: any emoji Slack names, by a member or by the Manager itself.
  *
  * A reaction is its message's, by the Manager whose chat it is and the
  * message's id, and goes with the message, so a rewind that drops a
  * message drops its reactions. Its giver is a member, by their account, or
- * the Manager, which names none; each gives a message each kind once. A
+ * the Manager, which names none; each gives a message each kind once. Its
+ * kind is the name it is kept under (`reactionOfName`), and its emoji is
+ * kept beside it, so a reader draws a kind it never heard of. A
  * member's reaction goes with their account. Note that the row names the
  * Manager, as its message does, so a write to it wakes the chat's live
  * read on the Manager's topic.
@@ -34,7 +31,10 @@ export const managerChatReaction = pgTable(
     reactorKind: text("reactor_kind").$type<ManagerChatAuthor>().notNull(),
     /** The member who gave it; null for the Manager's own. */
     reactorUserId: text("reactor_user_id").references(() => user.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<ManagerChatReaction>().notNull(),
+    /** Slack's name for its emoji, as the reaction is kept (`reactionOfName`). */
+    kind: text("kind").notNull(),
+    /** The emoji the kind names, as Slack's table spells it. */
+    emoji: text("emoji").notNull(),
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
@@ -60,9 +60,6 @@ export const managerChatReaction = pgTable(
       "manager_chat_reaction_reactor",
       sql`(${table.reactorKind} = ${literal(MANAGER_CHAT_AUTHOR.PERSON)} and ${table.reactorUserId} is not null) or (${table.reactorKind} = ${literal(MANAGER_CHAT_AUTHOR.AGENT)} and ${table.reactorUserId} is null)`,
     ),
-    check(
-      "manager_chat_reaction_kind",
-      sql`${table.kind} in (${literal(MANAGER_CHAT_REACTION.THUMBS_UP)}, ${literal(MANAGER_CHAT_REACTION.THUMBS_DOWN)})`,
-    ),
+    check("manager_chat_reaction_kind", sql`${table.kind} <> '' and ${table.emoji} <> ''`),
   ],
 );

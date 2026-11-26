@@ -67,6 +67,7 @@ const thumbsUp = (
   messageId,
   by: MANAGER_CHAT_AUTHOR.PERSON,
   kind: MANAGER_CHAT_REACTION.THUMBS_UP,
+  emoji: "👍",
   reacted: true,
   now: SENT_AT,
   ...rest,
