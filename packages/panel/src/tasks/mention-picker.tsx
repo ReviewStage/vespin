@@ -1,64 +1,59 @@
-import { type ComputerApps, computerAppNamed } from "@repo/features/agent-parts";
 import type { NamedServer } from "@repo/features/agent-servers-model";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
-import { fileName } from "@repo/features/code-ref-words";
-import {
-  type DateSpan,
-  dateChipText,
-  dateLabel,
-  dateOfWords,
-  readerZone,
-  suggestedDates,
-} from "@repo/features/date-mention";
-import { descriptionSections } from "@repo/features/description-sections";
+import { readerZone } from "@repo/features/date-mention";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND, type EntityKind, entityOfMention } from "@repo/features/entity-kind";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import { inboxRowOf } from "@repo/features/inbox-digest";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
-import { machineName, THIS_MAC, type ThisMac } from "@repo/features/machine-name";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { machineName, type ThisMac } from "@repo/features/machine-name";
 import type { MentionHolder } from "@repo/features/mention-holder";
+import { MENTION_FROM, MENTION_WIDEN, narrowingQuery } from "@repo/features/mention-kind";
+import type { Mention, MentionPlace } from "@repo/features/mention-link";
 import {
-  MENTION_BROWSE,
-  MENTION_FROM,
-  MENTION_WIDEN,
-  type MentionFrom,
-  narrowingQuery,
-  typedMentionKind,
-} from "@repo/features/mention-kind";
-import {
-  encodeMention,
-  isMentionableTool,
-  MENTION_KIND,
-  type Mention,
-  type MentionPlace,
-  sectionAnchors,
-} from "@repo/features/mention-link";
+  agentCandidate,
+  appCandidates,
+  automationCandidate,
+  dateCandidates,
+  descriptionCandidates,
+  isKindChoice,
+  MENTION_NO_MATCH,
+  MENTION_OFFER_KIND,
+  type MentionCandidate,
+  type MentionHeld,
+  type MentionOfferedKind,
+  type MentionOfferFrom,
+  type MentionOfferRow,
+  machineCandidates,
+  mentionBack,
+  mentionGroups,
+  mentionKinds,
+  mentionPaths,
+  mentionScope,
+  mentionSubject,
+  offeredAgents,
+  pageCandidate,
+  pathCandidates,
+  personCandidate,
+  pullRequestCandidate,
+  type RepositoryPath,
+  serverCandidates,
+  skillCandidate,
+  taskCandidate,
+  threadCandidate,
+} from "@repo/features/mention-offer";
 import type { PageLine } from "@repo/features/page-wire";
-import {
-  hitRangesIn,
-  LOOSE_FROM,
-  type SearchSubject,
-  searchHit,
-} from "@repo/features/search-score";
+import { hitRangesIn, searchHit } from "@repo/features/search-score";
 import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { SkillOption } from "@repo/features/skill-mention";
-import { skillWord } from "@repo/features/skill-word";
 import { TASK_TREE_ENTRY, type TaskSummary } from "@repo/features/task-wire";
-import {
-  MCP_SERVER_LABEL,
-  noMatchWords,
-  readFailedWords,
-  showMoreWords,
-  TERM,
-} from "@repo/features/words";
-import { namesTaskKey, taskKey } from "@repo/features/workspace-key";
+import { readFailedWords } from "@repo/features/words";
+import { taskKey } from "@repo/features/workspace-key";
 import {
   type Workspace,
   type WorkspaceMachine,
@@ -67,7 +62,6 @@ import {
 } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxItems } from "@repo/host/app-state";
-import type { MacApp } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import {
@@ -98,7 +92,6 @@ import {
   useMinute,
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
-import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { eq, useLiveQuery } from "@tanstack/react-db";
 import {
   queryOptions,
@@ -128,7 +121,7 @@ import { type IntegrationToolsReads, useIntegrationTools } from "../integration-
 import { inboxItemsQuery, inboxItemsRetryMutation } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useWorkspaceDirectory } from "../member-directory.js";
-import { memberRows, YOU_WORD } from "../member-rows.js";
+import { memberRows } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { Highlighted } from "../search-field.js";
 import { useTaskListCollections, useTaskListRowAs } from "../task-list-collections.js";
@@ -144,15 +137,9 @@ import {
   dateMentionNode,
   useDatePicker,
 } from "./date-picker.js";
-import { fileFolder } from "./file-ref-model.js";
 import { InboxItemChipCard } from "./inbox-item-chip.js";
 import { inboxItemGlyph } from "./inbox-item-parts.js";
-import {
-  type MachineAllowedApps,
-  useAllowedApps,
-  useMacApps,
-  useMacAppsReadable,
-} from "./mac-apps.js";
+import { useAllowedApps, useMacApps, useMacAppsReadable } from "./mac-apps.js";
 import { PageCard } from "./page-card.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
@@ -291,28 +278,6 @@ import { MachineGlyph, MachineOwnerFace, useWorkspaceMachines } from "./workspac
  * name, or the server's name and the tool's.
  */
 
-/** What the list's groups are called, in the order they stand. */
-const MENTION_GROUP = {
-  SUGGESTED: "Suggested",
-  DATES: "Dates",
-  AGENTS: "Agents",
-  TASKS: "Tasks",
-  PEOPLE: "People",
-  DESCRIPTION: "Description",
-  PAGES: "Pages",
-  FILES: "Files and folders",
-  THREADS: "Threads",
-  AUTOMATIONS: "Automations",
-  PULL_REQUESTS: "Pull requests",
-  SKILLS: "Skills",
-  /** The apps on the developer's Mac, which an agent uses through `computer`. */
-  APPS: "Apps",
-  /** The machines of the workspace's members, which an agent's commands and computer use may be sent to by id. */
-  MACHINES: "Machines",
-  SERVERS: MCP_SERVER_LABEL.many,
-  FROM: MENTION_BROWSE,
-} as const;
-
 /** The entity each kind of the list lists, whose glyph its row and its crumb wear (`../entities/entity-glyph.tsx`). */
 const KIND_ENTITY = {
   [MENTION_FROM.FILES]: ENTITY_KIND.REPOSITORY,
@@ -328,56 +293,25 @@ const KIND_ENTITY = {
   [MENTION_FROM.MACHINES]: ENTITY_KIND.MACHINE,
   [MENTION_FROM.SERVERS]: ENTITY_KIND.SERVER,
 } as const satisfies Record<
-  Exclude<
-    MentionFrom,
-    typeof MENTION_FROM.DESCRIPTION | typeof MENTION_FROM.PEOPLE | typeof MENTION_FROM.SERVER
-  >,
+  Exclude<MentionOfferFrom, typeof MENTION_FROM.DESCRIPTION | typeof MENTION_FROM.PEOPLE>,
   EntityKind
 >;
-
-/** The kind a list is narrowed to: one of the place's own, or one connected server by its connection, wearing its provider's mark. */
-type Narrow =
-  | { readonly from: Exclude<MentionFrom, typeof MENTION_FROM.SERVER> }
-  | {
-      readonly from: typeof MENTION_FROM.SERVER;
-      readonly connection: string;
-      readonly provider: IntegrationProvider;
-    };
-
-/** One kind the place offers, as its row under "Browse" and its narrowed list's crumb name it. */
-interface MentionKind {
-  readonly narrow: Narrow;
-  readonly name: string;
-  /** The word that, typed before a colon after the `@`, narrows the list to it; none for a server past its provider's first. */
-  readonly keyword: string | undefined;
-}
 
 /** A word closed with Escape: where it stands. */
 interface Closed {
   readonly start: number;
 }
 
-/** What a page's row says of a version past its first, as its card says it. */
-function versionWords(version: number): string {
-  return `Version ${version}`;
+/** The row of a list narrowed to dates that opens the date picker, to write the day picked there. */
+interface PickDateRow {
+  readonly picksDate: true;
+  readonly name: string;
 }
 
-/** What a pull request's row says beside its name where no agent is named for it. */
-const PULL_REQUEST_DETAIL = "Pull request";
-
-/** The row of a list narrowed to dates that opens the date picker, to write the day picked there. */
-const PICK_DATE_ROW: MentionRow = {
-  picksDate: true,
-  name: "Pick a date",
-  detail: undefined,
-  terms: "Pick a date",
-};
+const PICK_DATE_ROW: PickDateRow = { picksDate: true, name: "Pick a date" };
 
 /** The key the picker's row stands under, which no mention's or kind's key spells. */
 const PICK_DATE_KEY = "pick-date";
-
-/** What a skill's row says beside its name. */
-const SKILL_DETAIL = "Skill";
 
 /**
  * A narrowed list's crumb: back, folded to its glyph, its glyph and name,
@@ -385,15 +319,6 @@ const SKILL_DETAIL = "Skill";
  */
 const CRUMB_CLASS =
   "mention-menu-crumb flex h-pane-bar flex-none items-center gap-icon-gap border-b border-border pr-list-inset pl-item-gap [--ui-fold:folded]";
-
-/** What a server's row says beside its name. */
-const SERVER_DETAIL = MCP_SERVER_LABEL.one;
-
-/** What a tool's row says beside its name, which already names its server. */
-const TOOL_DETAIL = "Tool";
-
-/** What stands between a server's name and its tool's in a tool's mention. */
-const TOOL_JOIN = " · ";
 
 /** The repository's skills as an `@` list offers them: as read, the ask to read them, and the pick that writes one as its `/name` chip. */
 export interface MentionSkills {
@@ -406,12 +331,6 @@ export interface MentionSkills {
 
 /** The servers of a list that offers none. */
 const NO_SERVERS: readonly NamedServer[] = [];
-
-/** The most rows one group lists. */
-const PER_GROUP = 4;
-
-/** The most rows a list narrowed to one kind lists. */
-const PER_KIND = 50;
 
 /** How long the typing rests before the service is searched for the agents the words name. */
 const SEARCH_PAUSE = Duration.millis(250);
@@ -430,14 +349,8 @@ interface OfferedTask {
 /** No tasks: what a list not yet read offers rows from. */
 const NO_TASKS: readonly OfferedTask[] = [];
 
-/** No rows: what a kind not asked for offers. */
-const NO_ROWS: readonly MentionRow[] = [];
-
 /** The list's own name, which its listbox is read by. */
 const MENU_LABEL = "Mention";
-
-/** What the list says where it has no row. */
-const NO_MATCH = noMatchWords(TERM.RESULT);
 
 /** What a narrowed list's back arrow is read by: back to every kind, or up out of a folder. */
 const BACK_LABEL = {
@@ -451,48 +364,40 @@ const BACK_PLACE = {
   UP: "the folder above",
 } as const;
 
-/** One row the list offers: what it mentions, or the skill it names, the name it is written with, and a muted detail. */
-type MentionRow = {
-  readonly name: string;
-  readonly detail: React.ReactNode;
-  /** The name a pick writes, where it is not the row's own: a date's in full, where its row says it from today. */
-  readonly written?: string | undefined;
-  /** The words it is found by. */
-  readonly terms: string;
-  /** A task's key, as `ACME-42`, which typed whole finds the task first. */
-  readonly key?: string | undefined;
+/**
+ * One thing the list offers as `@repo/features/mention-offer` builds it, and
+ * what the panel draws beside it: its detail as drawn where that is no plain
+ * words, a task's key at its end, its look and card, and the thread, the
+ * automation or the pull request whose mark it wears.
+ */
+interface PanelCandidate extends MentionCandidate {
+  /** The detail as drawn where it is not its words, as a page's age ticks. */
+  readonly drawn?: React.ReactNode | undefined;
   /** What a task's key is drawn from at the row's end (`TaskKey`), as ⌘K's and the Tasks list's rows draw it; none for any other row. */
   readonly taskKey?: { readonly workspaceName: string; readonly number: number } | undefined;
-  /** A person's picture, which their row wears; none for any other row. */
-  readonly actor?: Actor | undefined;
-  /** An agent's row as every agent menu draws it (`agent-menu-row.tsx`), or a skill's as the `/` list does (`skill-ref.tsx`): its glyph, its end, and its card; none for any other row. */
+  /** An agent's row as every agent menu draws it (`agent-menu-row.tsx`), a skill's as the `/` list does (`skill-ref.tsx`), or a machine's: its glyph, its end, and its card. */
   readonly look?: Pick<MenuRow, "icon" | "before" | "end" | "card"> | undefined;
   /** The card a page's, a person's, a thread's, or an automation's row hangs beside it; none for any other row, whose chip's card is drawn as its row is (`comboboxGroups`). */
   readonly card?: React.ReactNode | undefined;
-  /** A pull request, whose mark its row wears for where it stands; none for any other row. */
+  /** A pull request, whose mark its row wears for where it stands. */
   readonly pullRequest?: MentionablePullRequest | undefined;
-} & (
-  | { readonly mention: Mention }
-  /** An Inbox thread, which no mention names: a pick writes its link, which every place draws as its chip. */
-  | { readonly thread: InboxItemPlace; readonly item: InboxItem }
-  /** An automation, which no mention names either: a pick writes its link, drawn as its chip. */
-  | { readonly automation: AutomationSummary }
-  | { readonly skill: string }
-  /** A kind's row, which opens its narrowed list; `keeps` where it ends a group, opening the kind searched by the words already typed. */
-  | { readonly from: MentionKind; readonly keeps?: true | undefined }
-  | { readonly picksDate: true }
-);
+  /** An Inbox thread, whose ask its row wears. */
+  readonly thread?: { readonly place: InboxItemPlace; readonly item: InboxItem } | undefined;
+  /** An automation, whose tile its row wears. */
+  readonly automation?: AutomationSummary | undefined;
+}
 
-interface MentionGroup {
-  readonly label: string;
+/** One row the list draws: a thing a pick names, a kind a press narrows to, or the row that opens the date picker. */
+type MentionRow = MentionOfferRow<PanelCandidate> | PickDateRow;
+
+/** A group of rows the list draws, under its heading. */
+interface MentionMenuGroup {
+  readonly title: string;
   readonly rows: readonly MentionRow[];
 }
 
-/** A path of the repository as the list finds it: a file or a folder. */
-interface RepositoryPath {
-  readonly path: string;
-  readonly folder: boolean;
-}
+/** No rows: what a kind not asked for offers. */
+const NO_ROWS: readonly PanelCandidate[] = [];
 
 /** The highlight, held against the word it stands in by the key of the row it stands on (`rowKey`), so a row read late never takes its place. */
 interface Highlight {
@@ -501,216 +406,41 @@ interface Highlight {
   readonly key: string;
 }
 
-/** A folder the list walked into: its path, and the words as they stood then, past which the words typed search it. */
-interface Walked {
-  readonly path: string;
-  readonly entry: string;
+/** Whether a row opens the date picker. */
+function isPickDate(row: MentionRow): row is PickDateRow {
+  return "picksDate" in row;
 }
 
-/**
- * A narrowing a key made, held against the word it was made in: the kind,
- * the words as they stood then (or the `kind:` typed before it), whether
- * the kind was typed rather than opened, and the folders walked into since.
- */
-interface Held {
-  readonly start: number;
-  readonly narrow: Narrow;
-  readonly entry: string;
-  readonly typed: boolean;
-  readonly walked: readonly Walked[];
-}
-
-/** Where the list stands for the word: every kind, or one kind, its folders walked, and the words that search it. */
-interface Scope {
-  readonly kind: MentionKind | undefined;
-  /** The words as they stood when the kind was narrowed to, or the `kind:` typed. */
-  readonly entry: string;
-  /** Whether the word spells the kind (`@files:`), typed or written as its row opened, which ⌫ widens by deleting the colon rather than by a key the list takes. */
-  readonly typed: boolean;
-  readonly walked: readonly Walked[];
-  readonly term: string;
-}
-
-/** Whether two narrowings name the same kind. */
-function sameNarrow(first: Narrow, second: Narrow): boolean {
-  if (first.from !== MENTION_FROM.SERVER || second.from !== MENTION_FROM.SERVER) {
-    return first.from === second.from;
-  }
-
-  return first.connection === second.connection;
-}
-
-/**
- * Where the list stands for the word: the narrowing held for it, as long as
- * the words still begin as they did when it was made and the place still
- * offers its kind, its walk cut back to the folders whose words still
- * stand; else the kind whose word the words begin with, typed before a
- * colon; else every kind, searched by the words whole.
- */
-function scopeOf(
-  trigger: ComposerTrigger,
-  held: Held | undefined,
-  kinds: readonly MentionKind[],
-): Scope {
-  const { query } = trigger;
-
-  const kept =
-    held?.start === trigger.start && query.startsWith(held.entry)
-      ? kinds.find((kind) => sameNarrow(kind.narrow, held.narrow))
-      : undefined;
-
-  if (held !== undefined && kept !== undefined) {
-    const standing = held.walked.findIndex((level) => !query.startsWith(level.entry));
-    const walked = standing === -1 ? held.walked : held.walked.slice(0, standing);
-    const from = walked.at(-1)?.entry ?? held.entry;
-
-    return {
-      kind: kept,
-      entry: held.entry,
-      typed: held.typed,
-      walked,
-      term: query.slice(from.length),
-    };
-  }
-
-  const typed = typedMentionKind(query);
-  const kind = typed === undefined ? undefined : kinds.find((each) => each.keyword === typed.word);
-
-  if (typed === undefined || kind === undefined) {
-    return { kind: undefined, entry: "", typed: false, walked: [], term: query };
-  }
-
-  return {
-    kind,
-    entry: typed.entry,
-    typed: true,
-    walked: [],
-    term: query.slice(typed.entry.length),
-  };
-}
-
-/** A step back out of a narrowed list: the narrowing held after it, and what the `@` word is written as where the step deletes the `kind:` it spells; none where the word stands. */
-interface Back {
-  readonly to: Held | undefined;
-  readonly words: string | undefined;
-}
-
-/**
- * Where back takes a narrowed list: out of the folder walked into, else to
- * every kind, the word spelling the kind written as the words it searches
- * by; nowhere for a wide list.
- */
-function backFrom(scope: Scope | undefined, start: number): Back | undefined {
-  if (scope?.kind === undefined) return undefined;
-  const { kind, entry, typed, walked, term } = scope;
-
-  if (walked.length > 0) {
-    const to = { start, narrow: kind.narrow, entry, typed, walked: walked.slice(0, -1) };
-
-    return { to, words: undefined };
-  }
-
-  return { to: undefined, words: typed ? term : undefined };
+/** The thing a row names, where it names one rather than a kind or the date picker. */
+function candidateOf(row: MentionRow): PanelCandidate | undefined {
+  return isPickDate(row) || isKindChoice(row) ? undefined : row;
 }
 
 /** Whether → opens the row: a kind's, which narrows the list, or a folder's, which walks into it. */
 function opens(row: MentionRow): boolean {
-  return "from" in row || ("mention" in row && row.mention.kind === MENTION_KIND.FOLDER);
+  if (isPickDate(row)) return false;
+
+  return isKindChoice(row) || row.kind === MENTION_OFFER_KIND.FOLDER;
 }
 
-/** A path's row: its own name, its folder after it, found by the whole path. */
-function pathRow(entry: RepositoryPath): MentionRow {
-  const name = fileName(entry.path);
-
-  return {
-    mention: entry.folder
-      ? { kind: MENTION_KIND.FOLDER, path: entry.path }
-      : { kind: MENTION_KIND.FILE, path: entry.path },
-    name: entry.folder ? `${name}/` : name,
-    detail: fileFolder(entry.path),
-    terms: entry.path,
-  };
-}
-
-/** The description's rows: each section by its heading, a heading borne twice once for each section, then the description itself, found by its name and its key; none where no description stands. */
-function taskRows(
-  taskId: string | undefined,
-  taskName: string,
-  key: string | undefined,
-  text: string,
-): MentionRow[] {
-  if (taskId === undefined) return [];
-  const headings = descriptionSections(text).map((section) => section.heading);
-  const anchors = sectionAnchors(headings);
-
-  return [
-    ...headings.flatMap((heading, at): MentionRow[] => {
-      const anchor = anchors[at] ?? "";
-
-      if (anchor === "") return [];
-
-      return [
-        {
-          mention: { kind: MENTION_KIND.SECTION, taskId: taskId, anchor },
-          name: heading,
-          detail: "Section",
-          terms: heading,
-        },
-      ];
-    }),
-    {
-      mention: { kind: MENTION_KIND.TASK, taskId: taskId },
-      name: taskName,
-      detail: "The whole description",
-      terms: key === undefined ? taskName : `${key} ${taskName}`,
-      key,
-    },
-  ];
-}
-
-/**
- * Each of the holder's pages' rows, the task's,
- * by its title, its version where it has more than one and else how long
- * ago it was written, as its card says them, hanging that card; none where
- * nothing holds the place.
- */
-function pageRows(
-  holder: MentionHolder | undefined,
-  pages: readonly MentionablePage[],
-  now: number,
-): MentionRow[] {
-  if (holder === undefined) return [];
-
-  return pages.map((page) => ({
-    mention: { kind: MENTION_KIND.PAGE, taskId: holder.taskId, pageId: page.id },
-    name: page.title,
-    detail:
-      page.version > 1 ? versionWords(page.version) : <Time at={page.at} now={now} hint={false} />,
-    terms: page.title,
-    card: <PageCard place={holder} page={page} />,
-  }));
-}
-
-/** Each of the workspace's tasks' rows but the plan's own, by its name, its key beside it, found by either. */
+/** The workspace's tasks' rows but the plan's own, by its name, its key at its end in TaskKey's words, found by either. */
 function workspaceTaskRows(
   taskId: string | undefined,
   workspace: Workspace | undefined,
   tasks: readonly OfferedTask[],
-): MentionRow[] {
+  slug: string,
+): readonly PanelCandidate[] {
   if (workspace === undefined) return [];
 
-  return tasks.flatMap((task): MentionRow[] => {
+  return tasks.flatMap((task): PanelCandidate[] => {
     if (task.id === taskId || task.workspaceId !== workspace.id) return [];
     const key = task.number === undefined ? undefined : taskKey(workspace.name, task.number);
 
     return [
       {
-        mention: { kind: MENTION_KIND.TASK, taskId: task.id },
-        name: task.name,
+        ...taskCandidate(task, key, slug),
         // Note that the key stands at the row's end in TaskKey's words, as ⌘K and the Tasks list set it, never as the detail's plain words.
         detail: undefined,
-        terms: key === undefined ? task.name : `${key} ${task.name}`,
-        key,
         taskKey:
           task.number === undefined
             ? undefined
@@ -720,39 +450,22 @@ function workspaceTaskRows(
   });
 }
 
-/**
- * Each agent's row as every agent menu draws it (`agentMenuRow`), labeled
- * and found by its task: the plan's own agents first, then the workspace's
- * others in the order read, each once, an archived one only once a word is
- * typed, and the agent whose box it is left out.
- */
+/** Each agent's row as every agent menu draws it (`agentMenuRow`), said and found by its task. */
 function agentRows(
-  taskId: string | undefined,
-  own: readonly MentionableAgent[],
-  workspace: readonly MentionableAgent[],
-  self: string | undefined,
-  query: string,
+  agents: readonly MentionableAgent[],
   place: AgentRowPlace,
-): MentionRow[] {
-  const seen = new Set<string>(self === undefined ? [] : [self]);
-  const typed = query.trim() !== "";
-  const mine = taskId === undefined ? [] : own.map((agent) => ({ ...agent, task: { id: taskId } }));
-  const rows: MentionRow[] = [];
-
-  for (const agent of [...mine, ...workspace]) {
-    if (seen.has(agent.id) || (agent.archived === true && !typed)) continue;
-    seen.add(agent.id);
+  workspace: string,
+): readonly PanelCandidate[] {
+  return agents.map((agent) => {
     const row = agentMenuRow(agent, place);
-    rows.push({
-      mention: { kind: MENTION_KIND.AGENT, agentId: agent.id },
-      name: row.label,
-      detail: row.detail,
-      terms: (row.terms ?? [row.label]).join(" "),
-      look: { icon: row.icon, end: row.end, card: row.card },
-    });
-  }
+    const detail = Predicate.isString(row.detail) ? row.detail : undefined;
 
-  return rows;
+    return {
+      ...agentCandidate({ id: agent.id, name: row.label, detail }, workspace),
+      drawn: row.detail,
+      look: { icon: row.icon, end: row.end, card: row.card },
+    };
+  });
 }
 
 /** The workspace's members as the list offers them, as every people menu lists them (`memberRows`): the reader first, then everyone else by name, each wearing their picture. */
@@ -768,31 +481,16 @@ function directoryPeople(
   }));
 }
 
-/** Each person's row, by their name, wearing their picture and hanging their card, said by their email or as You, found by their name or their email. */
+/** Each person's row, by their name, hanging their card, said by their email or as You, found by their name or their email. */
 function personRows(
   people: readonly MentionablePerson[],
   readerId: string | undefined,
-): MentionRow[] {
+  workspace: string,
+): readonly PanelCandidate[] {
   return people.map((person) => ({
-    mention: { kind: MENTION_KIND.PERSON, userId: person.userId },
-    name: person.name,
-    detail: person.userId === readerId ? YOU_WORD : person.email,
-    terms: `${person.name} ${person.email ?? ""}`,
-    actor: person.actor,
+    ...personCandidate(person, person.userId === readerId, workspace),
     card: actorCard(person.actor),
   }));
-}
-
-/** A thread's row, by its title, said by what holds it, found by both. */
-function threadRow(place: InboxItemPlace, item: InboxItem, holder: string): MentionRow {
-  return {
-    thread: place,
-    item,
-    name: item.title,
-    detail: holder,
-    terms: `${item.title} ${holder}`,
-    card: <InboxItemChipCard place={place} fallback={null} />,
-  };
 }
 
 /** The ids of the tasks the feed holds threads of that the window lists not. */
@@ -808,17 +506,18 @@ function unlistedThreadTasks(
 /**
  * Each of the workspace's Inbox threads' rows as the account's feed holds
  * them, the plan's own first, then the newest changed first: a task's under
- * its task, said by its name; none of another workspace's, or of a task the
- * window lists not.
+ * its task, said by its name, hanging its Inbox row's card; none of another
+ * workspace's, or of a task the window lists not.
  */
 function threadRows(
   feed: AppInboxItems | undefined,
   taskId: string | undefined,
   workspace: Workspace | undefined,
   tasks: readonly OfferedTask[],
-): MentionRow[] {
+  slug: string,
+): readonly PanelCandidate[] {
   if (feed === undefined || workspace === undefined) return [];
-  const held: { readonly row: MentionRow; readonly own: boolean; readonly at: number }[] = [];
+  const held: { readonly row: PanelCandidate; readonly own: boolean; readonly at: number }[] = [];
   // Note that the workspace's tasks are read by id, because the feed may hold a thread of every task and a scan per task read the whole list each.
   const named = new Map<string, OfferedTask>();
 
@@ -836,11 +535,13 @@ function threadRows(
         itemId: item.id,
       };
 
-      held.push({
-        row: threadRow(place, item, task.name),
-        own: itemTaskId === taskId,
-        at: item.updatedAt,
-      });
+      const row: PanelCandidate = {
+        ...threadCandidate(item, task.name, slug),
+        thread: { place, item },
+        card: <InboxItemChipCard place={place} fallback={null} />,
+      };
+
+      held.push({ row, own: itemTaskId === taskId, at: item.updatedAt });
     }
   }
 
@@ -853,234 +554,64 @@ function threadRows(
 function automationRows(
   automations: readonly AutomationSummary[],
   workspace: Workspace | undefined,
-): MentionRow[] {
-  return automations.map((automation) => {
-    const fires = automationTriggerText(automation.trigger, automation.repositories ?? []);
-
-    return {
+  slug: string,
+): readonly PanelCandidate[] {
+  return automations.map((automation) => ({
+    ...automationCandidate(
       automation,
-      name: automation.name,
-      detail: fires,
-      terms: `${automation.name} ${fires}`,
-      card: <AutomationCard automation={automation} workspaceName={workspace?.name} />,
-    };
-  });
+      automationTriggerText(automation.trigger, automation.repositories ?? []),
+      slug,
+    ),
+    automation,
+    card: <AutomationCard automation={automation} workspaceName={workspace?.name} />,
+  }));
 }
 
-/**
- * Each of the place's pull requests' rows, its task's or its agent's on no
- * task, by its number and title, wearing its mark, labeled by the agent
- * that published it: a pick writes its GitHub address, as a pull request's
- * link pasted is written.
- */
-function pullRequestRows(pullRequests: readonly MentionablePullRequest[]): MentionRow[] {
-  return pullRequests.map((pullRequest) => {
-    const name = pullRequestLabelOf(pullRequest);
-    const detail = pullRequest.agent ?? PULL_REQUEST_DETAIL;
+/** Each of the place's pull requests' rows, its task's or its agent's on no task, wearing its mark, labeled by the agent that published it. */
+function pullRequestRows(
+  pullRequests: readonly MentionablePullRequest[],
+): readonly PanelCandidate[] {
+  return pullRequests.map((pullRequest) => ({
+    ...pullRequestCandidate(pullRequest, pullRequest.agent),
+    pullRequest,
+  }));
+}
+
+/** Each of the holder's pages' rows, its version where it has more than one and else how long ago it was written, as its card says them, hanging that card; none where nothing holds the place. */
+function pageRows(
+  holder: MentionHolder | undefined,
+  pages: readonly MentionablePage[],
+  now: number,
+  workspace: string,
+): readonly PanelCandidate[] {
+  if (holder === undefined) return [];
+
+  return pages.map((page) => ({
+    ...pageCandidate(page, holder.taskId, now, workspace),
+    drawn: page.version > 1 ? undefined : <Time at={page.at} now={now} hint={false} />,
+    card: <PageCard place={holder} page={page} />,
+  }));
+}
+
+/** Each of the repository's skills' rows, drawn as the `/` list draws it, so it reads as the `/name` chip a pick writes, and hangs its card. */
+function skillRows(skills: readonly SkillOption[]): readonly PanelCandidate[] {
+  return skills.map((skill) => {
+    const option = skillOption(skill);
 
     return {
-      mention: {
-        kind: MENTION_KIND.LINK,
-        provider: INTEGRATION_PROVIDER.GITHUB,
-        url: pullRequest.url,
-      },
-      name,
-      detail,
-      terms: `${name} ${detail} ${PULL_REQUEST_DETAIL}`,
-      pullRequest,
+      ...skillCandidate(skill),
+      look: { icon: option.icon, end: option.hint, card: option.card },
     };
   });
 }
 
-/** What an app's row says after its name: the machine it is on, where the list offers more than one machine's apps; else that the developer always allows it, or that it runs now. */
-const APP_DETAIL = {
-  ALLOWED: "Always allowed",
-  RUNNING: "Running",
-  /** The name a pick writes for an app the list offers on more than one machine. */
-  WRITTEN: (name: string, machine: string) => `${name} on ${machine}`,
-} as const;
-
-/** The row that names the Mac itself, any app on it, found by the words a person says it with. */
-const COMPUTER_ROW: MentionRow = {
-  mention: { kind: MENTION_KIND.COMPUTER },
-  name: "Computer",
-  detail: undefined,
-  terms: "Computer Mac screen",
-};
-
 /**
- * The name an app is called by where no call named it: a bundle id's last
- * part, its first letter raised ("com.apple.Notes" is "Notes"), or the name
- * an app with no bundle id is allowed by as it stands.
- */
-function allowedAppName(app: string): string {
-  if (/\s/u.test(app) || !app.includes(".")) return app;
-  const last = app.slice(app.lastIndexOf(".") + 1);
-
-  return last === "" ? app : `${last.charAt(0).toUpperCase()}${last.slice(1)}`;
-}
-
-/** One app on one machine as the `@` list offers it. */
-interface MachineApp {
-  /** The app by its bundle id, or by its name where it has none. */
-  readonly app: string;
-  readonly name: string;
-  /** The machine it is on, by its device id; none for this Mac's apps where the window knows no device. */
-  readonly machine: string | undefined;
-  /** What the list calls the machine: This Mac, or its name. */
-  readonly machineName: string;
-  /** The machine's own name, which a pick writes, since This Mac means another Mac to every other reader; none where no read names it. */
-  readonly ownName: string | undefined;
-  readonly allowed: boolean;
-  readonly running: boolean;
-}
-
-/** Where the `@` list reads apps from: this Mac's own, where the window is the Mac the agent uses, and those the reader's machines always allow. */
-interface AppSources {
-  readonly onMac: readonly MacApp[];
-  readonly allowed: readonly MachineAllowedApps[];
-  readonly kept: ComputerApps;
-  /** This Mac's device, which this Mac's apps are on. */
-  readonly thisDevice: string | undefined;
-  readonly thisMac: ThisMac;
-  /** A machine's own name by its device id, as the workspace's machines read it; none where it names none. */
-  readonly ownNameOf: (deviceId: string | undefined) => string | undefined;
-}
-
-/**
- * Every app the list offers, one per app on each machine, grouped by
- * machine: this Mac's own as its host lists them, those running first and
- * then by name, then each other machine of the reader's by its name, its
- * always-allowed apps by name. An app a machine allows is named as that
- * machine posted it, else as a `computer` call in the conversation named it,
- * else by its bundle id. This Mac's allowed apps are its host's rows, which
- * already say so.
- */
-function machineAppsOf({
-  onMac,
-  allowed,
-  kept,
-  thisDevice,
-  thisMac,
-  ownNameOf,
-}: AppSources): MachineApp[] {
-  const ownRows = onMac.map(
-    ({ name, bundleId, running, allowed: always }): MachineApp => ({
-      app: bundleId ?? name,
-      name,
-      machine: thisDevice,
-      machineName: THIS_MAC,
-      ownName: ownNameOf(thisDevice),
-      allowed: always,
-      running,
-    }),
-  );
-
-  const listedHere = onMac.length > 0;
-
-  const others = allowed.flatMap((machine) => {
-    if (listedHere && machine.deviceId === thisDevice) return [];
-    const posted = new Map((machine.looks ?? []).map((look) => [look.app, look.name]));
-    const machineName = nameOfMachine(machine, thisMac);
-
-    return machine.apps.map(
-      (app): MachineApp => ({
-        app,
-        name:
-          posted.get(app) ??
-          computerAppNamed(kept, app, machine.deviceId)?.name ??
-          allowedAppName(app),
-        machine: machine.deviceId,
-        machineName,
-        ownName: ownNameOf(machine.deviceId) ?? machine.name,
-        allowed: true,
-        running: false,
-      }),
-    );
-  });
-
-  // Note that rows are grouped by machine: This Mac's first, its running apps leading, then each other machine by name, its apps by name.
-  const here = (each: MachineApp) => (each.machine === thisDevice ? 0 : 1);
-
-  return [
-    ...ownRows.toSorted(
-      (one, other) => Number(other.running) - Number(one.running) || byName(one, other),
-    ),
-    ...others.toSorted(
-      (one, other) =>
-        here(one) - here(other) ||
-        one.machineName.localeCompare(other.machineName) ||
-        (one.machine ?? "").localeCompare(other.machine ?? "") ||
-        byName(one, other),
-    ),
-  ];
-}
-
-/** Two apps in name order. */
-function byName(one: MachineApp, other: MachineApp): number {
-  return one.name.localeCompare(other.name);
-}
-
-/** What the list calls one of the reader's machines that allows apps: This Mac, or its name. */
-function nameOfMachine(machine: MachineAllowedApps, thisMac: ThisMac): string {
-  return machineName({ deviceId: machine.deviceId, name: machine.name }, [], thisMac);
-}
-
-/**
- * The Mac's own row, then a row for each app on each machine the list
- * offers (`machineAppsOf`); none where it offers none, as while agents use no
- * apps anywhere. A pick names the app by its bundle id, or by its name where
- * it has none, and the machine it is on, so a call on it goes there. Where
- * the list offers more than one machine's apps, each row says the machine
- * it is on in place of whether it runs or is always allowed, and a pick of an app the list offers on more than one machine
- * writes that machine's own name beside the app's ("Simulator on Mac
- * mini"), so two chips of it never read alike, and never This Mac, which
- * names another Mac to every other reader.
- */
-function appRows(sources: AppSources): MentionRow[] {
-  const offered = machineAppsOf(sources);
-
-  if (offered.length === 0) return [];
-  // Note that machines are counted by their ids, so two of the same name still count as two.
-  const machines = new Set(offered.map((each) => each.machine ?? each.machineName));
-  const named = machines.size > 1;
-  const onHowMany = new Map<string, number>();
-
-  for (const each of offered) onHowMany.set(each.app, (onHowMany.get(each.app) ?? 0) + 1);
-
-  const rows = offered.map((each): MentionRow => {
-    const state = each.allowed ? APP_DETAIL.ALLOWED : each.running ? APP_DETAIL.RUNNING : undefined;
-    const twinned = (onHowMany.get(each.app) ?? 0) > 1;
-
-    return {
-      mention: {
-        kind: MENTION_KIND.MAC_APP,
-        app: each.app,
-        ...(each.machine === undefined ? undefined : { machine: each.machine }),
-      },
-      name: each.name,
-      detail: named ? each.machineName : state,
-      written:
-        twinned && each.ownName !== undefined
-          ? APP_DETAIL.WRITTEN(each.name, each.ownName)
-          : undefined,
-      terms: `${each.name} ${each.app} ${each.machineName}`,
-    };
-  });
-
-  return [COMPUTER_ROW, ...rows];
-}
-
-/**
- * Each of the workspace's machines' rows, the reader's own first, then
- * the task's followers', then everyone else's, each by name as read, drawn
- * as the agent's Default machine menu draws a machine
- * (`agent-machines.tsx`): its platform's glyph wearing its online dot, a
- * teammate's face before its name, and its name as every list of machines
- * calls it (`machineName`, This Mac for the one the window runs on), found
- * by its name and its owner's. A pick is written with the machine's own
- * name and names it by its id, which an agent passes as `run_on_mac`'s and
- * `computer`'s `machine`.
+ * Each of the workspace's machines' rows, drawn as the agent's Default
+ * machine menu draws a machine (`agent-machines.tsx`): its platform's glyph
+ * wearing its online dot, a teammate's face before its name, and its name as
+ * every list of machines calls it (`machineName`, This Mac for the one the
+ * window runs on), found by its own name, its owner's and its platform's. A
+ * pick is written with the machine's own name.
  */
 function machineRows(
   machines: readonly WorkspaceMachine[],
@@ -1088,463 +619,54 @@ function machineRows(
   followerIds: ReadonlySet<string>,
   people: readonly MentionablePerson[],
   thisMac: ThisMac,
-): MentionRow[] {
-  const rank = (machine: WorkspaceMachine) =>
-    machine.userId === readerId ? 0 : followerIds.has(machine.userId) ? 1 : 2;
-
+  place: MentionPlace,
+): readonly PanelCandidate[] {
   const listed = machines.map((machine) => ({ deviceId: machine.id, name: machine.name }));
+  const byId = new Map(machines.map((machine) => [machine.id, machine]));
 
-  return machines
-    .map((machine, at) => ({ machine, at }))
-    .sort((one, other) => rank(one.machine) - rank(other.machine) || one.at - other.at)
-    .map(({ machine }): MentionRow => {
-      const owner = people.find((person) => person.userId === machine.userId)?.name ?? "";
-      const yours = machine.userId === readerId;
+  const offered = machines.map((machine) => ({
+    id: machine.id,
+    name: machineName({ deviceId: machine.id, name: machine.name }, listed, thisMac),
+    written: machine.name,
+    ownerId: machine.userId,
+    terms: [
+      machine.name,
+      people.find((person) => person.userId === machine.userId)?.name ?? "",
+      DEVICE_PLATFORM_NAME[machine.platform],
+    ],
+  }));
 
-      return {
-        mention: { kind: MENTION_KIND.MACHINE, machineId: machine.id },
-        name: machineName({ deviceId: machine.id, name: machine.name }, listed, thisMac),
-        written: machine.name,
-        detail: undefined,
-        terms: `${machine.name} ${owner} ${DEVICE_PLATFORM_NAME[machine.platform]}`,
+  return machineCandidates(offered, { readerId, followerIds }, place).flatMap((row) => {
+    const machine = byId.get(row.id);
+
+    if (machine === undefined) return [];
+
+    return [
+      {
+        ...row,
         look: {
           icon: <MachineGlyph machine={machine} />,
-          before: yours ? undefined : <MachineOwnerFace userId={machine.userId} />,
+          before:
+            machine.userId === readerId ? undefined : <MachineOwnerFace userId={machine.userId} />,
         },
-      };
-    });
+      },
+    ];
+  });
 }
 
-/** Each connected server's row, and where asked each of its tools' rows as far as its read answered, found by the server's name and the tool's. */
-function serverRows(
-  servers: readonly NamedServer[],
+/** The tools a connected server's read answered, or none while it has answered none. */
+function toolsOf(
   reads: IntegrationToolsReads,
-  withTools: boolean,
-): MentionRow[] {
-  return servers.flatMap(({ provider, connection, name }) => {
-    // An account past its provider's first is named by its connection; the first by the provider alone, as it always was.
-    const account = connection === provider ? undefined : { connection };
-
-    const server: MentionRow = {
-      mention: { kind: MENTION_KIND.SERVER, provider, ...account },
-      name,
-      detail: SERVER_DETAIL,
-      terms: name,
-    };
-
+): (connection: string) => readonly { readonly name: string }[] | undefined {
+  return (connection) => {
     const read = reads[connection];
 
-    if (!withTools || read === undefined || !("tools" in read)) return [server];
-
-    // Note that a tool whose name no mention can carry is left out, since its pick would name nothing.
-    const tools = read.tools.flatMap((tool): MentionRow[] => {
-      const mention: Mention = { kind: MENTION_KIND.TOOL, provider, ...account, tool: tool.name };
-
-      if (!isMentionableTool(tool.name)) return [];
-
-      return [
-        {
-          mention,
-          name: `${name}${TOOL_JOIN}${tool.name}`,
-          detail: TOOL_DETAIL,
-          terms: `${tool.name} ${name}`,
-        },
-      ];
-    });
-
-    return [server, ...tools];
-  });
-}
-
-/** A date's row: said from today as its chip says it, in full beside it, and written in full. */
-function dateRow(date: DateSpan, now: number, zone: string): MentionRow {
-  const written = dateLabel(date, zone);
-
-  return {
-    mention: { kind: MENTION_KIND.DATE, ...date },
-    name: dateChipText(date, now, zone),
-    detail: written,
-    written,
-    terms: written,
+    return read !== undefined && "tools" in read ? read.tools : undefined;
   };
-}
-
-/**
- * The dates the list offers for the words: the one they name, or, narrowed
- * to dates with nothing typed, today, tomorrow, and next Monday; none for
- * a wide list with nothing typed. A list narrowed to dates ends on the row
- * that opens the date picker.
- */
-function dateRows(term: string, narrowed: boolean, now: number, zone: string): MentionRow[] {
-  const pick = narrowed ? [PICK_DATE_ROW] : [];
-
-  if (term.trim() === "") {
-    return narrowed
-      ? [...suggestedDates(now, zone).map((date) => dateRow(date, now, zone)), ...pick]
-      : [];
-  }
-
-  const date = dateOfWords(term, now, zone);
-
-  return [...(date === undefined ? [] : [dateRow(date, now, zone)]), ...pick];
-}
-
-/** Each of the repository's skills' rows, found by its name and what it says it is for. */
-function skillRows(skills: readonly SkillOption[]): MentionRow[] {
-  return skills.map((skill) => {
-    // Note that a skill's row is the `/` list's, so it reads as the `/name` chip a pick writes, and hangs its card.
-    const option = skillOption(skill);
-
-    return {
-      skill: skill.name,
-      name: skillWord(skill.name),
-      detail: skill.description === "" ? SKILL_DETAIL : skill.description,
-      terms: `${skill.name} ${skill.description}`,
-      look: { icon: option.icon, end: option.hint, card: option.card },
-    };
-  });
-}
-
-/** Whether the words are a row's task's key whole. */
-function keyed(row: MentionRow, query: string): boolean {
-  return row.key !== undefined && namesTaskKey(query, row.key);
-}
-
-/** Whether a row is a path's, whose letters typed in order find it. */
-function isPath(row: MentionRow): boolean {
-  return (
-    "mention" in row &&
-    (row.mention.kind === MENTION_KIND.FILE || row.mention.kind === MENTION_KIND.FOLDER)
-  );
-}
-
-/** What a row is searched by: its name, the words it is found by, its task's key, and, for a path, its letters in order. */
-function rowSubject(row: MentionRow): SearchSubject {
-  return {
-    label: row.name,
-    lines: row.terms === row.name ? [] : [row.terms],
-    key: row.key,
-    loose: isPath(row),
-  };
-}
-
-/** How well a row answers the query, by the tier it meets; 0 where it meets none. */
-function rowScore(row: MentionRow, query: string): number {
-  return searchHit(rowSubject(row), query)?.score ?? 0;
-}
-
-/**
- * The rows matching the query, best first, as many as `most`; the first
- * rows in order for no query. A task whose key the words are whole ranks
- * first, in the scorer's first tier.
- */
-function best(rows: readonly MentionRow[], query: string, most: number): readonly MentionRow[] {
-  return matching(rows, query).slice(0, most);
-}
-
-/** Every row matching the query, best first, ties in the order given; every row for no query. */
-function matching(rows: readonly MentionRow[], query: string): readonly MentionRow[] {
-  if (query.trim() === "") return rows;
-
-  return rows
-    .flatMap((row) => {
-      const score = rowScore(row, query);
-
-      return score > 0 ? [{ row, score }] : [];
-    })
-    .sort((first, second) => second.score - first.score)
-    .map((each) => each.row);
-}
-
-/** A path's row, and how well it answers the words it was found by. */
-interface FoundPath {
-  readonly entry: RepositoryPath;
-  readonly row: MentionRow;
-  readonly score: number;
-}
-
-/** The paths some words found: in the listing's order, and best first. */
-interface PathsFound {
-  readonly matched: readonly FoundPath[];
-  readonly ranked: readonly FoundPath[];
-}
-
-/** The repository's paths as read, and what each word typed found among them. */
-interface PathSearch {
-  readonly paths: readonly RepositoryPath[];
-  /** The paths the words found, best first, ties in the listing's order; the words are never blank. */
-  readonly found: (term: string) => readonly FoundPath[];
-}
-
-/**
- * A search over the paths one read listed, which a repository may hold tens
- * of thousands of. Each word's finds are kept while the word is typed on or
- * back, so a word met again is answered from what it found; and a word typed
- * on from one kept searches only what that one found. Note that the
- * narrowing is sound only from a word of at least `LOOSE_FROM` letters:
- * a letter more never begins, starts, or holds a word the shorter one did
- * not, and its letters in order are the shorter one's in order, but a
- * shorter word finds nothing by letters in order, which a longer one may.
- */
-function pathSearch(paths: readonly RepositoryPath[]): PathSearch {
-  const all = paths.map((entry) => ({ entry, row: pathRow(entry) }));
-  const kept = new Map<string, PathsFound>();
-
-  const found = (term: string): readonly FoundPath[] => {
-    const known = kept.get(term);
-
-    if (known !== undefined) return known.ranked;
-
-    // Only the words this one types on or back from stay kept.
-    for (const word of kept.keys()) {
-      if (!term.startsWith(word) && !word.startsWith(term)) kept.delete(word);
-    }
-
-    const shorter = [...kept.keys()]
-      .filter((word) => term.startsWith(word) && searchTokens(word).join("").length >= LOOSE_FROM)
-      .sort((first, second) => second.length - first.length)
-      .at(0);
-
-    const among = shorter === undefined ? all : (kept.get(shorter)?.matched ?? all);
-
-    const matched = among
-      .map((each) => ({ ...each, score: rowScore(each.row, term) }))
-      .filter((each) => each.score > 0);
-
-    const ranked = [...matched].sort((first, second) => second.score - first.score);
-    kept.set(term, { matched, ranked });
-
-    return ranked;
-  };
-
-  return { paths, found };
-}
-
-/** The best of the paths the words found, as many as `most`, under the folder where one was walked into. */
-function foundRows(
-  search: PathSearch,
-  folder: string | undefined,
-  term: string,
-  most: number,
-): readonly MentionRow[] {
-  const found = search.found(term);
-
-  const under =
-    folder === undefined ? found : found.filter((each) => each.entry.path.startsWith(`${folder}/`));
-
-  return under.slice(0, most).map((each) => each.row);
-}
-
-/**
- * The repository's paths a list narrowed to them offers: for no words, the
- * folder walked into, then what it holds, its folders first, or what the
- * repository's root holds where none was; else the best of every path
- * under the folder by the words.
- */
-function fileRows(
-  search: PathSearch,
-  folder: string | undefined,
-  term: string,
-): readonly MentionRow[] {
-  if (term.trim() !== "") return foundRows(search, folder, term, PER_KIND);
-  const { paths } = search;
-
-  const under =
-    folder === undefined ? paths : paths.filter((entry) => entry.path.startsWith(`${folder}/`));
-
-  // Note that a folder's own entries are said without the folder, which the crumb already names.
-  const entries = under
-    .filter((entry) => (fileFolder(entry.path) ?? "") === (folder ?? ""))
-    .sort((first, second) => Number(second.folder) - Number(first.folder))
-    .map((entry) => ({ ...pathRow(entry), detail: undefined }));
-
-  const itself = folder === undefined ? [] : [pathRow({ path: folder, folder: true })];
-
-  return [...itself, ...entries].slice(0, PER_KIND);
-}
-
-/** Every row of each kind but the repository's paths, found by the list's words. */
-interface KindRows {
-  /** What a bare `@` suggests first: the task's own agents, open threads, pull requests, and pages, in that order. */
-  readonly suggested: readonly MentionRow[];
-  readonly description: readonly MentionRow[];
-  /** The workspace's other tasks. */
-  readonly tasks: readonly MentionRow[];
-  readonly pages: readonly MentionRow[];
-  readonly agents: readonly MentionRow[];
-  readonly people: readonly MentionRow[];
-  /** The workspace's Inbox threads. */
-  readonly threads: readonly MentionRow[];
-  /** The workspace's automations. */
-  readonly automations: readonly MentionRow[];
-  readonly pullRequests: readonly MentionRow[];
-  readonly skills: readonly MentionRow[];
-  /** The date the words name, or the dates a list narrowed to dates offers. */
-  readonly dates: readonly MentionRow[];
-  /** The apps on this Mac, those running first. */
-  readonly apps: readonly MentionRow[];
-  /** The workspace's machines, the reader's own first, then the followers'. */
-  readonly machines: readonly MentionRow[];
-  /** The connected servers' rows, or the one server's the list is narrowed to. */
-  readonly servers: readonly MentionRow[];
-}
-
-/** Up to fifty of one kind's rows, found by the words; a folder's where one was walked into. */
-function narrowedRows(
-  kind: MentionKind,
-  folder: string | undefined,
-  term: string,
-  paths: PathSearch | undefined,
-  rows: KindRows,
-): readonly MentionRow[] {
-  switch (kind.narrow.from) {
-    case MENTION_FROM.FILES:
-      return paths === undefined ? [] : fileRows(paths, folder, term);
-    case MENTION_FROM.DESCRIPTION:
-      return best(rows.description, term, PER_KIND);
-    case MENTION_FROM.TASKS:
-      return best(rows.tasks, term, PER_KIND);
-    case MENTION_FROM.PAGES:
-      return best(rows.pages, term, PER_KIND);
-    case MENTION_FROM.AGENTS:
-      return best(rows.agents, term, PER_KIND);
-    case MENTION_FROM.PEOPLE:
-      return best(rows.people, term, PER_KIND);
-    case MENTION_FROM.THREADS:
-      return best(rows.threads, term, PER_KIND);
-    case MENTION_FROM.AUTOMATIONS:
-      return best(rows.automations, term, PER_KIND);
-    case MENTION_FROM.PULL_REQUESTS:
-      return best(rows.pullRequests, term, PER_KIND);
-    case MENTION_FROM.SKILLS:
-      return best(rows.skills, term, PER_KIND);
-    case MENTION_FROM.DATES:
-      return rows.dates;
-    case MENTION_FROM.APPS:
-      return best(rows.apps, term, PER_KIND);
-    case MENTION_FROM.MACHINES:
-      return best(rows.machines, term, PER_KIND);
-    case MENTION_FROM.SERVERS:
-    case MENTION_FROM.SERVER:
-      return best(rows.servers, term, PER_KIND);
-  }
-}
-
-/** A kind's row under "Browse", which opens its narrowed list: its glyph, its name, and its chevron, nothing more. */
-function kindRow(kind: MentionKind): MentionRow {
-  return { from: kind, name: kind.name, detail: undefined, terms: kind.name };
-}
-
-/** The foot of a group holding `more` rows than it shows, said as every capped list says it, which opens the kind searched by the same words. */
-function showMoreRow(kind: MentionKind, more: number): MentionRow {
-  const words = showMoreWords(more);
-
-  return { from: kind, keeps: true, name: words, detail: undefined, terms: words };
-}
-
-/** A group of the wide list: the best few of `found`, then, where it holds more and its kind can be opened, the row that opens it. */
-function cappedGroup(
-  label: string,
-  found: readonly MentionRow[],
-  kind: MentionKind | undefined,
-): MentionGroup {
-  const shown = found.slice(0, PER_GROUP);
-  const more = found.length - shown.length;
-
-  return {
-    label,
-    rows: more > 0 && kind !== undefined ? [...shown, showMoreRow(kind, more)] : shown,
-  };
-}
-
-/** Whether a row is a group's foot rather than a kind's own row or anything mentioned. */
-function isShowMore(row: MentionRow): boolean {
-  return "from" in row && row.keeps === true;
-}
-
-/**
- * The groups the list offers for the word. For no words: up to four rows
- * the task itself suggests, then a row for each kind to browse, the
- * connected servers folded into one. For words: each kind's best few, a
- * group holding more ending in the row that opens its kind searched by the
- * same words; the date the words name first, since words that read as a
- * date mean one, and the task whose key they are whole next, then agents,
- * tasks, people, the description, pages, and files and folders. One kind:
- * up to fifty of its rows, a folder's where one was walked into.
- */
-function groupsFor(
-  scope: Scope,
-  paths: PathSearch | undefined,
-  rows: KindRows,
-  kinds: readonly MentionKind[],
-): readonly MentionGroup[] {
-  const { kind, term } = scope;
-
-  if (kind !== undefined) {
-    const folder = scope.walked.at(-1)?.path;
-    const narrowed = narrowedRows(kind, folder, term, paths, rows);
-
-    return narrowed.length === 0 ? [] : [{ label: folder ?? kind.name, rows: narrowed }];
-  }
-
-  if (term.trim() === "") {
-    return [
-      { label: MENTION_GROUP.SUGGESTED, rows: rows.suggested.slice(0, PER_GROUP) },
-      // Note that each server's own kind stays, for its provider's word, but only the one row of them all is browsed.
-      {
-        label: MENTION_GROUP.FROM,
-        rows: kinds.flatMap((each) =>
-          each.narrow.from === MENTION_FROM.SERVER ? [] : [kindRow(each)],
-        ),
-      },
-    ].filter((group) => group.rows.length > 0);
-  }
-
-  const kindOf = (from: MentionFrom) => kinds.find((each) => each.narrow.from === from);
-
-  const group = (label: string, found: readonly MentionRow[], from: MentionFrom) =>
-    cappedGroup(label, matching(found, term), kindOf(from));
-
-  const files = paths === undefined ? [] : paths.found(term).map((each) => each.row);
-  const description = group(MENTION_GROUP.DESCRIPTION, rows.description, MENTION_FROM.DESCRIPTION);
-  const tasks = group(MENTION_GROUP.TASKS, rows.tasks, MENTION_FROM.TASKS);
-  // The group holding the task the words are the key of, the plan's own or another, leads the list.
-  const keyedGroup = [description, tasks].find((each) => each.rows.some((row) => keyed(row, term)));
-
-  // Note that agents and tasks lead and files come last of these, because they are what is
-  // mentioned most, and a path's letters in order find it by almost any word.
-  const ranked = [
-    group(MENTION_GROUP.AGENTS, rows.agents, MENTION_FROM.AGENTS),
-    tasks,
-    group(MENTION_GROUP.PEOPLE, rows.people, MENTION_FROM.PEOPLE),
-    description,
-    group(MENTION_GROUP.PAGES, rows.pages, MENTION_FROM.PAGES),
-    cappedGroup(MENTION_GROUP.FILES, files, kindOf(MENTION_FROM.FILES)),
-  ].filter((each) => each !== keyedGroup);
-
-  // Note that a kind the words name leads, so `@agent` still offers the way into the agents.
-  const named = matching(
-    kinds.flatMap((each) => (each.narrow.from === MENTION_FROM.SERVER ? [] : [kindRow(each)])),
-    term,
-  );
-
-  return [
-    { label: MENTION_GROUP.FROM, rows: named },
-    { label: MENTION_GROUP.DATES, rows: rows.dates },
-    ...(keyedGroup === undefined ? [] : [keyedGroup]),
-    ...ranked,
-    group(MENTION_GROUP.THREADS, rows.threads, MENTION_FROM.THREADS),
-    group(MENTION_GROUP.AUTOMATIONS, rows.automations, MENTION_FROM.AUTOMATIONS),
-    group(MENTION_GROUP.PULL_REQUESTS, rows.pullRequests, MENTION_FROM.PULL_REQUESTS),
-    group(MENTION_GROUP.SKILLS, rows.skills, MENTION_FROM.SKILLS),
-    group(MENTION_GROUP.MACHINES, rows.machines, MENTION_FROM.MACHINES),
-    group(MENTION_GROUP.APPS, rows.apps, MENTION_FROM.APPS),
-    group(MENTION_GROUP.SERVERS, rows.servers, MENTION_FROM.SERVERS),
-  ].filter((each) => each.rows.length > 0);
 }
 
 /** A kind's glyph, as its rows wear theirs. */
-function KindGlyph({ kind }: { kind: MentionKind }): React.JSX.Element {
+function KindGlyph({ kind }: { kind: MentionOfferedKind }): React.JSX.Element {
   const { narrow } = kind;
 
   if (narrow.from === MENTION_FROM.SERVER) return <ProviderMark provider={narrow.provider} />;
@@ -1587,20 +709,22 @@ function MentionRowMark({
 }
 
 /** A row's glyph: a mention's its entity's mark, a pull request's its mark for where it stands, and a kind's, a skill's, a thread's, or an automation's its own. */
-function RowGlyph({ row, workspace }: { row: MentionRow; workspace: string }): React.JSX.Element {
-  if ("skill" in row) return <EntityGlyph kind={ENTITY_KIND.SKILL} />;
+function RowGlyph({ row, workspace }: { row: MentionRow; workspace: string }): React.ReactNode {
+  if (isPickDate(row)) return <EntityGlyph kind={ENTITY_KIND.DATE} />;
 
-  if ("from" in row) return <KindGlyph kind={row.from} />;
+  if (isKindChoice(row)) return <KindGlyph kind={row.kind} />;
 
-  if ("picksDate" in row) return <EntityGlyph kind={ENTITY_KIND.DATE} />;
+  if (row.kind === MENTION_OFFER_KIND.SKILL) return <EntityGlyph kind={ENTITY_KIND.SKILL} />;
 
-  if ("thread" in row) return inboxItemGlyph(inboxRowOf(row.item));
+  if (row.thread !== undefined) return inboxItemGlyph(inboxRowOf(row.thread.item));
 
-  if ("automation" in row) {
+  if (row.automation !== undefined) {
     return <ActorMark actor={automationActor(row.automation)} size={ACTOR_SIZE.INLINE} />;
   }
 
   if (row.pullRequest !== undefined) return <PullRequestMark pullRequest={row.pullRequest} />;
+
+  if (row.mention === undefined) return null;
 
   return (
     <MentionRowMark mention={row.mention} name={row.written ?? row.name} workspace={workspace} />
@@ -1609,15 +733,13 @@ function RowGlyph({ row, workspace }: { row: MentionRow; workspace: string }): R
 
 /** A row's key, stable while it stands: its skill's name, its kind's narrowing, or its mention. */
 function rowKey(row: MentionRow): string {
-  if ("skill" in row) return row.skill;
+  if (isPickDate(row)) return PICK_DATE_KEY;
 
-  if ("picksDate" in row) return PICK_DATE_KEY;
+  if (isKindChoice(row)) return JSON.stringify({ ...row.kind.narrow, keeps: row.more });
 
-  if ("thread" in row) return JSON.stringify(row.thread);
+  if (row.kind === MENTION_OFFER_KIND.SKILL || row.automation !== undefined) return row.id;
 
-  if ("automation" in row) return row.automation.id;
-
-  if ("from" in row) return JSON.stringify({ ...row.from.narrow, keeps: row.keeps === true });
+  if (row.thread !== undefined) return JSON.stringify(row.thread.place);
 
   return JSON.stringify(row.mention);
 }
@@ -1632,17 +754,19 @@ type MarkedWordsResult = { readonly label: React.ReactNode; readonly detail: Rea
 
 /** A row's name and detail, each marked where the words found it, as ⌘K marks its rows. */
 function markedWords(row: MentionRow, query: string): MarkedWordsResult {
-  const subject = rowSubject(row);
+  if (isPickDate(row)) return { label: row.name, detail: undefined };
+  const subject = mentionSubject(row);
   const hit = searchHit(subject, query);
+  const drawn = isKindChoice(row) ? undefined : (row.drawn ?? row.detail);
 
-  if (hit === undefined) return { label: row.name, detail: row.detail };
+  if (hit === undefined) return { label: row.name, detail: drawn };
 
   return {
     label: <Highlighted text={row.name} ranges={hit.label} />,
-    detail: Predicate.isString(row.detail) ? (
-      <Highlighted text={row.detail} ranges={hitRangesIn(row.detail, subject, hit)} />
+    detail: Predicate.isString(drawn) ? (
+      <Highlighted text={drawn} ranges={hitRangesIn(drawn, subject, hit)} />
     ) : (
-      row.detail
+      drawn
     ),
   };
 }
@@ -1664,12 +788,17 @@ function showMoreWordsOf(row: MentionRow): ShowMoreWords {
   };
 }
 
+/** Whether a row is a group's foot rather than a kind's own row or anything mentioned. */
+function isShowMore(row: MentionRow): boolean {
+  return !isPickDate(row) && isKindChoice(row) && row.more;
+}
+
 /** The key a highlighted folder's row says at its end walks into it, since choosing the row writes the folder. */
 const WALK_INTO_HINT = <Shortcut chord={{ key: SHORTCUT_KEY.RIGHT, plain: true }} />;
 
 /** The groups as the list draws them: each row its glyph, its name and detail marked where `query` found them, an agent's end, its card, a chevron where it opens, and → on the folder at `at`. */
 function comboboxGroups(
-  groups: readonly MentionGroup[],
+  groups: readonly MentionMenuGroup[],
   query: string,
   at: number,
   rowCard: RowCardOf,
@@ -1679,34 +808,39 @@ function comboboxGroups(
   const tokens = searchTokens(query);
 
   return groups.map((group) => ({
-    label: group.label,
-    options: group.rows.map((row) => ({
-      id: rowKey(row),
-      ...(isShowMore(row) ? showMoreWordsOf(row) : markedWords(row, query)),
-      words: row.name,
-      // A group's foot keeps the glyph's room empty, so its words stand in line with the rows above.
-      icon: isShowMore(row) ? null : (row.look?.icon ?? rowGlyph(row)),
-      before: row.look?.before,
-      hint:
-        row === highlighted && opens(row) && !("from" in row)
-          ? WALK_INTO_HINT
-          : (row.look?.end ??
-            (row.taskKey === undefined ? undefined : (
-              <TaskKey
-                workspaceName={row.taskKey.workspaceName}
-                number={row.taskKey.number}
-                tokens={tokens}
-              />
-            ))),
-      card: row.look?.card ?? row.card ?? rowCard(row),
-      opens: "from" in row,
-    })),
+    label: group.title,
+    options: group.rows.map((row) => {
+      const named = candidateOf(row);
+      const kind = !isPickDate(row) && isKindChoice(row);
+
+      return {
+        id: rowKey(row),
+        ...(isShowMore(row) ? showMoreWordsOf(row) : markedWords(row, query)),
+        words: row.name,
+        // A group's foot keeps the glyph's room empty, so its words stand in line with the rows above.
+        icon: isShowMore(row) ? null : (named?.look?.icon ?? rowGlyph(row)),
+        before: named?.look?.before,
+        hint:
+          row === highlighted && opens(row) && !kind
+            ? WALK_INTO_HINT
+            : (named?.look?.end ??
+              (named?.taskKey === undefined ? undefined : (
+                <TaskKey
+                  workspaceName={named.taskKey.workspaceName}
+                  number={named.taskKey.number}
+                  tokens={tokens}
+                />
+              ))),
+        card: named?.look?.card ?? named?.card ?? rowCard(row),
+        opens: kind,
+      };
+    }),
   }));
 }
 
 /** What a narrowed list stands under: its kind, the folder walked into, and the way back, where a key made it. */
 interface Crumb {
-  readonly kind: MentionKind;
+  readonly kind: MentionOfferedKind;
   readonly folder: string | undefined;
   readonly back: (() => void) | undefined;
 }
@@ -1786,7 +920,7 @@ function MentionMenu({
 }: {
   id: string;
   crumb: Crumb | undefined;
-  groups: readonly MentionGroup[];
+  groups: readonly MentionMenuGroup[];
   /** The words the groups were found by, which mark each row. */
   query: string;
   at: number;
@@ -1820,7 +954,7 @@ function MentionMenu({
         }}
         // A narrowed list's one group is named by its crumb.
         headed={crumb === undefined}
-        empty={noted ? undefined : NO_MATCH}
+        empty={noted ? undefined : MENTION_NO_MATCH}
         note={
           noted ? (
             <>
@@ -1992,81 +1126,59 @@ function repositoryPathsQueryOptions(place: {
 }
 
 /**
- * The kinds the place offers, in the list's order: the workspace's agents
- * where it reads them, its other tasks where it holds any, its people where
- * the window has read them, the description where one stands and the account has
- * Descriptions on, the pages of what
- * holds it, its repository's files and folders where it names one, its
- * Inbox threads and automations where it holds any, the pull requests
- * the plan's agents published, the repository's skills where the words go
- * to an agent, dates wherever the list stands, the apps on this Mac where
- * the words go to an agent and it may read them, every connected server at
- * once, and each connected server alone, the first of each provider
- * narrowed to by the provider's own word.
+ * The kinds the place holds, which the list offers in its order
+ * (`mentionKinds`): the workspace's agents where it reads them, its other
+ * tasks where it holds any, its people where the window has read them, the
+ * description where one stands and the workspace has Descriptions on, the
+ * pages of what holds it, its repository's files and folders where it names
+ * one, its Inbox threads and automations where it holds any, the pull
+ * requests the plan's agents published, the repository's skills where the
+ * words go to an agent, its machines, the apps on the reader's machines
+ * where the words go to an agent and it may read them, and the connected
+ * servers.
  */
-function kindsOf(
+function heldKinds(
   source: MentionSource,
   self: string | undefined,
-  skills: MentionSkills | undefined,
-  servers: readonly NamedServer[],
-  people: number,
-  tasks: number,
-  inbox: { readonly threads: number; readonly automations: number },
+  held: {
+    readonly tasks: number;
+    readonly people: number;
+    readonly threads: number;
+    readonly automations: number;
+    readonly skills: number;
+    readonly machines: number;
+    readonly apps: number;
+    readonly servers: number;
+  },
   descriptionsOn: boolean,
-  apps: number,
-  machines: number,
-): readonly MentionKind[] {
+): ReadonlySet<MentionOfferFrom> {
   const { holder, repository } = source;
   const taskId = holder?.taskId;
-  const pages = holder === undefined ? 0 : (source.pages ?? NO_PAGES).length;
-  const pullRequests = (source.pullRequests ?? NO_PULL_REQUESTS).length;
 
   const agents =
     source.readAgents !== undefined ||
     (taskId !== undefined && (source.agents ?? NO_AGENTS).some((agent) => agent.id !== self));
 
-  const files =
-    repository !== null && treeKey(taskId, source.workspaceId, repository) !== undefined;
-
-  const offered: readonly (readonly [
-    Exclude<MentionFrom, typeof MENTION_FROM.SERVER>,
-    string,
-    boolean,
-  ])[] = [
-    [MENTION_FROM.AGENTS, MENTION_GROUP.AGENTS, agents],
-    [MENTION_FROM.TASKS, MENTION_GROUP.TASKS, tasks > 0],
-    [MENTION_FROM.PEOPLE, MENTION_GROUP.PEOPLE, people > 0],
-    [MENTION_FROM.DESCRIPTION, MENTION_GROUP.DESCRIPTION, taskId !== undefined && descriptionsOn],
-    [MENTION_FROM.PAGES, MENTION_GROUP.PAGES, pages > 0],
-    [MENTION_FROM.FILES, MENTION_GROUP.FILES, files],
-    [MENTION_FROM.THREADS, MENTION_GROUP.THREADS, inbox.threads > 0],
-    [MENTION_FROM.AUTOMATIONS, MENTION_GROUP.AUTOMATIONS, inbox.automations > 0],
-    [MENTION_FROM.PULL_REQUESTS, MENTION_GROUP.PULL_REQUESTS, pullRequests > 0],
-    [MENTION_FROM.SKILLS, MENTION_GROUP.SKILLS, (skills?.known ?? []).length > 0],
-    [MENTION_FROM.DATES, MENTION_GROUP.DATES, true],
-    [MENTION_FROM.MACHINES, MENTION_GROUP.MACHINES, machines > 0],
-    [MENTION_FROM.APPS, MENTION_GROUP.APPS, apps > 0],
-    [MENTION_FROM.SERVERS, MENTION_GROUP.SERVERS, servers.length > 0],
+  const offered: readonly (readonly [MentionOfferFrom, boolean])[] = [
+    [MENTION_FROM.AGENTS, agents],
+    [MENTION_FROM.TASKS, held.tasks > 0],
+    [MENTION_FROM.PEOPLE, held.people > 0],
+    [MENTION_FROM.DESCRIPTION, taskId !== undefined && descriptionsOn],
+    [MENTION_FROM.PAGES, holder !== undefined && (source.pages ?? NO_PAGES).length > 0],
+    [
+      MENTION_FROM.FILES,
+      repository !== null && treeKey(taskId, source.workspaceId, repository) !== undefined,
+    ],
+    [MENTION_FROM.THREADS, held.threads > 0],
+    [MENTION_FROM.AUTOMATIONS, held.automations > 0],
+    [MENTION_FROM.PULL_REQUESTS, (source.pullRequests ?? NO_PULL_REQUESTS).length > 0],
+    [MENTION_FROM.SKILLS, held.skills > 0],
+    [MENTION_FROM.MACHINES, held.machines > 0],
+    [MENTION_FROM.APPS, held.apps > 0],
+    [MENTION_FROM.SERVERS, held.servers > 0],
   ];
 
-  const own = offered.flatMap(([from, name, offers]): MentionKind[] =>
-    offers ? [{ narrow: { from }, name, keyword: from }] : [],
-  );
-
-  const named = new Set<IntegrationProvider>();
-
-  const connected = servers.map(({ provider, connection, name }): MentionKind => {
-    const first = !named.has(provider);
-    named.add(provider);
-
-    return {
-      narrow: { from: MENTION_FROM.SERVER, connection, provider },
-      name,
-      keyword: first ? provider : undefined,
-    };
-  });
-
-  return [...own, ...connected];
+  return new Set(offered.flatMap(([from, offers]) => (offers ? [from] : [])));
 }
 
 /** Words typed in the `@` word that starts at `wordAt`. */
@@ -2144,7 +1256,7 @@ export function useMentionPicker({
   const [trigger, setTrigger] = useState<ComposerTrigger | undefined>(undefined);
   const [highlight, setHighlight] = useState<Highlight | undefined>(undefined);
   const [closed, setClosed] = useState<Closed | undefined>(undefined);
-  const [narrowing, setNarrowing] = useState<Held | undefined>(undefined);
+  const [narrowing, setNarrowing] = useState<MentionHeld | undefined>(undefined);
 
   // A dismissal or narrowing stays with its word only while the caret is in it.
   if (trigger === undefined && (closed !== undefined || narrowing !== undefined)) {
@@ -2176,7 +1288,16 @@ export function useMentionPicker({
   }, [queryClient, taskId, workspaceId, repository]);
   const read = paths.data;
   // Note that the paths are searched through one search per read, which keeps what each word found, rather than ranking every path on each render.
-  const pathsSearched = useMemo(() => (read === undefined ? undefined : pathSearch(read)), [read]);
+  const slug = place.workspace;
+
+  const pathsSearched = useMemo(
+    () =>
+      mentionPaths(
+        read === undefined ? NO_ROWS : pathCandidates(read, { workspace: slug, repository }),
+      ),
+    [read, slug, repository],
+  );
+
   const pathsFailed = paths.isError && !paths.isFetching;
   const readPathsAgain = paths.refetch;
 
@@ -2246,9 +1367,10 @@ export function useMentionPicker({
             descriptionsOn ? taskId : undefined,
             tasksWorkspace,
             workspaceTasks ?? NO_TASKS,
+            slug,
           )
         : NO_ROWS,
-    [open, descriptionsOn, taskId, tasksWorkspace, workspaceTasks],
+    [open, descriptionsOn, taskId, tasksWorkspace, workspaceTasks, slug],
   );
 
   // The threads offered are the workspace's as the account's feed holds them, which the host holds for the session.
@@ -2259,7 +1381,7 @@ export function useMentionPicker({
   const threadRowsOffered = useMemo(
     () =>
       threadsAsked
-        ? threadRows(feed.data, taskId, tasksWorkspace, workspaceTasks ?? NO_TASKS)
+        ? threadRows(feed.data, taskId, tasksWorkspace, workspaceTasks ?? NO_TASKS, slug)
         : NO_ROWS,
     [threadsAsked, feed.data, taskId, tasksWorkspace, workspaceTasks],
   );
@@ -2287,7 +1409,7 @@ export function useMentionPicker({
 
   const automationRowsOffered =
     automationsRead !== undefined && "automations" in automationsRead
-      ? automationRows(automationsRead.automations, tasksWorkspace)
+      ? automationRows(automationsRead.automations, tasksWorkspace, place.workspace)
       : [];
 
   // The plan's own key, which finds the description's row as another task's finds its.
@@ -2316,41 +1438,47 @@ export function useMentionPicker({
   const appRowsOffered =
     !open || onThatMac === undefined
       ? []
-      : appRows({
-          onMac: onThatMac ? apps.apps : [],
-          allowed: allowedApps.machines,
-          kept: keptApps,
-          thisDevice,
-          thisMac,
-          ownNameOf: (deviceId) => machines.machines.find((each) => each.id === deviceId)?.name,
-        });
+      : appCandidates(
+          {
+            onMac: onThatMac ? apps.apps : [],
+            allowed: allowedApps.machines,
+            kept: keptApps,
+            thisDevice,
+            thisMac,
+            ownNameOf: (deviceId) => machines.machines.find((each) => each.id === deviceId)?.name,
+          },
+          place,
+        );
 
   const followerIds = new Set((followers ?? []).map((follower) => follower.userId));
 
   const machineRowsOffered = machinesAsked
-    ? machineRows(machines.machines, readerId, followerIds, people, thisMac)
+    ? machineRows(machines.machines, readerId, followerIds, people, thisMac, place)
     : [];
 
   // The list is narrowed to the kind a key opened or whose word was typed, and searched by the words after it.
   const kinds = open
-    ? kindsOf(
-        source,
-        self,
-        skills,
+    ? mentionKinds(
+        heldKinds(
+          source,
+          self,
+          {
+            tasks: taskRowsOffered.length,
+            people: people.length,
+            threads: threadRowsOffered.length,
+            automations: automationRowsOffered.length,
+            skills: (skills?.known ?? []).length,
+            machines: machineRowsOffered.length,
+            apps: appRowsOffered.length,
+            servers: servers.length,
+          },
+          descriptionsOn,
+        ),
         servers,
-        people.length,
-        taskRowsOffered.length,
-        {
-          threads: threadRowsOffered.length,
-          automations: automationRowsOffered.length,
-        },
-        descriptionsOn,
-        appRowsOffered.length,
-        machineRowsOffered.length,
       )
     : [];
 
-  const scope = open ? scopeOf(trigger, narrowing, kinds) : undefined;
+  const scope = open ? mentionScope(trigger, narrowing, kinds) : undefined;
   const term = scope?.term ?? "";
 
   // Note that the workspace's tasks the window lists not are asked of the service as the typing pauses, as ⌘K asks them, and join the list the task rows above are built from, one row each.
@@ -2412,56 +1540,73 @@ export function useMentionPicker({
 
   const narrow = scope?.kind?.narrow;
 
-  const groups =
+  const own: readonly MentionableAgent[] =
+    taskId === undefined
+      ? []
+      : (source?.agents ?? NO_AGENTS).map((agent) => ({ ...agent, task: { id: taskId } }));
+
+  const pullRequestsOffered = pullRequestRows(source?.pullRequests ?? NO_PULL_REQUESTS);
+  const pagesOffered = pageRows(holder, source?.pages ?? NO_PAGES, now, slug);
+
+  const offered =
     scope === undefined || source === undefined
       ? []
-      : groupsFor(
-          scope,
-          pathsSearched,
+      : mentionGroups<PanelCandidate>(
           {
             suggested: [
-              ...(taskId === undefined
-                ? []
-                : agentRows(taskId, source.agents ?? NO_AGENTS, NO_AGENTS, self, "", agentPlace)),
+              ...agentRows(offeredAgents(own, NO_AGENTS, self, false), agentPlace, slug),
               ...threadRowsOffered.filter(
-                (row) => "thread" in row && "taskId" in row.thread && row.thread.taskId === taskId,
+                (row) =>
+                  row.thread !== undefined &&
+                  "taskId" in row.thread.place &&
+                  row.thread.place.taskId === taskId,
               ),
-              ...pullRequestRows(source.pullRequests ?? NO_PULL_REQUESTS),
-              ...pageRows(holder, source.pages ?? NO_PAGES, now),
+              ...pullRequestsOffered,
+              ...pagesOffered,
             ],
-            description: descriptionsOn
-              ? taskRows(taskId, source.taskName, planKey, source.text())
-              : [],
+            description:
+              descriptionsOn && taskId !== undefined
+                ? descriptionCandidates(
+                    { taskId, name: source.taskName, key: planKey },
+                    source.text(),
+                    place,
+                  )
+                : NO_ROWS,
             tasks: taskRowsOffered,
-            pages: pageRows(holder, source.pages ?? NO_PAGES, now),
+            pages: pagesOffered,
             agents: agentRows(
-              taskId,
-              source.agents ?? NO_AGENTS,
-              agentsRead?.agents ?? NO_AGENTS,
-              self,
-              term,
+              offeredAgents(own, agentsRead?.agents ?? NO_AGENTS, self, term.trim() !== ""),
               agentPlace,
+              slug,
             ),
-            people: personRows(people, readerId),
+            people: personRows(people, readerId, slug),
+            files: pathsSearched,
             threads: threadRowsOffered,
             automations: automationRowsOffered,
-            pullRequests: pullRequestRows(source.pullRequests ?? NO_PULL_REQUESTS),
+            pullRequests: pullRequestsOffered,
             skills: skillRows(skills?.known ?? []),
-            dates: dateRows(term, narrow?.from === MENTION_FROM.DATES, now, readerZone()),
-            apps: appRowsOffered,
             machines: machineRowsOffered,
-            // A list narrowed to one server offers its tools before a word is typed.
-            servers:
-              narrow?.from === MENTION_FROM.SERVER
-                ? serverRows(
-                    servers.filter((server) => server.connection === narrow.connection),
-                    tools,
-                    true,
-                  )
-                : serverRows(servers, tools, term.trim() !== ""),
+            apps: appRowsOffered,
+            servers: (connection, withTools) =>
+              serverCandidates(
+                connection === undefined
+                  ? servers
+                  : servers.filter((server) => server.connection === connection),
+                toolsOf(tools),
+                withTools,
+                place,
+              ),
+            dates: (words) => dateCandidates(words, now, readerZone(), place),
           },
+          scope,
           kinds,
         );
+
+  // A list narrowed to dates ends on the row that opens the date picker.
+  const groups: readonly MentionMenuGroup[] =
+    scope?.kind !== undefined && narrow?.from === MENTION_FROM.DATES
+      ? [{ title: scope.kind.name, rows: [...(offered[0]?.rows ?? []), PICK_DATE_ROW] }]
+      : offered;
 
   const rows = groups.flatMap((group) => group.rows);
 
@@ -2548,7 +1693,7 @@ export function useMentionPicker({
   };
 
   // The list narrowed or widened by a key starts again at its first row.
-  const narrowTo = (next: Held | undefined) => {
+  const narrowTo = (next: MentionHeld | undefined) => {
     if (trigger === undefined) return;
     setNarrowing(next);
     setHighlight(undefined);
@@ -2561,24 +1706,20 @@ export function useMentionPicker({
     if (trigger === undefined || scope === undefined) return;
     const { start } = trigger;
 
-    if ("from" in row) {
-      // A group's foot opens its kind searched by the words already typed; a kind's own row opens it afresh.
-      const words = row.keeps === true ? scope.term : "";
-      const { keyword, narrow } = row.from;
+    if (isPickDate(row)) return;
 
-      // Note that a kind with no word of its own (a provider's second server) is held by the list alone.
-      narrowTo(
-        keyword === undefined ? { start, narrow, entry: "", typed: false, walked: [] } : undefined,
-      );
-      onRetype(keyword === undefined ? words : narrowingQuery(keyword, words));
+    if (isKindChoice(row)) {
+      // A group's foot opens its kind searched by the words already typed; a kind's own row opens it afresh, as its query writes it.
+      narrowTo(undefined);
+      onRetype(row.query);
 
       return;
     }
 
-    if (!("mention" in row) || row.mention.kind !== MENTION_KIND.FOLDER) return;
+    if (row.kind !== MENTION_OFFER_KIND.FOLDER) return;
     const entry = narrowingQuery(MENTION_FROM.FILES, "");
     const within = scope.kind?.narrow.from === MENTION_FROM.FILES;
-    const walked = { path: row.mention.path, entry };
+    const walked = { path: row.id, entry };
     narrowTo({
       start,
       narrow: { from: MENTION_FROM.FILES },
@@ -2589,7 +1730,7 @@ export function useMentionPicker({
     onRetype(entry);
   };
 
-  const backTo = trigger === undefined ? undefined : backFrom(scope, trigger.start);
+  const backTo = trigger === undefined ? undefined : mentionBack(scope, trigger.start);
 
   const back =
     backTo === undefined
@@ -2624,24 +1765,13 @@ export function useMentionPicker({
     });
   };
 
-  // A skill is written as the `/name` chip its own list writes; a kind's row opens; the picker's row opens the picker; anything else is written as its mention.
+  // A skill is written as the `/name` chip its own list writes; a kind's row opens; the picker's row opens the picker; anything else is written as its link, a thread's by its id alone, whose agent and task its reader asks the service for.
   const choose = (row: MentionRow) => {
-    if ("from" in row) openRow(row);
-    else if ("skill" in row) skills?.onChoose(row.skill);
-    else if ("picksDate" in row) {
+    if (isPickDate(row)) {
       if (trigger !== undefined) pickNewDate(trigger);
-    } else if ("thread" in row) {
-      // A thread is written by its id alone, whose agent and task its reader asks the service for.
-      const thread = { kind: LINK_DESTINATION.INBOX_ITEM, itemId: row.thread.itemId } as const;
-      onChoose({ name: row.name, target: linkOf(thread, place.workspace) });
-    } else if ("automation" in row) {
-      const automation = {
-        kind: LINK_DESTINATION.AUTOMATION,
-        automationId: row.automation.id,
-      } as const;
-
-      onChoose({ name: row.name, target: linkOf(automation, place.workspace) });
-    } else onChoose({ name: row.written ?? row.name, target: encodeMention(row.mention, place) });
+    } else if (isKindChoice(row)) openRow(row);
+    else if (row.kind === MENTION_OFFER_KIND.SKILL) skills?.onChoose(row.id);
+    else onChoose({ name: row.written ?? row.name, target: row.target });
   };
 
   // The list closed by Escape or a press away stays closed until the caret leaves its word.
@@ -2724,12 +1854,14 @@ export function useMentionPicker({
 
   // Note that a row's card is the chip's, made as the row is drawn, because the repository's paths are thousands and only the few listed hang one.
   const rowCard: RowCardOf = (row) => {
-    if (!("mention" in row)) return undefined;
+    const mention = candidateOf(row)?.mention;
 
-    return entityCard(entityOfMention(row.mention), {
+    if (mention === undefined) return undefined;
+
+    return entityCard(entityOfMention(mention), {
       own: undefined,
       glyph: rowGlyph(row),
-      name: row.written ?? row.name,
+      name: candidateOf(row)?.written ?? row.name,
       workspace: place.workspace,
       wordsWorkspaceId: tasksWorkspaceId,
       repository: repository ?? undefined,
