@@ -420,7 +420,9 @@ function PullRequestToolbar({
  * plain preview of its words that a press opens whole in Markdown, and each
  * review thread under the review that started it, by its file and lines,
  * opened to its comments; the earlier entries a read left on GitHub
- * counted first, opening there. Its
+ * counted first, opening there. The Description and the Conversation each
+ * fold under their headings, as the panel's do, and open again on a second
+ * tap. Its
  * parts are held live while the screen is in focus, and a pull down reads
  * them again. The merge's one press merges, or arms auto-merge where the
  * repository merges through a queue, once its question is answered, as a
@@ -855,7 +857,7 @@ function PullRequestPage({
         )}
       </ListSection>
       {described ? (
-        <ListSection title={DESCRIPTION_WORDS}>
+        <ListSection title={DESCRIPTION_WORDS} foldable>
           <WordsRow
             words={description}
             repository={agent?.repository}
@@ -931,6 +933,7 @@ function PullRequestPage({
       <ListSection
         title={CONVERSATION_WORDS}
         count={conversation === undefined ? undefined : conversationCount(conversation)}
+        foldable
       >
         {conversation === undefined ? (
           answerFailed(parts.conversation) ? (
