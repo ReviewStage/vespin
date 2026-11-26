@@ -105,50 +105,10 @@ import { type MentionsOffered, useMentionOffer } from "../use-mention-offer.js";
 import { usePillField } from "../use-pill-field.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
+import { keepDraft, keptDraft } from "./composer-drafts.js";
 
 /** What the field says before anything is typed, as the panel's box says it to a started agent. */
 const PLACEHOLDER = "Send a follow-up";
-
-/**
- * Each agent's words typed and not yet sent, with the suggestion last laid
- * into them, by the agent, so they outlive the page that drew them, as a
- * widening window hands a page from its tab's stack to a split view's
- * detail, each drawing its own, and the page drawn anew lays no suggestion
- * in again.
- */
-const unsentWords = new Map<string, UnsentDraft>();
-
-/** Words typed and not yet sent, with the suggestion last laid into them. */
-interface UnsentDraft {
-  readonly words: string;
-  readonly laidFor: string | undefined;
-}
-
-/** Each reply typed in a Manager chat's thread and not yet sent, by the Manager and then the message the thread hangs on, so each thread keeps a draft of its own, as the panel's thread box does. */
-const unsentReplies = new Map<string, Map<string, UnsentDraft>>();
-
-/** The draft kept for the agent's own box, or for one of its chat's threads (`thread`, by its root). */
-function keptDraft(agentId: string, thread: string | undefined): UnsentDraft | undefined {
-  return thread === undefined ? unsentWords.get(agentId) : unsentReplies.get(agentId)?.get(thread);
-}
-
-/** Keeps the draft of the agent's box or one of its threads, or lets it go where `draft` is none. */
-function keepDraft(agentId: string, thread: string | undefined, draft: UnsentDraft | undefined) {
-  if (thread === undefined) {
-    if (draft === undefined) unsentWords.delete(agentId);
-    else unsentWords.set(agentId, draft);
-
-    return;
-  }
-
-  const replies = unsentReplies.get(agentId) ?? new Map<string, UnsentDraft>();
-
-  if (draft === undefined) replies.delete(thread);
-  else replies.set(thread, draft);
-
-  if (replies.size === 0) unsentReplies.delete(agentId);
-  else unsentReplies.set(agentId, replies);
-}
 
 /** A send out on the act port: what it carries, so a refusal hands it back. */
 interface Sent {
