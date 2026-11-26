@@ -1,21 +1,28 @@
 /**
- * prototype-mixed-picker.tsx -- PROTOTYPE (round 2): the Mixed direction's face picker, made of the very parts a sidebar section's icon picker is: one search over characters and every emoji, Characters and Emoji tabs, and the section icons' colors.
+ * prototype-mixed-picker.tsx -- PROTOTYPE (round 3): the Mixed direction's face picker, built as a sidebar section's icon picker is (`section-icon-picker.tsx`): one search over characters and every emoji, Characters | Emoji tabs, and a face's colors asked in a small menu that pops up from the face pressed.
  *
- * Throwaway, never merged. The picker is the app's one icon picker
- * (`IconPicker`) laid out as a section's is (`section-icon-picker.tsx`):
- * a search that finds characters and emoji alike ("Search characters and
- * emoji", as a section's says "Search icons and emoji"), an emoji typed into
- * it offered first; a segmented Characters | Emoji bar, as a section's Icons
- * | Emoji; and the Emoji tab listing every emoji `unicode-emoji-json` holds
- * under Unicode's own groups, through the same model a section's picker reads
- * (`section-icon-model.ts`), so the app has one emoji picker.
+ * Throwaway, never merged. Where a section's picker and a face's differ, the
+ * section's shape is followed:
  *
- * Under the tabs stands one color row, the face drawn in each color, as a
- * section glyph's colors draw the glyph in each: the same hues in the same
- * order and names (red, orange, yellow, green, teal, blue, purple, pink),
- * then gray where a section offers the text's own ink, so a face and a
- * section are colored from one palette. A color recolors whatever the face
- * is, character or emoji, and every character in the grid with it.
+ * - A search "Search characters and emoji", as a section's "Search icons
+ *   and emoji", finding an emoji typed or pasted first, then the characters
+ *   ("Icons" there), then the emoji whose name it matches.
+ * - Characters | Emoji tabs, as Icons | Emoji. The Characters tab offers
+ *   Recent, the faces this window picked last in the colors they were
+ *   picked in, then every character, as Icons offers Recent, Suggested, and
+ *   All icons; the Emoji tab every emoji `unicode-emoji-json` holds, under
+ *   Unicode's own groups, through the section picker's model.
+ * - A character is drawn in the text's quiet ink but the one chosen, in its
+ *   color, as a glyph is; pressing it opens its colors under it, the
+ *   character in each, gray first where a section offers the text's own ink,
+ *   then the section icons' hues in their order, two rows of five; the one
+ *   it starts on pressed and focused, the arrows walking them, Escape or a
+ *   press away putting them away, and a color pressed choosing the face.
+ *
+ * Two differences stay, since a face is not a section's icon: an emoji
+ * pressed opens its colors too, because a face's emoji stands on a disc of
+ * its color where a section's stands bare; and there is no Remove icon,
+ * because a Manager always wears a face.
  */
 
 import {
@@ -24,11 +31,14 @@ import {
   MANAGER_FACE_COLOR,
   MANAGER_FACE_COLOR_NAME,
   type ManagerFaceCharacter,
+  type ManagerFaceColor,
   type ManagerFace as ManagerFaceValue,
 } from "@repo/features/manager-face";
 import { noMatchWords, readingWords } from "@repo/features/words";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useId, useRef, useState } from "react";
 import { type EmojiGroup, emojiGroups, findEmoji } from "../../section-icon-model.js";
+import { AnchoredPopover } from "../anchored-popover/anchored-popover.js";
+import { POPOVER_ALIGN, POPOVER_WIDTH } from "../anchored-popover/popover-place.js";
 import { IconButton } from "../button/button.js";
 import { CHOICE_BAR_LOOK, ChoiceBar } from "../choice-bar/choice-bar.js";
 import {
@@ -38,8 +48,8 @@ import {
   IconPickerGroup,
 } from "../icon-picker/icon-picker.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
+import { POPOVER_PANEL_LOOK, PopoverPanel } from "../popover-panel/popover-panel.js";
 import { ROVING_ORIENTATION, useRovingKeys } from "../roving-keys/roving-keys.js";
-import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
 import { MANAGER_FACE_SIZE, ManagerFace, MIXED_COLORS } from "./manager-face.js";
 
 /** The picker's two kinds of face, as a section's picker has Icons and Emoji. */
@@ -51,6 +61,12 @@ const FACE_KIND = {
 type FaceKind = (typeof FACE_KIND)[keyof typeof FACE_KIND];
 
 const CHARACTERS = Object.values(MANAGER_FACE_CHARACTER);
+
+/** The colors a face is asked in: gray first, where a section offers the text's own ink, then the section icons' hues in their order. */
+const ASKED_COLORS: readonly ManagerFaceColor[] = [
+  MANAGER_FACE_COLOR.GRAY,
+  ...MIXED_COLORS.filter((color) => color !== MANAGER_FACE_COLOR.GRAY),
+];
 
 /** What the picker says while the emoji load, where they failed to, and where a search found nothing. */
 const READING_EMOJI = readingWords("emoji");
@@ -105,6 +121,197 @@ function useEmoji(wanted: boolean): EmojiRead {
   return read;
 }
 
+/* ----- Recent, as a section's picker keeps the icons this Mac chose last ----- */
+
+const RECENT_KEY = "prototype.recentFaces";
+const RECENT_MOST = 10;
+
+function readRecent(): readonly ManagerFaceValue[] {
+  try {
+    const kept: unknown = JSON.parse(window.localStorage.getItem(RECENT_KEY) ?? "[]");
+
+    // SAFETY: only this module writes the key, and it writes faces.
+    return Array.isArray(kept) ? (kept as ManagerFaceValue[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Whether two faces are the same choice, whatever their color: one character, or one emoji. */
+function sameChoice(one: ManagerFaceValue, other: ManagerFaceValue): boolean {
+  return one.emoji !== undefined || other.emoji !== undefined
+    ? one.emoji === other.emoji
+    : one.character === other.character;
+}
+
+function keepRecent(face: ManagerFaceValue): void {
+  const next = [face, ...readRecent().filter((one) => !sameChoice(one, face))].slice(
+    0,
+    RECENT_MOST,
+  );
+
+  try {
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+  } catch {
+    // Note that a refused write keeps Recent as it stood.
+  }
+}
+
+/* ----- A face's colors, popped up from the face pressed ----- */
+
+/** What a face is called: its character's name, or its emoji's. */
+function choiceLabel(face: ManagerFaceValue, emojiName?: string): string {
+  return face.emoji === undefined
+    ? MANAGER_FACE_CHARACTER_NAME[face.character]
+    : (emojiName ?? face.emoji);
+}
+
+/**
+ * A pressed face's colors, hung over the grid from the face as a menu is,
+ * as a section glyph's colors are: the face drawn in each, the one it starts
+ * on pressed and focused; a press chooses the face in that color, and
+ * Escape or the focus leaving puts them away.
+ */
+function FaceColors({
+  face,
+  label,
+  starts,
+  onColor,
+  onClose,
+}: {
+  face: ManagerFaceValue;
+  label: string;
+  starts: ManagerFaceColor;
+  onColor: (color: ManagerFaceColor) => void;
+  onClose: (byKey: boolean) => void;
+}): React.JSX.Element {
+  const start = useRef<HTMLButtonElement | null>(null);
+  const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.BOTH });
+  const holder = useRef<HTMLDivElement | null>(null);
+
+  return (
+    <PopoverPanel
+      open
+      title={`${label} color`}
+      replayUnmasked
+      look={POPOVER_PANEL_LOOK.MENU}
+      initialFocus={start}
+      onDismiss={() => onClose(true)}
+      onLeave={(left) => {
+        const cell = holder.current?.closest(".ui-face-cell");
+        const toCell =
+          left instanceof Node ? cell?.contains(left) === true : cell?.matches(":hover") === true;
+
+        if (!toCell) onClose(false);
+      }}
+    >
+      <div
+        ref={(element) => {
+          holder.current = element;
+          roving.ref(element);
+        }}
+        data-roving={roving["data-roving"]}
+        role="toolbar"
+        aria-label={`${label} color`}
+        className={`${ICON_PICKER_ASIDE} grid grid-cols-5 gap-tight-gap p-tight-gap`}
+        onKeyDown={roving.onKeyDown}
+        onFocus={roving.onFocus}
+      >
+        {ASKED_COLORS.map((color) => (
+          <IconButton
+            key={color}
+            ref={color === starts ? start : undefined}
+            icon={<ManagerFace face={{ ...face, color }} size={MANAGER_FACE_SIZE.ROW} raw />}
+            label={MANAGER_FACE_COLOR_NAME[color]}
+            pressed={color === starts}
+            roving
+            onClick={() => onColor(color)}
+          />
+        ))}
+      </div>
+    </PopoverPanel>
+  );
+}
+
+/** Which cell's colors stand open: the group it was pressed in, and its face. */
+interface Opened {
+  readonly group: string;
+  readonly face: ManagerFaceValue;
+}
+
+/**
+ * One face's cell in `group`, whose press opens its colors under it, as a
+ * section glyph's cell does. A character not chosen is drawn quiet, in gray,
+ * as a glyph not chosen is drawn in the text's ink; an emoji, bare, as a
+ * section's emoji is.
+ */
+function FaceCell({
+  group,
+  face,
+  label,
+  pressed,
+  inked,
+  starts,
+  stop,
+  opened,
+  onOpen,
+  onChoose,
+  onClose,
+}: {
+  group: string;
+  face: ManagerFaceValue;
+  label: string;
+  pressed: boolean;
+  inked: boolean;
+  starts: ManagerFaceColor;
+  stop: boolean;
+  opened: Opened | undefined;
+  onOpen: (opened: Opened) => void;
+  onChoose: (face: ManagerFaceValue) => void;
+  onClose: (byKey: boolean) => void;
+}): React.JSX.Element {
+  const open = opened?.group === group && sameChoice(opened.face, face);
+  const drawn =
+    face.emoji !== undefined && !inked ? (
+      <span className="text-foreground">{face.emoji}</span>
+    ) : (
+      <ManagerFace
+        face={inked ? face : { ...face, color: MANAGER_FACE_COLOR.GRAY }}
+        size={MANAGER_FACE_SIZE.ROW}
+        raw
+      />
+    );
+
+  return (
+    <span className="ui-face-cell relative grid">
+      <IconPickerChoice
+        label={label}
+        pressed={pressed}
+        stop={stop}
+        face={drawn}
+        popup
+        onPress={() => onOpen({ group, face })}
+      />
+      {open ? (
+        <AnchoredPopover
+          open
+          align={POPOVER_ALIGN.START}
+          width={POPOVER_WIDTH.FIT}
+          onPressAway={() => onClose(false)}
+        >
+          <FaceColors
+            face={face}
+            label={label}
+            starts={starts}
+            onColor={(color) => onChoose({ ...face, color })}
+            onClose={onClose}
+          />
+        </AnchoredPopover>
+      ) : null}
+    </span>
+  );
+}
+
 /* ----- The picker ----- */
 
 /** Whether `text` is one emoji a reader typed or pasted, which the search offers first. */
@@ -114,88 +321,6 @@ function typedEmoji(text: string): string | undefined {
   return /^\p{Extended_Pictographic}/u.test(trimmed) && [...trimmed].length <= 8
     ? trimmed
     : undefined;
-}
-
-/**
- * The color row: the face standing drawn in each color, the one it wears
- * pressed, one tab stop walked with the arrows, as a section glyph's colors are.
- */
-function ColorRow({
-  face,
-  onColor,
-}: {
-  face: ManagerFaceValue;
-  onColor: (next: ManagerFaceValue) => void;
-}): React.JSX.Element {
-  const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.HORIZONTAL });
-
-  return (
-    <div className="flex flex-col gap-tight-gap">
-      <Text as={TEXT_ELEMENT.H3} variant={TEXT_VARIANT.GROUP} className="m-0">
-        Color
-      </Text>
-      <div
-        ref={roving.ref}
-        data-roving={roving["data-roving"]}
-        role="toolbar"
-        aria-label="Face color"
-        className={`${ICON_PICKER_ASIDE} grid grid-cols-section-icons gap-tight-gap`}
-        onKeyDown={roving.onKeyDown}
-        onFocus={roving.onFocus}
-      >
-        {MIXED_COLORS.map((color) => (
-          <IconButton
-            key={color}
-            icon={<ManagerFace face={{ ...face, color }} size={MANAGER_FACE_SIZE.ROW} raw />}
-            label={MANAGER_FACE_COLOR_NAME[color]}
-            pressed={face.color === color}
-            roving
-            onClick={() => onColor({ ...face, color })}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** One emoji's choice, a press choosing it at once in the face's color. */
-function emojiChoice(
-  one: { readonly emoji: string; readonly name: string },
-  face: ManagerFaceValue,
-  stop: boolean,
-  onChange: (next: ManagerFaceValue) => void,
-): React.JSX.Element {
-  return (
-    <IconPickerChoice
-      key={one.emoji}
-      label={one.name}
-      pressed={face.emoji === one.emoji}
-      stop={stop}
-      face={<span className="text-foreground">{one.emoji}</span>}
-      onPress={() => onChange({ character: face.character, color: face.color, emoji: one.emoji })}
-    />
-  );
-}
-
-/** One character's choice, drawn in the face's color. */
-function characterChoice(
-  character: ManagerFaceCharacter,
-  face: ManagerFaceValue,
-  stop: boolean,
-  onChange: (next: ManagerFaceValue) => void,
-): React.JSX.Element {
-  const one = { character, color: face.color };
-
-  return (
-    <IconPickerChoice
-      key={character}
-      label={MANAGER_FACE_CHARACTER_NAME[character]}
-      pressed={face.emoji === undefined && face.character === character}
-      stop={stop}
-      face={<ManagerFace face={one} size={MANAGER_FACE_SIZE.ROW} raw />}
-      onPress={() => onChange(one)}
-    />
-  );
 }
 
 /** The Mixed picker; see the module's head. */
@@ -216,9 +341,69 @@ export function MixedFacePicker({
     face.emoji === undefined ? FACE_KIND.CHARACTERS : FACE_KIND.EMOJI,
   );
   const [query, setQuery] = useState("");
+  const [recent] = useState(readRecent);
+  const [opened, setOpened] = useState<Opened | undefined>(undefined);
   const searching = query.trim() !== "";
   const emoji = useEmoji(searching || kind === FACE_KIND.EMOJI);
-  const panelId = useRef(`mixed-face-panel-${Math.random().toString(36).slice(2)}`).current;
+  const panelId = useId();
+  let stopTaken = false;
+
+  // A face pressed again closes the colors it opened, as a disclosure does.
+  const open = (next: Opened) =>
+    setOpened((was) =>
+      was?.group === next.group && sameChoice(was.face, next.face) ? undefined : next,
+    );
+
+  const choose = (next: ManagerFaceValue) => {
+    keepRecent(next);
+    setOpened(undefined);
+    onChange(next);
+  };
+
+  const close = () => setOpened(undefined);
+
+  // Note that the first cell drawn chosen, or else the first drawn, is the grid's one tab stop.
+  const cell = (
+    group: string,
+    one: ManagerFaceValue,
+    options: { label?: string; inked?: boolean } = {},
+  ) => {
+    const pressed = sameChoice(face, one) && (one.emoji !== undefined || face.emoji === undefined);
+    const stop = !stopTaken && (pressed || standing === undefined);
+
+    if (stop) stopTaken = true;
+
+    return (
+      <FaceCell
+        key={`${group}:${one.emoji ?? one.character}`}
+        group={group}
+        face={one}
+        label={options.label ?? choiceLabel(one)}
+        pressed={pressed}
+        inked={options.inked ?? pressed}
+        starts={pressed ? face.color : options.inked ? one.color : MANAGER_FACE_COLOR.GRAY}
+        stop={stop}
+        opened={opened}
+        onOpen={open}
+        onChoose={choose}
+        onClose={close}
+      />
+    );
+  };
+
+  const characterFace = (character: ManagerFaceCharacter): ManagerFaceValue => ({
+    character,
+    color:
+      face.emoji === undefined && face.character === character
+        ? face.color
+        : MANAGER_FACE_COLOR.GRAY,
+  });
+
+  const emojiFace = (one: string): ManagerFaceValue => ({
+    character: face.character,
+    color: face.emoji === one ? face.color : MANAGER_FACE_COLOR.GRAY,
+    emoji: one,
+  });
 
   const note = (words: string) => <NoteLine look={NOTE_LINE_LOOK.LIST}>{words}</NoteLine>;
 
@@ -239,7 +424,6 @@ export function MixedFacePicker({
         words.every((word) => MANAGER_FACE_CHARACTER_NAME[character].toLowerCase().includes(word)),
       );
       const typed = typedEmoji(query);
-      const typedOne = typed === undefined ? [] : [{ emoji: typed, name: typed }];
       const found =
         emoji.state === EMOJI_READ.READ
           ? findEmoji(emoji.groups, query)
@@ -247,34 +431,23 @@ export function MixedFacePicker({
               .filter((one) => one.emoji !== typed)
           : [];
 
-      if (characters.length === 0 && typedOne.length === 0 && found.length === 0) {
+      if (characters.length === 0 && typed === undefined && found.length === 0) {
         return emojiNote ?? note(NO_MATCH);
       }
 
       return (
         <>
-          {typedOne.length === 0 ? null : (
-            <IconPickerGroup name="Emoji">
-              {typedOne.map((one) => emojiChoice(one, face, true, onChange))}
-            </IconPickerGroup>
+          {typed === undefined ? null : (
+            <IconPickerGroup name="Emoji">{cell("typed", emojiFace(typed))}</IconPickerGroup>
           )}
           {characters.length === 0 ? null : (
             <IconPickerGroup name="Characters">
-              {characters.map((character, at) =>
-                characterChoice(character, face, typedOne.length === 0 && at === 0, onChange),
-              )}
+              {characters.map((character) => cell("found-characters", characterFace(character)))}
             </IconPickerGroup>
           )}
           {found.length === 0 ? null : (
-            <IconPickerGroup name={typedOne.length === 0 ? "Emoji" : "More emoji"}>
-              {found.map((one, at) =>
-                emojiChoice(
-                  one,
-                  face,
-                  typedOne.length === 0 && characters.length === 0 && at === 0,
-                  onChange,
-                ),
-              )}
+            <IconPickerGroup name={typed === undefined ? "Emoji" : "More emoji"}>
+              {found.map((one) => cell("found-emoji", emojiFace(one.emoji), { label: one.name }))}
             </IconPickerGroup>
           )}
         </>
@@ -282,26 +455,27 @@ export function MixedFacePicker({
     }
 
     if (kind === FACE_KIND.CHARACTERS) {
-      const stopAt = face.emoji === undefined ? face.character : CHARACTERS[0];
-
       return (
-        <IconPickerGroup name="Characters">
-          {CHARACTERS.map((character) =>
-            characterChoice(character, face, character === stopAt, onChange),
+        <>
+          {recent.length === 0 ? null : (
+            <IconPickerGroup name="Recent">
+              {recent.map((one) => cell("recent", one, { inked: true }))}
+            </IconPickerGroup>
           )}
-        </IconPickerGroup>
+          <IconPickerGroup name="Characters">
+            {CHARACTERS.map((character) => cell("characters", characterFace(character)))}
+          </IconPickerGroup>
+        </>
       );
     }
 
     if (emoji.state !== EMOJI_READ.READ) return emojiNote;
-    const all = emoji.groups.flatMap((group) => group.emojis);
-    const stop = all.find((one) => one.emoji === face.emoji) ?? all[0];
 
     return (
       <>
         {emoji.groups.map((group) => (
           <IconPickerGroup key={group.name} name={group.name}>
-            {group.emojis.map((one) => emojiChoice(one, face, one === stop, onChange))}
+            {group.emojis.map((one) => cell(group.name, emojiFace(one.emoji), { label: one.name }))}
           </IconPickerGroup>
         ))}
       </>
@@ -313,24 +487,27 @@ export function MixedFacePicker({
       searchLabel="Search characters and emoji"
       search={search}
       query={query}
-      onQuery={setQuery}
+      onQuery={(next) => {
+        setOpened(undefined);
+        setQuery(next);
+      }}
       legend={kind === FACE_KIND.CHARACTERS ? "Characters" : "Emoji"}
       panel={{ id: panelId, labelledBy: `${panelId}-${kind}` }}
       bar={
-        <>
-          <ChoiceBar<FaceKind>
-            label="Face kind"
-            items={[
-              { value: FACE_KIND.CHARACTERS, label: "Characters" },
-              { value: FACE_KIND.EMOJI, label: "Emoji" },
-            ]}
-            value={kind}
-            onChange={setKind}
-            look={CHOICE_BAR_LOOK.SEGMENTED}
-            panels={(each) => ({ tab: `${panelId}-${each}`, panel: panelId })}
-          />
-          <ColorRow face={face} onColor={onChange} />
-        </>
+        <ChoiceBar<FaceKind>
+          label="Face kind"
+          items={[
+            { value: FACE_KIND.CHARACTERS, label: "Characters" },
+            { value: FACE_KIND.EMOJI, label: "Emoji" },
+          ]}
+          value={kind}
+          onChange={(next) => {
+            setOpened(undefined);
+            setKind(next);
+          }}
+          look={CHOICE_BAR_LOOK.SEGMENTED}
+          panels={(each) => ({ tab: `${panelId}-${each}`, panel: panelId })}
+        />
       }
     >
       {body}

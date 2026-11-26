@@ -10,7 +10,7 @@ import {
 import { type RefObject, useRef, useState } from "react";
 import { SmilePlusIcon } from "../../icons/icons.js";
 import { ReplayUnmask } from "../../session-replay-marks.js";
-import { BUTTON_SIZE } from "../button/button.js";
+import { BUTTON_SIZE, type ButtonSize } from "../button/button.js";
 import { CHOICE_BAR_LOOK, ChoiceBar } from "../choice-bar/choice-bar.js";
 import { IconPicker, IconPickerChoice, IconPickerGroup } from "../icon-picker/icon-picker.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
@@ -346,13 +346,16 @@ export function ManagerFaceWell({
   onOpenChange,
   onChange,
   disabled,
+  size = BUTTON_SIZE.CONTROL,
 }: {
   face: ManagerFaceValue | undefined;
   open: boolean;
-  /** Hears the picker stand or go. */
-  onOpenChange: (open: boolean) => void;
+  /** Hears the picker stand or go; `away` where a press away from it put it away. */
+  onOpenChange: (open: boolean, away: boolean) => void;
   onChange: (next: ManagerFaceValue) => void;
   disabled?: boolean | undefined;
+  /** PROTOTYPE: the well's size, compact in a row's editor as a section head's well is. */
+  size?: ButtonSize | undefined;
 }): React.JSX.Element {
   const search = useRef<HTMLInputElement | null>(null);
 
@@ -368,8 +371,8 @@ export function ManagerFaceWell({
       label={face === undefined ? "Pick face" : `Change face, ${managerFaceName(face)}`}
       title={MANAGER_FACE}
       open={open}
-      onOpenChange={(next) => onOpenChange(next)}
-      size={BUTTON_SIZE.CONTROL}
+      onOpenChange={(next, away) => onOpenChange(next, away)}
+      size={size}
       disabled={disabled}
       initialFocus={search}
     >
@@ -378,7 +381,7 @@ export function ManagerFaceWell({
         search={search}
         onChange={(next) => {
           onChange(next);
-          onOpenChange(false);
+          onOpenChange(false, false);
         }}
       />
     </PopoverIconButton>

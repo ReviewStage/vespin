@@ -16,6 +16,7 @@ import {
 import { managerChatUnread } from "@repo/features/workspace-managers-model";
 import { selectAgentPinned } from "@repo/host/app-state-reads";
 import {
+  BUTTON_SIZE,
   InlineEdit,
   LIST_DENSITY,
   LIST_ROW_CURRENT,
@@ -33,6 +34,8 @@ import {
   Time,
   WorkingCount,
 } from "@repo/ui";
+import { SmileIcon } from "@repo/ui/icons";
+import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQuery } from "@tanstack/react-query";
@@ -53,6 +56,7 @@ import { appStateQuery, selectFixtureStaged, selectSignedIn } from "../use-app-s
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { type MenuEntry, rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
+import { pickFaceOf, usePickingFace } from "./prototype-face-pick.js";
 import { useRowPlace, withRowMoves } from "./row-moves.js";
 import { moveToSectionEntry, type SectionDialogs, useSectionDialogs } from "./sidebar-sections.js";
 import { SIDEBAR_ROW_TIME } from "./task-card.js";
@@ -259,7 +263,38 @@ export function AgentListRow({
     press.current = held instanceof HTMLButtonElement ? held : null;
   }, []);
 
-  const glyph = <AgentGlyph agent={agent} />;
+  // PROTOTYPE (round 3): Change face opens the row's editor with its face well's picker open, as Change icon opens a section's head; the well stands in the glyph's place while the row is edited.
+  const pickingFace = usePickingFace(agent.id);
+  const { faceChange } = actions;
+  const faceWell =
+    editing && faceChange !== undefined && agent.face !== undefined ? (
+      <ManagerFaceWell
+        face={agent.face}
+        open={pickingFace}
+        onOpenChange={(next, away) => {
+          pickFaceOf(next ? agent.id : undefined);
+
+          // Note that a press away from the picker took the focus before it put the picker away, so it ends the edit here.
+          if (away) rename?.end(undefined);
+        }}
+        onChange={faceChange}
+        size={BUTTON_SIZE.COMPACT}
+      />
+    ) : undefined;
+  const faceDoor: MenuEntry | undefined =
+    faceChange === undefined || rename === undefined
+      ? undefined
+      : {
+          label: "Change face",
+          icon: <SmileIcon />,
+          onSelect: () => {
+            pickFaceOf(agent.id);
+            rename.begin();
+          },
+        };
+  const doors = faceDoor === undefined ? actions.doors : { ...actions.doors, changeFace: faceDoor };
+
+  const glyph = faceWell ?? <AgentGlyph agent={agent} />;
 
   const waiting = <WaitingCount count={waits + asked} />;
 
@@ -307,6 +342,7 @@ export function AgentListRow({
       label="Agent name"
       maxLength={AGENT_BOUNDS.MAX_TITLE_CHARS}
       editing
+      endsOnBlur={!pickingFace}
       onEnd={(edit) => {
         endedByKey(edit.byKey);
         rename.end(edit.value);
@@ -325,7 +361,7 @@ export function AgentListRow({
           withRowMoves(
             [
               ...pinGroups(agent, pinned, onPin, actions.subject, { dialogs: sections, name }),
-              ...agentMenuGroups(rowDoors(actions.doors)),
+              ...agentMenuGroups(rowDoors(doors)),
             ],
             rowPlace,
           ),

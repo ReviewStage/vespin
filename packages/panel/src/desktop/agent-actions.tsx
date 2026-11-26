@@ -296,6 +296,8 @@ export interface AgentActions {
   readonly openInTab: (() => void) | undefined;
   /** The rename its Rename opens; none while what it stands under is archived. */
   readonly rename: InlineRename | undefined;
+  /** PROTOTYPE (round 3): saves a Manager's face, as Change face's picker does; none for another agent. */
+  readonly faceChange: ((face: ManagerFace) => void) | undefined;
   readonly dialog: React.JSX.Element;
 }
 
@@ -524,6 +526,7 @@ export function useAgentActions(
     subject,
     openInTab,
     rename: renamable ? rename : undefined,
+    faceChange: manager && agents.onUnarchive === undefined ? changeFace : undefined,
     dialog: (
       <>
         {archive.dialog}
