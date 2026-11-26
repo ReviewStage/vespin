@@ -238,9 +238,11 @@ test("an edit ends once, whichever end comes first", () => {
 function EditedBeside({
   ends,
   handle,
+  holding = false,
 }: {
   ends: InlineEditEnd[];
   handle: RefObject<InlineEditHandle | null>;
+  holding?: boolean;
 }): React.JSX.Element {
   const box = useRef<HTMLSpanElement | null>(null);
   const [floating, setFloating] = useState(false);
@@ -272,13 +274,14 @@ function EditedBeside({
       label: "Agent name",
       editing: true,
       within: [box],
+      holding,
       ref: handle,
       onEnd: (end: InlineEditEnd) => ends.push(end),
     }),
   );
 }
 
-test("the focus going into the edit's own boxes, or a flyout floated from one, ends nothing, and leave ends it once the focus stands outside", async () => {
+test("the focus going into the edit's own boxes, or a flyout floated from one, ends nothing, and leaving a box for elsewhere ends it", async () => {
   const ends: InlineEditEnd[] = [];
   const handle = createRef<InlineEditHandle>();
   const container = render(createElement(EditedBeside, { ends, handle }));
@@ -301,7 +304,18 @@ test("the focus going into the edit's own boxes, or a flyout floated from one, e
 
   act(() => handle.current?.leave());
   assert.deepEqual(ends, [], "leave ends nothing while the focus stands in the edit");
-  act(() => purple?.blur());
+  act(() => cat.focus());
+  act(() => cat.blur());
+  assert.deepEqual(ends, [{ value: undefined, byKey: false }], "the focus leaving the box ends it");
+});
+
+test("while a layer stands the focus leaving ends nothing, and leave ends the edit once the focus stands outside", () => {
+  const ends: InlineEditEnd[] = [];
+  const handle = createRef<InlineEditHandle>();
+  render(createElement(EditedBeside, { ends, handle, holding: true }));
+  act(() => handle.current?.field()?.blur());
+
+  assert.deepEqual(ends, []);
   act(() => handle.current?.leave());
   assert.deepEqual(ends, [{ value: undefined, byKey: false }]);
 });

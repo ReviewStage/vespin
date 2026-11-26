@@ -72,7 +72,9 @@ export type { ListSelection } from "../selection/list-selection.js";
  * inside it, because a button holds no button: each is a control of its own,
  * reached by Tab after the row and pressed without pressing the row. A row
  * that opens nothing is no control at all. The leading mark is decoration,
- * hidden from a reader, since the title says what the row is. The row owns
+ * hidden from a reader, since the title says what the row is, unless it is
+ * a control of its own (`leadingControl`), as a Manager's face well is while
+ * a row that opens nothing is renamed. The row owns
  * every length in it and takes no class or style.
  *
  * A keyboard-driven list (arrows or j/k between rows, a key to act on the
@@ -647,6 +649,7 @@ export function List({
 /** One row of a `List`: `title` over `description`, `meta` at its end, `actions` beside it. */
 export function ListRow({
   leading,
+  leadingControl = false,
   title,
   titleReplayMasked = false,
   description,
@@ -697,6 +700,8 @@ export function ListRow({
 }: {
   /** A mark before the title (an avatar, a status's glyph), drawn as decoration. */
   leading?: ReactNode;
+  /** Whether `leading` is a control of its own, which a reader reaches, rather than decoration: a face well in a row being renamed, which opens nothing meanwhile. */
+  leadingControl?: boolean | undefined;
   /** What the row is, which its name opens with. */
   title: ReactNode;
   /** Whether the title names a person's thing, a task's or a repository's name, kept masked in a screen recording even where the row stands under `ReplayUnmask`; a title in words stays measured as words. */
@@ -979,7 +984,7 @@ export function ListRow({
       {said(mark) ? (
         <span
           className={tone === undefined ? LEADING_CLASS : LEADING_TONED_CLASS}
-          aria-hidden="true"
+          aria-hidden={leadingControl && checked === undefined ? undefined : "true"}
         >
           {mark}
         </span>

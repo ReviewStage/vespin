@@ -1,5 +1,5 @@
 import type { ReactNode, Ref, RefObject } from "react";
-import { useImperativeHandle, useLayoutEffect, useRef } from "react";
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef } from "react";
 import { isComposingKey } from "../../composing-key.js";
 import { ShadcnInput } from "../../shadcn/input.js";
 import { iconPickerChoiceOf } from "../icon-picker/icon-picker.js";
@@ -19,7 +19,9 @@ import { iconPickerChoiceOf } from "../icon-picker/icon-picker.js";
  * A field may stand beside controls of the edit's own, as a Manager's face
  * well stands beside its name: the focus going into one of the boxes the
  * caller names (`within`), or into a flyout an icon picker's choice floats
- * that traces back into one (`iconPickerChoiceOf`), ends nothing, and
+ * that traces back into one (`iconPickerChoiceOf`), ends nothing, the focus
+ * leaving one of those boxes for anywhere else ends it as leaving the field
+ * does, and
  * neither does the focus going anywhere while a layer one of them hung
  * stands (`holding`), a picker drawn in a portal outside them, as a group
  * head's editor has it (`GroupHeaderEditor`). A press away that puts the
@@ -149,6 +151,27 @@ function InlineEditField({
     onEnd({ value: keep && typed !== "" && typed !== value ? typed : undefined, byKey });
   };
 
+  // Note that the focus may leave from a box of the edit's own as well as from the field, as it does from a face well tabbed to, so each box is heard too.
+  const leaving = (next: EventTarget | null) => {
+    if (held.current || inEdit(next, field.current, within)) return;
+    end(true, false);
+  };
+
+  const left = useRef(leaving);
+  left.current = leaving;
+  useEffect(() => {
+    if (!endsOnBlur) return undefined;
+
+    const boxes = within.flatMap((box) => (box.current === null ? [] : [box.current]));
+    const onFocusOut = (event: FocusEvent) => left.current(event.relatedTarget);
+
+    for (const box of boxes) box.addEventListener("focusout", onFocusOut);
+
+    return () => {
+      for (const box of boxes) box.removeEventListener("focusout", onFocusOut);
+    };
+  }, [within, endsOnBlur]);
+
   useImperativeHandle(ref, () => ({
     leave: () => {
       if (!inEdit(document.activeElement, field.current, within)) end(true, false);
@@ -167,14 +190,7 @@ function InlineEditField({
       placeholder={placeholder}
       maxLength={maxLength}
       spellCheck={false}
-      onBlur={
-        endsOnBlur
-          ? (event) => {
-              if (held.current || inEdit(event.relatedTarget, field.current, within)) return;
-              end(true, false);
-            }
-          : undefined
-      }
+      onBlur={endsOnBlur ? (event) => leaving(event.relatedTarget) : undefined}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           event.preventDefault();
