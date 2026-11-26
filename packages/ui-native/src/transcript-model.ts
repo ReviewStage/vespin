@@ -1673,8 +1673,12 @@ export function managerChatItems(
   const going = sendingTo(reading.sending, undefined);
   const sending = chatSendingItems(going, view.sending.channel, reading);
 
+  // Note that the message under New opens a run of its own, under its sender's name, as the panel heads it.
   const runs = new Map<string, ChatRunPlace>([
-    ...view.top.map((line) => [line.message.id, line.place] as const),
+    ...view.top.map(
+      (line) =>
+        [line.message.id, line === fresh ? { ...line.place, opens: true } : line.place] as const,
+    ),
     ...sending.map(({ item, place }) => [item.place.message, place] as const),
   ]);
 

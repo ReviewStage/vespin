@@ -670,21 +670,25 @@ function threadRowsOf(
  * close under the one before it, as a chat app stands one sender's bubbles,
  * and every other row a step from it (tasks.css).
  */
-function useChatRowClass(rows: readonly ChatRow[]): (index: number) => string {
+function useChatRowClass(
+  rows: readonly ChatRow[],
+  newKey?: string | undefined,
+): (index: number) => string {
   return useCallback(
     (index: number) => {
       if (index === 0) return LOG_ROW_CLASS;
       const row = rows[index];
 
+      // Note that the message under New opens a run of its own (`newKeyOf`).
       const continues =
-        (row?.kind === CHAT_ROW.MESSAGE && !row.line.place.opens) ||
+        (row?.kind === CHAT_ROW.MESSAGE && !row.line.place.opens && row.key !== newKey) ||
         (row?.kind === CHAT_ROW.SENDING && !row.place.opens);
 
       return continues
         ? `${LOG_ROW_CLASS} agent-log-row-run`
         : `${LOG_ROW_CLASS} agent-log-row-next`;
     },
-    [rows],
+    [rows, newKey],
   );
 }
 
@@ -1120,7 +1124,7 @@ export function ManagerChatTab({
   const finding = useFindOpen();
   const findRows = useMemo(() => (finding ? rows.map(findRowOf) : NO_FIND_ROWS), [finding, rows]);
   useVirtualFind({ root: list, rows: findRows, handle: rowsHandle, findable: keys.length > 0 });
-  const rowClassOf = useChatRowClass(rows);
+  const rowClassOf = useChatRowClass(rows, newKey);
   const asks = approvals.asks;
 
   const workingWords =
@@ -1189,10 +1193,11 @@ export function ManagerChatTab({
 
     if (row.kind === CHAT_ROW.RULE) return <ThreadRule count={row.count} />;
 
+    // Note that the message under New opens a run of its own, under its sender's name, as a channel heads the first message past its New line.
     return row.key === newKey ? (
       <>
         <NewMessagesRule />
-        {drawLine(row.line, doors)}
+        {drawLine({ ...row.line, place: { ...row.line.place, opens: true } }, doors)}
       </>
     ) : (
       drawLine(row.line, doors)
