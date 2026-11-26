@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
+import { ForegroundClock } from "@repo/runtime/effect";
+import { testForegroundClock } from "@repo/runtime/testing";
 import { HTTP_METHOD } from "@repo/wire";
 import {
   HTTP_STATUS,
@@ -24,8 +26,16 @@ import {
 
 const BASE_URL = "https://app.test";
 
-/** The service's reach as it is first kept, at the test clock's start, before any call was made. */
-const REACHABLE: ServiceReachState = { reachable: true, answeredAt: 0 };
+/** The service's reach as it is first kept, on the foreground clock's now, before any call was made. */
+const keptReach = Effect.gen(function* () {
+  const foreground = yield* ForegroundClock;
+
+  return yield* SubscriptionRef.make<ServiceReachState>({
+    reachable: true,
+    answeredAt: foreground.now(),
+  });
+});
+
 const PATH = "/api/account/preferences";
 
 function refusal(): Response {
@@ -160,7 +170,7 @@ it.effect(
   "silence past 45 seconds, then a call that ends with no answer, sets the service unreachable, and the next answer, a refusal among them, sets it back",
   () =>
     Effect.gen(function* () {
-      const reach = yield* SubscriptionRef.make<ServiceReachState>(REACHABLE);
+      const reach = yield* keptReach;
       let asked = 0;
 
       const { call, client } = callOn(NO_CREDENTIAL, () => {
@@ -185,14 +195,14 @@ it.effect(
       const refused = yield* send;
       assert.ok(callAnswered(refused) && refused.response.status === HTTP_STATUS.UNAUTHORIZED);
       assert.equal((yield* SubscriptionRef.get(reach)).reachable, true);
-    }),
+    }).pipe(Effect.provideServiceEffect(ForegroundClock, testForegroundClock)),
 );
 
 it.effect(
   "a 426 says this build needs an update on the reach, until the next answer of another status",
   () =>
     Effect.gen(function* () {
-      const reach = yield* SubscriptionRef.make<ServiceReachState>(REACHABLE);
+      const reach = yield* keptReach;
       let asked = 0;
 
       const { call, client } = callOn(NO_CREDENTIAL, () => {
@@ -220,7 +230,7 @@ it.effect(
   "a call that runs out its deadline within 45 seconds of the last answer leaves the service reachable",
   () =>
     Effect.gen(function* () {
-      const reach = yield* SubscriptionRef.make<ServiceReachState>(REACHABLE);
+      const reach = yield* keptReach;
       let asked = 0;
 
       const { call, client } = callOn(NO_CREDENTIAL, () => {
@@ -246,6 +256,41 @@ it.effect(
       const unanswered = yield* Fiber.join(silent);
 
       assert.deepEqual(unanswered, { fault: CALL_FAULT.NETWORK, errorName: "TimeoutError" });
+      assert.equal((yield* SubscriptionRef.get(reach)).reachable, true);
+    }).pipe(Effect.provideServiceEffect(ForegroundClock, testForegroundClock)),
+);
+
+it.effect(
+  "a call the background cut off, minutes past the last answer, leaves the service reachable, the foreground clock having stood still",
+  () =>
+    Effect.gen(function* () {
+      const foreground = yield* testForegroundClock;
+      let asked = 0;
+
+      const { call, client } = callOn(NO_CREDENTIAL, () => {
+        asked += 1;
+
+        if (asked === 1) return jsonResponse({ ok: true });
+
+        throw new TypeError("Load failed");
+      });
+
+      const reach = yield* keptReach.pipe(Effect.provideService(ForegroundClock, foreground));
+
+      const send = call
+        .send({ method: HTTP_METHOD.GET, path: PATH })
+        .pipe(
+          Effect.provide(client),
+          Effect.provideService(ServiceReach, reach),
+          Effect.provideService(ForegroundClock, foreground),
+        );
+
+      assert.ok(callAnswered(yield* send));
+      foreground.away();
+      yield* TestClock.adjust("7 minutes");
+      foreground.back();
+      yield* send;
+
       assert.equal((yield* SubscriptionRef.get(reach)).reachable, true);
     }),
 );

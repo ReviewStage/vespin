@@ -1,4 +1,10 @@
 import {
+  ForegroundClock,
+  type ForegroundMillis,
+  foregroundAfter,
+  foregroundPassed,
+} from "@repo/runtime/effect";
+import {
   HTTP_STATUS,
   type HttpMethod,
   positiveInteger,
@@ -8,7 +14,6 @@ import {
 } from "@repo/wire";
 import { webResponseFromClientResponse } from "@repo/wire/effect";
 import {
-  Clock,
   Context,
   Data,
   Duration,
@@ -48,7 +53,8 @@ const JSON_CONTENT_TYPE = "application/json";
  * attempt is never enough, because a held read answers within its deadline
  * while the service is well, so an attempt that runs out its own, or a gap
  * no read was answered in that is shorter than this, says nothing of the
- * service.
+ * service. It is foreground time (`ForegroundClock`), so a call the
+ * background cut off says nothing of the minutes the app spent there.
  */
 const SILENCE_BEFORE_UNREACHABLE = Duration.seconds(45);
 
@@ -128,8 +134,8 @@ export type CallAnswer = CallResponse | CallFailure;
 export interface ServiceReachState {
   /** Whether the service answers, as the calls last judged it. */
   readonly reachable: boolean;
-  /** When an attempt was last answered, in the clock's milliseconds; when the reach was first kept, before any was. */
-  readonly answeredAt: number;
+  /** When an attempt was last answered, on the foreground clock; when the reach was first kept, before any was. */
+  readonly answeredAt: ForegroundMillis;
   /** Set where the service's last answer refused this build as older than it serves (426, `host-upgrade-needed`), until an answer of any other status. */
   readonly updateNeeded?: true;
 }
@@ -261,33 +267,34 @@ function transportFailure(error: CallTransportError): CallFailure {
   };
 }
 
-/** Changes the service's reach as of the clock's now, where the client keeps one. */
+/** Changes the service's reach as of the foreground clock, where the client keeps one. */
 function toldReach(
-  change: (state: ServiceReachState, now: number) => ServiceReachState,
+  change: (state: ServiceReachState, foreground: ForegroundClock) => ServiceReachState,
 ): Effect.Effect<void> {
   return Effect.flatMap(
     Effect.serviceOption(ServiceReach),
     Option.match({
       onNone: () => Effect.void,
       onSome: (reach) =>
-        Effect.flatMap(Clock.currentTimeMillis, (now) =>
-          SubscriptionRef.update(reach, (state) => change(state, now)),
-        ),
+        Effect.gen(function* () {
+          const foreground = yield* ForegroundClock;
+          yield* SubscriptionRef.update(reach, (state) => change(state, foreground));
+        }),
     }),
   );
 }
 
 /** An attempt the service answered, with any status: a 426 says this build is older than the service serves, and any other that it is not. */
 const heardAnswer = (status: number) =>
-  toldReach((_, now) => ({
+  toldReach((_, foreground) => ({
     reachable: true,
-    answeredAt: now,
+    answeredAt: foreground.now(),
     ...(status === HTTP_STATUS.UPGRADE_REQUIRED ? { updateNeeded: true } : undefined),
   }));
 
 /** An attempt that ended with no answer, which says the service is unreachable only once nothing was answered for `SILENCE_BEFORE_UNREACHABLE`. */
-const heardNoAnswer = toldReach((state, now) =>
-  now - state.answeredAt > Duration.toMillis(SILENCE_BEFORE_UNREACHABLE)
+const heardNoAnswer = toldReach((state, foreground) =>
+  foregroundPassed(foreground, foregroundAfter(state.answeredAt, SILENCE_BEFORE_UNREACHABLE))
     ? { ...state, reachable: false }
     : state,
 );
