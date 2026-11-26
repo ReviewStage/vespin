@@ -67,9 +67,11 @@ env:
 # A sheet with words typed keeps them as the panel's New task does: the
 # swipe down and the ✕ (Cancel) each close it at once, with no question, and
 # the words stand in the next New task's field until they are emptied. Note
-# that the app is launched again for it, so the Inbox and its bar's compose
-# stand.
+# that the app is launched again for it from a cleared state, so the Inbox
+# and its bar's compose stand, and the relation's words above, which a
+# relaunch keeps as their draft, stand in no field.
 - launchApp:
+    clearState: true
     arguments:
       fixture: inbox
 - extendedWaitUntil:
