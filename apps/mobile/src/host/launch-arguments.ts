@@ -28,6 +28,7 @@ const LAUNCH_ARGUMENT = {
   REFUSE_WRITES: "refuseWrites",
   BUSY_ACCOUNT: "busyAccount",
   BUSY_RENDER: "busyRender",
+  PR_PROBE: "prProbe",
   PILL_FIELD: "pillField",
   SENTRY_TEST: "sentryTest",
   MEDIA_ORIGIN: "mediaOrigin",
@@ -129,6 +130,16 @@ export function launchBusyRender(): number | undefined {
   const ms = Predicate.isNumber(named) ? named : Number(named);
 
   return launchFixtureProfile() !== undefined && Number.isInteger(ms) && ms > 0 ? ms : undefined;
+}
+
+/** PROBE (not for merge): how long a fixture run holds back a pull request's three parts, as `-prProbe <pr>,<checks>,<conversation>` names them in milliseconds. */
+export function launchPullRequestProbe(): readonly [number, number, number] | undefined {
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.PR_PROBE);
+
+  if (launchFixtureProfile() === undefined || !Predicate.isString(named)) return undefined;
+  const [pr = 0, checks = 0, conversation = 0] = named.split(",").map(Number);
+
+  return [pr, checks, conversation];
 }
 
 /** Whether this launch stands a fixture run as the service's refusal of an old build leaves it, as `-updateNeeded true` asks (`maestro/update-needed.yaml`). */

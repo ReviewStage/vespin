@@ -109,6 +109,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent, useShownAgent } from "../agents/use-agent.js";
 import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-on.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useProbeDrawn } from "../pull-requests/pr-probe.js";
 import { reactionMenu } from "../pull-requests/reaction-menu.js";
 import {
   type PullRequestKey,
@@ -537,6 +538,14 @@ function PullRequestPage({
   const url = pullRequest?.url ?? listed?.url ?? gitHubPullRequestUrl(key);
   const press = shownPressOf(pullRequest, method, writes.pending);
   const offered = offeredActionOf(pullRequest);
+  useProbeDrawn(
+    [
+      title === undefined || state === undefined ? "spinner" : "title",
+      pullRequest === undefined ? "" : "head",
+      checks === undefined ? "" : "checks",
+      conversation === undefined ? "" : "conversation",
+    ].filter((each) => each !== ""),
+  );
 
   // The title typed into Edit title, drawn in the title's place until GitHub answers, as the panel's title stands as typed; the pull request it was typed on, so another route never draws it.
   const [retitled, setRetitled] = useState<{
