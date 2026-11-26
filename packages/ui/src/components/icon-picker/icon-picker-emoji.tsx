@@ -1,11 +1,21 @@
-import { type EmojiGroup, emojiGroups, findEmoji } from "@repo/features/emoji-model";
+import {
+  EMOJI_CATEGORY,
+  type EmojiCategory,
+  type EmojiGroup,
+  emojiGroups,
+  findEmoji,
+} from "@repo/features/emoji-model";
 import { emojiSchema } from "@repo/features/emoji-wire";
 import { noMatchWords, readingWords } from "@repo/features/words";
 import { queryOptions, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Schema } from "effect";
-import { memo, type ReactNode } from "react";
+import { memo, type ReactNode, useRef } from "react";
+import { createPortal } from "react-dom";
+import { GLYPH } from "../../icons/glyph-registry.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
 import { IconPickerChoice, IconPickerGroup } from "./icon-picker.js";
+import { IconPickerCategories, type IconPickerCategory } from "./icon-picker-categories.js";
+import { useIconPickerFrame } from "./icon-picker-frame.js";
 
 /**
  * icon-picker-emoji.tsx -- the icon picker's emoji: every emoji by category, loaded the first time they are shown, and the emoji a search finds, an emoji typed or pasted into it first.
@@ -15,7 +25,11 @@ import { IconPickerChoice, IconPickerGroup } from "./icon-picker.js";
  * the picker's owner calls where it shows them or a search looks in them),
  * so no window parses them before. With nothing
  * searched, `IconPickerEmoji` draws every emoji under its category's name,
- * the one chosen, or else the first, the grid's tab stop. A search draws
+ * Slack's, the one chosen, or else the first, the grid's tab stop, and
+ * stands a category bar in the picker's band (`IconPickerCategories`), the
+ * owner's own group first under a clock, then each category under its glyph;
+ * a press jumps the grid to the group, and the group in view is underlined
+ * as the grid scrolls, its name standing at the grid's top. A search draws
  * an emoji typed or picked into it (⌃⌘Space) first, so one newer than the
  * grid's still can be chosen, then whatever the owner's own set found
  * beside the emoji (`beside`, as a section's glyphs), then the emoji whose
@@ -44,6 +58,26 @@ const TYPED_EMOJI = "Emoji";
 
 /** What the emoji found by name are offered under after one typed. */
 const MORE_EMOJI = "More emoji";
+
+/** The glyph each category wears in the category bar. */
+const CATEGORY_GLYPH = {
+  [EMOJI_CATEGORY.SMILEYS_PEOPLE]: GLYPH.EMOJI_SMILEYS_PEOPLE,
+  [EMOJI_CATEGORY.NATURE]: GLYPH.EMOJI_NATURE,
+  [EMOJI_CATEGORY.FOOD]: GLYPH.EMOJI_FOOD,
+  [EMOJI_CATEGORY.TRAVEL]: GLYPH.EMOJI_TRAVEL,
+  [EMOJI_CATEGORY.ACTIVITIES]: GLYPH.EMOJI_ACTIVITIES,
+  [EMOJI_CATEGORY.OBJECTS]: GLYPH.EMOJI_OBJECTS,
+  [EMOJI_CATEGORY.SYMBOLS]: GLYPH.EMOJI_SYMBOLS,
+  [EMOJI_CATEGORY.FLAGS]: GLYPH.EMOJI_FLAGS,
+} as const satisfies Record<EmojiCategory, React.ComponentType>;
+
+/** A group as the category bar offers it: under its category's glyph, or the lead's, an owner's own group standing under none. */
+function categoryOf(group: EmojiGroup): IconPickerCategory {
+  return {
+    name: group.name,
+    glyph: group.category === undefined ? GLYPH.EMOJI_LEAD : CATEGORY_GLYPH[group.category],
+  };
+}
 
 /** Whether a search, trimmed, is one emoji. */
 const isOneEmoji = Schema.is(emojiSchema);
@@ -200,7 +234,7 @@ function emojiNote({ groups, failed }: EmojiLoaded): string {
   return groups === undefined ? EMOJI_READING : NO_EMOJI_MATCH;
 }
 
-/** The emoji with nothing searched: the owner's own group first (`lead`), then every one under its category's name; the one chosen, or the first, is the grid's tab stop. */
+/** The emoji with nothing searched: the owner's own group first (`lead`), then every one under its category's name, with the category bar in the picker's band; the one chosen, or the first, is the grid's tab stop. */
 function EmojiGroups({
   loaded,
   lead,
@@ -223,10 +257,34 @@ function EmojiGroups({
   const all = groups.flatMap((group) => group.emojis);
   const stop = all.find((one) => one.emoji === chosen) ?? all[0];
 
+  // Each group's box, in the bar's order, which the bar jumps the grid to and reads the place of.
+  const boxes = useRef<(HTMLElement | null)[]>([]);
+  boxes.current.length = groups.length;
+  const frame = useIconPickerFrame();
+
+  const bar =
+    frame.band === null || frame.scroller === null || loadedGroups.length === 0
+      ? null
+      : createPortal(
+          <IconPickerCategories
+            categories={groups.map(categoryOf)}
+            groups={boxes}
+            scroller={frame.scroller}
+          />,
+          frame.band,
+        );
+
   return (
     <>
-      {groups.map((group) => (
-        <IconPickerGroup key={group.name} name={group.name}>
+      {bar}
+      {groups.map((group, at) => (
+        <IconPickerGroup
+          key={group.name}
+          name={group.name}
+          ref={(box) => {
+            boxes.current[at] = box;
+          }}
+        >
           {group.emojis.map((one) => (
             <EmojiCell
               key={one.emoji}

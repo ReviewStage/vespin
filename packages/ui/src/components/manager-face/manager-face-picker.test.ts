@@ -12,7 +12,8 @@ import { ManagerFacePicker, type ManagerFaceRecent } from "./manager-face-picker
  * then the section colors, and the color pressed picks the face in it and
  * keeps it first in Recent; a search finds an emoji typed first, then the
  * characters, then the emoji by name, and Enter presses the first found; an
- * emoji picked keeps the character standing beside it.
+ * emoji picked keeps the character standing beside it; and the Emoji tab's
+ * category bar stands beside the grid, never among its choices.
  */
 
 declare global {
@@ -205,4 +206,24 @@ test("a search finds an emoji typed first, then the characters, then the emoji b
   await act(async () => button("Purple").click());
   expect(picked).toEqual([{ character: "ghost", color: "purple", emoji: "🦊" }]);
   expect(recent.faces).toEqual([{ character: "ghost", color: "purple", emoji: "🦊" }]);
+});
+
+test("the Emoji tab offers Slack's categories in a bar beside the grid, and Enter with nothing searched still presses the grid's first emoji", async () => {
+  mount({ character: "ghost", color: "blue" }, memoryRecent([]));
+
+  await act(async () =>
+    document.querySelector<HTMLElement>('[role="tab"]:not([aria-selected="true"])')?.click(),
+  );
+  await vi.waitFor(() => expect(groups()[0]).toBe("Smileys & People"));
+
+  const bar = [...document.querySelectorAll('[role="toolbar"] button')];
+  expect(bar.map((one) => one.getAttribute("aria-label"))).toEqual(groups());
+  expect(bar.map((one) => one.getAttribute("aria-current"))[0]).toBe("true");
+
+  await act(async () => {
+    search("").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  expect(document.querySelector(".ui-icon-picker-flyout")?.getAttribute("aria-label")).toBe(
+    "grinning face color",
+  );
 });

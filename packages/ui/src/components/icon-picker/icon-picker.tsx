@@ -1,5 +1,14 @@
 import type { PopoverRoot } from "@base-ui/react/popover";
-import { type ReactNode, type RefObject, useEffect, useRef } from "react";
+import {
+  type ReactNode,
+  type Ref,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { joinRefs } from "../../join-refs.js";
 import { Popover, PopoverContent } from "../../shadcn/popover.js";
 import { ICON_BUTTON_SIZE, IconButton } from "../button/button.js";
 import { ROVING_ORIENTATION, useRovingKeys } from "../roving-keys/roving-keys.js";
@@ -7,14 +16,18 @@ import { ScrollArea } from "../scroll-area/scroll-area.js";
 import { SearchField } from "../search-field/search-field.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
+import { IconPickerFrameContext } from "./icon-picker-frame.js";
 
 /**
  * icon-picker.tsx -- the app's one icon picker: a search over named groups of choices, each a square button in a grid ten wide, walked with the arrows, which a section's icon and a Manager's face are both picked in.
  *
  * The picker is a frame its owner fills: a search on top, anything the
  * owner stands under it (a section's Icons and Emoji tabs and its Remove
- * icon), and a scrolling grid of groups (`IconPickerGroup`), each choice an
- * `IconPickerChoice`, pressed while it is the one chosen. The grid is one
+ * icon), a band under that where a grid offering its groups by category
+ * stands its category bar (`icon-picker-frame.ts`), and a scrolling grid of
+ * groups (`IconPickerGroup`), each choice an `IconPickerChoice`, pressed
+ * while it is the one chosen, each group's name standing at the grid's top
+ * while the group scrolls under it, as Slack's emoji picker's do. The grid is one
  * tab stop moved through with the arrows, a row's width up and down; the
  * choice that took focus becomes the stop, so Tab out and back lands where
  * the arrows left it. The arrow down from the search enters the grid, and
@@ -317,23 +330,33 @@ export function IconPickerChoice({
   );
 }
 
-/** A group of choices under its name, in the grid's rows of ten. */
+/**
+ * A group of choices under its name, in the grid's rows of ten, its name
+ * standing at the grid's top on the picker's own surface while the group
+ * scrolls under it, until the next group's pushes it off. Note that the room
+ * under the name is its padding rather than a margin, so no choice shows
+ * through between the name and the first row while it stands.
+ */
 export function IconPickerGroup({
   name,
+  ref,
   children,
 }: {
   name: string;
+  /** The group's box, which a category bar jumps the grid to and reads the place of. */
+  ref?: Ref<HTMLElement> | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
     <section
+      ref={ref}
       className="ui-icon-picker-group [.ui-icon-picker-group+&]:mt-control-gap"
       aria-label={name}
     >
       <Text
         as={TEXT_ELEMENT.H3}
         variant={TEXT_VARIANT.GROUP}
-        className="ui-icon-picker-group-name m-0 mb-tight-gap"
+        className="ui-icon-picker-group-name sticky top-0 z-1 m-0 bg-popover pb-tight-gap"
       >
         {name}
       </Text>
@@ -380,6 +403,10 @@ export function IconPicker({
   children: ReactNode;
 }): React.JSX.Element {
   const grid = useRef<HTMLDivElement | null>(null);
+  const [band, setBand] = useState<HTMLDivElement | null>(null);
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
+  const frame = useMemo(() => ({ band, scroller }), [band, scroller]);
+  const holdScroller = useMemo(() => joinRefs(grid, setScroller), []);
 
   // Enter, shifted or not, presses the first choice drawn.
   const chooseFirst = () => {
@@ -395,35 +422,38 @@ export function IconPicker({
   };
 
   return (
-    <div className="ui-icon-picker flex w-section-icon-picker flex-col">
-      <div className="ui-icon-picker-head flex flex-col gap-control-gap p-card-inset-snug pb-0">
-        <search onKeyDown={toGrid}>
-          <SearchField
-            ref={search}
-            label={searchLabel}
-            placeholder={searchLabel}
-            value={query}
-            onChange={onQuery}
-            onClear={() => onQuery("")}
-            onEnter={chooseFirst}
-            onShiftEnter={chooseFirst}
-          />
-        </search>
-        {bar}
-      </div>
-      <fieldset
-        className="ui-icon-picker-choices m-0 min-w-0 border-0 p-card-inset-snug pt-control-gap"
-        role={panel === undefined ? undefined : "tabpanel"}
-        id={panel?.id}
-        aria-labelledby={panel?.labelledBy}
-        onKeyDown={stepGrid}
-        onFocus={standTabStop}
-      >
-        <VisuallyHidden as="legend">{legend}</VisuallyHidden>
-        <div className="ui-icon-picker-scroll flex h-section-icon-scroll flex-col">
-          <ScrollArea ref={grid}>{children}</ScrollArea>
+    <IconPickerFrameContext value={frame}>
+      <div className="ui-icon-picker flex w-section-icon-picker flex-col">
+        <div className="ui-icon-picker-head flex flex-col gap-control-gap p-card-inset-snug pb-0">
+          <search onKeyDown={toGrid}>
+            <SearchField
+              ref={search}
+              label={searchLabel}
+              placeholder={searchLabel}
+              value={query}
+              onChange={onQuery}
+              onClear={() => onQuery("")}
+              onEnter={chooseFirst}
+              onShiftEnter={chooseFirst}
+            />
+          </search>
+          {bar}
         </div>
-      </fieldset>
-    </div>
+        <div ref={setBand} className="ui-icon-picker-band" />
+        <fieldset
+          className="ui-icon-picker-choices m-0 min-w-0 border-0 p-card-inset-snug pt-control-gap"
+          role={panel === undefined ? undefined : "tabpanel"}
+          id={panel?.id}
+          aria-labelledby={panel?.labelledBy}
+          onKeyDown={stepGrid}
+          onFocus={standTabStop}
+        >
+          <VisuallyHidden as="legend">{legend}</VisuallyHidden>
+          <div className="ui-icon-picker-scroll flex h-section-icon-scroll flex-col">
+            <ScrollArea ref={holdScroller}>{children}</ScrollArea>
+          </div>
+        </fieldset>
+      </div>
+    </IconPickerFrameContext>
   );
 }

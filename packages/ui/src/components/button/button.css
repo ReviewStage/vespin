@@ -235,10 +235,13 @@
     }
   }
 
-  /* A button that goes to the page on show reads in the full ink, as one
-     under the pointer does, without a fill: the page is where it stands,
-     not a state it holds. */
-  .ui-button:is([data-variant="quiet"], [data-variant="outline"])[aria-current="page"] {
+  /* A button that goes to the page on show, or to the part of one in view,
+     reads in the full ink, as one under the pointer does, without a fill:
+     the page is where it stands, not a state it holds. */
+  .ui-button:is([data-variant="quiet"], [data-variant="outline"]):is(
+    [aria-current="page"],
+    [aria-current="true"]
+  ) {
     --ui-button-ink: var(--ui-color-text);
   }
 

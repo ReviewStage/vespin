@@ -14,6 +14,10 @@
  * names outright (a keyword, a shortcode such as `+1` or `:thumbsup:`, or
  * its name) first, then one whose words the query's words are whole, then
  * the rest, each tier in Unicode's order.
+ *
+ * A picker offers the emoji under Slack's and Apple's categories rather
+ * than Unicode's, each one tab of its category bar: Unicode's Smileys &
+ * Emotion and People & Body stand as one, Smileys & People.
  */
 
 /** The newest emoji version offered: one newer is not yet drawn by every macOS a Mac may run. */
@@ -37,6 +41,45 @@ const EMOJI_RANK = {
 } as const;
 
 type EmojiRank = (typeof EMOJI_RANK)[keyof typeof EMOJI_RANK];
+
+/** The categories a picker offers the emoji under, each a tab of its category bar, in Unicode's order. */
+export const EMOJI_CATEGORY = {
+  SMILEYS_PEOPLE: "smileys-people",
+  NATURE: "nature",
+  FOOD: "food",
+  TRAVEL: "travel",
+  ACTIVITIES: "activities",
+  OBJECTS: "objects",
+  SYMBOLS: "symbols",
+  FLAGS: "flags",
+} as const;
+
+export type EmojiCategory = (typeof EMOJI_CATEGORY)[keyof typeof EMOJI_CATEGORY];
+
+/** What each category is called, as Slack names it. */
+const EMOJI_CATEGORY_NAME = {
+  [EMOJI_CATEGORY.SMILEYS_PEOPLE]: "Smileys & People",
+  [EMOJI_CATEGORY.NATURE]: "Animals & Nature",
+  [EMOJI_CATEGORY.FOOD]: "Food & Drink",
+  [EMOJI_CATEGORY.TRAVEL]: "Travel & Places",
+  [EMOJI_CATEGORY.ACTIVITIES]: "Activities",
+  [EMOJI_CATEGORY.OBJECTS]: "Objects",
+  [EMOJI_CATEGORY.SYMBOLS]: "Symbols",
+  [EMOJI_CATEGORY.FLAGS]: "Flags",
+} as const satisfies Record<EmojiCategory, string>;
+
+/** The category each of Unicode's groups stands under. */
+const UNICODE_CATEGORY = new Map<string, EmojiCategory>([
+  ["Smileys & Emotion", EMOJI_CATEGORY.SMILEYS_PEOPLE],
+  ["People & Body", EMOJI_CATEGORY.SMILEYS_PEOPLE],
+  ["Animals & Nature", EMOJI_CATEGORY.NATURE],
+  ["Food & Drink", EMOJI_CATEGORY.FOOD],
+  ["Travel & Places", EMOJI_CATEGORY.TRAVEL],
+  ["Activities", EMOJI_CATEGORY.ACTIVITIES],
+  ["Objects", EMOJI_CATEGORY.OBJECTS],
+  ["Symbols", EMOJI_CATEGORY.SYMBOLS],
+  ["Flags", EMOJI_CATEGORY.FLAGS],
+]);
 
 /** One emoji as the generated data lists it: its CLDR name, the emoji version it came in, and its CLDR keywords and GitHub shortcodes. */
 export interface EmojiDataEmoji {
@@ -63,10 +106,11 @@ export interface EmojiChoice {
   readonly words: readonly string[];
 }
 
-/** One category of emoji, in Unicode's order. */
+/** One group of emoji: a category, or an owner's own, as a reaction's 👍 and 👎, which stands under none. */
 export interface EmojiGroup {
   readonly name: string;
   readonly emojis: readonly EmojiChoice[];
+  readonly category?: EmojiCategory | undefined;
 }
 
 /** A name, keyword, shortcode, or query as its words, lowercased; a hyphenated word also as its parts, so "rex" finds the T-Rex. */
@@ -112,13 +156,31 @@ function rankOf(
     : EMOJI_RANK.PREFIX;
 }
 
-/** Every emoji every client draws, by category in Unicode's order, from the generated data. */
+/**
+ * Every emoji every client draws, by category in Unicode's order, from the
+ * generated data: Unicode's groups of one category, as Smileys & Emotion and
+ * People & Body, joined under its name, and a group no category holds
+ * standing alone under its own.
+ */
 export function emojiGroups(groups: readonly EmojiDataGroup[]): EmojiGroup[] {
-  return groups.flatMap((group) => {
-    const emojis = group.emojis.filter((one) => one.version <= NEWEST_EMOJI_VERSION).map(choiceOf);
+  const drawn: EmojiGroup[] = [];
 
-    return emojis.length === 0 ? [] : [{ name: group.name, emojis }];
-  });
+  for (const group of groups) {
+    const emojis = group.emojis.filter((one) => one.version <= NEWEST_EMOJI_VERSION).map(choiceOf);
+    const category = UNICODE_CATEGORY.get(group.name);
+    const last = drawn.at(-1);
+
+    if (emojis.length === 0) continue;
+
+    if (category !== undefined && last?.category === category) {
+      drawn[drawn.length - 1] = { ...last, emojis: [...last.emojis, ...emojis] };
+    } else {
+      const name = category === undefined ? group.name : EMOJI_CATEGORY_NAME[category];
+      drawn.push({ name, emojis, category });
+    }
+  }
+
+  return drawn;
 }
 
 /**
