@@ -1,0 +1,36 @@
+pinned to 2febfd3dab
+== bundle PJj11079 base 2febfd3dab
+  built 2febfd3dab base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+main for A and B: dfab35cdbb; LT1 head c6a29d7dd8; A = 2febfd3dab
+iphone-light-inbox: fails 0 shots 16 
+iphone-light-keep: fails 0 shots 3 
+iphone-light-navigation: fails 0 shots 3 
+iphone-light-new-task: fails 0 shots 10 
+iphone-light-manager-thread: fails 0 shots 5 
+ipad27-light-inbox: fails 1 shots 10 Assert that "Pick a date and time…" is not visible... FAILED
+n2A-write-1x seed: rc 0
+n2A-write-1x fn2mark: 15 steps,  FAILED marked [Thread 309: decide how a partial cent rounds in the agent composer] settled [Thread 323: decide how a partial cent rounds in the task relations]
+  n2A search: s1 [Thread 309] 11 steps ; s2 [Thread 323 on All] 14 steps 
+  n2A db after rows: at 1795717336894 file host/accounts/stub-account/collections.sqlite;tables: applied_tx cache_generation_sequence collection_version c_dxzkr3k_1i collection_expected_keys leader_term c_jhw3rj_1i collection_metadata persisted_index_registry cache_generation collection_registry t_dxzkr3k_1i cache_generation_claim collection_reset_epoch t_jhw3rj_1i ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:8392203f-b1c1-4766-8372-20a8f0f566e1|c_jhw3rj_1i|t_j
+  n2A written.json: NO status after 121 polls (264381 ms after the relaunch): {"5eed0004-0000-4000-8000-0000003d0a42":{"carried":true,"unread":true}}
+  n2A times: second_launch_T=1795717086397 terminate_T=1795717271717 mark_end_T=1795717272064 relaunch_T=1795717272131 s1_end_T=1795717314319 s2_end_T=1795717379512 written_status_T=1795717536512 tries=121 
+  n2A tap/kill times: 
+  n2A db at the end: at 1795717537471 file host/accounts/stub-account/collections.sqlite;tables: applied_tx cache_generation_sequence collection_version c_dxzkr3k_1i collection_expected_keys leader_term c_jhw3rj_1i collection_metadata persisted_index_registry cache_generation collection_registry t_dxzkr3k_1i cache_generation_claim collection_reset_epoch t_jhw3rj_1i ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:8392203f-b1c1-4766-8372-20a8f0f566e1|c_jhw3rj_1i|t_j
+  n2A requests (inbox and writes): 3 lines; 
+== bundle PJj11079B base dfab35cdbb
+  built dfab35cdbb base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+upgrade b-seed (main dfab35cdbb): rc 0
+upgrade b-relaunch: list drawn | crash none | red box none | app-ready {"launch_ms":2495.5404574871063,"local_ms":655.538041472435,"started_ms":1292.951791524887,"screens_ms":2220.2165414094925,"inbox_ms":1850.8034994602203,"active_ms":416.101749420166,"first_rows":"kept | db   files: collections.sqlite 5337088 bytes, -wal none bytes;  applied_tx 52 rows, 1245184 bytes;  c_dzw7l6r_1i 639 rows, 3723264 bytes;  cache_generation 1 rows, 4096 bytes;  cache_generation_claim 2 rows, 4096 bytes;  cache_generation_sequence 0 rows, 4096 bytes;  collection_expected_keys 639 rows, 
+upgrade: A installed over B (no uninstall)
+upgrade a-first: list drawn | crash none | red box none | app-ready {"launch_ms":8501.563124537468,"local_ms":807.035124540329,"started_ms":1436.203707575798,"screens_ms":2256.1721665859222,"inbox_ms":1929.2728745937347,"active_ms":506.0918325185776,"first_rows":"feed | db   files: collections.sqlite 16084992 bytes, -wal none bytes;  applied_tx 62 rows, 2031616 bytes;  c_b5t7ju_1i 5084 rows, 4366336 bytes;  c_bqzqlmq_1i 639 rows, 3702784 bytes;  c_dzw7l6r_1i 639 rows, 3723264 bytes;  cache_generation 3 rows, 4096 bytes;  cache_generation_claim 3 rows, 4096 bytes;  cac
+upgrade a-second: list drawn | crash none | red box none | app-ready {"launch_ms":2502.615416407585,"local_ms":588.4723324775696,"started_ms":1220.263457417488,"screens_ms":2133.7295414209366,"inbox_ms":1754.492374420166,"active_ms":387.4077913761139,"first_rows":"kept | db   files: collections.sqlite 17088512 bytes, -wal none bytes;  applied_tx 72 rows, 3014656 bytes;  c_b5t7ju_1i 5049 rows, 4354048 bytes;  c_bqzqlmq_1i 639 rows, 3686400 bytes;  c_dzw7l6r_1i 639 rows, 3723264 bytes;  cache_generation 3 rows, 4096 bytes;  cache_generation_claim 5 rows, 4096 bytes;  cac
