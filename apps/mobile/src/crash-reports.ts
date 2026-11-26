@@ -136,6 +136,16 @@ const tracing = reactNativeTracingIntegration({ traceFetch: false, traceXHR: fal
 /** The SDK's integrations this file stands in for: the tracing above, and the screens' (`traceScreens`), added once the launch's trace has ended. */
 const REPLACED_INTEGRATION = { TRACING: "ReactNativeTracing", SCREENS: "ExpoRouter" } as const;
 
+/**
+ * The SDK's integration left out: the root's registration (`AppRegistry`).
+ * Note that the app start resets itself as the root registers once it is
+ * extended (`extendAppStart`, before `expo-router/entry` runs), which would
+ * drop the launch's extension, and with it the launch's trace and the
+ * screens' tracing that waits on its end. It only starts a screen's span
+ * again as an Android activity restarts, which iOS never does.
+ */
+const UNREGISTERED = "AppRegistry";
+
 /** The operation the SDK names a tap's span by. */
 const TAP_OP = "ui.action.touch";
 
@@ -212,7 +222,10 @@ function sentryOptions(enabled: boolean, launch: boolean): Parameters<typeof ini
       ...defaults.flatMap((integration) => {
         if (integration.name === REPLACED_INTEGRATION.TRACING) return [tracing];
 
-        return integration.name === REPLACED_INTEGRATION.SCREENS ? [] : [integration];
+        return integration.name === REPLACED_INTEGRATION.SCREENS ||
+          integration.name === UNREGISTERED
+          ? []
+          : [integration];
       }),
       { name: "TapNames", setup: (client) => client.on("spanStart", nameTap) },
     ],
@@ -258,7 +271,13 @@ function traceScreens(): void {
 
   if (screensTraced) return;
   screensTraced = true;
-  addIntegration(expoRouterIntegration({ enableTimeToInitialDisplay: true }));
+  // Note that a screen already seen, as Back returns to it, is traced too, since with no request traced it would hold no span the SDK counts and be dropped.
+  addIntegration(
+    expoRouterIntegration({
+      enableTimeToInitialDisplay: true,
+      ignoreEmptyBackNavigationTransactions: false,
+    }),
+  );
 }
 
 /** Traces the screens once the launch's trace has ended, by its rows or by the SDK's deadline, or at once where none stands. */
