@@ -1097,14 +1097,13 @@
   clip-path: inset(var(--pull-request-fold, 0px) -100vmax -100vmax);
 }
 
-/* Note that the tabs' own fill is translucent, so it is laid over the
-   panel's ground, or what scrolls under them would show through. */
+/* Note that the bar stands on the panel's ground here, as the header does,
+   or what scrolls under it would show through. */
 .pull-request-tab[data-header-fold] > .ui-pane-bar {
   position: relative;
   z-index: 2;
   margin-bottom: calc(-1 * var(--pull-request-fold-room, 0px));
-  background: linear-gradient(var(--ui-color-fill-hover), var(--ui-color-fill-hover))
-    var(--side-panel-ground);
+  background: var(--side-panel-ground);
 }
 
 /* The room stands at the top of what the shown view's scroller holds where
