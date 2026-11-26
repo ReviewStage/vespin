@@ -690,7 +690,7 @@ function OwnAgentPage({
     threadAlone.current = split.alone;
   });
 
-  // Note that a link to one of the Manager's messages goes back to its chat, closing a thread that stands alone over it, so the message is landed on where it can be seen.
+  // Note that a link to one of the Manager's messages goes back to its chat, closing a thread that stands alone over it, so the chat, shown again, lands on the message itself: in its own rows, or in the thread a reply stands in, which it opens.
   useEffect(() => {
     if (messageAsked === undefined) return;
     setView(MANAGER_VIEW.MESSAGES);
@@ -836,7 +836,8 @@ function OwnAgentPage({
                           tabbed={false}
                           tab={agentTab(agent.id)}
                           agents={agents}
-                          shown={tasks.shown && !sidePanel.fullScreen}
+                          // Note that a chat hidden under its thread is not shown, so nothing lands in it unseen.
+                          shown={tasks.shown && !sidePanel.fullScreen && !split.alone}
                           views={views}
                           // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
                           onOpenDelegation={(_agent, callId, _task, status) =>

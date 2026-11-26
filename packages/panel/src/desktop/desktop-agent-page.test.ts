@@ -650,7 +650,7 @@ test("with a thread open beside a Manager's chat, ⌘F finds in whichever of the
   assert.equal(barOver(thread), true, "from the thread, it finds in the thread");
 });
 
-test("a link to a Manager's message while its thread stands alone over the chat closes the thread, so the chat shows the message", async () => {
+test("while a Manager's thread stands alone over its chat, ⌘F finds in the thread, a link to a reply lands in its thread, and a link to a message of the chat closes the thread", async () => {
   const manager = managerWithThread();
   const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
   const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
@@ -671,6 +671,15 @@ test("a link to a Manager's message while its thread stands alone over the chat 
   const container = await mountAgentPage(history, tasks, Asked);
   await openThread(container);
 
+  // The reader was in the chat last, before Messages narrowed.
+  const chat =
+    container.querySelector(".agent-page .desktop-task-column") ??
+    assert.fail("the chat stands beside the thread");
+
+  act(() => {
+    chat.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+  });
+
   // Messages stands narrower than the chat's least and the thread's together, so the thread stands alone.
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
@@ -684,7 +693,23 @@ test("a link to a Manager's message while its thread stands alone over the chat 
 
   assert.equal(split.hasAttribute("data-alone"), true, "the thread stands alone over the chat");
 
-  act(() => ask({ agentId: manager.id, messageId: "first", ask: 1 }));
+  act(() => {
+    assert.ok(runAppCommand(APP_COMMAND.FIND), "the page offers find");
+  });
+  assert.ok(
+    container.querySelector(".manager-thread-pane > .find-bar"),
+    "⌘F finds in the thread, the one pane shown",
+  );
+
+  act(() => ask({ agentId: manager.id, messageId: "reply", ask: 1 }));
+  await settleQueries();
+  assert.match(
+    threadShown(container)?.textContent ?? "",
+    /The web app's\./u,
+    "a link to a reply lands in its thread",
+  );
+
+  act(() => ask({ agentId: manager.id, messageId: "first", ask: 2 }));
   await settleQueries();
 
   assert.equal(threadShown(container), null, "the thread closes");

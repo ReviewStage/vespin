@@ -55,7 +55,7 @@ export interface SideSplitHandle {
   readonly ref: (element: HTMLElement | null) => (() => void) | undefined;
   readonly open: boolean;
   readonly alone: boolean;
-  /** Whether the pane is open and the pointer or the focus went into it last, rather than into the view. */
+  /** Whether the reader is in the pane: it stands alone, or it is open and the pointer or the focus went into it last, rather than into the view. */
   readonly sideHeld: boolean;
   readonly drawn: number;
   readonly edge: ResizeEdgeHandle;
@@ -101,7 +101,8 @@ export function useSideSplit(options: SideSplitOptions): SideSplitHandle {
   const alone = open && room > 0 && room < mainMin + bounds.MIN;
   const drawn = room > 0 ? Math.max(bounds.MIN, Math.min(width, room - mainMin)) : width;
 
-  return { ref, open, alone, sideHeld: open && held, drawn, edge };
+  // Note that a pane standing alone is the one the reader can be in, whichever they were in last.
+  return { ref, open, alone, sideHeld: alone || (open && held), drawn, edge };
 }
 
 /** A view with a pane opened beside it, or alone while the split is shut. */
