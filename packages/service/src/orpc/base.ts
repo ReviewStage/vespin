@@ -43,6 +43,7 @@ import {
   presentedHostVersion,
   presentedPollSecret,
 } from "../auth/device-secret.js";
+import { withoutSessionCookies } from "../auth/session-cookies.js";
 import { sessionCredential } from "../auth/session-credential.js";
 import { HostedEnvironment } from "../environment.js";
 import {
@@ -157,6 +158,20 @@ export const hosted: RouterImplementerWithMiddlewares<
   HostedContext,
   WithEffectContext<WebServices>
 > = implement(hostedContract).$context<HostedContext>().use(procedureTraced);
+
+/**
+ * A read whose answer is held until its rows move: its services lose the
+ * request's place for session cookies (`auth/session-cookies.ts`), so a
+ * browser's session is read without extending it and no cookie rides on an
+ * answer a sign-in in another tab may have overtaken.
+ */
+export const heldReadMiddleware = middlewareGen<HostedContext, WithEffectContext<WebServices>>(
+  function* ({ context, next }) {
+    return yield* next({
+      context: { "effect/context": withoutSessionCookies(context["effect/context"]) },
+    });
+  },
+);
 
 /** The caller by its bearer, or with no `Authorization` at all, the browser's session cookie (`auth/bearer.ts`'s `resolveHostedUserId`). */
 export function accountMiddleware(resolveUserId: UserIdResolver) {
