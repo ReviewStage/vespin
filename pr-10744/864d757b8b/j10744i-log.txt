@@ -1,11 +1,11 @@
 -- j10744i: main pinned to 2c7272a1bc: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
 EXCEPTION (the Manager 23:16 UTC Nov 25): flow-only PR over Vmain14 (natives from 938bbc656d), missing #10759 AgentsLiveActivity.swift and #10966 ClaudeMark/OpenAIMark assets
-pinned to 041f224259
-== bundle PJj10744i base 041f224259
-  built 041f224259 base app Vmain-current.app ()
+pinned to 02cea9e6f4
+== bundle PJj10744i base 02cea9e6f4
+  built 02cea9e6f4 base app Vmain-current.app ()
   install 0
   typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
   export 0 (simulator-bundle.sh)
   signed 0
--light-description-edit: fails RIG (the keyboard tip flag DidShowContinuousPathIntroduction would not stay set) 
--dark-description-edit: fails RIG (the keyboard tip flag DidShowContinuousPathIntroduction would not stay set) 
+ipad27-light-description-edit: fails 0 shots 11 
+ipad27-dark-description-edit: fails 0 shots 11 
