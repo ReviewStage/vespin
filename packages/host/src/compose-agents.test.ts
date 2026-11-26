@@ -2524,6 +2524,25 @@ function keptItemIds(pool: EntityPool) {
   );
 }
 
+/** Whether each item the Inbox kind's collection keeps now is unread, by id, as a live query loads them from the account's database. */
+function keptUnread(pool: EntityPool) {
+  return Effect.flatMap(pool.collection(INBOX_ITEM), (collection) =>
+    Effect.promise(async () => {
+      const query = createLiveQueryCollection({
+        query: (q) => q.from({ item: collection }),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      await query.preload();
+      const unread = Object.fromEntries(query.toArray.map((item) => [item.id, item.unread]));
+      await query.cleanup();
+
+      return unread;
+    }),
+  );
+}
+
 /** One launch as the host makes it where the Inbox kind is kept on disk: the pool on the local copy, the agents on the pool, then `account`'s database opened. */
 function keptLaunch(root: string, account = "user-dana") {
   return Effect.gen(function* () {
@@ -2605,6 +2624,37 @@ it.effect(
         ["account-items-page:1", "account-items-page:2"],
       );
       assert.deepEqual(yield* keptItemIds(next.pool), [OTHER_ITEM.id, third.id].toSorted());
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "an item of a whole answer's first page marked read while its later pages are read stays read on disk once the last lands",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-paged-mark-");
+      const unread = { ...OTHER_ITEM, unread: true };
+      const lastPage = yield* Deferred.make<void>();
+      const next = yield* keptLaunch(root);
+      next.sealItems(LIVE_ANSWERED);
+      next.pageItems(
+        [
+          {
+            stamps: [stampOf(unread, OTHER_TASK_ID, { unread: true })],
+            items: [{ ...ITEM_ROW, ...unread }],
+          },
+          { stamps: [], items: [] },
+        ],
+        Deferred.await(lastPage),
+      );
+      yield* next.open;
+      yield* settled;
+
+      yield* next.acts.AGENTS_INBOX_READ_STATE({ itemId: unread.id, unread: false });
+      yield* settled;
+      yield* Deferred.succeed(lastPage, undefined);
+      yield* settled;
+
+      assert.deepEqual(yield* keptUnread(next.pool), { [unread.id]: false });
     }).pipe(Effect.provide(keptPlatform)),
 );
 
