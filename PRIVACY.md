@@ -683,8 +683,10 @@ affected users and relevant authorities as required by applicable law.
 
 We retain your data for as long as your account is active and as needed to
 provide the Service. Deleting a task deletes it at once with its history,
-pages, inbox items, and pictures, and its agents' transcripts. Deleting an
-agent deletes its transcript at once. Deleting an agent asks Vercel to delete
+pages, and inbox items, and its agents' transcripts. The pictures, videos,
+sound clips, and files kept with any of these, or with anything else deleted
+below, become unreachable at once and are purged from storage within about a
+minute. Deleting an agent deletes its transcript at once. Deleting an agent asks Vercel to delete
 its sandbox and the drive holding its checkout; where that fails or does not
 finish in time, the delete goes ahead anyway, and the sandbox and drive may
 remain. Archiving an agent deletes neither: its sandbox and drive are deleted once
