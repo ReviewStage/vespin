@@ -1,87 +1,77 @@
 import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
+import { SLACK_EMOJI } from "@repo/features/slack-emoji-data";
 import {
   BUTTON_SIZE,
   ChannelMessage,
   IconButton,
+  IconPicker,
+  IconPickerEmoji,
+  IconPickerMenuPanel,
+  PopoverIconButton,
   ReactionChip,
-  ReactionPicker,
-  ReactionPickerButton,
-  ReactionPickerMenuPanel,
   ReactionRow,
   Text,
   TIME_LOOK,
   Time,
 } from "@repo/ui";
+import { SmilePlusIcon } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
-import type { EmojiGroup } from "@repo/ui/section-icon-model";
-import { useState } from "react";
+import { type EmojiGroup, emojiGroups } from "@repo/ui/section-icon-model";
+import { type RefObject, useRef, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**
- * reaction-picker.tsx -- a reaction picked from every emoji: a Manager
- * chat message's actions, 👍 and 👎 then Add reaction, which hangs the
- * picker, the reactions it was given under it, the reader's own lit, and
+ * reaction-picker.tsx -- a reaction picked from every emoji in the app's
+ * one emoji picker (`IconPicker` over `IconPickerEmoji`, as a section's
+ * icon is picked): a Manager chat message's actions, 👍 and 👎 then Add
+ * reaction, which hangs the picker, 👍 and 👎 leading it, the reactions it was given under it, the reader's own lit, and
  * the picker alone, as a menu's Add reaction › opens it beside its item.
  */
 
 const SENT_AT = new Date(2026, 10, 26, 10, 42).getTime();
 
-/** A few emoji by category, as the picker loads them, each by its Unicode name. */
-const EMOJI: readonly EmojiGroup[] = [
-  {
-    name: "Smileys & Emotion",
-    emojis: [
-      ["😀", "grinning face"],
-      ["😂", "face with tears of joy"],
-      ["🙂", "slightly smiling face"],
-      ["😍", "smiling face with heart-eyes"],
-      ["🤔", "thinking face"],
-      ["😎", "smiling face with sunglasses"],
-      ["😅", "grinning face with sweat"],
-      ["🥳", "partying face"],
-      ["😬", "grimacing face"],
-      ["🫡", "saluting face"],
-      ["❤️", "red heart"],
-      ["🔥", "fire"],
-    ].map(([emoji = "", name = ""]) => ({ emoji, name })),
-  },
-  {
-    name: "People & Body",
-    emojis: [
-      ["👍", "thumbs up"],
-      ["👎", "thumbs down"],
-      ["👏", "clapping hands"],
-      ["🙌", "raising hands"],
-      ["🙏", "folded hands"],
-      ["💪", "flexed biceps"],
-      ["👀", "eyes"],
-      ["👋", "waving hand"],
-      ["🤝", "handshake"],
-      ["✌️", "victory hand"],
-    ].map(([emoji = "", name = ""]) => ({ emoji, name })),
-  },
-  {
-    name: "Activities",
-    emojis: [
-      ["🎉", "party popper"],
-      ["🎊", "confetti ball"],
-      ["🏆", "trophy"],
-      ["🎯", "bullseye"],
-    ].map(([emoji = "", name = ""]) => ({ emoji, name })),
-  },
-  {
-    name: "Symbols",
-    emojis: [
-      ["✅", "check mark button"],
-      ["❌", "cross mark"],
-      ["⚠️", "warning"],
-      ["❓", "red question mark"],
-      ["💯", "hundred points"],
-      ["➕", "plus"],
-    ].map(([emoji = "", name = ""]) => ({ emoji, name })),
-  },
-];
+/** Every emoji, from the app's one table of them, as the picker loads them. */
+const EMOJI = emojiGroups(SLACK_EMOJI);
+
+/** 👍 and 👎, leading the picker as they lead a message's actions. */
+const QUICK: EmojiGroup = {
+  name: "Quick reactions",
+  emojis: [
+    { emoji: "👍", name: "thumbs up" },
+    { emoji: "👎", name: "thumbs down" },
+  ],
+};
+
+/** The app's one emoji picker as a reaction is picked in it, 👍 and 👎 leading. */
+function ReactionEmojiPicker({
+  search,
+  onEmoji,
+}: {
+  search?: RefObject<HTMLInputElement | null>;
+  onEmoji: (emoji: string) => void;
+}): React.JSX.Element {
+  const [query, setQuery] = useState("");
+
+  return (
+    <IconPicker
+      searchLabel="Search emoji"
+      search={search}
+      query={query}
+      onQuery={setQuery}
+      legend="Emoji"
+    >
+      <IconPickerEmoji
+        groups={EMOJI}
+        failed={false}
+        query={query}
+        chosen={undefined}
+        onEmoji={onEmoji}
+        lead={QUICK}
+      />
+    </IconPicker>
+  );
+}
 
 /** A reaction the message wears: its emoji, how many gave it, and whether the reader did. */
 interface Worn {
@@ -111,6 +101,7 @@ function pressed(worn: readonly Worn[], emoji: string): readonly Worn[] {
 function ReactionPickers(): React.JSX.Element {
   const [worn, setWorn] = useState(START);
   const [open, setOpen] = useState(false);
+  const search = useRef<HTMLInputElement | null>(null);
   const react = (emoji: string) => setWorn((now) => pressed(now, emoji));
   const reacted = (emoji: string) => worn.some((one) => one.emoji === emoji && one.reacted);
 
@@ -143,12 +134,24 @@ function ReactionPickers(): React.JSX.Element {
                     onClick={() => react(emoji)}
                   />
                 ))}
-                <ReactionPickerButton
+                <PopoverIconButton
+                  icon={<SmilePlusIcon aria-hidden="true" />}
+                  label="Add reaction"
+                  title="Add reaction"
+                  hint="Add reaction"
                   open={open}
-                  onOpenChange={setOpen}
-                  onEmoji={react}
-                  picker={(place) => <ReactionPicker groups={EMOJI} failed={false} {...place} />}
-                />
+                  onOpenChange={(next) => setOpen(next)}
+                  size={BUTTON_SIZE.COMPACT}
+                  initialFocus={search}
+                >
+                  <ReactionEmojiPicker
+                    search={search}
+                    onEmoji={(emoji) => {
+                      react(emoji);
+                      setOpen(false);
+                    }}
+                  />
+                </PopoverIconButton>
               </>
             }
             under={
@@ -174,9 +177,9 @@ function ReactionPickers(): React.JSX.Element {
         id="reaction-picker-alone"
         title="The picker, as a menu's Add reaction › opens it"
       >
-        <ReactionPickerMenuPanel>
-          <ReactionPicker groups={EMOJI} failed={false} onEmoji={react} />
-        </ReactionPickerMenuPanel>
+        <IconPickerMenuPanel>
+          <ReactionEmojiPicker onEmoji={react} />
+        </IconPickerMenuPanel>
       </CatalogSection>
     </>
   );

@@ -344,6 +344,15 @@ export function IconPickerGroup({
   );
 }
 
+/** The picker as a menu's panel: on the menu's surface, which the panel beside a menu's item leaves to what it holds. */
+const MENU_PANEL =
+  "ui-icon-picker-menu-panel w-fit rounded-menu border border-border-strong bg-popover text-popover-foreground shadow-menu animate-menu-in";
+
+/** A picker beside a menu's item (`MenuPanel`'s `panel`), on the menu's surface, as a Manager's Change face › and a message's Add reaction › open one. */
+export function IconPickerMenuPanel({ children }: { children: ReactNode }): React.JSX.Element {
+  return <div className={MENU_PANEL}>{children}</div>;
+}
+
 /** The picker; see the module's head. */
 export function IconPicker({
   searchLabel,

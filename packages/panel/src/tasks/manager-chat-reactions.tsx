@@ -4,8 +4,9 @@
  * Every message of the chat with an id, in the channel or in a thread, may
  * be given any emoji Slack names as a reaction: 👍 and 👎 first among the
  * actions over its corner, each pressed where the reader gave it, then Add
- * reaction, which hangs a picker of every emoji (`@repo/ui`'s
- * `ReactionPickerButton`), all before Reply in thread; its menu offers the
+ * reaction, which hangs the app's one emoji picker (`@repo/ui`'s
+ * `IconPicker` over `IconPickerEmoji`, as a section's icon and a Manager's
+ * face pick emoji), 👍 and 👎 leading it, all before Reply in thread; its menu offers the
  * same, Add reaction › opening the picker beside it. Under its words a
  * chip stands to each reaction it was given (`@repo/ui`'s `ReactionChip`),
  * its emoji and how many gave it, lit where the reader did. Pressing a
@@ -31,6 +32,7 @@ import {
 } from "@repo/features/manager-chat-live";
 import {
   CHAT_ADD_REACTION_WORDS,
+  CHAT_REACTION_PICKER_WORDS,
   CHAT_REACTION_REFUSED_WORDS,
   CHAT_REACTION_UNNAMED_WORDS,
   chatReactionEmoji,
@@ -42,20 +44,23 @@ import { slackEmojiIndex } from "@repo/features/slack-emoji";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
+  BUTTON_SIZE,
   HeldMessageAction,
+  IconPicker,
+  IconPickerEmoji,
+  IconPickerMenuPanel,
   POPOVER_WIDTH,
+  PopoverIconButton,
   ReactionChip,
-  ReactionPicker,
-  ReactionPickerButton,
-  ReactionPickerMenuPanel,
-  type ReactionPickerPlace,
   ReactionRow,
   STATUS_TONE,
   useEmojiGroups,
 } from "@repo/ui";
 import { SmilePlusIcon } from "@repo/ui/icons";
+import type { EmojiGroup } from "@repo/ui/section-icon-model";
+import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useCallback } from "react";
+import { type ReactNode, type RefObject, useCallback, useRef, useState } from "react";
 import { pressMutation } from "../act-mutations.js";
 import { MessageAction } from "../ai-elements/message.js";
 import type { MenuEntry } from "../desktop/action-menu.js";
@@ -172,11 +177,85 @@ function usePickedReaction(message: ManagerChatLiveMessage, react: ChatReact) {
     );
 }
 
-/** The picker of every emoji where it stands open, which reads them the first time one does. */
-function LoadedReactionPicker(place: ReactionPickerPlace): ReactNode {
+/** The reactions offered first, leading the picker as they lead the actions. */
+const QUICK: EmojiGroup = {
+  name: CHAT_REACTION_PICKER_WORDS.QUICK,
+  emojis: OFFERED.map((kind) => ({
+    emoji: MANAGER_CHAT_REACTION_FACES[kind].emoji,
+    name: MANAGER_CHAT_REACTION_FACES[kind].name,
+  })),
+};
+
+/**
+ * The app's one emoji picker, as a section's icon and a Manager's face
+ * pick emoji, offering every emoji as a reaction, 👍 and 👎 first; it
+ * reads them the first time one stands open.
+ */
+function ReactionEmojiPicker({
+  search,
+  onEmoji,
+}: {
+  /** The search's field, which a popover opening the picker focuses first. */
+  search?: RefObject<HTMLInputElement | null> | undefined;
+  onEmoji: (emoji: string) => void;
+}): ReactNode {
+  const [query, setQuery] = useState("");
   const emoji = useEmojiGroups();
 
-  return <ReactionPicker groups={emoji.data} failed={emoji.isError} {...place} />;
+  return (
+    <ReplayUnmask>
+      <IconPicker
+        searchLabel={CHAT_REACTION_PICKER_WORDS.SEARCH}
+        search={search}
+        query={query}
+        onQuery={setQuery}
+        legend={CHAT_REACTION_PICKER_WORDS.LEGEND}
+      >
+        <IconPickerEmoji
+          groups={emoji.data}
+          failed={emoji.isError}
+          query={query}
+          chosen={undefined}
+          onEmoji={onEmoji}
+          lead={QUICK}
+        />
+      </IconPicker>
+    </ReplayUnmask>
+  );
+}
+
+/** A message's Add reaction: a compact smile-plus among its actions, hanging the picker while `open`; a pick hands the emoji on and puts the picker away. */
+function AddReactionAction({
+  open,
+  onOpenChange,
+  onEmoji,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onEmoji: (emoji: string) => void;
+}): ReactNode {
+  const search = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <PopoverIconButton
+      icon={<SmilePlusIcon aria-hidden="true" />}
+      label={CHAT_ADD_REACTION_WORDS}
+      title={CHAT_ADD_REACTION_WORDS}
+      hint={CHAT_ADD_REACTION_WORDS}
+      open={open}
+      onOpenChange={(next) => onOpenChange(next)}
+      size={BUTTON_SIZE.COMPACT}
+      initialFocus={search}
+    >
+      <ReactionEmojiPicker
+        search={search}
+        onEmoji={(emoji) => {
+          onEmoji(emoji);
+          onOpenChange(false);
+        }}
+      />
+    </PopoverIconButton>
+  );
 }
 
 /** The 👍 and 👎 among a message's actions, each pressed where the reader gave it, a press giving it or taking it back, then Add reaction, the picker of every emoji. */
@@ -213,12 +292,7 @@ export function ReactMessageActions({
         );
       })}
       <HeldMessageAction>
-        <ReactionPickerButton
-          open={picking}
-          onOpenChange={onPicking}
-          onEmoji={picked}
-          picker={(place) => <LoadedReactionPicker {...place} />}
-        />
+        <AddReactionAction open={picking} onOpenChange={onPicking} onEmoji={picked} />
       </HeldMessageAction>
     </>
   );
@@ -249,14 +323,14 @@ export function useChatReactionMenu(
       icon: <SmilePlusIcon aria-hidden="true" />,
       width: POPOVER_WIDTH.FIT,
       panel: ({ close }) => (
-        <ReactionPickerMenuPanel>
-          <LoadedReactionPicker
+        <IconPickerMenuPanel>
+          <ReactionEmojiPicker
             onEmoji={(emoji) => {
               picked(emoji);
               close();
             }}
           />
-        </ReactionPickerMenuPanel>
+        </IconPickerMenuPanel>
       ),
     },
   ];

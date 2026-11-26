@@ -326,8 +326,6 @@ export * from "./components/quiet-words/quiet-words.js";
 
 export * from "./components/reaction-chip/reaction-chip.js";
 
-export * from "./components/reaction-picker/reaction-picker.js";
-
 export * from "./components/readable-controls/readable-controls.js";
 
 export * from "./components/rect-float/rect-float.js";

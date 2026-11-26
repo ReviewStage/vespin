@@ -200,21 +200,25 @@ function emojiNote({ groups, failed }: EmojiLoaded): string {
   return groups === undefined ? EMOJI_READING : NO_EMOJI_MATCH;
 }
 
-/** The emoji with nothing searched: every one under its category's name; the one chosen, or the first, is the grid's tab stop. */
+/** The emoji with nothing searched: the owner's own group first (`lead`), then every one under its category's name; the one chosen, or the first, is the grid's tab stop. */
 function EmojiGroups({
   loaded,
+  lead,
   chosen,
   press,
 }: {
   loaded: EmojiLoaded;
+  lead: EmojiGroup | undefined;
   chosen: string | undefined;
   press: EmojiPress;
 }): React.JSX.Element {
-  const groups = loaded.groups;
+  const loadedGroups = loaded.groups ?? [];
+  const groups = lead === undefined ? loadedGroups : [lead, ...loadedGroups];
 
-  if (groups === undefined || groups.length === 0) {
-    return <NoteLine look={NOTE_LINE_LOOK.LIST}>{emojiNote(loaded)}</NoteLine>;
-  }
+  const note =
+    loadedGroups.length === 0 ? (
+      <NoteLine look={NOTE_LINE_LOOK.LIST}>{emojiNote(loaded)}</NoteLine>
+    ) : null;
 
   const all = groups.flatMap((group) => group.emojis);
   const stop = all.find((one) => one.emoji === chosen) ?? all[0];
@@ -237,6 +241,7 @@ function EmojiGroups({
           ))}
         </IconPickerGroup>
       ))}
+      {note}
     </>
   );
 }
@@ -326,6 +331,7 @@ export const IconPickerEmoji = memo(function IconPickerEmoji({
   beside,
   colors,
   opened,
+  lead,
 }: {
   /** Every emoji by category; none while they load or where they failed to. */
   groups: readonly EmojiGroup[] | undefined;
@@ -342,11 +348,15 @@ export const IconPickerEmoji = memo(function IconPickerEmoji({
   colors?: IconPickerEmojiColors | undefined;
   /** The emoji whose colors stand open, where `colors` is handed; none where none do. */
   opened?: string | undefined;
+  /** The owner's own group, drawn first with nothing searched, as a reaction's 👍 and 👎; none where every emoji stands under its category alone. */
+  lead?: EmojiGroup | undefined;
 }): React.JSX.Element {
   const loaded = { groups, failed };
   const press = { onEmoji, colors, opened };
 
-  if (query.trim() === "") return <EmojiGroups loaded={loaded} chosen={chosen} press={press} />;
+  if (query.trim() === "") {
+    return <EmojiGroups loaded={loaded} lead={lead} chosen={chosen} press={press} />;
+  }
 
   return <FoundEmoji loaded={loaded} query={query} chosen={chosen} press={press} beside={beside} />;
 });
