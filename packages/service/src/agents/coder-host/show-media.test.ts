@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
+import { readAttachmentBlobTombstones } from "@repo/database/models/attachment-blob-tombstones";
 import {
   readConversationPicture,
   readServedConversationPicture,
@@ -13,25 +14,22 @@ import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import {
-  fillConversationPictures,
-  getTestDB,
-  inlineBytesOf,
-  openWorkspace,
-} from "@repo/database/testing";
+import { fillConversationPictures, getTestDB, openWorkspace } from "@repo/database/testing";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   CONVERSATION_MEDIA_TYPE,
   CONVERSATION_PICTURE_BOUNDS,
 } from "@repo/features/conversation-picture-wire";
 import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
-import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
+import { MP4_TYPE, PHONE_VIDEO_BOUNDS, PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { m4aBytes, mp4Bytes, pngBytes, webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
-import { Effect, Option, Schema } from "effect";
+import { Clock, Effect, Layer, Option, Schema } from "effect";
 import { ACTION_RESULT_STATUS } from "../../core.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import { openGithubUser } from "../../testing/github-app-fake.js";
+import type { SandboxSelfUpload } from "./inbox-image.js";
 import { runShowMedia, SHOW_MEDIA_REFUSAL, type ShowMediaBinding } from "./show-media.js";
 
 /**
@@ -80,6 +78,53 @@ function sandboxWith(
     });
 }
 
+/**
+ * A sandbox that uploads its own files to the suite's store, as a cloud
+ * sandbox does: each probed by its size and first bytes, and put at the
+ * URL presigned for it as the bytes `uploaded` names for its path, which
+ * may differ from those probed, as a file changed in between would; and an
+ * MP4 copy put for a phone where one is given.
+ */
+function selfUploadingSandbox(
+  files: Readonly<Record<string, Uint8Array>>,
+  options: {
+    readonly uploaded?: Readonly<Record<string, Uint8Array>>;
+    readonly phoneVideo?: Uint8Array;
+  } = {},
+): ShowMediaBinding["sandbox"] {
+  const selfUpload: SandboxSelfUpload = {
+    probe: (path, headBytes) => {
+      const bytes = files[path];
+
+      return Promise.resolve(
+        bytes === undefined ? null : { size: bytes.byteLength, head: bytes.subarray(0, headBytes) },
+      );
+    },
+    upload: (path, upload) => {
+      const bytes = options.uploaded?.[path] ?? files[path];
+
+      if (bytes !== undefined) {
+        blobs.acceptUpload(upload.url, upload.headers["x-content-type"] ?? "", bytes);
+      }
+
+      return Promise.resolve();
+    },
+    uploadPhoneCopy: (_path, _kind, upload) => {
+      if (options.phoneVideo === undefined) return Promise.resolve(false);
+      blobs.acceptUpload(upload.url, upload.headers["x-content-type"] ?? "", options.phoneVideo);
+
+      return Promise.resolve(true);
+    },
+  };
+
+  return () =>
+    Promise.resolve({
+      checkout: CHECKOUT,
+      readFile: () => Promise.reject(new Error("a sandbox that uploads itself is never read")),
+      selfUpload,
+    });
+}
+
 const openConversation = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
@@ -116,7 +161,10 @@ const refused = (reason: string) => ({ status: ACTION_RESULT_STATUS.REJECTED, re
 const show = (binding: ShowMediaBinding, input: WireBoundaryInput) =>
   runShowMedia(binding, unparsedWire(input));
 
-it.layer(getTestDB())("show_media", (it) => {
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+it.layer(Layer.merge(getTestDB(), blobs.layer))("show_media", (it) => {
   it.effect(
     "each file is kept beside the transcript in order, named by its id, type, and size, and read back as its bytes",
     () =>
@@ -156,9 +204,77 @@ it.layer(getTestDB())("show_media", (it) => {
         assert.ok(first);
         const read = yield* readConversationPicture(target.conversationId, first.id);
         assert.deepEqual(
-          Option.map(read, (stored) => [...inlineBytesOf(stored.body)]),
+          Option.map(read, (stored) => [...blobs.bytesOf(stored.body)]),
           Option.some([...pngBytes(1200, 720)]),
         );
+      }),
+  );
+
+  it.effect(
+    "a sandbox that uploads its own files keeps what landed in the store, a WebM with its MP4, by URLs of one type, bound, and two minutes; a file changed after its probe is refused and its upload tombstoned",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const webm = webmBytes(1280, 800);
+        const mp4 = mp4Bytes(1280, 800);
+        const presignedBefore = blobs.presigned.length;
+        const now = yield* Clock.currentTimeMillis;
+
+        const sandbox = selfUploadingSandbox(
+          { [`${CHECKOUT}/flow.webm`]: webm, [`${CHECKOUT}/swapped.png`]: pngBytes(4, 3) },
+          {
+            uploaded: { [`${CHECKOUT}/swapped.png`]: new TextEncoder().encode("<svg></svg>") },
+            phoneVideo: mp4,
+          },
+        );
+
+        const answer = readShown(
+          yield* show({ target, sandbox }, { images: [{ path: "flow.webm", caption: "Flow" }] }),
+        );
+
+        const [video] = answer.pictures;
+        assert.ok(video);
+        const kept = yield* readConversationPicture(target.conversationId, video.id);
+
+        const phone = yield* readServedConversationPicture(
+          target.conversationId,
+          video.id,
+          PLAYABLE_VIDEO_TYPE.MP4,
+        );
+
+        assert.deepEqual(
+          Option.map(kept, (one) => [...blobs.bytesOf(one.body)]),
+          Option.some([...webm]),
+        );
+        assert.deepEqual(
+          Option.map(phone, (one) => [...blobs.bytesOf(one.body)]),
+          Option.some([...mp4]),
+        );
+
+        const minted = blobs.presigned.slice(presignedBefore);
+        assert.deepEqual(
+          minted.map(({ contentType, maxBytes, validUntil }) => ({
+            contentType,
+            maxBytes,
+            seconds: (validUntil - now) / 1000,
+          })),
+          [
+            {
+              contentType: CONVERSATION_MEDIA_TYPE.WEBM,
+              maxBytes: CONVERSATION_PICTURE_BOUNDS.MAX_BYTES,
+              seconds: 120,
+            },
+            { contentType: MP4_TYPE, maxBytes: PHONE_VIDEO_BOUNDS.MAX_BYTES, seconds: 120 },
+          ],
+        );
+
+        assert.deepEqual(
+          yield* show({ target, sandbox }, { images: [{ path: "swapped.png", caption: "Swap" }] }),
+          refused(`${SHOW_MEDIA_REFUSAL.NOT_IMAGE} swapped.png`),
+        );
+        const swapped = blobs.presigned.at(-1)?.pathname;
+        assert.ok(swapped !== undefined);
+        assert.ok((yield* readAttachmentBlobTombstones(10_000)).some((one) => one.key === swapped));
       }),
   );
 
@@ -278,7 +394,7 @@ it.layer(getTestDB())("show_media", (it) => {
         assert.ok(video);
         const read = yield* readConversationPicture(target.conversationId, video.id);
         assert.deepEqual(
-          Option.map(read, (stored) => [stored.contentType, [...inlineBytesOf(stored.body)]]),
+          Option.map(read, (stored) => [stored.contentType, [...blobs.bytesOf(stored.body)]]),
           Option.some([CONVERSATION_MEDIA_TYPE.WEBM, [...recording]]),
           "it is served back as the WebM it was",
         );
@@ -308,7 +424,7 @@ it.layer(getTestDB())("show_media", (it) => {
         assert.ok(video);
         const read = yield* readConversationPicture(target.conversationId, video.id);
         assert.deepEqual(
-          Option.map(read, (stored) => [stored.contentType, [...inlineBytesOf(stored.body)]]),
+          Option.map(read, (stored) => [stored.contentType, [...blobs.bytesOf(stored.body)]]),
           Option.some([CONVERSATION_MEDIA_TYPE.MP4, [...recording]]),
         );
       }),
@@ -463,7 +579,7 @@ it.layer(getTestDB())("show_media", (it) => {
         const served = (playable: (typeof PLAYABLE_VIDEO_TYPE)[keyof typeof PLAYABLE_VIDEO_TYPE]) =>
           Effect.map(
             readServedConversationPicture(target.conversationId, ogg.id, playable),
-            Option.map((picture) => [picture.contentType, [...inlineBytesOf(picture.body)]]),
+            Option.map((picture) => [picture.contentType, [...blobs.bytesOf(picture.body)]]),
           );
 
         assert.deepEqual(

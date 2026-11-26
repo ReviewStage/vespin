@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { posix } from "node:path";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readPageById } from "@repo/database/models/task-pages";
@@ -75,14 +74,15 @@ import {
   readInboxItemHome,
 } from "../../inbox/inbox-store.js";
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
+import { type AttachmentUploads, withAttachmentUploads } from "../../storage/attachment-uploads.js";
 import type { BlobStoreFailure } from "../../storage/blob-store.js";
 import { placeholderLinksWords } from "../link-rule.js";
 import { taskIdOfInput } from "../task-ref.js";
 import {
   type InboxSandboxDoor,
-  readSandboxBodyFile,
-  readSandboxMedia,
   type SandboxImageRefusals,
+  storeSandboxBodyFile,
+  storeSandboxMedia,
 } from "./inbox-image.js";
 import { keptAddressesIn, readKeptPicture } from "./inbox-kept-picture.js";
 
@@ -836,13 +836,13 @@ function bodyFile(
 ): Effect.Effect<
   Result.Result<InboxBodyPicture, string>,
   StoreFailure | BlobStoreFailure,
-  DatabaseServices
+  DatabaseServices | AttachmentUploads
 > {
   return Effect.flatMap(readKeptPicture(poster, path), (kept) =>
     kept !== undefined
       ? Effect.succeed(kept)
       : Effect.map(
-          readSandboxBodyFile(sandbox, path, PICTURE_REFUSALS),
+          storeSandboxBodyFile(sandbox, path, PICTURE_REFUSALS),
           Result.map((file) => ({ ...file, path, name: posix.basename(path) || path })),
         ),
   );
@@ -865,7 +865,7 @@ function bodyFiles(
 ): Effect.Effect<
   Result.Result<BodyFiles, string>,
   StoreFailure | BlobStoreFailure,
-  DatabaseServices
+  DatabaseServices | AttachmentUploads
 > {
   const paths = [...inboxSandboxPicturePaths(body), ...keptAddressesIn(body)];
 
@@ -911,8 +911,8 @@ function keptOptionMedia(
   sandbox: InboxSandboxDoor,
 ): Effect.Effect<
   Result.Result<{ readonly media: InboxOptionMedia; readonly file?: PostPicture }, string>,
-  never,
-  DatabaseServices
+  BlobStoreFailure,
+  DatabaseServices | AttachmentUploads
 > {
   if ("url" in posted) {
     const label = posted.label === undefined ? {} : { label: posted.label };
@@ -926,14 +926,14 @@ function keptOptionMedia(
   const { path } = posted;
 
   return Effect.map(
-    readSandboxMedia(sandbox, path, OPTION_FILE_REFUSALS),
+    storeSandboxMedia(sandbox, path, OPTION_FILE_REFUSALS),
     Result.map((read) => {
-      const file = { ...read, id: randomUUID(), name: posix.basename(path) || path };
+      const file = { ...read, name: posix.basename(path) || path };
       const caption = posted.caption === undefined ? {} : { caption: posted.caption };
 
       const media = {
         type: INBOX_OPTION_MEDIA.FILE,
-        attachmentId: file.id,
+        attachmentId: file.stored.id,
         mediaType: file.contentType,
         ...caption,
       };
@@ -986,7 +986,11 @@ function optionMedia(
   ask: InboxAskInput | undefined,
   bodyPictures: number,
   sandbox: InboxSandboxDoor,
-): Effect.Effect<Result.Result<KeptOptionMedia, string>, never, DatabaseServices> {
+): Effect.Effect<
+  Result.Result<KeptOptionMedia, string>,
+  BlobStoreFailure,
+  DatabaseServices | AttachmentUploads
+> {
   if (ask?.type !== INBOX_ASK.DECIDE)
     return Effect.succeed(Result.succeed({ media: [], files: [] }));
   const posted = ask.options.map((option) => option.media ?? []);
@@ -1149,6 +1153,7 @@ export function postToInbox(
 
     return yield* written(agent, posted.success);
   }).pipe(
+    withAttachmentUploads,
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(inboxRejected(INBOX_REFUSAL.UNAVAILABLE))),
   );

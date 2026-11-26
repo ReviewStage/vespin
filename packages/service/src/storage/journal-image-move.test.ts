@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import { attachment } from "@repo/database/schemas/attachment";
 import { attachmentBlobTombstone } from "@repo/database/schemas/attachment-blob-tombstone";
 import { journalImageMove, journalImageRewrite } from "@repo/database/schemas/journal-image-move";
@@ -17,6 +16,7 @@ import { ConfigProvider, Effect, Layer, Option } from "effect";
 import { memoryBlobStore } from "../testing/blob-store-fake.js";
 import { attachmentBlobPath } from "./attachment-blob-paths.js";
 import { readConversationPictureBytes } from "./attachment-bytes.js";
+import { keepPictureBytesOne } from "./attachment-keeps.js";
 import { BlobStore, blobStoreFromEnvironment } from "./blob-store.js";
 import { moveJournalImages } from "./journal-image-move.js";
 
@@ -74,7 +74,7 @@ it.layer(Layer.merge(getTestDB(), store.layer))("the journal image move over a s
         ]);
 
         // The conversation already keeps the sketch, as a later line's image would have kept it.
-        const held = yield* keepConversationPicture(line, {
+        const held = yield* keepPictureBytesOne(line, {
           bytes: sketch,
           contentType: INBOX_IMAGE_TYPE.PNG,
           width: 640,

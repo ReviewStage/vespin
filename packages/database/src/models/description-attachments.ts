@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
 import {
   DESCRIPTION_ATTACHMENT_BOUNDS,
-  type DescriptionFile,
+  type DescriptionFileType,
   descriptionFileTypeSchema,
 } from "@repo/features/description-attachment-wire";
 import {
@@ -22,6 +21,9 @@ import {
   attachmentBodyOf,
   phoneBodyFields,
   phoneBodyOf,
+  type StoredAttachment,
+  StoredAttachmentSchema,
+  storedAttachmentColumns,
 } from "./attachment-body.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import { reachableTask, taskReachableBy } from "./workspace-store.js";
@@ -96,21 +98,16 @@ const countPictures = SqlSchema.findOne({
 
 const insertPicture = SqlSchema.void({
   Request: Schema.Struct({
-    id: Schema.String,
+    stored: StoredAttachmentSchema,
     taskId: Schema.String,
     organizationId: Schema.String,
     userId: Schema.String,
     contentType: descriptionFileTypeSchema,
-    byteCount: Schema.Number,
-    bytes: Schema.Uint8Array,
-    mp4Bytes: Schema.NullOr(Schema.Uint8Array),
     createdAt: Schema.Date,
   }),
-  execute: (row) =>
+  execute: ({ stored, ...row }) =>
     Database.use((db) =>
-      db
-        .insert(attachment)
-        .values({ ...row, phoneByteCount: row.mp4Bytes === null ? null : row.mp4Bytes.byteLength }),
+      db.insert(attachment).values({ ...row, ...storedAttachmentColumns(stored) }),
     ),
 });
 
@@ -159,7 +156,7 @@ const findServedPicture = SqlSchema.findOneOption({
 
 /** A description's file as a copy of it is made: its type, where its bytes stand, and where a recording's or a clip's copy for a phone stands, where one is kept. */
 export interface CopiedDescriptionFile {
-  readonly contentType: DescriptionFile["contentType"];
+  readonly contentType: DescriptionFileType;
   readonly body: AttachmentBody;
   readonly phone: AttachmentBody | undefined;
 }
@@ -172,7 +169,7 @@ const CopiedDescriptionFileSchema = Schema.Struct({
 
 /** A description's file as a read answers it: its type, and where its bytes stand. */
 export interface StoredDescriptionFile {
-  readonly contentType: DescriptionFile["contentType"];
+  readonly contentType: DescriptionFileType;
   readonly body: AttachmentBody;
 }
 
@@ -203,16 +200,19 @@ const findWorkspacePicture = SqlSchema.findOneOption({
     ),
 });
 
-/** A picture, video, or PDF to keep on the description, a recording with the MP4 its sandbox made of it, which no count weighs. */
-export type DescriptionAttachmentToKeep = DescriptionFile & {
-  readonly mp4Bytes?: Uint8Array | undefined;
-};
+/** A picture, video, or PDF to keep on the description: its type, and its bytes as uploaded to the Blob store, a recording with the copy for a phone its sandbox made of it, which no count weighs. */
+export interface DescriptionAttachmentToKeep {
+  readonly contentType: DescriptionFileType;
+  readonly stored: StoredAttachment;
+}
 
 /**
- * Keeps one picture, video, or PDF on the description, uploaded by the account, under a
- * new id, a PDF or a video counted among its pictures; refused where the description
- * already holds its bound of pictures, and nothing where the account reaches no
- * such plan.
+ * Keeps one picture, video, or PDF on the description, uploaded by the
+ * account, under the id its bytes were stored under, a PDF or a video
+ * counted among its pictures; refused where the description already holds
+ * its bound of pictures, and nothing where the account reaches no such
+ * plan. A refusal leaves the upload under an id no row takes, which its
+ * uploader tombstones (`tombstoneUnwrittenUploads`).
  */
 export function keepDescriptionAttachment(
   userId: string,
@@ -235,20 +235,16 @@ export function keepDescriptionAttachment(
           return { status: DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY } as const;
         }
 
-        const id = randomUUID();
         yield* insertPicture({
-          id,
+          stored: picture.stored,
           taskId,
           organizationId: locked.value.organizationId,
           userId,
           contentType: picture.contentType,
-          byteCount: picture.bytes.length,
-          bytes: picture.bytes,
-          mp4Bytes: picture.mp4Bytes ?? null,
           createdAt: yield* DateTime.nowAsDate,
         });
 
-        return { status: DESCRIPTION_ATTACHMENT_KEEP.KEPT, id } as const;
+        return { status: DESCRIPTION_ATTACHMENT_KEEP.KEPT, id: picture.stored.id } as const;
       }),
     ),
   );

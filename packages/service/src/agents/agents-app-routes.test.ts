@@ -16,7 +16,6 @@ import {
   renameAgent,
   updateAgentBranch,
 } from "@repo/database/models/agent-store";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import { rewindConversation } from "@repo/database/models/conversation-rewind";
 import { registerDevice } from "@repo/database/models/device-store";
 import { childConversationId } from "@repo/database/models/ids";
@@ -40,7 +39,6 @@ import {
   openTaskAgent,
   openWorkspace,
   startTask,
-  storeAttachmentInBlob,
 } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
 import {
@@ -101,6 +99,7 @@ import { SERVER_EVENT } from "../events/server-events.js";
 import { LINK_OUTCOME, linkInstallation } from "../github/github-installations.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { ATTACHMENT_BLOB_VARIANT, attachmentBlobPath } from "../storage/attachment-blob-paths.js";
+import { keepPictureBytesOne } from "../storage/attachment-keeps.js";
 import {
   AGENT_GITHUB_IMAGE,
   AGENT_MESSAGES,
@@ -1697,7 +1696,7 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
     "a picture a tool answered an agent or its worker is served as its bytes, not to be sniffed, not to be cached, and never to run as a page, to whoever may read the agent, and through its own transcript alone",
     () =>
       Effect.gen(function* () {
-        const { owner, other, task, ask, fetch } = yield* openTask();
+        const { owner, other, task, ask, fetch, blobs } = yield* openTask();
         const { agent, target } = yield* startedAgent(owner, task.id, ask);
         const callId = "call-worker";
         const workerConversation = childConversationId(target.conversationId, callId);
@@ -1708,19 +1707,24 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
           kind: CONVERSATION_KIND.CHILD,
           parentConversationId: target.conversationId,
         });
-        const agentPicture = Option.getOrThrow(yield* keepConversationPicture(target, picture(1)));
 
-        const workerPicture = Option.getOrThrow(
-          yield* keepConversationPicture(
-            { userId: owner, conversationId: workerConversation },
-            picture(2),
-          ),
+        const agentPicture = Option.getOrThrow(
+          yield* keepPictureBytesOne(target, picture(1)).pipe(Effect.provide(blobs.layer)),
         );
 
+        const workerPicture = Option.getOrThrow(
+          yield* keepPictureBytesOne(
+            { userId: owner, conversationId: workerConversation },
+            picture(2),
+          ).pipe(Effect.provide(blobs.layer)),
+        );
+
+        // Note that each read is a browser's, which is piped the bytes, since a native reader is sent to the store.
         const at = (bearer: string | undefined, pictureId: string, call?: string) =>
           request(AGENT_PICTURE, bearer, {
             id: agent.id,
             picture: pictureId,
+            fetchMode: "cors",
             ...(call === undefined ? undefined : { call }),
           });
 
@@ -1776,20 +1780,17 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
         const mp4 = mp4Bytes(1280, 800);
 
         const recording = Option.getOrThrow(
-          yield* keepConversationPicture(target, {
+          yield* keepPictureBytesOne(target, {
             bytes: webm,
             contentType: CONVERSATION_MEDIA_TYPE.WEBM,
             width: 1280,
             height: 800,
             mp4Bytes: mp4,
-          }),
+          }).pipe(Effect.provide(blobs.layer)),
         );
 
         const blobKey = attachmentBlobPath(recording.id);
         const phoneBlobKey = attachmentBlobPath(recording.id, ATTACHMENT_BLOB_VARIANT.PHONE);
-        yield* storeAttachmentInBlob(recording.id, { blobKey, phoneBlobKey });
-        blobs.objects.set(blobKey, { bytes: webm, contentType: WEBM_TYPE, etag: '"1"' });
-        blobs.objects.set(phoneBlobKey, { bytes: mp4, contentType: MP4_TYPE, etag: '"2"' });
 
         const at = (bearer: string, init: { accept?: string; fetchMode?: string } = {}) =>
           request(AGENT_PICTURE, bearer, { id: agent.id, picture: recording.id, ...init });
