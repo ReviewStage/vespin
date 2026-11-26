@@ -163,10 +163,11 @@ export function threadNeedsReader(row: InboxRowWaiting, readerId: string | undef
   );
 }
 
-/** The messages a digest still carries, its open ask and its tail, each once, oldest first: the thread a change is drawn over on a row alone. */
+/** The messages a digest still carries, its open asks and its tail, each once, oldest first: the thread a change is drawn over on a row alone. */
 function carriedThread(digest: InboxDigest): readonly InboxMessage[] {
-  const asks = digest.openAsk === undefined ? [] : [digest.openAsk];
-  const byId = new Map([...asks, ...digest.tail].map((message) => [message.id, message] as const));
+  const byId = new Map(
+    [...digest.openAsks, ...digest.tail].map((message) => [message.id, message] as const),
+  );
 
   return [...byId.values()].sort((one, other) => one.createdAt - other.createdAt);
 }

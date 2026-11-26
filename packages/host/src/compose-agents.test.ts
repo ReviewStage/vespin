@@ -2596,6 +2596,27 @@ function keptMessageIds(pool: EntityPool) {
   );
 }
 
+/** The thread `id` names as the lean Inbox kind keeps it in the account's database, as a live query loads it: whether it carries its thread, and its digest's latest messages. */
+function keptThreadOf(pool: EntityPool, id: string) {
+  return Effect.flatMap(pool.collection(INBOX_THREAD), (collection) =>
+    Effect.promise(async () => {
+      const query = createLiveQueryCollection({
+        query: (q) => q.from({ thread: collection }),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      await query.preload();
+      const row = query.toArray.find((each) => each.id === id);
+      await query.cleanup();
+
+      return row === undefined
+        ? undefined
+        : { carriesThread: "thread" in row, tail: row.digest.tail.map((each) => each.id) };
+    }),
+  );
+}
+
 /** The threads whose kept messages a search for `tokens` finds, as a screen's search query reads them from the account's database. */
 function searchedThreads(pool: EntityPool, tokens: readonly [string, ...string[]]) {
   return Effect.flatMap(pool.collection(INBOX_MESSAGE), (collection) =>
@@ -2687,6 +2708,39 @@ it.effect(
         },
         { kept: [HELD_ITEM.id], dropped: [] },
         "a search finds a thread by the words its kept messages say, in SQLite",
+      );
+      assert.deepEqual(
+        yield* keptThreadOf(next.pool, HELD_ITEM.id),
+        { carriesThread: false, tail: [second, third] },
+        "the thread is kept lean, its digest taken from the messages its answer carried",
+      );
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "where the platform keeps the Inbox lean, a close stands over the kept thread as the service answered it, the task the thread stands on kept",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-close-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+      deliverItems(launch.live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* toldTimes(launch.accountItems, 1);
+
+      const answer = yield* launch.acts.AGENTS_INBOX_CLOSE({
+        itemId: HELD_ITEM.id,
+        revision: HELD_ITEM.revision,
+        clientKey: "close-1",
+      });
+
+      const drawn = launch.pool.row(INBOX_THREAD, HELD_ITEM.id);
+
+      assert.ok("item" in answer && answer.taken);
+      assert.deepEqual(
+        { status: drawn?.status, taskId: drawn?.taskId },
+        { status: INBOX_STATUS.CLOSED, taskId: TASK_ID },
       );
     }).pipe(Effect.provide(keptPlatform)),
 );
