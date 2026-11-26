@@ -20,6 +20,7 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Reading pull request"
     timeout: 30000
+- waitForAnimationToEnd
 - takeScreenshot: pr-skeleton-link
 - launchApp:
     stopApp: true
@@ -34,9 +35,16 @@ appId: dev.vespin.ios
     text: "Open"
     optional: true
 - extendedWaitUntil:
-    visible: "Reading conversation"
+    visible: "Invite a teammate by email.*"
     timeout: 30000
+- waitForAnimationToEnd
 - takeScreenshot: pr-skeleton-listed
+- swipe:
+    start: "75%, 75%"
+    end: "75%, 35%"
+    duration: 400
+- waitForAnimationToEnd
+- takeScreenshot: pr-skeleton-listed-lower
 - launchApp:
     stopApp: true
     arguments:
@@ -50,6 +58,13 @@ appId: dev.vespin.ios
     text: "Open"
     optional: true
 - extendedWaitUntil:
-    visible: "Comment"
+    visible: "Invite a teammate by email.*"
     timeout: 30000
+- waitForAnimationToEnd
 - takeScreenshot: pr-skeleton-partial
+- swipe:
+    start: "75%, 75%"
+    end: "75%, 35%"
+    duration: 400
+- waitForAnimationToEnd
+- takeScreenshot: pr-skeleton-partial-lower
