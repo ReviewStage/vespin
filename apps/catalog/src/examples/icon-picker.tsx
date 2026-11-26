@@ -104,7 +104,15 @@ function IconPickers(): React.JSX.Element {
 
   return (
     <CatalogSection id="icon-picker" title="Picking">
-      <IconPicker searchLabel="Search icons" query={query} onQuery={setQuery} legend="Icons">
+      <IconPicker
+        searchLabel="Search icons"
+        query={query}
+        onQuery={(next) => {
+          setFlagOpen(false);
+          setQuery(next);
+        }}
+        legend="Icons"
+      >
         {shown.length === 0 ? (
           <NoteLine look={NOTE_LINE_LOOK.LIST}>No icons match.</NoteLine>
         ) : (
