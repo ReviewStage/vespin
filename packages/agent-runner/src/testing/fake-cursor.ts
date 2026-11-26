@@ -13,6 +13,7 @@
 
 import type {
   AgentOptions,
+  InteractionUpdate,
   LocalAgentDocument,
   LocalAgentStore,
   RunResultStatus,
@@ -24,9 +25,14 @@ import type {
 import { Effect, Layer } from "effect";
 import { type CursorAgentHandle, type CursorRun, CursorSdk } from "../cursor-sdk.js";
 
+/** An update the SDK hands the send's `onDelta` alone, as it does a model call's end, in its place among the run's messages. */
+export interface FakeDelta {
+  readonly delta: InteractionUpdate;
+}
+
 /** One run as the fake plays it: its messages, how it ends, and what it answers a steer. */
 export interface FakeRun {
-  readonly messages: readonly SDKMessage[];
+  readonly messages: readonly (SDKMessage | FakeDelta)[];
   readonly status?: RunResultStatus;
   readonly error?: string;
   /** Holds the run open past its messages until the test releases it or a cancel ends it. */
@@ -37,6 +43,8 @@ export interface FakeRun {
   readonly checkpointBytes?: number;
   /** Why the SDK refuses to start the run, as it throws for a summary of an agent with no conversation yet. */
   readonly refused?: string;
+  /** Whether the SDK never answers the call that starts the run, as a summary Cursor never starts. */
+  readonly stalled?: boolean;
 }
 
 /** What the fake SDK was handed, in the order it was handed it. */
@@ -120,7 +128,11 @@ export function fakeCursor(
         }),
     );
 
-  const runOf = (store: LocalAgentStore | undefined, agentId: string): CursorRun => {
+  const runOf = (
+    store: LocalAgentStore | undefined,
+    agentId: string,
+    sendOptions?: SendOptions,
+  ): CursorRun => {
     const script = runs[played] ?? { messages: [] };
     played += 1;
     const number = played;
@@ -151,8 +163,13 @@ export function fakeCursor(
     })();
 
     return {
+      // Note that the SDK hands a delta to `onDelta`, awaited, before it streams the next message.
       stream: async function* () {
-        yield* script.messages;
+        for (const item of script.messages) {
+          if ("delta" in item) await sendOptions?.onDelta?.({ update: item.delta });
+          else yield item;
+        }
+
         await ended;
       },
       wait: async () => {
@@ -182,12 +199,14 @@ export function fakeCursor(
       record.sent.push({ message, options: sendOptions });
       changed();
 
-      return runOf(options.local?.store, agentId);
+      return runOf(options.local?.store, agentId, sendOptions);
     },
     summarize: async () => {
       if (going) throw new Error("Cursor cannot summarize while the agent runs.");
       record.summaries.push(played);
       const refused = runs[played]?.refused;
+
+      if (runs[played]?.stalled === true) return new Promise<never>(() => {});
 
       if (refused !== undefined) {
         played += 1;

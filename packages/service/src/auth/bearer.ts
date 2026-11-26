@@ -8,10 +8,16 @@ import {
   unparsedWire,
   type WireBoundaryInput,
 } from "../core.js";
+import { poolConnections } from "../db/index.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import type { RelayCredential } from "../http/relay-upgrade.js";
 import { auth } from "./auth.js";
-import { BearerCallers, type OAuthUserInfo, type UserInfoEndpoint } from "./bearer-callers.js";
+import {
+  BearerCallers,
+  CALLER_SPAN,
+  type OAuthUserInfo,
+  type UserInfoEndpoint,
+} from "./bearer-callers.js";
 import { resolveBrowserSessionUserId } from "./browser-session.js";
 import { CREDENTIAL_HEADER, sessionCredential } from "./session-credential.js";
 
@@ -19,6 +25,20 @@ export type { OAuthUserInfo, UserInfoEndpoint } from "./bearer-callers.js";
 
 /** The address a relay page's headers are read against as a request: only the headers are read. */
 const RELAY_PAGE_BASE = "http://localhost/";
+
+/**
+ * The span the auth service's own answer is asked under, beneath
+ * `CALLER_SPAN`, and what it says of the auth service's pool as the ask
+ * began (`db/index.ts`'s `poolConnections`): a pool with no idle connection,
+ * or none built yet, which it counts as empty, opens one to the database
+ * before its first statement. Note that it names counts alone, never the
+ * bearer or the account.
+ */
+const USER_INFO_SPAN = {
+  NAME: "auth.userInfo",
+  POOL_TOTAL: "auth.pool.total",
+  POOL_IDLE: "auth.pool.idle",
+} as const;
 
 /** What every `jose` error's code begins with, and the one of them that is a key set not reached rather than a token refused. */
 const JOSE_CODE = { PREFIX: "ERR_J", KEY_SET_TIMEOUT: "ERR_JWKS_TIMEOUT" } as const;
@@ -139,14 +159,23 @@ export function relayUserId(
   return requestUserId(page, userInfo, session);
 }
 
-/** The auth service's own answer, asked afresh. */
+/** The auth service's own answer, asked afresh, under `USER_INFO_SPAN` with its pool as the ask began. */
 const askedUserInfo: UserInfoEndpoint = (input) =>
-  Effect.tryPromise(async () => {
-    // SAFETY: Better Auth hands back its parsed userinfo answer as structured-clone data; the wire guards below validate the selected field.
-    const answer = (await auth.api.oauth2UserInfo(input)) as WireBoundaryInput;
+  Effect.gen(function* () {
+    const connections = poolConnections() ?? { total: 0, idle: 0 };
 
-    return oauthUserInfoFromAuthAnswer(unparsedWire(answer));
-  });
+    yield* Effect.annotateCurrentSpan({
+      [USER_INFO_SPAN.POOL_TOTAL]: connections.total,
+      [USER_INFO_SPAN.POOL_IDLE]: connections.idle,
+    });
+
+    return yield* Effect.tryPromise(async () => {
+      // SAFETY: Better Auth hands back its parsed userinfo answer as structured-clone data; the wire guards below validate the selected field.
+      const answer = (await auth.api.oauth2UserInfo(input)) as WireBoundaryInput;
+
+      return oauthUserInfoFromAuthAnswer(unparsedWire(answer));
+    });
+  }).pipe(Effect.withSpan(USER_INFO_SPAN.NAME));
 
 /**
  * The auth service's own userinfo endpoint, read at the hosted API boundary.
@@ -171,7 +200,9 @@ const hostedUserInfo: UserInfoEndpoint = (input) =>
 export function resolveHostedUserId(
   request: Request,
 ): Effect.Effect<Option.Option<string>, Cause.UnknownError> {
-  return requestUserId(request, hostedUserInfo, resolveBrowserSessionUserId);
+  return requestUserId(request, hostedUserInfo, resolveBrowserSessionUserId).pipe(
+    Effect.withSpan(CALLER_SPAN.NAME),
+  );
 }
 
 /**
@@ -183,12 +214,14 @@ export function resolveHostedUserId(
 export function resolveHostedBearerUserId(
   request: Request,
 ): Effect.Effect<Option.Option<string>, Cause.UnknownError> {
-  return hostedUserId(request, hostedUserInfo);
+  return hostedUserId(request, hostedUserInfo).pipe(Effect.withSpan(CALLER_SPAN.NAME));
 }
 
 /** The account a relay's upgrade names against the same store: the terminal relay's and the Browser tab's live view's alike. */
 export function resolveRelayUserId(
   credential: RelayCredential,
 ): Effect.Effect<Option.Option<string>, Cause.UnknownError> {
-  return relayUserId(credential, hostedUserInfo, resolveBrowserSessionUserId);
+  return relayUserId(credential, hostedUserInfo, resolveBrowserSessionUserId).pipe(
+    Effect.withSpan(CALLER_SPAN.NAME),
+  );
 }

@@ -40,6 +40,7 @@ import {
   openTaskAgent,
   openWorkspace,
   startTask,
+  storeAttachmentInBlob,
 } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
 import {
@@ -61,6 +62,7 @@ import {
   VOICE_SPEAKER,
   type VoiceSpeaker,
 } from "@repo/features/agent-wire";
+import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { INBOX_IMAGE_TYPE, inboxAnswerSchema } from "@repo/features/inbox-wire";
 import { transcriptNowAnswerSchema } from "@repo/features/live-wire";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
@@ -75,10 +77,12 @@ import {
   taskStartAnswerSchema,
   UNTITLED_TASK_NAME,
 } from "@repo/features/task-wire";
+import { MP4_TYPE, WEBM_TYPE } from "@repo/features/video-signature";
 import { EXPERIMENT } from "@repo/settings";
 import { TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
+import { mp4Bytes, webmBytes } from "@repo/wire/testing";
 import { and, eq, sql } from "drizzle-orm";
-import { DateTime, Duration, Effect, Option } from "effect";
+import { Clock, DateTime, Duration, Effect, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import {
@@ -96,6 +100,7 @@ import {
 import { SERVER_EVENT } from "../events/server-events.js";
 import { LINK_OUTCOME, linkInstallation } from "../github/github-installations.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
+import { ATTACHMENT_BLOB_VARIANT, attachmentBlobPath } from "../storage/attachment-blob-paths.js";
 import {
   AGENT_GITHUB_IMAGE,
   AGENT_MESSAGES,
@@ -1758,6 +1763,62 @@ it.layer(getTestDB())("an agent's pictures", (it) => {
         yield* joinWorkspace(task.workspaceId, other);
         const teammate = yield* fetch(at(other, agentPicture.id));
         assert.equal(teammate.status, HOSTED_HTTP_STATUS.OK, "a member of the agent's workspace");
+      }),
+  );
+
+  it.effect(
+    "a recording whose bytes and phone copy stand in the Blob store sends a native reader to the copy it plays for five minutes, pipes its WebM to a browser, and is none to another account",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, task, ask, fetch, blobs } = yield* openTask();
+        const { agent, target } = yield* startedAgent(owner, task.id, ask);
+        const webm = webmBytes(1280, 800);
+        const mp4 = mp4Bytes(1280, 800);
+
+        const recording = Option.getOrThrow(
+          yield* keepConversationPicture(target, {
+            bytes: webm,
+            contentType: CONVERSATION_MEDIA_TYPE.WEBM,
+            width: 1280,
+            height: 800,
+            mp4Bytes: mp4,
+          }),
+        );
+
+        const blobKey = attachmentBlobPath(recording.id);
+        const phoneBlobKey = attachmentBlobPath(recording.id, ATTACHMENT_BLOB_VARIANT.PHONE);
+        yield* storeAttachmentInBlob(recording.id, { blobKey, phoneBlobKey });
+        blobs.objects.set(blobKey, { bytes: webm, contentType: WEBM_TYPE, etag: '"1"' });
+        blobs.objects.set(phoneBlobKey, { bytes: mp4, contentType: MP4_TYPE, etag: '"2"' });
+
+        const at = (bearer: string, init: { accept?: string; fetchMode?: string } = {}) =>
+          request(AGENT_PICTURE, bearer, { id: agent.id, picture: recording.id, ...init });
+
+        const sentTo = (served: Response) => {
+          assert.equal(served.status, HOSTED_HTTP_STATUS.FOUND);
+          assert.equal(served.headers.get("cache-control"), "private, no-store");
+
+          return new URL(served.headers.get("location") ?? "").pathname;
+        };
+
+        const now = yield* Clock.currentTimeMillis;
+        assert.equal(sentTo(yield* fetch(at(owner, { accept: MP4_TYPE }))), `/${phoneBlobKey}`);
+        assert.equal(sentTo(yield* fetch(at(owner))), `/${blobKey}`);
+        assert.deepEqual(
+          blobs.presigned.map((minted) => minted.validUntil - now),
+          [5 * 60 * 1000, 5 * 60 * 1000],
+        );
+
+        const browser = yield* fetch(at(owner, { fetchMode: "cors" }));
+        assert.equal(browser.status, HOSTED_HTTP_STATUS.OK);
+        assert.equal(browser.headers.get("content-type"), WEBM_TYPE);
+        assert.equal(browser.headers.get("x-content-type-options"), "nosniff");
+        assert.deepEqual(new Uint8Array(yield* Effect.promise(() => browser.arrayBuffer())), webm);
+
+        assert.deepEqual(
+          yield* ask(at(other, { accept: MP4_TYPE })),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+        );
       }),
   );
 

@@ -36,7 +36,7 @@ import {
 import { DesktopTasks } from "./desktop/desktop-tasks.js";
 
 import {
-  type AgentComposerControl,
+  type HeldComposer,
   type MessageSender,
   useAgentComposer,
 } from "./tasks/use-agent-composer.js";
@@ -1189,6 +1189,28 @@ test("words another panel's window writes for a box reach this window's box as t
   assert.equal(app.box(), "Fix logout");
 });
 
+test("words another window wrote for another box stand in storage when this window writes before it hears of them", async () => {
+  const app = openWindow();
+  await app.show(INVITES, { account: DEAN });
+  typeInComposer(app.container, "Fix login");
+  await settle();
+  leaveWindow();
+
+  // The other window's write, which this one has not heard of as its own write lands.
+  window.localStorage.setItem(
+    "app.composerDrafts",
+    JSON.stringify([
+      ...JSON.parse(window.localStorage.getItem("app.composerDrafts") ?? "[]"),
+      keptEntry(DEAN.id, "plan-elsewhere", "agent-elsewhere", "Ship the export"),
+    ]),
+  );
+  typeInComposer(app.container, " now");
+  await settle();
+  leaveWindow();
+
+  assert.deepEqual(keptWords(), ["Ship the export", "Fix login now"]);
+});
+
 test("an account's drafts moved from its address reach a window that read its id's before", async () => {
   const app = openWindow();
   await app.show(INVITES, { account: DEAN });
@@ -1242,7 +1264,7 @@ test("words another window writes for a box this window let go a moment before s
 
 test("files attached in this window stay as its draft when another window lets the words beside them go", async () => {
   const notes = { name: "notes.md", mediaType: "text/plain", data: "IyBOb3Rlcw==" } as const;
-  let composer: AgentComposerControl | undefined;
+  let composer: HeldComposer | undefined;
 
   function Box(): null {
     useDraftsOwner(DEAN);
@@ -1272,5 +1294,5 @@ test("files attached in this window stay as its draft when another window lets t
     window.dispatchEvent(new StorageEvent("storage", { key: "app.composerDrafts" }));
   });
   await settle();
-  assert.deepEqual([box().held.text, box().held.attachments], ["", [notes]]);
+  assert.deepEqual([box().heldNow().text, box().held.attachments], ["", [notes]]);
 });

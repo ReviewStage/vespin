@@ -78,23 +78,31 @@ const LIST = [
 
 const OFFER = { experimentOn: true, apiVersion: 4 };
 
-it("offers every model Cursor lists once, at fast speed where a variant runs fast, and on two context windows where a variant runs on a larger one", () => {
+it("offers every model Cursor lists once, at fast speed where a variant runs fast, on two context windows where a variant runs on a larger one, and on the one window it lists otherwise", () => {
   const offered = withCursorModels([], OFFER, cursorModelsOf(LIST));
 
   assert.deepEqual(
-    offered.map((model) => [model.id, model.name, model.efforts, model.contextWindows]),
+    offered.map((model) => [
+      model.id,
+      model.name,
+      model.efforts,
+      model.contextWindows,
+      model.contextWindow,
+    ]),
     [
-      ["cursor/auto", "Auto", ["default"], undefined],
+      ["cursor/auto", "Auto", ["default"], undefined, undefined],
       [
         "cursor/grok-4.7",
         "Grok 4.7",
         ["low", "medium", "high"],
         { standardTokens: 256_000, longTokens: 500_000 },
+        500_000,
       ],
       // Note that Grok's larger window runs at standard speed alone, so its fast version has one window.
-      ["cursor/grok-4.7-fast", "Grok 4.7 (Fast)", ["low", "medium", "high"], undefined],
-      ["cursor/claude-opus-5.5", "Opus 5.5", ["high", "max"], undefined],
-      ["cursor/claude-opus-5.5-fast", "Opus 5.5 (Fast)", ["high", "max"], undefined],
+      ["cursor/grok-4.7-fast", "Grok 4.7 (Fast)", ["low", "medium", "high"], undefined, 256_000],
+      // Note that Opus lists no window, so it is offered none rather than a guessed one.
+      ["cursor/claude-opus-5.5", "Opus 5.5", ["high", "max"], undefined, undefined],
+      ["cursor/claude-opus-5.5-fast", "Opus 5.5 (Fast)", ["high", "max"], undefined, undefined],
     ],
   );
 });

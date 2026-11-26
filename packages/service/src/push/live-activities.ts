@@ -4,7 +4,8 @@
  * One activity stands per member per phone (`@repo/features/live-activity-wire`).
  * Whatever changed, the member's activity is refreshed whole
  * (`refreshLiveActivity`): its content state is read afresh, how many of
- * their own unarchived agents have a turn running, how many threads wait on
+ * their own unarchived agents have a turn running, short of
+ * `LIVE_ACTIVITY_PUSH.LONGEST_TURN`, how many threads wait on
  * them as their badge counts them (`inboxWaitingCount`), and up to three of
  * the running agents, the newest turn first, each with its name and when its
  * turn started. Note that no agent's current step is carried: it changed
@@ -116,6 +117,8 @@ const LIVE_ACTIVITY_PUSH = {
   LIFETIME: Duration.hours(8),
   /** How long an activity stands before the service ends it and starts a fresh one: inside `LIFETIME`, so its end still reaches it and iOS never leaves it ended beside the new one. */
   ROTATE_AFTER: Duration.minutes(7 * 60 + 45),
+  /** How long a turn runs before the activity leaves it out, and ends once only such turns run: Apple's Human Interface Guidelines keep a Live Activity to tasks of eight hours at most, and a turn may run a day (`TURN_DEADLINE.CAP_MS`). */
+  LONGEST_TURN: Duration.hours(8),
   /** How long a claimed push-to-start stands unconfirmed before a refresh takes it again: well past APNs' own timeout on the send (`APNS_REQUEST_TIMEOUT`). */
   START_HOLD: Duration.minutes(1),
   /** The most phones one sweep takes, and how many members at once; the rest wait for the next minute's. */
@@ -163,13 +166,20 @@ function listedAgents(userId: string, running: readonly RunningAgentTurn[]) {
   });
 }
 
+/** The running turns the activity shows at `now`: those short of `LIVE_ACTIVITY_PUSH.LONGEST_TURN`, in the order given. */
+function shownOf(running: readonly RunningAgentTurn[], now: number): readonly RunningAgentTurn[] {
+  const longest = Duration.toMillis(LIVE_ACTIVITY_PUSH.LONGEST_TURN);
+
+  return running.filter((turn) => now - turn.startedAt.getTime() < longest);
+}
+
 /** The member's activity as it now stands: how many agents run, how many threads wait on them, and the newest of the running agents. */
 function contentStateOf(
   userId: string,
   now: number,
 ): Effect.Effect<LiveActivityContentState, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
-    const running = yield* listRunningAgentTurns(userId);
+    const running = shownOf(yield* listRunningAgentTurns(userId), now);
 
     return {
       running: running.length,
@@ -344,17 +354,19 @@ function endOn(
     const never = phone.notify === PUSH_NOTIFY.NEVER;
 
     // Note that whether an agent runs is read again here, as a turn may have begun since the state was read.
-    if (!never && (yield* listRunningAgentTurns(userId)).length > 0) return;
+    const running = yield* listRunningAgentTurns(userId);
+
+    if (!never && shownOf(running, yield* Clock.currentTimeMillis).length > 0) return;
+
+    // An activity ended because its turns ran too long leaves at once, since its "Done" would say they finished.
+    const dismissAt =
+      running.length > 0 ? now : now + Duration.toMillis(LIVE_ACTIVITY_PUSH.DISMISS_AFTER);
 
     if (phone.activityToken !== null) {
       const delivery = yield* sendTo(
         phone,
         phone.activityToken,
-        endPayload(
-          never ? NOTHING_SHOWN : state,
-          now,
-          now + Duration.toMillis(LIVE_ACTIVITY_PUSH.DISMISS_AFTER),
-        ),
+        endPayload(never ? NOTHING_SHOWN : state, now, dismissAt),
         APNS_PRIORITY.IMMEDIATE,
         LIVE_ACTIVITY_PUSH.LIFETIME,
         now,

@@ -87,8 +87,8 @@ export function followerRoleWords(follower: TaskFollowerWire): string {
  */
 export function followerMachinesSentence(follower: TaskFollowerWire, whose: string): string {
   return follower.machines
-    ? `Agents on this task may use ${whose} machines for terminal commands and computer use.`
-    : `Agents on this task may not use ${whose} machines for terminal commands or computer use.`;
+    ? `Agents on this task may run commands on ${whose} machines.`
+    : `Agents on this task may not run commands on ${whose} machines.`;
 }
 
 /**

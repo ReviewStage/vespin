@@ -7,6 +7,7 @@ import { Activity, act, createElement, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import type { ComposerTrigger } from "../description-editor/contract.js";
+import { useHandedWords } from "./box-words.js";
 import { type SkillPicker, type SkillSource, useSkillPicker } from "./skill-picker.js";
 
 /**
@@ -38,7 +39,7 @@ async function mounted(source: SkillSource = SOURCE) {
     latest = useSkillPicker({
       editor,
       room,
-      draft: "",
+      words: useHandedWords(""),
       source,
       onOpen: undefined,
     });

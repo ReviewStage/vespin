@@ -1,38 +1,32 @@
 /**
- * manager-chat-threads.tsx -- a Manager's chat's threads: Reply in thread on a message, the summary of its replies under it, and the thread's pane beside the chat with its own reply box.
+ * manager-chat-threads.tsx -- a Manager's chat's threads: Reply in thread on a message, the summary of its replies under it, and the door that opens the thread in a tab of the page's side panel.
  *
  * A Manager's chat is a team channel (`@repo/features/manager-chat-view`):
  * anyone may answer a message in its thread, the Manager with
- * `chat_send`'s `thread_ts` and a person from the thread's pane. Each
+ * `chat_send`'s `thread_ts` and a person from the thread's tab. Each
  * message of the chat offers Reply in thread beside its Copy, and one others
  * answered says so under its words with the faces of who answered
- * (`ThreadSummary`); either opens its thread in a pane at the chat's end
- * (`ManagerThreadPane`), whose box sends the reader's words to the chat as a
- * reply in that thread (`threadRoot`). A reply also posted to the chat
- * stands at its top too, where both open the thread it stands in.
+ * (`ThreadSummary`); either opens its thread in a Thread tab of the page's
+ * side panel (`ThreadDoorsProvider`), the panel every page opens beside it,
+ * resized and kept as it is, whose box, the chat's own composer, sends the
+ * reader's words and files to the chat as a reply in that thread
+ * (`threadRoot`). A reply also posted to the chat stands at its top too,
+ * where both open the thread it stands in.
  */
 
 import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
-import type { ManagerChatLine } from "@repo/features/manager-chat-view";
+import { CHAT_THREAD_WORDS, type ManagerChatLine } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
-import { ThreadPane, ThreadReplies } from "@repo/ui";
+import { ThreadReplies } from "@repo/ui";
 import { MessageSquareReplyIcon } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
-import { type ReactNode, useState } from "react";
+import { createContext, type ReactNode, use } from "react";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { MessageAction } from "../ai-elements/message.js";
 import { usePerson } from "../member-directory.js";
-import { MessageBox, useMessageBox } from "./message-box.js";
 
-/** The words of a thread's presses and its box. */
-const THREAD_WORDS = {
-  REPLY: "Reply in thread",
-  BOX: "Reply…",
-  SEND: "Reply",
-} as const;
-
-/** The most characters a reply's words may spell, as a message to the chat may. */
-const THREAD_REPLY_CHARS = 8_000;
+/** The words of a thread's presses and its box, as every client says them. */
+export const THREAD_WORDS = CHAT_THREAD_WORDS;
 
 /** Reply in thread beside a message's Copy, which opens its thread (`onOpen`). */
 export function ThreadReplyAction({ onOpen }: { onOpen: () => void }): ReactNode {
@@ -104,67 +98,19 @@ export function ThreadSummary({
   );
 }
 
-/** A thread's box: the reader's words, sent through `onSend` as a reply in the thread. */
-function ThreadBox({ onSend }: { onSend: (text: string) => void }): ReactNode {
-  const [words, setWords] = useState("");
-
-  const send = () => {
-    const trimmed = words.trim();
-
-    if (trimmed === "") return;
-    setWords("");
-    onSend(trimmed);
-  };
-
-  const box = useMessageBox({
-    draft: words,
-    setDraft: setWords,
-    placeholder: THREAD_WORDS.BOX,
-    label: THREAD_WORDS.BOX,
-    maxLength: THREAD_REPLY_CHARS,
-    onSubmit: send,
-    focus: true,
-    // Note that a reply goes as words alone, so the box offers no file it would drop.
-    takesFiles: false,
-  });
-
-  return (
-    <MessageBox
-      box={box}
-      send={{ label: THREAD_WORDS.SEND, empty: words.trim() === "", onSend: send }}
-    />
-  );
+/** Where the chat opens its threads: the one its page's side panel shows, and the press that opens one there. */
+export interface ThreadDoors {
+  /** The thread the panel shows, by the message it stands on; none while it shows none. */
+  readonly open: string | undefined;
+  readonly onOpen: (root: string) => void;
 }
 
-/**
- * The open thread's pane beside the chat: the message it stands on (`root`)
- * and its replies, each drawn as the chat draws its rows, and its box, which
- * sends through `onSend` where the chat takes words; closed by `onClose`.
- */
-export function ManagerThreadPane({
-  root,
-  replies,
-  count,
-  onSend,
-  onClose,
-  rootKey,
-}: {
-  root: ReactNode;
-  replies: ReactNode;
-  count: number;
-  /** The thread's root's id, under which its box keeps its words apart from another thread's. */
-  rootKey: string;
-  onSend: ((text: string) => void) | undefined;
-  onClose: () => void;
-}): ReactNode {
-  return (
-    <ThreadPane
-      root={root}
-      count={count}
-      onClose={onClose}
-      composer={onSend === undefined ? null : <ThreadBox key={rootKey} onSend={onSend} />}
-    >
-      {replies}
-    </ThreadPane>
-  );
+const ThreadDoorsContext = createContext<ThreadDoors | undefined>(undefined);
+
+/** Hands a Manager's chat the side panel its threads open in: its page's. */
+export const ThreadDoorsProvider = ThreadDoorsContext.Provider;
+
+/** Where the chat opens its threads; none where nothing beside it shows one, and its messages offer no thread. */
+export function useThreadDoors(): ThreadDoors | undefined {
+  return use(ThreadDoorsContext);
 }

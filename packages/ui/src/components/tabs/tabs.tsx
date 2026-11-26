@@ -81,12 +81,10 @@ import { type TabMove, useTabDrag } from "./use-tab-drag.js";
  * never the window's.
  *
  * A TabCard is one screen among a switcher's recent ones, in a row of them
- * (`TabCards`): a still of it, or its glyph large until it has one, its name,
- * and where it stands. The keys stay where they were while a switcher is
+ * (`TabCards`): its glyph large, its name, and where it stands. The keys stay where they were while a switcher is
  * held, so a card takes no stop; the pointer resting on it chooses it, and a
  * press picks it, on the press itself where the switcher's chord makes the
- * release a right-click (`pickOnPress`). The still is a picture of the
- * window, whose address the session recording masks, so it draws empty there.
+ * release a right-click (`pickOnPress`).
  *
  * Its words are text, which the session recording masks with the rest.
  */
@@ -673,7 +671,7 @@ export function TabCards({
 }
 
 /**
- * One card: its still or its glyph, its name, and where it stands. `here`
+ * One card: its glyph, its name, and where it stands. `here`
  * dims the card of the screen already on show. `onPoint` hears the pointer
  * come onto it, and `onPick` a press on it: on the press itself where
  * `pickOnPress`, for a switcher held on ⌃, which a Mac makes a release a
@@ -687,7 +685,6 @@ export function TabCard({
   detail,
   detailIcon,
   endMark,
-  still,
   here = false,
   chosen,
   pickOnPress = false,
@@ -704,8 +701,6 @@ export function TabCard({
   detailIcon?: ReactNode;
   /** A mark after the detail's words, or alone where there are none. */
   endMark?: ReactNode;
-  /** A picture of the screen, by its address; its glyph, large, until it has one. */
-  still?: string | undefined;
   here?: boolean | undefined;
   chosen: boolean;
   pickOnPress?: boolean | undefined;
@@ -747,18 +742,9 @@ export function TabCard({
         padding={CARD_PADDING.FLUSH}
         className="ui-tab-card-preview flex h-[110px] items-center justify-center mb-0.5 group-data-[here=true]/card:opacity-55"
       >
-        {still === undefined ? (
-          <span className="ui-tab-card-glyph inline-flex text-muted-foreground [--ui-glyph-size:28px] [&_:is(svg,img)]:size-[28px]">
-            {icon}
-          </span>
-        ) : (
-          <img
-            className="ui-tab-card-still size-full object-cover object-left-top"
-            src={still}
-            alt=""
-            draggable={false}
-          />
-        )}
+        <span className="ui-tab-card-glyph inline-flex text-muted-foreground [--ui-glyph-size:28px] [&_:is(svg,img)]:size-[28px]">
+          {icon}
+        </span>
       </Card>
       <div className="ui-tab-card-name flex min-w-0 items-center gap-icon-gap px-0.5 whitespace-nowrap [--ui-glyph-size:var(--ui-menu-glyph)] [&>:is(svg,img)]:size-menu-glyph [&>:is(svg,img)]:flex-none [&>.ui-text]:min-w-0 [&>.ui-text]:flex-auto [&>.ui-text]:overflow-hidden [&>.ui-text]:text-ellipsis">
         {icon}

@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
+import type { AttachmentBody } from "@repo/database/models/attachment-body";
 import {
   createAutomation,
   recordAutomationRun,
@@ -20,6 +21,7 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   connectWorkspaceMachine,
   getTestDB,
+  inlineBytesOf,
   joinWorkspace,
   leaveWorkspace,
   openWorkspace,
@@ -81,7 +83,6 @@ import {
   INBOX_MESSAGE_OUTCOME,
   INBOX_POST_REFUSAL,
   type InboxAgent,
-  type InboxFile,
   type InboxItemWritten,
   markInboxItemRead,
   markInboxItemUnread,
@@ -228,6 +229,12 @@ const attached = (
 
 const TRACE = new TextEncoder().encode("TypeError: invite is undefined\n");
 const SHOT = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+
+// A PNG whose header states it 3 pixels wide and 2 high.
+const SIZED_SHOT = Uint8Array.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 3,
+  0, 0, 0, 2, 8, 6, 0, 0, 0,
+]);
 
 /** A workspace automation of the account's on a task of the workspace, which its runs start agents beside. */
 const openAutomation = (userId: string, workspaceId: string) =>
@@ -823,6 +830,36 @@ it.layer(getTestDB())("the inbox store", (it) => {
   );
 
   it.effect(
+    "a picture a message carries is kept with the size its header states, and any other file with none",
+    () =>
+      Effect.gen(function* () {
+        const { agent, workspaceId } = yield* openAgentIn;
+        const teammate = yield* openUser;
+        yield* joinWorkspace(workspaceId, teammate);
+        const posted = yield* post(agent);
+
+        const files = [
+          attached("trace.txt", AGENT_ATTACHMENT_TYPE.TEXT, TRACE),
+          attached("after.png", AGENT_ATTACHMENT_TYPE.PNG, SIZED_SHOT),
+        ];
+
+        const answered = Option.getOrThrow(
+          yield* answerDone(teammate, posted, randomUUID(), files),
+        );
+
+        const ids = (answeringOf(answered)?.files ?? []).map((file) => file.attachmentId);
+        const sql = yield* SqlClient.SqlClient;
+
+        const rows = yield* sql<{ id: string; width: number | null; height: number | null }>`
+          select id, width, height from attachment where id in ${sql.in(ids)}`;
+
+        const sizeOf = (id: string | undefined) => rows.find((row) => row.id === id);
+        assert.deepEqual(sizeOf(ids[0]), { id: ids[0], width: null, height: null });
+        assert.deepEqual(sizeOf(ids[1]), { id: ids[1], width: 3, height: 2 });
+      }),
+  );
+
+  it.effect(
     "an answer's files are kept on the message that carries it in the order attached, named by name and type, and served as their bytes to every member and nobody else; an answer not taken keeps none",
     () =>
       Effect.gen(function* () {
@@ -863,10 +900,17 @@ it.layer(getTestDB())("the inbox store", (it) => {
         for (const reader of [agent.userId, teammate]) {
           const read = Option.getOrThrow(yield* readInboxItem(reader, id)).item;
           assert.deepEqual(answeringOf(read)?.files, kept);
-          const found = yield* readInboxAttachment(reader, id, trace.attachmentId);
-          const served: InboxFile = Option.getOrThrow(found);
+
+          const found: Option.Option<{
+            readonly contentType: string;
+            readonly body: AttachmentBody;
+          }> = yield* readInboxAttachment(reader, id, trace.attachmentId);
+
+          const served: { readonly contentType: string; readonly body: AttachmentBody } =
+            Option.getOrThrow(found);
+
           assert.equal(served.contentType, AGENT_ATTACHMENT_TYPE.TEXT);
-          assert.deepEqual(new Uint8Array(served.bytes), TRACE);
+          assert.deepEqual(new Uint8Array(inlineBytesOf(served.body)), TRACE);
         }
 
         assert.ok(Option.isNone(yield* readInboxAttachment(outsider, id, shot.attachmentId)));
@@ -889,7 +933,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
         const [file] = answeringOf(Option.getOrThrow(answered))?.files ?? [];
         assert.ok(file);
         const served = yield* readInboxAttachment(agent.userId, posted.id, file.attachmentId);
-        assert.equal(Option.getOrThrow(served).bytes.byteLength, spec.byteLength);
+        assert.equal(inlineBytesOf(Option.getOrThrow(served).body).byteLength, spec.byteLength);
       }),
   );
 
@@ -1369,7 +1413,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
         const [trace] = message?.files ?? [];
         assert.ok(trace);
         const served = yield* readInboxAttachment(agent.userId, id, trace.attachmentId);
-        assert.deepEqual(new Uint8Array(Option.getOrThrow(served).bytes), TRACE);
+        assert.deepEqual(new Uint8Array(inlineBytesOf(Option.getOrThrow(served).body)), TRACE);
 
         const askedAgain = yield* post(agent, { ...SETTINGS, title: "Require two reviews" });
         // Note that the agent is handed no member's key.

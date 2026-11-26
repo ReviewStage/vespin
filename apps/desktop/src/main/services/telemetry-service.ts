@@ -1,3 +1,4 @@
+import { Worker } from "node:worker_threads";
 import {
   PRODUCT_EVENT,
   productSessionCountBucket,
@@ -12,13 +13,14 @@ import {
   withoutAccessTokens,
 } from "@repo/features/sentry-breadcrumbs";
 import { type SentryCapture, sentryReporterLayer } from "@repo/features/sentry-reporting";
-import { sentryTracesSampler } from "@repo/features/sentry-tracing";
+import { sentryTracesSampler, spanWithLoopStall } from "@repo/features/sentry-tracing";
 import { usageDataTransportOptions } from "@repo/features/sentry-usage-data";
-import { type RunMode, sentryReportingEnabled } from "@repo/host";
+import { LOOP_TICK_MS, type RunMode, sentryReportingEnabled } from "@repo/host";
 import { sharesUsageData } from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
 import type { EffectDesktopService } from "@repo/host/desktop-service";
 import type { ReportAttributes } from "@repo/host/effect";
+import type { MainStall } from "@repo/host/main-stall";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import { sendLineToSentry } from "@repo/host/sentry-line";
 import * as Sentry from "@sentry/electron/main";
@@ -31,6 +33,7 @@ import {
   type WorkingSetCrossing,
 } from "../window/renderer-health";
 import type { DesktopConfig } from "./desktop-config";
+import { mainLoopStalls, mainLoopTick, mainTicks, startMainLoopStalls } from "./main-loop-stalls";
 
 /** How long the quit waits for a queued crash report to leave; a flush must not hold a quit. */
 const CRASH_REPORT_FLUSH_MS = 2_000;
@@ -39,6 +42,9 @@ const CRASH_REPORT_FLUSH_MS = 2_000;
 const SpanStatus = Data.taggedEnum<Tracer.SpanStatus>();
 
 declare const PACKAGED_SENTRY_DSN: string;
+
+/** The stall watch's worker, as `build.mjs` bundles `src/utility/stall-watch.ts` to text. */
+declare const STALL_WATCH_WORKER: string;
 
 /**
  * `<name>@X.Y.Z`, the release `build.mjs` uploads this bundle's source maps
@@ -67,20 +73,29 @@ let usageData: boolean | undefined;
  * Main reports on behalf of every renderer, so what leaves goes through the
  * same token filters as the preload's and the renderers' own.
  *
- * Every window profiles while a kept trace's root span is open
- * (`SENTRY_PROFILING`), so a send and a page load carry the stack frames that
- * ran under them: main serves every document with
- * `Document-Policy: js-profiling`, which the browser's profiler needs
- * (`renderer/desktop-sentry-sdk.ts`). Main itself is not profiled, because
- * Sentry ships its Node profiler's addon for Node's ABIs and not Electron's.
+ * Every window profiles while it is in use (`SENTRY_PROFILING`,
+ * `renderer/desktop-sentry-sdk.ts`), so the spans it times and its
+ * interactions carry the stack frames that ran under them: the SDK serves
+ * every document with `Document-Policy: js-profiling`, which the browser's
+ * profiler needs (`enableRendererProfiling`). Main itself is not profiled,
+ * because Sentry ships its Node profiler's addon for Node's ABIs and not
+ * Electron's; nor does it run Sentry's event loop block detection, whose
+ * addon is built the same way, so main watches itself for stalls instead
+ * (`watchMainStalls`).
  *
  * Nothing leaves while the device does not share usage data: main's offline
  * transport, which sends every window's envelopes and the crash reporter's
  * minidumps as well as main's own, asks the switch before each one
  * (`@repo/features/sentry-usage-data`). A report made before the settings
  * are read is kept on disk until they are, then sent or dropped.
+ *
+ * Main's stalls are heard from here on (`main-loop-stalls.ts`), and each of
+ * main's requests says the longest one within it
+ * (`SENTRY_LOOP_STALL_ATTRIBUTE`), so a request the service answered at once
+ * but main read late reads as main's wait rather than the service's.
  */
 export function initializeCrashReporting(runMode: RunMode, environment: SentryEnvironment): void {
+  startMainLoopStalls();
   Sentry.init({
     dsn: PACKAGED_SENTRY_DSN,
     enabled: sentryReportingEnabled(runMode.sendsNetwork, PACKAGED_SENTRY_DSN),
@@ -92,7 +107,9 @@ export function initializeCrashReporting(runMode: RunMode, environment: SentryEn
     beforeBreadcrumb: withoutAccessTokens,
     beforeSend: eventWithoutAccessTokens,
     ignoreSpans: SPANS_NAMING_ACCESS_TOKENS,
-    beforeSendSpan: Sentry.withStreamedSpan(spanWithoutAccessTokens),
+    beforeSendSpan: Sentry.withStreamedSpan((span) =>
+      spanWithoutAccessTokens(spanWithLoopStall(span, mainLoopStalls.worstWithin)),
+    ),
     transportOptions: usageDataTransportOptions(() => usageData),
   });
 }
@@ -304,6 +321,75 @@ function reportCpuSummary(summary: CpuSummary, appVersion: string): void {
   });
 }
 
+/**
+ * One stall of main: counted every time as a Sentry metric distribution,
+ * tagged as the CPU summaries are, and reported as a warning with the stack
+ * it was caught in where the watch paused main for one, which it does at most
+ * once a `MAIN_STALL.STACK_GAP_MS`, grouped by that stack. A stall caught in main's own tick names nothing that held main, so
+ * it is counted and never reported; and the stall is counted here rather
+ * than beside each span, which carries the longest within it already
+ * (`main.loop_stall_ms`), so how often main stalls is read across every
+ * machine.
+ */
+function reportMainStall(stall: MainStall, appVersion: string, workingAgents: number): void {
+  Sentry.metrics.distribution("desktop.main.stall", stall.durationMs, {
+    unit: "millisecond",
+    attributes: {
+      "agents.working": workingAgents,
+      "app.version": appVersion,
+      "os.arch": process.arch,
+    },
+  });
+
+  const frames = stall.frames ?? [];
+
+  if (frames.length === 0 || frames.some((frame) => frame.function === mainLoopTick.name)) return;
+
+  Sentry.captureEvent({
+    level: "warning",
+    exception: {
+      values: [
+        {
+          type: "MainProcessStall",
+          value: "The main process stopped answering",
+          stacktrace: { frames: [...frames] },
+          mechanism: { type: "auto.electron.main.stall", handled: true, synthetic: true },
+        },
+      ],
+    },
+    contexts: { stall: { duration_ms: stall.durationMs } },
+  });
+}
+
+/**
+ * Watches main for stalls from a worker thread (`src/utility/stall-watch.ts`)
+ * until `scope` closes: the worker waits on the count main's loop timer
+ * ticks (`main-loop-stalls.ts`), so the watch adds no timer of its own to
+ * main, and hands back each stall it caught, which `report` is given. The
+ * thread keeps no quit waiting, and one that could not start leaves main
+ * unwatched, never failing it.
+ */
+function watchMainStalls(
+  report: (stall: MainStall) => void,
+  scope: Scope.Scope,
+): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    const worker = new Worker(STALL_WATCH_WORKER, {
+      eval: true,
+      workerData: { ticks: mainTicks.buffer, tickMs: LOOP_TICK_MS },
+    });
+
+    worker.unref();
+    worker.on("message", report);
+    worker.on("error", () => undefined);
+
+    return Scope.addFinalizer(
+      scope,
+      Effect.promise(() => worker.terminate()),
+    );
+  });
+}
+
 export interface TelemetryService extends EffectDesktopService {
   /**
    * A counted event, whose name and every property value the allowlist in
@@ -323,7 +409,7 @@ interface TelemetryServiceDependencies {
   workingAgents: () => number;
 }
 
-/** Everything that leaves this process and is not the Gateway: the crash stream, the counted events, the feedback delivery, the windows' memory notes, the processes' CPU summaries. */
+/** Everything that leaves this process and is not the Gateway: the crash stream, the counted events, the feedback delivery, the windows' memory notes, the processes' CPU summaries, main's stalls. */
 export function createTelemetryService(
   dependencies: TelemetryServiceDependencies,
 ): TelemetryService {
@@ -355,7 +441,8 @@ export function createTelemetryService(
       );
     },
     // Every window's working set is read once a minute, and every process's
-    // CPU time every few seconds, for the run's life.
+    // CPU time every few seconds, for the run's life, and main is watched for
+    // stalls where it reports at all.
     start: () =>
       Effect.andThen(
         Effect.forkIn(sampleWindowMemory(noteWorkingSetCrossing), sampling),
@@ -365,7 +452,17 @@ export function createTelemetryService(
           ),
           sampling,
         ),
-      ).pipe(Effect.asVoid),
+      ).pipe(
+        Effect.andThen(
+          config.runMode.sendsNetwork
+            ? watchMainStalls(
+                (stall) => reportMainStall(stall, config.appVersion, dependencies.workingAgents()),
+                sampling,
+              )
+            : Effect.void,
+        ),
+        Effect.asVoid,
+      ),
     // A report queued when the quit began would otherwise go with the
     // process; the flush is bounded so it cannot be what holds one open.
     // Note that it flushes rather than closes, because a launch that fails

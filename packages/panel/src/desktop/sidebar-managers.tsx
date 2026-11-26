@@ -45,7 +45,6 @@ import {
   LIST_DENSITY,
   List,
   type ListRowNest,
-  motionKey,
   NOTE_LINE_LOOK,
   NoteLine,
   PlusIcon,
@@ -56,12 +55,14 @@ import { ArrowUpDownIcon, GLYPH, SlidersHorizontalIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { type RefObject, useMemo, useRef } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { type ManagerSortControl, useManagerSort } from "../tasks/manager-sort.js";
 import {
   type PinnedManager,
   pinnedManagersOf,
+  sameForManagers,
   useManagerAgents,
   useWorkspaceManagers,
 } from "../tasks/workspace-managers.js";
@@ -78,9 +79,6 @@ import { useRowDrag } from "./use-row-drag.js";
 
 /** What the section is called, on its head and its list alike. */
 const MANAGERS_HEAD = "Managers";
-
-/** Its key, by which the groups under it glide as it comes and goes. */
-const MANAGERS_KEY = "managers";
 
 /** What View options is called, on its button and its menu alike, as the Tasks head's is. */
 const VIEW_OPTIONS = "View options";
@@ -179,7 +177,7 @@ export function SidebarManagerRow({
 }): React.JSX.Element {
   const more = !useCoarsePointer();
   // Note that the row acts through the window's agents control as it stands, which moves as a task opens, so it reads it itself rather than the sidebar handing it on (`sidebar-open.tsx`).
-  const agents = useManagerAgents(useSidebarOpen((open) => open.tasks.agents));
+  const agents = useManagerAgents(useSidebarOpen((open) => open.tasks.agents, sameForManagers));
 
   return (
     <ManagerRow
@@ -232,7 +230,6 @@ export function ManagerRows({
         label={MANAGERS_HEAD}
         density={LIST_DENSITY.DENSE}
         joinsWalk
-        moves
         onPointerDown={drops === undefined ? undefined : drag}
       >
         {managers.map((agent) => (
@@ -294,6 +291,29 @@ function ManagerViewOptions({
   );
 }
 
+/**
+ * The New Manager card, which the Managers head's + asks through `asking`.
+ * Note that it is a component of its own, because the card reads the newest
+ * read of the models, which moves as New task opens (`useNewTaskShown`), so
+ * New task opening draws it alone rather than the Managers and their rows.
+ */
+function NewManagerCard({
+  tasks,
+  asking,
+  onOpen,
+}: {
+  tasks: SidebarTasksControl;
+  /** Where the card hands the + its ask, the newest at each draw. */
+  asking: RefObject<() => void>;
+  /** Opens a Manager's page, the sidebar put away where it floats. */
+  onOpen: (agentId: string) => void;
+}): React.JSX.Element {
+  const newManager = useNewManagerDialog({ tasks, onOpen });
+  asking.current = newManager.ask;
+
+  return newManager.dialog;
+}
+
 /** The Managers section; see the module's head. Nothing while the workspace listed has the Managers experiment off. */
 export function SidebarManagers({
   tasks,
@@ -318,9 +338,10 @@ export function SidebarManagers({
   onOpen: (agentId: string) => void;
 }): React.JSX.Element | null {
   const { listed, managers } = useListedManagers(tasks);
-  const newManager = useNewManagerDialog({ tasks, onOpen });
+  const askNewManager = useRef<() => void>(() => undefined);
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const sorting = useManagerSort(tasks.workspace?.id, staged);
+  const phone = usePhoneRoom();
 
   // Note that a pinned Manager stands under Pinned alone, as a pinned task does, and returns here on Unpin; and one in a section stands there alone, as a task leaves Tasks for one.
   const sorted = useMemo(() => {
@@ -351,15 +372,17 @@ export function SidebarManagers({
       className="sidebar-group"
       aria-label={MANAGERS_HEAD}
       data-row-drop={drops === undefined ? undefined : MANAGERS_DROP_ZONE}
-      {...motionKey(MANAGERS_KEY)}
     >
       <GroupHeader
-        {...sidebarHead({
-          folded,
-          onToggle: folds.toggleManagers,
-          count: listedManagers.length,
-          noun: TERM.MANAGER,
-        })}
+        {...sidebarHead(
+          {
+            folded,
+            onToggle: folds.toggleManagers,
+            count: listedManagers.length,
+            noun: TERM.MANAGER,
+          },
+          phone,
+        )}
         glyph={<GLYPH.MANAGER />}
         label={MANAGERS_HEAD}
         standing={standing.length === 0 ? undefined : rows(standing)}
@@ -370,7 +393,7 @@ export function SidebarManagers({
                 icon={<PlusIcon />}
                 label={NEW_MANAGER}
                 size={BUTTON_SIZE.COMPACT}
-                onClick={newManager.ask}
+                onClick={() => askNewManager.current()}
               />
             </Tooltip>
             <ManagerViewOptions shown={shown} control={sorting} />
@@ -382,7 +405,7 @@ export function SidebarManagers({
         ) : null}
         {listedManagers.length === 0 ? null : rows(listedManagers)}
       </GroupHeader>
-      {newManager.dialog}
+      <NewManagerCard tasks={tasks} asking={askNewManager} onOpen={onOpen} />
     </nav>
   );
 }

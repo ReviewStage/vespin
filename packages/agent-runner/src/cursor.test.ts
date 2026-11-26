@@ -24,7 +24,9 @@ import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { EventsUndelivered } from "./events.js";
 import {
+  CURSOR_MODEL_CALL,
   CURSOR_SIGNED_OUT_DETAIL,
+  CURSOR_SILENT_DETAIL,
   type CursorConfig,
   IMAGE_MEDIA_TYPE,
   INPUT_LINE,
@@ -45,7 +47,7 @@ import { runAgent } from "./runner.js";
 import { fakeAppServer } from "./testing/fake-app-server.js";
 import { fakeCheckoutSnapshots, fakeSnapshotOf } from "./testing/fake-checkout-snapshots.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
-import { type FakeRun, fakeBlobOf, fakeCursor } from "./testing/fake-cursor.js";
+import { type FakeDelta, type FakeRun, fakeBlobOf, fakeCursor } from "./testing/fake-cursor.js";
 import { fakeProbe } from "./testing/fake-probe.js";
 import { ANSWER, type Answer, makeFakeService } from "./testing/fake-service.js";
 
@@ -362,6 +364,60 @@ it.effect(
         },
         ...RECORDED_TURN,
         { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+      ]);
+    }),
+);
+
+it.effect(
+  "posts each model call Cursor hands the send alone as a message of its own, ahead of the message streamed after it or at the stream's end",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+
+      const usage = {
+        first: { inputTokens: 12000, outputTokens: 40, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        last: {
+          inputTokens: 12726,
+          outputTokens: 368,
+          cacheReadTokens: 10048,
+          cacheWriteTokens: 0,
+        },
+      };
+
+      const said = (modelCallId: string, ended: typeof usage.first): FakeDelta => ({
+        delta: { type: "model-call-completed", modelCallId, usage: ended },
+      });
+
+      const posted = (model_call_id: string, ended: typeof usage.first) => ({
+        type: CURSOR_MODEL_CALL,
+        agent_id: SESSION,
+        model_call_id,
+        usage: ended,
+      });
+
+      // The first call ends once the read completes, the second before the turn's usage, and a third after the run's last message.
+      const turn = [
+        ...RECORDED_TURN.slice(0, 5),
+        said("model-call-1", usage.first),
+        ...RECORDED_TURN.slice(5, 6),
+        said("model-call-2", usage.last),
+        ...RECORDED_TURN.slice(6),
+        said("model-call-3", usage.last),
+      ];
+
+      const { write, run } = yield* launch([{ messages: turn }], service);
+
+      yield* write(CONFIG);
+      yield* write(message("Read the README.", LINE.FIRST));
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(messagesOf(service.applied).slice(1, -1), [
+        ...RECORDED_TURN.slice(0, 5),
+        posted("model-call-1", usage.first),
+        ...RECORDED_TURN.slice(5, 6),
+        posted("model-call-2", usage.last),
+        ...RECORDED_TURN.slice(6),
+        posted("model-call-3", usage.last),
       ]);
     }),
 );
@@ -898,6 +954,39 @@ it.effect(
         cursor.sent.map(({ message: sent }) => sent.text),
         ["<coder_instructions>\nYou are a Vespin coding agent.\n</coder_instructions>\n\nGo on."],
       );
+    }),
+);
+
+it.effect(
+  "ends the launch failed with words the member reads where Cursor never starts a summary within its silence limit",
+  () =>
+    Effect.gen(function* () {
+      fakeTranscripts(TWO_TURNS_HELD);
+      const service = fakeService(LINE_AFTER_REWIND);
+      const { cursor, write, run } = yield* launch([{ messages: [], stalled: true }], service);
+
+      yield* write({ ...CONFIG, transcriptsUrl: TRANSCRIPTS_URL });
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE_AFTER_REWIND,
+        content: [],
+        compact: true,
+      });
+      yield* service.seen;
+
+      for (let step = 0; step < 500 && cursor.summaries.length === 0; step += 1) {
+        yield* Effect.yieldNow;
+      }
+
+      yield* TestClock.adjust(RUNNER_UNANSWERED.SILENCE_MS);
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      vi.restoreAllMocks();
+      assert.deepEqual(messagesOf(service.applied).at(-1), {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: CURSOR_SILENT_DETAIL,
+      });
     }),
 );
 

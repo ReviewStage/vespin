@@ -37,6 +37,16 @@ describe("keepActs", () => {
       [KEEP_ACT.SHARE],
     ],
     [
+      "a recording held by its address is saved to Photos only once the player plays it",
+      {
+        kind: KEPT_KIND.VIDEO,
+        source: { uri: "https://vespin.dev/api/agents/a/pictures/p", headers: {} },
+        name: "flow.webm",
+        plays: false,
+      },
+      [KEEP_ACT.SHARE],
+    ],
+    [
       "a sound clip, which neither Photos nor the pasteboard holds, is only shared",
       { kind: KEPT_KIND.SOUND, source: "file:///caches/inbox-3.m4a", name: "chime.m4a" },
       [KEEP_ACT.SHARE],

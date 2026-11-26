@@ -300,6 +300,12 @@ a description's, or a comment's), its size rounded to a step (under 100 KB,
 picture it was or what it showed. They go through the Service, as the Mac
 app's do, and the app holds no PostHog key of its own.
 
+The Mac app and the web app also count each file Vespin refuses to attach
+because it is too large: what kind of file it was (an image, a PDF, a text
+file, a video, a sound clip, or another kind) and its size rounded to a step
+(under 3 MB, 7 MB, 25 MB, 100 MB, or 250 MB, or larger), never its name, its
+type, or where you added it.
+
 While you are signed in, the Mac app and the web app record how you use
 Vespin's window, such as the screens you visit and where you click, never your
 screen or other apps. Text you type and other content that may be sensitive is
@@ -330,10 +336,15 @@ token-shaped parts of addresses. The Mac app's and the web app's reports do not
 name your account; the Service's name it by its id only. The
 Service does not send Sentry what was sent to or returned by a model, though an
 error's own words can quote what an agent was working on. The Mac app also sends
-Sentry diagnostic data about its resource use, such as processor usage. The
-Service and the Mac app's windows send processor profiles of the traces Sentry
-keeps: which of their own functions ran and for how long, never the values
-they handled. The Mac app and the web app send none of this while "Share
+Sentry diagnostic data about its resource use, such as processor usage, and
+how long its main process stopped answering whenever it did, with the stack of
+its own functions it stood still in, never the values they held. The
+Service sends processor profiles of the traces Sentry keeps, and the Mac
+app's windows of the time they are in use, from a click, keystroke, or scroll
+until ten seconds without one: which of their own functions ran and for how
+long, never the values they handled. The Mac app's windows also say, of a slow click, keystroke, or
+screen they timed, which of their own functions held the window and for how
+long. The Mac app and the web app send none of this while "Share
 usage data" is off. A report made as the app starts, before it has read that
 setting, waits on your device until it has, and is then sent or deleted.
 
@@ -624,8 +635,9 @@ data with:
   Notification service, which receives your phone's push token and each
   notification's title, body and, for a post, its words as written, as the
   Notifications section says.
-- **Infrastructure providers:** Vercel (hosting, agent sandboxes, and Vercel
-  Connect, which holds integration tokens), Neon (database), PostHog (usage
+- **Infrastructure providers:** Vercel (hosting, agent sandboxes, Vercel
+  Connect, which holds integration tokens, and Vercel Blob, which keeps
+  attachment bytes), Neon (database), PostHog (usage
   data, screen recordings, feedback, and setup answers), Sentry (error and
   performance monitoring), Resend (email: for onboarding emails and product updates,
   Resend is told your email address, your first name, when you signed up, whether
@@ -647,7 +659,11 @@ data with:
 ## 6\. Data storage and security
 
 Your data is stored on servers provided by our infrastructure partners: our
-database is hosted by Neon, and agents' checkouts and session files live in
+database is hosted by Neon, the bytes of attachments (pictures, recordings,
+sound clips, and files kept with transcripts, descriptions, and Inbox threads)
+are kept in a private Vercel Blob store, from which the Mac and iOS apps may
+load a picture, recording, or sound clip you may see directly, at an address
+the service makes for that one file and for five minutes, and agents' checkouts and session files live in
 Vercel Sandboxes and on Vercel Drives: each agent's
 checkout on a drive of its own, and one drive per workspace holding the default
 branch of every repository it connects, member-token ones included, which each
@@ -669,8 +685,10 @@ affected users and relevant authorities as required by applicable law.
 
 We retain your data for as long as your account is active and as needed to
 provide the Service. Deleting a task deletes it at once with its history,
-pages, inbox items, and pictures, and its agents' transcripts. Deleting an
-agent deletes its transcript at once. Deleting an agent asks Vercel to delete
+pages, and inbox items, and its agents' transcripts. The pictures, videos,
+sound clips, and files kept with any of these, or with anything else deleted
+below, become unreachable at once and are purged from storage within about a
+minute. Deleting an agent deletes its transcript at once. Deleting an agent asks Vercel to delete
 its sandbox and the drive holding its checkout; where that fails or does not
 finish in time, the delete goes ahead anyway, and the sandbox and drive may
 remain. Archiving an agent deletes neither: its sandbox and drive are deleted once

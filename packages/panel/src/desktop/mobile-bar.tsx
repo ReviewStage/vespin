@@ -1,3 +1,4 @@
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BarAction, BarItem, BarItems, MENU_KEEPS_CLEAR, PlusIcon, SearchIcon } from "@repo/ui";
 import { raiseKeyboard } from "@repo/ui/command";
@@ -7,9 +8,10 @@ import { useAdminView } from "../admin/admin-route.js";
 import { type AdminView, adminSection } from "../admin/routing.js";
 import { runAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useInboxOn } from "../inbox-on.js";
 import { type InboxView, useInboxView } from "../inbox-route.js";
-import { useBoardDoor, useInboxDoor } from "../places/routed-doors.js";
+import { useAutomationsDoor, useBoardDoor, useInboxDoor } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace, useWindowPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { type AutomationsPlace, automationsTab } from "../tasks/automations-place.js";
@@ -18,16 +20,20 @@ import { useInboxViewCount } from "./places-waiting.js";
 
 /**
  * mobile-bar.tsx -- a phone's way between the window's places: a bar
- * floating at the screen's foot with the Inbox, Tasks, and Search in one
- * pill, and New task beside it, as a phone's own apps float their tabs
- * beside a compose button.
+ * floating at the screen's foot with the Inbox, Tasks, Automations, and
+ * Search in one pill, as the iOS app's tabs stand, and New task beside it,
+ * as a phone's own apps float their tabs beside a compose button.
  *
  * The Inbox is a phone's first place, the one it opens on
  * (`places/window-history.ts`). Tasks is the Tasks page, which a phone draws
  * as the sidebar's tree of tasks, the pinned and each section, standing in
  * place above the bar (`desktop-shell.tsx`), a list sized for a finger
- * rather than the page's list or board. Search opens the command palette,
- * as the sidebar's Search does, and New task the New task dialog.
+ * rather than the page's list or board. Automations is the Automations
+ * page, its list or its Runs tab. Search opens the command palette, as the
+ * sidebar's Search does, which a phone draws as a page of its own over the
+ * place it was pressed on, this bar along its foot with Search the place
+ * current (`searching`), as the iOS app's Search tab stands; and New task
+ * the New task dialog.
  *
  * It stands only in a narrow room and only on a place's list, the Inbox's,
  * the Tasks page, Automations, or Home, so a task, an agent's page, or an
@@ -99,18 +105,24 @@ export function mobileBarShown(
 export function MobileBar({
   tasks,
   leave,
+  searching = false,
 }: {
   tasks: TasksControl;
-  /** Leaves what stands over the places (Settings) before a press opens one; none where the bar stands among them. */
+  /** Leaves what stands over the places (Settings, Search's page) before a press opens one; none where the bar stands among them. */
   leave?: (() => void) | undefined;
+  /** Whether the bar stands along Search's page, Search the place current, which a press on it leaves as it stands. */
+  searching?: boolean | undefined;
 }): React.JSX.Element {
   const board = useBoardDoor(tasks);
   const inbox = useInboxDoor(tasks);
+  const automations = useAutomationsDoor(tasks);
   const { place } = useWindowPlace();
+  const automationsOpen = useAutomationsPlace().open;
   const boardOpen = place === ROUTED_PLACE.BOARD;
   const among = leave === undefined;
   const inInbox = among && place === ROUTED_PLACE.INBOX;
   const inTasks = among && !inInbox && boardOpen;
+  const inAutomations = among && !inInbox && automationsOpen;
   const inboxCount = useInboxViewCount(tasks);
   const inboxOn = useInboxOn();
 
@@ -142,12 +154,24 @@ export function MobileBar({
             Tasks
           </BarItem>
           <BarItem
+            icon={<EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />}
+            current={inAutomations}
+            onPress={go(() => automations.open())}
+          >
+            Automations
+          </BarItem>
+          <BarItem
             icon={<SearchIcon />}
-            onPress={go(() => {
-              // A tap opening Search brings the keyboard up with it, as a phone's own search does.
-              raiseKeyboard();
-              runAppCommand(APP_COMMAND.COMMAND_PALETTE);
-            })}
+            current={searching}
+            onPress={
+              searching
+                ? () => undefined
+                : go(() => {
+                    // A tap opening Search brings the keyboard up with it, as a phone's own search does.
+                    raiseKeyboard();
+                    runAppCommand(APP_COMMAND.COMMAND_PALETTE);
+                  })
+            }
           >
             Search
           </BarItem>

@@ -4,6 +4,7 @@ import {
   type AgentAttachment,
   base64Bytes,
 } from "@repo/features/agent-wire";
+import { PRODUCT_ATTACHMENT_KIND } from "@repo/features/analytics";
 import { base64Of } from "@repo/features/attached-files";
 import {
   attachedPictureName,
@@ -14,6 +15,7 @@ import {
 import { pastedFile } from "@repo/features/long-paste";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { useRef, useState } from "react";
+import { attachmentKindOf, countAttachmentTooLarge } from "./attachment-too-large.js";
 import { reportShownFailure } from "./failure-report.js";
 import { encodeImage } from "./feedback-images.js";
 import { isPictureFile } from "./picture-files.js";
@@ -108,7 +110,11 @@ async function attachmentOf(file: File): Promise<FileRead> {
   const pdf = file.type === AGENT_ATTACHMENT_TYPE.PDF || name.toLowerCase().endsWith(".pdf");
   const bound = pdf ? AGENT_BOUNDS.MAX_PDF_BYTES : AGENT_BOUNDS.MAX_TEXT_BYTES;
 
-  if (file.size > bound) return { refusal: REFUSAL.TOO_LARGE(name) };
+  if (file.size > bound) {
+    countAttachmentTooLarge(pdf ? PRODUCT_ATTACHMENT_KIND.PDF : attachmentKindOf(file), file.size);
+
+    return { refusal: REFUSAL.TOO_LARGE(name) };
+  }
 
   const bytes = await file.arrayBuffer().then(
     (buffer) => new Uint8Array(buffer),

@@ -4,12 +4,13 @@ import { requireNativeView } from "expo";
 import type { ComponentType, Ref } from "react";
 import type { ColorValue, NativeSyntheticEvent, StyleProp, ViewStyle } from "react-native";
 
-/** A pill as the view draws it: the Markdown it is written back as, its words and glyph, and what VoiceOver hears. */
+/** A pill as the view draws it: the Markdown it is written back as, its words and glyph, what VoiceOver hears, and, for a held picture's, the file its thumbnail is drawn from in the glyph's place. */
 export interface NativePill {
   readonly markdown: string;
   readonly words: string;
   readonly glyph: string;
   readonly heard: string;
+  readonly thumbnail?: string | undefined;
 }
 
 /** A run of the words as the view takes it: plain words, or one pill. */
@@ -31,9 +32,14 @@ export interface NativeLook {
   readonly pillGlyph: ColorValue;
 }
 
-/** What the view tells as its words or its caret move: the Markdown, the caret's line before and after it, each pill as the object character, where the caret stands in the drawn words, whether words are selected, and how many changes have been typed. */
+/** A run of the words as the view tells it: plain words as typed, or one pill by the Markdown it stands for. */
+export type NativeToldRun =
+  | { readonly text: string }
+  | { readonly pill: { readonly markdown: string } };
+
+/** What the view tells as its words or its caret move: its runs, the caret's line before and after it, each pill as the object character, where the caret stands in the drawn words, whether words are selected, and how many changes have been typed. */
 export interface NativeWords {
-  readonly markdown: string;
+  readonly runs: readonly NativeToldRun[];
   readonly before: string;
   readonly after: string;
   readonly caret: number;
@@ -69,6 +75,10 @@ interface NativePillFieldProps {
   readonly onWords: (event: NativeSyntheticEvent<NativeWords>) => void;
   readonly onHeight: (event: NativeSyntheticEvent<{ readonly height: number }>) => void;
   readonly onFocusChange: (event: NativeSyntheticEvent<{ readonly focused: boolean }>) => void;
+  /** A press on a pill that wears a thumbnail, by the pill's Markdown. */
+  readonly onPillPress?:
+    | ((event: NativeSyntheticEvent<{ readonly markdown: string }>) => void)
+    | undefined;
 }
 
 /** The name the native module registers under, which its Swift names too. */

@@ -69,13 +69,15 @@ const openManager = (userId: string, workspaceId: string) =>
     return Option.getOrThrow(started).agent.id;
   });
 
-/** A message the account writes to the Manager's chat, answering its id. */
+/** A message the account writes to the Manager's chat, answering its id and the key it was written under. */
 const say = (userId: string, agentId: string, text: string) =>
   Effect.gen(function* () {
+    const clientKey = randomUUID();
+
     const outcome = yield* writeManagerChatMessage(userId, {
       agentId,
       id: randomUUID().slice(0, 8),
-      clientKey: randomUUID(),
+      clientKey,
       authorKind: MANAGER_CHAT_AUTHOR.PERSON,
       authorUserId: userId,
       authorName: "Dean Stratakos",
@@ -90,7 +92,7 @@ const say = (userId: string, agentId: string, text: string) =>
 
     assert.equal(outcome.status, MANAGER_CHAT_OUTCOME.DONE);
 
-    return outcome.message.id;
+    return { id: outcome.message.id, clientKey };
   });
 
 /** A reaction of this kind the account gives the message, as a member or, by its starter, as the Manager. */
@@ -158,8 +160,13 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
 
         const held = yield* readManagerChatPage(owner, agentId, { limit: MANAGER_CHAT_PAGE });
 
+        // Note that each message carries the key it was written under, which a reader's message on its way is held by.
         assert.deepEqual(
-          newest.messages,
+          newest.messages.map((message) => message.clientKey),
+          newestFirst.slice(0, MANAGER_CHAT_PAGE).map((message) => message.clientKey),
+        );
+        assert.deepEqual(
+          newest.messages.map(({ clientKey: _key, ...message }) => message),
           held.map((message) => ({
             ...message,
             attachments: [...message.attachments],
@@ -170,7 +177,7 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
         );
         assert.deepEqual(
           newest.messages.map((message) => message.id),
-          newestFirst.slice(0, MANAGER_CHAT_PAGE),
+          newestFirst.slice(0, MANAGER_CHAT_PAGE).map((message) => message.id),
         );
 
         assert.ok(newest.before !== undefined);
@@ -178,7 +185,7 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
 
         assert.deepEqual(
           older.messages.map((message) => message.id),
-          newestFirst.slice(MANAGER_CHAT_PAGE),
+          newestFirst.slice(MANAGER_CHAT_PAGE).map((message) => message.id),
         );
         assert.equal(older.before, undefined);
 
@@ -195,7 +202,7 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
         const workspace = yield* openWorkspace(owner);
         yield* joinWorkspace(workspace, teammate);
         const agentId = yield* openManager(owner, workspace);
-        const messageId = yield* say(owner, agentId, "Ship the table?");
+        const { id: messageId } = yield* say(owner, agentId, "Ship the table?");
         yield* say(owner, agentId, "Unreacted");
 
         // Note that a reaction wakes the read on the Manager's topic, as a message does.

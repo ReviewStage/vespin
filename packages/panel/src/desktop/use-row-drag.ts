@@ -24,7 +24,9 @@
  * The rows are drawn on their own `transform` and the copy on its own, and
  * the stylesheet (desktop.css) times every slide from the motion tokens, so
  * reduced motion and a capture run hold them still as they hold the rest.
- * Only the drop reaches the list's owner, as one move. It is pointer events
+ * Only the drop reaches the list's owner, as one move, whose store draws the
+ * list in its new order at once, an optimistic write where its order is
+ * main's (`drawAhead`, `use-app-state.ts`). It is pointer events
  * with the pointer captured, never the browser's drag and drop, for the
  * reasons the strip's gives, and the captured pointer's own click lands on
  * the list rather than on the row, so a drop opens nothing.
@@ -214,9 +216,9 @@ export interface RowDragOptions<Row = number> {
 /** What the list's owner hears from a drop: the row `from` now stands at `to` among the list's rows, which differs from where it stood. */
 export type RowMove<Row = number> = (from: Row, to: number) => void;
 
-/** The list's rows that move, its items of the kind (`item`); one on its way out (`ListMotion`) is no longer one of them. */
+/** The list's rows that move, its items of the kind (`item`). */
 function rowsIn(list: HTMLElement, item: string): HTMLElement[] {
-  return [...list.querySelectorAll<HTMLElement>(`:scope > ${item}:not([data-leaving])`)];
+  return [...list.querySelectorAll<HTMLElement>(`:scope > ${item}`)];
 }
 
 /**
@@ -239,9 +241,7 @@ function placeAmong(press: RowPress, rows: readonly HTMLElement[], at: number): 
 
 /** A drop zone's rows of the kind (`item`), where it keeps an order of its own that a drop lands at a place in. */
 function zoneRowsIn(zone: HTMLElement, item: string): HTMLElement[] {
-  return [
-    ...zone.querySelectorAll<HTMLElement>(`[data-row-drop-rows] > ${item}:not([data-leaving])`),
-  ];
+  return [...zone.querySelectorAll<HTMLElement>(`[data-row-drop-rows] > ${item}`)];
 }
 
 /** The copy's travel down the list, the pointer's own and the list's scrolling since the press, held between the first row's top and the last row's foot. */
@@ -526,10 +526,13 @@ function lower(press: RowPress, list: HTMLElement, settle: boolean): void {
 
 /**
  * Lands the copy: plays it from where it was let go, on both axes, into the
- * place the row now stands, on the rows' own timing, then takes it down,
- * the row standing faded beneath it until it does, so the two never show
- * at once. The timing is read at the list, so reduced motion and a capture
- * run, which hold the tokens there, land it at once.
+ * place the row stands in the next frame, on the rows' own timing, then
+ * takes it down, the row standing faded beneath it until it does, so the
+ * two never show at once. Note that the place is read a frame on, because a
+ * store the list draws from may hand the move's order to React a microtask
+ * after the drop, as React Query and TanStack DB do, and the row stands
+ * there only once it has. The timing is read at the list, so reduced motion
+ * and a capture run, which hold the tokens there, land it at once.
  */
 function land(copy: HTMLElement, row: HTMLElement, list: HTMLElement): void {
   const timing = tokenTiming(list, MOTION_TOKEN.DURATION_FAST, MOTION_TOKEN.SPRING_FAST);
@@ -540,20 +543,23 @@ function land(copy: HTMLElement, row: HTMLElement, list: HTMLElement): void {
     return;
   }
 
-  const home = row.getBoundingClientRect();
-  const across = home.left - Number.parseFloat(copy.style.left);
-  const down = home.top - Number.parseFloat(copy.style.top);
   row.setAttribute(DRAGGING_ATTRIBUTE, "true");
 
-  const landed = copy.animate(
-    [{ transform: copy.style.transform }, { transform: `translate(${across}px, ${down}px)` }],
-    { ...timing, fill: "forwards" },
-  );
+  requestAnimationFrame(() => {
+    const home = row.getBoundingClientRect();
+    const across = home.left - Number.parseFloat(copy.style.left);
+    const down = home.top - Number.parseFloat(copy.style.top);
 
-  landed.onfinish = () => {
-    copy.remove();
-    row.removeAttribute(DRAGGING_ATTRIBUTE);
-  };
+    const landed = copy.animate(
+      [{ transform: copy.style.transform }, { transform: `translate(${across}px, ${down}px)` }],
+      { ...timing, fill: "forwards" },
+    );
+
+    landed.onfinish = () => {
+      copy.remove();
+      row.removeAttribute(DRAGGING_ATTRIBUTE);
+    };
+  });
 }
 
 /**

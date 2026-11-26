@@ -5,7 +5,9 @@
  * so it runs before an input is read) and acts on that account's phones
  * alone (`@repo/database/models/push-device-store`). A register is
  * idempotent, and a token another account registered moves to the caller,
- * since the phone is signed in here now; an unregister of a token the
+ * since the phone is signed in here now; it keeps the hosted API version
+ * the app's request named, so a push shaped for a newer build reaches only
+ * a phone that reads it; an unregister of a token the
  * account does not hold is done all the same, so a phone signing out after
  * its token moved answers no differently. The token is kept in lower case,
  * however the app spelled its hex, so one token is one row. A read of the
@@ -21,6 +23,7 @@ import {
   setPushDeviceNotify,
   unregisterPushDevice,
 } from "@repo/database/models/push-device-store";
+import { presentedClient } from "@repo/features/client-identity";
 import type { PushDeviceDoneAnswer } from "@repo/features/push-device-wire";
 import { Effect, Option } from "effect";
 import {
@@ -41,12 +44,14 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
   const signedIn = hosted.pushDevices.use(accountMiddleware(seams.resolveUserId));
 
   return {
-    register: signedIn.register.effect(function* ({ input, context: { userId } }) {
+    register: signedIn.register.effect(function* ({ input, context: { userId, request } }) {
+      const client = presentedClient(request.headers);
       yield* hostedStoreOrUnavailable(
         registerPushDevice(userId, {
           token: input.token.toLowerCase(),
           environment: input.environment,
           bundleId: input.bundleId,
+          ...(client === undefined ? undefined : { apiVersion: client.apiVersion }),
         }),
       );
 

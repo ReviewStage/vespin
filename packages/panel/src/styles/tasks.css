@@ -1086,12 +1086,17 @@
     margin-block: 0;
   }
 
-  /* Note that Preview, Run, and the merge control together may outgrow the
-     side panel at its least, so they wrap onto lines of their own, held to
-     the row's end, rather than run past an edge that clips them. */
+  /* The controls take the room the pill leaves on its line, whatever they
+     hold, so they stand beside it as one group rather than dropping to a
+     line of their own under a pill left alone. Note that Preview, Run, and
+     the merge control together may outgrow that room in the side panel at
+     its least, so what does not fit wraps onto a line of its own inside the
+     group, held to the row's end, rather than run past an edge that clips
+     it; the group drops under the pill only where its widest control could
+     not stand beside it at all. */
   .pull-request-title-actions {
-    min-width: 0;
-    flex: 0 1 auto;
+    min-width: min-content;
+    flex: 1 1 0;
     flex-wrap: wrap;
     justify-content: flex-end;
   }
@@ -1767,13 +1772,9 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue
 }
 
 /* A goal's trail (agent-goal.tsx) stands a little room off the words and
-   the trails around it, which a turn's parts would otherwise set flush, its
-   glyph and words set in as a call's line sets its own (`--transcript-gutter`),
-   so the two read as one column. */
+   the trails around it, which a turn's parts would otherwise set flush. */
 [data-goal-trail] {
   padding-block: var(--ui-space-4);
-  padding-inline-start: var(--ui-space-4);
-  column-gap: var(--ui-icon-gap);
 }
 
 /* A goal's card (agent-goal.tsx) previews the checker's reason on its head

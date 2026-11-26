@@ -103,8 +103,6 @@ import {
   OutsideLink,
   PAGE_FRAME,
   PaneBar,
-  RevealArea,
-  revealArea,
   SCROLL_FADE,
   SCROLL_FADE_INSET,
   SCROLL_GUTTER,
@@ -2742,7 +2740,6 @@ function ConversationView({
   );
 
   const scroller = useRef<HTMLDivElement>(null);
-  const page = useRef<HTMLDivElement>(null);
   const entries = useRef<VirtualRowsHandle>(null);
   const name = useNamer();
   // Note that the entries' words are read only while a find bar stands open over the tab.
@@ -2780,48 +2777,42 @@ function ConversationView({
       {/* Its words at the measure, as far in from the sides as a `DetailPage` at a column's inset
       stands them, so the Conversation and the Checks read alike. It is a reveal area, so the
       Conversation glides as the Description folds over it. */}
-      <RevealArea root={page}>
-        <div
-          ref={page}
-          className="pull-request-page px-pull-request-page pt-section-gap text-body text-foreground wrap-anywhere [--pull-request-page-measure:var(--ui-page-measure)]"
-          {...revealArea()}
-        >
-          <DescriptionPart
-            part={parts.pullRequest}
-            onRead={parts.ask.pullRequest}
-            reactions={landed(parts.conversation)?.descriptionReactions}
-            subject={landed(parts.conversation)?.descriptionSubject}
-            picture={picture}
+      <div className="pull-request-page px-pull-request-page pt-section-gap text-body text-foreground wrap-anywhere [--pull-request-page-measure:var(--ui-page-measure)]">
+        <DescriptionPart
+          part={parts.pullRequest}
+          onRead={parts.ask.pullRequest}
+          reactions={landed(parts.conversation)?.descriptionReactions}
+          subject={landed(parts.conversation)?.descriptionSubject}
+          picture={picture}
+          fold={{
+            open: filters.descriptionOpen,
+            onOpenChange: (descriptionOpen) => change({ descriptionOpen }),
+          }}
+        />
+        <ThreadLandingProvider value={landing}>
+          <ConversationPart
+            parts={parts}
+            shown={shown}
+            filterControls={
+              <ConversationViewOptions
+                control={choices}
+                hidden={conversation === undefined ? undefined : conversationHidden(conversation)}
+              />
+            }
             fold={{
-              open: filters.descriptionOpen,
-              onOpenChange: (descriptionOpen) => change({ descriptionOpen }),
+              open: conversationOpen,
+              onOpenChange: (open) => change({ conversationOpen: open }),
             }}
+            url={url}
+            scroller={scroller}
+            handle={entries}
+            landing={landing}
+            now={now}
+            picture={picture}
           />
-          <ThreadLandingProvider value={landing}>
-            <ConversationPart
-              parts={parts}
-              shown={shown}
-              filterControls={
-                <ConversationViewOptions
-                  control={choices}
-                  hidden={conversation === undefined ? undefined : conversationHidden(conversation)}
-                />
-              }
-              fold={{
-                open: conversationOpen,
-                onOpenChange: (open) => change({ conversationOpen: open }),
-              }}
-              url={url}
-              scroller={scroller}
-              handle={entries}
-              landing={landing}
-              now={now}
-              picture={picture}
-            />
-          </ThreadLandingProvider>
-          {conversation === undefined ? null : <PullRequestCommentBox comment={comment} />}
-        </div>
-      </RevealArea>
+        </ThreadLandingProvider>
+        {conversation === undefined ? null : <PullRequestCommentBox comment={comment} />}
+      </div>
     </ScrollArea>
   );
 }

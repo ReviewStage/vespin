@@ -21,7 +21,8 @@ import {
  * headed alike (`sidebarHead`): a heading set apart over its rows, its
  * chevron brought by the pointer or the keyboard, and, folded, its count at
  * rest, so a fold still reads as folded with no chevron standing; open, it
- * counts nothing.
+ * counts nothing but on a phone, whose every header counts its rows at rest
+ * as the iOS app's list does.
  */
 
 /** What a group's count is read as, one and many. */
@@ -81,8 +82,8 @@ export interface SidebarHeadFold {
   readonly noun: CountNoun;
 }
 
-/** A sidebar group's head: a heading set apart over its rows, folded as the sidebar keeps it and counted at rest while folded; with no `fold`, one that folds and counts nothing. */
-export function sidebarHead(fold: SidebarHeadFold | undefined): SidebarHead {
+/** A sidebar group's head: a heading set apart over its rows, folded as the sidebar keeps it and counted at rest while folded, or on a `phone` while it holds any; with no `fold`, one that folds and counts nothing. */
+export function sidebarHead(fold: SidebarHeadFold | undefined, phone: boolean): SidebarHead {
   return {
     heading: GROUP_HEADING.NONE,
     look: GROUP_LOOK.HEADING,
@@ -90,6 +91,11 @@ export function sidebarHead(fold: SidebarHeadFold | undefined): SidebarHead {
     count:
       fold === undefined
         ? undefined
-        : foldedCount(fold.folded, fold.count, fold.noun, NAV_COUNT_SHOWN.ALWAYS),
+        : foldedCount(
+            fold.folded || (phone && fold.count > 0),
+            fold.count,
+            fold.noun,
+            NAV_COUNT_SHOWN.ALWAYS,
+          ),
   };
 }

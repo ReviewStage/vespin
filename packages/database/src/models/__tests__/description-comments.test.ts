@@ -22,7 +22,7 @@ import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
-import { getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
+import { getTestDB, inlineBytesOf, joinWorkspace, openWorkspace } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
 import { readDescriptionAttachment } from "../description-attachments.js";
 import {
@@ -756,7 +756,7 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
 
         const kept = Option.getOrThrow(yield* readDescriptionCommentFile(owner, taskId, fileId));
         assert.equal(kept.contentType, AGENT_ATTACHMENT_TYPE.TEXT);
-        assert.deepEqual([...kept.bytes], [...notes]);
+        assert.deepEqual([...inlineBytesOf(kept.body)], [...notes]);
         assert.ok(Option.isNone(yield* readDescriptionCommentFile(outsider, taskId, fileId)));
         // A comment's file is no picture of the description's.
         assert.ok(Option.isNone(yield* readDescriptionAttachment(owner, taskId, fileId)));

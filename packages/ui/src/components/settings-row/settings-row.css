@@ -31,9 +31,7 @@
   /* What a row grows under its line (`below`) stands a step under the
      row's gap. A fold's (`SettingsFoldRow`) stands its body in that room
      instead, the gap and the step drawn as the body's own padding, so the
-     room the fold takes is its body's alone: pressed shut, it gives all of
-     it up at once (`--disclosure-rise`, disclosure.css) rather than leaving
-     the step for what stands under it to travel after it has rolled up. */
+     room the fold takes is its body's alone. */
   .ui-settings-row-below {
     margin-block-start: var(--ui-space-8);
   }

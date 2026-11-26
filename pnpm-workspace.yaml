@@ -10,7 +10,7 @@ catalog:
   "@effect/platform-node": 4.0.4
   "@effect/sql-pg": 4.0.4
   "@effect/sql-pglite": 4.0.4
-  "@types/node": 26.6.6
+  "@types/node": 26.6.9
   tsx: 4.23.15
   react: 19.2.8
   react-dom: 19.2.8
@@ -45,6 +45,7 @@ catalog:
   "@sentry/esbuild-plugin": 5.4.0
   "@sentry/node": 11.7.0
   "@sentry/profiling-node": 11.7.0
+  "@tailwindcss/node": 4.3.5
   "@tailwindcss/vite": 4.3.5
   "@tanstack/db": 1.0.0-rc.1.5
   "@tanstack/react-db": 1.0.0-rc.1.5
@@ -63,6 +64,7 @@ catalog:
   esbuild: 0.28.2
   expo: 58.0.23
   expo-haptics: 58.0.7
+  expo-image: 58.0.18
   expo-symbols: 58.0.4
   expo-video: 58.0.13
   jsdom: ^30.0.1

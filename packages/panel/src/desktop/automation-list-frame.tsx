@@ -3,7 +3,6 @@ import {
   type GroupFold,
   GroupHeader,
   List,
-  ListMotion,
   ListRow,
   SETTINGS_SKELETON_CONTROL,
   SettingsControlSkeleton,
@@ -12,7 +11,7 @@ import {
   Toolbar,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { type ReactNode, useCallback, useRef } from "react";
+import type { ReactNode } from "react";
 
 /**
  * automation-list-frame.tsx -- the Automations list's boxes, which the list and its placeholders both draw.
@@ -27,6 +26,9 @@ import { type ReactNode, useCallback, useRef } from "react";
 
 /** A group of automations, one owner's, a page section below the one before it. */
 const AUTOMATION_GROUP = "automation-group [.automation-group+&]:mt-page-section-gap";
+
+/** What a group's count counts, said after its figure to a reader. */
+const AUTOMATIONS_NOUN = "automations";
 
 /** An automation's or a run's metadata at its row's end, in a line of its own. */
 export const AUTOMATION_ROW_META =
@@ -76,14 +78,15 @@ export function AutomationsActsSkeleton(): React.JSX.Element {
  * list's and the Inbox's are, so a row's hover, focus, and open menu draw
  * as theirs do. A lone owner's list is still a region named by its owner, as a
  * headed one is by its heading, so a reader moving by landmark hears whose
- * automations they are either way. Its rows move (`ListMotion`): one made
- * slides in, one deleted slides out, and the rows under it glide up.
+ * automations they are either way. A row made or deleted stands or goes
+ * at once.
  */
 export function AutomationGroupList({
   name,
   nameMasked = true,
   headed,
   fold,
+  count,
   children,
 }: {
   name: string;
@@ -92,44 +95,26 @@ export function AutomationGroupList({
   headed: boolean;
   /** How a headed group folds under its heading; left out, its rows always stand. */
   fold?: GroupFold | undefined;
+  /** How many rows a headed group holds, after its name, as a phone's list counts them; none where it counts nothing. */
+  count?: number | undefined;
   children: ReactNode;
 }): React.JSX.Element {
-  const root = useRef<HTMLElement | null>(null);
-
-  // Note that the group is a div or a section by whether it is headed, so the motion's root is held by a callback either takes.
-  const hold = useCallback((node: HTMLElement | null) => {
-    root.current = node;
-  }, []);
-
-  const rows = (
-    <List label={name} moves>
-      {children}
-    </List>
-  );
-
-  const list = (
-    <ListMotion root={root}>
-      {headed ? (
-        <GroupHeader
-          heading={GROUP_HEADING.H2}
-          label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
-          fold={fold}
-        >
-          {rows}
-        </GroupHeader>
-      ) : (
-        rows
-      )}
-    </ListMotion>
-  );
+  const rows = <List label={name}>{children}</List>;
 
   return headed ? (
-    <div ref={hold} className={AUTOMATION_GROUP}>
-      {list}
+    <div className={AUTOMATION_GROUP}>
+      <GroupHeader
+        heading={GROUP_HEADING.H2}
+        label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
+        fold={fold}
+        count={count === undefined ? undefined : { value: count, noun: AUTOMATIONS_NOUN }}
+      >
+        {rows}
+      </GroupHeader>
     </div>
   ) : (
-    <section ref={hold} className={AUTOMATION_GROUP} aria-label={name}>
-      {list}
+    <section className={AUTOMATION_GROUP} aria-label={name}>
+      {rows}
     </section>
   );
 }
@@ -180,8 +165,9 @@ export function AutomationOwnerFrame({
 /**
  * The list while it is first read, in its own list and rows: each row's
  * clock tile, its name over what fires it, its owner and its next run in their
- * columns, a narrow room's rows naming neither, and its switch, so the list
- * lands where the blocks stood. The rows open nothing.
+ * columns, and its switch, a narrow room's rows naming neither and ending in
+ * a chevron, as a phone's rows do, so the list lands where the blocks stood.
+ * The rows open nothing.
  */
 export function AutomationListSkeleton({ narrow }: { narrow: boolean }): React.JSX.Element {
   return (
@@ -205,7 +191,12 @@ export function AutomationListSkeleton({ narrow }: { narrow: boolean }): React.J
               />
             )
           }
-          actions={<SettingsControlSkeleton control={SETTINGS_SKELETON_CONTROL.SWITCH} />}
+          actions={
+            narrow ? undefined : (
+              <SettingsControlSkeleton control={SETTINGS_SKELETON_CONTROL.SWITCH} />
+            )
+          }
+          chevron={narrow}
         />
       ))}
     </AutomationGroupList>

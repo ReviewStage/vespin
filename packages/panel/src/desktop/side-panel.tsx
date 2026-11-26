@@ -92,6 +92,7 @@ import {
   subagentTab,
   TAB_WORDS,
   type TerminalStripTab,
+  type ThreadStripTab,
   type TranscriptStripTab,
   tabKey,
 } from "@repo/ui/tab-strip-model";
@@ -415,6 +416,7 @@ function tabTaskOf(
     }
 
     case STRIP_TAB_KIND.TRANSCRIPT:
+    case STRIP_TAB_KIND.THREAD:
     case STRIP_TAB_KIND.SUBAGENT:
     case STRIP_TAB_KIND.CHANGES:
     case STRIP_TAB_KIND.TURN_CHANGES:
@@ -1447,9 +1449,22 @@ function stripTabs(input: {
       ];
     });
 
+  // A thread of a Manager's chat beside its page wears the thread's glyph and its word, as the window's Inbox names a thread.
+  const threadTabs = panel.strip
+    .filter(
+      (tab): tab is ThreadStripTab =>
+        !Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.THREAD,
+    )
+    .map((tab) => ({
+      tab,
+      look: look(tab, tabLook({ kind: TAB_KIND.THREAD })),
+      close: () => panel.onClose(tab),
+    }));
+
   return [
     ...fixed,
     ...transcriptTabs,
+    ...threadTabs,
     ...subagentTabs,
     ...fileTabs,
     ...changesTabs,
@@ -2348,6 +2363,7 @@ function TabContent({
   cloudBrowsers,
   cloudDrafts,
   transcript,
+  thread,
   onTabActions,
 }: {
   tab: SidePanelTab;
@@ -2401,6 +2417,8 @@ function TabContent({
   };
   /** An agent's transcript and composer, drawn by the panel's holder: the Inbox's, beside an item. */
   transcript: ((agentId: string) => React.ReactNode) | undefined;
+  /** A thread of a Manager's chat and its box, drawn by the panel's holder: the Manager's page. */
+  thread: ((tab: ThreadStripTab) => React.ReactNode) | undefined;
   /** Hears what a tab's body offers its toolbar's ⋯, under the tab it is drawn for (`useHandedTabActions`). */
   onTabActions: (tab: SidePanelTab, actions: TabActionGroups | undefined) => void;
 }): React.JSX.Element | null {
@@ -2412,6 +2430,8 @@ function TabContent({
   switch (tab.kind) {
     case STRIP_TAB_KIND.TRANSCRIPT:
       return <>{transcript?.(tab.transcript)}</>;
+    case STRIP_TAB_KIND.THREAD:
+      return <>{thread?.(tab)}</>;
     case STRIP_TAB_KIND.CLOUD_BROWSER: {
       const drawn = cloudBrowsers.find((each) => each.id === tab.cloudBrowser);
 
@@ -2777,7 +2797,8 @@ export function useSidePanelDrawing(panel: SidePanelControl): SidePanelDrawing {
     label: "Resize panel",
     onResize: panel.onResize,
     onToggleCollapsed: panel.onToggle,
-    onToggleExpanded: panel.onToggleFullScreen,
+    // Note that a tab that never fills the window, as a Manager's chat's thread, holds at the panel's widest rather than growing over the page.
+    onToggleExpanded: panel.expands ? panel.onToggleFullScreen : undefined,
   });
 
   return {
@@ -2857,6 +2878,7 @@ export function SidePanel({
   banner,
   transcript,
   transcriptDoors,
+  thread,
   activity: taskActivity,
   phone,
   taskOfTab,
@@ -2892,6 +2914,8 @@ export function SidePanel({
   transcript?: ((agentId: string) => React.ReactNode) | undefined;
   /** What the agent of a transcript's tab opens on its task, which its menu offers; none where no transcript's tab stands. */
   transcriptDoors?: TranscriptDoors | undefined;
+  /** A thread of a Manager's chat and its box, which its thread tab shows beside the Manager's page; none elsewhere. */
+  thread?: ((tab: ThreadStripTab) => React.ReactNode) | undefined;
   /**
    * A phone's page header standing for the panel's bar: where it is handed
    * and the panel stands only full screen, the panel's bar is not drawn, and
@@ -3396,6 +3420,7 @@ export function SidePanel({
               cloudBrowsers={cloudBrowsers}
               cloudDrafts={cloudDrafts}
               transcript={transcript}
+              thread={thread}
               onTabActions={handTabActions}
             />
           </HandTabActionsContext>
@@ -3488,7 +3513,7 @@ function PanelPhoneHead({
                     .groups(opener)
                     .map((group) =>
                       group.map((item) =>
-                        "items" in item || "panel" in item
+                        "items" in item || "panel" in item || "groups" in item
                           ? item
                           : { ...item, detail: item.detail ?? shown.label, replayMasked: true },
                       ),
@@ -3543,7 +3568,10 @@ function PanelFrame({
   onLeavingHere,
   children,
 }: Omit<SidePanelDrawing, "panel"> & {
-  panel: Pick<SidePanelControl, "width" | "fullScreen" | "fullScreenOnly" | "onToggleFullScreen">;
+  panel: Pick<
+    SidePanelControl,
+    "width" | "fullScreen" | "fullScreenOnly" | "expands" | "onToggleFullScreen"
+  >;
   /** What the pane is called to a reader. */
   label: string;
   /** Whether the full-screen button stands just before the panel's toggle, where one is drawn, rather than at the row's end: a task's page's, whose agents' tabs' row holds both. */
@@ -3577,13 +3605,15 @@ function PanelFrame({
     panel.fullScreen && leaving === PANEL_LEAVING.NONE ? panel.onToggleFullScreen : undefined,
   );
 
-  const fullScreenToggle = panel.fullScreenOnly ? null : (
-    <FullScreenToggle
-      fullScreen={panel.fullScreen}
-      leaving={leaving !== PANEL_LEAVING.NONE}
-      onToggle={panel.onToggleFullScreen}
-    />
-  );
+  // Note that a tab that never fills the window offers no full screen, its kind's own answer (`stripTabExpands`).
+  const fullScreenToggle =
+    panel.fullScreenOnly || !panel.expands ? null : (
+      <FullScreenToggle
+        fullScreen={panel.fullScreen}
+        leaving={leaving !== PANEL_LEAVING.NONE}
+        onToggle={panel.onToggleFullScreen}
+      />
+    );
 
   return (
     <>

@@ -35,7 +35,6 @@ import {
   ConfirmDialog,
   GAP,
   type InlineEditEnd,
-  motionKey,
   ProviderMark,
   RenamableName,
   RetryButton,
@@ -548,7 +547,7 @@ export function IntegrationRow({
 
   return (
     // Note that a row is followed by its connection, because one that connects or disconnects leaves one section for the other and glides across rather than leaving one and arriving in the other.
-    <Stack gap={GAP.NONE} {...motionKey(connection)}>
+    <Stack gap={GAP.NONE}>
       <MenuRow
         thing={name}
         actions={actions}
@@ -815,7 +814,7 @@ export function IntegrationAccountRow({
   const words = accountName ?? INTEGRATION_NAME[provider];
 
   return (
-    <Stack gap={GAP.NONE} {...motionKey(connection)}>
+    <Stack gap={GAP.NONE}>
       <MenuRow
         thing={name}
         actions={actions}

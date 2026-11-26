@@ -75,9 +75,9 @@ import {
   readInboxItemHome,
 } from "../../inbox/inbox-store.js";
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
+import type { BlobStoreFailure } from "../../storage/blob-store.js";
 import { placeholderLinksWords } from "../link-rule.js";
 import { taskIdOfInput } from "../task-ref.js";
-
 import {
   type InboxSandboxDoor,
   readSandboxBodyFile,
@@ -147,17 +147,14 @@ function threadReachWords(slackOn: boolean): string {
 }
 
 /**
- * What a Manager posts a thread for, the one rule its prompt, `inbox_post`,
- * and `chat_send` all state (Dean, Nov 23, 2026): an ask its chat cannot
- * hold, and nothing else, so its pull requests, its pages, and its reports
- * stand in its chat.
+ * When an agent posts a thread, by whether it is a Manager: a Manager posts
+ * one for anything it needs a person to decide, answer, approve, or do, and
+ * says all else in its chat (Dean, Nov 23, 2026; widened to every ask by
+ * Charles, Nov 25, 2026).
  */
-export const MANAGER_THREAD_ASKS = "a decision between options or a to-do only they can do";
-
-/** When an agent posts a thread, by whether it is a Manager, whose chat holds all but `MANAGER_THREAD_ASKS`. */
 function postThreadWhen(manager: boolean): string {
   return manager
-    ? `Use it only for ${MANAGER_THREAD_ASKS}, and say everything else with ${AGENT_TOOL.SEND_TO_USER}, your pull requests and pages included; when someone writes to you on an Inbox thread, reply on that same Inbox thread. `
+    ? `Use this whenever you need a person to decide, answer, approve, or do something, even a small question. Use ${AGENT_TOOL.SEND_TO_USER} for everything else: answers, updates, and your pull requests and pages. If someone replies on an Inbox thread, reply there. `
     : "Use it whenever you need something from them or have something ready for them to look at, and when someone writes to you on a thread, reply on that same thread. ";
 }
 
@@ -836,7 +833,11 @@ function bodyFile(
   poster: ThreadPoster,
   path: string,
   sandbox: InboxSandboxDoor,
-): Effect.Effect<Result.Result<InboxBodyPicture, string>, StoreFailure, DatabaseServices> {
+): Effect.Effect<
+  Result.Result<InboxBodyPicture, string>,
+  StoreFailure | BlobStoreFailure,
+  DatabaseServices
+> {
   return Effect.flatMap(readKeptPicture(poster, path), (kept) =>
     kept !== undefined
       ? Effect.succeed(kept)
@@ -861,7 +862,11 @@ function bodyFiles(
   poster: ThreadPoster,
   body: string,
   sandbox: InboxSandboxDoor,
-): Effect.Effect<Result.Result<BodyFiles, string>, StoreFailure, DatabaseServices> {
+): Effect.Effect<
+  Result.Result<BodyFiles, string>,
+  StoreFailure | BlobStoreFailure,
+  DatabaseServices
+> {
   const paths = [...inboxSandboxPicturePaths(body), ...keptAddressesIn(body)];
 
   if (paths.length > INBOX_BOUNDS.MAX_MESSAGE_PICTURES) {
@@ -1137,14 +1142,10 @@ export function postToInbox(
 
     if (Result.isFailure(posted)) return inboxRejected(storeRefusal(posted.failure));
     const { taskId } = agent;
-
-    // Note that a thread on no task is not pushed, since a released iPhone opens an alert on its task.
-    if (taskId !== null) {
-      yield* afterResponse(
-        "a thread's push",
-        pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId }),
-      );
-    }
+    yield* afterResponse(
+      "a thread's push",
+      pushThreadPost({ item: posted.success, asked: post.ask !== undefined, taskId }),
+    );
 
     return yield* written(agent, posted.success);
   }).pipe(

@@ -15,6 +15,7 @@ import {
   useId,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { ChevronRightIcon, FoldChevronIcon } from "../../icons/lucide-glyphs.js";
@@ -27,7 +28,6 @@ import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { CARD_CORNER, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
-import { motionKey, motionRows } from "../list-motion/list-motion.js";
 import { withContextMenu } from "../menu/context-menu.js";
 import { useLinkAddress } from "../menu/link-address.js";
 import { rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
@@ -305,7 +305,7 @@ type NestedItemResult = {
  * What a reader hears of a row's nesting, spread on its item: its level, 1
  * at the top, and its place among its siblings, in a list that nests rows;
  * nothing for a row at the top of a list that nests none. Note that the
- * rows stand flat in one list, as their motion, their drag, and a grid's
+ * rows stand flat in one list, as their drag and a grid's
  * columns need, so the place is said rather than left to the list to count.
  */
 export function nestedItem(depth: number, nest: ListRowNest | undefined): NestedItemResult {
@@ -543,7 +543,6 @@ export function List({
   density = LIST_DENSITY.REGULAR,
   inset = LIST_INSET.LIST,
   fingerTall = false,
-  moves = false,
   joinsWalk = false,
   selection,
   onPointerDown,
@@ -559,8 +558,6 @@ export function List({
   inset?: ListInset;
   /** Whether each row stands a finger's press tall on a coarse pointer. */
   fingerTall?: boolean | undefined;
-  /** Whether its rows move as they arrive, leave, and change places, under a `ListMotion` (`motionRows`). */
-  moves?: boolean;
   /** Whether its rows join the walk of a `useRovingKeys` box around it, with the rows of the lists beside it, rather than walk alone. */
   joinsWalk?: boolean;
   /** Which rows are chosen and what hears the next set, where the list chooses rows at all. */
@@ -614,7 +611,6 @@ export function List({
           overscan={run.overscan}
           anchor={VIRTUAL_ROWS_ANCHOR.START}
           listItems
-          moves={moves}
           holdsFocus
           className={LIST_CLASS}
           aria-label={label}
@@ -651,7 +647,6 @@ export function List({
       data-finger-tall={fingerTall ? "true" : undefined}
       aria-label={label}
       onPointerDown={onPointerDown}
-      {...(moves ? motionRows() : {})}
     >
       {contexts(children)}
     </ul>,
@@ -665,6 +660,7 @@ export function ListRow({
   titleReplayMasked = false,
   description,
   descriptionReplayMasked = false,
+  foot,
   lead,
   leadAt = LIST_ROW_LEAD.DESCRIPTION,
   attachments,
@@ -697,7 +693,6 @@ export function ListRow({
   id,
   selectKey,
   selectBox = false,
-  motionKey: followedBy,
   ref,
   onKeyDown,
   menu,
@@ -718,6 +713,8 @@ export function ListRow({
   description?: ReactNode;
   /** Whether the description holds a person's words, kept masked on the same terms as the title. */
   descriptionReplayMasked?: boolean | undefined;
+  /** A line of its own under the description, in its ink, such as how an automation's newest run went; none for a row of two lines. */
+  foot?: ReactNode;
   /** What the row belongs to, drawn as a chip of its glyph and its name before the description, on its line. */
   lead?: ListRowLead | undefined;
   /** Where the lead stands: a chip before the description, on its line, or a line of its own over the title. */
@@ -786,8 +783,6 @@ export function ListRow({
   selectKey?: string | undefined;
   /** Whether the row draws the box the pointer chooses it by over its unread gutter (`SELECT_BOX_PLACE.UNREAD_GUTTER`), where it can be chosen. */
   selectBox?: boolean | undefined;
-  /** The key a `ListMotion` follows the row by, out of one list and into another (`motionKey`). */
-  motionKey?: string | undefined;
   /** Handed the row's press, or its item where it opens nothing. A callback, so one list keeps each row's by its own key. */
   ref?: RefCallback<HTMLElement> | undefined;
   /** A key pressed on the row's press; a row that opens nothing hears none. */
@@ -869,6 +864,9 @@ export function ListRow({
     (named === undefined
       ? undefined
       : { mark: leading, name: named, detail: plainWords(description) ?? plainWords(lead?.label) });
+
+  // Note that a row says its fold holds the keyboard, because its stylesheet cannot find that through `:has()` without checking the row again at every change under it.
+  const [foldHeld, setFoldHeld] = useState(false);
 
   const rowMenu = useRowMenu(menu === undefined ? undefined : { ...menu, subject }, {
     disabled,
@@ -1029,6 +1027,9 @@ export function ListRow({
             <ReplayWords masked={descriptionReplayMasked}>{description}</ReplayWords>
           </span>
         ) : null}
+        {said(foot) ? (
+          <span className="ui-list-row-description ui-list-row-foot">{foot}</span>
+        ) : null}
         {metaPlace === LIST_ROW_META.LAST ? end : null}
       </span>
       {metaPlace === LIST_ROW_META.MIDDLE ? end : null}
@@ -1087,6 +1088,8 @@ export function ListRow({
           aria-label={fold.label}
           aria-expanded={fold.open}
           onClick={() => fold.onOpenChange(!fold.open)}
+          onFocus={(event) => setFoldHeld(event.currentTarget.matches(":focus-visible"))}
+          onBlur={() => setFoldHeld(false)}
         >
           {/* Note that the chevron turns on the one turn every fold makes (`disclosure.css`). */}
           <span className="ui-disclosure-turn" data-open={fold.open}>
@@ -1163,7 +1166,6 @@ export function ListRow({
     <>
       <li
         id={id}
-        {...(followedBy === undefined ? {} : motionKey(followedBy))}
         {...placed}
         {...nestedItem(depth, nest)}
         ref={place === undefined ? (onPress ? undefined : ref) : itemRef}
@@ -1185,6 +1187,14 @@ export function ListRow({
         data-ink={ink}
         data-menu-open={menuOpen || rowMenu.open ? "true" : undefined}
         data-depth={depth === 0 ? undefined : depth}
+        // What the row draws beside its words, which its stylesheet reads rather than its children (`list-row.css`).
+        data-opens={press === undefined ? undefined : "true"}
+        data-acts={said(actions) ? "true" : undefined}
+        data-more={moreDrawn ? "true" : undefined}
+        data-fold={fold === undefined ? undefined : "true"}
+        data-fold-held={foldHeld ? "true" : undefined}
+        data-end={end === null ? undefined : "true"}
+        data-attachments={said(attachments) ? "true" : undefined}
         onKeyDown={rowMenu.onKeyDown}
         {...withContextMenu(rowMenu.doors, {})}
         // Note that the row stands where its run places it (`VirtualRows`), its depth's own property beside that.

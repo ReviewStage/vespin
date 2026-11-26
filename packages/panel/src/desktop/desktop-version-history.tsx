@@ -1015,7 +1015,7 @@ export function DesktopVersionHistory({
                 {/* biome-ignore lint/a11y/noStaticElementInteractions: the keys and the focus are the rows' own, which the box only hears bubble. */}
                 <div
                   {...roving}
-                  className="sidebar-section-body flex min-h-list-held flex-col p-ring-reach"
+                  className="sidebar-section-body flex min-h-full flex-col p-ring-reach"
                   onFocus={(event) => {
                     roving.onFocus(event);
                     chooseSteppedRow(rows, versions.onSelect)(event);
@@ -1084,7 +1084,7 @@ export function DesktopVersionHistory({
             <ScrollArea fade={SCROLL_FADE.BOTH}>
               {/* biome-ignore lint/a11y/noStaticElementInteractions: the keys and the focus are the rows' own, which the box only hears bubble. */}
               <div
-                className="sidebar-section-body flex min-h-list-held flex-col p-ring-reach"
+                className="sidebar-section-body flex min-h-full flex-col p-ring-reach"
                 onFocus={chooseSteppedRow(sectionRows, chooseUnit)}
                 onKeyDown={sectionKeys}
               >

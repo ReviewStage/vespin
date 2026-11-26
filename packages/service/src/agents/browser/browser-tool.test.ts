@@ -9,7 +9,12 @@ import {
 } from "@repo/database/models/agent-browser-tabs";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import { user } from "@repo/database/schemas/auth";
-import { getTestDB, openAgentConversation, openWorkspace } from "@repo/database/testing";
+import {
+  getTestDB,
+  inlineBytesOf,
+  openAgentConversation,
+  openWorkspace,
+} from "@repo/database/testing";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import { BROWSER_AGENT_ACTION, BROWSER_STEP_STATUS } from "@repo/features/browser-agent-actions";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
@@ -865,7 +870,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
         assert.deepEqual(
           Option.map(kept, (picture) => [
             picture.contentType,
-            Buffer.from(picture.bytes).toString("base64"),
+            Buffer.from(inlineBytesOf(picture.body)).toString("base64"),
           ]),
           Option.some(["image/jpeg", KEPT_JPEG]),
         );
@@ -1015,7 +1020,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
         );
         const kept = yield* readConversationPicture(conversationId, step.picture.id);
         assert.deepEqual(
-          Option.map(kept, (picture) => [picture.contentType, [...picture.bytes]]),
+          Option.map(kept, (picture) => [picture.contentType, [...inlineBytesOf(picture.body)]]),
           Option.some(["video/webm", [...RECORDED_WEBM]]),
         );
         assert.doesNotMatch(JSON.stringify(storedBrowserOutput(unparsedWire(stopped))), /GkXfo/u);

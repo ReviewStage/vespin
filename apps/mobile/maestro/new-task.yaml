@@ -134,7 +134,13 @@ env:
 - launchApp:
     arguments:
       fixture: inbox
-- assertVisible: "Inbox"
+# Note that the relaunch is waited on as the flow's other launches are,
+# rather than asserted at once, because a loaded iPad's relaunch draws the
+# Inbox after the assert's short wait, and the failure's own frame, taken a
+# moment later, then shows it.
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
 - runFlow:

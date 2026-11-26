@@ -62,6 +62,7 @@ import type { AgentActAnswer, Unreached } from "../act.js";
 import { failureShown } from "../failure-report.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
+import { useHandedWords } from "./box-words.js";
 import { MessageBox, useMessageBox } from "./message-box.js";
 import type { HeldCall } from "./transcript-blocks.js";
 import type { MessageSender } from "./use-agent-composer.js";
@@ -498,7 +499,7 @@ function DenyNoteBox({ busy, maxLength, onDeny, onCancel }: DenyNoteDoors): Reac
   };
 
   const box = useMessageBox({
-    draft: words,
+    draft: useHandedWords(words),
     setDraft: setWords,
     placeholder: DENY_NOTE_WORDS.PLACEHOLDER,
     label: DENY_NOTE_WORDS.LABEL,

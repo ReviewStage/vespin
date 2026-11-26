@@ -56,37 +56,6 @@ import { whenPageGone } from "./page-gone";
 import { updateProcedures } from "./update-acts";
 import { windowSurfaceProcedures, windowSurfaceReports } from "./window-surface";
 
-/** The widest a still of part of a panel is kept, in device pixels: a card's preview at twice its width, and no more. */
-const STILL_WIDTH = 480;
-
-/** The JPEG quality a still is kept at: a preview, never read for its words. */
-const STILL_QUALITY = 70;
-
-/**
- * A still of part of a panel, as ⌃Tab's card previews the tab it left:
- * taken while the window may be hidden, downscaled, and answered as a
- * JPEG's data URL to that panel alone. Note that nothing here keeps it,
- * writes it, or counts it, because it is a picture of the panel's words.
- */
-async function windowStill(
-  sender: WebContents,
-  rect: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
-): Promise<string | null> {
-  const image = await sender.capturePage(
-    { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-    { stayHidden: true, stayAwake: true },
-  );
-
-  if (image.isEmpty()) return null;
-
-  const scaled =
-    image.getSize().width > STILL_WIDTH
-      ? image.resize({ width: STILL_WIDTH, quality: "good" })
-      : image;
-
-  return `data:image/jpeg;base64,${scaled.toJPEG(STILL_QUALITY).toString("base64")}`;
-}
-
 /**
  * Opens a fresh channel to a panel's page under `channel`: main keeps one end
  * and posts the other to the page with the ticket.
@@ -193,6 +162,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
     ...windowSurfaceProcedures({
       panels,
       requestMicrophone: () => native.requestMicrophone(),
+      watchMicrophoneUntilActive: (onGranted) => native.watchMicrophoneUntilActive(onGranted),
       microphoneRoute: () => state.snapshot().audio.microphoneRoute,
       microphoneRouteWatcher: () => native.microphoneRouteWatcher(),
       recordProductEvent,
@@ -219,7 +189,6 @@ export function registerDesktopIpc(services: DesktopServices): void {
 
         return true;
       },
-      captureStill: (sender, rect) => windowStill(sender, rect),
       tellUnsavedWork: services.unsavedWork.tell,
       tellMenuOffers: services.menuOffers.tell,
       tellHandoff: services.handoff.tell,

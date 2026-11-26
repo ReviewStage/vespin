@@ -13,7 +13,12 @@ import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, openWorkspace } from "@repo/database/testing";
+import {
+  fillConversationPictures,
+  getTestDB,
+  inlineBytesOf,
+  openWorkspace,
+} from "@repo/database/testing";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   CONVERSATION_MEDIA_TYPE,
@@ -151,7 +156,7 @@ it.layer(getTestDB())("show_media", (it) => {
         assert.ok(first);
         const read = yield* readConversationPicture(target.conversationId, first.id);
         assert.deepEqual(
-          Option.map(read, (stored) => [...stored.bytes]),
+          Option.map(read, (stored) => [...inlineBytesOf(stored.body)]),
           Option.some([...pngBytes(1200, 720)]),
         );
       }),
@@ -273,7 +278,7 @@ it.layer(getTestDB())("show_media", (it) => {
         assert.ok(video);
         const read = yield* readConversationPicture(target.conversationId, video.id);
         assert.deepEqual(
-          Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
+          Option.map(read, (stored) => [stored.contentType, [...inlineBytesOf(stored.body)]]),
           Option.some([CONVERSATION_MEDIA_TYPE.WEBM, [...recording]]),
           "it is served back as the WebM it was",
         );
@@ -303,7 +308,7 @@ it.layer(getTestDB())("show_media", (it) => {
         assert.ok(video);
         const read = yield* readConversationPicture(target.conversationId, video.id);
         assert.deepEqual(
-          Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
+          Option.map(read, (stored) => [stored.contentType, [...inlineBytesOf(stored.body)]]),
           Option.some([CONVERSATION_MEDIA_TYPE.MP4, [...recording]]),
         );
       }),
@@ -366,20 +371,11 @@ it.layer(getTestDB())("show_media", (it) => {
   it.effect("a transcript that keeps as many pictures as it may shows no more", () =>
     Effect.gen(function* () {
       const target = yield* openConversation;
-      const db = yield* Database;
-      // Note that the row stands in for pictures kept up to the budget, because two hundred
-      // megabytes of real bytes would only slow the test.
-      yield* db.insert(attachment).values({
-        userId: target.userId,
-        conversationId: target.conversationId,
-        sha256: "f".repeat(64),
-        contentType: INBOX_IMAGE_TYPE.PNG,
-        width: 1,
-        height: 1,
-        byteCount: CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION,
-        bytes: new Uint8Array([0]),
-        createdAt: new Date(),
-      });
+      // Note that the rows stand in for pictures kept up to the budget.
+      yield* fillConversationPictures(
+        target,
+        CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION,
+      );
 
       const binding = {
         target,
@@ -399,19 +395,19 @@ it.layer(getTestDB())("show_media", (it) => {
       Effect.gen(function* () {
         const target = yield* openConversation;
         const db = yield* Database;
-        // Note that the row leaves room for the first picture below and not the second, so the
+        // Note that the rows leave room for the first picture below and not the second, so the
         // refusal falls between them.
-        yield* db.insert(attachment).values({
-          userId: target.userId,
-          conversationId: target.conversationId,
-          sha256: "e".repeat(64),
-          contentType: INBOX_IMAGE_TYPE.PNG,
-          width: 1,
-          height: 1,
-          byteCount: CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION - 40,
-          bytes: new Uint8Array([0]),
-          createdAt: new Date(),
-        });
+        yield* fillConversationPictures(
+          target,
+          CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION - 40,
+        );
+
+        const keptRows = db
+          .select({ sha256: attachment.sha256 })
+          .from(attachment)
+          .where(eq(attachment.conversationId, target.conversationId));
+
+        const before = yield* keptRows;
 
         const binding = {
           target,
@@ -430,12 +426,7 @@ it.layer(getTestDB())("show_media", (it) => {
 
         assert.deepEqual(answer, refused(SHOW_MEDIA_REFUSAL.FULL));
 
-        const kept = yield* db
-          .select({ sha256: attachment.sha256 })
-          .from(attachment)
-          .where(eq(attachment.conversationId, target.conversationId));
-
-        assert.deepEqual(kept, [{ sha256: "e".repeat(64) }], "the first picture was not kept");
+        assert.deepEqual(yield* keptRows, before, "the first picture was not kept");
       }),
   );
   it.effect(
@@ -472,7 +463,7 @@ it.layer(getTestDB())("show_media", (it) => {
         const served = (playable: (typeof PLAYABLE_VIDEO_TYPE)[keyof typeof PLAYABLE_VIDEO_TYPE]) =>
           Effect.map(
             readServedConversationPicture(target.conversationId, ogg.id, playable),
-            Option.map((picture) => [picture.contentType, [...picture.bytes]]),
+            Option.map((picture) => [picture.contentType, [...inlineBytesOf(picture.body)]]),
           );
 
         assert.deepEqual(

@@ -15,12 +15,17 @@ import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-fac
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { TASK_REGION } from "@repo/features/tasks-model";
-import { AgentPlaceholderIcon, DocumentIcon, PlusIcon, TaskStatusMark } from "@repo/ui";
+import {
+  AgentPlaceholderIcon,
+  DocumentIcon,
+  HarnessMark,
+  PlusIcon,
+  TaskStatusMark,
+} from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { EntityGlyph } from "../entities/entity-glyph.js";
-import { HarnessMark } from "../harness-marks.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import type { TaskListRows } from "../task-list-collections.js";
 import { providerOf } from "./agent-model.js";
@@ -70,6 +75,8 @@ export const TAB_KIND = {
   PAGE: "page",
   /** A Browser tab, named by its page's title once it has one. */
   BROWSER: "browser",
+  /** One thread of a Manager's chat, beside its page. */
+  THREAD: "thread",
 } as const;
 
 /** Where an agent stands as its glyph wears it: its model, and where it stands where that is known. */
@@ -138,7 +145,8 @@ export type TabSubject =
       readonly kind: typeof TAB_KIND.BROWSER;
       /** Its page's title, or its address until it has one; none before a page is opened. */
       readonly title: string | undefined;
-    };
+    }
+  | { readonly kind: typeof TAB_KIND.THREAD };
 
 /** A tab's look: its glyph and its name. */
 export interface KindLook {
@@ -366,5 +374,7 @@ export function tabLook(subject: TabSubject): KindLook {
       return { icon: <EntityGlyph kind={ENTITY_KIND.PAGE} />, label: subject.title };
     case TAB_KIND.BROWSER:
       return { icon: <GLYPH.WEBSITE />, label: subject.title ?? TAB_WORDS.BROWSER };
+    case TAB_KIND.THREAD:
+      return { icon: <EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />, label: TAB_WORDS.THREAD };
   }
 }

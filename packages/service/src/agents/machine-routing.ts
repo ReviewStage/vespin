@@ -44,6 +44,7 @@ import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import type { TaskStoreEffect } from "@repo/database/models/task-store";
 import { turnAsker } from "@repo/database/models/turn-asker";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import type { DevicePlatform } from "@repo/features/device-agent-wire";
 import {
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
@@ -95,8 +96,12 @@ interface Candidate extends CommandMachine {
   readonly online: boolean;
 }
 
-/** A machine as the panel lists it to be an agent's default: as an answer names it, with whether its owner lets the task's agents use it and whether it listened lately. */
-export type ListedMachine = RoutedMachine & { readonly lets: boolean; readonly online: boolean };
+/** A machine as the panel lists it to be an agent's default: as an answer names it, with its platform, whether its owner lets the task's agents use it, and whether it listened lately. */
+export type ListedMachine = RoutedMachine & {
+  readonly platform: DevicePlatform;
+  readonly lets: boolean;
+  readonly online: boolean;
+};
 
 /** A person whose machines a call may reach, with whether they let the task's agents use them. */
 interface Person {
@@ -339,7 +344,12 @@ export function routeOf(
 
 /** A machine as a list names it (`ListedMachine`). */
 function listedOf(machine: Candidate): ListedMachine {
-  return { ...routed(machine), lets: machine.lets, online: machine.online };
+  return {
+    ...routed(machine),
+    platform: machine.platform,
+    lets: machine.lets,
+    online: machine.online,
+  };
 }
 
 /**

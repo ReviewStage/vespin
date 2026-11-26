@@ -30,7 +30,6 @@ import {
 import { afterPaint } from "../../after-paint.js";
 import { joinRefs } from "../../join-refs.js";
 import { offsetWithin } from "../../offset-within.js";
-import { motionRows } from "../list-motion/list-motion.js";
 import {
   ROVING_REACH,
   type RovingReach,
@@ -50,8 +49,7 @@ import {
  * placed as TanStack Virtual's docs place a row: absolutely, inside a block
  * as tall as every row would stand (`containerRef`), the virtualizer
  * writing each row's top and the block's height itself
- * (`directDomUpdates`), by `top` rather than a transform, so a row's own
- * transform stays the list's to move it by (`ListMotion`). The scroller's
+ * (`directDomUpdates`), by `top` rather than a transform. The scroller's
  * own scroll bar spans the whole run. Each row is measured as it is drawn
  * and as it resizes, so a row scrolled out and back is placed by what it
  * measured rather than by `estimate`. Note that a row is never measured
@@ -94,8 +92,7 @@ import {
  * the caller's own listbox (`options`), which owns options and their groups
  * alone, the run is a block of no role of its own, wrapping none of them,
  * and each option wears its place, so a reader hears the options as the
- * listbox's and each one's place among them. A run whose rows move as a list's do
- * wears what `ListMotion` reads (`moves`), each row being a mover. A run is
+ * listbox's and each one's place among them. A run is
  * named to a reader as a list is (`aria-label`), and a run whose rows are
  * dragged hears the press on its block and says it keeps an order a row is
  * dropped at a place in, as any list of dragged rows does (`onPointerDown`,
@@ -473,7 +470,6 @@ export function VirtualRows({
   anchor = VIRTUAL_ROWS_ANCHOR.END,
   listItems = false,
   options = false,
-  moves = false,
   holdsFocus = false,
   paddingEnd = 0,
   shiftedBy,
@@ -505,8 +501,6 @@ export function VirtualRows({
   listItems?: boolean;
   /** Whether each row is an option of the caller's own listbox, wearing the place it is handed, in a run of no role of its own that wraps none. */
   options?: boolean;
-  /** Whether the rows move as a list's do (`ListMotion`), each a mover. */
-  moves?: boolean;
   /** Whether a row holding the keyboard stays drawn wherever the run is scrolled, as a list the keyboard walks keeps it. */
   holdsFocus?: boolean;
   /** The room after the last row, in pixels, which the virtualizer counts as the run's own (`paddingEnd`), as a log's room at its end. */
@@ -805,7 +799,6 @@ export function VirtualRows({
     "aria-label": label,
     onPointerDown,
     "data-row-drop-rows": dropRows,
-    ...(moves && motionRows()),
     // Note that the row holding the keyboard is kept as it takes it and let go as it loses it, a row taking it from another being kept in its place.
     ...(holdsFocus && {
       onFocus: (event: FocusEvent<HTMLElement>) => {

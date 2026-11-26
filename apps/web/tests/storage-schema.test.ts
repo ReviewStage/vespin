@@ -62,6 +62,7 @@ const DECLARED_TABLES = [
   "agent_section_entry",
   "agent_wakeup",
   "attachment",
+  "attachment_blob_tombstone",
   "automation",
   "automation_run",
   "claude_broken_sessions",

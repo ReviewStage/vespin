@@ -104,14 +104,23 @@ import type { ContextMenuProps } from "../menu/context-menu.js";
 import { ONE_LINE_ELEMENT, OneLine } from "../one-line/one-line.js";
 import { Tooltip, wholeWordsHint } from "../tooltip/hint.js";
 import {
+  TOOLBAR_CORNERS,
   TOOLBAR_INSET,
   TOOLBAR_LOOK,
+  type ToolbarCorners,
   ToolbarFrame,
   type ToolbarInset,
   type ToolbarLook,
 } from "./toolbar-frame.js";
 
-export { TOOLBAR_INSET, TOOLBAR_LOOK, type ToolbarInset, type ToolbarLook };
+export {
+  TOOLBAR_CORNERS,
+  TOOLBAR_INSET,
+  TOOLBAR_LOOK,
+  type ToolbarCorners,
+  type ToolbarInset,
+  type ToolbarLook,
+};
 
 /** What the not-found state calls the thing it could not show. */
 export const NOT_FOUND_THING = {
@@ -258,6 +267,8 @@ export interface ToolbarProps {
   readonly end?: ToolbarInset | undefined;
   /** How the slots are laid: the window's, or a phone's one control a corner with the title centered; the window's where none is named. */
   readonly look?: ToolbarLook | undefined;
+  /** How wide a phone's corners stand: one control each where none is named, or as wide as the wider corner's controls; read only by a phone's look. */
+  readonly corners?: ToolbarCorners | undefined;
   /** What the bar heads (`task`), which names it to the page's own rules and its tests as `task-head`. */
   readonly place?: string | undefined;
   /** Whether the bar is a container its slots' rules answer the width of (`@container ui-toolbar`), so a control folds before the title or tabs beside it do. */
@@ -465,6 +476,7 @@ export function Toolbar({
   start,
   end,
   look,
+  corners,
   place,
   measure,
   folded,
@@ -502,6 +514,7 @@ export function Toolbar({
       start={start}
       end={end}
       look={look}
+      corners={corners}
       place={place}
       measure={measure}
       folded={folded}

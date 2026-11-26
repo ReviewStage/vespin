@@ -124,14 +124,24 @@ export const ownedByTaskAlone = (table: {
  * item on no task, a Manager's thread, names none, and its files go with
  * the item alone.
  *
- * The bytes stand in the row itself, as every owner's did: this deployment
- * keeps no blob store, and each owner holds its bytes to its own bound, a
- * check on the column. The media type is what the service sniffed a
- * picture's bytes to be, or the type a file traveled as, which the bytes
- * are served under. A WebM recording may carry an H.264 MP4 of itself
- * beside its bytes (`mp4_bytes`), and an Ogg clip an AAC M4A of itself,
- * which a player that plays neither is served instead, so the copy is
- * read, shown, and deleted with its row.
+ * The bytes stand in the row itself (`bytes`), as every owner's did, or in
+ * the deployment's private Vercel Blob store under the pathname the row
+ * names (`blob_key`, `packages/service/src/storage/attachment-blob-paths.ts`);
+ * exactly one of the two stands (`attachment_storage`). Each owner holds its
+ * bytes to its own bound, a check on `byte_count`, the length every writer
+ * counts the bytes at, so a bound holds wherever the bytes are kept.
+ * The media type is what the service sniffed a picture's bytes to be, or
+ * the type a file traveled as, which the bytes are served under. A WebM
+ * recording may carry an H.264 MP4 of itself beside its bytes, and an Ogg
+ * clip an AAC M4A of itself, which a player that plays neither is served
+ * instead: inline beside inline bytes (`mp4_bytes`), or in the store beside
+ * stored ones (`phone_blob_key`), counted by `phone_byte_count` either way.
+ *
+ * A row deleted, by its owner's cascade or by itself, leaves its stored
+ * objects' pathnames behind as tombstones (`./attachment-blob-tombstone.ts`),
+ * written by a trigger the migration that made them creates, so no delete
+ * path need know of the store; the scheduled sweep deletes the objects and
+ * then their tombstones within about a minute.
  */
 export const attachment = pgTable(
   "attachment",
@@ -174,11 +184,18 @@ export const attachment = pgTable(
     /** A conversation's picture's size in pixels, as its header states it; null for every other owner's. */
     width: integer("width"),
     height: integer("height"),
-    /** How many bytes it is, read off the row without the bytes. */
+    /** How many bytes it is, read off the row without the bytes, and what each owner's bound holds. */
     byteCount: integer("byte_count").notNull(),
-    bytes: bytea("bytes").notNull(),
-    /** An H.264 MP4 of a WebM recording, or an AAC M4A of an Ogg sound clip, made in the agent's sandbox beside it for a player that plays neither, iOS's; null for every other row, an MP4 recording's among them, which every player plays as it is, and for a file kept before it or one its sandbox could not encode. Held to the bound a function answers whole, and counted in no owner's bound, which count the file alone. */
+    /** The bytes, where they stand in the row; null where they stand in the Blob store (`blob_key`). */
+    bytes: bytea("bytes"),
+    /** The bytes' pathname in the deployment's private Blob store, where they stand there; null where they stand in the row (`bytes`). Never served or synced, since only the service reads the store. */
+    blobKey: text("blob_key"),
+    /** An H.264 MP4 of a WebM recording, or an AAC M4A of an Ogg sound clip, made in the agent's sandbox beside it for a player that plays neither, iOS's, kept in the row beside inline bytes; null for every other row, an MP4 recording's among them, which every player plays as it is, for a file kept before it or one its sandbox could not encode, and for a row whose bytes stand in the store, whose copy stands there too (`phone_blob_key`). Held to the bound a function answers whole, and counted in no owner's bound, which count the file alone. */
     mp4Bytes: bytea("mp4_bytes"),
+    /** The pathname of that copy for a phone in the Blob store, beside stored bytes; null where the row keeps no copy there. */
+    phoneBlobKey: text("phone_blob_key"),
+    /** How many bytes the copy for a phone is, wherever it stands, which its bound holds; null where the row keeps none. Note that a copy written inline by a release before the column may stand without it, unbounded but by its writer. */
+    phoneByteCount: integer("phone_byte_count"),
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
@@ -205,17 +222,22 @@ export const attachment = pgTable(
     // Each owner holds its bytes to its own bound, as the table it kept before did; a plan's recording to a video's, and its PDF to a PDF's.
     check(
       "attachment_bytes_bound",
-      sql`(${table.conversationId} is null or octet_length(${table.bytes}) <= ${bound(CONVERSATION_PICTURE_BOUNDS.MAX_BYTES)}) and (not ${ownedByTaskAlone(table)} or octet_length(${table.bytes}) <= ${bound(PICTURE_BOUNDS.MAX_BYTES)} or (${isVideo(table)} and octet_length(${table.bytes}) <= ${bound(PICTURE_BOUNDS.MAX_VIDEO_BYTES)}) or (${isPdf(table)} and octet_length(${table.bytes}) <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)}))`,
+      sql`(${table.conversationId} is null or ${table.byteCount} <= ${bound(CONVERSATION_PICTURE_BOUNDS.MAX_BYTES)}) and (not ${ownedByTaskAlone(table)} or ${table.byteCount} <= ${bound(PICTURE_BOUNDS.MAX_BYTES)} or (${isVideo(table)} and ${table.byteCount} <= ${bound(PICTURE_BOUNDS.MAX_VIDEO_BYTES)}) or (${isPdf(table)} and ${table.byteCount} <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)}))`,
     ),
     // A plan comment's file names its task and workspace, has a name and a place among the comment's files, and is held to a file's bound.
     check(
       "attachment_description_comment_file",
-      sql`${table.descriptionCommentId} is null or (${table.taskId} is not null and ${table.organizationId} is not null and ${table.name} is not null and ${table.position} is not null and octet_length(${table.bytes}) <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)})`,
+      sql`${table.descriptionCommentId} is null or (${table.taskId} is not null and ${table.organizationId} is not null and ${table.name} is not null and ${table.position} is not null and ${table.byteCount} <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)})`,
     ),
-    // Only a WebM recording or an Ogg clip carries a copy for a phone, held to the bound a function may answer whole, as the file is.
+    // Only a WebM recording or an Ogg clip carries a copy for a phone, held to the bound a function may answer whole, as the file is, wherever the copy stands.
     check(
       "attachment_phone_copy",
-      sql`${table.mp4Bytes} is null or (${keepsPhoneCopy(table)} and octet_length(${table.mp4Bytes}) <= ${bound(PHONE_VIDEO_BOUNDS.MAX_BYTES)})`,
+      sql`(${table.mp4Bytes} is null and ${table.phoneBlobKey} is null and ${table.phoneByteCount} is null) or (${keepsPhoneCopy(table)} and ${table.phoneByteCount} <= ${bound(PHONE_VIDEO_BOUNDS.MAX_BYTES)})`,
+    ),
+    // The bytes stand in the row or in the store, never both and never neither, and a copy for a phone stands beside them, inline beside inline bytes and stored beside stored ones, its count known where it is stored and standing only beside a copy.
+    check(
+      "attachment_storage",
+      sql`num_nonnulls(${table.bytes}, ${table.blobKey}) = 1 and (${table.blobKey} is null or ${table.mp4Bytes} is null) and (${table.phoneBlobKey} is null or (${table.blobKey} is not null and ${table.phoneByteCount} is not null)) and (${table.phoneByteCount} is null or ${table.mp4Bytes} is not null or ${table.phoneBlobKey} is not null)`,
     ),
     // A conversation's picture carries its hash and its size in pixels.
     check(
@@ -225,7 +247,7 @@ export const attachment = pgTable(
     // An inbox item's file is of a kind, held to its kind's bound, a message's recording to a video's, and only an answer's or a message's file has a name and a place, and only a message's names a message; no other owner's has a kind.
     check(
       "attachment_inbox_kind",
-      sql`(${table.inboxItemId} is null and ${table.kind} is null) or (${table.inboxItemId} is not null and ((${table.kind} = ${literal(INBOX_ATTACHMENT_KIND.IMAGE)} and octet_length(${table.bytes}) <= ${bound(INBOX_BOUNDS.MAX_IMAGE_BYTES)} and ${table.name} is null and ${table.position} is null and ${table.inboxMessageId} is null) or (${table.kind} = ${literal(INBOX_ATTACHMENT_KIND.ANSWER)} and octet_length(${table.bytes}) <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)} and ${table.name} is not null and ${table.position} is not null and ${table.inboxMessageId} is null) or (${table.kind} = ${literal(INBOX_ATTACHMENT_KIND.MESSAGE)} and (octet_length(${table.bytes}) <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)} or (${isVideo(table)} and octet_length(${table.bytes}) <= ${bound(INBOX_BOUNDS.MAX_VIDEO_BYTES)})) and ${table.name} is not null and ${table.position} is not null and ${table.inboxMessageId} is not null)))`,
+      sql`(${table.inboxItemId} is null and ${table.kind} is null) or (${table.inboxItemId} is not null and ((${table.kind} = ${literal(INBOX_ATTACHMENT_KIND.IMAGE)} and ${table.byteCount} <= ${bound(INBOX_BOUNDS.MAX_IMAGE_BYTES)} and ${table.name} is null and ${table.position} is null and ${table.inboxMessageId} is null) or (${table.kind} = ${literal(INBOX_ATTACHMENT_KIND.ANSWER)} and ${table.byteCount} <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)} and ${table.name} is not null and ${table.position} is not null and ${table.inboxMessageId} is null) or (${table.kind} = ${literal(INBOX_ATTACHMENT_KIND.MESSAGE)} and (${table.byteCount} <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)} or (${isVideo(table)} and ${table.byteCount} <= ${bound(INBOX_BOUNDS.MAX_VIDEO_BYTES)})) and ${table.name} is not null and ${table.position} is not null and ${table.inboxMessageId} is not null)))`,
     ),
   ],
 );
@@ -234,19 +256,26 @@ export const attachment = pgTable(
  * The columns a read serves a row by, for a reader that plays the video
  * given: a recording's MP4 copy, or a clip's M4A copy, under its own type
  * where the reader plays MP4 and the row keeps one, and the row's own bytes
- * and type otherwise.
+ * and type otherwise. The copy is wherever the row keeps it, inline
+ * (`bytes`) or stored (`blobKey`), exactly one of the two standing, as
+ * `attachment_storage` holds them.
  * Note that the choice is made in the statement, so a read loads one copy
- * of the recording's bytes, never both.
+ * of the recording's bytes, never both, and a stored one's key alone.
  */
 export function servedColumns(playable: PlayableVideoType) {
   if (playable === PLAYABLE_VIDEO_TYPE.WEBM) {
-    return { contentType: attachment.contentType, bytes: attachment.bytes };
+    return {
+      contentType: attachment.contentType,
+      bytes: attachment.bytes,
+      blobKey: attachment.blobKey,
+    };
   }
 
   return {
-    contentType: sql<string>`case when ${attachment.mp4Bytes} is null then ${attachment.contentType} when ${isAudio(attachment)} then ${literal(AUDIO_TYPE.M4A)} else ${literal(MP4_TYPE)} end`,
-    bytes: sql<Uint8Array>`coalesce(${attachment.mp4Bytes}, ${attachment.bytes})`.mapWith(
+    contentType: sql<string>`case when ${attachment.mp4Bytes} is null and ${attachment.phoneBlobKey} is null then ${attachment.contentType} when ${isAudio(attachment)} then ${literal(AUDIO_TYPE.M4A)} else ${literal(MP4_TYPE)} end`,
+    bytes: sql<Uint8Array | null>`coalesce(${attachment.mp4Bytes}, ${attachment.bytes})`.mapWith(
       attachment.bytes,
     ),
+    blobKey: sql<string | null>`coalesce(${attachment.phoneBlobKey}, ${attachment.blobKey})`,
   };
 }

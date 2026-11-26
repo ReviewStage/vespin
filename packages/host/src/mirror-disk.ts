@@ -4,7 +4,7 @@ import {
   type MirrorFileMode,
   type MirrorFrame,
 } from "@repo/features/sandbox-mirror-wire";
-import { Effect, Option, Path } from "effect";
+import { Clock, Effect, Option, Path } from "effect";
 import { Hex } from "effect/encoding";
 import * as FileSystem from "effect/FileSystem";
 
@@ -35,7 +35,15 @@ const TEMPORARY_PREFIX = ".mirroring-";
 /** How many of the mirror's files are read at once while a manifest is matched. */
 const READ_CONCURRENCY = 8;
 
-type ManifestFile = Extract<
+/**
+ * How long ago a file must have been modified for its hash to be kept: one
+ * written within this of being read may be written again within the same
+ * tick of its modified time, so its size and time would not tell the two
+ * apart, as git's own rule for racy files has it.
+ */
+const SETTLED_MS = 2_000;
+
+export type ManifestFile = Extract<
   MirrorFrame,
   { readonly type: typeof MIRROR_FRAME.MANIFEST }
 >["files"][number];
@@ -118,17 +126,30 @@ export const mirrorDeleted = (root: string, file: string) =>
     return true;
   });
 
+/** A file's hash as a match last read it, with the size and modified time the file had then. */
+interface KnownHash {
+  readonly size: number;
+  readonly modifiedAt: number;
+  readonly hash: string;
+}
+
+/** The hashes a match read, by path, for the next match of the same mirror to take where the file kept its size and modified time. */
+export type KnownHashes = Map<string, KnownHash>;
+
 /**
  * A manifest matched against the mirror at `root`, whose own files are
  * `listed` as git lists them: each file the manifest lacks is deleted, and
  * the paths whose size or hash differ from the manifest's, or that the
  * mirror lacks, are answered in the manifest's order for the caller to ask
- * for. A file is hashed only where its size agrees.
+ * for. A file is hashed only where its size agrees, and not even then where
+ * `known` holds its hash from a match that saw the same size and modified
+ * time, which every match it is handed keeps up to date.
  */
 export const mirrorMatched = (
   root: string,
   listed: readonly string[],
   manifest: readonly ManifestFile[],
+  known: KnownHashes = new Map(),
 ) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
@@ -145,7 +166,11 @@ export const mirrorMatched = (
 
           if (Option.isNone(info) || info.value.type !== "File") return undefined;
 
-          return [file, Number(info.value.size)] as const;
+          const modifiedAt = Option.getOrUndefined(
+            Option.map(info.value.mtime, (at) => at.getTime()),
+          );
+
+          return [file, { size: Number(info.value.size), modifiedAt }] as const;
         }),
       { concurrency: READ_CONCURRENCY },
     );
@@ -157,14 +182,35 @@ export const mirrorMatched = (
       if (!wanted.has(file)) yield* mirrorDeleted(root, file);
     }
 
+    for (const file of known.keys()) {
+      if (!own.has(file)) known.delete(file);
+    }
+
+    const now = yield* Clock.currentTimeMillis;
+
     const differing = yield* Effect.forEach(
       manifest,
       (file) =>
         Effect.gen(function* () {
-          if (own.get(file.path) !== file.size) return true;
-          const bytes = yield* fileSystem.readFile(path.join(root, file.path));
+          const stood = own.get(file.path);
 
-          return (yield* hashOf(bytes)) !== file.hash;
+          if (stood?.size !== file.size) return true;
+          const kept = known.get(file.path);
+
+          if (kept?.size === stood.size && kept.modifiedAt === stood.modifiedAt) {
+            return kept.hash !== file.hash;
+          }
+
+          const bytes = yield* fileSystem.readFile(path.join(root, file.path));
+          const hash = yield* hashOf(bytes);
+          const { modifiedAt } = stood;
+
+          // Note that a file modified too lately to be told apart from its next write is hashed again next time.
+          if (modifiedAt !== undefined && now - modifiedAt > SETTLED_MS) {
+            known.set(file.path, { size: stood.size, modifiedAt, hash });
+          } else known.delete(file.path);
+
+          return hash !== file.hash;
         }),
       { concurrency: READ_CONCURRENCY },
     );

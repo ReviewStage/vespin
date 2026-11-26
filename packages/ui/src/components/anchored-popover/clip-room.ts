@@ -12,11 +12,16 @@ import type { Box } from "./popover-place.js";
  * in its nearest positioned ancestor (its `offsetParent`), past any box
  * between that does not clip it, and a fixed box in the window, which no box
  * around it clips. The page's own boxes hand their overflow to the window,
- * which its owner's room already keeps to.
+ * which its owner's room already keeps to. A box drawn as its children
+ * alone (`display: contents`) clips nothing, though it may carry an
+ * overflow, since it has no box to clip by.
  */
 
 /** The overflow that clips nothing; any other value on an axis clips it. */
 const UNCLIPPED = "visible";
+
+/** The display of a box that draws its children alone, which overflow never applies to, as the sections dialog's body is. */
+const UNBOXED = "contents";
 
 /** The box `element` is laid in, whose overflow may clip it; none where only the window stands above. */
 function containerOf(element: HTMLElement): HTMLElement | null {
@@ -34,9 +39,11 @@ export function clipsAround(layer: HTMLElement): HTMLElement[] {
   const clips: HTMLElement[] = [];
 
   for (let at = containerOf(layer); at !== null; at = containerOf(at)) {
-    const { overflowX, overflowY } = getComputedStyle(at);
+    const { display, overflowX, overflowY } = getComputedStyle(at);
+    // Note that a box drawn as its children alone has no box of its own to clip by, whatever overflow it is given.
+    const boxed = display !== UNBOXED;
 
-    if (overflowX !== UNCLIPPED || overflowY !== UNCLIPPED) clips.push(at);
+    if (boxed && (overflowX !== UNCLIPPED || overflowY !== UNCLIPPED)) clips.push(at);
   }
 
   return clips;

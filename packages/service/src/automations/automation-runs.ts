@@ -1,5 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
-import { agentTaskId, readVisibleAgent } from "@repo/database/models/agent-store";
+import { readVisibleAgent } from "@repo/database/models/agent-store";
 import {
   type Automation,
   type AutomationRun,
@@ -491,8 +491,10 @@ const steerClaimed = Effect.fnUntraced(function* (
   }
 
   yield* attachRunAgent(run.id, agentId);
-  // The agent's own task is every run's that goes to it.
-  yield* attachRunTask(run.id, agentTaskId(found.value));
+  const { taskId } = found.value;
+
+  // The agent's own task is every run's that goes to it; a Manager works on none, so its runs hold none.
+  if (taskId !== null) yield* attachRunTask(run.id, taskId);
 
   return Option.some<AutomationRunOutcome>({
     status: AUTOMATION_RUN_STATUS.STARTED,

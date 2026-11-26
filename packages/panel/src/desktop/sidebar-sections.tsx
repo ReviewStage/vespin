@@ -47,7 +47,6 @@ import {
   LAYOUT_ELEMENT,
   type ListRowNest,
   MoreButton,
-  motionKey,
   NOTE_LINE_LOOK,
   NoteLine,
   nextRowOrHead,
@@ -60,7 +59,6 @@ import {
   TextField,
   TrashIcon,
   useConfirmDialog,
-  useLeaving,
   useMenu,
 } from "@repo/ui";
 import { FolderPlusIcon, GLYPH, MailOpenIcon, SmilePlusIcon } from "@repo/ui/icons";
@@ -69,17 +67,25 @@ import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { useSectionWrites, useTaskSections } from "../tasks/use-pin-writes.js";
 import { useReadMark } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
-import { listedSlot, movedBeside, nestsOf, siblingsAt, useNestedRows } from "./nested-rows.js";
+import { movedBeside, nestsOf, siblingsAt, useNestedRows } from "./nested-rows.js";
 import { NewTaskInButton } from "./new-task-button.js";
-import { type RowPlace, RowPlaced, useRowMoveKeys, withRowMoves } from "./row-moves.js";
+import {
+  type RowPlace,
+  RowPlaced,
+  useRowMoveKeys,
+  useRowPlaces,
+  withRowMoves,
+} from "./row-moves.js";
 import { SectionIconWell, sectionGlyph } from "./section-icon-picker.js";
 import { SIDEBAR_ENTRY, type SidebarEntry, SidebarEntryRow } from "./sidebar-entries.js";
 import { SIDEBAR_SECTION_SLOT, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
@@ -855,19 +861,10 @@ function SectionRows({
   const nested = useNestedRows(tasks, context.opened, context.current, context.every);
   const layout = useMemo(() => sectionLayout(drawn, nested, managers), [drawn, nested, managers]);
   const { rows } = layout;
-  // Note that a row on its way out has no place among the rows a drag or a menu moves.
-  const shown = useLeaving(rows, sectionDrawnKey);
-  const keys = useMemo(() => shown.map(({ key }) => key), [shown]);
-  const listedAt = new Map(rows.map((row, at) => [sectionDrawnKey(row), at]));
+  const keys = useMemo(() => rows.map(sectionDrawnKey), [rows]);
+  const listedAt = new Map(keys.map((key, at) => [key, at]));
   const depths = rows.map(sectionDepthOf);
   const sectionId = drawn.section.id;
-
-  // Note that a row is heard by its place among the rows drawn, rows on their way out among them, and found among those listed by its key, as the slot it is carried to is (`listedSlot`).
-  const fromListed = (from: number) => {
-    const key = shown[from]?.key;
-
-    return key === undefined ? undefined : listedAt.get(key);
-  };
 
   // Note that a move lands the row's entry beside its sibling's, which alone orders the two as they are drawn.
   const besideSibling = (from: number, beside: number | undefined) => {
@@ -880,16 +877,11 @@ function SectionRows({
 
   const move = folded
     ? undefined
-    : (from: number, to: number) => {
-        const at = fromListed(from);
-
-        if (at !== undefined)
-          besideSibling(at, movedBeside(depths, at, listedSlot(shown, from, to)));
-      };
+    : (from: number, to: number) => besideSibling(from, movedBeside(depths, from, to));
 
   const drag = useRunRowDrag(move, {
     onDropOut: (from, zone, at) => {
-      const held = shown[from]?.value;
+      const held = rows[from];
 
       if (held === undefined) return;
 
@@ -900,16 +892,18 @@ function SectionRows({
   });
 
   const moveKeys = useRowMoveKeys(move);
-  const nests = nestsOf(shown.map(({ value }) => sectionDepthOf(value)));
+  const nests = nestsOf(depths);
   const rowsShown = context.tasks.shown && context.inSight;
+
+  const keptPlace = useRowPlaces();
 
   const placeOf = (key: string) => {
     const at = listedAt.get(key);
 
-    if (move === undefined || at === undefined) return undefined;
+    if (move === undefined || at === undefined) return keptPlace(key, undefined);
     const siblings = siblingsAt(depths, at);
 
-    return {
+    return keptPlace(key, {
       at: siblings.indexOf(at),
       count: siblings.length,
       onMove: (from: number, to: number) => {
@@ -917,7 +911,7 @@ function SectionRows({
 
         if (moved !== undefined) besideSibling(moved, siblings[to]);
       },
-    };
+    });
   };
 
   return (
@@ -929,15 +923,16 @@ function SectionRows({
       block={moveKeys}
     >
       {(index, place) => {
-        const entry = shown[index];
+        const entry = rows[index];
+        const key = keys[index];
 
-        if (entry === undefined) return null;
+        if (entry === undefined || key === undefined) return null;
         const nest = nests[index];
 
         return (
-          <RowPlaced key={entry.key} place={placeOf(entry.key)}>
+          <RowPlaced key={key} place={placeOf(key)}>
             <SidebarEntryRow
-              entry={entry.value}
+              entry={entry}
               tasks={context.tasks}
               shown={rowsShown}
               place={place}
@@ -981,7 +976,9 @@ export function TaskRowsSkeleton({ widths }: { widths: readonly string[] }): Rea
  * What a section draws in place of its rows while the view leaves none
  * standing: a row's skeleton while the list is first read, nothing where it
  * could not be read, which the list's own line says, and once read a word
- * that tasks are dragged in; nothing while it draws rows.
+ * that tasks are dragged in; nothing while it draws rows. Note that under a
+ * finger, which drags no row in, an empty section stands as its header
+ * alone, as the iOS app's does.
  */
 function SectionFoot({
   drawn,
@@ -990,9 +987,13 @@ function SectionFoot({
   drawn: DrawnSection;
   tasks: SidebarTasksControl;
 }): React.JSX.Element | null {
+  const coarse = useCoarsePointer();
+
   if (drawn.tasks.length > 0 || drawn.managers.length > 0 || tasks.listFailed) return null;
 
   if (!tasks.listRead) return <TaskRowsSkeleton widths={SECTION_SKELETON} />;
+
+  if (coarse) return null;
 
   return (
     <div className={SIDEBAR_SECTION_SLOT}>
@@ -1025,6 +1026,8 @@ function SidebarSection({
   );
 
   const rowCount = drawn.tasks.length + drawn.managers.length;
+  // Note that a phone's header draws no ⋯, its menu a long press away, as the iOS app's is; its + stays.
+  const phone = usePhoneRoom();
   const menu = useMenu(tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
@@ -1078,12 +1081,15 @@ function SidebarSection({
             />
           )
         }
-        {...sidebarHead({
-          folded,
-          onToggle: () => context.onToggle(section.id),
-          count: rowCount,
-          noun: TASK_NOUN,
-        })}
+        {...sidebarHead(
+          {
+            folded,
+            onToggle: () => context.onToggle(section.id),
+            count: rowCount,
+            noun: TASK_NOUN,
+          },
+          phone,
+        )}
         glyph={glyph}
         label={<ReplayMask>{section.title}</ReplayMask>}
         menuOpen={menu.open !== undefined}
@@ -1101,12 +1107,14 @@ function SidebarSection({
         }
         actions={
           <>
-            <MoreButton
-              ref={ellipsis}
-              thing={section.title}
-              size={BUTTON_SIZE.COMPACT}
-              {...menu.trigger()}
-            />
+            {phone ? null : (
+              <MoreButton
+                ref={ellipsis}
+                thing={section.title}
+                size={BUTTON_SIZE.COMPACT}
+                {...menu.trigger()}
+              />
+            )}
             <NewTaskInButton
               label={`New task in ${section.title}`}
               onPress={() => context.onNewTaskIn(section.id)}
@@ -1138,11 +1146,6 @@ function SidebarSection({
   );
 }
 
-/** A section's key, by which it leaves the list. */
-function sectionKeyOf(drawn: DrawnSection): string {
-  return drawn.section.id;
-}
-
 /**
  * The account's sections in the listed workspace, between Pinned and Tasks,
  * in the order dragged: a section's header is its handle, so a press on one
@@ -1168,9 +1171,6 @@ export function SidebarSections({
 
   const drag = useRowDrag(move, { handle: SECTION_HANDLE });
   const keys = useRowMoveKeys(move);
-  // Note that a section on its way out, deleted or moved away, is drawn on where it stood until its exit has played.
-  const shown = useLeaving(sections, sectionKeyOf);
-  const listedAt = new Map(sections.map((drawn, at) => [sectionKeyOf(drawn), at]));
   const { edits } = context;
 
   const creating =
@@ -1178,7 +1178,7 @@ export function SidebarSections({
       ? edits.inPlace
       : undefined;
 
-  if (shown.length === 0 && creating === undefined) return null;
+  if (sections.length === 0 && creating === undefined) return null;
 
   const created = (end: GroupHeaderEditEnd, icon: TaskSectionIcon | undefined) => {
     if (creating === undefined) return;
@@ -1202,16 +1202,15 @@ export function SidebarSections({
         as={LAYOUT_ELEMENT.UL}
         gap={GAP.SECTION}
         className="sidebar-sections"
-        moves
         onPointerDown={drag}
         {...keys}
       >
-        {shown.map(({ key, value: drawn }, drawnAt) => (
-          <li key={key} className="sidebar-sections-item" {...motionKey(key)}>
+        {sections.map((drawn, at) => (
+          <li key={drawn.section.id} className="sidebar-sections-item">
             <SidebarSection
               drawn={drawn}
               context={context}
-              place={{ at: listedAt.get(key) ?? drawnAt, count: sections.length, onMove: move }}
+              place={{ at, count: sections.length, onMove: move }}
             />
           </li>
         ))}

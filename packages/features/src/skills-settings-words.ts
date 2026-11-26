@@ -216,7 +216,7 @@ const FAILURE_WORDS = {
   [INSTALLED_SKILL_CALL_FAILURE.UNANSWERED]: () =>
     "Could not connect. Check your internet connection and try again.",
   [INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND]: () =>
-    "That skill or workspace is no longer yours to reach.",
+    "You no longer have access to that skill or workspace.",
   [INSTALLED_SKILL_CALL_FAILURE.NOT_PERMITTED]: () =>
     "Only whoever installed this skill, or the workspace's owners and admins, can remove it.",
   [INSTALLED_SKILL_CALL_FAILURE.INVALID]: () =>

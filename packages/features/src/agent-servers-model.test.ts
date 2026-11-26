@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
-import { test } from "vitest";
+import { it, test } from "vitest";
 import {
   SERVER_ROW,
   SERVER_SECTION,
   searchServers,
   serverGroups,
   serverRows,
+  serversChoiceWords,
+  switchedOffWords,
   switchedServers,
 } from "./agent-servers-model.js";
 import { CONNECTION_HEALTH, connectionHealth } from "./integration-health.js";
@@ -184,4 +186,25 @@ test("switching one server keeps every other one off, an account this window dra
     "slack",
   ]);
   assert.deepEqual(switchedServers(["linear", "notion-2"], "linear", true), ["notion-2"]);
+});
+
+// Note that a large account switched wholly off once listed every server beside "None"; a row names only the few that differ.
+it.each([
+  { on: [], off: [], face: "None", note: "None connected yet." },
+  { on: ["GitHub", "Linear"], off: [], face: "All", note: undefined },
+  { on: [], off: ["GitHub", "Linear", "Notion", "Sentry", "Slack"], face: "None", note: undefined },
+  { on: ["GitHub", "Linear", "Notion"], off: ["Sentry"], face: "3 of 4", note: "Sentry off." },
+  { on: ["GitHub"], off: ["Linear", "Notion", "Sentry"], face: "1 of 4", note: "Only GitHub on." },
+  { on: ["A", "B", "C", "D"], off: ["E", "F", "G", "H", "I"], face: "4 of 9", note: undefined },
+])(
+  "a servers row with $on.length on and $off.length off reads $face",
+  ({ on, off, face, note }) => {
+    assert.deepEqual(serversChoiceWords({ on, off }), { face, note });
+  },
+);
+
+test("another reader is told which servers the creator switched off by name while a few, else by count", () => {
+  assert.equal(switchedOffWords([]), "All");
+  assert.equal(switchedOffWords(["Linear", "Sentry"]), "All but Linear and Sentry");
+  assert.equal(switchedOffWords(["A", "B", "C", "D"]), "All but 4");
 });

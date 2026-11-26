@@ -299,7 +299,7 @@ function transcriptAnswer(
  * stands.
  */
 const standingCallsOf = (userId: string, agentId: string) =>
-  Effect.map(hostedStoreOrUnavailable(listStandingVoiceCalls(userId, agentId)), (rows) =>
+  Effect.map(listStandingVoiceCalls(userId, agentId), (rows) =>
     rows.length === 0
       ? undefined
       : {
@@ -428,7 +428,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
 
       // The title is read after the page, since it lands after a turn ends, which a held read may span.
       const titled = yield* hostedStoreOrUnavailable(readAgent(context.userId, agent.id));
-      const calls = yield* standingCallsOf(context.userId, agent.id);
+      const calls = yield* hostedStoreOrUnavailable(standingCallsOf(context.userId, agent.id));
 
       return {
         ...transcriptAnswer(
@@ -692,16 +692,22 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       }
 
       const standing = { createdAt: agent.createdAt, blank: startedBlank(agent) };
-      // The rewind is read before the page, so a page read after a rewind never carries the one before it.
-      const rewound = yield* hostedStoreOrUnavailable(readRewoundRevision(target));
 
-      const newest = yield* hostedStoreOrUnavailable(
-        transcriptNewest(target, CODER_TOOL_SET, standing, agent),
+      // The title and the calls are read after the page's rows, as the forward read's are, so one that landed while the rows were read is told rather than lost to a follow that starts after it.
+      const afterRows = Effect.all(
+        {
+          titled: readAgent(context.userId, agent.id),
+          calls: standingCallsOf(context.userId, agent.id),
+        },
+        { concurrency: "unbounded" },
       );
 
-      // The title is read after the page, as the forward read's is, so one that landed while the page was read is told rather than lost to a follow that starts after it.
-      const titled = yield* hostedStoreOrUnavailable(readAgent(context.userId, agent.id));
-      const calls = yield* standingCallsOf(context.userId, agent.id);
+      const newest = yield* hostedStoreOrUnavailable(
+        transcriptNewest(target, CODER_TOOL_SET, standing, afterRows, agent),
+      );
+
+      const { rewound } = newest;
+      const { titled, calls } = newest.afterRows;
 
       return {
         ...newestAnswer(
@@ -751,14 +757,14 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
 
       const started = { createdAt: read.delegation.createdAt };
 
+      // The title is read after the page's rows, since it lands beside the worker's start, which the page's reads may span.
       const newest = yield* hostedStoreOrUnavailable(
-        transcriptNewest(worker, CODER_TOOL_SET, started),
+        transcriptNewest(worker, CODER_TOOL_SET, started, childTitlesOf(target, [conversationId])),
       );
 
-      // The title is read after the page, since it lands beside the worker's start, which the page's reads may span.
-      const titles = yield* hostedStoreOrUnavailable(childTitlesOf(target, [conversationId]));
+      const title = newest.afterRows.get(conversationId) ?? null;
 
-      return newestAnswer(newest, titles.get(conversationId) ?? null, readsCut(input.parts));
+      return newestAnswer(newest, title, readsCut(input.parts));
     }),
   };
 }

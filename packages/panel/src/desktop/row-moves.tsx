@@ -1,7 +1,7 @@
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useAppCommand } from "../app-commands.js";
 import type { MenuAction, MenuEntry } from "./action-menu.js";
@@ -52,6 +52,50 @@ export function RowPlaced({
   children: ReactNode;
 }): React.JSX.Element {
   return <RowPlaceContext value={place}>{children}</RowPlaceContext>;
+}
+
+/** A row's place as its list keeps it: the place handed, and the move it calls, the newest the list drew. */
+interface KeptRowPlace {
+  readonly place: RowPlace;
+  move: RowPlace["onMove"];
+}
+
+/**
+ * The places a list hands its rows, by each row's key: the place the row
+ * was handed last while it stands at the same place in a list of the same
+ * length, its move calling the newest one the list drew. Note that a list
+ * draws its rows' places afresh whenever it draws again, its run measuring
+ * the scroller anew as a task opens among them, and a row's place is a
+ * context its menu reads (`RowPlaced`), so a fresh one drew every row of
+ * the list again, each menu among them.
+ */
+export function useRowPlaces(): (key: string, place: RowPlace | undefined) => RowPlace | undefined {
+  const kept = useRef(new Map<string, KeptRowPlace>()).current;
+
+  return (key, place) => {
+    if (place === undefined) {
+      kept.delete(key);
+
+      return undefined;
+    }
+
+    const was = kept.get(key);
+
+    if (was !== undefined && was.place.at === place.at && was.place.count === place.count) {
+      was.move = place.onMove;
+
+      return was.place;
+    }
+
+    const entry: KeptRowPlace = {
+      place: { at: place.at, count: place.count, onMove: (from, to) => entry.move(from, to) },
+      move: place.onMove,
+    };
+
+    kept.set(key, entry);
+
+    return entry.place;
+  };
 }
 
 /** The place the list around this row handed it, if it stands in one that reorders. */
@@ -125,8 +169,8 @@ export function withRowMoves(
 /** What a list that moves its rows wears, so a row's focus is read by the list it stands directly in and not one of the lists nested in its rows. */
 const MOVE_LIST = "data-row-moves";
 
-/** A list's rows that move; one on its way out (`ListMotion`) is no longer one of them, as `use-row-drag.ts` counts them. */
-const MOVING_ROW = ":scope > li:not([data-leaving])";
+/** A list's rows that move, as `use-row-drag.ts` counts them. */
+const MOVING_ROW = ":scope > li";
 
 /** What a row wears in a list drawing only the rows near the view, its place among them all (`VirtualRows`). */
 const ROW_INDEX = "data-index";

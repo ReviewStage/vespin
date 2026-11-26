@@ -1,7 +1,14 @@
 // pill-field.tsx -- the app's one field of words that draws mentions and files' markers as pills inside them, as the panel's box draws its chips, while its value stays the Markdown the wire carries.
 
 import { readerZone } from "@repo/features/date-mention";
-import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
+import { writtenMarkers } from "@repo/features/file-marker";
+import {
+  PILL_KIND,
+  PILL_RUN,
+  type Pill,
+  typedPillRuns,
+  typedRunsMarkdown,
+} from "@repo/features/pill-words";
 import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import { type CaretAtWord, caretAtWord, drawnPill, sameAtWord, toldWord } from "./caret-at-word.js";
@@ -9,6 +16,7 @@ import { useChipMarkOf } from "./chip-mark.js";
 import {
   NativePillField,
   type NativePillFieldDoors,
+  type NativeToldRun,
   type NativeValue,
   type NativeWords,
 } from "./pill-field-native.js";
@@ -17,6 +25,25 @@ import { useColors } from "./tokens/colors.js";
 
 /** No files held: every marker stays words. */
 const NO_FILES: ReadonlySet<string> = new Set();
+
+/** No thumbnails: every file's pill wears its glyph. */
+const NO_THUMBNAILS: ReadonlyMap<string, string> = new Map();
+
+/** The words the view tells written as the Markdown the wire carries, each marker typed as words escaped so it names no file, as the panel's box writes it. */
+function toldMarkdown(runs: readonly NativeToldRun[]): string {
+  return typedRunsMarkdown(
+    runs.map((run) =>
+      "pill" in run
+        ? { kind: PILL_RUN.PILL, pill: run.pill }
+        : { kind: PILL_RUN.WORDS, text: run.text },
+    ),
+  );
+}
+
+/** The thumbnail a held picture's pill wears, by its name; none for a mention or any other file. */
+function thumbnailOf(pill: Pill, thumbnails: ReadonlyMap<string, string>): string | undefined {
+  return pill.kind === PILL_KIND.FILE ? thumbnails.get(pill.name) : undefined;
+}
 
 /**
  * What a screen does to the field: puts a pill in place of the `@` word the
@@ -42,6 +69,10 @@ interface PillFieldProps {
   readonly onChange: (markdown: string) => void;
   /** The names of the files the words may hold markers of, each drawn as its pill; no other marker is one. */
   readonly files?: ReadonlySet<string> | undefined;
+  /** The file each held picture's pill draws its thumbnail from in its glyph's place, by the picture's name, as the panel's box draws a picture's chip; a picture with none wears its glyph. */
+  readonly thumbnails?: ReadonlyMap<string, string> | undefined;
+  /** Opens a held picture full screen, by its name, as a press on its pill asks; a pill presses nothing where none is given. */
+  readonly onPicturePress?: ((name: string) => void) | undefined;
   /** The task's repository, `owner/name`, whose GitHub pages a mention names as its files. */
   readonly repository?: string | null | undefined;
   readonly placeholder?: string | undefined;
@@ -62,7 +93,9 @@ interface PillFieldProps {
  * (`@repo/features/pill-words`), its look the chip it becomes once sent
  * (`pillLook`). A pill selects and deletes as one, and copies as its
  * Markdown, as the desktop's box copies. The value goes out exactly as the
- * desktop writes it. The field tells the `@` word the caret stands in, so a
+ * desktop writes it: a marker typed as words is never a pill, whatever file
+ * is held, and goes out escaped, `\[Picture 1]`, so it names no file
+ * (`typedPillRuns`, `typedRunsMarkdown`); only a file's own pill names it. The field tells the `@` word the caret stands in, so a
  * mention offer opens on it, and `pick` puts the picked pill in its place.
  * It is UIKit's text view on TextKit 2 (`pill-field-native.ts`): the system's
  * edit menu, dictation, autocorrect, and Dynamic Type are its own.
@@ -72,6 +105,8 @@ export function PillField({
   value,
   onChange,
   files = NO_FILES,
+  thumbnails = NO_THUMBNAILS,
+  onPicturePress,
   repository = null,
   placeholder,
   maxLines,
@@ -99,15 +134,19 @@ export function PillField({
     const reading = { repository, now: Date.now(), zone: readerZone() };
 
     const drawn = (pill: Pill) => ({
-      pill: { markdown: pill.markdown, ...pillLook(pill, reading, markOf) },
+      pill: {
+        markdown: pill.markdown,
+        ...pillLook(pill, reading, markOf),
+        thumbnail: thumbnailOf(pill, thumbnails),
+      },
     });
 
-    const runs = pillRuns(value, files).map((run) =>
+    const runs = typedPillRuns(value, files).map((run) =>
       run.kind === PILL_RUN.WORDS ? { text: run.text } : drawn(run.pill),
     );
 
     return { runs, seen };
-  }, [value, files, repository, seen, markOf]);
+  }, [value, files, thumbnails, repository, seen, markOf]);
 
   const look = {
     text: colors.TEXT,
@@ -128,24 +167,36 @@ export function PillField({
         );
       },
       rewrite: (words) => void native.current?.rewriteWord(words, toldWord(atWord.current)),
+      // Note that a picture's pill wears its thumbnail as it goes in where its file is written, and otherwise from the handing once it is.
       place: (pills) => {
         void native.current?.insertPills(
-          pills.map((pill) => drawnPill(pill, repository, markOf)),
+          pills.map((pill) => ({
+            ...drawnPill(pill, repository, markOf),
+            thumbnail: thumbnailOf(pill, thumbnails),
+          })),
           undefined,
         );
       },
       focus: () => void native.current?.focus(),
       blur: () => void native.current?.blur(),
     }),
-    [repository, markOf],
+    [repository, thumbnails, markOf],
   );
 
+  // Note that a pressed pill is named by the marker its Markdown spells, which only a held file's pill wears.
+  const onPillPress = ({ nativeEvent }: NativeSyntheticEvent<{ readonly markdown: string }>) => {
+    const [marker] = writtenMarkers(nativeEvent.markdown);
+
+    if (marker !== undefined) onPicturePress?.(marker.name);
+  };
+
   const onWords = ({ nativeEvent: words }: NativeSyntheticEvent<NativeWords>) => {
-    const changed = words.markdown !== told.current.markdown;
-    told.current = { markdown: words.markdown };
+    const markdown = toldMarkdown(words.runs);
+    const changed = markdown !== told.current.markdown;
+    told.current = { markdown };
     setSeen(words.changes);
 
-    if (changed) onChange(words.markdown);
+    if (changed) onChange(markdown);
     const word = caretAtWord(words);
 
     if (sameAtWord(word, atWord.current)) return;
@@ -174,6 +225,7 @@ export function PillField({
         void native.current?.focus();
       }}
       onFocusChange={({ nativeEvent }) => onFocusChange?.(nativeEvent.focused)}
+      onPillPress={onPillPress}
     />
   );
 }

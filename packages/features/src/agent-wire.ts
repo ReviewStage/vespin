@@ -21,6 +21,7 @@ import { agentBootSchema } from "./agent-boot.js";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
+import { isStillGif } from "./gif-frames.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
 import { commitShaSchema } from "./link-grammar.js";
 import { managerFacePickSchema, managerFaceSchema } from "./manager-face.js";
@@ -134,6 +135,12 @@ export const AGENT_BOUNDS = {
   MAX_TEXT_BYTES: MAX_REQUEST_FILES_BYTES,
   /** The most bytes a text file is inlined whole for the model at: about 25,000 tokens of code. A larger one is written into the agent's machine, its first lines inlined (`isInlinedText`). */
   MAX_INLINED_TEXT_BYTES: 100_000,
+  /**
+   * The most bytes one file of any other kind may hold (`AGENT_ATTACHMENT_TYPE.OTHER`): as many as
+   * the message's files together, as a PDF's, since a message's files ride base64 inside its request,
+   * whose body a function bounds (`request-body-limit.ts`), and one archive or document may be all it carries.
+   */
+  MAX_FILE_BYTES: MAX_REQUEST_FILES_BYTES,
   /** The most bytes every file of one message holds together, which base64 grows by a third and which stays under a function's request body limit (`request-body-limit.ts`). */
   MAX_ATTACHMENTS_BYTES: MAX_REQUEST_FILES_BYTES,
 } as const;
@@ -556,17 +563,37 @@ export type AgentTurn = typeof agentTurnSchema.Type;
 
 /**
  * The files a message may carry, by the media type each travels as: an
- * image or a PDF, which the model reads as a file, or a text file of any
+ * image or a PDF, which the model reads as a file; a text file of any
  * extension, which travels as its UTF-8 bytes and is inlined for the model
  * as fenced text under its name, or written into its machine where it is
- * too large to inline (`isInlinedText`).
+ * too large to inline (`isInlinedText`); or any other file, which is never
+ * handed to the model but written into its machine, and named by its path
+ * for the agent to open with its own tools.
  */
 export const AGENT_ATTACHMENT_TYPE = {
   PNG: "image/png",
   JPEG: "image/jpeg",
   WEBP: "image/webp",
+  /**
+   * A still GIF (`gif-frames.ts`). Note that no client sends one yet, but
+   * re-encodes it as it does any other picture, because a message box's file
+   * may be kept and served back as its type (a comment's, an Inbox reply's,
+   * a queued message's), which a client released before this reads under
+   * types without it.
+   */
+  GIF: "image/gif",
   PDF: "application/pdf",
   TEXT: "text/plain",
+  /**
+   * Any other file, a document, a spreadsheet, an archive, or a binary,
+   * whatever type its machine gave it, since its name says what it is and a
+   * file is served back under the type it travels as, which this one names
+   * no reader to run. Note that no client sends one yet, but refuses it as
+   * it always has, because a message box's file may be kept and served back
+   * as its type (a comment's, an Inbox reply's, a queued message's), which a
+   * client released before this reads under types without it.
+   */
+  OTHER: "application/octet-stream",
 } as const;
 
 export type AgentAttachmentType =
@@ -584,8 +611,10 @@ const AGENT_ATTACHMENT_BYTES = {
   [AGENT_ATTACHMENT_TYPE.PNG]: AGENT_BOUNDS.MAX_IMAGE_BYTES,
   [AGENT_ATTACHMENT_TYPE.JPEG]: AGENT_BOUNDS.MAX_IMAGE_BYTES,
   [AGENT_ATTACHMENT_TYPE.WEBP]: AGENT_BOUNDS.MAX_IMAGE_BYTES,
+  [AGENT_ATTACHMENT_TYPE.GIF]: AGENT_BOUNDS.MAX_IMAGE_BYTES,
   [AGENT_ATTACHMENT_TYPE.PDF]: AGENT_BOUNDS.MAX_PDF_BYTES,
   [AGENT_ATTACHMENT_TYPE.TEXT]: AGENT_BOUNDS.MAX_TEXT_BYTES,
+  [AGENT_ATTACHMENT_TYPE.OTHER]: AGENT_BOUNDS.MAX_FILE_BYTES,
 } as const satisfies Record<AgentAttachmentType, number>;
 
 /** The characters base64 spells a count of bytes in, padded, as an attachment's data carries them. */
@@ -630,10 +659,15 @@ const ONE_LINE_PATTERN = /^[^\r\n]*$/u;
 /** Standard base64, padded, with no data-URL prefix and no line breaks. */
 const BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/u;
 
+/** The bytes base64 spells. */
+function bytesOf(base64: string): Uint8Array {
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
 /** Whether base64 spells UTF-8 text, as a text file must to be inlined for the model. */
 function spellsUtf8(base64: string): boolean {
   try {
-    const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+    const bytes = bytesOf(base64);
     new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 
     return true;
@@ -642,7 +676,20 @@ function spellsUtf8(base64: string): boolean {
   }
 }
 
-/** Whether a file is within its type's bound and, where it is text, spells UTF-8. */
+/** Whether base64 spells a GIF of one frame; base64 a decoder refuses spells none. */
+function spellsStillGif(base64: string): boolean {
+  try {
+    return isStillGif(bytesOf(base64));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether a file is within its type's bound and, where it is text, spells
+ * UTF-8, and where it is a GIF, is a GIF of one frame (`gif-frames.ts`),
+ * since an animation is taken as an image by no model.
+ */
 function attachmentIsReadable(attachment: {
   readonly mediaType: AgentAttachmentType;
   readonly data: string;
@@ -650,6 +697,8 @@ function attachmentIsReadable(attachment: {
   if (attachment.data.length > base64Chars(AGENT_ATTACHMENT_BYTES[attachment.mediaType])) {
     return false;
   }
+
+  if (attachment.mediaType === AGENT_ATTACHMENT_TYPE.GIF) return spellsStillGif(attachment.data);
 
   return attachment.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT || spellsUtf8(attachment.data);
 }
@@ -1619,6 +1668,8 @@ const agentPageSchema = EffectSchema.Struct({
   origin: EffectSchema.optionalKey(agentOriginSchema),
   workspaceId: EffectSchema.String,
   repository: EffectSchema.NullOr(EffectSchema.String),
+  /** Every repository it works in as `owner/name`, `repository` first and the rest it was started in after it; none for one with none, and absent from a service before it. */
+  repositories: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** The branch checked out in its sandbox as its last turn ended, pushed or not; absent before a turn ends, where the checkout stood detached, and from a service before it. */
   branch: EffectSchema.optionalKey(EffectSchema.String),
 });
@@ -1733,10 +1784,17 @@ export type ListedAgent = typeof listedAgentSchema.Type;
  * a surface that draws an agent the list doesn't hold, such as one a link
  * names, draws it as it draws a listed one. Note that a page names no
  * automation by null where the list leaves the key out, and carries the run
- * that started it and its branch, which the list's row doesn't.
+ * that started it, its branch, and every repository it works in, which the
+ * list's row doesn't.
  */
 export function listedAgentOfPage(page: AgentPage): ListedAgent {
-  const { automationId, origin: _origin, branch: _branch, ...agent } = page;
+  const {
+    automationId,
+    origin: _origin,
+    branch: _branch,
+    repositories: _repositories,
+    ...agent
+  } = page;
 
   return automationId === null ? agent : { ...agent, automationId };
 }

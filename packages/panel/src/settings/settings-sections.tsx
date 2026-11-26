@@ -164,6 +164,8 @@ export const SECTION = {
   INTEGRATIONS_GROUP: "integrations-group",
   /** An integration's page's accounts, headed by its provider's name. */
   INTEGRATION_ACCOUNTS: "integration-accounts",
+  /** About's group where the platform offers updates: the version's row, with Open changelog at its head. */
+  ABOUT_UPDATES: "about-updates",
   SHORTCUTS_GROUP: "shortcuts-group",
   SHORTCUTS_WRITING: "shortcuts-writing",
   SHORTCUTS_FILES_CHANGED: "shortcuts-files-changed",
@@ -230,7 +232,7 @@ const SETTINGS_SECTIONS = {
   [SECTION.BILLING_STATUS]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.BILLING,
-    head: "Billing",
+    head: "Payment",
     words: "billing set up manage card payment invoices stripe portal failed blocked",
     drawn: billingShown,
   },
@@ -374,6 +376,10 @@ const SETTINGS_SECTIONS = {
     head: "Just for you",
     words: "personal only me mine account experiments",
     drawn: accountDrawn,
+  },
+  [SECTION.ABOUT_UPDATES]: {
+    found: SECTION_FOUND.PAGE,
+    head: "Updates",
   },
   [SECTION.SHORTCUTS_GROUP]: {
     found: SECTION_FOUND.ROWS,

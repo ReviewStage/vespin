@@ -83,14 +83,21 @@ test("a popover closed through open keeps what it holds in its layer and hears n
   assert.equal(away.count, 2, "opened again it hears one");
 });
 
-test("a popover hung inside a card that scrolls turns below where the card leaves it no room above, though the window would", () => {
-  // The card stands 300 to 700 down the window, its button 320 to 340, and the layer is 120 tall.
+/**
+ * The side a popover takes, hung from a button 320 to 340 down the window in
+ * a card that scrolls standing 300 to 700, the layer 120 tall; `between`
+ * wraps the button in a box drawn as its children alone, which still
+ * carries an overflow and measures as no box at all.
+ */
+function sideInCard(between: boolean): string | undefined {
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
   ) {
     if (this.dataset.box === "card") return new DOMRect(0, 300, 400, 400);
 
     if (this.dataset.box === "anchor") return new DOMRect(100, 320, 100, 20);
+
+    if (this.dataset.box === "contents") return new DOMRect(0, 0, 0, 0);
 
     return new DOMRect(100, 0, 340, 120);
   });
@@ -116,20 +123,34 @@ test("a popover hung inside a card that scrolls turns below where the card leave
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
+  const anchor = createElement(
+    "span",
+    { "data-box": "anchor", style: { position: "relative" } },
+    createElement(AnchoredPopover, {
+      open: true,
+      align: POPOVER_ALIGN.START,
+      children: createElement("p", null, "Rows"),
+    }),
+  );
+
+  const held = between
+    ? createElement(
+        "div",
+        {
+          "data-box": "contents",
+          style: { display: "contents", overflowX: "hidden", overflowY: "auto" },
+        },
+        anchor,
+      )
+    : anchor;
+
   act(() =>
     root.render(
       createElement(
         "div",
         { "data-box": "card", style: { overflowX: "hidden", overflowY: "auto" } },
-        createElement(
-          "span",
-          { "data-box": "anchor", style: { position: "relative" } },
-          createElement(AnchoredPopover, {
-            open: true,
-            align: POPOVER_ALIGN.START,
-            children: createElement("p", null, "Rows"),
-          }),
-        ),
+        held,
       ),
     ),
   );
@@ -138,6 +159,15 @@ test("a popover hung inside a card that scrolls turns below where the card leave
   const laid = layer === null ? undefined : getComputedStyle(layer).position;
   sheet.remove();
   assert.equal(laid, "absolute", "the layer is laid as the app lays it");
+
+  return layer?.dataset.side;
+}
+
+test("a popover hung inside a card that scrolls turns below where the card leaves it no room above, though the window would", () => {
   // 320 - 300 - 4 - 8 = 8 above inside the card cannot hold 120, and 700 - 340 - 4 - 8 below can.
-  assert.equal(layer?.dataset.side, POPOVER_SIDE.BELOW);
+  assert.equal(sideInCard(false), POPOVER_SIDE.BELOW);
+});
+
+test("a box drawn as its children alone between the popover and its card clips nothing, though it carries an overflow", () => {
+  assert.equal(sideInCard(true), POPOVER_SIDE.BELOW);
 });

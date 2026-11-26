@@ -23,7 +23,6 @@ import { handHostReads, holdIntegrations, holdIntegrationTools } from "../testin
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { holdMotion, releaseMotion } from "../testing/motion-held.js";
-import { playListMotions } from "../testing/pane-motion.js";
 import { AgentServersButton } from "./agent-servers.js";
 
 /**
@@ -481,75 +480,4 @@ test("Escape from the home takes the popover away at once where motion is held",
   key("Escape");
 
   assert.equal(panelIn(container), null);
-});
-
-/** How tall a row is drawn, in the layout given. */
-const ROW = 40;
-
-/** Each row standing under the rows before it in the list, as a layout would; jsdom lays nothing out. */
-function layRowsInOrder() {
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
-    this: HTMLElement,
-  ) {
-    const rows = [...(this.closest(".agent-servers-list")?.querySelectorAll("li") ?? [])];
-    const top = this.matches("li") ? rows.indexOf(this) * ROW : 0;
-
-    // SAFETY: the list reads only a row's top, bottom, and height.
-    return { top, bottom: top + ROW, left: 0, right: 0, width: 0, height: ROW } as DOMRect;
-  });
-}
-
-/** The statuses with `provider` standing as `standing`. */
-function withStanding(provider: string, standing: IntegrationStatus): IntegrationStatuses {
-  return {
-    ...statuses,
-    statusOf: (server) => (server === provider ? standing : statuses.statusOf(server)),
-  };
-}
-
-test("a server that connects glides from Not connected into Connected, followed by its connection", async () => {
-  const motions = playListMotions();
-
-  try {
-    const { container, render } = await opened();
-    layRowsInOrder();
-
-    const mercury = () =>
-      [...container.querySelectorAll<HTMLElement>(".agent-servers-list li")].find((row) =>
-        row.textContent?.includes("Mercury"),
-      ) ?? assert.fail("no Mercury row");
-
-    assert.equal(mercury().dataset.motionKey, INTEGRATION_PROVIDER.MERCURY);
-
-    render(withStanding(INTEGRATION_PROVIDER.MERCURY, INTEGRATION_STATUS.CONNECTED));
-    await act(async () => {
-      for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
-    });
-
-    assert.deepEqual(sections(container), [["Connected", ["Linear", "Mercury", "Vercel"]]]);
-    const glide = motions.played.find((each) => each.element === mercury());
-    assert.deepEqual(glide?.keyframes[0], { transform: `translate(0px, ${ROW}px)` });
-  } finally {
-    motions.remove();
-  }
-});
-
-test("with motion held still, a server that connects takes its place and nothing plays", async () => {
-  const motions = playListMotions();
-
-  try {
-    for (const name of ["--ui-duration-exit", "--ui-duration-shape"]) {
-      document.documentElement.style.setProperty(name, "0ms");
-    }
-
-    const { container, render } = await opened();
-    layRowsInOrder();
-
-    render(withStanding(INTEGRATION_PROVIDER.MERCURY, INTEGRATION_STATUS.CONNECTED));
-
-    assert.deepEqual(sections(container), [["Connected", ["Linear", "Mercury", "Vercel"]]]);
-    assert.deepEqual(motions.played, []);
-  } finally {
-    motions.remove();
-  }
 });

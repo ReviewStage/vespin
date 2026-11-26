@@ -42,6 +42,7 @@ import {
   type TasksControlOverrides,
   tasksControl,
   waitingOf,
+  withNewTaskShown,
 } from "../testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { DesktopHome } from "./desktop-home.js";
@@ -161,6 +162,7 @@ function home(
   tasks: TasksControl,
   room: ShellRoom,
   onSettings: (link: SettingsLink) => void,
+  homeAsks = 0,
 ) {
   return withQueryClient(
     router.provide(
@@ -169,7 +171,10 @@ function home(
         { value: onSettings },
         overEveryTask(
           tasks,
-          createElement(DesktopHome, { tasks, room, accountName: DEAN.name, staged: true }),
+          withNewTaskShown(
+            { homeAsks },
+            createElement(DesktopHome, { tasks, room, accountName: DEAN.name, staged: true }),
+          ),
         ),
       ),
     ),
@@ -610,7 +615,6 @@ test("New task pressed while Home stands hands the composer's words the caret, o
   const { page, tasks, router } = mount({}, [RETRY_429], SHELL_ROOM.NARROW);
   await settle();
   assert.ok(document.activeElement !== composerEditor(page));
-  const pressed = { ...tasks, newTask: { ...tasks.newTask, homeAsks: 1 } };
-  act(() => root?.render(home(router, pressed, SHELL_ROOM.NARROW, () => undefined)));
+  act(() => root?.render(home(router, tasks, SHELL_ROOM.NARROW, () => undefined, 1)));
   assert.ok(document.activeElement === composerEditor(page), "the words take the caret");
 });

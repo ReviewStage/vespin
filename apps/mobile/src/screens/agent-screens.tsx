@@ -23,7 +23,7 @@ import {
   type AgentStatus,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { PRODUCT_PICTURE_KIND, PRODUCT_SURFACE } from "@repo/features/analytics";
 import { appsInUse } from "@repo/features/apps-in-use";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import { UNDELIVERED_FILES_LOST } from "@repo/features/inbox-undelivered";
@@ -38,6 +38,7 @@ import {
 import { managerChatView } from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -101,6 +102,8 @@ import {
   StackSubtitle,
   shownFiles,
   shownMediaIds,
+  shownPictureIds,
+  shownRecordingIds,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptReveal,
@@ -163,7 +166,7 @@ import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
-import { useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
+import { useChatFaces, useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
@@ -191,6 +194,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useDictation } from "../use-dictation.js";
+import { PicturesProvider, useAgentPictureFiles, usePictures } from "../use-pictures.js";
 import { useAgentTalk, useStandingCallCard } from "../voice-call.js";
 import { openedVersion, PageScreen } from "./page-screens.js";
 
@@ -879,6 +883,7 @@ const AgentConversation = memo(function AgentConversation({
   // Note that a Manager's page is its chat, never its transcript, as the panel draws it: the chat's own rows (`managerChat`), its transcript read only for the work each turn did.
   const chat = shown?.kind === AGENT_KIND.MANAGER;
   useManagerChatLooks(shown);
+  const chatFaces = useChatFaces(chat ? shown : undefined, readerId);
   const chatHeld = useManagerChat(id, chat);
   const chatPage = chatHeld?.rows;
 
@@ -902,7 +907,10 @@ const AgentConversation = memo(function AgentConversation({
     () =>
       chat && chatPage !== undefined
         ? managerChatItems(
-            managerChatView(chatPage.messages, messages ?? [], { running }),
+            managerChatView(chatPage.messages, messages ?? [], {
+              running,
+              sending: chatPage.sending ?? [],
+            }),
             messages ?? [],
             {
               writing,
@@ -914,6 +922,8 @@ const AgentConversation = memo(function AgentConversation({
               suggestionAddress,
               waitingCalls,
               sending: chatPage.sending,
+              managerName: chatFaces?.managerName,
+              readerName: chatFaces?.readerName,
               // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
               greeting:
                 shown !== undefined && chatPage.before === undefined
@@ -935,6 +945,7 @@ const AgentConversation = memo(function AgentConversation({
       suggestionAddress,
       waitingCalls,
       shown,
+      chatFaces,
     ],
   );
 
@@ -984,10 +995,20 @@ const AgentConversation = memo(function AgentConversation({
     [messages, status],
   );
 
-  // Note that only the pictures and recordings of the rows on screen and the few beside them are read, so a transcript of hundreds of screenshots never holds them all as it opens, and the next rows to scroll in are drawn as they land.
+  // Note that only the pictures and recordings of the rows on screen and the few beside them are asked for, so a transcript of hundreds of screenshots never holds them all as it opens, and the next rows to scroll in are drawn as they land: a picture through expo-image's own view, a recording or a clip as the file it plays from, and the apps' capsules' pictures as the files SwiftUI and the viewer read.
+  const near = useMemo(() => rowsNear(items, rowsShown, MEDIA_REACH), [items, rowsShown]);
+  const pictureIds = useMemo(() => shownPictureIds(near), [near]);
+  const dockIds = useMemo(() => appsDockMediaIds(inUse), [inUse]);
+
+  // Note that every picture and recording of the transcript is handed to its row by its id, which it reads where it is drawn, so one landing draws that piece alone and never this page, whose rows may hold an open long-press menu; a sound clip alone is read here, as the file it plays from.
+  const addressed = useMemo(
+    () => new Set([...shownPictureIds(items), ...shownRecordingIds(items)]),
+    [items],
+  );
+
   const mediaIds = useMemo(
-    () => [...shownMediaIds(rowsNear(items, rowsShown, MEDIA_REACH)), ...appsDockMediaIds(inUse)],
-    [items, rowsShown, inUse],
+    () => shownMediaIds(near).filter((each) => !addressed.has(each)),
+    [near, addressed],
   );
 
   const sentFiles = useSentFiles(useMemo(() => shownFiles(items), [items]));
@@ -1069,6 +1090,8 @@ const AgentConversation = memo(function AgentConversation({
   const chatRetry = useManagerChatRetry(id);
   const retry = chat ? chatRetry : transcriptRetry;
   const media = useAgentMedia(id, mediaIds);
+  const dockFiles = useAgentPictureFiles(id, dockIds);
+  const pictures = usePictures(PICTURE_OWNER.AGENT, id, pictureIds);
 
   // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
   const title =
@@ -1225,6 +1248,10 @@ const AgentConversation = memo(function AgentConversation({
   const openThread = (threadId: string) =>
     router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: threadId })));
 
+  // Note that a chat message's thread opens on its own page pushed over the chat, on iPhone and iPad alike, as Slack's app pushes a thread.
+  const openChatThread = (root: string) =>
+    router.push({ pathname: onOwnTab("/tasks/agent/[id]/thread/[root]"), params: { id, root } });
+
   // Note that a pull request the agent's workspace is not read for yet opens on GitHub, which reads it whoever opened it.
   const openPullRequest = (url: string) => {
     const key = keyOf(url);
@@ -1253,9 +1280,7 @@ const AgentConversation = memo(function AgentConversation({
     <AgentComposerArea
       id={id}
       apps={
-        inUse === undefined
-          ? undefined
-          : { inUse, source: (pictureId) => media.sources.get(pictureId) }
+        inUse === undefined ? undefined : { inUse, source: (pictureId) => dockFiles.get(pictureId) }
       }
       pullRequest={pullRequests[0]}
       onOpenPullRequest={openPullRequest}
@@ -1289,46 +1314,53 @@ const AgentConversation = memo(function AgentConversation({
   );
 
   const transcriptView = (
-    <AgentTranscript
-      items={rows}
-      onRowsShown={showRows}
-      reveal={reveal}
-      head={null}
-      empty={{
-        title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
-        symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
-        loading: !failed,
-        action: failed
-          ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
-          : undefined,
-      }}
-      older={older}
-      heldCall={approvals.heldCall}
-      suggestion={suggestion}
-      repository={agent?.repository}
-      onOpenLink={openLink}
-      onToggle={(item) => setToggles((held) => toggledAt(held, item))}
-      onOpenPage={openPage}
-      mediaSource={(pictureId) => media.sources.get(pictureId)}
-      fileSource={sentFiles.source}
-      onRetryFile={sentFiles.retry}
-      onRetryMedia={media.retry}
-      onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
-      onOpenAddress={openInSafari}
-      messageLink={messageLink}
-      messageMore={messageActs.more}
-      managerFace={chat ? shown?.face : undefined}
-      onOpenThread={openThread}
-      undelivered={undelivered}
-      onOpenPullRequest={(item) => openPullRequest(item.url)}
-      pullRequestActs={(item) => {
-        const key = keyOf(item.url);
+    <PicturesProvider owner={PICTURE_OWNER.AGENT} ownerId={id} kind={PRODUCT_PICTURE_KIND.AGENT}>
+      <AgentTranscript
+        items={rows}
+        onRowsShown={showRows}
+        reveal={reveal}
+        head={null}
+        empty={{
+          title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
+          symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
+          loading: !failed,
+          action: failed
+            ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
+            : undefined,
+        }}
+        older={older}
+        heldCall={approvals.heldCall}
+        suggestion={suggestion}
+        repository={agent?.repository}
+        onOpenLink={openLink}
+        onToggle={(item) => setToggles((held) => toggledAt(held, item))}
+        onOpenPage={openPage}
+        mediaSource={(mediaId) =>
+          addressed.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId)
+        }
+        fileSource={sentFiles.source}
+        onRetryFile={sentFiles.retry}
+        onRetryMedia={(mediaId) =>
+          addressed.has(mediaId) ? pictures.retry(mediaId) : media.retry(mediaId)
+        }
+        onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
+        onOpenAddress={openInSafari}
+        messageLink={messageLink}
+        messageMore={messageActs.more}
+        channel={chatFaces?.faces}
+        onOpenChatThread={chat ? openChatThread : undefined}
+        onOpenThread={openThread}
+        undelivered={undelivered}
+        onOpenPullRequest={(item) => openPullRequest(item.url)}
+        pullRequestActs={(item) => {
+          const key = keyOf(item.url);
 
-        return key === undefined || cardMergeOf(offers(key)) === undefined
-          ? []
-          : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
-      }}
-    />
+          return key === undefined || cardMergeOf(offers(key)) === undefined
+            ? []
+            : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
+        }}
+      />
+    </PicturesProvider>
   );
 
   const asks = (

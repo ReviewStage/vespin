@@ -29,6 +29,7 @@ import { HostProvider } from "../host/host-provider.js";
 import { useHostConnectLink } from "../host-connect-link.js";
 import { useInboxWidget } from "../inbox-widget/use-inbox-widget.js";
 import { useKeeping } from "../keeping.js";
+import { useLaunchLoadCount } from "../launch-load.js";
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
@@ -191,6 +192,7 @@ function GuardedScreens() {
   });
 
   useAppNotReadyCount(signedIn && !updateNeeded);
+  useLaunchLoadCount();
   usePushRegistration(signedIn);
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);

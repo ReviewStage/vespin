@@ -16,12 +16,17 @@ import { useHostCount } from "./host/host-provider.js";
 /** The build number this build was released as (`CFBundleVersion`), which an open is read beside; none where the build names none. */
 const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
 
-/** How often the JS thread is asked to answer while a page waits for its push, and how late an answer counts as the thread busy, past a timer's own jitter. */
-const BUSY_TICK_MS = 16;
-const BUSY_LATE_MS = 4;
-
 /** The kinds of page counted open since this launch, so each kind's first, which draws views the app has not drawn before, is told from the rest. */
 const openedKinds = new Set<ProductSurface>();
+
+/** How long the long tasks in `tasks` held the JS thread between `from` and `to`, each clipped to that span. */
+function heldBetween(tasks: readonly PerformanceEntry[], from: number, to: number): number {
+  return tasks.reduce((held, task) => {
+    const overlap = Math.min(task.startTime + task.duration, to) - Math.max(task.startTime, from);
+
+    return overlap > 0 ? held + overlap : held;
+  }, 0);
+}
 
 /**
  * Counts, once a push, the time from this page's first render, which the
@@ -31,17 +36,17 @@ const openedKinds = new Set<ProductSurface>();
  * `productOpenMilliseconds`, as `open:drawn` with its kind and whether it
  * was the first of its kind since launch: never which thread, task, or
  * agent, and never a time itself. Beside them, on the same rungs, how long
- * the JS thread was busy before the push started: the page's first render
- * and commit, and how late a timer asked every `BUSY_TICK_MS` was answered
- * after them, which work the thread ran ahead of the push, such as the
- * host's, makes late; and whether the page's own thread, task, or agent was
- * held as it first drew (`held`) or still to be read. Note that the slide's
- * first frame falls between the push's start and its standing, once UIKit
- * has laid the page out for its transition, which no event marks. A page
- * that pushes nothing, such as one handing its item to a split view
- * (`surface` none), counts nothing, and so does one whose push stands after
- * the app left the front, since its time would hold a wait nobody sat
- * through.
+ * the JS thread was held before the push started, from the page's first
+ * render: the part of each long task React Native reported (`longtask`, a
+ * stretch of 50 ms or more with no chance to yield) that fell in that span,
+ * such as the host's work ahead of the push; and whether the page's own
+ * thread, task, or agent was held as it first drew (`held`) or still to be
+ * read. Note that the slide's first frame falls between the push's start and
+ * its standing, once UIKit has laid the page out for its transition, which
+ * no event marks. A page that pushes nothing, such as one handing its item
+ * to a split view (`surface` none), counts nothing, and so does one whose
+ * push stands after the app left the front, since its time would hold a wait
+ * nobody sat through.
  */
 export function useOpenDrawnCount(surface: ProductSurface | undefined, held: boolean): void {
   const count = useHostCount();
@@ -49,31 +54,30 @@ export function useOpenDrawnCount(surface: ProductSurface | undefined, held: boo
   const [renderedAt] = useState(() => performance.now());
   const [heldAtFirst] = useState(held);
 
-  // Note that the watch starts as the page commits, so an early push is never missed, and that the render and commit before it count as busy whole.
+  // Note that the watch starts as the page commits, so an early push is never missed, and that the long task its render and commit ran in is reported as that task ends, after the watch began.
   useLayoutEffect(() => {
     if (surface === undefined) return;
     let startedAt: number | undefined;
     let counted = false;
-    let busy = performance.now() - renderedAt;
-    let asked = performance.now();
+    const longTasks: PerformanceEntry[] = [];
 
-    const answering = setInterval(() => {
-      const now = performance.now();
-      const late = now - asked - BUSY_TICK_MS;
+    const watch = new PerformanceObserver((list) => {
+      longTasks.push(...list.getEntries());
+    });
 
-      if (late > BUSY_LATE_MS) busy += late;
-      asked = now;
-    }, BUSY_TICK_MS);
+    watch.observe({ type: "longtask" });
 
     const stopStart = navigation.addListener("transitionStart", (event) => {
       if (event.data.closing || startedAt !== undefined) return;
       startedAt = performance.now();
-      clearInterval(answering);
     });
 
     const stopEnd = navigation.addListener("transitionEnd", (event) => {
       if (event.data.closing || counted || startedAt === undefined) return;
       counted = true;
+      // Note that a long task is reported only once it ends, so those not yet handed to the watch are taken as the slide stands, long after the push began.
+      const busy = heldBetween([...longTasks, ...watch.takeRecords()], renderedAt, startedAt);
+      watch.disconnect();
 
       if (AppState.currentState !== "active") return;
       const order = openedKinds.has(surface) ? PRODUCT_OPEN_ORDER.LATER : PRODUCT_OPEN_ORDER.FIRST;
@@ -91,7 +95,7 @@ export function useOpenDrawnCount(surface: ProductSurface | undefined, held: boo
     });
 
     return () => {
-      clearInterval(answering);
+      watch.disconnect();
       stopStart();
       stopEnd();
     };

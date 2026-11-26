@@ -40,6 +40,7 @@ import {
 } from "@repo/database/testing";
 import {
   AGENT_BOUNDS,
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_PAYER,
   CHECK_SUMMARY,
@@ -635,6 +636,63 @@ it.layer(SUITE)("an automation's runs", (it) => {
   );
 
   it.effect(
+    "a run aimed at a Manager, an agent on no task, is sent to it and settles as started with no task",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, automation, workspaceId } = yield* openAutomation();
+
+        const manager = Option.getOrThrow(
+          yield* createAgent(owner, {
+            taskId: null,
+            workspaceId,
+            idempotencyKey: randomUUID(),
+            model: SOL,
+            effort: "low",
+            repository: null,
+            descriptionSnapshot: null,
+            prompt: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind: AGENT_KIND.MANAGER,
+          }),
+        ).agent;
+
+        // Its session ran, as its harness opening it records.
+        yield* claimRuntimeSession(
+          { userId: owner, conversationId: manager.conversationId },
+          "wrun_manager",
+          new Date("2026-10-15T12:00:00Z"),
+        );
+        const run = yield* runNow(yield* toSameAgent(automation, manager.id));
+
+        const outcome = yield* executeAutomationRun(agentSessions.sessionsFor, run).pipe(
+          Effect.provide(services),
+        );
+
+        assert.deepEqual(outcome, { status: AUTOMATION_RUN_STATUS.STARTED, agentId: manager.id });
+        assert.equal(agentSessions.opened.length, 0, "no agent was started");
+        assert.equal(agentSessions.sent.length, 1);
+
+        const [kept] = yield* Database.use((db) =>
+          db
+            .select({
+              status: automationRun.status,
+              agentId: automationRun.agentId,
+              taskId: automationRun.taskId,
+            })
+            .from(automationRun)
+            .where(eq(automationRun.id, run.id)),
+        );
+
+        assert.deepEqual(kept, {
+          status: AUTOMATION_RUN_STATUS.STARTED,
+          agentId: manager.id,
+          taskId: null,
+        });
+      }),
+  );
+
+  it.effect(
     "a run that hands the same agent a webhook's body leaves that agent heard from another account for good, its automation deleted since, where a Run now leaves it its owner's",
     () =>
       Effect.gen(function* () {
@@ -698,10 +756,11 @@ it.layer(SUITE)("an automation's runs", (it) => {
         assert.deepEqual(sent, { status: AUTOMATION_RUN_STATUS.STARTED, agentId: first });
 
         // Its agent deleted, the target let go, as one made with none chosen stands: the run starts one, which it keeps.
+        const changed = new Date("2026-10-15T12:00:00Z");
         yield* Database.use((db) =>
           db
             .update(automationTable)
-            .set({ targetAgentId: null })
+            .set({ targetAgentId: null, updatedAt: changed })
             .where(eq(automationTable.id, fresh.id)),
         );
         const opened = agentSessions.opened.length;
@@ -713,6 +772,11 @@ it.layer(SUITE)("an automation's runs", (it) => {
           Option.getOrThrow(yield* readAutomationToRun(fresh.id)).targetAgentId,
           adopted,
           "the automation keeps the agent its first run started",
+        );
+        assert.deepEqual(
+          Option.getOrThrow(yield* readAutomationToRun(fresh.id)).updatedAt,
+          changed,
+          "a run changes the automation no later, as Last updated orders it",
         );
         const kept = Option.getOrThrow(yield* readAgent(owner, adopted));
         assert.equal(

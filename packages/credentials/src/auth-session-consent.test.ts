@@ -63,8 +63,8 @@ function flow(
   return {
     callbackPath: "/callback",
     pages: {
-      granted: { badge: "Signed in", title: "Signed in", body: "Close this tab." },
-      notGranted: { badge: "Not signed in", title: "Not signed in", body: "Try again." },
+      granted: { title: "Signed in", body: "Close this tab." },
+      notGranted: { title: "Not signed in", body: "Try again." },
     },
     reasons: { refused: REFUSED, timedOut: "Timed out." },
     openExternal: () => undefined,

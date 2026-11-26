@@ -94,6 +94,16 @@ function changeRefused(answer: HostDoneAnswerView): string | undefined {
   return "failure" in answer ? MACHINE_SETTINGS_WORDS.CHANGE_FAILED : undefined;
 }
 
+/** How the machine draws its apps where agents may use them, on a Mac alone, since only the desktop app ships the computer-use helper; none elsewhere, which draws no apps. */
+function appsOnMachine(
+  machine: MachineLine,
+  apps: ReadonlyMap<string, AllowedApp> | undefined,
+): ReadonlyMap<string, AllowedApp> | undefined {
+  const platform = machine.platform ?? DEVICE_PLATFORM.DARWIN;
+
+  return platform === DEVICE_PLATFORM.DARWIN ? apps : undefined;
+}
+
 /** What a machine lets agents do, as its folded row says it under its name; none for a machine whose app never joined, which holds no settings. */
 export function machineAgentFacts(
   machine: MachineLine,
@@ -104,8 +114,8 @@ export function machineAgentFacts(
   if (settings === undefined) return undefined;
   const commands = MACHINE_COMMAND_MODE_LABEL[settings.commandMode];
 
-  // Note that computer use is said only where the reader has it on, as its rows are drawn only there.
-  if (apps === undefined) return { commands };
+  // Note that computer use is said only on a Mac where the reader has it on, as its rows are drawn only there.
+  if (appsOnMachine(machine, apps) === undefined) return { commands };
   const count = settings.alwaysAllowedApps.length;
 
   return {
@@ -138,13 +148,13 @@ interface RemoveAsked {
 
 /**
  * One machine's own settings for agents, inset under its row: how agents'
- * terminal commands run there, and, where the reader has Computer use on,
+ * terminal commands run there, and, on a Mac where the reader has Computer use on,
  * whether agents may use its apps and the apps they use unasked. Nothing
  * for a machine whose app never joined, which holds none.
  */
 export function MachineAgentRows({
   machine,
-  apps,
+  apps: appsRead,
 }: {
   machine: MachineLine;
   /** How the machine names and draws its apps, by the app they are allowed by; none where Computer use is off, which draws no apps. */
@@ -160,6 +170,7 @@ export function MachineAgentRows({
 
   const { mutateAsync: sendRemoveApp } = useMutation(actMutation(ACT_KIND.MACHINES_CHANGE));
   const settings = machine.settings;
+  const apps = appsOnMachine(machine, appsRead);
 
   if (settings === undefined) return null;
   const { id } = machine;

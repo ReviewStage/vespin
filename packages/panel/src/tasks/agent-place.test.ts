@@ -7,6 +7,7 @@ import {
   type AgentRunsOnRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import { CALL_KIND } from "@repo/features/turn-rows";
@@ -242,7 +243,7 @@ test("where a move is offered, Agent runs in opens the places, Cloud wearing its
   assert.equal(moved.length, 1);
 });
 
-test("the Default machine row names the agent's default with its dot, offline as such, a teammate's face before a machine of theirs, and a pick of another machine sets it, named from the press while the service has yet to answer and no longer once a newer pick answered; a local agent's chip opens the same rows", async () => {
+test("the machines an agent may also run commands on stand under where it runs, each with its dot, a teammate's face, what it may do there, and Default on the default; a pick of another sets it, drawn from the press while the service has yet to answer and no longer once a newer pick answered; a local agent's chip lists the same machines", async () => {
   const sent: unknown[] = [];
   const owner = { userId: "user-ada", name: "Ada Lovelace" };
 
@@ -269,8 +270,8 @@ test("the Default machine row names the agent's default with its dot, offline as
             machine: { id: "laptop", name: "Laptop" },
           },
           machines: [
-            { id: "laptop", name: "Laptop", owner, online: false },
-            { id: "studio", name: "Studio", owner, online: true },
+            { id: "studio", name: "Studio", owner, platform: DEVICE_PLATFORM.DARWIN, online: true },
+            { id: "laptop", name: "Laptop", owner, platform: DEVICE_PLATFORM.LINUX, online: false },
           ],
         },
       },
@@ -291,22 +292,16 @@ test("the Default machine row names the agent's default with its dot, offline as
     ?.querySelector('[role="img"]')
     ?.getAttribute("aria-label");
 
-  act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click());
-  const machines = optionsOf("Terminal commands and computer use go here");
-
-  act(() =>
-    [
-      ...document.querySelectorAll<HTMLElement>(
-        '[role="listbox"][aria-label="Terminal commands and computer use go here"] [role="option"]',
-      ),
-    ][1]?.click(),
-  );
+  act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[2]?.click());
   await settle();
 
-  // Note that the machines are a teammate's, Ada's, so each wears her face, "A", before its name.
-  assert.deepEqual(rows, ["Agent runs inCloud", "Terminal and computer useALaptop"]);
+  // Note that the default, the laptop, stands first though the service lists the studio first; each is a teammate's, Ada's, so wears her face, "A"; and computer use is said of the studio alone, the one Mac.
+  assert.deepEqual(rows, [
+    "Agent runs inCloud",
+    "ALaptopTerminalDefault",
+    "AStudioTerminal · Computer use",
+  ]);
   assert.equal(standing, "Offline");
-  assert.equal(machines.length, 2);
   assert.deepEqual(sent, [{ agentId: AGENT_ID, machineId: "studio" }]);
 
   const local = {
@@ -320,18 +315,12 @@ test("the Default machine row names the agent's default with its dot, offline as
   act(() => placeChip().click());
   assert.deepEqual(optionsOf("Where this agent works"), [
     "Agent runs inMini",
-    "Terminal and computer useAStudio",
+    "AStudioTerminal · Computer useDefault",
+    "ALaptopTerminalOffline",
   ]);
 
   // Note that the laptop is picked back while the studio's pick is still out, and its answer comes first; the service's default stands then, never the older pick.
-  act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click());
-  act(() =>
-    [
-      ...document.querySelectorAll<HTMLElement>(
-        '[role="listbox"][aria-label="Terminal commands and computer use go here"] [role="option"]',
-      ),
-    ][0]?.click(),
-  );
+  act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[2]?.click());
   await settle();
   assert.deepEqual(sent, [
     { agentId: AGENT_ID, machineId: "studio" },
@@ -342,8 +331,70 @@ test("the Default machine row names the agent's default with its dot, offline as
   act(() => placeChip().click());
   assert.deepEqual(optionsOf("Where this agent works"), [
     "Agent runs inMini",
-    "Terminal and computer useALaptop",
+    "ALaptopTerminalDefault",
+    "AStudioTerminal · Computer use",
   ]);
+});
+
+test("past three machines the rest fold into an All row whose submenu lists every one, the default checked, and a pick there sets it", async () => {
+  const sent: unknown[] = [];
+  const owner = { userId: "user-ada", name: "Ada Lovelace" };
+  fakeActPort({
+    [AGENT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: (payload) => {
+      sent.push(payload);
+
+      return Promise.resolve({});
+    },
+  });
+  handState({});
+  handBeats({});
+  const names = ["One", "Two", "Three", "Four", "Five"];
+
+  handHostReads({
+    workspaceTools: {
+      [AGENT_ID]: {
+        rows: {
+          runOnMac: { on: true, owner, machine: { id: "Five", name: "Five" } },
+          machines: names.map((name) => ({ id: name, name, owner, online: false })),
+        },
+      },
+    },
+  });
+  writeAppState(await appBridge().requestAppState());
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(withQueryClient(createElement(AgentPlace, { agent: { id: AGENT_ID } }))));
+  await settle();
+  act(() => placeChip().click());
+  const rows = optionsOf("Where this agent works");
+  act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[4]?.click());
+  const all = optionsOf("It can also run commands on");
+
+  const checked = document.querySelector(
+    '[role="listbox"][aria-label="It can also run commands on"] [aria-selected="true"]',
+  )?.textContent;
+
+  act(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="listbox"][aria-label="It can also run commands on"] [role="option"]',
+      ),
+    ][3]?.click(),
+  );
+  await settle();
+
+  assert.deepEqual(rows, [
+    "Agent runs inCloud",
+    "AFiveTerminalDefault",
+    "AOneTerminalOffline",
+    "ATwoTerminalOffline",
+    "All 5 machines2 more",
+  ]);
+  assert.equal(all.length, 5);
+  assert.equal(checked, "AFiveTerminal");
+  assert.deepEqual(sent, [{ agentId: AGENT_ID, machineId: "Three" }]);
 });
 
 /** The machine a running action on an app, naming the machine of the id given or none, says it goes to, as its row's chip names it. */

@@ -12,38 +12,22 @@
  *
  * A message others answered in its thread says so under its words
  * (`ThreadReplies`): the faces of who answered and how many replies, in the
- * accent's ink, which opens the thread. The thread stands in a pane at the
- * channel's end (`ThreadPane`): its head, the message it answers, the
- * replies under a rule that counts them, and its own reply box at its foot.
- * `ChannelSplit` lays the channel and the pane side by side, the pane at
- * its own width and the channel taking the rest.
+ * accent's ink, which opens the thread. The thread stands in a tab of the
+ * side panel beside the channel: the message it answers, then the replies
+ * under a rule that counts them (`ThreadRule`).
  *
  * It is drawn in the Tailwind theme's utilities.
  */
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { repliesWords } from "@repo/features/manager-chat-view";
 import type { ReactNode } from "react";
-import { GLYPH } from "../../icons/glyph-registry.js";
-import { IconButton } from "../button/button.js";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { OneLine } from "../one-line/one-line.js";
 import { MessageActions, MessageFrame } from "./message.js";
 
-/** What the channel's rows say in words of their own. */
-const CHANNEL_WORDS = {
-  REPLY: "reply",
-  REPLIES: "replies",
-  THREAD: "Thread",
-  CLOSE: "Close thread",
-} as const;
-
 /** How many of a thread's repliers' faces its summary shows, the rest counted in its words alone. */
 const REPLIER_FACES = 3;
-
-/** How a thread's replies are counted: "1 reply", "3 replies". */
-export function repliesWords(count: number): string {
-  return `${count} ${count === 1 ? CHANNEL_WORDS.REPLY : CHANNEL_WORDS.REPLIES}`;
-}
 
 /**
  * One message of a channel: `avatar` and `name` over its words with `at`
@@ -150,57 +134,14 @@ export function ThreadReplies({
   );
 }
 
-/** A thread in its pane beside the channel: its head, which closes it (`onClose`), the message it answers (`root`), its replies under a rule that counts them, and its reply box (`composer`) at its foot. */
-export function ThreadPane({
-  root,
-  count,
-  composer,
-  onClose,
-  children,
-}: {
-  root: ReactNode;
-  count: number;
-  composer: ReactNode;
-  onClose: () => void;
-  /** The replies, in the order they were sent. */
-  children: ReactNode;
-}): React.JSX.Element {
-  return (
-    <aside
-      className="ui-thread-pane flex h-full w-thread-pane flex-none flex-col border-s border-border bg-background"
-      aria-label={CHANNEL_WORDS.THREAD}
-    >
-      <header className="ui-thread-pane-head flex flex-none items-center justify-between gap-ui-8 border-b border-border px-ui-12 py-ui-6">
-        <span className="font-ui-semibold text-body text-foreground">{CHANNEL_WORDS.THREAD}</span>
-        <IconButton icon={<GLYPH.CLOSE />} label={CHANNEL_WORDS.CLOSE} onClick={onClose} />
-      </header>
-      <div className="ui-thread-pane-body flex min-h-0 flex-1 flex-col overflow-y-auto py-ui-8">
-        {root}
-        {count === 0 ? null : (
-          <div className="ui-thread-pane-rule flex items-center gap-ui-8 px-ui-12 py-ui-6 text-caption text-muted-foreground">
-            <span className="flex-none">{repliesWords(count)}</span>
-            <span className="h-px flex-1 bg-border" />
-          </div>
-        )}
-        {children}
-      </div>
-      <div className="ui-thread-pane-foot flex-none px-ui-8 pb-ui-8">{composer}</div>
-    </aside>
-  );
-}
+/** The rule under a thread's message, in its tab, that counts the replies after it; none before anyone answered. */
+export function ThreadRule({ count }: { count: number }): React.JSX.Element | null {
+  if (count === 0) return null;
 
-/** A channel and, where one is open, its thread's pane beside it at the column's end. */
-export function ChannelSplit({
-  pane,
-  children,
-}: {
-  pane: ReactNode;
-  children: ReactNode;
-}): React.JSX.Element {
   return (
-    <div className="ui-channel-split flex min-h-0 w-full flex-1 flex-row">
-      <div className="ui-channel-split-main flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
-      {pane}
+    <div className="ui-thread-rule flex items-center gap-ui-8 px-ui-8 py-ui-6 text-caption text-muted-foreground">
+      <span className="flex-none">{repliesWords(count)}</span>
+      <span className="h-px flex-1 bg-border" />
     </div>
   );
 }

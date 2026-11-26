@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE, MEMORY_SAVE_FAILURE } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { MEMORY_SCOPE } from "@repo/features/memory-settings-words";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -10,6 +11,7 @@ import {
   type AppHostRead,
   type AppMemories,
   type AppStateDelivery,
+  memoriesHolder,
   NO_KEYS_HELD,
 } from "@repo/host/app-state";
 import type { PortActKind, PortActResult } from "@repo/host/contract";
@@ -29,7 +31,7 @@ import {
 } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { chooseMenuItem, menuItems } from "../testing/phone-head.js";
-import { MemorySection } from "./memory-page.js";
+import { MemorySection, type MemorySectionScope, WORKSPACE_MEMORY_SCOPE } from "./memory-page.js";
 
 /**
  * Settings › Memory over a bridge answering as the host would: the memories
@@ -125,9 +127,13 @@ const done = (value: PortActResult<PortActKind>): FakeActAnswer => ({
 
 const unanswered = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 
-/** Lays one workspace's read on the document and delivers it, as the host does as a read moves. */
-function lay(workspaceId: string, read: AppHostRead<readonly MemorySummary[]>): void {
-  laid = { ...laid, [workspaceId]: read };
+/** Lays one workspace's read, or one Manager's in it, on the document and delivers it, as the host does as a read moves. */
+function lay(
+  workspaceId: string,
+  read: AppHostRead<readonly MemorySummary[]>,
+  managerId?: string,
+): void {
+  laid = { ...laid, [workspaceId]: { ...laid[workspaceId], [memoriesHolder(managerId)]: read } };
   version += 1;
 
   for (const listener of [...listeners]) {
@@ -135,10 +141,11 @@ function lay(workspaceId: string, read: AppHostRead<readonly MemorySummary[]>): 
   }
 }
 
-/** Lays a workspace's memories as the test's host reads them now; nothing while it reads nothing. */
-function layRead(workspaceId: string): void {
+/** Lays a workspace's memories as the test's host reads them now, a Manager's none; nothing while it reads nothing. */
+function layRead(workspaceId: string, managerId?: string): void {
   if (readsNothing) return;
-  lay(workspaceId, readFails ? { failed: true } : { rows: stored.get(workspaceId) ?? [] });
+  const rows = managerId === undefined ? (stored.get(workspaceId) ?? []) : [];
+  lay(workspaceId, readFails ? { failed: true } : { rows }, managerId);
 }
 
 /** The bridge, answering the page's acts the way the host would. */
@@ -147,9 +154,9 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
 
   switch (request.kind) {
     case ACT_KIND.MEMORIES_FOLLOW: {
-      const { workspaceId } = request.payload;
+      const { workspaceId, managerId } = request.payload;
       // Note that the host lays what it read once the hold is taken, never inside it, and holds it quietly.
-      void Promise.resolve().then(() => layRead(workspaceId));
+      void Promise.resolve().then(() => layRead(workspaceId, managerId));
 
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
     }
@@ -235,6 +242,7 @@ async function mount(
   signedIn = true,
   workspace: Workspace | null = ACME,
   workspaces: WorkspacesRead = WORKSPACES_READ,
+  scope: MemorySectionScope = WORKSPACE_MEMORY_SCOPE,
 ): Promise<{
   readonly page: HTMLElement;
   readonly show: (next: Workspace, readerId?: string) => Promise<void>;
@@ -254,6 +262,7 @@ async function mount(
             null,
             createElement(MemorySection, {
               signedIn,
+              scope,
               workspace: shown ?? undefined,
               readerId,
               workspacesFailed: workspaces.failed,
@@ -694,6 +703,28 @@ test("Add memory writes a new one in the card, saves it replacing nothing, and k
   );
   await vi.waitFor(() =>
     assert.match(field(page)?.textContent ?? "", /looks like it holds a credential/u),
+  );
+});
+
+test("a Manager's Memory reads its own memories and keeps one added there for it alone", async () => {
+  const managerId = "8f2b6c1d-4e5a-4b7c-9d8e-0f1a2b3c4d5e";
+
+  const { page } = await mount(true, ACME, WORKSPACES_READ, {
+    kind: MEMORY_SCOPE.MANAGER,
+    managerId,
+  });
+
+  act(() => button(page, "Add memory").click());
+  await writeInField(page, "Coders' pull requests stay unarmed.");
+  pressInField(page, "Save");
+  await settle();
+
+  assert.deepEqual(words(page), [], "the workspace's own memories stand nowhere in it");
+  assert.deepEqual(
+    sent
+      .filter((request) => request.kind === ACT_KIND.MEMORIES_SAVE)
+      .map((request) => request.payload),
+    [{ workspaceId: ACME.id, managerId, text: "Coders' pull requests stay unarmed." }],
   );
 });
 

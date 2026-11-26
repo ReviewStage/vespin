@@ -27,8 +27,10 @@ async function streamingRelay(t: TestContext) {
   });
   let port: number;
 
+  // Note that the relay listens 32,768 above the port, so this range keeps it over
+  // Linux's ephemeral ports (32768-60999), where another test's connection may hold it.
   for (;;) {
-    port = randomInt(10_000, 30_000);
+    port = randomInt(28_232, 32_768);
     server.listen(port, "127.0.0.1");
 
     try {

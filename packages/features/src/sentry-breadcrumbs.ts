@@ -3,7 +3,9 @@
  *
  * A renderer's `fetch`, XHR, and console become Sentry breadcrumbs, and a
  * request may carry a bearer token in its query, under the `access_token`
- * parameter OAuth and LiveKit alike name it by. That token may reach the
+ * parameter OAuth and LiveKit alike name it by, or a presigned Blob URL's
+ * grant, under its `vercel-blob-*` parameters (`BEARER_PARAMETERS`); "the
+ * token" below is any of them. That token may reach the
  * page and never a crash report,
  * so a breadcrumb that names one anywhere it carries text is dropped whole
  * rather than redacted: a URL or a console line is free text, and a pattern
@@ -60,8 +62,17 @@ interface SpanText {
 /** A pattern Sentry's `ignoreSpans` drops a span by as it starts: its name, or one of its attributes. */
 type IgnoredSpan = string | { readonly attributes: Readonly<Record<string, string>> };
 
-/** The query parameter a bearer token travels in a URL under. */
-const ACCESS_TOKEN_PARAMETER = "access_token";
+/**
+ * The query parameters a bearer credential travels in a URL under: the
+ * access token OAuth and LiveKit name, and the delegation and signature of
+ * a presigned Vercel Blob URL, which the desktop's host follows a redirect
+ * from the service to and which open the object to whoever holds them.
+ */
+const BEARER_PARAMETERS = [
+  "access_token",
+  "vercel-blob-delegation",
+  "vercel-blob-signature",
+] as const;
 
 /**
  * The attributes a request's span carries its address in as it starts:
@@ -72,7 +83,10 @@ const ACCESS_TOKEN_PARAMETER = "access_token";
 const STARTING_ADDRESS_ATTRIBUTES = ["url.full", "http.url", "url"] as const;
 
 function namesAccessToken(texts: readonly unknown[]): boolean {
-  return texts.some((text) => Predicate.isString(text) && text.includes(ACCESS_TOKEN_PARAMETER));
+  return texts.some(
+    (text) =>
+      Predicate.isString(text) && BEARER_PARAMETERS.some((parameter) => text.includes(parameter)),
+  );
 }
 
 /** An attribute as it may be sent: an address scrubbed already, and any other text naming the token replaced. */
@@ -179,12 +193,10 @@ export function eventWithoutAccessTokens<Event extends EventText>(event: Event):
  * names the token is never recorded, and so never sent. Note that Sentry
  * matches a string here as a substring of the value.
  */
-export const SPANS_NAMING_ACCESS_TOKENS: IgnoredSpan[] = [
-  ACCESS_TOKEN_PARAMETER,
-  ...STARTING_ADDRESS_ATTRIBUTES.map((name) => ({
-    attributes: { [name]: ACCESS_TOKEN_PARAMETER },
-  })),
-];
+export const SPANS_NAMING_ACCESS_TOKENS: IgnoredSpan[] = BEARER_PARAMETERS.flatMap((parameter) => [
+  parameter,
+  ...STARTING_ADDRESS_ATTRIBUTES.map((name) => ({ attributes: { [name]: parameter } })),
+]);
 
 /**
  * Sentry's streamed `beforeSendSpan`, which every span that was recorded

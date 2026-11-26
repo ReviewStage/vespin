@@ -110,11 +110,21 @@ export const managerChatAttachmentSchema = EffectSchema.Union([
 
 export type ManagerChatAttachment = typeof managerChatAttachmentSchema.Type;
 
-/** One message as its row delivers it: its author, its words and files, the root of the thread it replies in, the turn and line it stands with, its instants in epoch milliseconds, and its reactions as three lists of one length, each kind given in `MANAGER_CHAT_REACTION`'s order. */
+/**
+ * One message as its row delivers it: the key it was written under, its
+ * author, its words and files, the root of the thread it replies in, the
+ * turn and line it stands with, its instants in epoch milliseconds, and its
+ * reactions as three lists of one length, each kind given in
+ * `MANAGER_CHAT_REACTION`'s order. The key is the one a person's send went
+ * under, which their message on its way is held by, so a reader lets that
+ * message go in the draw its row lands in, whether or not the send has
+ * answered.
+ */
 const MESSAGES = liveRows({
   row: EffectSchema.Struct({
     id: EffectSchema.String,
     seq: countedNumber,
+    clientKey: EffectSchema.String,
     authorKind: EffectSchema.Literals(Object.values(MANAGER_CHAT_AUTHOR)),
     authorUserId: EffectSchema.NullOr(EffectSchema.String),
     authorName: EffectSchema.String,

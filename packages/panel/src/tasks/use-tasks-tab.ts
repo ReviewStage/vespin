@@ -166,7 +166,7 @@ import { useIdleTabs } from "./use-idle-tabs.js";
 import { useInboxWaitingTasks } from "./use-inbox-slices.js";
 import { useInboxTaskAgents } from "./use-inbox-task-agents.js";
 import { isOverviewTab, type MainTab, type MainTabsControl, useMainTabs } from "./use-main-tabs.js";
-import { type NewTask, useNewTask } from "./use-new-task.js";
+import { type NewTask, type NewTaskShown, useNewTask } from "./use-new-task.js";
 import { usePinWrites } from "./use-pin-writes.js";
 import { usePinnedTabTasks } from "./use-pinned-tab-tasks.js";
 import {
@@ -708,6 +708,17 @@ function readInboxItemHome(
   );
 }
 
+/**
+ * The Tasks tab as the window holds it: the control handed to its parts,
+ * steady while what they read holds, and what of New task moves, which the
+ * window provides apart (`NewTaskShownContext`) so a press of New task draws
+ * its readers alone.
+ */
+export interface TasksTab {
+  readonly control: TasksControl;
+  readonly newTaskShown: NewTaskShown;
+}
+
 export function useTasksTab(input: {
   /** What main holds of the account's tasks but the list itself, which the window reads from its collections (`task-list-collections.tsx`); a fixture run's own stand in for them. */
   tasks: TasksView;
@@ -753,7 +764,7 @@ export function useTasksTab(input: {
   startStands: () => void;
   /** Answers whether the window stands on a start's page, letting it go (`places/window-history.ts`'s `onLeaveStart`). */
   leaveStart: () => boolean;
-}): TasksControl {
+}): TasksTab {
   const { shown, placeLeave } = input;
   // Note that the reads below stay on `act` until they move to queries; every write is a mutation, and
   // none invalidates a query, since what each changes comes back through app state.
@@ -1110,7 +1121,7 @@ export function useTasksTab(input: {
   // The open task as the list carries it, looked up by its id alone; its agents are followed only where the list carries it.
   const openListed = useTaskListRow(listCollections.tasks, viewed.activeTaskId);
 
-  const agents = useAgents({
+  const { control: agents, modelsRead } = useAgents({
     taskId: viewed.activeTaskId,
     repository:
       openDocument?.id === viewed.activeTaskId ? (openDocument?.repository ?? null) : null,
@@ -1653,6 +1664,19 @@ export function useTasksTab(input: {
   const openWorkspaceId =
     openTaskId === undefined ? undefined : listedRows.task(openTaskId)?.workspaceId;
 
+  // The agent whose page stands in the task's place, as the list carries it, which a Manager on no task is drawn on alone.
+  const pageAgent = useTaskListRow(listCollections.agents, agentView?.agentId);
+
+  // The workspace of the agent on no task whose page stands, as a Manager's: its own where the list carries it, else the
+  // one its address names; none while no such page stands, or its agent is on a task, whose page opens that task.
+  const agentPageIn =
+    agentView === undefined || (pageAgent !== undefined && pageAgent.taskId !== null)
+      ? undefined
+      : (pageAgent?.workspaceId ??
+        (agentView.workspace === undefined
+          ? undefined
+          : workspaceOfSlug(viewed.workspaces, agentView.workspace)?.id));
+
   // Whether `workspaceId` lists the task last open there, which a switch to it opens again.
   const reopensIn = (workspaceId: string, last: string | undefined): boolean =>
     last !== undefined && listedRows.task(last)?.workspaceId === workspaceId;
@@ -1913,6 +1937,14 @@ export function useTasksTab(input: {
       const mine = navigations.current;
       chooseListed(workspaceId);
 
+      // Note that a Manager's page, an agent's on no task, gives way to Home whatever was last open there, so nothing of
+      // the workspace left stands, its side panel's threads included, as that panel is the page's own.
+      if (agentPageIn !== undefined && agentPageIn !== workspaceId) {
+        if (!left) leaveTask();
+
+        return;
+      }
+
       if (openWorkspaceId === undefined || openWorkspaceId === workspaceId) return;
       const last = lastOpenIn.current.get(workspaceId);
       const reopens = reopensIn(workspaceId, last);
@@ -1931,14 +1963,17 @@ export function useTasksTab(input: {
         },
       );
     },
-    [chooseListed, openWorkspaceId, listedRows, openTask, leaveTask],
+    [chooseListed, agentPageIn, openWorkspaceId, listedRows, openTask, leaveTask],
   );
 
   // A switch's own move, as a page holding unsaved work holds it, answering whether it left the open task: off another
-  // workspace's open task, to the task last open in `workspaceId` or Home, as the switch goes; else, or where that moves
+  // workspace's Manager's page, to Home; off its open task, to the task last open in `workspaceId` or Home, as the switch
+  // goes; else, or where that moves
   // nothing, the place standing turned under it, as listing it turns the Board, Automations, the Inbox, and Home.
   const switchMove = (workspaceId: string): boolean => {
-    if (openWorkspaceId !== undefined && openWorkspaceId !== workspaceId) {
+    if (agentPageIn !== undefined && agentPageIn !== workspaceId) {
+      if (leaveMove()) return true;
+    } else if (openWorkspaceId !== undefined && openWorkspaceId !== workspaceId) {
       const last = lastOpenIn.current.get(workspaceId);
       const reopens = reopensIn(workspaceId, last);
 
@@ -2264,7 +2299,7 @@ export function useTasksTab(input: {
   };
 
   // New task's flow, handed where the window stands and the moves a start makes there, each read as it stands at the call.
-  const newTask = useNewTask({
+  const { newTask, shown: newTaskShown } = useNewTask({
     shown,
     workspaceId: listedWorkspace?.id,
     typedNames: drafts,
@@ -2291,6 +2326,7 @@ export function useTasksTab(input: {
       showMention: (mention) => arriveOnMention(mention),
     },
     agents,
+    modelsRead,
     showTab: mainTabs.onShow,
   });
 
@@ -3701,5 +3737,5 @@ export function useTasksTab(input: {
     agentsCarried,
   });
 
-  return steady;
+  return { control: steady, newTaskShown };
 }

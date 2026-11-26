@@ -112,7 +112,6 @@ async function mount() {
               ...control.newTask,
               workspaces: [ACME],
               workspaceId: ACME.id,
-              preset: { repository: "acme/web" },
               repositoriesIn: () => ({ ...NO_REPOSITORIES, scope: ACME.id }),
               start: (
                 _name: string,
@@ -125,6 +124,7 @@ async function mount() {
                 return Promise.resolve(undefined);
               },
             },
+            preset: { repository: "acme/web" },
             workspaceId: ACME.id,
             onLeave: () => undefined,
             listSide: MENTION_MENU_SIDE.ABOVE,

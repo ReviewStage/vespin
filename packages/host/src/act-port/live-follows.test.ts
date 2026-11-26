@@ -10,7 +10,7 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { WireBoundaryInput } from "@repo/wire";
 import { Effect, Predicate } from "effect";
-import { OWN_TRANSCRIPT } from "../app-state.js";
+import { OWN_TRANSCRIPT, WORKSPACE_OWN_MEMORIES } from "../app-state.js";
 import {
   ACCOUNT_ASK_ACT_KIND,
   AGENT_ACT_KIND,
@@ -75,7 +75,7 @@ const FOLLOWS = [
     key: { workspaceId: WORKSPACE_ID },
     path: HOSTED_SERVICE_PATH.LIVE_WORKSPACE_MEMORIES,
     slice: LIVE_READ.MEMORIES,
-    at: [WORKSPACE_ID],
+    at: [WORKSPACE_ID, WORKSPACE_OWN_MEMORIES],
   },
   {
     follow: AGENT_ACT_KIND.AGENTS_ORIGIN_FOLLOW,

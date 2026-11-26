@@ -316,7 +316,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
       onOpenApiKeys: () => undefined,
       onStarted: () => undefined,
       me: tasks.me,
-    }),
+    }).control,
   );
 
   const liveScope = { taskId };

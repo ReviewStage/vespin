@@ -1,4 +1,5 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import type { AttachmentBody } from "@repo/database/models/attachment-body";
 import { readShownAgentPicture } from "@repo/database/models/conversation-pictures";
 import { readWorkspaceDescriptionAttachment } from "@repo/database/models/description-attachments";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
@@ -14,6 +15,8 @@ import { INBOX_FILE_TYPE } from "@repo/features/inbox-wire";
 import { insideCode } from "@repo/features/mention-link";
 import { Effect, Option, Result } from "effect";
 import type { InboxBodyPicture } from "../../inbox/inbox-store.js";
+import { attachmentBytes } from "../../storage/attachment-bytes.js";
+import type { BlobStoreFailure } from "../../storage/blob-store.js";
 
 /**
  * inbox-kept-picture.ts -- a picture a post draws from what is already kept in its workspace rather than from the poster's sandbox: one an agent showed with `show_media`, by the id that call answered, or one of a task's description, by its address.
@@ -83,11 +86,38 @@ export function keptAddressesIn(text: string): readonly string[] {
   return [...addresses];
 }
 
-/** The file a kept row copies to: its type, its bytes, and its phone copy where it keeps one. */
+/** The file a kept row copies: its type, where its bytes stand, and where its phone copy stands, where it keeps one. */
 interface KeptFile {
   readonly contentType: InboxBodyPicture["contentType"];
-  readonly bytes: Uint8Array;
-  readonly mp4Bytes: Uint8Array | null;
+  readonly body: AttachmentBody;
+  readonly phone: AttachmentBody | undefined;
+}
+
+/**
+ * The kept file's bytes and its phone copy's, read wherever the row keeps
+ * them; nothing where the store no longer holds the file's own, and no
+ * phone copy where it no longer holds that, which a phone then falls back
+ * from. Note that the copy
+ * is handed its bytes rather than the row's key, because a row's delete
+ * removes the objects under its keys, so two rows may never share one: the
+ * copy is kept as its writer keeps any new file, under its own id.
+ */
+function keptBytesOf(
+  file: KeptFile,
+): Effect.Effect<
+  Option.Option<{ readonly bytes: Uint8Array; readonly mp4Bytes: Uint8Array | undefined }>,
+  BlobStoreFailure
+> {
+  return Effect.gen(function* () {
+    const bytes = yield* attachmentBytes(file.body);
+
+    if (Option.isNone(bytes)) return Option.none();
+
+    if (file.phone === undefined) return Option.some({ bytes: bytes.value, mp4Bytes: undefined });
+    const mp4Bytes = yield* attachmentBytes(file.phone);
+
+    return Option.some({ bytes: bytes.value, mp4Bytes: Option.getOrUndefined(mp4Bytes) });
+  });
 }
 
 /** The kept row under the source, as the poster may read it; nothing where it may not. */
@@ -112,29 +142,35 @@ export function readKeptPicture(
   destination: string,
 ): Effect.Effect<
   Result.Result<InboxBodyPicture, string> | undefined,
-  StoreFailure,
+  StoreFailure | BlobStoreFailure,
   DatabaseServices
 > {
   const source = keptSourceOf(destination);
 
   if (source === undefined) return Effect.succeed(undefined);
   const id = "shown" in source ? source.shown : source.description.attachmentId;
+  const unreached = Result.fail(`${KEPT_PICTURE_REFUSAL.UNREACHED} ${destination}`);
 
-  return Effect.map(keptFileOf(poster, source), (found) => {
-    if (Option.isNone(found))
-      return Result.fail(`${KEPT_PICTURE_REFUSAL.UNREACHED} ${destination}`);
-    const { contentType, bytes, mp4Bytes } = found.value;
+  return Effect.gen(function* () {
+    const found = yield* keptFileOf(poster, source);
+
+    if (Option.isNone(found)) return unreached;
+    const { contentType } = found.value;
 
     if (contentType === INBOX_FILE_TYPE.PDF) {
       return Result.fail(`${KEPT_PICTURE_REFUSAL.PDF} ${destination}`);
     }
 
+    const read = yield* keptBytesOf(found.value);
+
+    if (Option.isNone(read)) return unreached;
+
     return Result.succeed({
       path: destination,
       name: id,
       contentType,
-      bytes,
-      mp4Bytes: mp4Bytes ?? undefined,
+      bytes: read.value.bytes,
+      mp4Bytes: read.value.mp4Bytes,
     });
   });
 }

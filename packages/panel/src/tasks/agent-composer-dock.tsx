@@ -11,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { ReactNode, RefObject } from "react";
 import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
 import type { AgentBox } from "./agent-box.js";
-import { AgentComposer } from "./agent-composer.js";
+import { AgentComposer, type ComposerWords } from "./agent-composer.js";
 import type { CallRoute } from "./agent-machines.js";
 import { offersStop } from "./agent-model.js";
 import {
@@ -67,6 +67,8 @@ export function AgentComposerDock({
   onMoveToCloud,
   queue,
   place,
+  wording,
+  talks = true,
 }: {
   agent: AgentSummary;
   /** What the agent's box reads off the agent (`agent-box.tsx`). */
@@ -92,8 +94,10 @@ export function AgentComposerDock({
   closedRemedy: ReactNode;
   /** Moves the agent to the cloud, carrying the message its Mac did not take; none where Move to would not. */
   onMoveToCloud: ((carry?: MoveCarry) => void) | undefined;
-  /** The agent's queue: whether the reader changes it, whether the agent works, and the box's edit of a queued message. */
-  queue: { readonly controls: boolean; readonly working: boolean; readonly editing: QueueEditing };
+  /** The agent's queue: whether the reader changes it, whether the agent works, and the box's edit of a queued message; none where the box queues nothing, as a Manager's chat's thread's does. */
+  queue:
+    | { readonly controls: boolean; readonly working: boolean; readonly editing: QueueEditing }
+    | undefined;
   /** Whose Mac the agent uses, the pictures its lines hold, and the apps its calls used, which the box's `@` and files read. */
   place: {
     readonly owner: Actor | undefined;
@@ -101,9 +105,13 @@ export function AgentComposerDock({
     readonly pictures: AgentPictureDoor;
     readonly computerApps: ComputerApps;
   };
+  /** What the box asks for, calls its field, and calls its round button, where it says other than an agent's box does, as a thread's reply box does. */
+  wording?: ComposerWords | undefined;
+  /** Whether the box offers Talk, a call into the agent; a Manager's chat's thread's does not, since a call's lines land in the chat rather than the thread. */
+  talks?: boolean | undefined;
 }): ReactNode {
   const enterQueues = useQuery({ ...appStateQuery, select: selectEnterQueues }).data === true;
-  const queueEditing = queue.editing;
+  const queueEditing = queue?.editing;
 
   if (onUnarchive !== undefined) {
     return (
@@ -132,7 +140,7 @@ export function AgentComposerDock({
           <ComputerAppsProvider value={place.computerApps}>
             <AgentComposer
               {...box}
-              talksIn={agent.taskId}
+              talksIn={talks ? agent.taskId : undefined}
               composer={composer}
               usage={transcript.usage}
               payer={transcript.payer}
@@ -151,8 +159,13 @@ export function AgentComposerDock({
               closedRemedy={closedRemedy}
               onContinueInCloud={onMoveToCloud}
               // Note that a box filled in from a suggestion queues nothing, because its words go once, through the suggestion.
+              wording={wording}
               queueing={
-                agent.runtime === undefined || !queue.controls || composer.suggestion !== undefined
+                queue === undefined ||
+                queueEditing === undefined ||
+                agent.runtime === undefined ||
+                !queue.controls ||
+                composer.suggestion !== undefined
                   ? undefined
                   : {
                       working: queue.working,

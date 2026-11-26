@@ -25,6 +25,7 @@ import { beforeAll, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 
 import { descriptionEditor } from "../description-editor/index.js";
+import { SHELL_ROOM } from "../shell-room.js";
 import {
   type AnyAct,
   FAKE_ANSWER,
@@ -64,6 +65,7 @@ import {
   item,
   itemPane,
   keyOn,
+  layOut,
   listed,
   menuItem,
   menuWords,
@@ -380,6 +382,26 @@ test("Enter on a focused option sends the reply carrying the pick and never pres
   );
   // The answer stands at once, as sent: the pick Enter was on, never pressed off.
   assert.deepEqual(answeredPicks(page), ["Retry once"], "Enter left the pick standing");
+});
+
+test("on a phone the box is docked under the thread with the open ask's options in it, and a pick goes with its Send", async () => {
+  const { page } = mount({ chosen: ON_THRESHOLD, room: SHELL_ROOM.NARROW });
+  await settle();
+  layOut(page, 390);
+  const sent = heldMessages(repliedOn(THRESHOLD, "c1b2c3d4-0000-4000-8000-000000000092"));
+  const pane = itemPane(page);
+  const box = pane.querySelector("form.inbox-answer") ?? assert.fail("the box stands");
+  const once = openOptions(pane)[1] ?? assert.fail("no second option");
+  assert.equal(box.closest(".inbox-board") === null, true, "the box stands outside the thread");
+  assert.ok(box.contains(once), "the options stand in the box");
+
+  act(() => once.click());
+  await act(async () => answerSend(pane).click());
+  await settle();
+  assert.deepEqual(
+    sent.map(({ answers }) => answers),
+    [{ ask: askIdOf(THRESHOLD.id), reply: INBOX_REPLY.CHOSE, choices: ["Retry once"] }],
+  );
 });
 
 test("a waiting choice of several is a checkbox list whose box counts nothing on its foot: the arrows move along it picking nothing, a number key toggles its option, and Enter on a picked option sends every pick and lets none go", async () => {
@@ -1069,6 +1091,33 @@ test("picking an option in the draft reply stands it picked and lights Send, the
     "line: Reply",
     "row: Add files and more, Machine: Cloud, Off, Ports: Ports, Opus 5.5 High, Dictate, Composer actions, Send",
   ]);
+});
+
+test("an option picked after words are written leaves every word in the box, and the reply sent carries both", async () => {
+  const shown = threadItem([askingMessage(EXPIRY_ASK)]);
+  const pane = await mountThread(shown);
+  const sent = heldMessages(repliedOn(shown, "e1b2c3d4-0000-4000-8000-000000000011"));
+
+  // The words are written in two goes, so the second lands on a draft the box already holds.
+  typeInComposer(pane, "Most teams");
+  typeInComposer(pane, " asked for it.");
+  await settle();
+  act(() => openOptions(pane)[1]?.click());
+  await settle();
+  act(() =>
+    pane.querySelector<HTMLButtonElement>('form.inbox-answer button[type="submit"]')?.click(),
+  );
+  await settle();
+
+  assert.deepEqual(
+    sent.map(({ text, answers }) => ({ text, answers })),
+    [
+      {
+        text: "Most teams asked for it.",
+        answers: { ask: ASKING_ID, reply: INBOX_REPLY.CHOSE, choices: ["7 days"] },
+      },
+    ],
+  );
 });
 
 test("an approve-or-request-changes ask is two small buttons in the draft reply, the one the agent recommends saying so: the one pressed stands pressed, pressed again it is let go, and the reply sent with words carries it, stamped as requested changes", async () => {

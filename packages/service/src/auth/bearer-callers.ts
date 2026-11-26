@@ -39,6 +39,22 @@ export type UserInfoEndpoint = (input: {
  */
 export const BEARER_CALLER_TTL = Duration.seconds(60);
 
+/**
+ * The span a caller's resolution runs under (`bearer.ts`), and what it says
+ * of the bearer's kept caller: answered from what the instance kept, or
+ * asked of the auth service, alone or joined to an ask already under way,
+ * both of which wait on it.
+ * Note that the attribute names the cache's state alone, never the bearer
+ * or the account, so no credential reaches a trace.
+ */
+export const CALLER_SPAN = {
+  NAME: "auth.resolveCaller",
+  CACHE: "auth.cache",
+} as const;
+
+/** What `CALLER_SPAN.CACHE` says of a bearer's resolution. */
+const CALLER_CACHE = { HIT: "hit", MISS: "miss" } as const;
+
 /** How many bearers one instance keeps at once, the least recently asked dropped first. */
 const BEARER_CALLER_CAPACITY = 500;
 
@@ -109,6 +125,11 @@ export const bearerCallersLayer = Layer.effect(
           if (authorization === null) return yield* ask(input);
           const digest = bearerDigest(authorization);
           const standing = Option.flatten(yield* Cache.getSuccess(kept, digest));
+
+          yield* Effect.annotateCurrentSpan(
+            CALLER_SPAN.CACHE,
+            Option.isSome(standing) ? CALLER_CACHE.HIT : CALLER_CACHE.MISS,
+          );
 
           if (Option.isSome(standing)) return standing.value;
 

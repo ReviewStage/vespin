@@ -22,7 +22,7 @@ import {
  * the Inbox's groups are: each counts its rows from where it stands in the
  * column and reads its place again as the lists above it grow, shrink, or
  * fold (`shiftedBy`), and draws every row while a find bar stands open, so
- * the find covers them. Its rows move as a list's do (`ListMotion`), the
+ * the find covers them. The
  * row holding the keyboard stays drawn wherever the column is scrolled,
  * and each run is held while it stands (`holdRun`), so the column's keys
  * bring in a row any run leaves undrawn.
@@ -75,7 +75,6 @@ export function SidebarRun({
       overscan={place.finding ? keys.length : undefined}
       anchor={VIRTUAL_ROWS_ANCHOR.START}
       listItems
-      moves
       holdsFocus
       className="sidebar-tasks"
       data-row-drop-rows={drops ? "" : undefined}

@@ -7,16 +7,14 @@ import {
   GroupHeader,
   Inline,
   List,
-  ListMotion,
   ListRow,
-  motionRows,
   PAGE_FRAME,
   SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   type StatusTone,
 } from "@repo/ui";
-import { type ReactNode, useRef } from "react";
+import type { ReactNode } from "react";
 
 /**
  * person-frame.tsx -- a person's page's boxes, which the page and its placeholders both draw.
@@ -26,9 +24,7 @@ import { type ReactNode, useRef } from "react";
  * placeholders with blocks in what is still being read, so a placeholder is
  * the page's own shape rather than a copy of it. The page names its person
  * once, as its header's title (`PageHeader`, the page's one `h1`). Under the
- * header its blocks stand in one body, the root its lists move under
- * (`ListMotion`), so a row glides as its list changes, and one taken out of
- * a section and drawn in another, an agent done working, glides across. It stands outside the
+ * header its blocks stand in one body. It stands outside the
  * page's chunk (its lazy route, `panel-router.tsx`), so what the window draws while that
  * chunk loads draws through the same boxes.
  */
@@ -102,31 +98,9 @@ export function PersonTop({ children }: { children?: ReactNode }): React.JSX.Ele
   return <div className="person-top">{children}</div>;
 }
 
-/**
- * What stands under the page's header: its top and its sections, the root
- * their lists move under (`ListMotion`). Each block in it moves too,
- * carrying its rows, so a section folded or a list grown glides every
- * section under it, its head and its rows as one, rather than its rows
- * gliding past a head that jumped. While what the page lists is still
- * being read (`reading`), a row arriving fades in where it stands rather
- * than slides in after the last.
- */
-export function PersonBody({
-  reading,
-  children,
-}: {
-  reading: boolean;
-  children: ReactNode;
-}): React.JSX.Element {
-  const root = useRef<HTMLDivElement | null>(null);
-
-  return (
-    <div ref={root} {...motionRows()}>
-      <ListMotion root={root} reading={reading}>
-        {children}
-      </ListMotion>
-    </div>
-  );
+/** What stands under the page's header: its top and its sections. */
+export function PersonBody({ children }: { children: ReactNode }): React.JSX.Element {
+  return <div>{children}</div>;
 }
 
 /** What says, to a reader, that the members are read: the header's blocks are decoration. */

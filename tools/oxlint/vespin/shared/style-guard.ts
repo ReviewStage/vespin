@@ -23,6 +23,7 @@ export const STYLE_RULE = {
   CURSOR: "pointer-cursor",
   CRUMB_WIDTH: "crumb-width",
   HAS_OVER_ANY: "has-over-any",
+  HAS: "has-selector",
   BAR_CORNER: "bar-corner",
   GRID_COLUMNS: "grid-columns",
   EDGE_CLIP: "edge-clip",
@@ -78,6 +79,11 @@ export const STYLE_RULES: Readonly<
     refuses:
       "a `:has()` on an ancestor or an earlier sibling of a subject that is any element (`> *`, `> :not(.a)`): the browser then restyles the whole window for every element added under it, so the state is said on the subject's parent or by an attribute the component sets",
     backlog: false,
+  },
+  [STYLE_RULE.HAS]: {
+    refuses:
+      "a `:has()`, or Tailwind's `has-*` variant, that reads what a component draws or holds, or what the keyboard holds (its children, a descendant's class, attribute, or focus): the browser checks it again on every change under its subject, which made each task's opening restyle every row, so the component says it by an attribute it sets, and what the keyboard holds is read from the root's `data-keyboard` under `:focus-within` (`keyboard-modality.ts`), never `:has(:focus-visible)`",
+    backlog: true,
   },
   [STYLE_RULE.BAR_CORNER]: {
     refuses:
@@ -536,6 +542,34 @@ function hasOverAnySubject(block: CssBlock): boolean {
       );
     });
 }
+
+/** What each `:has()` in a selector holds, read through its nested parentheses. */
+function hasArguments(selector: string): readonly string[] {
+  const held: string[] = [];
+  let from = selector.indexOf(":has(");
+  while (from !== -1) {
+    let depth = 0;
+    let at = from + ":has".length;
+    for (; at < selector.length; at += 1) {
+      if (selector[at] === "(") depth += 1;
+      else if (selector[at] === ")") depth -= 1;
+      if (depth === 0) break;
+    }
+    held.push(selector.slice(from + ":has(".length, at));
+    from = selector.indexOf(":has(", at);
+  }
+  return held;
+}
+
+/** Whether a block's selector holds a `:has()`, which reads what a component draws or holds or what the keyboard holds, none of it by an attribute the component sets; an at-rule's prelude (`@supports selector(:has(…))`) holds none. */
+function readsDrawnThrough(block: CssBlock): boolean {
+  const selector = selectorOf(block);
+
+  return !selector.trimStart().startsWith("@") && hasArguments(selector).length > 0;
+}
+
+/** Tailwind's `:has()` variants (`has-[…]:`, `group-has-*:`, `peer-has-*:`). */
+const HAS_VARIANT = /(?:^|:)(?:group-|peer-|in-)?has-[^:]*:/u;
 
 /** Whether a block's selector draws a path's crumb: a list item, in its last compound, of a path. */
 function isCrumbBox(block: CssBlock): boolean {
@@ -1049,6 +1083,7 @@ function classViolations(
   const edge = edgeClipClasses(tokens);
   if (edge !== undefined) violations.push({ rule: STYLE_RULE.EDGE_CLIP, line, excerpt: edge });
   for (const token of tokens) {
+    if (HAS_VARIANT.test(token)) violations.push({ rule: STYLE_RULE.HAS, line, excerpt: token });
     const rule = classRuleOf(token, names);
     if (rule !== undefined) violations.push({ rule, line, excerpt: token });
     const rounded = RADIUS_UTILITY.exec(utilityOf(token));
@@ -1143,6 +1178,10 @@ export function styleViolations(
           line: block.line,
           excerpt: selectorOf(block),
         });
+      }
+      // Note that a block holding only nested rules is read too, because what it reads under `:has()` styles every rule nested in it.
+      if (readsDrawnThrough(block)) {
+        violations.push({ rule: STYLE_RULE.HAS, line: block.line, excerpt: selectorOf(block) });
       }
       const edge = edgeClipBlock(block);
       if (edge !== undefined) {

@@ -111,6 +111,7 @@ import {
   useDescriptionWordsOwner,
   useDescriptionWordsUnsaved,
 } from "./tasks/use-description-editing.js";
+import { NewTaskShownContext } from "./tasks/use-new-task.js";
 import { ListedPullRequests, OpenLinkProvider } from "./tasks/use-open-link.js";
 import { useOpenWorkspaceGitHub } from "./tasks/use-task-relation-writes.js";
 import { useTasksTab } from "./tasks/use-tasks-tab.js";
@@ -538,7 +539,7 @@ function AppWindow(): React.JSX.Element {
   const startStands = useRef<TaskVisits["onStartStands"]>(() => undefined);
   const leaveStart = useRef<TaskVisits["onLeaveStart"]>(() => false);
 
-  const tasks = useTasksTab({
+  const { control: tasks, newTaskShown } = useTasksTab({
     tasks: planning ?? IDLE_TASKS_VIEW,
     run: run ?? IDLE_RUN,
     signedIn: account?.status === ACCOUNT_STATUS.SIGNED_IN,
@@ -654,9 +655,10 @@ function AppWindow(): React.JSX.Element {
   );
 
   // What the window shows is handed off to the member's iPhone, as the phone's own screen for it would be (`handoff.ts`).
-  // Note that the task list is read as it stands at the draw, as the links at hand are.
+  // Note that the task list is walked as it stands at the draw, and only where a task is handed off, never copied whole,
+  // because the window draws on every press and a copy of every task the list holds took milliseconds of each.
   useHandoff(() => (accountGated ? [] : copyLink.linksAt(false).map(({ link }) => link)), {
-    tasks: taskListCollections.tasks.toArray,
+    tasks: { [Symbol.iterator]: () => taskListCollections.tasks.values() },
     workspaces: tasks.workspaces,
   });
 
@@ -969,96 +971,104 @@ function AppWindow(): React.JSX.Element {
 
   return (
     <OpenSettingsProvider value={openSettings}>
-      {/* The window's one voice call, which outlives switching tabs and tasks. */}
-      <VoiceCallProvider>
-        <OpenLinkProvider value={openAppLink}>
-          <ListedPullRequests tasks={listedTasks} onOpen={openListedPullRequest}>
-            <OpenPersonProvider value={openPerson}>
-              <PreloadPersonProvider value={preloadPerson}>
-                <OpenFeedbackProvider value={openFeedbackAbout}>
-                  <RepositoryRemedyProvider value={repositoryRemedies}>
-                    <GitHubConnectProvider value={gitHubConnect}>
-                      <ListedAutomations tasks={tasks}>
-                        {/* A maintainer's sign-in as the member, said above the stage on the web. */}
-                        <ViewingAs />
-                        {/* A failure offers no Retry while the app does not reach the service, whose reads start again once it does. */}
-                        <RetryOffered value={connected}>
-                          <div
-                            ref={stage.ref}
-                            className="app-stage"
-                            data-capture={String(run.captureMode)}
-                            // The panel is drawn as an ordinary app window's content; desktop.css
-                            // lays it out.
-                            data-surface="desktop"
-                            // The sidebar's width lays out the shell and Settings' page list.
-                            style={cssCustomProperties({ "--sidebar-width": `${sidebar.width}px` })}
-                          >
-                            {/* The window's content. */}
-                            <ShellRoomContext value={room}>
-                              <div className="desktop-stage">
-                                <MessageRevealProvider value={messageReveal}>
-                                  <ThreadRevealProvider value={threadReveal}>
-                                    {/* The window's call as its card draws it, docked wherever the window is not on the call's agent. */}
-                                    <StandingCallProvider
-                                      onShowAgent={tasks.onShowAgent}
-                                      onOpenOwnAgent={tasks.agentView.onOpen}
-                                    >
-                                      <SettingsShell
-                                        gates={gates}
-                                        tab={tab}
-                                        onTabChange={changeTab}
-                                        tasks={tasks}
-                                        history={history}
-                                        sidebar={sidebar}
-                                        room={room}
-                                        settingsStep={settingsStep}
-                                        doors={settingsDoors}
-                                      />
-                                    </StandingCallProvider>
-                                  </ThreadRevealProvider>
-                                </MessageRevealProvider>
-                              </div>
-                            </ShellRoomContext>
-                            {/* A note to the people who make the app, written in a dialog over the
+      {/* What of New task moves, read where it is drawn, so a press of New task draws its readers alone. */}
+      <NewTaskShownContext value={newTaskShown}>
+        {/* The window's one voice call, which outlives switching tabs and tasks. */}
+        <VoiceCallProvider>
+          <OpenLinkProvider value={openAppLink}>
+            <ListedPullRequests tasks={listedTasks} onOpen={openListedPullRequest}>
+              <OpenPersonProvider value={openPerson}>
+                <PreloadPersonProvider value={preloadPerson}>
+                  <OpenFeedbackProvider value={openFeedbackAbout}>
+                    <RepositoryRemedyProvider value={repositoryRemedies}>
+                      <GitHubConnectProvider value={gitHubConnect}>
+                        <ListedAutomations tasks={tasks}>
+                          {/* A maintainer's sign-in as the member, said above the stage on the web. */}
+                          <ViewingAs />
+                          {/* A failure offers no Retry while the app does not reach the service, whose reads start again once it does. */}
+                          <RetryOffered value={connected}>
+                            <div
+                              ref={stage.ref}
+                              className="app-stage"
+                              data-capture={String(run.captureMode)}
+                              // The panel is drawn as an ordinary app window's content; desktop.css
+                              // lays it out.
+                              data-surface="desktop"
+                              // The sidebar's width lays out the shell and Settings' page list.
+                              style={cssCustomProperties({
+                                "--sidebar-width": `${sidebar.width}px`,
+                              })}
+                            >
+                              {/* The window's content. */}
+                              <ShellRoomContext value={room}>
+                                <div className="desktop-stage">
+                                  <MessageRevealProvider value={messageReveal}>
+                                    <ThreadRevealProvider value={threadReveal}>
+                                      {/* The window's call as its card draws it, docked wherever the window is not on the call's agent. */}
+                                      <StandingCallProvider
+                                        onShowAgent={tasks.onShowAgent}
+                                        onOpenOwnAgent={tasks.agentView.onOpen}
+                                      >
+                                        <SettingsShell
+                                          gates={gates}
+                                          tab={tab}
+                                          onTabChange={changeTab}
+                                          tasks={tasks}
+                                          history={history}
+                                          sidebar={sidebar}
+                                          room={room}
+                                          settingsStep={settingsStep}
+                                          doors={settingsDoors}
+                                        />
+                                      </StandingCallProvider>
+                                    </ThreadRevealProvider>
+                                  </MessageRevealProvider>
+                                </div>
+                              </ShellRoomContext>
+                              {/* A note to the people who make the app, written in a dialog over the
           window. */}
-                            <FeedbackDialog
-                              kind={feedbackKind}
-                              about={feedbackAbout}
-                              account={account}
-                              onKind={setFeedbackKind}
-                              onClose={() => setFeedbackKind(undefined)}
-                            />
-                            <WindowNotices />
-                            {/* The plans, the open plan's agents and files, every command the
+                              <FeedbackDialog
+                                kind={feedbackKind}
+                                about={feedbackAbout}
+                                account={account}
+                                onKind={setFeedbackKind}
+                                onClose={() => setFeedbackKind(undefined)}
+                              />
+                              <WindowNotices />
+                              {/* The plans, the open plan's agents and files, every command the
           window can run now, and the settings, behind ⌘K, past the sign-in
           alone. */}
-                            <SettingsPalette
-                              available={!accountGated}
-                              tab={tab}
-                              onTabChange={changeTab}
-                              tasks={tasks}
-                              links={copyLink}
-                              doors={settingsDoors}
-                            />
-                            {/* The screens stood on last, Back's steps across every task, behind ⌃Tab, on a desktop app past the sign-in; in the stage's room, which names a phone's places as it stands them. */}
-                            <ShellRoomContext value={room}>
-                              <TabSwitcher
-                                available={!accountGated}
-                                steps={history}
-                                tasks={tasks}
-                              />
-                            </ShellRoomContext>
-                          </div>
-                        </RetryOffered>
-                      </ListedAutomations>
-                    </GitHubConnectProvider>
-                  </RepositoryRemedyProvider>
-                </OpenFeedbackProvider>
-              </PreloadPersonProvider>
-            </OpenPersonProvider>
-          </ListedPullRequests>
-        </OpenLinkProvider>
-      </VoiceCallProvider>
+                              {/* In the stage's room, which a phone draws as its Search tab's page. */}
+                              <ShellRoomContext value={room}>
+                                <SettingsPalette
+                                  available={!accountGated}
+                                  tab={tab}
+                                  onTabChange={changeTab}
+                                  tasks={tasks}
+                                  links={copyLink}
+                                  doors={settingsDoors}
+                                />
+                              </ShellRoomContext>
+                              {/* The screens stood on last, Back's steps across every task, behind ⌃Tab, on a desktop app past the sign-in; in the stage's room, which names a phone's places as it stands them. */}
+                              <ShellRoomContext value={room}>
+                                <TabSwitcher
+                                  available={!accountGated}
+                                  steps={history}
+                                  tasks={tasks}
+                                />
+                              </ShellRoomContext>
+                            </div>
+                          </RetryOffered>
+                        </ListedAutomations>
+                      </GitHubConnectProvider>
+                    </RepositoryRemedyProvider>
+                  </OpenFeedbackProvider>
+                </PreloadPersonProvider>
+              </OpenPersonProvider>
+            </ListedPullRequests>
+          </OpenLinkProvider>
+        </VoiceCallProvider>
+      </NewTaskShownContext>
     </OpenSettingsProvider>
   );
 }

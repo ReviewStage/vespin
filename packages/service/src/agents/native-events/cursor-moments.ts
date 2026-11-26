@@ -16,8 +16,10 @@
  * integration's server as that integration's call (`storedServerCall`); and
  * one to any other MCP server as `cursorMcp`. A subagent's task keeps its
  * answer short: the steps its subagent took, which Cursor nests in a shape
- * of its own, are left out. Each run's usage meters the turn and says the
- * context it read; a summary written stamps the agent compacted; and the
+ * of its own, are left out. Each run's usage, the sum of its model calls,
+ * meters the turn, and each model call the runner posts says the context
+ * that call read, so the ring reads the last call's prompt rather than
+ * that sum; a summary written stamps the agent compacted; and the
  * agent's id, on every message, is the session a relaunch resumes. A call
  * Cursor gave up on can be left running with no answer, as one its review
  * refused is while the model tries again under a new id, so every call
@@ -26,6 +28,7 @@
  * changes nothing here, and a message no schema fits is no moment.
  */
 
+import { CURSOR_MODEL_CALL } from "@repo/agent-runner/protocol";
 import {
   CURSOR_TOOL,
   claudeCodeWorkspaceTool,
@@ -52,6 +55,7 @@ const MESSAGE = {
   TOOL_CALL: "tool_call",
   USAGE: "usage",
   SUMMARY: "summary",
+  MODEL_CALL: CURSOR_MODEL_CALL,
 } as const;
 
 /**
@@ -377,7 +381,7 @@ function statusMoments(message: WireValue): readonly NativeMoment[] {
   ];
 }
 
-/** A run's usage, as the meter and the context ring read it. Note that Cursor counts the cache's reads and writes within the input, as the record counts them. */
+/** A run's usage, the sum of its model calls, as the meter reads it. Note that Cursor counts the cache's reads and writes within the input, as the record counts them. */
 function usageMoments(message: WireValue): readonly NativeMoment[] {
   return Option.match(readUsage(message), {
     onSome: ({ usage }): readonly NativeMoment[] => [
@@ -391,6 +395,15 @@ function usageMoments(message: WireValue): readonly NativeMoment[] {
           cacheWriteTokens: usage.cacheWriteTokens,
         },
       },
+    ],
+    onNone: () => [],
+  });
+}
+
+/** One model call's usage, as the context ring reads it: the whole prompt the call read, the cache's reads and writes within it. */
+function modelCallMoments(message: WireValue): readonly NativeMoment[] {
+  return Option.match(readUsage(message), {
+    onSome: ({ usage }): readonly NativeMoment[] => [
       {
         kind: NATIVE_MOMENT.CONTEXT,
         usage: {
@@ -455,6 +468,8 @@ function messageMoments(
       return toolCallMoments(message, held);
     case MESSAGE.USAGE:
       return usageMoments(message);
+    case MESSAGE.MODEL_CALL:
+      return modelCallMoments(message);
     case MESSAGE.SUMMARY:
       return summaryMoments(message);
     default:

@@ -18,6 +18,24 @@ export const MEMORY_PAGE_WORDS = {
   SEARCH: "Search memories",
 } as const;
 
+/**
+ * Whose memories a Settings › Memory lists: the workspace's own, which every
+ * member's agents recall, or one Manager's, which it alone recalls and which
+ * a memory added there is kept for.
+ */
+export const MEMORY_SCOPE = {
+  WORKSPACE: "workspace",
+  MANAGER: "manager",
+} as const;
+
+export type MemoryScopeKind = (typeof MEMORY_SCOPE)[keyof typeof MEMORY_SCOPE];
+
+/** What a Manager's Settings › Memory says over its memories, and where it holds none. */
+export const MANAGER_MEMORY_WORDS = {
+  CAPTION: "Only this Manager recalls these, including any you add here.",
+  EMPTY: "This Manager hasn't remembered anything yet.",
+} as const;
+
 /** What a memory's acts say, in its menu and the selection's bar. */
 export const MEMORY_ACT = {
   EDIT: "Edit",
@@ -178,11 +196,19 @@ export const MEMORY_VIEW_EMPTY = {
   [MEMORY_VIEW.UNUSED]: `Every memory older than ${MEMORY_RECALL_WINDOW_DAYS} days was recalled in the last ${MEMORY_RECALL_WINDOW_DAYS}.`,
 } as const satisfies Record<MemoryView, string>;
 
-/** What Delete asks, of `count` memories, and what it says of the `left` the reader may not delete. */
-export function forgetQuestion(count: number, left: number) {
+/** What Delete asks, of `count` memories of `scope`, and what it says of the `left` the reader may not delete. */
+export function forgetQuestion(
+  count: number,
+  left: number,
+  scope: MemoryScopeKind = MEMORY_SCOPE.WORKSPACE,
+) {
   const one = count === 1;
   const them = one ? "it" : "them";
-  const body = `No agent will recall ${them} in any later task in this workspace, for anyone.`;
+
+  const body =
+    scope === MEMORY_SCOPE.MANAGER
+      ? `This Manager will no longer recall ${them}.`
+      : `No agent will recall ${them} in any later task in this workspace, for anyone.`;
 
   const kept =
     left === 0

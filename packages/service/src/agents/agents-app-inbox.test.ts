@@ -18,7 +18,7 @@ import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { conversations } from "@repo/database/schemas/storage";
-import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, startTask, storeAttachmentInBlob } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
 import {
   ACCOUNT_INBOX_ARCHIVED,
@@ -82,6 +82,7 @@ import { SERVER_EVENT } from "../events/server-events.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import type { InboxTitleModelOf } from "../inbox/inbox-procedures.js";
 import { answerInboxAsk, closeInboxItem, postInboxThread } from "../inbox/inbox-store.js";
+import { attachmentBlobPath } from "../storage/attachment-blob-paths.js";
 import {
   ACCOUNT_INBOX,
   AGENT_MESSAGES,
@@ -1995,6 +1996,53 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
             }),
           ),
           refusal(HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED, HOSTED_API_ERROR.METHOD_NOT_ALLOWED),
+        );
+      }),
+  );
+
+  it.effect(
+    "an attachment whose bytes stand in the Blob store sends a native reader to them, pipes them to a browser, and is none to another account",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, fetch, ask, post, read, blobs } = yield* openInbox();
+        yield* post(
+          { key: "landing", title: "The landing page", body: "![It](shots/landing.png)" },
+          [
+            {
+              path: "shots/landing.png",
+              name: "landing.png",
+              contentType: INBOX_IMAGE_TYPE.PNG,
+              bytes: PNG,
+            },
+          ],
+        );
+        const item = (yield* read()).items.find((each) => each.key === "landing");
+        const file = item?.thread?.[0]?.files?.[0];
+        assert.ok(item && file);
+        const blobKey = attachmentBlobPath(file.attachmentId);
+        yield* storeAttachmentInBlob(file.attachmentId, { blobKey });
+        blobs.objects.set(blobKey, { bytes: PNG, contentType: INBOX_IMAGE_TYPE.PNG, etag: '"1"' });
+
+        const at = (bearer: string, fetchMode?: string) =>
+          request(INBOX_ATTACHMENT, bearer, {
+            id: item.id,
+            attachment: file.attachmentId,
+            ...(fetchMode !== undefined && { fetchMode }),
+          });
+
+        const native = yield* fetch(at(owner));
+        assert.equal(native.status, HOSTED_HTTP_STATUS.FOUND);
+        assert.equal(new URL(native.headers.get("location") ?? "").pathname, `/${blobKey}`);
+
+        const browser = yield* fetch(at(owner, "cors"));
+        assert.equal(browser.status, HOSTED_HTTP_STATUS.OK);
+        assert.equal(browser.headers.get("content-type"), INBOX_IMAGE_TYPE.PNG);
+        assert.deepEqual(openedPagePolicy(browser.headers), SANDBOXED_PAGE);
+        assert.deepEqual(new Uint8Array(yield* Effect.promise(() => browser.arrayBuffer())), PNG);
+
+        assert.deepEqual(
+          yield* ask(at(other)),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
         );
       }),
   );

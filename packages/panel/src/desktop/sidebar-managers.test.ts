@@ -24,7 +24,7 @@ import {
   MODELS_READ,
   type ModelsRead,
 } from "../tasks/use-agents.js";
-import type { NewTask } from "../tasks/use-new-task.js";
+import { NEW_TASK_UNSHOWN, type NewTask } from "../tasks/use-new-task.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handHostReads, handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
@@ -35,6 +35,7 @@ import {
   newTaskControl,
   taskAgentsOf,
   tasksControl,
+  withNewTaskShown,
 } from "../testing/tasks-control.js";
 
 /**
@@ -42,7 +43,8 @@ import {
  * Managers of the live task list's agents, listed under their head where
  * the workspace has the experiment on, each opening its page, and no head
  * at all where it is off; its View options' sort; a Manager's row's Change
- * face ›, which changes its face, and Settings…, which names it; and
+ * face ›, which changes its face, and Settings…, which renames it and
+ * changes its model; and
  * New Manager, whose edited retry is a request of its own. Synthetic
  * throughout.
  */
@@ -344,7 +346,7 @@ test("a Manager's row offers Rename and Change face › beside Settings…, and 
   await vi.waitFor(() => assert.equal(items().length, 0, "the menu is put away"));
 });
 
-test("a Manager's row's Settings… opens New Manager's card filled from the Manager, whose Save names it and changes its model", async () => {
+test("a Manager's row's Settings… opens its settings, whose name renames it in place and whose model chip changes its model as picked", async () => {
   const renamed: AgentRenameAsk[] = [];
   const chosen: { agentId: string; model: string }[] = [];
   const sidebar = await mountSidebar(true, [], undefined, [], renamed, chosen);
@@ -365,19 +367,28 @@ test("a Manager's row's Settings… opens New Manager's card filled from the Man
   assert.ok(settings, "Settings… stands in the menu");
   act(() => settings.click());
 
+  const name =
+    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
+      (button) =>
+        button.textContent === "Frontend Manager" &&
+        button.getAttribute("aria-description") === "Rename",
+    ) ?? assert.fail("the Manager's name is drawn, pressed to rename it");
+
+  act(() => name.click());
+
   const field =
     document.querySelector<HTMLInputElement>('[role="dialog"] input') ??
-    assert.fail("the Name field is drawn");
+    assert.fail("the name opens in a field");
 
   assert.equal(field.value, "Frontend Manager");
-  assert.ok(
-    document.querySelector('[role="dialog"] [aria-disabled="true"]'),
-    "its Repositories stand held as it was made",
-  );
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, " Web ");
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  act(() => {
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
+  await vi.waitFor(() => assert.deepEqual(renamed, [{ agentId: FRONTEND, title: "Web" }]));
 
   const chip =
     document.querySelector<HTMLButtonElement>('[role="dialog"] .agent-model-chip button') ??
@@ -391,15 +402,7 @@ test("a Manager's row's Settings… opens New Manager's card filled from the Man
     ) ?? assert.fail("the chip lists the second model");
 
   act(() => sonnet.click());
-
-  const save =
-    [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find(
-      (button) => button.textContent === "Save",
-    ) ?? assert.fail("Save is drawn");
-
-  act(() => save.click());
   await vi.waitFor(() => assert.deepEqual(chosen, [{ agentId: FRONTEND, model: SONNET }]));
-  assert.deepEqual(renamed, [{ agentId: FRONTEND, title: "Web" }]);
 });
 
 /** A Mac the member registered, their last Runs on pick. */
@@ -410,11 +413,23 @@ const MAC: MacOffer = {
 };
 
 /** New Task's control as New Manager reads it: the recent repository, and the devices as `modelsRead` stands. */
-function newManagerTask(overrides: Partial<NewTask> = {}): NewTask {
-  return newTaskControl({
-    repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: [RELAY] }),
-    ...overrides,
-  });
+/** New task as New Manager reads it: its doors, and where the newest read of the models stands, which the window provides apart (`NewTaskShown.modelsRead`). */
+interface ManagerNewTask {
+  readonly newTask: NewTask;
+  readonly modelsRead: ModelsRead;
+}
+
+function newManagerTask({
+  modelsRead = NEW_TASK_UNSHOWN.modelsRead,
+  ...overrides
+}: Partial<NewTask> & { readonly modelsRead?: ModelsRead } = {}): ManagerNewTask {
+  return {
+    newTask: newTaskControl({
+      repositoriesIn: () => ({ ...NO_REPOSITORIES, recent: [RELAY] }),
+      ...overrides,
+    }),
+    modelsRead,
+  };
 }
 
 /**
@@ -423,7 +438,7 @@ function newManagerTask(overrides: Partial<NewTask> = {}): NewTask {
  * unanswered; answers how to draw it again over another New Task, press a
  * button by its name, and type the Manager's name.
  */
-async function mountNewManager(newTask: NewTask) {
+async function mountNewManager(newTask: ManagerNewTask) {
   handState({ [EXPERIMENT.MANAGERS]: true });
   handHostReads({
     models: {
@@ -462,12 +477,19 @@ async function mountNewManager(newTask: NewTask) {
   const root = createRoot(container);
   roots.push(root);
 
-  const draw = (next: NewTask) =>
+  const draw = (next: ManagerNewTask) =>
     root.render(
       withQueryClient(
-        drawnSidebar(
-          sidebarProps(
-            tasksControl({ workspaces: [WORKSPACE], workspace: WORKSPACE, newTask: next }),
+        withNewTaskShown(
+          { modelsRead: next.modelsRead },
+          drawnSidebar(
+            sidebarProps(
+              tasksControl({
+                workspaces: [WORKSPACE],
+                workspace: WORKSPACE,
+                newTask: next.newTask,
+              }),
+            ),
           ),
         ),
       ),

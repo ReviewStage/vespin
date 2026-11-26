@@ -218,7 +218,7 @@ async function mountPage(held?: TasksPageHeld): Promise<{
     const [view, setView] = useState(viewOf(TASKS));
     restand = setView;
 
-    const control = useTasksTab({
+    const { control } = useTasksTab({
       tasks: view,
       run: { fixtureMode: false, profile: RUN_PROFILE.IDLE },
       signedIn: true,

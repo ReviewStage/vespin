@@ -40,6 +40,7 @@ import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
+  inlineBytesOf,
   joinWorkspace,
   openedPullRequest,
   openWorkspace,
@@ -255,7 +256,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         );
 
         assert.equal(picture.contentType, AGENT_ATTACHMENT_TYPE.PNG);
-        assert.deepEqual(new Uint8Array(picture.bytes), SIZED_PNG);
+        assert.deepEqual(new Uint8Array(inlineBytesOf(picture.body)), SIZED_PNG);
 
         // The retired runtime's receipt of the message, its image staged by name with no bytes, takes the line it was sent as.
         const taken = yield* writer.takeAwaitingLine(target, {
@@ -2352,6 +2353,70 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           { name: "notes.txt", mediaType: "text/plain", url: "data:text/plain;base64,aGVsbG8=" },
           { id: kept[0]?.id, mediaType: "image/png", name: "flow.png" },
         ]);
+      }),
+  );
+
+  it.effect(
+    "a file sent with a reply in one of a Manager's chat's threads lands on the reply's own row, in that thread",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, agent, ask } = yield* messagedAgent(agentSessions, { running: false });
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const root = readAnswer(
+          agentChatSendAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            request(AGENT_CHAT_MESSAGES, owner, {
+              method: "POST",
+              id: agent.id,
+              body: { text: "Ship the invites.", clientKey: randomUUID() },
+            }),
+          ),
+        );
+
+        readAnswer(
+          agentChatSendAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            request(AGENT_CHAT_MESSAGES, owner, {
+              method: "POST",
+              id: agent.id,
+              body: {
+                text: "Here's the list.",
+                clientKey: randomUUID(),
+                threadRoot: root.messageId,
+                // "hello" in base64.
+                attachments: [
+                  { name: "invites.txt", mediaType: AGENT_ATTACHMENT_TYPE.TEXT, data: "aGVsbG8=" },
+                ],
+              },
+            }),
+          ),
+        );
+
+        const page = yield* readManagerChatPage(owner, agent.id, { limit: 10 });
+        const reply = page.find((message) => message.text === "Here's the list.");
+
+        assert.deepEqual(
+          { threadRoot: reply?.threadRoot, attachments: reply?.attachments },
+          {
+            threadRoot: root.messageId,
+            attachments: [
+              {
+                name: "invites.txt",
+                mediaType: "text/plain",
+                url: "data:text/plain;base64,aGVsbG8=",
+              },
+            ],
+          },
+        );
       }),
   );
 

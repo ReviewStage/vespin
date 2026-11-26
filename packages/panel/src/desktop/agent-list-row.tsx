@@ -341,7 +341,6 @@ export function AgentListRow({
       <>
         <ListRow
           ref={holdPress}
-          motionKey={agent.id}
           density={LIST_DENSITY.DENSE}
           ink={LIST_ROW_INK.SIDEBAR}
           leading={glyph}

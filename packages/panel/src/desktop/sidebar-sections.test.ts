@@ -28,7 +28,6 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
-import { playListMotions } from "../testing/pane-motion.js";
 import { type TasksControlOverrides, tasksControl } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
@@ -67,13 +66,16 @@ const roots: Root[] = [];
  * them: a section write's writes, a task's pin as its mark, and a pin given
  * a place as its move, each landing.
  */
-function hearWrites(asked: Partial<Asked>): void {
+function hearWrites(
+  asked: Partial<Asked>,
+  answered: Promise<boolean> = Promise.resolve(true),
+): void {
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_WRITE_SECTION]: ({ writes }) => {
       asked.writes?.push(...writes);
 
-      return Promise.resolve(true);
+      return answered;
     },
     [ACT_KIND.TASKS_PIN]: ({ taskId, pinned, position }) => {
       if (position === undefined)
@@ -640,29 +642,7 @@ test("deleting a section removes it at once with no dialog, and Undo brings it b
   assert.equal(icon?.textContent, "🚀");
 });
 
-test("a deleted section slides out where it stood, out of reach, and leaves once its exit has played; the one that stays is not held", async () => {
-  const motions = playListMotions();
-  onTestFinished(motions.remove);
-  const writes: TaskSectionWrite[] = [];
-  const { container: sidebar, draw } = await mountSidebarRedrawn(writes, ICONLESS);
-  openSectionMenu(sidebar, "Launch");
-
-  await act(async () => item("Delete section").click());
-  await draw(applied(ICONLESS, writes.splice(0)));
-
-  const leaving = sidebar.querySelector<HTMLElement>("li[data-leaving]");
-  assert.match(leaving?.textContent ?? "", /Launch/u, "it is drawn on");
-  assert.equal(leaving?.hasAttribute("inert"), true, "out of reach while it goes");
-  const out = motions.played.find((each) => each.element === leaving);
-
-  await act(async () => out?.finish());
-  assert.equal(sidebar.querySelector("[data-leaving]"), null);
-  assert.deepEqual(sectionTitles(sidebar), ["Someday"]);
-});
-
-test("the last section deleted slides out too, and takes its group with it once its exit has played", async () => {
-  const motions = playListMotions();
-  onTestFinished(motions.remove);
+test("the last section deleted takes its group with it", async () => {
   const writes: TaskSectionWrite[] = [];
   const { container: sidebar, draw } = await mountSidebarRedrawn(writes);
   openSectionMenu(sidebar, "Launch");
@@ -670,10 +650,6 @@ test("the last section deleted slides out too, and takes its group with it once 
   await act(async () => item("Delete section").click());
   await draw(applied(SECTIONS, writes.splice(0)));
 
-  const leaving = sidebar.querySelector<HTMLElement>('nav[aria-label="Sections"] li[data-leaving]');
-  assert.match(leaving?.textContent ?? "", /Launch/u, "it is drawn on");
-
-  await act(async () => motions.played.find((each) => each.element === leaving)?.finish());
   assert.equal(sidebar.querySelector('nav[aria-label="Sections"]'), null);
 });
 
@@ -1476,9 +1452,7 @@ test("a drag put back with nothing pinned takes the empty Pinned away again", as
   assert.deepEqual(asked.marks, []);
 });
 
-test("Pinned stands once a pin exists, folding and counting it, and once the last is unpinned slides out before it goes", async () => {
-  const motions = playListMotions();
-  onTestFinished(motions.remove);
+test("Pinned stands once a pin exists, folding and counting it, and goes once the last is unpinned", async () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -1504,11 +1478,6 @@ test("Pinned stands once a pin exists, folding and counting it, and once the las
 
   await draw([task(PINNED.id, PINNED.name), INVITES, RETRIES]);
 
-  const leaving = pinnedGroup(container);
-  assert.equal(leaving?.hasAttribute("data-leaving"), true, "it is drawn on while it goes");
-  const out = motions.played.find((each) => each.element === leaving);
-  assert.equal(out?.keyframes.at(-1)?.opacity, 0, "it fades out");
-  await act(async () => out?.finish());
   assert.equal(pinnedGroup(container), null);
 });
 
@@ -2260,6 +2229,58 @@ test("⇧⌘↓ on a task in a section moves the task within it, and ⇧⌘↑ o
   assert.deepEqual(
     workspaceSections(written(), WORKSPACE.id).map((section) => section.title),
     [...before].reverse(),
+  );
+});
+
+test("a section moved twice before the first move is handed back stands where the second move put it", async () => {
+  const asked = noneAsked();
+
+  const section = (id: string, title: string, position: string, createdAt: number) => ({
+    id,
+    workspaceId: WORKSPACE.id,
+    title,
+    position,
+    createdAt,
+  });
+
+  const placed: TaskSections = {
+    sections: [
+      section(LAUNCH, "Launch", "a0", 1),
+      section(SOMEDAY, "Someday", "a1", 2),
+      section(STARS, "Stars", "a2", 3),
+    ],
+    entries: [],
+    agentEntries: [],
+  };
+
+  const sidebar = await mountDraggable([], placed, asked);
+  // Note that the section writes are heard but answered only at the end, as main has not yet handed its state back.
+  const { promise: answered, resolve: answer } = Promise.withResolvers<boolean>();
+  hearWrites(asked, answered);
+  onTestFinished(() => answer(true));
+
+  // Note that the writes are heard but never handed back, as main's state has not yet reached the window.
+  const moveDown = async (title: string) => {
+    const fold = sectionHeader(sidebar, title).querySelector<HTMLElement>("button[aria-expanded]");
+    await act(async () => fold?.focus());
+    await act(async () => {
+      runAppCommand(APP_COMMAND.MOVE_ROW_DOWN);
+    });
+  };
+
+  await moveDown("Launch");
+  // Note that the first move is drawn before the second is pressed, as a window draws it before the next key, since the test's client hands its writes to React on a timer of its own.
+  await vi.waitFor(() => assert.deepEqual(sectionTitles(sidebar), ["Someday", "Launch", "Stars"]));
+  await moveDown("Someday");
+
+  const written = asked.writes.reduce(
+    (state, write) => applySectionWrite(state, write, AFTER_FIXTURES),
+    placed,
+  );
+
+  assert.deepEqual(
+    workspaceSections(written, WORKSPACE.id).map(({ title }) => title),
+    ["Launch", "Someday", "Stars"],
   );
 });
 

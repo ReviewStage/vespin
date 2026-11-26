@@ -136,6 +136,16 @@ function createPool(connectionString: string): Pool {
 let pool: Pool | undefined;
 
 /**
+ * How many connections the process-wide pool holds, and how many of them
+ * stand idle, or none where nothing has built it yet: what a span reads to
+ * say whether the statement it waits on had a connection ready
+ * (`auth/bearer.ts`). It builds nothing and opens nothing.
+ */
+export function poolConnections(): { total: number; idle: number } | undefined {
+  return pool && { total: pool.totalCount, idle: pool.idleCount };
+}
+
+/**
  * The process-wide pool, read from `DATABASE_URL` on first request. Drizzle's
  * node-postgres session calls this synchronously with no fiber to read a
  * `Config` on, so the read is the record's under the same rule

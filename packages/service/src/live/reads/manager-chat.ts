@@ -105,6 +105,7 @@ function messagesStatement(userId: string, agentId: string, before: string) {
         id: managerChatMessage.id,
         // Note that `seq` is a `bigint`, which Postgres answers as text, so it is read as a number.
         seq: sql<number>`(${managerChatMessage.seq})::float8`,
+        clientKey: managerChatMessage.clientKey,
         authorKind: managerChatMessage.authorKind,
         authorUserId: managerChatMessage.authorUserId,
         authorName: managerChatMessage.authorName,

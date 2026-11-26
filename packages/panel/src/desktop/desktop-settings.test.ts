@@ -98,7 +98,7 @@ const HOMES = [
   { words: "Prefer the Mac's microphone", page: "This Mac" },
   { words: "Open Vespin at login", page: "This Mac" },
   { words: "Check for updates", page: "About", found: "Updates" },
-  { words: "Changelog", page: "About" },
+  { words: "Open changelog", page: "About", found: "Changelog" },
   { words: "Minimize inline comments", page: "Appearance" },
   { words: "Dark theme", page: "Appearance" },
 ];

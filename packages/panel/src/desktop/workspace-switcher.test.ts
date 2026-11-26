@@ -90,7 +90,7 @@ function mount(
               createElement(KeyedSwitcher, {
                 tasks: { ...tasksControl(), ...tasks },
                 inSight,
-                newTask: { shown: false, onOpen: () => undefined },
+                newTask: { home: false, onOpen: () => undefined },
                 admin: { onOpen: () => undefined, onPreload: () => undefined },
               }),
             ),

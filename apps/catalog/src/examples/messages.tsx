@@ -10,7 +10,6 @@ import {
   CHAT_RUN,
   CHAT_SIDE,
   ChannelMessage,
-  ChannelSplit,
   ChatAside,
   ChatBubble,
   CopyIcon,
@@ -32,8 +31,8 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
-  ThreadPane,
   ThreadReplies,
+  ThreadRule,
   TIME_LOOK,
   Time,
 } from "@repo/ui";
@@ -224,72 +223,67 @@ function Messages(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection
         id="message-channel"
-        title="A channel: rows under their sender, a thread's replies under its message, and the thread in its pane"
+        title="A channel: rows under their sender, and a thread's replies under its message"
       >
         <div className="catalog-frame">
-          <ChannelSplit
-            pane={
-              <ThreadPane
-                root={
-                  <ChannelMessage
-                    avatar={MANAGER_AVATAR}
-                    name="Iris"
-                    at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
-                  >
-                    <Text>Wanna do standup now?</Text>
-                  </ChannelMessage>
-                }
+          <ChannelMessage
+            avatar={MANAGER_AVATAR}
+            name="Iris"
+            at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
+            actions={
+              <IconButton
+                icon={<CopyIcon />}
+                label="Copy"
+                size={BUTTON_SIZE.COMPACT}
+                onClick={() => {}}
+              />
+            }
+            under={
+              <ThreadReplies
                 count={1}
-                onClose={() => {}}
-                composer={null}
-              >
-                <ChannelMessage
-                  avatar={<Avatar name="Ada Lovelace" size={AVATAR_SIZE.CARD} decorative />}
-                  name="Ada Lovelace"
-                  at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
-                >
-                  <Text>Give me five minutes.</Text>
-                </ChannelMessage>
-              </ThreadPane>
+                faces={[
+                  <Avatar key="ada" name="Ada Lovelace" size={AVATAR_SIZE.INLINE} decorative />,
+                ]}
+                open
+                onOpen={() => {}}
+              />
             }
           >
+            <Text>Wanna do standup now?</Text>
+          </ChannelMessage>
+          {RUN.map((words, index) => (
             <ChannelMessage
-              avatar={MANAGER_AVATAR}
-              name="Iris"
+              key={words}
+              avatar={<Avatar name="Ada Lovelace" size={AVATAR_SIZE.CARD} decorative />}
+              name="Ada Lovelace"
               at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
-              actions={
-                <IconButton
-                  icon={<CopyIcon />}
-                  label="Copy"
-                  size={BUTTON_SIZE.COMPACT}
-                  onClick={() => {}}
-                />
-              }
-              under={
-                <ThreadReplies
-                  count={1}
-                  faces={[
-                    <Avatar key="ada" name="Ada Lovelace" size={AVATAR_SIZE.INLINE} decorative />,
-                  ]}
-                  open
-                  onOpen={() => {}}
-                />
-              }
+              continues={index > 0}
             >
-              <Text>Wanna do standup now?</Text>
+              <Text>{words}</Text>
             </ChannelMessage>
-            {RUN.map((words, index) => (
-              <ChannelMessage
-                key={words}
-                avatar={<Avatar name="Ada Lovelace" size={AVATAR_SIZE.CARD} decorative />}
-                name="Ada Lovelace"
-                at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
-                continues={index > 0}
-              >
-                <Text>{words}</Text>
-              </ChannelMessage>
-            ))}
-          </ChannelSplit>
+          ))}
+        </div>
+      </CatalogSection>
+      <CatalogSection
+        id="message-thread"
+        title="A thread, as its side panel tab draws it: the message it answers, then its replies under a rule that counts them"
+      >
+        <div className="catalog-frame">
+          <ChannelMessage
+            avatar={MANAGER_AVATAR}
+            name="Iris"
+            at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
+          >
+            <Text>Wanna do standup now?</Text>
+          </ChannelMessage>
+          <ThreadRule count={1} />
+          <ChannelMessage
+            avatar={<Avatar name="Ada Lovelace" size={AVATAR_SIZE.CARD} decorative />}
+            name="Ada Lovelace"
+            at={<Time at={SENT_AT} look={TIME_LOOK.DAY} />}
+          >
+            <Text>Give me five minutes.</Text>
+          </ChannelMessage>
         </div>
       </CatalogSection>
     </>

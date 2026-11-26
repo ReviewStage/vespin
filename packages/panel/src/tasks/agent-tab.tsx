@@ -61,6 +61,7 @@ import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
 import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
 import type { MentionHolder } from "@repo/features/mention-holder";
+import { messageFileChips } from "@repo/features/message-files";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle, plainWords } from "@repo/features/plain-words";
 import { briefAgent, replayOpening } from "@repo/features/replay-card-model";
@@ -134,6 +135,7 @@ import { EXPERIMENT } from "@repo/settings";
 import {
   ANNOUNCE,
   announce,
+  CarryOnLine,
   CHAT_RUN,
   CHAT_SIDE,
   ChatBubble,
@@ -219,7 +221,7 @@ import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
-import { useFindDetails, useFindOpen } from "../find-in-tab.js";
+import { FIND_DETAIL, FindDetailFolds, useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
@@ -286,8 +288,6 @@ import {
   CALL_PICTURES_PLACE,
   CallPictures,
   ComputerAppsProvider,
-  MessageFileChips,
-  MessageFiles,
   ShownPictures,
   useAgentPictureDoor,
   useComputerIcon,
@@ -339,7 +339,7 @@ import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { type SentLine as RailSentLine, sentLineOf } from "./sent-lines.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
 import { ShownPage } from "./shown-page.js";
-import { SentWords, useSkill } from "./skill-chip.js";
+import { SentMessage, type SentMessageBody, useSkill } from "./skill-chip.js";
 import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
 import { useStartingAgent } from "./starting-agent.js";
@@ -1399,51 +1399,54 @@ function PlanCard({
   taskId?: string | undefined;
 }): ReactNode {
   const named = sender != null;
-  // Note that a card standing in a sent line's place draws its words as the line would, so a file's marker in them is the file's chip.
-  const words = files === undefined ? <TranscriptWords text={text} /> : <SentWords text={text} />;
   // The task's status as the list holds it, else as the window hands the open task live (`LiveDoors`), as its sender reads it.
   const listed = useTaskStatus(lead.description ? taskId : undefined);
   const handed = useContext(LiveDoors)?.cards?.task?.status;
   const status = lead.description ? (listed ?? handed) : undefined;
 
-  const card = (
-    <Message from={MESSAGE_ROLE.USER} className="agent-origin" data-message-id={messageId}>
-      {files === undefined ? null : <MessageFileChips message={files} />}
-      <Plan data-origin-description="" aria-label={lead.label}>
-        <PlanHeader>
-          <PlanIcon>
-            {status === undefined ? lead.icon : <TaskStatusMark status={status} />}
-          </PlanIcon>
-          <PlanTitle label={lead.label} previews={title === cardTitle(text)}>
-            {title}
-          </PlanTitle>
-        </PlanHeader>
-        <PlanContent>
-          {taskId === undefined ? (
-            words
-          ) : (
-            <DescriptionPictures taskId={taskId} text={text}>
-              {words}
-            </DescriptionPictures>
-          )}
-          {body === undefined ? null : <OriginBody body={body} />}
-        </PlanContent>
-      </Plan>
-      <MessageLine
-        sender={named ? sender : undefined}
-        at={sentAt}
-        wrap
-        actions={<CopyMessageAction words={text} messageId={messageId} />}
-      />
-    </Message>
-  );
+  // Note that a card standing in a sent line's place draws its files and words as the line would, so a file's marker in them is the file's chip.
+  const card = (line: SentMessageBody | undefined) => {
+    const words = line?.words ?? <TranscriptWords text={text} />;
+
+    return (
+      <Message from={MESSAGE_ROLE.USER} className="agent-origin" data-message-id={messageId}>
+        {line?.files}
+        <Plan data-origin-description="" aria-label={lead.label}>
+          <PlanHeader>
+            <PlanIcon>
+              {status === undefined ? lead.icon : <TaskStatusMark status={status} />}
+            </PlanIcon>
+            <PlanTitle label={lead.label} previews={title === cardTitle(text)}>
+              {title}
+            </PlanTitle>
+          </PlanHeader>
+          <PlanContent>
+            {taskId === undefined ? (
+              words
+            ) : (
+              <DescriptionPictures taskId={taskId} text={text}>
+                {words}
+              </DescriptionPictures>
+            )}
+            {body === undefined ? null : <OriginBody body={body} />}
+          </PlanContent>
+        </Plan>
+        <MessageLine
+          sender={named ? sender : undefined}
+          at={sentAt}
+          wrap
+          actions={<CopyMessageAction words={text} messageId={messageId} />}
+        />
+      </Message>
+    );
+  };
 
   return files === undefined ? (
-    card
+    card(undefined)
   ) : (
-    <MessageFiles message={files} words={text}>
+    <SentMessage files={messageFileChips(files)} words={text}>
       {card}
-    </MessageFiles>
+    </SentMessage>
   );
 }
 
@@ -1778,9 +1781,31 @@ function MessageSender({ actor }: { actor: Actor }): React.JSX.Element {
   );
 }
 
-/** A carry-on's head: where the turn before it was cut off and carried on by itself, in the words its reason reads (`carryOnLineWords`). */
-function CarryOnHead({ reason }: { reason: CarryOnReason }): React.JSX.Element {
-  return <SubjectLine lead={carryOnLineWords(reason)} fit={SUBJECT_FIT.OWN} />;
+/**
+ * A carry-on: where the turn before it was cut off and carried on by itself,
+ * one of the transcript's steps in the words its reason reads
+ * (`carryOnLineWords`), never a message anyone sent, the words the agent was
+ * sent folded under it as a thought's are, a detail a find may leave out.
+ */
+function CarryOnView({
+  message,
+  reason,
+  words,
+}: {
+  message: AgentTranscriptMessage;
+  reason: CarryOnReason;
+  words: string;
+}): React.JSX.Element {
+  return (
+    <FindDetailFolds>
+      <CarryOnLine
+        line={carryOnLineWords(reason)}
+        sent={words}
+        data-message-id={message.id}
+        {...FIND_DETAIL}
+      />
+    </FindDetailFolds>
+  );
 }
 
 /** What a wakeup's line says the agent did, after its own chip. */
@@ -1982,6 +2007,13 @@ export function AgentMessage({
   // A line the voice said on a call is the voice's, never the agent's words.
   if (isVoiceLine(message)) return <VoiceLineRow message={message} />;
 
+  // A carry-on is the app's word to the agent where a turn was cut off, drawn as a step of the transcript rather than under a sender.
+  const carryOn = carryOnLineOf(message);
+
+  if (carryOn !== undefined) {
+    return <CarryOnView message={message} reason={carryOn.reason} words={words} />;
+  }
+
   const named =
     sender === undefined ? null : senderFor === undefined ? (
       <MessageSender actor={sender} />
@@ -2049,22 +2081,8 @@ export function AgentMessage({
         <ThreadLineHead line={thread} words={words} received={received} fit={SUBJECT_FIT.OWN} />
       );
 
-    // A wakeup is the agent's own line, headed by what it did, as a thread's line is; a carry-on is headed by what cut the turn before it off.
-    const carryOn = carryOnLineOf(message);
-
-    const subject = isWakeupLine(message) ? (
-      <WakeupHead delay={wakeupDelay} />
-    ) : carryOn !== undefined ? (
-      <CarryOnHead reason={carryOn.reason} />
-    ) : (
-      threadHead
-    );
-
-    const sentWords = (
-      <SentToAgent id={message.id} arrived={message.arrivedIn !== undefined}>
-        <SentWords text={shown} />
-      </SentToAgent>
-    );
+    // A wakeup is the agent's own line, headed by what it did, as a thread's line is.
+    const subject = isWakeupLine(message) ? <WakeupHead delay={wakeupDelay} /> : threadHead;
 
     // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
     const copy = (
@@ -2079,35 +2097,39 @@ export function AgentMessage({
     const mark = marked ? <UndeliveredMark messageId={message.id} /> : null;
 
     return (
-      <MessageFiles message={message} words={shown} sending={sending}>
-        <Message
-          from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
-          className={received ? RECEIVED_MESSAGE_CLASS : undefined}
-          data-message-id={message.id}
-          data-undelivered={marked ? "" : undefined}
-        >
-          {received ? <MessageHead sender={named}>{subject}</MessageHead> : subject}
-          <MessageFileChips message={message} sending={sending} />
-          {shown !== "" ? (
-            <ChatBubble
-              side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
-              run={CHAT_RUN.ALONE}
-              beside={mark}
-            >
-              {sentWords}
-            </ChatBubble>
-          ) : mark === null ? null : (
-            // A line of files alone stands its mark on a row of its own, kept clear of the files' fade.
-            <MessageBeside mark={mark}>{null}</MessageBeside>
-          )}
-          <MessageLine
-            align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
-            status={status}
-            at={sentAt}
-            actions={copy}
-          />
-        </Message>
-      </MessageFiles>
+      <SentMessage files={messageFileChips(message)} words={shown} sending={sending}>
+        {(body) => (
+          <Message
+            from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
+            className={received ? RECEIVED_MESSAGE_CLASS : undefined}
+            data-message-id={message.id}
+            data-undelivered={marked ? "" : undefined}
+          >
+            {received ? <MessageHead sender={named}>{subject}</MessageHead> : subject}
+            {body.files}
+            {shown !== "" ? (
+              <ChatBubble
+                side={received ? CHAT_SIDE.RECEIVED : CHAT_SIDE.SENT}
+                run={CHAT_RUN.ALONE}
+                beside={mark}
+              >
+                <SentToAgent id={message.id} arrived={message.arrivedIn !== undefined}>
+                  {body.words}
+                </SentToAgent>
+              </ChatBubble>
+            ) : mark === null ? null : (
+              // A line of files alone stands its mark on a row of its own, kept clear of the files' fade.
+              <MessageBeside mark={mark}>{null}</MessageBeside>
+            )}
+            <MessageLine
+              align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
+              status={status}
+              at={sentAt}
+              actions={copy}
+            />
+          </Message>
+        )}
+      </SentMessage>
     );
   }
 

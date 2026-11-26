@@ -191,9 +191,7 @@
      a sidebar group's or a pull request's section, moves alike whatever it
      holds. Its body lands in the layout at once and rides in on the pair an
      arriving element rides: a fade, and a clip unrolling it from its top
-     edge on the spring, the very beat what stands under it glides down on
-     (`ListMotion`), so the clip's foot and what it pushes travel as one edge
-     and a tall body is never seen through the block still sliding off it.
+     edge on the spring.
      Nothing moves a height, so the words never re-wrap mid-motion, and a
      body still growing as it streams is unrolled by a fraction of its own
      box rather than a size it was measured at. Only the press marks the
@@ -205,22 +203,7 @@
       ui-disclosure-unroll var(--ui-duration-shape) var(--ui-spring) backwards;
   }
 
-  /* Pressed shut under a list's motion, the body gives up its room at once,
-     the height measured as the press lands (`--disclosure-rise`), and rolls
-     up from its foot as it fades, on the exit's tokens, while what stands
-     under it closes over it on those same tokens (`LIST_MOTION_REPLAY`):
-     one quick edge rising, never an empty gap a block then travels the
-     spring across. */
-  [data-disclosure="folding"] > .ui-disclosure-body {
-    margin-block-end: calc(-1 * var(--disclosure-rise, 0px));
-    animation:
-      ui-disclosure-leave var(--ui-duration-exit) var(--ui-motion-exit) forwards,
-      ui-disclosure-roll-up var(--ui-duration-exit) var(--ui-motion-exit) forwards;
-    /* Note that the hold waits on every motion the body runs, as below. */
-    transition: none;
-  }
-
-  /* Closing where nothing glides, the body fades out where it stands and
+  /* Closing, the body fades out where it stands and
      the layout lands once the fade is done. */
   [data-disclosure="closing"] > .ui-disclosure-body {
     animation: ui-disclosure-leave var(--ui-duration-exit) var(--ui-motion-exit) forwards;
@@ -244,15 +227,6 @@
     }
     to {
       clip-path: inset(0);
-    }
-  }
-
-  @keyframes ui-disclosure-roll-up {
-    from {
-      clip-path: inset(0);
-    }
-    to {
-      clip-path: inset(0 0 100% 0);
     }
   }
 

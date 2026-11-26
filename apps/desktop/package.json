@@ -1,7 +1,7 @@
 {
   "name": "@repo/desktop",
   "productName": "Vespin",
-  "version": "0.40.0",
+  "version": "0.42.0",
   "private": true,
   "description": "Vespin desktop application",
   "main": "dist/main.js",
@@ -28,7 +28,7 @@
     "@repo/settings": "workspace:*",
     "@repo/ui": "workspace:*",
     "@repo/wire": "workspace:*",
-    "@sentry/esbuild-plugin": "catalog:",
+    "@sentry/cli": "2.58.6",
     "@tailwindcss/node": "4.3.5",
     "@tanstack/react-query": "catalog:",
     "@tailwindcss/oxide": "4.3.5",

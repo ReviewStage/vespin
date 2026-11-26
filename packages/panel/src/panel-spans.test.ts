@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import type { TaskSummary } from "@repo/features/task-wire";
+import { ListRow } from "@repo/ui";
 import { act, createElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -21,11 +22,11 @@ import type { TasksControl } from "./tasks/use-tasks-tab.js";
 import { fakeActPortAnswering } from "./testing/app-bridge.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "./testing/desktop-sidebar.js";
-import { keyPressed, reportEventTiming } from "./testing/event-timing.js";
+import { clicked, keyPressed, reportEventTiming } from "./testing/event-timing.js";
 import { tasksControl } from "./testing/tasks-control.js";
 
 /**
- * panel-spans.test.ts -- what the window times of its own start and of a key pressed in a timed box: its start to its first surface drawn and to the sidebar's first task list read, each once, and a keystroke to the paint after it, saying how long it waited and nothing of the key.
+ * panel-spans.test.ts -- what the window times of its own start, of a key pressed in a timed box, and of a list row pressed: its start to its first surface drawn and to the sidebar's first task list read, each once, a keystroke to the paint after it, saying how long it waited and nothing of the key, and a row's press to the paint after it, split three ways.
  *
  * The browser's Event Timing is answered by the test (`testing/event-timing.ts`); the clock is a fake date.
  */
@@ -54,10 +55,10 @@ let uninstall: () => void = () => undefined;
 
 beforeEach(() => {
   spans = [];
+  reportEventTiming();
   uninstall = installPanelSpanRecorder((span) => spans.push(span));
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(5_000_000);
-  reportEventTiming();
   fakeActPortAnswering(() => Promise.resolve(undefined));
 });
 
@@ -317,4 +318,35 @@ test("an Inbox left before it drew a row, or in a window that records nothing, t
   );
 
   assert.deepEqual(recorded(), []);
+});
+
+test("a list row pressed is timed to the paint after it, split into its wait, its handlers, and its draw, even where the press took the row away; a press off every row is not", () => {
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() =>
+    root.render(createElement(ListRow, { title: "Invite expiry", onPress: () => undefined })),
+  );
+  const title = document.body.querySelector("button span");
+  assert.ok(title);
+
+  // The press opens another page, which draws the list away before the paint.
+  clicked(title, { processingStart: 9, processingEnd: 13, duration: 640 }, () =>
+    act(() => root.render(createElement("main"))),
+  );
+  clicked(document.body, { processingStart: 1, processingEnd: 2, duration: 400 });
+
+  assert.deepEqual(
+    recorded().map(({ name, waited, measured }) => ({ name, waited, measured })),
+    [
+      {
+        name: PANEL_SPAN.ROW_PRESS,
+        waited: 640,
+        measured: {
+          "press.input_delay_ms": 9,
+          "press.processing_ms": 4,
+          "press.presentation_ms": 627,
+        },
+      },
+    ],
+  );
 });

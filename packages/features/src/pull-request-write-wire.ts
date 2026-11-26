@@ -374,7 +374,7 @@ const actionRequestSchemaOf = <Merge extends EffectSchema.Top>(merge: Merge) =>
     }),
   ]);
 
-/** One change, as the tab asks the service to make it (POST); a merge past the base's rules (`bypass`, Bypass rules and merge…) is a member's own, absent from a client before it. */
+/** One change, as the tab asks the service to make it (POST); a merge past the base's rules (`bypass`, Bypass rules and merge) is a member's own, absent from a client before it. */
 export const pullRequestActionRequestSchema = actionRequestSchemaOf(
   EffectSchema.Struct({
     ...mergeFields,

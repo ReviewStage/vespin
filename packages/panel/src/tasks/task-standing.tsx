@@ -235,6 +235,8 @@ export interface TaskStandingDoor {
   readonly relations?: TaskRelationsDoor | undefined;
   /** Whether the description is in sight, which S's ask waits on, so it never opens a menu behind another tab; in sight where unsaid. */
   readonly inSight?: boolean | undefined;
+  /** Whether the path over the title is left out, as on a phone, whose bar names the path and whose ⋯ offers its repository and its parent; drawn where unsaid. */
+  readonly pathless?: boolean | undefined;
 }
 
 /**
@@ -289,7 +291,10 @@ const PATH_LABEL = "Task path";
  * plan's; none for a task at the top, or one whose parent the list does not
  * hold yet.
  */
-function parentOf(task: TaskSummary, tasks: readonly TaskSummary[]): TaskSummary | undefined {
+export function parentOf(
+  task: TaskSummary,
+  tasks: readonly TaskSummary[],
+): TaskSummary | undefined {
   const parentId = tasks.find((each) => each.id === task.id)?.parentTaskId ?? task.parentTaskId;
 
   return parentId === undefined ? undefined : tasks.find((each) => each.id === parentId);
@@ -396,9 +401,49 @@ function RepositoryPath({
 }
 
 /**
+ * Where a page with no path (`pathless`) answers an ask for the repository's
+ * menu, as ⌘K's Change repository makes: no crumb, only the box the menu
+ * hangs from at the head of the description, and the refusal of the last pick.
+ */
+function RepositoryAsk({
+  task,
+  door,
+}: {
+  task: TaskSummary;
+  door: TaskRepositoryDoor;
+}): React.JSX.Element {
+  const menu = useRepositoryMenu({
+    value: task.repository,
+    chooser: door.chooser,
+    onChoose: door.onChoose,
+    openRequest: door.openRequest,
+    onAsked: door.onAsked,
+    align: POPOVER_ALIGN.START,
+  });
+
+  return (
+    <div className="plan-task-repository-ask relative" ref={menu.room}>
+      {menu.menu}
+      {door.note === undefined ? null : (
+        <FailureNote
+          failure={failureShown({
+            surface: FAILURE_SURFACE.REPOSITORY_PIN,
+            cause: FAILURE_CONDITION.REFUSED,
+            refused: true,
+          })}
+        >
+          {door.note}
+        </FailureNote>
+      )}
+    </div>
+  );
+}
+
+/**
  * The task's path over its title: its repository's crumb where the page
  * hands the repository's doors, its parent's where it has one, and its own
- * key, current; nothing where none of them stands.
+ * key, current; nothing where none of them stands, or where the page says
+ * it is `pathless`.
  */
 export function TaskPath({
   task,
@@ -414,6 +459,11 @@ export function TaskPath({
   );
 
   const rest = [parent, keyCrumb(task, door.workspaceName)];
+
+  if (door.pathless === true)
+    return door.repository === undefined ? null : (
+      <RepositoryAsk key={task.id} task={task} door={door.repository} />
+    );
 
   return door.repository === undefined ? (
     <PathLine crumbs={rest} />

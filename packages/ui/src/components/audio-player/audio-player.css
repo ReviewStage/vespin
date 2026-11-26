@@ -6,7 +6,7 @@
    while the keyboard moved the focus (`@repo/panel`'s base.css). */
 
 @layer components {
-  :root[data-keyboard="true"] .ui-audio-player-scrubber:has(:focus-visible) {
+  :root[data-keyboard="true"] .ui-audio-player-scrubber:focus-within {
     border-radius: var(--ui-control-radius);
     outline: var(--ui-focus-ring-width) solid var(--ui-color-focus-ring);
     outline-offset: var(--ui-focus-ring-offset);

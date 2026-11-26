@@ -220,8 +220,6 @@ export * from "./components/line-button/line-button.js";
 
 export * from "./components/link-field/link-field.js";
 
-export * from "./components/list-motion/list-motion.js";
-
 export * from "./components/list-row/list-row.js";
 
 export * from "./components/list-row/list-row-hint.js";
@@ -375,6 +373,8 @@ export * from "./components/selection/selection-region.js";
 export * from "./components/selection/selection-toolbar.js";
 
 export * from "./components/session-line/session-line.js";
+
+export * from "./components/settings-dialog/settings-dialog.js";
 
 export * from "./components/settings-ordered-rows/settings-ordered-rows.js";
 

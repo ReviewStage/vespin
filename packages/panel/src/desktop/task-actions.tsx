@@ -107,6 +107,7 @@ import {
   useShortcutTarget,
   useShortcutTargetOn,
 } from "../shortcut-target.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { useSteadyDoors } from "../steady-door.js";
 import {
   type TaskListRows,
@@ -154,6 +155,7 @@ import {
   actingCommand,
   type MenuAction,
   type MenuEntry,
+  type MenuPage,
   type MenuSubmenu,
   rowMenu,
 } from "./action-menu.js";
@@ -680,6 +682,25 @@ function TaskRepositoryPanel({
 /** What the task's menu is named, wherever a right-click on what names the task opens it. */
 export const TASK_MENU_LABEL = "Task actions";
 
+/** What a task's menu is of: a row of a list, or the task itself, its page's ⋯ and its crumb's. */
+export const TASK_MENU_KIND = {
+  ROW: "row",
+  DOCUMENT: "document",
+} as const;
+
+export type TaskMenuKind = (typeof TASK_MENU_KIND)[keyof typeof TASK_MENU_KIND];
+
+/** How a task's menu is grouped: as the desktop groups it, or as the iOS app's long press groups a row's (`taskActionGroups`). */
+const TASK_MENU_GROUPING = {
+  DESKTOP: "desktop",
+  PHONE_ROW: "phone-row",
+} as const;
+
+type TaskMenuGrouping = (typeof TASK_MENU_GROUPING)[keyof typeof TASK_MENU_GROUPING];
+
+/** What the page a phone's row menu gathers its less used acts on is called, as the iOS app's long press calls it. */
+const MORE = "More";
+
 /** What a task's one Move to is called, and what it names the move out of its workspace, at the foot of its sections. */
 const MOVE_TO = "Move to";
 const ANOTHER_WORKSPACE = "Another workspace";
@@ -726,6 +747,14 @@ function moveToEntries(
  * Each item prints its chord where the chord acts on `subject`, the task
  * as the menu draws it (`shortcut-target.ts`): the open task's, and a
  * sidebar row's U, P, and S.
+ *
+ * A row's menu on a phone (`TASK_MENU_GROUPING.PHONE_ROW`) is grouped as the
+ * iOS app's long press groups it, the acts a finger reaches for first on
+ * its first page: Rename and Mark as read; then Status, Priority, and
+ * Assignee; then Pin, and More, a page holding the rest (Task relation,
+ * Move to, and Change repository; Copy link and its kin; Version history,
+ * Remove parent, and Follow or Unfollow); then Permanently delete. It
+ * offers every act the desktop's does, so a long press hides none.
  */
 function taskActionGroups(
   tasks: TaskRowTab,
@@ -755,6 +784,8 @@ function taskActionGroups(
     opened: OpenedTask | undefined;
     /** Whether the account has Descriptions on, without which there is no description to copy and no version history. */
     descriptions: boolean;
+    /** How the menu is grouped: a phone's row's as the iOS app's long press groups it. */
+    grouping: TaskMenuGrouping;
   },
 ): MenuEntry[][] {
   const { opened, descriptions, subject } = doors;
@@ -824,17 +855,32 @@ function taskActionGroups(
     danger: true,
   };
 
-  const groups: MenuEntry[][] = [
+  const pin = pinAction(doors.pins, task, subject);
+  const filled = (groups: MenuEntry[][]) => groups.filter((group) => group.length > 0);
+
+  if (doors.grouping === TASK_MENU_GROUPING.PHONE_ROW) {
+    // Note that More wears no glyph, since the ⋯ is a thing's own button's alone (`MoreButton`).
+    const more: MenuPage = {
+      label: MORE,
+      groups: filled([
+        [...relate, ...move, repository],
+        [...link, ...copy],
+        [...versions, ...unparent, ...doors.follow],
+      ]),
+    };
+
+    return filled([[rename, ...read], [...doors.standing], [...pin, more], [remove]]);
+  }
+
+  return filled([
     [...copy, ...link],
     [rename, ...versions, ...read],
     [...doors.standing],
     [...relate, ...unparent],
-    [...pinAction(doors.pins, task, subject), ...doors.follow, ...move],
+    [...pin, ...doors.follow, ...move],
     [repository],
     [remove],
-  ];
-
-  return groups.filter((group) => group.length > 0);
+  ]);
 }
 
 /**
@@ -954,9 +1000,12 @@ export function useTaskMenuItems(
     chips?: StandingChips | undefined;
     /** The task the window has open (`openedTaskOf`), which the items read only where it is this one. */
     opened: OpenedTask | undefined;
+    /** What the menu is of, which a phone groups as the iOS app's long press does where it is a row's; a document's unless said. */
+    kind?: TaskMenuKind | undefined;
   },
 ) {
   const opened = openedAs(doors.opened, taskId);
+  const phone = usePhoneRoom();
   const listed = useTaskListCollections().tasks;
   const row = useTaskListRow(listed, taskId);
   // Note that the list's row is drawn again as it moves, its name read as it is being typed, and the open document stands in for a task the list holds not.
@@ -1031,6 +1080,10 @@ export function useTaskMenuItems(
         relationId,
         opened,
         descriptions,
+        grouping:
+          phone && doors.kind === TASK_MENU_KIND.ROW
+            ? TASK_MENU_GROUPING.PHONE_ROW
+            : TASK_MENU_GROUPING.DESKTOP,
         read: {
           unread: doors.unread,
           onMark: (unread) => {
@@ -1358,6 +1411,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   const actions = useTaskMenuItems(tasks, task.id, task.name, {
     rename: rename.begin,
     drawn: true,
+    kind: TASK_MENU_KIND.ROW,
     unread,
     row: rowSubject,
     opened,
@@ -1373,7 +1427,6 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
       <RowHintOptions card={card}>
         <ListRow
           ref={hold}
-          motionKey={task.id}
           density={LIST_DENSITY.DENSE}
           ink={LIST_ROW_INK.SIDEBAR}
           leading={<PlanGlyph status={task.status} />}

@@ -10,7 +10,7 @@ import { attachment } from "../../schemas/attachment.js";
 import { user } from "../../schemas/auth.js";
 import { conversations } from "../../schemas/storage.js";
 import { CONVERSATION_KIND } from "../../storage-vocabulary.js";
-import { getTestDB } from "../../testing/index.js";
+import { fillConversationPictures, getTestDB, inlineBytesOf } from "../../testing/index.js";
 import { deleteConversations } from "../conversation-delete.js";
 import {
   keepConversationPicture,
@@ -75,7 +75,7 @@ it.layer(getTestDB())("a conversation's pictures", (it) => {
       );
       const read = yield* readConversationPicture(owner.conversationId, first.value.id);
       assert.deepEqual(
-        Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
+        Option.map(read, (stored) => [stored.contentType, [...inlineBytesOf(stored.body)]]),
         Option.some([INBOX_IMAGE_TYPE.PNG, [...picture(1).bytes]]),
       );
       assert.deepEqual(
@@ -90,21 +90,11 @@ it.layer(getTestDB())("a conversation's pictures", (it) => {
     Effect.gen(function* () {
       const target = yield* openConversation;
       const kept = yield* keepConversationPicture(target, picture(0));
-      // Note that the row stands in for pictures kept up to the budget's last few bytes, because
-      // the budget is read off the rows' byte counts and two hundred megabytes of real bytes
-      // would only slow the test.
-      const db = yield* Database;
-      yield* db.insert(attachment).values({
-        userId: target.userId,
-        conversationId: target.conversationId,
-        sha256: "f".repeat(64),
-        contentType: INBOX_IMAGE_TYPE.PNG,
-        width: 1,
-        height: 1,
-        byteCount: CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION - 10,
-        bytes: new Uint8Array([0]),
-        createdAt: new Date(),
-      });
+      // Note that the rows stand in for pictures kept up to the budget's last few bytes.
+      yield* fillConversationPictures(
+        target,
+        CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION - 10,
+      );
 
       const past = yield* keepConversationPicture(target, picture(1));
       const keptAlready = yield* keepConversationPicture(target, picture(0));
