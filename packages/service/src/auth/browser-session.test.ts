@@ -27,7 +27,7 @@ import { CONNECTOR_ASKED_NOTHING, integrationConnectOf } from "../testing/integr
 import { SESSION_COOKIE_CACHE } from "./auth-policy.js";
 import { requestUserId } from "./bearer.js";
 import { browserSessionUserId } from "./browser-session.js";
-import { answeredWithSessionCookies, SESSION_COOKIE_FRESH_MS } from "./session-cookies.js";
+import { droppedLateSessionCookies, SESSION_COOKIE_FRESH_MS } from "./session-cookies.js";
 
 /**
  * A browser's session read in process answers the browser as Better Auth's
@@ -201,17 +201,12 @@ it.layer(getTestDB())("a browser's session read", (it) => {
       }),
   );
 
-  it.effect("a late answer carries none of the cookies, so it overwrites no later sign-in", () =>
+  it.effect("a late answer drops every cookie kept for it, so it overwrites no later sign-in", () =>
     Effect.sync(() => {
       const kept = ["better-auth.session_token=stale; Path=/; Max-Age=604800"];
 
-      const late = answeredWithSessionCookies(
-        new Response(null),
-        kept,
-        SESSION_COOKIE_FRESH_MS + 1,
-      );
-
-      assert.deepEqual(late.headers.getSetCookie(), []);
+      assert.equal(droppedLateSessionCookies(kept, SESSION_COOKIE_FRESH_MS + 1), 1);
+      assert.deepEqual(kept, []);
     }),
   );
 });

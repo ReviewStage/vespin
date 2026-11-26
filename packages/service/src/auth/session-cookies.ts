@@ -55,18 +55,26 @@ export function withoutSessionCookies<Services>(
 }
 
 /**
- * The answer with the cookies kept for it, each its own `Set-Cookie`, where
- * it leaves within `SESSION_COOKIE_FRESH_MS` of its request, and then held
- * to `private, no-store` whatever caching its procedure asked for, so no
- * shared cache keeps a browser's cookie and hands it to another. A later
- * answer carries none.
+ * Drops the cookies kept for an answer leaving later than
+ * `SESSION_COOKIE_FRESH_MS` after its request came, answering how many it
+ * dropped, so the procedure's span can count them (`orpc/base.ts`). Note
+ * that a dropped daily extension is the one way a browser's session cookie
+ * still outlives its welcome, so a count above zero names a procedure that
+ * should read its session as a held read does.
  */
-export function answeredWithSessionCookies(
-  response: Response,
-  kept: readonly string[],
-  elapsedMs: number,
-): Response {
-  if (kept.length === 0 || elapsedMs > SESSION_COOKIE_FRESH_MS) return response;
+export function droppedLateSessionCookies(kept: string[], elapsedMs: number): number {
+  if (elapsedMs <= SESSION_COOKIE_FRESH_MS) return 0;
+
+  return kept.splice(0).length;
+}
+
+/**
+ * The answer with the cookies kept for it, each its own `Set-Cookie`, and
+ * then held to `private, no-store` whatever caching its procedure asked for,
+ * so no shared cache keeps a browser's cookie and hands it to another.
+ */
+export function answeredWithSessionCookies(response: Response, kept: readonly string[]): Response {
+  if (kept.length === 0) return response;
 
   for (const cookie of kept) response.headers.append(COOKIE_ANSWER.SET_COOKIE, cookie);
   response.headers.set(COOKIE_ANSWER.CACHE_CONTROL, COOKIE_ANSWER.PRIVATE);

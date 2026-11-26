@@ -252,7 +252,6 @@ export function hostedFetch(router: HostedRouter): HostedFetch {
     }
 
     // Note that each request has its own place for the cookies its session read answers with (`auth/session-cookies.ts`).
-    const askedAt = Date.now();
     const kept: string[] = [];
     const asked = Context.add(services, SessionCookies, { kept });
 
@@ -260,11 +259,7 @@ export function hostedFetch(router: HostedRouter): HostedFetch {
       context: { "effect/context": asked, "effect/wrap": hostedRefusalWrap(asked), request },
     });
 
-    if (matched) {
-      return sameOriginOnly(
-        answeredWithSessionCookies(settled(response), kept, Date.now() - askedAt),
-      );
-    }
+    if (matched) return sameOriginOnly(answeredWithSessionCookies(settled(response), kept));
 
     const { pathname } = new URL(request.url);
 
