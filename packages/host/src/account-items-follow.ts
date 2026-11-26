@@ -21,6 +21,7 @@ import {
   type PlacedInboxItem,
   placedItem,
 } from "./inbox-collections.js";
+import { INBOX_MESSAGE } from "./inbox-messages.js";
 import { KEPT_LIST } from "./kept-lists.js";
 import {
   confirmWrite,
@@ -462,10 +463,18 @@ export function followAccountItems(
 
       // Note that where the account's database keeps the Inbox kind whole, the follow writes each answer there and tells no item on the document (`account-items-stored.ts`).
       if (items.onDisk) {
+        // Note that the messages are answered by this follow alone, whole or by what moved, so it stands as the read that answers every one.
+        const messages = yield* dependencies.pool.stand(INBOX_MESSAGE, {
+          owns: true,
+          redraw: () => Effect.void,
+          confirmation: () => undefined,
+        });
+
         const read = yield* followStoredItems({
           seal: (sync) => dependencies.seal(userId, sync),
           pool: dependencies.pool,
           items,
+          messages,
           resumes,
           tasksListed: dependencies.tasksListed ?? noneListed,
           onTxWait: (handed) => {

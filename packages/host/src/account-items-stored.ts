@@ -34,7 +34,16 @@ import { INBOX_STATUS } from "@repo/features/inbox-wire";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
-import { and, createLiveQueryCollection, eq, isUndefined, lt, not, or } from "@tanstack/db";
+import {
+  and,
+  createLiveQueryCollection,
+  eq,
+  inArray,
+  isUndefined,
+  lt,
+  not,
+  or,
+} from "@tanstack/db";
 import { Clock, Effect, Option, Schema } from "effect";
 import type { AppInboxItems, AppInboxRead } from "./app-state.js";
 import {
@@ -43,6 +52,7 @@ import {
   type PlacedInboxItem,
   placedItem,
 } from "./inbox-collections.js";
+import { INBOX_MESSAGE, type ThreadMessage, threadMessagesOf } from "./inbox-messages.js";
 import {
   followTakingRows,
   type LiveFailure,
@@ -193,6 +203,56 @@ function agedIds(pool: EntityPool, now: number): Effect.Effect<readonly string[]
   );
 }
 
+/** The ids of every message the message kind keeps on the threads `threadIds` names; none where it names none. Note that the filter runs in SQLite, so only those threads' messages are read. */
+function threadMessageIds(
+  pool: EntityPool,
+  threadIds: readonly string[],
+): Effect.Effect<ReadonlySet<string>> {
+  if (threadIds.length === 0) return Effect.succeed(new Set());
+
+  return Effect.flatMap(pool.collection(INBOX_MESSAGE), (collection) =>
+    Effect.promise(async () => {
+      const kept = createLiveQueryCollection({
+        query: (q) =>
+          q
+            .from({ message: collection })
+            .where(({ message }) => inArray(message.threadId, [...threadIds]))
+            .select(({ message }) => ({ id: message.id })),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      try {
+        await kept.preload();
+
+        return new Set(kept.toArray.map((row) => row.id));
+      } finally {
+        await kept.cleanup();
+      }
+    }),
+  );
+}
+
+/**
+ * The messages an answer moves: every message of each item it carries, and
+ * the ids of those kept on these items, or on those `gone`, that it no
+ * longer carries, since an item that moves comes whole, its latest messages
+ * among it, and one gone takes its thread with it.
+ */
+function movedMessages(
+  pool: EntityPool,
+  placed: readonly PlacedInboxItem[],
+  gone: readonly string[],
+): Effect.Effect<{ readonly rows: readonly ThreadMessage[]; readonly gone: readonly string[] }> {
+  const rows = placed.flatMap(threadMessagesOf);
+  const carried = new Set(rows.map((row) => row.id));
+
+  return Effect.map(
+    threadMessageIds(pool, [...placed.map((item) => item.id), ...gone]),
+    (kept) => ({ rows, gone: [...kept].filter((id) => !carried.has(id)) }),
+  );
+}
+
 /** What the stored follow is handed. */
 export interface StoredItemsFollow {
   /** The account's items read past the sync id named, whole where it is empty; a failure where the service answered none. */
@@ -202,6 +262,8 @@ export interface StoredItemsFollow {
   readonly pool: EntityPool;
   /** The items the follow stands on, kept on disk whole. */
   readonly items: HeldRows<PlacedInboxItem, InboxChange>;
+  /** Each message of their threads, kept on disk whole beside them, which a thread reads as it opens. */
+  readonly messages: HeldRows<ThreadMessage, never>;
   /** Whether this attempt may read past the sync id kept, as the first of a follow's does. */
   readonly resumes: boolean;
   /** The task list's summaries of the tasks named, of those it holds now. */
@@ -241,7 +303,12 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
       const pending = pool.standing(INBOX_ITEM)?.pending;
       const aged = found.filter((id) => pending?.has(id) !== true);
 
-      if (aged.length > 0) yield* items.answer([], { gone: aged });
+      if (aged.length === 0) return;
+      // Note that an item's messages go before it, so a launch never finds an item kept whose thread is gone.
+      const left = yield* threadMessageIds(pool, aged);
+
+      if (left.size > 0) yield* follow.messages.answer([], { gone: [...left] });
+      yield* items.answer([], { gone: aged });
     });
 
     // Note that a database that kept the items is told at once, so a launch draws the kept Inbox before the read answers.
@@ -259,8 +326,17 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
         const at = syncIdOf(standing);
         const cursor = cursorOf(holders, standing);
 
+        const whole = standing?.past === undefined;
+
+        // Note that the messages are written before the items and the sync id beside them, so a launch cut short between the two reads past an older id and writes them again, never past messages it lacks.
+        if (whole) yield* follow.messages.answer(placed.flatMap(threadMessagesOf));
+        else {
+          const moved = yield* movedMessages(pool, placed, standing.gone);
+          yield* follow.messages.answer(moved.rows, { gone: moved.gone });
+        }
+
         // Note that a whole answer names every item there is, so it replaces what the database keeps; one past a sync id names only what moved, and what stands no longer.
-        yield* standing?.past === undefined
+        yield* whole
           ? items.answer(placed, { ...(at === undefined ? undefined : { at }), cursor })
           : items.answer(placed, {
               gone: standing.gone,

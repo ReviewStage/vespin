@@ -59,6 +59,7 @@ import {
 import { TestClock } from "effect/testing";
 import type { AppManagerChats, AppTranscript } from "./app-state.js";
 import { INBOX_CHANGE, INBOX_ITEM } from "./inbox-collections.js";
+import { INBOX_MESSAGE } from "./inbox-messages.js";
 import { localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
@@ -2572,6 +2573,89 @@ it.effect(
         [],
         "the next launch reads past the sync id kept, never whole",
       );
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+/** The ids of every message the message kind keeps now, as a live query loads them from the account's database. */
+function keptMessageIds(pool: EntityPool) {
+  return Effect.flatMap(pool.collection(INBOX_MESSAGE), (collection) =>
+    Effect.promise(async () => {
+      const query = createLiveQueryCollection({
+        query: (q) => q.from({ message: collection }),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      await query.preload();
+      const ids = query.toArray.map((message) => message.id).sort();
+      await query.cleanup();
+
+      return ids;
+    }),
+  );
+}
+
+/** A message on `item`'s thread as its row carries it, the agent's, at `createdAt`. */
+function messageRowOf(item: InboxItem, id: string, createdAt: number) {
+  return {
+    id,
+    itemId: item.id,
+    author: "agent",
+    userId: null,
+    name: null,
+    text: `Said at ${createdAt}`,
+    ask: null,
+    answers: null,
+    createdAt,
+  };
+}
+
+it.effect(
+  "where the account's database keeps the Inbox kind, each item's messages are kept there beside it, and an answer that moves the item keeps only the messages it carries",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-messages-");
+      const first = "0d1e2f3a-4b5c-4d6e-8f7a-8b9c0d1e2f3a";
+      const second = "1e2f3a4b-5c6d-4e7f-8a8b-9c0d1e2f3a4b";
+      const third = "2f3a4b5c-6d7e-4f8a-9b9c-0d1e2f3a4b5c";
+      const quit = yield* Scope.make();
+      const launch = yield* Scope.provide(quit)(keptLaunch(root));
+      launch.sealItems(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+
+      launch.live.items.set({
+        stamps: [stampOf(HELD_ITEM, TASK_ID)],
+        items: [{ ...ITEM_ROW, ...HELD_ITEM }],
+        messages: [messageRowOf(HELD_ITEM, first, 1), messageRowOf(HELD_ITEM, second, 2)],
+        files: [],
+      });
+
+      yield* toldTimes(launch.accountItems, 1);
+      const kept = yield* keptMessageIds(launch.pool);
+
+      // Note that the item moves as a message lands on it, since the read's poll answers only once a stamp moves.
+      const moved = { ...HELD_ITEM, updatedAt: HELD_ITEM.updatedAt + 1 };
+
+      launch.live.items.set({
+        stamps: [stampOf(moved, TASK_ID, { messages: 2 })],
+        items: [{ ...ITEM_ROW, ...moved }],
+        messages: [messageRowOf(moved, second, 2), messageRowOf(moved, third, 3)],
+        files: [],
+      });
+
+      // Note that the follow polls again on its clock, and the delta is written through the database, which answers on its own time, so the case moves the clock and reads the kept messages until they move.
+      yield* TestClock.adjust(Duration.seconds(30));
+      yield* Effect.repeat(keptMessageIds(launch.pool), {
+        until: (ids) => !ids.includes(first),
+        times: 200,
+      });
+      yield* Scope.close(quit, Exit.void);
+
+      const next = yield* keptLaunch(root);
+
+      assert.deepEqual(kept, [first, second].sort());
+      assert.deepEqual(yield* keptMessageIds(next.pool), [second, third].sort());
     }).pipe(Effect.provide(keptPlatform)),
 );
 
