@@ -318,6 +318,34 @@ it.layer(Layer.merge(getTestDB(), store.layer))("the backfill over a store", (it
         assert.equal(store.objects.has(keys.blobKey), false);
       }),
   );
+
+  it.effect(
+    "a write the store acknowledged but holds short leaves the row's bytes inline and fails the sweep",
+    () =>
+      Effect.gen(function* () {
+        const id = yield* keepInline(CONVERSATION_MEDIA_TYPE.PNG, new Uint8Array([20, 21, 22]));
+        const working = yield* BlobStore;
+
+        const holdingShort = {
+          ...working,
+          head: (pathname: string) =>
+            Effect.map(
+              working.head(pathname),
+              Option.map((held) => ({ ...held, size: held.size - 1 })),
+            ),
+        };
+
+        const exit = yield* Effect.exit(
+          Effect.provideService(moveAttachmentsToBlob(), BlobStore, holdingShort),
+        );
+
+        assert.ok(Exit.isFailure(exit));
+        assert.deepEqual((yield* bodiesOf(id)).original, {
+          kind: ATTACHMENT_BODY.INLINE,
+          bytes: new Uint8Array([20, 21, 22]),
+        });
+      }),
+  );
 });
 
 /** The store as a deployment that names none builds it, whatever this machine's environment holds. */

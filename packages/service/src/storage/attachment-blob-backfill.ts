@@ -4,7 +4,7 @@
  * Each sweep takes a bounded batch of the rows that still keep their bytes
  * inline (`ATTACHMENT_BLOB_BACKFILL`), and moves a few at a time: for each it reads
  * the row's bytes, writes them, and its copy for a phone, to the row's own
- * pathnames, and only then claims them on the row, clearing its bytes in
+ * pathnames, reads back that the store holds each whole, and only then claims them on the row, clearing its bytes in
  * the same statement (`@repo/database/models/attachment-blob-backfill`). No
  * lock is held across a write, so a reader or a delete never waits on the
  * store. Every key is tombstoned before its write and its tombstone dropped
@@ -27,6 +27,7 @@ import {
   claimAttachmentBlobs,
   countInlineAttachments,
   type InlineAttachment,
+  type InlineBody,
   readInlineAttachmentBytes,
   readInlineAttachments,
   tombstoneAttachmentBlobs,
@@ -35,7 +36,12 @@ import {
 import { Data, Effect, Option } from "effect";
 import { ATTACHMENT_BLOB_BACKFILL } from "../maintenance/maintenance-bounds.js";
 import { ATTACHMENT_BLOB_VARIANT, attachmentBlobPath } from "./attachment-blob-paths.js";
-import { BLOB_STORE_FAILURE, BlobStore, type BlobStoreFailure } from "./blob-store.js";
+import {
+  BLOB_STORE_FAILURE,
+  BlobStore,
+  type BlobStoreFailure,
+  type BlobStoreValues,
+} from "./blob-store.js";
 
 /** What became of one row the sweep took. */
 const ROW_MOVE = {
@@ -73,6 +79,20 @@ function withinBudget(rows: readonly InlineAttachment[]): readonly InlineAttachm
 const failedMove = (failure: BlobStoreFailure): RowMove =>
   failure.reason === BLOB_STORE_FAILURE.UNCONFIGURED ? ROW_MOVE.UNCONFIGURED : ROW_MOVE.FAILED;
 
+/**
+ * Writes one body and reads back what the store holds at its key, answering
+ * whether it holds exactly that many bytes. Note that a row's inline bytes
+ * are cleared only once each of its writes reads back whole, so a write the
+ * store acknowledged but holds short leaves the row inline for the next sweep.
+ */
+const writeVerified = (store: BlobStoreValues, key: string, body: InlineBody) =>
+  Effect.gen(function* () {
+    yield* store.put(key, body.bytes, body.contentType);
+    const held = yield* store.head(key);
+
+    return Option.isSome(held) && held.value.size === body.bytes.byteLength;
+  });
+
 /** Moves one row's bytes into the store and claims them on the row. */
 const moveRow = /* @__PURE__ */ Effect.fn("storage/moveAttachmentRow")(function* (id: string) {
   const store = yield* BlobStore;
@@ -89,13 +109,13 @@ const moveRow = /* @__PURE__ */ Effect.fn("storage/moveAttachmentRow")(function*
   yield* tombstoneAttachmentBlobs({ blobKey, phoneBlobKey });
 
   const written = yield* Effect.gen(function* () {
-    yield* store.put(blobKey, original.bytes, original.contentType);
+    const held = [yield* writeVerified(store, blobKey, original)];
 
     if (phone !== null && phoneBlobKey !== null) {
-      yield* store.put(phoneBlobKey, phone.bytes, phone.contentType);
+      held.push(yield* writeVerified(store, phoneBlobKey, phone));
     }
 
-    return true as const;
+    return held.every(Boolean) ? (true as const) : ROW_MOVE.FAILED;
   }).pipe(Effect.catchTag("BlobStoreFailure", (failure) => Effect.succeed(failedMove(failure))));
 
   if (written !== true) {
