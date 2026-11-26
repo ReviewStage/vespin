@@ -5,7 +5,7 @@ import { AGENT_KIND, type AgentKind } from "@repo/features/agent-wire";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
-  MANAGER_FACE_OFFERED_COLORS,
+  MANAGER_FACE_PICK_COLORS,
   type ManagerFace,
 } from "@repo/features/manager-face";
 import { eq } from "drizzle-orm";
@@ -25,9 +25,9 @@ import { archiveAgent, createAgent, updateManagerFaceCommitted } from "../agent-
  * accounts.
  */
 
-/** Every face the service gives: each character in each offered color. */
+/** Every face the service gives: each character in each color a face is given in, never `peach` and never an emoji. */
 const EVERY_FACE: readonly ManagerFace[] = Object.values(MANAGER_FACE_CHARACTER).flatMap(
-  (character) => MANAGER_FACE_OFFERED_COLORS.map((color) => ({ character, color })),
+  (character) => MANAGER_FACE_PICK_COLORS.map((color) => ({ character, color })),
 );
 
 const faceKey = (face: ManagerFace | null | undefined) =>
@@ -69,7 +69,7 @@ const openManager = (
 
 it.layer(getTestDB())("a new Manager's face", (it) => {
   it.effect(
-    "takes a face no standing Manager of its workspace wears, the last free one too, and an archived one's again",
+    "takes a face of the nine colors no standing Manager of its workspace wears, the last free one too, and an archived one's again",
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
@@ -84,6 +84,8 @@ it.layer(getTestDB())("a new Manager's face", (it) => {
         }
 
         const worn = new Set(made.map((agent) => faceKey(agent.face)));
+        const given = new Set(EVERY_FACE.map(faceKey));
+        assert.ok([...worn].every((face) => given.has(face)));
         const free = EVERY_FACE.find((face) => !worn.has(faceKey(face)));
         assert.equal(worn.size, EVERY_FACE.length - 1);
         assert.ok(free !== undefined);

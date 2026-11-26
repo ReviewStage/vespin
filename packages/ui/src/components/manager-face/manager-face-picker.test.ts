@@ -61,7 +61,7 @@ test("a search keeps the faces whose name holds every word typed, and Enter pick
   roots.push(root);
   act(() => root.render(createElement(Picker)));
 
-  expect(offered(container)).toHaveLength(36);
+  expect(offered(container)).toHaveLength(54);
   expect(pressed(container)).toEqual(["Blue ghost"]);
 
   const field = container.querySelector<HTMLInputElement>('input[type="search"], input');
@@ -72,17 +72,20 @@ test("a search keeps the faces whose name holds every word typed, and Enter pick
 
   search(field, "bubble");
   expect(offered(container)).toEqual([
+    "Red speech bubble",
+    "Orange speech bubble",
     "Yellow speech bubble",
     "Green speech bubble",
+    "Teal speech bubble",
     "Blue speech bubble",
-    "Pink speech bubble",
     "Purple speech bubble",
-    "Peach speech bubble",
+    "Pink speech bubble",
+    "Gray speech bubble",
   ]);
 
   act(() => {
     field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   });
 
-  expect(pressed(container)).toEqual(["Yellow speech bubble"]);
+  expect(pressed(container)).toEqual(["Red speech bubble"]);
 });

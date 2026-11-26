@@ -23,7 +23,7 @@ import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
-  MANAGER_FACE_OFFERED_COLORS,
+  MANAGER_FACE_PICK_COLORS,
   type ManagerFace,
   managerFaceSchema,
 } from "@repo/features/manager-face";
@@ -35,8 +35,8 @@ import { agentTable } from "../schemas/agent.js";
 
 const CHARACTERS = Object.values(MANAGER_FACE_CHARACTER);
 
-// Note that the walk keeps to the colors the pickers offer, because a color added for the faces to come is one a released client draws as yellow.
-const COLORS = MANAGER_FACE_OFFERED_COLORS;
+// Note that the walk keeps to the colors a face is given in, so it never gives `peach`, and never an emoji, which only a member picks.
+const COLORS = MANAGER_FACE_PICK_COLORS;
 
 /** Every face in walk order: the pairs' diagonals, each a run of faces whose characters and colors all differ. */
 const FACES: readonly ManagerFace[] = COLORS.flatMap((_, diagonal) =>
