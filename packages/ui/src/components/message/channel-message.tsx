@@ -42,6 +42,7 @@ export function ChannelMessage({
   name,
   at,
   continues = false,
+  open = false,
   actions,
   contextMenu,
   under,
@@ -54,6 +55,8 @@ export function ChannelMessage({
   at?: ReactNode;
   /** Whether it goes on its sender's run, drawn with no picture, name, or time. */
   continues?: boolean | undefined;
+  /** Whether its thread stands open beside the channel, which holds the row in a steady tint. */
+  open?: boolean | undefined;
   actions?: ReactNode;
   /** The menu a right-click or a long press on it opens; none where it has none. */
   contextMenu?: ContextMenuProps | undefined;
@@ -65,8 +68,9 @@ export function ChannelMessage({
   return (
     <MessageFrame
       revealActionsOnTap
-      className={`ui-channel-message relative flex w-full min-w-0 gap-ui-8 rounded-ui-6 px-ui-8 hover:bg-muted ${continues ? "py-ui-2" : "pt-ui-6 pb-ui-2"}`}
+      className={`ui-channel-message relative flex w-full min-w-0 gap-ui-8 rounded-ui-6 px-ui-8 hover:bg-muted data-[open]:bg-message-open data-[open]:hover:bg-message-open ${continues ? "py-ui-2" : "pt-ui-6 pb-ui-2"}`}
       data-continues={continues ? "" : undefined}
+      data-open={open ? "" : undefined}
       data-message-id={messageId}
     >
       <span className="ui-channel-message-avatar inline-flex w-channel-avatar flex-none items-start justify-center">
