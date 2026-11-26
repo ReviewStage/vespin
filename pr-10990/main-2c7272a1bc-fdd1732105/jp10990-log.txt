@@ -1,0 +1,12 @@
+-- jp10990: main pinned to 2c7272a1bc: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to ca8a29eaf8
+== bundle PJjp10990 base ca8a29eaf8
+  built ca8a29eaf8 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-picture-scroll: fails NOSTART (steps 60, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+iphone-light-keep: fails 1 shots 1 Assert that "Save to Photos" is visible... FAILED
+  iphone-light-keep around the failure: Tap on "Recorded the invite flow"... COMPLETED|Assert that ".*walked the invite flow.*" is visible... COMPLETED|Wait for animation to end... COMPLETED|Long press on "The invite page"... COMPLETED|Assert that "Save to Photos" is visible... FAILED||
+iphone-light-agent: fails 0 shots 32 
