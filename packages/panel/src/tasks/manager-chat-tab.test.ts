@@ -27,7 +27,6 @@ import { MemberDirectory } from "../member-directory.js";
 import { FAKE_ANSWER, fakeActs } from "../testing/app-bridge.js";
 import { handMembers, handState } from "../testing/app-state.js";
 import {
-  composerWords,
   editorBundleLanded,
   installEditorLayout,
   pressInComposer,
@@ -45,9 +44,7 @@ import { ThreadDoorsProvider } from "./manager-chat-threads.js";
  * manager-chat-tab.test.ts -- a Manager's page as its own chat, drawn from
  * the chat's rows: the reader's messages at the right and everyone else's at
  * the left, each sender named over their run; an ended turn's work a press
- * away from the Manager's first message of the turn, and found by ⌘F; Reply beside any message,
- * the Manager's or a person's, quoting it whole into the box, which sends it
- * to the chat; a call the Manager holds for an answer standing at the chat's
+ * away from the Manager's first message of the turn, and found by ⌘F; a call the Manager holds for an answer standing at the chat's
  * foot with its answers; Retry sending a refused message again with its
  * files; and a thread opening beside the chat, as the page's side panel
  * opens it, its box the chat's own composer replying in it. Synthetic words.
@@ -351,7 +348,7 @@ test("a message's menu, a right-click or a long press, leads with Reply in threa
   const items = [...document.querySelectorAll<HTMLElement>("[role='menuitem']")];
   assert.deepEqual(
     items.map((item) => item.textContent),
-    ["Reply in thread", "Reply", "Copy"],
+    ["Reply in thread", "Copy"],
   );
 
   act(() => items[0]?.click());
@@ -621,39 +618,6 @@ test("⌘F finds words in an ended turn's work while it stands closed, deep in a
   );
 });
 
-test.each([
-  ["the Manager's", "told"],
-  ["a teammate's", "seven"],
-])(
-  "Reply beside %s message quotes the whole message into the box, which sends it to the chat with the words after it",
-  async (_sender, messageId) => {
-    const told = `**Plan**: the invite flow ships first.\n\n${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}`;
-
-    const { container, sent } = await drawChat([
-      row("ask", 1, "What first?", DEAN),
-      row("told", 2, told),
-      row("seven", 3, told, CHARLES),
-    ]);
-
-    // The pointer comes onto the message, which draws its actions at once.
-    const message = container.querySelector(`[data-message-id="${messageId}"]`);
-    assert.ok(message, "the message is drawn");
-    pointerCross(document.body, message);
-
-    const reply = message.querySelector<HTMLButtonElement>('button[aria-label="Reply"]');
-    assert.ok(reply, "Reply stands beside the message");
-    act(() => reply.click());
-    await settleQueries();
-    typeInComposer(container, "Ship it");
-    pressInComposer(container, "Enter");
-    await settleQueries();
-
-    assert.deepEqual(sent, [
-      `> **Plan**: the invite flow ships first.\n>\n> ${"Then the reminders, once the invite flow has run a week. ".repeat(6).trim()}\n\nShip it`,
-    ]);
-  },
-);
-
 test("a chat longer than its first page asks once for the page before it as it opens, and one that did not answer offers Retry", async () => {
   const { container, older } = await drawChat([row("later", 7, "Shipped.")], { before: 7 });
 
@@ -683,35 +647,6 @@ test("a thread whose message is older than the pages read asks for the page it m
   await settleQueries();
 
   assert.deepEqual(older, [7, 7]);
-});
-
-test("Reply on a message in a thread quotes it into the thread's box, and the chat's own box holds nothing of it", async () => {
-  const { container } = await drawChat(
-    [
-      row("first", 1, "On it."),
-      { ...row("asked", 2, "Which repo?", CHARLES), threadRoot: "first" },
-    ],
-    { opened: "first" },
-  );
-
-  const thread =
-    container.querySelector("[data-thread-tab]") ?? assert.fail("the thread's tab stands");
-
-  const message =
-    thread.querySelector('[data-message-id="asked"]') ?? assert.fail("the reply is drawn");
-
-  pointerCross(document.body, message);
-
-  const reply =
-    message.querySelector<HTMLButtonElement>('button[aria-label="Reply"]') ??
-    assert.fail("Reply stands beside the reply");
-
-  act(() => reply.click());
-  await settleQueries();
-
-  const chat = container.querySelector(".agent-tab") ?? assert.fail("the chat stands");
-  assert.equal(composerWords(thread).trim(), "Which repo?");
-  assert.equal(composerWords(chat), "");
 });
 
 test("a call the Manager holds for an answer stands at the chat's foot, whose Allow sends the answer", async () => {

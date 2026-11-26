@@ -5,7 +5,7 @@
  * and keeps the work each turn did, its thoughts, calls, and own words, out
  * of sight until the reader asks. A turn that has ended offers Show work
  * among the actions of its first message and in that message's menu
- * (`manager-chat-tab.tsx`, `chat-reply.tsx`); the turn under way offers it
+ * (`manager-chat-tab.tsx`, `chat-message-menu.tsx`); the turn under way offers it
  * beside its working line. Either draws the work under its row as the
  * transcript draws a turn's, and Hide work folds it away again, so a
  * finished chat draws no more than its messages.

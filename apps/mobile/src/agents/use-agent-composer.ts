@@ -61,7 +61,6 @@ import {
   type SendingMessage,
 } from "@repo/features/agent-view";
 import {
-  AGENT_BOUNDS,
   AGENT_KIND,
   type AgentAttachment,
   type AgentQueueChange,
@@ -75,7 +74,6 @@ import {
   queueEditChange,
   queueEditLeft,
 } from "@repo/features/queue-edit-model";
-import { cutReply, QUOTE_GAP, quoteOf, replyOf } from "@repo/features/reply-quote";
 import { type SuggestionSendResult, suggestedWords } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
@@ -249,8 +247,6 @@ export interface AgentComposer {
   readonly pills: ComposerPills;
   /** Lays one of the member's sent lines' words in the field to send again in its place, the field's own kept aside, and has it take the keyboard. */
   readonly editMessage: (line: MessageEdit) => void;
-  /** Quotes a message's Markdown whole into the field, after what it holds, a blank line under the quote for the member's own words, and has it take the keyboard, as the panel's Reply does. */
-  readonly reply: (words: string) => void;
   /** Gives up the edit of a sent line, the field given back what it held; none while the field holds no sent line's words. */
   readonly cancelMessageEdit: (() => void) | undefined;
   /** The question the send of a line written again asks first where anything follows it, as the panel's asks it. */
@@ -777,24 +773,6 @@ export function useAgentComposer(
     setFocusAsk((count) => count + 1);
   };
 
-  // Note that the quote goes after what the field holds, cut only where the message's bound leaves it no room, and the member writes under it.
-  const reply = (quoted: string) => {
-    const picked = replyOf(quoted);
-
-    if (picked === "") return;
-
-    setWords((typed) => {
-      const kept = typed.trimEnd();
-      const lead = kept === "" ? "" : `${kept}${QUOTE_GAP}`;
-      const room = AGENT_BOUNDS.MAX_MESSAGE_CHARS - lead.length - QUOTE_GAP.length;
-      const cut = cutReply(picked, room);
-
-      return cut === "" ? typed : `${lead}${quoteOf(cut)}${QUOTE_GAP}`;
-    });
-    setNote(undefined);
-    setFocusAsk((count) => count + 1);
-  };
-
   const editAsk = editSendAsk(rewriting?.line.takes, false, rewriting?.line.cuts ?? true);
 
   const stop = () => {
@@ -999,7 +977,6 @@ export function useAgentComposer(
     mentions: skills === undefined ? mentions : undefined,
     pills: pillField.pills,
     editMessage,
-    reply,
     cancelMessageEdit: rewriting === undefined ? undefined : () => giveBackRewritten(rewriting),
     sendingEdit: {
       title: editAsk.title,

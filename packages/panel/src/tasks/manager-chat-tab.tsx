@@ -111,7 +111,7 @@ import type { DelegationDoors } from "./agent-tab.js";
 import { LOG_ROW_CLASS, ToolCallView, TurnWorkRows } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { TranscriptSkeleton } from "./agent-tab-skeleton.js";
-import { ReplyMessageAction, useChatMessageMenu } from "./chat-reply.js";
+import { useChatMessageMenu } from "./chat-message-menu.js";
 import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { EditComposer } from "./edit-composer.js";
@@ -123,7 +123,6 @@ import {
   useThreadDoors,
 } from "./manager-chat-threads.js";
 import { useMoveToCloud } from "./move-agent.js";
-import { ReplyDoorProvider, ReplyToSelection, useBoxReplyDoor } from "./reply-to-selection.js";
 import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { SentMessage } from "./skill-chip.js";
 import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
@@ -278,8 +277,8 @@ function ManagerGreeting({
 
 /**
  * One of the Manager's messages: its words in a bubble at the column's left,
- * under its name where it opens its run, beside its face, with Copy and
- * Reply beside it and in its menu; Show work there too where it is the
+ * under its name where it opens its run, beside its face, with Reply in
+ * thread and Copy beside it and in its menu; Show work there too where it is the
  * first the Manager sent in a turn that did work, which opens the turn's
  * work under it; its files over the words; when it was sent under the run's
  * last.
@@ -320,7 +319,7 @@ function ManagerMessage({
         continues={!place.opens}
         contextMenu={menu.contextMenu}
         actions={
-          // Note that a message of files alone has no words to copy or quote, so it offers its thread and its work alone.
+          // Note that a message of files alone has no words to copy, so it offers its thread and its work alone.
           message.text === "" ? (
             <>
               {thread.action}
@@ -335,7 +334,6 @@ function ManagerMessage({
               lead={
                 <>
                   {thread.action}
-                  <ReplyMessageAction words={message.text} />
                   {workAction}
                 </>
               }
@@ -370,8 +368,8 @@ function ManagerMessage({
 /**
  * A person's message: the reader's own in a bubble at the column's right,
  * and anyone else's at its left, under their name where it opens their run
- * and beside their picture, its files over the words, Reply and Copy beside
- * it and in its menu, as every message of the chat offers them, and when it
+ * and beside their picture, its files over the words, Reply in thread and
+ * Copy beside it and in its menu, as every message of the chat offers them, and when it
  * was sent under the run's last.
  */
 function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoors }): ReactNode {
@@ -388,7 +386,6 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   const lineId = own ? (message.lineId ?? undefined) : undefined;
   const ownLine = lineId === undefined ? undefined : doors.lines.get(lineId);
   const editor = useMessageEdit(lineId ?? "");
-  // Note that any message of the chat is answered as the Manager's is: Reply quotes it whole into the box, beside its Copy and in its menu.
   const thread = threadOf(message, doors);
   const menu = useChatMessageMenu(message.text, thread.onOpen, undefined);
 
@@ -408,7 +405,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
             continues={!place.opens}
             contextMenu={menu.contextMenu}
             actions={
-              // Note that a message of files alone has no words to copy or quote, so it offers its thread alone.
+              // Note that a message of files alone has no words to copy, so it offers its thread alone.
               message.text === "" ? (
                 thread.action
               ) : (
@@ -416,12 +413,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
                   words={message.text}
                   messageId={ownLine === undefined ? undefined : lineId}
                   rewind={ownLine === undefined ? undefined : REWIND_ACTION.EDIT}
-                  lead={
-                    <>
-                      {thread.action}
-                      <ReplyMessageAction words={message.text} />
-                    </>
-                  }
+                  lead={thread.action}
                 />
               )
             }
@@ -825,7 +817,6 @@ function useManagerChatBox({
   const moveToCloud = useMoveToCloud(agent, control);
   const callRoute = useCallRoute(agent.id);
   const computerApps = useMemo(() => computerAppsOf(transcript.messages), [transcript.messages]);
-  const { door: replyDoor, reply: replyThroughBox } = useBoxReplyDoor();
 
   const ends = useAgentEndDoors({
     agent,
@@ -912,7 +903,6 @@ function useManagerChatBox({
       cards={cards}
       keywords={control.keywords}
       skills={control.readSkills}
-      replyDoor={replyDoor}
       closedRemedy={ends.closedRemedy}
       onMoveToCloud={moveToCloud}
       queue={wiring.queue}
@@ -931,8 +921,6 @@ function useManagerChatBox({
     composer,
     box,
     pictures,
-    replies: boxOpen && !composer.sending,
-    replyThroughBox,
     ends,
     marks,
     boxOpen,
@@ -981,7 +969,6 @@ export function ManagerChatTab({
 
   const queue = useAgentQueue(agent.id, transcript.queue);
   const queueEditing = useQueueEditing(composer, queue, pictures);
-  const tab = useRef<HTMLElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const rowsHandle = useRef<VirtualRowsHandle>(null);
   useManagerChatLooks(agent.id, agent.saidAt);
@@ -1186,26 +1173,23 @@ export function ManagerChatTab({
   })();
 
   return (
-    <AgentTabFrame ref={tab} label={name}>
+    <AgentTabFrame label={name}>
       <AgentPicturesProvider value={pictures}>
         <UndeliveredLines value={marks}>
           <RewindProvider value={rewind}>
-            <ReplyDoorProvider value={chatBox.replies ? chatBox.replyThroughBox : undefined}>
-              {log}
-              <AgentTabFoot>
-                <ThreadsDock threads={threads} />
-                {chatBox.dock({
-                  box,
-                  approvalsWaiting: approvals.waiting,
-                  transcript,
-                  queue: { controls: true, working: standing.working, editing: queueEditing },
-                })}
-              </AgentTabFoot>
-            </ReplyDoorProvider>
+            {log}
+            <AgentTabFoot>
+              <ThreadsDock threads={threads} />
+              {chatBox.dock({
+                box,
+                approvalsWaiting: approvals.waiting,
+                transcript,
+                queue: { controls: true, working: standing.working, editing: queueEditing },
+              })}
+            </AgentTabFoot>
           </RewindProvider>
         </UndeliveredLines>
       </AgentPicturesProvider>
-      {chatBox.replies ? <ReplyToSelection scope={tab} onReply={chatBox.replyThroughBox} /> : null}
     </AgentTabFrame>
   );
 }
@@ -1282,7 +1266,6 @@ export function ManagerThreadTab({
     actMutation(ACT_KIND.AGENTS_MANAGER_CHAT_OLDER),
   );
 
-  const tab = useRef<HTMLElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const rowsHandle = useRef<VirtualRowsHandle>(null);
 
@@ -1377,25 +1360,22 @@ export function ManagerThreadTab({
   );
 
   return (
-    <AgentTabFrame ref={tab} label={TAB_WORDS.THREAD}>
+    <AgentTabFrame label={TAB_WORDS.THREAD}>
       <AgentPicturesProvider value={pictures}>
         <UndeliveredLines value={marks}>
-          <ReplyDoorProvider value={chatBox.replies ? chatBox.replyThroughBox : undefined}>
-            {log}
-            <AgentTabFoot>
-              {chatBox.dock({
-                box: threadBoxOf(box),
-                approvalsWaiting: chatBox.approvals.waiting,
-                transcript: THREAD_USAGE,
-                queue: undefined,
-                wording: THREAD_BOX_WORDS,
-                talks: false,
-              })}
-            </AgentTabFoot>
-          </ReplyDoorProvider>
+          {log}
+          <AgentTabFoot>
+            {chatBox.dock({
+              box: threadBoxOf(box),
+              approvalsWaiting: chatBox.approvals.waiting,
+              transcript: THREAD_USAGE,
+              queue: undefined,
+              wording: THREAD_BOX_WORDS,
+              talks: false,
+            })}
+          </AgentTabFoot>
         </UndeliveredLines>
       </AgentPicturesProvider>
-      {chatBox.replies ? <ReplyToSelection scope={tab} onReply={chatBox.replyThroughBox} /> : null}
     </AgentTabFrame>
   );
 }
