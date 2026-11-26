@@ -363,15 +363,11 @@
 }
 
 /* A pane beside a tab, a File or Changes tab's tree or a Terminal tab's
-   shells, stands there while the panel holds it open or it slides out; it
+   shells, stands there while the panel holds it open; it
    may be drawn for its place over the tab alone, which a wide panel does
    not show (`usePaneRoom`). Note that each rule here and under the query
    names one selector, so each weighs only its own. */
 .file-view[data-pane-beside="false"] :is(.file-tree-pane, .terminal-shells) {
-  display: none;
-}
-
-.file-tree-pane[data-leaving] > .ui-resize-edge {
   display: none;
 }
 
@@ -467,8 +463,7 @@
 
 /* A page's comments (page-pane.tsx) stand in a pane beside the page, as
    wide as it was last dragged and never over half the row, past a
-   hairline; sliding out, it stands over the page's right edge, its resize
-   edge gone. In a panel too narrow for both, the pane stands over the page
+   hairline. In a panel too narrow for both, the pane stands over the page
    instead, undragged, and steps aside while the page is picked in. */
 .page-comments-column {
   position: relative;
@@ -480,16 +475,6 @@
   flex: none;
   border-left: 1px solid var(--ui-color-border);
   background: var(--ui-color-ground);
-}
-
-.page-comments-column[data-leaving] {
-  position: absolute;
-  inset-block: 0;
-  right: 0;
-}
-
-.page-comments-column[data-leaving] > .ui-resize-edge {
-  display: none;
 }
 
 @container side-panel (width < 640px) {
@@ -771,10 +756,7 @@
 /* The Chapters view (agent-chapters-tab.tsx): the chapters' rail docked at
    its left, as Files changed's tree docks at its right, and the chapter
    chosen beside it, its head over its own Files changed list. The rail is
-   as wide as the tree stands by default, slides in past the view's left
-   edge and out over the chapter (`usePaneSlide`), so the body clips what
-   stands past it, with `clip` rather than `hidden`, and leaves a strip of
-   one mark a chapter while hidden. */
+   as wide as the tree stands by default, and leaves a strip of one mark a chapter while hidden. */
 .chapters-view {
   --chapter-rail-width: calc(var(--ui-space-64) * 4);
   /* The least the chapter reads at: its bar, three lines of its brief, and
@@ -822,18 +804,10 @@
   padding: var(--ui-tight-gap) calc(var(--ui-list-inset) + var(--ui-row-inset)) var(--ui-list-inset);
 }
 
-.chapter-rail[data-leaving] {
-  position: absolute;
-  z-index: 1;
-  inset-block: 0;
-  left: 0;
-  background: var(--side-panel-ground);
-}
-
 /* Note that the rail hidden beside the chapter is hidden only where it can
    stand beside it, so a panel narrowed since still floats it when asked. */
 @container side-panel (width >= 640px) {
-  .chapters-view[data-rail-beside="false"] .chapter-rail:not([data-leaving]) {
+  .chapters-view[data-rail-beside="false"] .chapter-rail {
     display: none;
   }
 }

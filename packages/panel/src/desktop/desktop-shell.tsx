@@ -101,7 +101,6 @@ import { MobileBar, mobileBarShown, useBarStanding } from "./mobile-bar.js";
 import { NewTaskButton } from "./new-task-button.js";
 import { NewWorkspaceOpener, useNewWorkspace } from "./new-workspace.js";
 import { OfflineMark } from "./offline-mark.js";
-import { PaneGlide } from "./pane-motion.js";
 import { PersonPageSkeleton } from "./person-frame.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead, phoneBar, type TaskHeadBack } from "./phone-head.js";
@@ -792,9 +791,8 @@ export function useShellPlaces(): ShellPlacesInput {
  * place beside the sidebar (`desktop-inbox.tsx`); it is still a stay on the task, so
  * what changed since the developer last looked is held here, across it,
  * rather than by the task's page (`use-task-looks.ts`). Folding the sidebar,
- * opening, shutting, or growing the side panel glides the work beside them
- * (pane-motion.tsx). A
- * window too narrow to pin the sidebar folds it, and a folded sidebar floats
+ * opening, shutting, or growing the side panel changes the layout at once.
+ * A window too narrow to pin the sidebar folds it, and a folded sidebar floats
  * over the work rather than beside it (`sidebar-collapse.ts`), put away by a
  * press outside it and its toggle. A stage as narrow as a phone's stands the
  * window as one pane at a time (`shell-room.ts`): the sidebar is a drawer its
@@ -1267,15 +1265,6 @@ export function ShellPlaces(): React.JSX.Element {
         </div>
       ) : null}
       {newTaskDialog}
-      <PaneGlide
-        root={shell}
-        place={tasks.sidePanel.stop}
-        layout={{
-          sidebarCollapsed: sidebar.collapsed,
-          panelOpen: tasks.sidePanel.open,
-          panelFullScreen: tasks.sidePanel.fullScreen,
-        }}
-      />
     </div>
   );
 }

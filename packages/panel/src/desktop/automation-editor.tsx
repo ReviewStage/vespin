@@ -202,7 +202,6 @@ import { AutomationRunsPanel, AutomationRunsScreen } from "./automation-runs-pan
 import { automationDeleteQuestion } from "./automation-words.js";
 import { useRunsPanel } from "./folded-groups.js";
 import { type NarrowColumns, useNarrowFocus } from "./narrow-focus.js";
-import { PaneGlide } from "./pane-motion.js";
 import { PhoneHead, phoneFindGroups } from "./phone-head.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
 import {
@@ -2636,7 +2635,6 @@ export function AutomationEditor({
   const runsScreen = useId();
   const runsPanel = useRunsPanel();
   const toggleRuns = single ? () => onRuns(!runsShown) : runsPanel.onToggle;
-  // The form glides to its new middle as the Runs panel comes and goes (pane-motion.tsx).
   const editorLayout = useRef<HTMLDivElement>(null);
   // The name's Escape lets go of the caret and keeps the press, as every field's here does.
   const nameField = useRef<HTMLInputElement>(null);
@@ -2852,12 +2850,7 @@ export function AutomationEditor({
           />
         </AutomationSetup>
       }
-      beside={
-        <>
-          {single ? null : <AutomationRunsPanel panel={runsPanel} {...runsRead} />}
-          <PaneGlide root={editorLayout} layout={{ runsOpen: !single && runsPanel.open }} />
-        </>
-      }
+      beside={single ? null : <AutomationRunsPanel panel={runsPanel} {...runsRead} />}
     >
       {single ? (
         <AutomationRunsScreen
