@@ -24,7 +24,10 @@
  * way, until its row lands; one refused stands marked, with Retry, Edit, and
  * Delete, as any of the agent box's lines does. Each message may be given
  * the reader's 👍 or 👎 from its actions, and wears the reactions it was
- * given under its words (`manager-chat-reactions.tsx`).
+ * given under its words (`manager-chat-reactions.tsx`). The first message
+ * after the reader's mark, where the chat stood unread as the page opened
+ * or where the reader marked one of the Manager's messages unread, stands
+ * under New (`manager-chat-looks.ts`).
  */
 
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
@@ -57,7 +60,15 @@ import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MessageFileChip } from "@repo/features/message-files";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
-import { ChannelMessage, EmptyState, GlyphSlot, ThreadRule, TIME_LOOK, Time } from "@repo/ui";
+import {
+  ChannelMessage,
+  EmptyState,
+  GlyphSlot,
+  NewMessagesRule,
+  ThreadRule,
+  TIME_LOOK,
+  Time,
+} from "@repo/ui";
 import { ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
@@ -166,6 +177,8 @@ interface ChatDoors {
   readonly thread?: ChatThreadDoors | undefined;
   /** Gives a message the reader's 👍 or 👎, or takes it off. */
   readonly react: ChatReact;
+  /** Moves the reader's mark of the chat back to just before one of the Manager's messages, which its menu's Mark as unread presses; none in a thread's tab. */
+  readonly markUnread?: ((message: ManagerChatLiveMessage) => void) | undefined;
 }
 
 /** The chat's threads as its rows read them: each root's replies by the root's id, the thread its page's side panel shows, and the press that opens one there. */
@@ -288,7 +301,8 @@ function ManagerGreeting({
 /**
  * One of the Manager's messages: its words in a bubble at the column's left,
  * under its name where it opens its run, beside its face, with Reply in
- * thread and Copy beside it and in its menu; Show work there too where it is the
+ * thread and Copy beside it and in its menu, and Mark as unread in its menu
+ * where the chat offers it; Show work there too where it is the
  * first the Manager sent in a turn that did work, which opens the turn's
  * work under it; its files over the words; when it was sent under the run's
  * last.
@@ -306,7 +320,9 @@ function ManagerMessage({
   const thread = threadOf(message, doors);
   const toggle = useWorkToggle();
   const workToggle = work === null ? undefined : toggle;
-  const menu = useChatMessageMenu(message.text, thread.onOpen, workToggle);
+  const { markUnread } = doors;
+  const onMarkUnread = markUnread === undefined ? undefined : () => markUnread(message);
+  const menu = useChatMessageMenu(message.text, thread.onOpen, workToggle, onMarkUnread);
   const workAction = workToggle === undefined ? null : <WorkMessageAction toggle={workToggle} />;
   // Note that while a find stands open the closed work is drawn hidden until found, so ⌘F reaches it and a match there opens it, as a closed fold's body is.
   const finding = useFindOpen();
@@ -695,6 +711,22 @@ function ownLastOf(rows: readonly ChatRow[], readerId: string | undefined): stri
   )?.key;
 }
 
+/** The key of the row New stands over: the first message after `newAfter` that is not the reader's own; none where New stands nowhere. */
+function newKeyOf(
+  rows: readonly ChatRow[],
+  newAfter: number | undefined,
+  readerId: string | undefined,
+): string | undefined {
+  if (newAfter === undefined) return undefined;
+
+  return rows.find(
+    (row) =>
+      row.kind === CHAT_ROW.MESSAGE &&
+      row.line.message.createdAt > newAfter &&
+      (readerId === undefined || row.line.message.authorUserId !== readerId),
+  )?.key;
+}
+
 /** No row for ⌘F to read, while no find stands. */
 const NO_FIND_ROWS: readonly FindRow[] = [];
 
@@ -1002,7 +1034,7 @@ export function ManagerChatTab({
   const queueEditing = useQueueEditing(composer, queue, pictures);
   const list = useRef<HTMLDivElement>(null);
   const rowsHandle = useRef<VirtualRowsHandle>(null);
-  useManagerChatLooks(agent.id, agent.saidAt);
+  const { newAfter, markUnread } = useManagerChatLooks(agent.id, agent.saidAt, agent.readThrough);
 
   const { endPress, endTrail, continuable } = ends;
 
@@ -1050,12 +1082,13 @@ export function ManagerChatTab({
   const doors = useMemo(
     () =>
       opener === undefined
-        ? chatBox.doors
+        ? { ...chatBox.doors, markUnread }
         : {
             ...chatBox.doors,
+            markUnread,
             thread: { replies: view.threads, open: opener.open, onOpen: opener.onOpen },
           },
-    [chatBox.doors, view.threads, opener],
+    [chatBox.doors, view.threads, opener, markUnread],
   );
 
   const ended =
@@ -1083,6 +1116,7 @@ export function ManagerChatTab({
 
   const keys = useMemo(() => rows.map((row) => row.key), [rows]);
   const ownLast = ownLastOf(rows, control.me);
+  const newKey = newKeyOf(rows, newAfter, control.me);
   const finding = useFindOpen();
   const findRows = useMemo(() => (finding ? rows.map(findRowOf) : NO_FIND_ROWS), [finding, rows]);
   useVirtualFind({ root: list, rows: findRows, handle: rowsHandle, findable: keys.length > 0 });
@@ -1155,7 +1189,14 @@ export function ManagerChatTab({
 
     if (row.kind === CHAT_ROW.RULE) return <ThreadRule count={row.count} />;
 
-    return drawLine(row.line, doors);
+    return row.key === newKey ? (
+      <>
+        <NewMessagesRule />
+        {drawLine(row.line, doors)}
+      </>
+    ) : (
+      drawLine(row.line, doors)
+    );
   };
 
   const log = (() => {

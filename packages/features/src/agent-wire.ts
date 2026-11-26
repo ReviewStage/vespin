@@ -1211,11 +1211,18 @@ export type AgentPinRequest = typeof agentPinRequestSchema.Type;
 
 /**
  * Moving the asking member's own read mark of a Manager's chat (PATCH): a
- * look reads it through the service's now, never back, and a mark by hand
- * changes nothing. A coder's mark moves too, though nothing reads it. The
- * answer is the agent as it then stands.
+ * look reads it through the service's now, never back. A mark by hand
+ * naming a message of the chat (`unreadFrom`, its id) moves the mark back
+ * to just before it, as Mark unread does, and one naming none changes
+ * nothing. A coder's mark moves too, though nothing reads it. The answer is
+ * the agent as it then stands.
  */
-export const agentReadRequestSchema = EffectSchema.Struct({ readMark: readMarkSchema });
+export const agentReadRequestSchema = EffectSchema.Struct({
+  readMark: readMarkSchema,
+  unreadFrom: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
+});
+
+export type AgentReadRequest = typeof agentReadRequestSchema.Type;
 
 /**
  * Switching the agent's MCP servers (PATCH): the whole list of those off,

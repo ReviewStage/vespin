@@ -5,7 +5,9 @@
  * member's look moves their own mark (`agent_read`) to the service's
  * instant, never back, so a row reads unread for a member while it said
  * something after their mark. A mark is keyed by the member, so no member's
- * look moves another's.
+ * look moves another's. Mark unread is the one write that moves a mark back
+ * (`markAgentUnread`), to just before the message it was asked from, and the
+ * member's next look moves it forward again.
  */
 
 import { eq, sql } from "drizzle-orm";
@@ -34,6 +36,22 @@ const markRead = SqlSchema.findAll({
     ),
 });
 
+const markUnread = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String, through: Schema.Date }),
+  Result: TxidRowSchema,
+  execute: ({ userId, agentId, through }) =>
+    Database.use((db) =>
+      db
+        .insert(agentRead)
+        .values({ userId, agentId, readThrough: through })
+        .onConflictDoUpdate({
+          target: [agentRead.userId, agentRead.agentId],
+          set: { readThrough: sql`excluded.read_through` },
+        })
+        .returning(TXID_RETURNING),
+    ),
+});
+
 const stampSaid = SqlSchema.void({
   Request: Schema.Struct({ agentId: Schema.String, now: Schema.Date }),
   execute: ({ agentId, now }) =>
@@ -49,6 +67,15 @@ export function markAgentRead(
   now: Date,
 ): AgentStoreEffect<string | undefined> {
   return Effect.map(markRead({ userId, agentId, now }), (rows) => rows[0]?.txid);
+}
+
+/** The member's mark of the agent's chat moved to `through`, back or forward, as Mark unread asks; the write's transaction id. */
+export function markAgentUnread(
+  userId: string,
+  agentId: string,
+  through: Date,
+): AgentStoreEffect<string | undefined> {
+  return Effect.map(markUnread({ userId, agentId, through }), (rows) => rows[0]?.txid);
 }
 
 /** The agent's chat stamped as having said something at `now`, which each member who has not looked since reads as unread. */

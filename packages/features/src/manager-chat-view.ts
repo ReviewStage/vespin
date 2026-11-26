@@ -60,6 +60,9 @@ export const CHAT_THREAD_WORDS = {
   GONE: "This thread is no longer in the chat.",
 } as const;
 
+/** What the rule over the first message after the reader's mark of the chat says, on every client, as Slack's New line does. */
+export const CHAT_NEW_WORDS = "New";
+
 /** What a thread's replies are counted in. */
 const REPLY_NOUN = { one: "reply", many: "replies" } as const;
 

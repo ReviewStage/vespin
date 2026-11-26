@@ -1,5 +1,5 @@
 /**
- * use-message-acts.ts -- what an agent's messages offer past copying and sharing them, as the panel's message actions offer it: a line of the member's Edit, and an agent's finished turn Fork to new agent and Rewind conversation to here.
+ * use-message-acts.ts -- what an agent's messages offer past copying and sharing them, as the panel's message actions offer it: a line of the member's Edit, a Manager's chat message Mark as unread, and an agent's finished turn Fork to new agent and Rewind conversation to here.
  *
  * Where each lands is the panel's (`@repo/features/agent-rewind-model`'s
  * `rewindPoints` and `editsInPlace`): Edit on a person's line that opened a
@@ -28,6 +28,7 @@ import {
   rewindPoints,
 } from "@repo/features/agent-rewind-model";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { INBOX_READ_MARK } from "@repo/features/inbox-list-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppTranscript } from "@repo/host/app-state";
 import type { FollowedAgent } from "@repo/host/app-state-reads";
@@ -70,8 +71,10 @@ export function useMessageActs(input: {
   readonly calling: boolean;
   /** Each message of a Manager's chat by its row's id, to the transcript line it went as (`lineId`), which its Edit takes the Manager back to, or null for one that went as none, such as the Manager's own; none for any other agent. */
   readonly chatLines?: ReadonlyMap<string, string | null> | undefined;
+  /** Moves the reader's mark of a Manager's chat back to just before one of the Manager's messages, by its id and when it was sent, as its Mark as unread presses; none for any other agent. */
+  readonly markUnread?: ((messageId: string, sentAt: number) => void) | undefined;
 }): MessageActs {
-  const { agentId, agent, transcript, readerId, composer, calling, chatLines } = input;
+  const { agentId, agent, transcript, readerId, composer, calling, chatLines, markUnread } = input;
   const acts = useHostActs();
   const write = useWrite();
   const router = useRouter();
@@ -178,9 +181,26 @@ export function useMessageActs(input: {
   // Note that a question whose line is no longer where it was, dropped or rewound elsewhere, asks nothing.
   const stands = asked !== undefined && points.revertsAt.get(asked.reply) === asked.line;
 
+  /** Mark as unread on one of the Manager's messages of its chat, where the page offers it. */
+  const readActs = (item: SaidItem): readonly HeldAct[] => {
+    const sentAt = item.at;
+
+    if (markUnread === undefined || item.manager !== true || sentAt === undefined) return [];
+
+    return [
+      {
+        label: INBOX_READ_MARK.UNREAD,
+        symbol: GLYPH.MARK_UNREAD,
+        onPress: () => markUnread(item.place.row, sentAt),
+      },
+    ];
+  };
+
   return {
     more: (item) =>
-      item.kind === TRANSCRIPT_ITEM.FOOT ? turnActs(item.place.message, item.copy) : lineActs(item),
+      item.kind === TRANSCRIPT_ITEM.FOOT
+        ? turnActs(item.place.message, item.copy)
+        : [...lineActs(item), ...readActs(item)],
     reverting: {
       title: ask.title,
       message: ask.body,

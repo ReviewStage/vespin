@@ -3,13 +3,14 @@ import type { ContextMenuProps } from "@repo/ui";
 import { CopyIcon, useMenu } from "@repo/ui";
 import { ListTreeIcon, MessageSquareReplyIcon } from "@repo/ui/icons";
 import type { ReactNode } from "react";
+import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { ActionMenu } from "../desktop/action-menu.js";
 import type { ChatWorkToggle } from "./chat-work.js";
 import { THREAD_WORDS } from "./manager-chat-threads.js";
 
 /**
- * chat-message-menu.tsx -- the menu a right-click or a long press on a message of a Manager's chat opens: Reply in thread, Copy, and Show work.
+ * chat-message-menu.tsx -- the menu a right-click or a long press on a message of a Manager's chat opens: Reply in thread, Copy, Mark as unread, and Show work.
  *
  * Every message of the chat, the Manager's and every person's, offers in
  * its menu what its actions beside it offer. A message is answered in its
@@ -32,18 +33,23 @@ interface ChatMessageMenu {
 /**
  * A chat message's right-click menu, a phone's long press: Reply in thread
  * first where the message opens a thread (`onThread`), as the actions beside
- * it lead with it, then Copy of its Markdown `words`, where it has any, and last, apart, Show work or Hide work where the message opens a
- * turn that did work (`work`), as the fold over it once did.
+ * it lead with it, then Copy of its Markdown `words`, where it has any,
+ * then apart Mark as unread where the chat's mark moves back to it
+ * (`onMarkUnread`), and last, apart, Show work or Hide work where the
+ * message opens a turn that did work (`work`), as the fold over it once did.
  */
 export function useChatMessageMenu(
   words: string,
   onThread: (() => void) | undefined,
   work: ChatWorkToggle | undefined,
+  onMarkUnread?: (() => void) | undefined,
 ): ChatMessageMenu {
   const copy = useCopyToast();
   const menu = useMenu(true);
   const worded = words !== "";
-  const offered = worded || onThread !== undefined || work !== undefined;
+
+  const offered =
+    worded || onThread !== undefined || work !== undefined || onMarkUnread !== undefined;
 
   const items = [
     ...(onThread === undefined
@@ -66,6 +72,11 @@ export function useChatMessageMenu(
       : []),
   ];
 
+  const readItems =
+    onMarkUnread === undefined
+      ? []
+      : [commandAction(PANEL_COMMAND.MARK_UNREAD, onMarkUnread, undefined)];
+
   const workItems =
     work === undefined
       ? []
@@ -84,7 +95,7 @@ export function useChatMessageMenu(
         <ActionMenu
           label={MENU_WORDS.MENU}
           menu={menu.drawn}
-          groups={workItems.length === 0 ? [items] : [items, workItems]}
+          groups={[items, readItems, workItems].filter((group) => group.length > 0)}
           replayUnmasked
           onClose={menu.close}
         />

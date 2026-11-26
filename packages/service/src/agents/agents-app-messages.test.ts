@@ -28,7 +28,7 @@ import { sentLineStands } from "@repo/database/models/message-reads";
 import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import { writePage } from "@repo/database/models/task-pages";
 import { createTask, readTask } from "@repo/database/models/task-store";
-import { agentPin } from "@repo/database/schemas";
+import { agentPin, agentRead } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
@@ -2073,6 +2073,60 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           ),
         );
         assert.equal(agentSessions.sent.length, 1);
+      }),
+  );
+
+  it.effect(
+    "a member's Mark unread from a message of a Manager's chat moves their own mark to just before it, and one naming no message of the chat is not found",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, agent, ask, task } = yield* messagedAgent(fakeAgentSessions(), {
+          running: false,
+        });
+
+        yield* joinWorkspace(task.workspaceId, other);
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const body = { text: "Ship the invites.", clientKey: randomUUID() };
+
+        const sent = readAnswer(
+          agentChatSendAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(request(AGENT_CHAT_MESSAGES, owner, { method: "POST", id: agent.id, body })),
+        );
+
+        const unread = (unreadFrom: string) =>
+          ask(
+            request(AGENT, other, {
+              method: "PATCH",
+              id: agent.id,
+              body: { readMark: READ_MARK.UNREAD, unreadFrom },
+            }),
+          );
+
+        const marks = Effect.map(
+          db
+            .select({ userId: agentRead.userId, readThrough: agentRead.readThrough })
+            .from(agentRead)
+            .where(eq(agentRead.agentId, agent.id)),
+          (rows) => rows.map((row) => [row.userId, row.readThrough.getTime()]),
+        );
+
+        const stored = Option.getOrThrow(
+          yield* readManagerChatMessage(owner, agent.id, sent.messageId),
+        );
+
+        assert.equal((yield* unread(sent.messageId)).status, HOSTED_HTTP_STATUS.OK);
+        assert.deepEqual(yield* marks, [[other, stored.createdAt.getTime() - 1]]);
+        assert.deepEqual(
+          yield* unread("no-such-message"),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+        );
       }),
   );
 
