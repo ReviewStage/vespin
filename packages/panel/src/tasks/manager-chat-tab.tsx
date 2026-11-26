@@ -702,8 +702,9 @@ function threadRowsOf(
 
 /**
  * Each row's class in its log: a message going on its sender's run stands
- * close under the one before it, as a chat app stands one sender's bubbles,
- * and every other row a step from it (tasks.css).
+ * right under the one before it, the two parted only by the padding each
+ * message keeps alike above and below (`ChannelMessage`), as a channel
+ * stands one sender's run, and every other row a step from it (tasks.css).
  */
 function useChatRowClass(
   rows: readonly ChatRow[],
@@ -719,9 +720,7 @@ function useChatRowClass(
         (row?.kind === CHAT_ROW.MESSAGE && !row.line.place.opens && row.key !== newKey) ||
         (row?.kind === CHAT_ROW.SENDING && !row.place.opens);
 
-      return continues
-        ? `${LOG_ROW_CLASS} agent-log-row-run`
-        : `${LOG_ROW_CLASS} agent-log-row-next`;
+      return continues ? LOG_ROW_CLASS : `${LOG_ROW_CLASS} agent-log-row-next`;
     },
     [rows, newKey],
   );
