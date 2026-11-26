@@ -119,9 +119,9 @@ final class KeyboardDockView: ExpoView {
     center.addObserver(self, selector: #selector(keyboardDidHide), name: UIResponder.keyboardDidHideNotification, object: nil)
   }
 
+  // Note that the tracker needs no letting go here, since a view stands in a window only while a superview holds it, so it has always left its window, and let the tracker go there, before it goes.
   deinit {
     NotificationCenter.default.removeObserver(self)
-    letTrackerGo()
   }
 
   /// Notes what took the keyboard as its move is announced, whose input accessory the bar stands over, and lays the window out inside the keyboard's own animation, so the tracker stands where the keyboard ends, the bar's lift rides its curve, and JavaScript hears where it ends as it starts.
