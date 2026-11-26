@@ -1,0 +1,9 @@
+pinned to 72ae291df7
+== bundle PJjov11139b base 72ae291df7
+  built 72ae291df7 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+busy: flow pass, app log 3534 lines: CollectionInErrorState 0, CollectionStateError 0, standalone 254 0, cleanup 0; recording 0 bytes (half size)
+fixture-decide: flow pass, app log 4074 lines: CollectionInErrorState 0, CollectionStateError 0, standalone 254 0, cleanup 0; recording 0 bytes (half size)
