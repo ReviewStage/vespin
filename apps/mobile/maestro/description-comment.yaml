@@ -1,4 +1,4 @@
-# description-comment.yaml -- a task's description in one view, a block's count of the open comment threads on it, and a long press on its words offering Comment in the edit menu, which opens a new thread on that block with its words quoted and the comment field taking the keyboard; Send opens the thread at once with the words as its first comment.
+# description-comment.yaml -- a task's description in one view, read a paragraph at a time at rest, a block's count of the open comment threads on it, and a long press on a paragraph's words offering Comment in the system's edit menu, which opens a new thread on that block with its words quoted and the comment field taking the keyboard; Send opens the thread at once with the words as its first comment.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -21,26 +21,24 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - tapOn: "Teammate invitations"
 - assertVisible: "Created by .*"
-# The description stands as its field, Context's count at its heading's end.
 # Note that the task's page is swiped at its right side rather than scrolled
 # from the screen's center, since a landscape iPad's center falls in the list
 # column beside the task, which never holds its description.
-- runFlow:
-    file: subflows/scroll-in.yaml
-    env:
-      ELEMENT: "Description"
-      BESIDE: "true"
-- assertVisible:
-    id: "description-words"
+- repeat:
+    while:
+      notVisible: "Goal"
+    times: 8
+    commands:
+      - swipe:
+          start: 85%, 70%
+          end: 85%, 35%
+      - waitForAnimationToEnd
+- assertVisible: "Goal"
 - waitForAnimationToEnd
 - takeScreenshot: description-blocks
-# A long press on the words selects one and opens the system's edit menu,
-# which offers Comment on its block, as the read rows' long press did.
-- runFlow:
-    file: subflows/description-press.yaml
-    env:
-      LONG: "true"
-      BESIDE: "true"
+# A long press on a paragraph's words selects one and opens the system's
+# edit menu, which offers Comment on its block.
+- longPressOn: "Goal"
 - assertVisible: "Comment"
 - waitForAnimationToEnd
 - takeScreenshot: description-block-menu

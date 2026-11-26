@@ -1,0 +1,151 @@
+# description-scroll.yaml -- a task's description, standing in one view, is left alone by a swipe that starts on its words or on a mention chip in them: short swipes up and down from the words take no keyboard and stand no format bar or ✓, swipes from the chip open nothing, and a tap on the words still takes the keyboard there.
+#
+# Note that a finger dragging a list stays over the content it started on,
+# so a swipe begun on the words also ends on them; their press must lose to
+# the swipe, as every system control's does, rather than opening the editor
+# as the finger lifts. A short swipe from the middle of the window is the
+# one the press won on main, the page never scrolling, so each is made
+# several times and one lucky pass counts for nothing.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, as `description-edit.yaml` is, so
+# Teammate invitations holds its description and no server is reached.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- scrollUntilVisible:
+    element: "Teammate invitations"
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+# The Context's paragraph is centered, an iPhone's at its middle, an iPad's
+# detail column scrolled beside the list, as `description-edit.yaml` does.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - scrollUntilVisible:
+          element: "Only an admin can add.*"
+          centerElement: true
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-in.yaml
+          env:
+            ELEMENT: "Only an admin can add.*"
+            BESIDE: "true"
+- waitForAnimationToEnd
+- assertVisible: "Only an admin can add.*"
+# Swipes up and down, each begun on the paragraph, leave the words
+# read-only: no field, no format bar, no Done. Note that an iPhone's are short
+# and written as points from the paragraph centered in the window, since
+# Maestro swipes from an element to the window's edge; an iPad's start from
+# the paragraph itself, which its detail column scrolls into sight at no
+# fixed height.
+- repeat:
+    times: 3
+    commands:
+      - runFlow:
+          when:
+            true: ${FLOATING_TABS != 'true'}
+          commands:
+            - swipe:
+                start: "50%, 50%"
+                end: "50%, 42%"
+                duration: 250
+            - waitForAnimationToEnd
+            - assertNotVisible: "Bold"
+            - assertNotVisible: "Done editing description"
+            - swipe:
+                start: "50%, 42%"
+                end: "50%, 50%"
+                duration: 250
+            - waitForAnimationToEnd
+            - assertNotVisible: "Bold"
+            - assertNotVisible: "Done editing description"
+            - runFlow:
+                file: subflows/scroll-to.yaml
+                env:
+                  ELEMENT: "Only an admin can add.*"
+                  DIRECTION: UP
+      - runFlow:
+          when:
+            true: ${FLOATING_TABS == 'true'}
+          commands:
+            - swipe:
+                from: "Only an admin can add.*"
+                direction: UP
+                duration: 250
+            - waitForAnimationToEnd
+            - assertNotVisible: "Bold"
+            - assertNotVisible: "Done editing description"
+            - runFlow:
+                file: subflows/scroll-in.yaml
+                env:
+                  ELEMENT: "Only an admin can add.*"
+                  DIRECTION: UP
+                  BESIDE: "true"
+            - swipe:
+                from: "Only an admin can add.*"
+                direction: DOWN
+                duration: 250
+            - waitForAnimationToEnd
+            - assertNotVisible: "Bold"
+            - assertNotVisible: "Done editing description"
+            - runFlow:
+                file: subflows/scroll-in.yaml
+                env:
+                  ELEMENT: "Only an admin can add.*"
+                  DIRECTION: UP
+                  BESIDE: "true"
+      - assertVisible: "Only an admin can add.*"
+- waitForAnimationToEnd
+- takeScreenshot: description-scrolled
+# A swipe begun on the Links section's task chip, a link of its own at rest
+# heard with its kind's word, opens nothing: scrolled back
+# to the chip, the page is still the task's own, its file chip standing
+# under the task chip, where Usage alerts' page would hold no such chip.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*Usage alerts.*"
+      BESIDE: ${FLOATING_TABS}
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          from: ".*Usage alerts.*"
+          direction: UP
+          duration: 600
+      - waitForAnimationToEnd
+      - assertNotVisible: "Done editing description"
+      - runFlow:
+          file: subflows/scroll-to.yaml
+          env:
+            ELEMENT: ".*Usage alerts.*"
+            DIRECTION: UP
+            BESIDE: ${FLOATING_TABS}
+      - assertVisible: "invite.ts"
+# A tap on the words still opens them in the editor.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Only an admin can add.*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- tapOn: "Only an admin can add.*"
+- extendedWaitUntil:
+    visible: "Done editing description"
+    timeout: 10000
+- assertVisible: "Bold"

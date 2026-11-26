@@ -25,16 +25,14 @@ appId: dev.vespin.ios
 # column beside the task, which never holds its description.
 - repeat:
     while:
-      notVisible:
-        id: "description-words"
+      notVisible: "Goal"
     times: 8
     commands:
       - swipe:
           start: 85%, 70%
           end: 85%, 35%
       - waitForAnimationToEnd
-- assertVisible:
-    id: "description-words"
+- assertVisible: "Goal"
 - takeScreenshot: markdown-top
 - repeat:
     while:

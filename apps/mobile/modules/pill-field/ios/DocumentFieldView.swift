@@ -914,6 +914,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
     super.layoutSubviews()
     // Note that words laid out at another width wrap anew, so they are laid out whole again.
     if textView.frame.width != bounds.width { laidWhole = false }
+    if textView.frame.size != bounds.size { forgetRestParagraphs() }
     textView.frame = bounds
     tellHeight()
     media.reckonNear()
@@ -1056,12 +1057,74 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
   }
 
   /// What VoiceOver and the flows reach in the field, in reading order: the text view, which iOS hears as one element of its words, and each view standing in its words, which that element would hide, such as a picture or a video under its play button.
+  ///
+  /// Note that words at rest are reached a paragraph at a time, as the read rows' blocks were, each framed where TextKit lays it out, so VoiceOver reads them block by block and a flow presses the words it names; while they are typed, the text view alone stands for them, so VoiceOver reads, moves the caret through and edits them as the system's own field.
   override var accessibilityElements: [Any]? {
     get {
       let standing: [UIView] = standingViews().filter { $0.window != nil }
-      return [textView] + standing.sorted { $0.convert($0.bounds, to: nil).minY < $1.convert($1.bounds, to: nil).minY }
+      let placed = standing.map { (view: $0 as Any, top: convert($0.bounds, from: $0).minY) }
+      guard tapsToEdit, !textView.isFirstResponder else {
+        return [textView] + placed.sorted { $0.top < $1.top }.map { $0.view }
+      }
+      let paragraphs = restParagraphs().map { (view: $0 as Any, top: $0.accessibilityFrameInContainerSpace.minY) }
+      return (paragraphs + placed).sorted { $0.top < $1.top }.map { $0.view }
     }
     set {}
+  }
+
+  /// The paragraphs of the words at rest as VoiceOver and the flows reach them, kept until the words or their layout change, so VoiceOver's place among them holds.
+  private var restKept: [UIAccessibilityElement]?
+
+  /// Each paragraph of the words at rest that holds any: its words, a pill heard by its own words among them, framed where TextKit lays it out in the field's space.
+  private func restParagraphs() -> [UIAccessibilityElement] {
+    if let restKept { return restKept }
+    guard let layout = textView.textLayoutManager, let content = layout.textContentManager else { return [] }
+    let string = textView.textStorage.string as NSString
+    var elements: [UIAccessibilityElement] = []
+    var location = 0
+
+    while location < string.length {
+      let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
+      location = NSMaxRange(paragraph)
+      let words = heardWords(in: paragraph)
+      guard !words.isEmpty,
+        let start = content.location(content.documentRange.location, offsetBy: paragraph.location),
+        let fragment = layout.textLayoutFragment(for: start)
+      else { continue }
+      let laid = fragment.layoutFragmentFrame.offsetBy(dx: textView.textContainerInset.left, dy: textView.textContainerInset.top)
+      let element = UIAccessibilityElement(accessibilityContainer: self)
+      element.accessibilityLabel = words
+      element.accessibilityTraits = .staticText
+      element.accessibilityHint = editable ? "Double-tap to edit." : nil
+      element.accessibilityFrameInContainerSpace = textView.convert(laid, to: self)
+      elements.append(element)
+    }
+
+    restKept = elements
+    return elements
+  }
+
+  /// A paragraph's words as VoiceOver hears them: its words, a pill's and a task box's heard among them, a card by its words; a picture, a table and a rule stand as elements of their own, or as none.
+  private func heardWords(in paragraph: NSRange) -> String {
+    let storage = textView.textStorage
+    var heard: [String] = []
+    storage.enumerateAttributes(in: paragraph) { attributes, range, _ in
+      switch attributes[.attachment] {
+      case let pill as PillAttachment: heard.append(pill.pill.heard)
+      case let box as TaskBoxAttachment: heard.append(box.accessibilityLabel ?? "")
+      case let block as BlockAttachment: if block.card != nil { heard.append(block.accessibilityLabel ?? "") }
+      case is NSTextAttachment: break
+      default: heard.append((storage.string as NSString).substring(with: range))
+      }
+    }
+    return heard.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  /// Lets the paragraphs at rest go, the words or their layout changed, and tells VoiceOver the field's elements changed.
+  private func forgetRestParagraphs() {
+    guard restKept != nil else { return }
+    restKept = nil
+    UIAccessibility.post(notification: .layoutChanged, argument: nil)
   }
 
   /// The name a flow finds the field by, which the text view carries too, so a find of the words by it reaches the element that reads and types them.
@@ -1082,6 +1145,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
 
   /// Lays out again the lines a picture stands in, once its size is read, and tells the height they now ask for: only those lines, never the words around them.
   private func relayMedia(_ address: String) {
+    forgetRestParagraphs()
     guard let layout = textView.textLayoutManager, let content = layout.textContentManager else { return }
     let storage = textView.textStorage
     storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
@@ -1108,6 +1172,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
 
   /// Lays each paragraph of `blocks` in its style again, which holds its words short of a count where one stands; only their looks, never their words or the caret.
   private func restyle(_ blocks: Set<Int>) {
+    forgetRestParagraphs()
     let storage = textView.textStorage
     quiet = true
     storage.beginEditing()
@@ -1243,6 +1308,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
 
   func textViewDidChange(_ textView: UITextView) {
     guard !quiet else { return }
+    forgetRestParagraphs()
     let edit = landed ?? typed
     // Note that the words the text itself saw laid in are the ones carried on to, the range asked about being the field's guess before the keyboard lays them.
     if let piece = landed ?? typed {
@@ -1271,12 +1337,18 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
   }
 
   func textViewDidBeginEditing(_ textView: UITextView) {
+    // Note that the words being typed stand as the text view alone, so VoiceOver is told the field's elements changed.
+    if tapsToEdit { UIAccessibility.post(notification: .layoutChanged, argument: textView) }
     onFocusChange(["focused": true])
   }
 
   func textViewDidEndEditing(_ textView: UITextView) {
     // Note that words at rest stand read-only again once the keyboard goes, so a press on a link opens it rather than placing the caret.
-    if tapsToEdit { textView.isEditable = false }
+    if tapsToEdit {
+      textView.isEditable = false
+      restKept = nil
+      UIAccessibility.post(notification: .layoutChanged, argument: nil)
+    }
     onFocusChange(["focused": false])
   }
 
@@ -1331,6 +1403,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizer
 
   /// Draws the lines anew, keeping the caret where it stood, as near as the new words allow. Words laid in whole leave nothing for undo's earlier steps to stand on, so they are let go, but where the words are the same as before, as a block's change of kind leaves them, which keeps its own undo.
   private func redraw(_ lines: [DocumentLine], keepUndo: Bool = false) {
+    forgetRestParagraphs()
     let selected = textView.selectedRange
     quiet = true
     pendingLine = nil
