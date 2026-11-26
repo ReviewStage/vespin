@@ -72,7 +72,6 @@ function places(drawn: AgentPullRequest): ReadonlyMap<string, ReactElement> {
         pullRequest: drawn,
         place: { taskId: null },
         lines: drawn,
-        files: drawn.changedFiles,
         agent: {
           subject: agentSubject(
             { agents: [AGENT], archived: [], models: [], me: undefined, pullRequests: new Map() },
