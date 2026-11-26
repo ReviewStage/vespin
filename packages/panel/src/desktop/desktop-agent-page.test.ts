@@ -494,19 +494,14 @@ test("a Manager's Inbox tab counts its open threads, and the dock over its box o
   );
 });
 
-test("a Manager's page on a phone stands on its chat, a message's thread summed under it, with no row of views, where its transcript stood", async () => {
-  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
-  pushedTranscripts(() => [
-    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
-  ]);
-  const manager: ListedAgent = { ...MANAGER, kind: AGENT_KIND.MANAGER };
-
-  const said = (
-    id: string,
-    seq: number,
-    text: string,
-    threadRoot: string | null,
-  ): ManagerChatLiveMessage => ({
+/** A Manager's chat message, said by the Manager, in the thread of `threadRoot` where one is named. */
+function said(
+  id: string,
+  seq: number,
+  text: string,
+  threadRoot: string | null,
+): ManagerChatLiveMessage {
+  return {
     id,
     seq,
     clientKey: `key-${id}`,
@@ -521,9 +516,16 @@ test("a Manager's page on a phone stands on its chat, a message's thread summed 
     lineId: null,
     createdAt: seq * 1_000,
     editedAt: null,
-  });
+  };
+}
 
-  // The chat holds one message with one reply in its thread, newest first, as the service pages it.
+/** A Manager whose chat holds one message with one reply in its thread, newest first, as the service pages it. */
+function managerWithThread(): ListedAgent {
+  handInboxItems({ rows: { [INBOX_SCOPE_KIND.TASK]: {}, agents: {} } });
+  pushedTranscripts(() => [
+    { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
+  ]);
+  const manager: ListedAgent = { ...MANAGER, kind: AGENT_KIND.MANAGER };
   handState(
     {},
     {
@@ -541,6 +543,12 @@ test("a Manager's page on a phone stands on its chat, a message's thread summed 
       },
     },
   );
+
+  return manager;
+}
+
+test("a Manager's page on a phone stands on its chat, a message's thread summed under it, with no row of views, where its transcript stood", async () => {
+  const manager = managerWithThread();
   const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
   const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
 
@@ -552,6 +560,45 @@ test("a Manager's page on a phone stands on its chat, a message's thread summed 
   assert.match(page.textContent ?? "", /On it\./u, "the chat's message stands");
   assert.match(page.textContent ?? "", /1 reply/u, "its thread's reply is summed under it");
   assert.equal(page.querySelector("[role='tablist']"), null, "no row of views stands");
+});
+
+test("a wide Manager's page opens a message's thread inside Messages beside the chat, not in the panel, and its close shuts it", async () => {
+  const manager = managerWithThread();
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
+  const container = await mountAgentPage(history, tasks);
+
+  const summary =
+    [...container.querySelectorAll<HTMLElement>("button")].find((button) =>
+      /1 reply/u.test(button.textContent ?? ""),
+    ) ?? assert.fail("the message sums its thread");
+
+  act(() => summary.click());
+  await settleQueries();
+
+  const thread =
+    container.querySelector<HTMLElement>(".agent-page section[aria-label='Thread']") ??
+    assert.fail("the thread stands in the page");
+
+  assert.match(thread.textContent ?? "", /The web app's\./u, "the thread shows its reply");
+  assert.match(
+    container.querySelector(".agent-page")?.textContent ?? "",
+    /On it\./u,
+    "the chat still stands beside it",
+  );
+  assert.equal(container.querySelector('aside[aria-label="Panel"]'), null, "no panel opens");
+
+  const close =
+    container.querySelector<HTMLElement>("button[aria-label='Close thread']") ??
+    assert.fail("the thread offers its close");
+
+  act(() => close.click());
+  await settleQueries();
+  assert.equal(
+    container.querySelector(".agent-page section[aria-label='Thread']"),
+    null,
+    "the thread is shut",
+  );
 });
 
 test("a Manager's Inbox tab lists its threads as the window's Inbox's view chooses, offering that view's menu", async () => {
