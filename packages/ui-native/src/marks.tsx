@@ -10,10 +10,8 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
-  Animation,
   accessibilityHidden,
   accessibilityLabel,
-  animation,
   fixedSize,
   font,
   foregroundStyle,
@@ -25,6 +23,7 @@ import {
   opacity,
   resizable,
   scaleEffect,
+  symbolEffect,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
@@ -71,6 +70,7 @@ import {
 import { Text } from "./text.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
+import { MANAGER_FACE_FILL } from "./tokens/manager-face-fills.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { readWorkingBeat, subscribeWorkingBeat } from "./working-beat.js";
@@ -445,7 +445,7 @@ export function AgentTile({
   );
 }
 
-/** Where a Manager's face stands: as a mark of its own, such as a row's lead or a writer's, which wears the working disc, or among words, such as a suggestion's, too small to hold it, where its mood and its bob say it works alone, as the panel's face among words does. */
+/** Where a Manager's face stands: as a mark of its own, such as a row's lead or a writer's, which wears the typing bubble while it works, or among words, such as a suggestion's, too small to hold it, where its mood alone says it works, as the panel's face among words does. */
 export const MANAGER_FACE_SEAT = {
   MARK: "mark",
   WORDS: "words",
@@ -453,48 +453,31 @@ export const MANAGER_FACE_SEAT = {
 
 export type ManagerFaceSeat = (typeof MANAGER_FACE_SEAT)[keyof typeof MANAGER_FACE_SEAT];
 
-/** The least side a working Manager's disc stands at, in points: the panel's at a row's 20 px face. */
-const FACE_DISC_LEAST = 12;
+/** How much of an emoji face's disc its emoji fills. */
+const FACE_EMOJI_SCALE = 0.62;
 
-/** How much of a face's side its working disc stands at past the least, and how much of the disc the working mark inside it fills, as the panel's seats size them. */
-const FACE_DISC_SCALE = 0.5;
-const FACE_DISC_MARK_SCALE = 2 / 3;
+/** The least side a working Manager's typing bubble stands at, in points, and how much of the face's side it takes past that, as the panel's seats size its bubble. */
+const FACE_BUBBLE_LEAST = 12;
+const FACE_BUBBLE_SCALE = 0.5;
 
-/** How far past the face's end corner its disc stands, in points, as the panel's stands 2 px out. */
-const FACE_DISC_OUT = 2;
-
-/** How high a working face bobs, of its side, and how long each rise or fall takes, in seconds: the panel's 8% each 0.8 s, half the working mark's lap. */
-const FACE_BOB = 0.08;
-const FACE_BOB_SECONDS = 0.8;
-
-/** How many of the working beat's steps a bob's rise or fall lasts, so a face and the mark beside it keep one time. */
-const FACE_BOB_STEPS = 4;
-
-/** Never bobs, for a face at rest or held still. */
-function holdBob(): () => void {
-  return () => undefined;
-}
-
-/** Whether a working face stands risen: half the working mark's lap up, half down, read off the one beat, so it draws again only as it turns; never where it rests or the reader reduces motion. */
-function useBobRisen(bobs: boolean): boolean {
-  return useSyncExternalStore(
-    bobs ? subscribeWorkingBeat : holdBob,
-    () => bobs && Math.floor(readWorkingBeat() / FACE_BOB_STEPS) % 2 === 0,
-  );
-}
+/** How far past the face's top end corner its bubble stands, in points, as the panel's stands 2 px out. */
+const FACE_BUBBLE_OUT = 3;
 
 /**
  * A Manager's face, as the panel's `ManagerFace` draws it
- * (`@repo/features/manager-face`'s character and color): one vector picture
- * of the asset catalog (`managerFaceAsset`), drawn and cached by the system,
- * so a long list of them costs no more than its glyphs. At rest it smiles;
- * while the Manager works the same character turns excited, bobs gently
- * on the working beat, SwiftUI easing each rise and fall, and, as a mark
- * of its own, wears the working mark on a disc of the ground at its end
- * corner (`MANAGER_FACE_SEAT`), so working
- * changes how the face looks and never which face it is. Where the reader
- * reduces motion it holds still, the disc saying it works. It is never
- * heard, since it always stands beside the name it leads, as `AgentTile` is.
+ * (`@repo/features/manager-face`'s character, emoji, and color). A
+ * character is one vector picture of the asset catalog
+ * (`managerFaceAsset`), drawn and cached by the system, so a long list of
+ * them costs no more than its glyphs; an emoji is SwiftUI's own text,
+ * centered on a disc of the face's fill in the theme's shade
+ * (`MANAGER_FACE_FILL`). At rest a character smiles and turns excited while
+ * the Manager works; as a mark of its own, a working face also wears the
+ * system's typing bubble (`ellipsis.bubble.fill`) at its top end corner,
+ * its dots lit in turn by the symbol's own variable color effect, held
+ * still where the reader reduces motion (`MANAGER_FACE_SEAT`). The face
+ * itself never moves, so working changes how it looks and never which
+ * face it is. It is never heard, since it always stands beside the name it
+ * leads, as `AgentTile` is.
  */
 export const ManagerFace = memo(function ManagerFace({
   face,
@@ -506,40 +489,45 @@ export const ManagerFace = memo(function ManagerFace({
   /** Its side, in points. */
   readonly size: number;
   readonly working?: boolean | undefined;
-  /** Where it stands, which says whether it wears the working disc; a mark of its own where none is given. */
+  /** Where it stands, which says whether it wears the typing bubble; a mark of its own where none is given. */
   readonly seat?: ManagerFaceSeat | undefined;
 }) {
   const colors = useColors();
+  const dark = useColorScheme() === "dark";
   const reduceMotion = useReduceMotion();
-  const risen = useBobRisen(working && !reduceMotion);
-  const disc = Math.max(FACE_DISC_LEAST, size * FACE_DISC_SCALE);
+  const bubble = Math.max(FACE_BUBBLE_LEAST, size * FACE_BUBBLE_SCALE);
+  const fill = MANAGER_FACE_FILL[face.color];
 
   return (
     <ZStack
-      alignment="bottomTrailing"
+      alignment="topTrailing"
       modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}
     >
-      <Image
-        assetName={managerFaceAsset(face, working)}
-        modifiers={[
-          resizable(),
-          frame({ width: size, height: size }),
-          offset({ y: risen ? -size * FACE_BOB : 0 }),
-          ...(working && !reduceMotion
-            ? [animation(Animation.easeInOut({ duration: FACE_BOB_SECONDS }), risen)]
-            : []),
-        ]}
-      />
-      {working && seat === MANAGER_FACE_SEAT.MARK ? (
-        <ZStack
-          modifiers={[
-            frame({ width: disc, height: disc }),
-            offset({ x: FACE_DISC_OUT, y: FACE_DISC_OUT }),
-          ]}
-        >
-          <Circle modifiers={[foregroundStyle(colors.GROUND)]} />
-          <WorkingMark side={disc * FACE_DISC_MARK_SCALE} />
+      {face.emoji === undefined ? (
+        <Image
+          assetName={managerFaceAsset(face, working)}
+          modifiers={[resizable(), frame({ width: size, height: size })]}
+        />
+      ) : (
+        <ZStack modifiers={[frame({ width: size, height: size })]}>
+          <Circle modifiers={[foregroundStyle(dark ? fill.DARK : fill.LIGHT)]} />
+          <Text modifiers={[font({ size: size * FACE_EMOJI_SCALE }), lineLimit(1), fixedSize()]}>
+            {face.emoji}
+          </Text>
         </ZStack>
+      )}
+      {working && seat === MANAGER_FACE_SEAT.MARK ? (
+        <Image
+          {...glyphImage(GLYPH.MANAGER_TYPING)}
+          size={bubble}
+          color={colors.TEXT_MUTED}
+          modifiers={[
+            offset({ x: FACE_BUBBLE_OUT, y: -FACE_BUBBLE_OUT }),
+            ...(reduceMotion
+              ? []
+              : [symbolEffect({ effect: "variableColor", fillStyle: "iterative" })]),
+          ]}
+        />
       ) : null}
     </ZStack>
   );
