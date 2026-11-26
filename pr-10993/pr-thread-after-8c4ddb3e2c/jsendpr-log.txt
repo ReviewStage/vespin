@@ -1,0 +1,7 @@
+pinned to 8c4ddb3e2c
+== bundle PJjsendpr base 8c4ddb3e2c
+  built 8c4ddb3e2c base app Vjnatsend2.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
