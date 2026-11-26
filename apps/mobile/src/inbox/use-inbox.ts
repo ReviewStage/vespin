@@ -18,6 +18,7 @@ import { base64Bytes } from "@repo/features/agent-wire";
 import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { sizeLabel } from "@repo/features/attachment-model";
 import { base64PictureSize, type ImageDimensions } from "@repo/features/image-signature";
+import type { InboxFields, InboxRow } from "@repo/features/inbox-digest";
 import {
   INBOX_MEDIA,
   INBOX_SHOW,
@@ -34,6 +35,8 @@ import {
   inboxGroup,
   inboxList,
   inboxPinnedRuns,
+  inboxRowGroups,
+  inboxSearchWordsOf,
   inboxShownItems,
   isUnread,
   MINE,
@@ -129,7 +132,10 @@ const CLOSE_WENT = {
 } as const;
 
 type UseChosenInboxResult = {
+  /** Every holder's items as the list reads them, each as its row (`inboxRowGroups`). */
   readonly groups: readonly InboxGroup<InboxAnyHolder>[];
+  /** The same holders' whole items, the reader's sends drawn on them, which a search reads every word of. */
+  readonly whole: readonly InboxGroup<InboxAnyHolder, InboxItem>[];
   readonly chosen: Workspace | undefined;
   readonly workspaces: number;
 };
@@ -145,9 +151,10 @@ export function useChosenInbox(reach: InboxReach = INBOX_ATTENTION): UseChosenIn
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
 
-  const groups = useInboxGroupsIn(chosen?.id, reach);
+  const whole = useSendsDrawn(useInboxGroupsIn(chosen?.id, reach));
+  const groups = useMemo(() => inboxRowGroups(whole), [whole]);
 
-  return { groups: useSendsDrawn(groups), chosen, workspaces: workspaces.length };
+  return { groups, whole, chosen, workspaces: workspaces.length };
 }
 
 /** The holders of the chosen workspace's Inbox items alone (`useChosenInbox`), as far as `reach` reads. */
@@ -192,6 +199,8 @@ export interface InboxListing {
   readonly feed: InboxFeed;
   readonly counts: InboxCounts;
   readonly readerId: string | undefined;
+  /** Every line of words each thread's row says, read from its whole item, as the list's search reads them (`inboxSearchWordsOf`). */
+  readonly wordsOf: (row: InboxRow) => readonly string[];
 }
 
 /** No run folded, for a listing whose pinned tasks' threads do not stand first. */
@@ -225,13 +234,20 @@ export function useInboxListing(view: {
     [view.show, view.chosen],
   );
 
-  const groups = useInboxGroups(reach);
+  const { groups, whole } = useChosenInbox(reach);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
   const { data: feed = INBOX_FEED.READING } = useQuery({
     ...appStateQuery,
     select: selectInboxFeed,
   });
+
+  // Note that the search reads every word of each thread from its whole item, by the row's id, as the panel's Inbox searches it.
+  const wordsOf = useMemo(() => {
+    const byId = new Map(whole.flatMap(({ items }) => items.map((item) => [item.id, item])));
+
+    return inboxSearchWordsOf((itemId) => byId.get(itemId));
+  }, [whole]);
 
   const { show, search, chosen, pinnedFirst = false } = view;
   const folds = useInboxRunFolds();
@@ -247,7 +263,7 @@ export function useInboxListing(view: {
       chosen,
       readerId,
       whose: MINE,
-      search: searchTokens(search),
+      search: { tokens: searchTokens(search), wordsOf },
       pinnedFirst,
       folded,
     });
@@ -259,8 +275,15 @@ export function useInboxListing(view: {
       feed,
       counts: inboxCounts(standing, readerId, MINE),
       readerId,
+      wordsOf,
     });
-  }, [keep, groups, readerId, feed, show, search, chosen, pinnedFirst, folded]);
+  }, [keep, groups, wordsOf, readerId, feed, show, search, chosen, pinnedFirst, folded]);
+}
+
+/** A thread as its screen draws it: its whole item, its sends drawn on it, with what holds it. */
+export interface InboxThreadHeld {
+  readonly holder: InboxAnyHolder;
+  readonly item: InboxItem;
 }
 
 /** The threads either side of the thread in front, by id, and how its screen opens one; none at an end. */
@@ -348,7 +371,7 @@ export function useInboxBadge(): number {
 }
 
 type UseInboxThreadResult = {
-  readonly listed: InboxListed<InboxAnyHolder> | undefined;
+  readonly listed: InboxThreadHeld | undefined;
   readonly readerId: string | undefined;
   readonly feed: InboxFeed;
   /** Reads again what the thread waits on where it failed: where it stands, its task's own inbox, or the feed and the task list. */
@@ -458,7 +481,7 @@ function listedIn(
     readonly items: readonly InboxItem[];
   }[],
   id: string | undefined,
-): InboxListed<InboxAnyHolder> | undefined {
+): InboxThreadHeld | undefined {
   for (const { holder, items } of groups) {
     const item = items.find((each) => each.id === id);
 
@@ -527,13 +550,13 @@ function useItemHome(id: string | undefined, asked: boolean): ItemHome {
 
 /** A task's own inbox as one group, where its read stands, and how to read it again. */
 interface HomeGroups {
-  readonly groups: readonly InboxGroup<InboxAnyHolder>[];
+  readonly groups: readonly InboxGroup<InboxAnyHolder, InboxItem>[];
   readonly read: InboxFeed;
   readonly again: () => void;
 }
 
 /** No group of a task's own inbox. */
-const NO_HOME_GROUPS: readonly InboxGroup<InboxAnyHolder>[] = [];
+const NO_HOME_GROUPS: readonly InboxGroup<InboxAnyHolder, InboxItem>[] = [];
 
 /**
  * The inbox of the task `taskId` names, followed while it is named, as one
@@ -622,19 +645,19 @@ function unanswered(went: NodWent | undefined): went is NodUnanswered {
  */
 export function useInboxActs(): {
   /** Marks a thread read or unread, a notice marked read acknowledged too. */
-  readonly mark: (item: InboxItem, unread: boolean) => void;
+  readonly mark: (item: InboxRow, unread: boolean) => void;
   /** Sets the thread's reminder for an instant, or clears it where `until` is null, which the host draws at once, as it draws a mark. */
   readonly remind: (itemId: string, until: number | null) => void;
   /** Resolves an open thread against the revision its row drew, as the thread's own Resolve does, buzzing as it lands or is refused, and offering Undo once it went. */
-  readonly resolve: (item: InboxItem) => void;
+  readonly resolve: (item: InboxFields) => void;
   /** Marks every thread given that is unread as read, and acknowledges the notices among them. */
-  readonly markAll: (items: readonly InboxItem[]) => void;
+  readonly markAll: (items: readonly InboxRow[]) => void;
   /** Marks several threads read or unread at once, as one write, saying how many the service took where it refused some; those marked read acknowledged as one does. */
-  readonly markMany: (items: readonly InboxItem[], unread: boolean) => void;
+  readonly markMany: (items: readonly InboxRow[], unread: boolean) => void;
   /** Sets or clears the reminder of several threads at once, as one write. */
   readonly remindMany: (itemIds: readonly string[], until: number | null) => void;
   /** Resolves several open threads at once, each against the revision its row drew, as one write, offering one Undo that takes back every one that went. */
-  readonly resolveMany: (items: readonly InboxItem[]) => void;
+  readonly resolveMany: (items: readonly InboxFields[]) => void;
   readonly refresh: () => Promise<void>;
   readonly refreshTasks: () => Promise<void>;
 } {
@@ -645,7 +668,7 @@ export function useInboxActs(): {
 
   return useMemo(() => {
     // Note that each nod goes at the revision the thread was marked on, so an agent's change since is never acknowledged unseen, and one settled first by someone else is passed over quietly, since what the mark asked already stands.
-    const nodRead = (items: readonly InboxItem[]) => {
+    const nodRead = (items: readonly InboxRow[]) => {
       const now = Date.now();
 
       const keyed: readonly SettledThread[] = items.flatMap((item) =>
@@ -902,7 +925,7 @@ export function useInboxActs(): {
  * nothing. Its notifications still shown are removed as it opens, read or
  * not, since the thread is on screen.
  */
-export function useReadOnOpen(listed: InboxListed<InboxAnyHolder> | undefined): void {
+export function useReadOnOpen(listed: { readonly item: InboxFields } | undefined): void {
   const acts = useHostActs();
   const id = listed?.item.id;
   const unread = listed !== undefined && isUnread(listed.item);

@@ -67,12 +67,7 @@ import type { AutomationSummary } from "@repo/features/automation-wire";
 import { READING_AUTOMATIONS } from "@repo/features/automation-words";
 import { fileName } from "@repo/features/code-ref-words";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import {
-  holderName,
-  type InboxAnyHolder,
-  type InboxListed,
-  inboxItemWords,
-} from "@repo/features/inbox-list-model";
+import { holderName, type InboxAnyHolder, type InboxListed } from "@repo/features/inbox-list-model";
 import { formatCount } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -1360,11 +1355,14 @@ function snippetOf(
   return undefined;
 }
 
-/** What an Inbox item's search reads: its title and its task's name, or its agent's on no task, and else everything it says (`inboxItemWords`). */
-function inboxWords({ holder, item }: InboxListed<InboxAnyHolder>): RowWords {
+/** What an Inbox item's search reads: its title and its task's name, or its agent's on no task, and else everything it says (`InboxSearch`'s `wordsOf`). */
+function inboxWords(
+  { holder, item }: InboxListed<InboxAnyHolder>,
+  wordsOf: InboxSearch["wordsOf"],
+): RowWords {
   const title = cardTitle(item.title);
 
-  return { label: title, terms: [title, holderName(holder)], keywords: inboxItemWords(item) };
+  return { label: title, terms: [title, holderName(holder)], keywords: wordsOf(item) };
 }
 
 /**
@@ -2544,8 +2542,13 @@ export function CommandPalette({
   // Note that each Inbox item's words are read once for the items pushed rather than on every key.
   const inboxList = useMemo(
     () =>
-      inboxAsked ? inboxSearch.items.map((listed) => ({ listed, words: inboxWords(listed) })) : [],
-    [inboxAsked, inboxSearch.items],
+      inboxAsked
+        ? inboxSearch.items.map((listed) => ({
+            listed,
+            words: inboxWords(listed, inboxSearch.wordsOf),
+          }))
+        : [],
+    [inboxAsked, inboxSearch.items, inboxSearch.wordsOf],
   );
 
   // Note that the automations are held the first time they are searched, on the Inbox's terms.

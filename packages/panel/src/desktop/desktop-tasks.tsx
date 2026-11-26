@@ -1,6 +1,6 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { NO_ITEMS, taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
+import { taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   LINK_DESTINATION,
@@ -237,6 +237,9 @@ import { useStandingDoor } from "./task-row-parts.js";
  * task whose repository belongs to another of the account's workspaces says
  * which, with the press that moves it there (`stranded-task-banner.tsx`).
  */
+
+/** No thread of an agent's waiting on the developer, one array so an agent with none hands down the same one. */
+const NO_WAITING: readonly InboxItem[] = [];
 
 /** No task open: what a task's relation menus offer while none is. */
 const NO_TASKS: readonly TaskSummary[] = [];
@@ -1032,7 +1035,7 @@ function DescriptionDocument({
       .filter((item) => item.agentId === tabAgent)
       .toSorted((a, b) => b.updatedAt - a.updatedAt);
 
-    const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
+    const waiting = waitingOf.get(tabAgent) ?? NO_WAITING;
 
     return posted.length === 0 ? undefined : { waiting, posted, onOpen: openWaitingThread };
   }, [tabAgent, boardOpen, boardSettled, waitingOf, openWaitingThread]);
