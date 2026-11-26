@@ -64,7 +64,7 @@ export {
 
 export type { CaretAtWord } from "./caret-at-word.js";
 
-export { ChangedFileRow } from "./changed-file-row.js";
+export { ChangedFileRow, changesSubtitle } from "./changed-file-row.js";
 
 export type { ChannelFaces } from "./channel-row.js";
 

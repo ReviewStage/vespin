@@ -39,12 +39,15 @@ export function cellFocusRingOff(): ModifierConfig {
  * compact screen, whose bar no SwiftUI modifier reaches. Note that a view
  * takes it whether or not it has a subtitle, an empty one drawing none,
  * since adding or removing a modifier redraws everything under the view.
+ * A stack's subtitle may stand in `inked` runs, some in an ink of their
+ * own, which a build without them draws as the plain `subtitle`.
  */
 export function barSubtitle(
   bar: BarKind,
   subtitle: string | undefined,
   leading = false,
   titleMark?: BarTitleMark,
+  inked: readonly InkedWords[] = [],
 ): ModifierConfig {
   if (bar === BAR_KIND.COLUMN)
     return createModifier(MODIFIER.COLUMN_SUBTITLE, { subtitle: subtitle ?? "", leading });
@@ -54,8 +57,14 @@ export function barSubtitle(
     leading,
     title: titleMark?.title ?? "",
     titleMark: titleMark?.asset ?? "",
+    runs: inked.map((run) =>
+      run.ink === undefined ? { text: run.words } : { text: run.words, color: run.ink },
+    ),
   });
 }
+
+/** A run of a stack bar's subtitle: its words, and the ink they take where they take one of their own, the subtitle's own gray elsewhere. */
+export type InkedWords = { readonly words: string; readonly ink?: string | undefined };
 
 /** A picture of the asset catalog a stack's bar leads its title with, such as a Manager's face, and the title it leads. */
 export type BarTitleMark = { readonly title: string; readonly asset: string };

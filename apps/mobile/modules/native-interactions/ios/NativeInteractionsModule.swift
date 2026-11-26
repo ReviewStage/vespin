@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, some of its words in colors of their own, and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -191,22 +191,53 @@ internal struct ColumnSubtitleModifier: ViewModifier, Record {
 /// (iOS 26), the picture standing as tall as the title's line, drawn for the
 /// screen's appearance and again as it changes; it clears that title as it
 /// clears its subtitle.
+///
+/// Where it is handed `runs` with an ink of their own, such as a pull
+/// request's lines added in green, it writes them as the item's attributed
+/// subtitle (iOS 26), each run in its color and the rest left to the bar's
+/// own gray, and clears that as it clears the plain one.
 internal struct StackSubtitleModifier: ViewModifier, Record {
   @Field var subtitle: String = ""
   @Field var leading: Bool = false
   @Field var title: String = ""
   @Field var titleMark: String = ""
+  @Field var runs: [SubtitleRun] = []
 
   func body(content: Content) -> some View {
     content.background(
-      StackSubtitleProbe(subtitle: subtitle, leading: leading, title: title, titleMark: titleMark)
+      StackSubtitleProbe(
+        subtitle: subtitle,
+        inked: inkedSubtitle(),
+        leading: leading,
+        title: title,
+        titleMark: titleMark
+      )
     )
   }
+
+  /// The runs as one attributed string, each in its own color where it names one; none where no run names a color, so the plain subtitle stands.
+  private func inkedSubtitle() -> AttributedString? {
+    guard runs.contains(where: { $0.color != nil }) else { return nil }
+    var built = AttributedString()
+    for run in runs {
+      var piece = AttributedString(run.text)
+      if let color = run.color { piece.uiKit.foregroundColor = color }
+      built.append(piece)
+    }
+    return built
+  }
+}
+
+/// A run of a stack bar's subtitle: its words, and the color they take, where they take one of their own.
+internal struct SubtitleRun: Record {
+  @Field var text: String = ""
+  @Field var color: UIColor? = nil
 }
 
 /// The probe a screen carries: an empty view that writes its subtitle to the stack's item each time it's placed or redrawn.
 private struct StackSubtitleProbe: UIViewRepresentable {
   let subtitle: String
+  let inked: AttributedString?
   let leading: Bool
   let title: String
   let titleMark: String
@@ -218,6 +249,7 @@ private struct StackSubtitleProbe: UIViewRepresentable {
   func updateUIView(_ view: StackSubtitleView, context: Context) {
     view.leading = leading
     view.marked = titleMark.isEmpty || title.isEmpty ? nil : (title: title, mark: titleMark)
+    view.inked = inked
     view.subtitle = subtitle
   }
 
@@ -233,9 +265,18 @@ private final class StackSubtitleView: UIView {
   private var styleFound: UINavigationItem.ItemStyle?
   /// The attributed title this probe wrote, so it clears only its own.
   private var writtenTitle: AttributedString?
+  /// The attributed subtitle this probe wrote, so it clears only its own.
+  private var writtenInked: AttributedString?
 
   var subtitle = "" {
     didSet { write() }
+  }
+
+  /// The subtitle with some runs in their own colors; none for a plain one.
+  var inked: AttributedString? {
+    didSet {
+      if inked != oldValue { write() }
+    }
   }
 
   var leading = false {
@@ -277,6 +318,10 @@ private final class StackSubtitleView: UIView {
       item.attributedTitle = nil
     }
     writtenTitle = nil
+    if let item, let writtenInked, item.attributedSubtitle == writtenInked {
+      item.attributedSubtitle = nil
+    }
+    writtenInked = nil
     if let item, let styleFound, item.style == .editor {
       item.style = styleFound
     }
@@ -299,6 +344,18 @@ private final class StackSubtitleView: UIView {
     held.navigationItem.subtitle = shown
     item = held.navigationItem
     written = shown
+    ink(held.navigationItem, shown: shown)
+  }
+
+  /// Writes the subtitle's inked runs as the item's attributed subtitle while there are words to show, or takes away the one it wrote once there are none.
+  private func ink(_ held: UINavigationItem, shown: String?) {
+    guard shown != nil, let inked else {
+      if let writtenInked, held.attributedSubtitle == writtenInked { held.attributedSubtitle = nil }
+      writtenInked = nil
+      return
+    }
+    held.attributedSubtitle = inked
+    writtenInked = inked
   }
 
   /// Leads the item's title with the picture `marked` names, as one attributed title, or takes away the one it wrote once it names none.
