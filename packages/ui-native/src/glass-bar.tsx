@@ -1,7 +1,6 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
 import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
-import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   frame,
   glassEffect,
@@ -12,8 +11,6 @@ import {
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
-  type KeyboardEvent,
-  LayoutAnimation,
   type LayoutChangeEvent,
   StyleSheet,
   useWindowDimensions,
@@ -21,8 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardDockArea } from "./keyboard-dock.js";
-import { useColors } from "./tokens/colors.js";
-import { PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { READING_WIDTH, SPACE } from "./tokens/space.js";
 
 /** The room a docked bar takes above the screen's bottom safe area before it is measured, in points: a bare field's, with its gap. */
 const DOCK_ROOM_UNMEASURED = 72;
@@ -32,9 +28,6 @@ const DockRoom = createContext(0);
 
 /** How far the system's keyboard stands over the dock a screen's content stands in, in points; none while it is down or outside a dock. */
 const DockKeyboard = createContext(0);
-
-/** Whether the dock the bar stands in lifts it natively, clear of the bottom safe area it keeps standing over; none outside the native dock. */
-const DockLifted = createContext(false);
 
 /** The bottom safe area the native dock lifts the bar less by, as it tells it, which the bar's foot pads by so the two are one number; none before the dock tells it, or outside it. */
 const DockInset = createContext<number | undefined>(undefined);
@@ -89,35 +82,18 @@ const styles = StyleSheet.create({
   bar: { marginHorizontal: BAR_MARGIN },
 });
 
-/**
- * Moves the next layout with the keyboard, on its own duration and curve, as
- * React Native's keyboard-avoiding view does, so what the keyboard lifts
- * rises with it rather than snapping to where it ends.
- */
-function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
-  if (duration <= 0) return;
-  LayoutAnimation.configureNext({
-    duration,
-    update: { duration, type: LayoutAnimation.Types[easing] ?? LayoutAnimation.Types.keyboard },
-  });
-}
-
-/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. Where `moves` is given, the next layout moves with the keyboard on its own curve. Note that it starts from the keyboard standing as it mounts, so a piece drawn while the keyboard is up, such as a composer's head a refused send adds, reads it at once rather than at the keyboard's next move. */
-export function useKeyboardHeight(moves = true): number {
+/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. Note that it starts from the keyboard standing as it mounts, so a piece drawn while the keyboard is up, such as a composer's head a refused send adds, reads it at once rather than at the keyboard's next move. */
+function useKeyboardHeight(): number {
   const [height, setHeight] = useState(() =>
     Keyboard.isVisible() ? (Keyboard.metrics()?.height ?? 0) : 0,
   );
 
   useEffect(() => {
-    const rising = Keyboard.addListener("keyboardWillShow", (event) => {
-      if (moves) moveWithKeyboard(event);
-      setHeight(event.endCoordinates.height);
-    });
+    const rising = Keyboard.addListener("keyboardWillShow", (event) =>
+      setHeight(event.endCoordinates.height),
+    );
 
-    const falling = Keyboard.addListener("keyboardWillHide", (event) => {
-      if (moves) moveWithKeyboard(event);
-      setHeight(0);
-    });
+    const falling = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
 
     // Note that the height is read again once the keyboard has stood or gone, since a piece mounted while it moved read where it stood before, which React Native holds until the move ends.
     const stood = Keyboard.addListener("keyboardDidShow", (event) =>
@@ -132,21 +108,9 @@ export function useKeyboardHeight(moves = true): number {
       stood.remove();
       gone.remove();
     };
-  }, [moves]);
+  }, []);
 
   return height;
-}
-
-/** The filled ground a field's row and what heads it stand on inside the glass, so their words read over a bright picture scrolling under the bar. */
-function useFieldGround(radius: number): readonly ModifierConfig[] {
-  const colors = useColors();
-
-  return [
-    SwiftModifiers.background(
-      colors.RAISED,
-      SwiftModifiers.shapes.roundedRectangle({ cornerRadius: radius }),
-    ),
-  ];
 }
 
 /**
@@ -173,70 +137,48 @@ export const BAR_GLASS: readonly ModifierConfig[] = [
  * docks on, and with the keyboard up on the folded iPhone Duo a share of the
  * whole window left the transcript a line or two.
  */
-export function BarHead({
-  children,
-  filled = false,
-}: {
-  readonly children: ReactNode;
-  /** Whether it stands on the field's filled ground, as the field's row does inside the glass, so its words read over a bright picture scrolling under the bar. */
-  readonly filled?: boolean;
-}) {
+export function BarHead({ children }: { readonly children: ReactNode }) {
   const { height: window } = useWindowDimensions();
-  const keyboard = useKeyboardHeight(false);
+  const keyboard = useKeyboardHeight();
   const [tall, setTall] = useState(0);
   const most = Math.round(Math.max(0, window - keyboard) * HEAD_SHARE);
-  const ground = useFieldGround(BAR_RADIUS - BAR_EDGE);
-
-  // Note that a filled head spans the bar's width, as the field's pill under it does, rather than hugging its words.
-  const fill = filled
-    ? [frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }), ...ground]
-    : [];
-
   const scrolls = tall > most;
 
   const stack = (
     <VStack
       alignment="leading"
-      modifiers={[
-        padding(BAR_HEAD_INSET),
-        onGeometryChange(({ height }) => setTall(height)),
-        ...(scrolls ? [] : fill),
-      ]}
+      modifiers={[padding(BAR_HEAD_INSET), onGeometryChange(({ height }) => setTall(height))]}
     >
       {children}
     </VStack>
   );
 
-  // Note that a head that scrolls takes its ground on the scroll's frame, so the fill stands still while its words scroll over it.
-  return scrolls ? (
-    <ScrollView modifiers={[frame({ height: most }), ...fill]}>{stack}</ScrollView>
-  ) : (
-    stack
-  );
+  return scrolls ? <ScrollView modifiers={[frame({ height: most })]}>{stack}</ScrollView> : stack;
 }
 
 /**
  * What a dock pins at its foot, standing in the screen's bottom safe area,
  * and telling its dock how tall it stands, its gap with it, as it grows and
- * shrinks, so the content under it scrolls clear of all of it.
+ * shrinks, so the content under it scrolls clear of all of it. Note that
+ * every bar stands in the native dock (`GlassDock`), which lifts it with the
+ * keyboard frame by frame, so the foot neither reads the keyboard nor moves
+ * with it itself.
  */
 function DockedFoot({ children }: { readonly children: ReactNode }) {
-  const keyboard = useKeyboardHeight() > 0;
-  const lifted = useContext(DockLifted);
   const inset = useContext(DockInset);
   const measure = useContext(DockMeasure);
-  // Note that inside the native dock the foot pads by the bottom safe area the dock tells, the one its lift is less by, rather than one React Native reads for itself, since on a page presented full screen, such as New task, the two differed by the home indicator and the bar stood that far short of the keyboard.
-  const told = lifted && inset !== undefined;
+  // Note that the foot pads by the bottom safe area the dock tells, the one its lift is less by, rather than one React Native reads for itself, since on a page presented full screen, such as New task, the two differed by the home indicator and the bar stood that far short of the keyboard.
+  const told = inset !== undefined;
 
   const onLayout =
     measure === undefined
       ? undefined
       : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
 
-  // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one. The native dock lifts the bar only as far past that safe area as the keyboard stands, so the bar keeps it throughout, and a drag that pulls the keyboard down lowers the bar without a jump at its end.
+  // Note that the sides of the safe area are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one. The native dock lifts the bar only as far past the bottom safe area as the keyboard stands, so the bar keeps it throughout, and a drag that pulls the keyboard down lowers the bar without a jump at its end.
   return (
     <SafeAreaView
-      edges={told || (keyboard && !lifted) ? ["left", "right"] : ["bottom", "left", "right"]}
+      edges={told ? ["left", "right"] : ["bottom", "left", "right"]}
       style={told ? [styles.gap, { paddingBottom: SPACE.ROW + inset }] : styles.gap}
     >
       <View onLayout={onLayout}>{children}</View>
@@ -263,7 +205,6 @@ export function GlassBar({
   foot,
   above,
   modifiers = [],
-  field = false,
   heads = false,
 }: {
   readonly children: ReactNode;
@@ -271,8 +212,6 @@ export function GlassBar({
   readonly foot?: ReactNode;
   /** SwiftUI standing over the bar in a glass of its own, such as an agent's queued messages, as the panel stands its queue over its box; nothing where none is given. */
   readonly above?: ReactNode;
-  /** Whether the row is a field with its presses, which stands on a filled pill inside the glass, as Messages stands its field, so its placeholder and glyphs read over a bright picture scrolling under the bar. */
-  readonly field?: boolean;
   /** What stands over the row inside the same glass, such as a composer's queued messages and attached pictures; nothing where none is given. */
   readonly head?: ReactNode;
   /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
@@ -280,9 +219,6 @@ export function GlassBar({
   /** Whether a head may come and go over a row that must never be drawn anew, such as a field of pills holding the keyboard: the bar then keeps the column a head stands in even while none does. */
   readonly heads?: boolean;
 }) {
-  const ground = useFieldGround(PRESS_SIZE / 2);
-  const pill = field ? ground : [];
-
   // Note that the glass spans the bar's width whatever its row holds, as the bar always has.
   const glass = [
     frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
@@ -292,7 +228,7 @@ export function GlassBar({
 
   // Note that a bar whose head comes and goes keeps one shape, because a row moved into a column is drawn anew, and a field drawn anew lets go of the keyboard between one key and the next.
   const alone = !heads && head === undefined && foot === undefined;
-  const rowModifiers = alone ? [...modifiers, ...pill, ...glass] : [...pill];
+  const rowModifiers = alone ? [...modifiers, ...glass] : [];
 
   // Note that a row over a foot holds the field alone, so it stands in a column that hands it the bar's width as it is, rather than a row that sizes the field's text view again for each width it tries.
   const row =
@@ -312,7 +248,7 @@ export function GlassBar({
         row
       ) : (
         <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
-          {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
+          {head === undefined ? null : <BarHead>{head}</BarHead>}
           {foot === undefined ? (
             row
           ) : (
@@ -396,11 +332,9 @@ export function GlassDock({ children, bar }: DockProps) {
       </DockKeyboard>
       {/* Note that the docked view is never flattened away, since the native dock lifts its last child, which must be this view and not whatever the bar mounts first. */}
       <View style={styles.docked} collapsable={false}>
-        <DockLifted value={true}>
-          <DockInset value={inset}>
-            <DockColumn bar={bar} onRoom={setRoom} />
-          </DockInset>
-        </DockLifted>
+        <DockInset value={inset}>
+          <DockColumn bar={bar} onRoom={setRoom} />
+        </DockInset>
       </View>
     </KeyboardDockArea>
   );
