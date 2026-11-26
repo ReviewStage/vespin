@@ -190,18 +190,54 @@ internal struct ColumnSubtitleModifier: ViewModifier, Record {
 /// Manager's face, it leads `title` with it as the item's attributed title
 /// (iOS 26), the picture standing as tall as the title's line, drawn for the
 /// screen's appearance and again as it changes; it clears that title as it
-/// clears its subtitle.
+/// clears its subtitle. Where it names a `titleEmoji`, such as a Manager's
+/// emoji face, that emoji on its disc stands in the picture's place, drawn
+/// into the attachment's image as a row's face draws it.
 internal struct StackSubtitleModifier: ViewModifier, Record {
   @Field var subtitle: String = ""
   @Field var leading: Bool = false
   @Field var title: String = ""
   @Field var titleMark: String = ""
+  @Field var titleEmoji: String = ""
+  @Field var titleEmojiFill: String = ""
+  @Field var titleEmojiFillDark: String = ""
 
   func body(content: Content) -> some View {
     content.background(
-      StackSubtitleProbe(subtitle: subtitle, leading: leading, title: title, titleMark: titleMark)
+      StackSubtitleProbe(
+        subtitle: subtitle,
+        leading: leading,
+        title: title,
+        titleMark: titleMark,
+        emojiFace: titleEmoji.isEmpty
+          ? nil
+          : EmojiTitleFace(emoji: titleEmoji, fill: titleEmojiFill, fillDark: titleEmojiFillDark)
+      )
     )
   }
+}
+
+/// A Manager's emoji face as a bar's title leads with it: its emoji, and its disc's fill in the light and the dark, as hex.
+private struct EmojiTitleFace: Equatable {
+  let emoji: String
+  let fill: String
+  let fillDark: String
+}
+
+/// How much of an emoji face's disc its emoji fills, as every face sets it (`manager-face-look.ts`'s `MANAGER_FACE_EMOJI_SCALE`).
+private let emojiFaceScale: CGFloat = 0.62
+
+/// An emoji face drawn into a square of `side` points: its disc in the fill of `traits`' appearance, its emoji centered on it.
+private func emojiFaceImage(_ face: EmojiTitleFace, side: CGFloat, traits: UITraitCollection) -> UIImage {
+  let fill = UIColor(vespinHex: traits.userInterfaceStyle == .dark ? face.fillDark : face.fill)
+  let words = NSAttributedString(string: face.emoji, attributes: [.font: UIFont.systemFont(ofSize: side * emojiFaceScale)])
+  let drawn = words.size()
+  let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
+    fill.setFill()
+    UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side)).fill()
+    words.draw(at: CGPoint(x: (side - drawn.width) / 2, y: (side - drawn.height) / 2))
+  }
+  return image.withRenderingMode(.alwaysOriginal)
 }
 
 /// The probe a screen carries: an empty view that writes its subtitle to the stack's item each time it's placed or redrawn.
@@ -210,6 +246,7 @@ private struct StackSubtitleProbe: UIViewRepresentable {
   let leading: Bool
   let title: String
   let titleMark: String
+  let emojiFace: EmojiTitleFace?
 
   func makeUIView(context: Context) -> StackSubtitleView {
     StackSubtitleView()
@@ -217,6 +254,7 @@ private struct StackSubtitleProbe: UIViewRepresentable {
 
   func updateUIView(_ view: StackSubtitleView, context: Context) {
     view.leading = leading
+    view.emojiFace = emojiFace
     view.marked = titleMark.isEmpty || title.isEmpty ? nil : (title: title, mark: titleMark)
     view.subtitle = subtitle
   }
@@ -246,6 +284,13 @@ private final class StackSubtitleView: UIView {
   var marked: (title: String, mark: String)? {
     didSet {
       if marked?.title != oldValue?.title || marked?.mark != oldValue?.mark { write() }
+    }
+  }
+
+  /// The emoji face that stands in the picture's place, where the title is a Manager's that wears one.
+  var emojiFace: EmojiTitleFace? {
+    didSet {
+      if emojiFace != oldValue { write() }
     }
   }
 
@@ -303,13 +348,14 @@ private final class StackSubtitleView: UIView {
 
   /// Leads the item's title with the picture `marked` names, as one attributed title, or takes away the one it wrote once it names none.
   private func lead(_ held: UINavigationItem) {
-    guard let marked, let picture = UIImage(named: marked.mark, in: nil, compatibleWith: traitCollection) else {
+    let font = UIFont.preferredFont(forTextStyle: .headline)
+    let side = font.lineHeight
+    let drawnFace = emojiFace.map { emojiFaceImage($0, side: side, traits: traitCollection) }
+    guard let marked, let picture = drawnFace ?? UIImage(named: marked.mark, in: nil, compatibleWith: traitCollection) else {
       if let writtenTitle, held.attributedTitle == writtenTitle { held.attributedTitle = nil }
       writtenTitle = nil
       return
     }
-    let font = UIFont.preferredFont(forTextStyle: .headline)
-    let side = font.lineHeight
     let attachment = NSTextAttachment(image: picture)
     // Note that a bound's origin is measured up from the baseline, so the picture's middle stands on the middle of the title's capitals.
     attachment.bounds = CGRect(x: 0, y: (font.capHeight - side) / 2, width: side, height: side)
