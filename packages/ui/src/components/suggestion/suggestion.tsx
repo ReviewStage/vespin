@@ -135,7 +135,7 @@ const SENT_WORDS = {
 export function SuggestionSent({ kind }: { kind: SuggestionKind }): React.JSX.Element {
   return (
     <ReplayUnmask>
-      <span className="ui-suggestion-sent inline-flex items-baseline gap-ui-4 [&>svg]:size-[1em] [&>svg]:self-center">
+      <span className="ui-suggestion-sent inline-flex items-baseline gap-icon-gap [&>svg]:size-[1em] [&>svg]:self-center">
         <GLYPH.STEER />
         {SENT_WORDS[kind]}
       </span>

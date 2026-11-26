@@ -248,7 +248,7 @@ function CrumbControl({
   const control =
     onPress === undefined ? (
       <BreadcrumbPage
-        className={`flex min-w-0 items-center gap-breadcrumb-gap ${LOOK[variant].words}`}
+        className={`flex min-w-0 items-center gap-icon-gap ${LOOK[variant].words}`}
         aria-current={current}
       >
         <CrumbFace glyph={crumb.glyph} label={label} end={crumb.end} />

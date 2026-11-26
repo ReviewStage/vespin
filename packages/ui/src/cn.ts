@@ -71,7 +71,6 @@ const FEEDBACK_DISPLAY = {
     "avatar-row",
     "avatar-stack",
     "badge-block",
-    "badge-gap",
     "badge-glyph",
     "badge-inline",
     "badge-swatch",

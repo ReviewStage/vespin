@@ -373,7 +373,6 @@ function linkClasses(look: ButtonLook): string {
 function faceClasses(size: BoxSize | undefined, ringShown: boolean, done: boolean): string {
   return cn(
     "ui-button-face inline-flex items-center gap-icon-gap min-w-0",
-    size === "compact" && "gap-1",
     ringShown && "invisible",
     done && "opacity-0",
   );

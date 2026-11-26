@@ -746,7 +746,7 @@ export function TabCard({
           <ReplayWords unmasked={labelReplayUnmasked}>{label}</ReplayWords>
         </Text>
       </div>
-      <div className="ui-tab-card-detail flex items-center gap-1 whitespace-nowrap [&>.ui-text]:min-w-0 [&>.ui-text]:overflow-hidden [&>.ui-text]:text-ellipsis">
+      <div className="ui-tab-card-detail flex items-center gap-icon-gap whitespace-nowrap [&>.ui-text]:min-w-0 [&>.ui-text]:overflow-hidden [&>.ui-text]:text-ellipsis">
         {detail === undefined ? null : (
           <>
             {detailIcon}

@@ -12,7 +12,7 @@ export interface WordsMark {
 }
 
 /** The mark's box: one line's height, centered on the words, a small gap before the words it marks, and nothing where the mark draws nothing. */
-const MARK = "ui-words-mark inline-flex empty:hidden h-[1em] items-center align-middle me-ui-4";
+const MARK = "ui-words-mark inline-flex empty:hidden h-[1em] items-center align-middle me-icon-gap";
 
 /** Words, with the mark set before the part it marks where one is given and falls inside them; the words alone otherwise. */
 export function MarkedWords({

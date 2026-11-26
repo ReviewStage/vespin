@@ -43,7 +43,7 @@ export type CountPart = {
  * glyph stands at the caption's size.
  */
 const PART =
-  "ui-count-part inline-flex items-center gap-0.5 [&:not([data-tone=neutral])]:text-tone-ink";
+  "ui-count-part inline-flex items-center gap-icon-gap [&:not([data-tone=neutral])]:text-tone-ink";
 
 const GLYPH = "ui-count-glyph inline-flex [&>svg]:size-caption-glyph";
 

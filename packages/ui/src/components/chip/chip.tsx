@@ -313,9 +313,8 @@ function chipClasses(
     look === CHIP_LOOK.FIELD && !iconOnly ? "justify-start" : "justify-center",
     width === CHIP_WIDTH.MIN_FIELD ? "" : "min-w-0",
     WIDTH_BOX[width],
-    compact
-      ? "h-chip-compact gap-chip-tight text-caption leading-caption"
-      : `h-control text-label ${removable ? "gap-chip-tight" : "gap-icon-gap"}`,
+    compact ? "h-chip-compact text-caption leading-caption" : "h-control text-label",
+    removable ? "gap-chip-tight" : "gap-icon-gap",
     !compact ? "font-label" : look === CHIP_LOOK.PILL ? "font-tag" : "font-caption",
     // Note that a mark alone is a square of its own height spelled as a width, because Safari 26 sizes an `aspect-ratio` box's track through its `max-w-full` to nothing.
     iconOnly ? `flex-none ${compact ? "w-chip-compact" : "w-control"}` : "flex-initial",
@@ -509,7 +508,7 @@ export function StaticChip({
         : "flex-initial px-chip-inset";
 
   const box = compact
-    ? "h-chip-compact gap-chip-tight text-caption leading-caption font-tag"
+    ? "h-chip-compact gap-icon-gap text-caption leading-caption font-tag"
     : "h-control text-label gap-icon-gap font-label";
 
   return (

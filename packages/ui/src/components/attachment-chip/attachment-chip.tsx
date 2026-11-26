@@ -204,7 +204,7 @@ function ChipFace({
             <span className="ui-attachment-chip-detail flex-none">{detail}</span>
           )
         ) : (
-          <span className="ui-attachment-chip-retry inline-flex flex-none items-center gap-ui-4 font-emphasis text-foreground [&>svg]:size-ui-12">
+          <span className="ui-attachment-chip-retry inline-flex flex-none items-center gap-icon-gap font-emphasis text-foreground [&>svg]:size-ui-12">
             <RetryIcon />
             {WORDS.RETRY}
           </span>

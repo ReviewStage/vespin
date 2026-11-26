@@ -331,7 +331,7 @@ function BehindTitle({
   return (
     <Behind depth={depth}>
       <CardPress label={WORDS.FORWARD(app.name)} onPress={() => onPick(app.id)}>
-        <span className="flex min-w-0 items-center gap-ui-6 pt-ui-4 pb-ui-12 ps-ui-8 pe-ui-8">
+        <span className="flex min-w-0 items-center gap-icon-gap pt-ui-4 pb-ui-12 ps-ui-8 pe-ui-8">
           <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
           <Text
             variant={TEXT_VARIANT.LABEL}

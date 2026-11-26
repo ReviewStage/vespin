@@ -181,8 +181,8 @@ const FIT_ROOT = {
 /** The gap each look keeps between its glyph, its name, and its standing: a row's gap where it is one line, and a margin on either side of the name where it wraps, which no gap reaches. */
 const LOOK_GAP = {
   [INLINE_REF_LOOK.LINK]: { row: "gap-icon-gap", glyph: "me-icon-gap", state: "ms-icon-gap" },
-  [INLINE_REF_LOOK.WASH]: { row: "gap-ui-4", glyph: "me-ui-4", state: "ms-ui-4" },
-  [INLINE_REF_LOOK.PILL]: { row: "gap-ui-4", glyph: "me-ui-4", state: "ms-ui-4" },
+  [INLINE_REF_LOOK.WASH]: { row: "gap-icon-gap", glyph: "me-icon-gap", state: "ms-icon-gap" },
+  [INLINE_REF_LOOK.PILL]: { row: "gap-icon-gap", glyph: "me-icon-gap", state: "ms-icon-gap" },
 } as const satisfies Record<InlineRefLook, { row: string; glyph: string; state: string }>;
 
 /** Each look's own box and ink at rest, a pill's type asked on its look so it outranks the line's own font the root takes. Note that a wash's name stands at least a 16px mark's height, so a mark beside it stays centered on it. */
