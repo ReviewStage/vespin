@@ -4,6 +4,7 @@ import { type InboxRow, inboxRowOf } from "./inbox-digest.js";
 import {
   agentThreadsLine,
   INBOX_MEDIA,
+  inboxNextReminderDue,
   inboxThreadEventsShown,
   inboxThreadMessages,
   inboxWaitingIn,
@@ -321,5 +322,17 @@ describe("inboxWaitingIn", () => {
     const kept = inboxWaitingKept(waiting, inboxWaitingIn(groups, undefined, 100));
 
     expect(kept.get("acme")).toBe(waiting.get("acme"));
+
+    // A thread put away until a reminder comes due is counted again then, not at the next write.
+    const reminded = [
+      {
+        holder: { task },
+        items: [{ ...posted("later", "agent-1", INBOX_STATUS.OPEN, 1, 1), remindAt: 500 }],
+      },
+    ];
+
+    expect(inboxWaitingIn(reminded, undefined, 100).get("acme")).toBeUndefined();
+    expect(inboxNextReminderDue(reminded, 100)).toBe(500);
+    expect(inboxWaitingIn(reminded, undefined, 500).get("acme")?.total).toBe(1);
   });
 });

@@ -30,6 +30,7 @@ import {
   type InboxAnyHolder,
   type InboxGroup,
   type InboxWaiting,
+  inboxNextReminderDue,
   inboxRowGroups,
   inboxWaitingIn,
   inboxWaitingKept,
@@ -47,12 +48,14 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useState,
 } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRowsOf } from "../host/host-provider.js";
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 import { useInboxRows } from "./inbox-rows.js";
+import { useSendsDrawn } from "./use-thread-answer.js";
 
 /** No holder grouped: what a read before the document lands answers. */
 const NO_GROUPS: readonly InboxGroup<InboxAnyHolder, InboxItem>[] = [];
@@ -171,18 +174,32 @@ function inWorkspaceOf(held: AttentionHeld, workspaceId: string | undefined): In
 export function InboxAttentionProvider({ children }: { readonly children: ReactNode }) {
   const [store] = useState(() => heldValue(ATTENTION_UNREAD));
   const all = useGroupsOf(undefined, INBOX_ATTENTION);
+  // Note that what waits is counted over the reader's sends standing too, so a reply out takes its thread off the counts at once, as the Inbox's own rows draw it.
+  const drawn = useSendsDrawn(all.groups);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+  // Note that the counts are made again as the soonest reminder comes due, since an item it put away comes back with no write to say so.
+  const [dueTurns, dueCame] = useReducer((turns: number) => turns + 1, 0);
 
   // Note that the store moves before the frame paints, so no screen draws a frame of the read before.
   useLayoutEffect(() => {
-    const counted = inboxWaitingIn(inboxRowGroups(all.groups), readerId, Date.now());
+    const counted = inboxWaitingIn(inboxRowGroups(drawn), readerId, Date.now());
 
     store.set({
       all,
       waiting: inboxWaitingKept(store.read().waiting, counted),
       inWorkspace: new Map(),
     });
-  }, [store, all, readerId]);
+  }, [store, all, drawn, readerId, dueTurns]);
+
+  useEffect(() => {
+    const now = Date.now();
+    const due = inboxNextReminderDue(inboxRowGroups(drawn), now);
+
+    if (due === undefined) return;
+    const timer = setTimeout(dueCame, due - now);
+
+    return () => clearTimeout(timer);
+  }, [drawn, dueTurns]);
 
   return <InboxAttention.Provider value={store}>{children}</InboxAttention.Provider>;
 }

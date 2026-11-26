@@ -1115,6 +1115,24 @@ export function inboxWaitingIn(
   return counts;
 }
 
+/** The soonest reminder among `groups` still ahead at `now`, when what waits must be counted again since an item comes back; none where no reminder stands ahead. */
+export function inboxNextReminderDue(
+  groups: readonly InboxGroup<InboxAnyHolder>[],
+  now: number,
+): number | undefined {
+  let next: number | undefined;
+
+  for (const { items } of groups) {
+    for (const { remindAt } of items) {
+      if (remindAt !== undefined && remindAt > now && (next === undefined || remindAt < next)) {
+        next = remindAt;
+      }
+    }
+  }
+
+  return next;
+}
+
 /** Whether two counts of what waits say the same. */
 function sameWaiting(one: InboxWaiting, other: InboxWaiting): boolean {
   const sameCounts = (a: ReadonlyMap<string, number>, b: ReadonlyMap<string, number>) =>
