@@ -542,6 +542,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const agents = yield* served(
       composeAgents({
         kernel,
+        keepsInbox: local?.keepsCollections === true,
         fileDownload: Option.getOrUndefined(fileDownload),
         account,
         accountId,

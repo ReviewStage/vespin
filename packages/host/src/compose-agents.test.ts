@@ -2535,7 +2535,7 @@ function keptLaunch(root: string, account = "user-dana") {
       store: local.store,
     });
 
-    const launch = yield* subject({ pool });
+    const launch = yield* subject({ pool, keepsInbox: true });
     yield* local.open(account, {
       kept: () => [],
       moves: Stream.empty,
@@ -2572,6 +2572,31 @@ it.effect(
         [],
         "the next launch reads past the sync id kept, never whole",
       );
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "where the account's database keeps the Inbox kind, a plan's inbox read never adds its items to the kept Inbox the list reads, so a thread opened from outside the feed stays out of it",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-scope-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      launch.sealScope(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+      yield* holding(launch.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE));
+      yield* settled;
+      launch.live.scope.set({ messages: [], files: [], items: [ITEM_ROW] });
+      yield* toldTimes(launch.told, 1);
+
+      // Note that the kept rows are read through the database, which answers on its own time, so the case reads them a few times before it judges.
+      const kept = yield* Effect.repeat(keptItemIds(launch.pool), {
+        until: (ids) => ids.length > 0,
+        times: 20,
+      });
+
+      assert.deepEqual(kept, []);
     }).pipe(Effect.provide(keptPlatform)),
 );
 

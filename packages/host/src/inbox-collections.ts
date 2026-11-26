@@ -196,6 +196,20 @@ export const INBOX_ITEM: RowKind<PlacedInboxItem, InboxChange> = {
 };
 
 /**
+ * An inbox item a plan's inbox read holds, as `INBOX_ITEM` holds it but in
+ * memory alone, for a platform that keeps the Inbox kind on disk: the kept
+ * collection is the account's feed's alone, which the Inbox list reads, so
+ * a thread a plan's read answers from outside that feed, as one opened from
+ * a link, is never drawn in the reader's own list or kept past the read.
+ * Note that a member's write is drawn over the feed's kind, so a write on
+ * such a thread lands once the plan's read next answers it.
+ */
+export const INBOX_SCOPED_ITEM: RowKind<PlacedInboxItem, InboxChange> = {
+  key: INBOX_ITEM.key,
+  drawn: INBOX_ITEM.drawn,
+};
+
+/**
  * What the service answered of a write on items, as the pool takes it:
  * kept on its transaction, standing as the item it names from then on, and
  * taken as that item in the place of a read that hands no wait; or refused,

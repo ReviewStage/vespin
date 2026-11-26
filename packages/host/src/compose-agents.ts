@@ -138,6 +138,7 @@ import {
   accountWideReads,
   INBOX_CHANGE,
   INBOX_ITEM,
+  INBOX_SCOPED_ITEM,
   type InboxChange,
   type InboxWritten,
   inboxSent,
@@ -336,6 +337,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
   focus: WindowFocus;
   /** The member signed in now, as an answer or a close drawn before the service says how it stands names them; none where nobody is. */
   reader?: () => InboxReader | undefined;
+  /** Whether the platform keeps the Inbox kind on disk (`LocalCopy.keepsCollections`), so a plan's inbox read stands apart from the kept feed it would otherwise be drawn in; none keeps none. */
+  keepsInbox?: boolean;
   /**
    * Waits for a write's transaction to arrive on the task list followed
    * live, which holds every agent's row (`TasksComposer.listed`), so a
@@ -559,6 +562,7 @@ export function composeAgents(
         ),
       accountId: dependencies.accountId,
       pool: dependencies.pool,
+      ...(dependencies.keepsInbox === true ? { kind: INBOX_SCOPED_ITEM } : undefined),
     });
 
     const accounts = yield* accountInboxes({
