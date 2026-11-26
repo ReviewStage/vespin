@@ -1,0 +1,9 @@
+EXCEPTION (the Manager 22:23 UTC Nov 25, as vjsend1b/1c): JS a7c5e077c0 over Vmain14 (natives from 938bbc656d), missing #10759 AgentsLiveActivity.swift and #10966 app.config.ts/assets, neither on the composer path
+pinned to a7c5e077c0
+== bundle PJjsend2b base a7c5e077c0
+  built a7c5e077c0 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-manager-send-once-before: fails 0 shots 1 
