@@ -19,6 +19,7 @@
  * this module's own fixture.
  */
 
+import type { AgentSummary } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { REMIND_TIMES, remindWords } from "@repo/features/inbox-remind-times";
 import {
@@ -48,15 +49,8 @@ import {
   CARD_PADDING,
   Card,
   ChannelMessage,
-  COMPOSER_LOOK,
-  ComposerFoot,
-  ComposerFrame,
   EmptyState,
   GlyphSlot,
-  GROUP_HEAD,
-  GROUP_HEADING,
-  GROUP_LOOK,
-  GroupHeader,
   IconButton,
   LineClamp,
   type MenuAction,
@@ -80,17 +74,29 @@ import {
   MessagesSquareIcon,
 } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
+import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "../ai-elements/conversation.js";
 import { MessageAction } from "../ai-elements/message.js";
 import { ActionMenu } from "../desktop/action-menu.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { usePerson } from "../member-directory.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
+import { useAgentBox } from "./agent-box.js";
+import { AgentComposer } from "./agent-composer.js";
+import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { useHandedWords } from "./box-words.js";
 import { REMIND_ME } from "./inbox-remind.js";
-import { MessageField, useMessageBox } from "./message-box.js";
 import { AskCard, PROTO_MANAGER, usePrototypeChat } from "./prototype-chat-ask.js";
+import { type BoxHeld, heldUpdateOver } from "./refused-send.js";
 import { TranscriptWords } from "./transcript-blocks.js";
+import type { AgentComposerControl } from "./use-agent-composer.js";
+import type { AgentsControl } from "./use-agents.js";
 
 /* ----- The fixture ----- */
 
@@ -155,6 +161,8 @@ type FeedPlace =
       readonly taskId: string;
       readonly taskName: string;
       readonly agentName: string;
+      /** The agent that posted the thread, whose box the card's reply goes through; none for an agent the fixture keeps no record of. */
+      readonly agentId?: string;
     };
 
 interface FeedThread {
@@ -256,6 +264,7 @@ const THREADS: readonly FeedThread[] = [
       taskId: TASK.INVITES.id,
       taskName: TASK.INVITES.name,
       agentName: "Build teammate invitations",
+      agentId: "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5",
     },
     title: WITHDRAW_ASK.title,
   },
@@ -266,6 +275,7 @@ const THREADS: readonly FeedThread[] = [
       taskId: TASK.DIGEST.id,
       taskName: TASK.DIGEST.name,
       agentName: "Send the weekly digest",
+      agentId: "6fc08203-4b7d-4e95-90bd-7c8d9eafb0c6",
     },
     title: "The digest's subject line",
   },
@@ -276,6 +286,7 @@ const THREADS: readonly FeedThread[] = [
       taskId: TASK.INVITES.id,
       taskName: TASK.INVITES.name,
       agentName: "Build teammate invitations",
+      agentId: "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5",
     },
     title: "#128 Invite a teammate by email",
     activity: "Pull request merged in Teammate invitations",
@@ -287,6 +298,7 @@ const THREADS: readonly FeedThread[] = [
       taskId: TASK.ROUNDING.id,
       taskName: TASK.ROUNDING.name,
       agentName: "Fix ledger rounding",
+      agentId: "70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7",
     },
     title: "Fix ledger rounding",
     activity: "Agent finished in Ledger rounding",
@@ -405,6 +417,9 @@ const markers = new Map<string, number>([
   ["t-rounding", 1],
   ["t-billing", 1],
 ]);
+
+/** Where the reader's marker stood as they opened each thread beside the feed, which its tab's New stands at. */
+const openedFrom = new Map<string, number>();
 
 /** The task agents' asks the reader answered, by item. */
 const taskAnswers = new Map<string, InboxAnswers>();
@@ -632,34 +647,136 @@ function ClampedWords({ text, clamp }: { text: string; clamp: boolean }): React.
   );
 }
 
-/** The thread's box: the chat's own field, its Reply sending to the thread. */
-function ReplyBox({ onSend }: { onSend: (text: string) => void }): React.JSX.Element {
-  const [words, setWords] = useState("");
+/** No stop: a reply in the feed never stops its agent's turn. */
+function neverStops(): Promise<boolean> {
+  return Promise.resolve(false);
+}
 
-  const send = () => {
-    const text = words.trim();
+/** Nothing to try again: a reply in the feed lands at once. */
+function noRetry(): void {}
 
-    if (text === "") return;
-    onSend(text);
-    setWords("");
+/** The agent of `agentId` as the window holds it: among its agents' rows, else as the task list lists it, which the box reads its model and servers off. */
+function useFeedAgent(agentId: string, agents: AgentsControl): AgentSummary | undefined {
+  const listed = useTaskListRow(useTaskListCollections().agents, agentId);
+  const held = agents.agents?.find((each) => each.id === agentId);
+
+  // SAFETY: PROTOTYPE: a listed agent carries every field the box reads off an agent.
+  return held ?? (listed as unknown as AgentSummary | undefined);
+}
+
+/**
+ * A thread's reply box: the agent composer itself, as the Inbox's answer
+ * box draws it (`inbox-answer-box.tsx`), over what it reads off the
+ * thread's agent (`useAgentBox`), so its `@` and `/` lists, dictation, +,
+ * files, and model chip are every box's; its Send replies on the thread
+ * (`onSend`).
+ */
+function FeedComposer({
+  agentId,
+  agents,
+  onSend,
+}: {
+  agentId: string;
+  agents: AgentsControl;
+  onSend: (text: string) => void;
+}): React.JSX.Element {
+  const agent = useFeedAgent(agentId, agents);
+  const agentBox = useAgentBox({ agentId, agent, agents });
+  const [held, setHeld] = useState<BoxHeld>({ text: "", attachments: [] });
+  const words = useHandedWords(held.text);
+  const latest = useRef(held);
+  latest.current = held;
+
+  const composer: AgentComposerControl = {
+    held: { words, attachments: held.attachments },
+    updateHeld: heldUpdateOver(setHeld),
+    sending: false,
+    note: undefined,
+    closed: undefined,
+    send: () => {
+      const text = latest.current.text.trim();
+
+      if (text === "" && latest.current.attachments.length === 0) return;
+      onSend(text);
+      setHeld({ text: "", attachments: [] });
+    },
+    retry: noRetry,
+    sent: [],
   };
 
-  const box = useMessageBox({
-    draft: useHandedWords(words),
-    setDraft: setWords,
-    placeholder: "Reply…",
-    label: "Reply",
-    maxLength: 8000,
-    onSubmit: send,
-    takesFiles: false,
-    takesFocus: false,
-  });
+  return (
+    <AgentComposer
+      {...agentBox}
+      // Note that a reply in a thread never stops its agent's turn, as the Inbox's box never does.
+      stoppable={false}
+      onClear={undefined}
+      composer={composer}
+      usage={undefined}
+      onStop={neverStops}
+      followsUp
+      keywords={agents.keywords}
+      skills={agents.readSkills}
+      wording={{ placeholder: "Reply…", label: "Reply", send: "Send" }}
+      maxLength={8000}
+      takesFocus={false}
+    />
+  );
+}
+
+/** Who a thread's box writes to: its Manager, or the task's agent that posted it; none where the fixture keeps no record of the agent. */
+function threadAgentOf(thread: FeedThread): string | undefined {
+  return thread.place.kind === "manager" ? PROTO_MANAGER : thread.place.agentId;
+}
+
+/**
+ * A task agent's Inbox thread as the window's side panel draws it beside
+ * the feed (`STRIP_TAB_KIND.INBOX_THREAD`), as a Manager's thread tab draws
+ * its own: the whole thread, at the reader's marker, in the log a tab
+ * scrolls, and the agent composer at its foot.
+ */
+export function PrototypeInboxThreadTab({
+  threadId,
+  agents,
+  readInboxImage,
+}: {
+  threadId: string;
+  agents: AgentsControl;
+  readInboxImage: (input: { itemId: string; attachmentId: string }) => Promise<unknown>;
+}): React.JSX.Element | null {
+  const feedVersion = useFeedVersion();
+  const thread = THREADS.find((each) => each.id === threadId);
+  const [shownFrom] = useState(
+    () => openedFrom.get(threadId) ?? (thread === undefined ? 0 : standingOf(thread).marker),
+  );
+
+  if (thread === undefined || feedVersion < 0) return null;
+  const standing = standingOf(thread);
+  const agentId = threadAgentOf(thread);
 
   return (
-    <ComposerFrame look={COMPOSER_LOOK.CARD}>
-      <MessageField box={box} look={COMPOSER_LOOK.BARE} />
-      <ComposerFoot send={{ label: "Reply", empty: words.trim() === "", onSend: send }} />
-    </ComposerFrame>
+    <AgentTabFrame label={TAB_WORDS.THREAD}>
+      <Conversation>
+        <ConversationContent>
+          <ThreadBody
+            standing={standing}
+            shownFrom={shownFrom}
+            whole
+            onMarkUnreadFrom={(at) => markUnreadFrom(standing, at)}
+            readInboxImage={readInboxImage}
+          />
+        </ConversationContent>
+        <ConversationScrollButton />
+      </Conversation>
+      {agentId === undefined ? null : (
+        <AgentTabFoot>
+          <FeedComposer
+            agentId={agentId}
+            agents={agents}
+            onSend={(text) => reply(standing, text)}
+          />
+        </AgentTabFoot>
+      )}
+    </AgentTabFrame>
   );
 }
 
@@ -784,6 +901,10 @@ function ThreadBody({
   );
 }
 
+/** PROTOTYPE: whether the list repeats itself, to measure the scroll over many full composers. */
+const STRESS =
+  typeof location !== "undefined" && new URLSearchParams(location.search).has("feedStress");
+
 /** How many of a thread's latest replies its card shows, the rest folded above them. */
 const LATEST_REPLIES = 3;
 
@@ -891,6 +1012,8 @@ interface EntryDoors {
   readonly onRemind: (at: number) => void;
   readonly onMarkUnreadFrom: (at: number) => void;
   readonly readInboxImage: (input: { itemId: string; attachmentId: string }) => Promise<unknown>;
+  /** The window's agents, whose box each card's reply goes through. */
+  readonly agents: AgentsControl;
 }
 
 /**
@@ -913,7 +1036,7 @@ function ThreadCard({
   const { thread } = standing;
   const unread = isUnread(standing);
   const due = fired.has(thread.id);
-  const manager = thread.place.kind === "manager";
+  const agentId = threadAgentOf(thread);
 
   return (
     <Card
@@ -932,6 +1055,10 @@ function ThreadCard({
             <OneLine className={unread ? "font-ui-semibold text-foreground" : "text-foreground"}>
               {thread.title}
             </OneLine>
+            {/* Its time, as Slack's Threads heads each thread with when it last moved. */}
+            <span className="flex-none text-caption text-muted-foreground">
+              <Time at={activityAt(standing)} look={TIME_LOOK.SINCE} />
+            </span>
           </span>
           {due || reminder !== undefined ? (
             <span className="flex flex-none items-center gap-ui-4 text-caption text-muted-foreground">
@@ -949,11 +1076,17 @@ function ThreadCard({
             key={`${thread.id}-${shownFrom}`}
             standing={standing}
             shownFrom={shownFrom}
-            onView={manager ? doors.onView : undefined}
+            onView={doors.onView}
             onMarkUnreadFrom={doors.onMarkUnreadFrom}
             readInboxImage={doors.readInboxImage}
           />
-          <ReplyBox onSend={(text) => reply(standing, text)} />
+          {agentId === undefined ? null : (
+            <FeedComposer
+              agentId={agentId}
+              agents={doors.agents}
+              onSend={(text) => reply(standing, text)}
+            />
+          )}
         </div>
       </div>
     </Card>
@@ -1021,21 +1154,6 @@ function activityAt(standing: ThreadStanding): number {
   return Math.max(standing.lastAt, fired.get(standing.thread.id) ?? 0);
 }
 
-/** The day a moment falls on, as the feed heads its days: Today, Yesterday, or the weekday and date. */
-function dayWords(at: number, now: number): string {
-  const day = new Date(at);
-  const today = new Date(now);
-  const startOf = (date: Date) =>
-    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-  const days = Math.round((startOf(today) - startOf(day)) / (24 * HOUR));
-
-  if (days === 0) return "Today";
-
-  if (days === 1) return "Yesterday";
-
-  return day.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-}
-
 /**
  * The Inbox as one list, Slack's Threads with its Activity beside it:
  * every thread the reader is in, each a card, and each agent that ended or
@@ -1049,13 +1167,18 @@ function dayWords(at: number, now: number): string {
  */
 export function PrototypeInboxFeed({
   only,
+  agents,
   onViewManagerThread,
+  onViewTaskThread,
   onOpenManagerThread,
   onOpenTask,
   readInboxImage,
 }: {
   only?: "manager" | undefined;
+  agents: AgentsControl;
   onViewManagerThread: (root: string) => void;
+  /** Opens a task agent's thread in the window's side panel, by the thread and its agent. */
+  onViewTaskThread?: ((threadId: string, agentId: string) => void) | undefined;
   onOpenManagerThread: (root: string) => void;
   onOpenTask: (taskId: string) => void;
   readInboxImage: (input: { itemId: string; attachmentId: string }) => Promise<unknown>;
@@ -1115,16 +1238,18 @@ export function PrototypeInboxFeed({
     setHeld(new Set([...held, ...listed.map((each) => each.thread.id)]));
   }
 
-  const now = Date.now();
   const unreadCount = ordered.filter(isUnread).length;
 
   const doorsOf = (standing: ThreadStanding): EntryDoors => ({
     onView: () => {
       // Note that the thread opens at the reader's marker, and opening it reads it.
-      if (standing.thread.place.kind !== "manager") return;
+      const { place } = standing.thread;
       setShownFrom((was) => new Map(was).set(standing.thread.id, standing.marker));
+      openedFrom.set(standing.thread.id, standing.marker);
       markRead(standing);
-      onViewManagerThread(standing.thread.place.root);
+
+      if (place.kind === "manager") onViewManagerThread(place.root);
+      else if (place.agentId !== undefined) onViewTaskThread?.(standing.thread.id, place.agentId);
     },
     onOpenPlace: () =>
       standing.thread.place.kind === "manager"
@@ -1140,6 +1265,7 @@ export function PrototypeInboxFeed({
       setShownFrom((was) => new Map(was).set(standing.thread.id, at));
     },
     readInboxImage,
+    agents,
   });
 
   const markAllRead = () => {
@@ -1150,17 +1276,6 @@ export function PrototypeInboxFeed({
 
     moved();
   };
-
-  // The list under its days, in the order it keeps: a day heads the entries that follow it.
-  const days: { readonly day: string; readonly entries: ThreadStanding[] }[] = [];
-
-  for (const each of listed) {
-    const day = dayWords(activityAt(each), now);
-    const last = days.at(-1);
-
-    if (last?.day === day) last.entries.push(each);
-    else days.push({ day, entries: [each] });
-  }
 
   const entryOf = (standing: ThreadStanding) =>
     standing.thread.activity === undefined ? (
@@ -1208,16 +1323,11 @@ export function PrototypeInboxFeed({
               {unreadsOnly ? "Nothing unread." : "Nothing here."}
             </EmptyState>
           ) : (
-            days.map(({ day, entries }) => (
-              <GroupHeader
-                key={day}
-                look={GROUP_LOOK.SECTION}
-                heading={GROUP_HEADING.NONE}
-                head={GROUP_HEAD.STICKS}
-                label={day}
-              >
-                <div className="flex flex-col gap-tight-gap">{entries.map(entryOf)}</div>
-              </GroupHeader>
+            // PROTOTYPE: `?feedStress=1` repeats the list six times, to measure the scroll over many full composers.
+            (STRESS ? Array.from({ length: 6 }, () => listed).flat() : listed).map((each, at) => (
+              <div key={`${each.thread.id}-${at}`} className="contents">
+                {entryOf(each)}
+              </div>
             ))
           )}
         </div>

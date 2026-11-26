@@ -80,6 +80,7 @@ import {
   changesTab,
   cloudBrowserTab,
   fileTab,
+  type InboxThreadStripTab,
   inTaskOrder,
   type LocalStripTab,
   type PageStripTab,
@@ -417,6 +418,7 @@ function tabTaskOf(
 
     case STRIP_TAB_KIND.TRANSCRIPT:
     case STRIP_TAB_KIND.THREAD:
+    case STRIP_TAB_KIND.INBOX_THREAD:
     case STRIP_TAB_KIND.SUBAGENT:
     case STRIP_TAB_KIND.CHANGES:
     case STRIP_TAB_KIND.TURN_CHANGES:
@@ -1461,10 +1463,23 @@ function stripTabs(input: {
       close: () => panel.onClose(tab),
     }));
 
+  // PROTOTYPE 2: a task agent's Inbox thread beside the Inbox's feed wears the thread's glyph and word, as a Manager's does.
+  const inboxThreadTabs = panel.strip
+    .filter(
+      (tab): tab is InboxThreadStripTab =>
+        !Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.INBOX_THREAD,
+    )
+    .map((tab) => ({
+      tab,
+      look: look(tab, tabLook({ kind: TAB_KIND.THREAD })),
+      close: () => panel.onClose(tab),
+    }));
+
   return [
     ...fixed,
     ...transcriptTabs,
     ...threadTabs,
+    ...inboxThreadTabs,
     ...subagentTabs,
     ...fileTabs,
     ...changesTabs,
@@ -2364,6 +2379,7 @@ function TabContent({
   cloudDrafts,
   transcript,
   thread,
+  inboxThread,
   onTabActions,
 }: {
   tab: SidePanelTab;
@@ -2419,6 +2435,8 @@ function TabContent({
   transcript: ((agentId: string) => React.ReactNode) | undefined;
   /** A thread of a Manager's chat and its box, drawn by the panel's holder: the Manager's page. */
   thread: ((tab: ThreadStripTab) => React.ReactNode) | undefined;
+  /** PROTOTYPE 2: a task agent's Inbox thread and its box, drawn by the panel's holder: the Inbox's feed. */
+  inboxThread: ((tab: InboxThreadStripTab) => React.ReactNode) | undefined;
   /** Hears what a tab's body offers its toolbar's ⋯, under the tab it is drawn for (`useHandedTabActions`). */
   onTabActions: (tab: SidePanelTab, actions: TabActionGroups | undefined) => void;
 }): React.JSX.Element | null {
@@ -2432,6 +2450,8 @@ function TabContent({
       return <>{transcript?.(tab.transcript)}</>;
     case STRIP_TAB_KIND.THREAD:
       return <>{thread?.(tab)}</>;
+    case STRIP_TAB_KIND.INBOX_THREAD:
+      return <>{inboxThread?.(tab)}</>;
     case STRIP_TAB_KIND.CLOUD_BROWSER: {
       const drawn = cloudBrowsers.find((each) => each.id === tab.cloudBrowser);
 
@@ -2879,6 +2899,7 @@ export function SidePanel({
   transcript,
   transcriptDoors,
   thread,
+  inboxThread,
   activity: taskActivity,
   phone,
   taskOfTab,
@@ -2916,6 +2937,8 @@ export function SidePanel({
   transcriptDoors?: TranscriptDoors | undefined;
   /** A thread of a Manager's chat and its box, which its thread tab shows beside the Manager's page; none elsewhere. */
   thread?: ((tab: ThreadStripTab) => React.ReactNode) | undefined;
+  /** PROTOTYPE 2: a task agent's Inbox thread, beside the Inbox's feed. */
+  inboxThread?: ((tab: InboxThreadStripTab) => React.ReactNode) | undefined;
   /**
    * A phone's page header standing for the panel's bar: where it is handed
    * and the panel stands only full screen, the panel's bar is not drawn, and
@@ -3421,6 +3444,7 @@ export function SidePanel({
               cloudDrafts={cloudDrafts}
               transcript={transcript}
               thread={thread}
+              inboxThread={inboxThread}
               onTabActions={handTabActions}
             />
           </HandTabActionsContext>

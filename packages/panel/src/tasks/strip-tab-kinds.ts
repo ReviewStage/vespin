@@ -452,6 +452,23 @@ const STRIP_TAB_KINDS = {
     // A thread reads as a column beside its chat, so it never fills the window over the chat it answers.
     expands: false,
   },
+  [STRIP_TAB_KIND.INBOX_THREAD]: {
+    title: () => TAB_WORDS.THREAD,
+    untitled: () => TAB_WORDS.THREAD,
+    look: () => ({ kind: TAB_KIND.THREAD }),
+    surface: surfaceOf(PRODUCT_SURFACE.INBOX),
+    link: NO_LINK,
+    drawsAgain: ALWAYS,
+    reopens: true,
+    endsSession: false,
+    closesIdle: true,
+    pin: UNPINNED,
+    kept: KEPT_NOWHERE,
+    takesFind: true,
+    stays: NEVER,
+    // A thread reads as a column beside its chat, so it never fills the window over the chat it answers.
+    expands: false,
+  },
 } as const satisfies { readonly [K in StripTabKind]: StripTabKindDeclaration<K> };
 
 /** The declaration of a tab's kind, over any tab. */

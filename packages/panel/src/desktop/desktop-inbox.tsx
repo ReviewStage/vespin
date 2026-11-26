@@ -24,6 +24,7 @@ import { ERROR_STATE_PLACEMENT, ErrorState, FILL_ELEMENT, Fill, Toolbar } from "
 import {
   agentTab,
   changesTab,
+  inboxThreadTab,
   pageTab,
   STRIP_TAB_KIND,
   type StripTab,
@@ -32,7 +33,7 @@ import {
 } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
-import { memo, useEffect, useLayoutEffect, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
@@ -63,7 +64,7 @@ import {
   PROTO_MANAGER,
   prototypeThreadOfItem,
 } from "../tasks/prototype-chat-ask.js";
-import { PrototypeInboxFeed } from "../tasks/prototype-inbox-feed.js";
+import { PrototypeInboxFeed, PrototypeInboxThreadTab } from "../tasks/prototype-inbox-feed.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
 import {
@@ -76,7 +77,7 @@ import {
 } from "../tasks/task-mentions.js";
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { useAgentPullRequestAddress } from "../tasks/use-agent-pull-request.js";
-import type { AgentsControl } from "../tasks/use-agents.js";
+import { type AgentsControl, placeAgents } from "../tasks/use-agents.js";
 import { useInboxListing } from "../tasks/use-inbox-listing.js";
 import { useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
 import { useInboxItemOpenSpan, useInboxOpenSpan } from "../tasks/use-inbox-spans.js";
@@ -218,6 +219,11 @@ export const DesktopInbox = memo(function DesktopInbox({
   // The panel holds the keys while the focus went into it last, or while it fills the window over the feed.
   const sideFocused = sidePanel.open && (focus === COLUMN.SIDE || sidePanel.fullScreen);
   const narrow = room === SHELL_ROOM.NARROW;
+  // The window's agents as a place lists them, none of its own, as an agent on no task's page reads them, which each card's box reads its agent through.
+  const feedAgents = useMemo(
+    () => placeAgents(tasks.agents, { agents: [], archived: [], pullRequests: new Map() }),
+    [tasks.agents],
+  );
 
   // A Manager's thread opens in the window's side panel, as its chat opens one, through the window's one door for a press.
   const viewThread = (root: string) =>
@@ -240,7 +246,14 @@ export const DesktopInbox = memo(function DesktopInbox({
             <Toolbar title="Inbox" />
           )}
           <PrototypeInboxFeed
+            agents={feedAgents}
             onViewManagerThread={viewThread}
+            onViewTaskThread={(threadId, agentId) =>
+              pressTab(
+                { sidePanel, mainTabs: tasks.mainTabs, onKeys: setFocus },
+                { kind: TAB_PRESS.PANEL, tab: inboxThreadTab(threadId, agentId) },
+              )
+            }
             onOpenManagerThread={(root) => {
               landInPrototypeThread(root);
               tasks.agentView.onOpen(PROTO_MANAGER);
@@ -272,6 +285,14 @@ export const DesktopInbox = memo(function DesktopInbox({
             taskOfTab={tasks}
             thread={(tab) => (
               <PrototypeManagerThreadBeside tasks={tasks} agentId={tab.manager} root={tab.thread} />
+            )}
+            inboxThread={(tab) => (
+              <PrototypeInboxThreadTab
+                key={tab.inboxThread}
+                threadId={tab.inboxThread}
+                agents={feedAgents}
+                readInboxImage={tasks.agents.readInboxImage}
+              />
             )}
           />
         ) : null}

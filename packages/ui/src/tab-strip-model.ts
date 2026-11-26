@@ -77,6 +77,8 @@ export const STRIP_TAB_KIND = {
   PAGE: "page",
   CLOUD_BROWSER: "cloudBrowser",
   THREAD: "thread",
+  /** PROTOTYPE 2: a task agent's Inbox thread, beside the Inbox's feed. */
+  INBOX_THREAD: "inboxThread",
 } as const;
 
 export type StripTabKind = (typeof STRIP_TAB_KIND)[keyof typeof STRIP_TAB_KIND];
@@ -191,6 +193,13 @@ export interface ThreadStripTab {
   readonly manager: string;
 }
 
+/** PROTOTYPE 2: one task agent's Inbox thread in the side panel beside the Inbox's feed, named by the thread and the agent that posted it. */
+export interface InboxThreadStripTab {
+  readonly kind: typeof STRIP_TAB_KIND.INBOX_THREAD;
+  readonly inboxThread: string;
+  readonly agent: string;
+}
+
 /** A tab naming what it shows, of any object kind. */
 type ObjectStripTab =
   | AgentStripTab
@@ -204,7 +213,8 @@ type ObjectStripTab =
   | LocalStripTab
   | PageStripTab
   | CloudBrowserStripTab
-  | ThreadStripTab;
+  | ThreadStripTab
+  | InboxThreadStripTab;
 
 /** A tab of either strip: a word of its column's own, or one naming what it shows. */
 export type StripTab = string | ObjectStripTab;
@@ -287,6 +297,11 @@ export function cloudBrowserTab(cloudBrowser: string): CloudBrowserStripTab {
 /** One thread of a Manager's chat, by the message it stands on, and the Manager. */
 export function threadTab(thread: string, manager: string): ThreadStripTab {
   return { kind: STRIP_TAB_KIND.THREAD, thread, manager };
+}
+
+/** PROTOTYPE 2: a task agent's Inbox thread's tab, by the thread and its agent. */
+export function inboxThreadTab(inboxThread: string, agent: string): InboxThreadStripTab {
+  return { kind: STRIP_TAB_KIND.INBOX_THREAD, inboxThread, agent };
 }
 
 /** A tab's kind: a word's for a string, and an object's own otherwise. */
@@ -481,6 +496,11 @@ const TAB_IDENTITY = {
   [STRIP_TAB_KIND.THREAD]: {
     same: (a, b) => a.thread === b.thread && a.manager === b.manager,
     key: (tab) => tab.thread,
+    agent: NO_AGENT,
+  },
+  [STRIP_TAB_KIND.INBOX_THREAD]: {
+    same: (a, b) => a.inboxThread === b.inboxThread && a.agent === b.agent,
+    key: (tab) => tab.inboxThread,
     agent: NO_AGENT,
   },
 } as const satisfies { readonly [K in StripTabKind]: TabIdentity<StripTabOf<K>> };

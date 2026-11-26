@@ -666,6 +666,7 @@ function OwnAgentPage({
               <Fill id={panels(view).panel} role="tabpanel" aria-labelledby={panels(view).tab}>
                 <PrototypeInboxFeed
                   only="manager"
+                  agents={agents}
                   onViewManagerThread={(root) => openThread(root)}
                   onOpenManagerThread={(root) => landInThread.current(root)}
                   onOpenTask={(taskId) => tasks.onShowTask(taskId)}

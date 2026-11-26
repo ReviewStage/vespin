@@ -8,6 +8,7 @@ import {
   cloudBrowserTab,
   type FileStripTab,
   fileTab,
+  type InboxThreadStripTab,
   inTaskOrder,
   type LocalStripTab,
   movedOrder,
@@ -180,7 +181,8 @@ export type SidePanelTab =
   | LocalStripTab
   | PageStripTab
   | CloudBrowserStripTab
-  | ThreadStripTab;
+  | ThreadStripTab
+  | InboxThreadStripTab;
 
 /** A tab of the kinds a task keeps open as its own Changes: a pull request's, and an agent turn's changes. */
 export type ChangesKindTab = ChangesStripTab | TurnChangesStripTab;
@@ -549,6 +551,8 @@ interface HeldState extends Omit<SidePanelState, "tabs" | "tab" | "tasks" | "pin
   readonly transcripts: readonly TranscriptStripTab[];
   /** The open threads of a Manager's chat, which the panel beside its page draws, in the order opened. */
   readonly threads: readonly ThreadStripTab[];
+  /** PROTOTYPE 2: the open Inbox threads of task agents, which the panel beside the Inbox's feed draws, in the order opened. */
+  readonly inboxThreads: readonly InboxThreadStripTab[];
   readonly files: readonly OpenFile[];
   /** The open page tabs, by page, in the order opened. */
   readonly pages: readonly OpenPage[];
@@ -1113,6 +1117,10 @@ function withTabHeld(
       return held.threads.some((each) => sameTab(each, tab))
         ? held
         : { ...held, threads: [...held.threads, tab] };
+    case STRIP_TAB_KIND.INBOX_THREAD:
+      return held.inboxThreads.some((each) => sameTab(each, tab))
+        ? held
+        : { ...held, inboxThreads: [...held.inboxThreads, tab] };
     case STRIP_TAB_KIND.TERMINAL: {
       const terminals = held.terminals.some((each) => sameTab(each, tab))
         ? held.terminals
@@ -1202,6 +1210,7 @@ function withShownPlaced(
 
     case STRIP_TAB_KIND.TRANSCRIPT:
     case STRIP_TAB_KIND.THREAD:
+    case STRIP_TAB_KIND.INBOX_THREAD:
     case STRIP_TAB_KIND.SUBAGENT:
     case STRIP_TAB_KIND.CHANGES:
     case STRIP_TAB_KIND.TURN_CHANGES:
@@ -1239,6 +1248,7 @@ function withShownCarried(held: HeldState, on: string): HeldState {
 
     case STRIP_TAB_KIND.TRANSCRIPT:
     case STRIP_TAB_KIND.THREAD:
+    case STRIP_TAB_KIND.INBOX_THREAD:
     case STRIP_TAB_KIND.SUBAGENT:
     case STRIP_TAB_KIND.CHANGES:
     case STRIP_TAB_KIND.TURN_CHANGES:
@@ -1468,6 +1478,11 @@ function drawsTranscript(
  * Manager's own page alone, which holds the panel at a stop of its own, the
  * Manager's id, standing for no task.
  */
+/** PROTOTYPE 2: whether a task agent's Inbox thread is drawn: beside the Inbox's feed, which stands for no task and no stop. */
+function drawsInboxThread(drawn: Pick<DrawnTabs, "task">): boolean {
+  return drawn.task.bare === true && drawn.task.id === undefined && drawn.task.stop === undefined;
+}
+
 function drawsThread(tab: ThreadStripTab, drawn: Pick<DrawnTabs, "task">): boolean {
   // PROTOTYPE 2: a Manager's thread is drawn beside the Inbox's feed too, which stands for no stop, as beside its Manager's page.
   return (
@@ -1568,6 +1583,7 @@ function agentOwnerOf(tab: SidePanelTab, drawn: DrawnTabs): string | undefined {
     case STRIP_TAB_KIND.FILE:
     case STRIP_TAB_KIND.PAGE:
     case STRIP_TAB_KIND.THREAD:
+    case STRIP_TAB_KIND.INBOX_THREAD:
       return undefined;
     default:
       return absurd(tab);
@@ -1666,6 +1682,8 @@ const DRAWN_OF_KIND: Readonly<
   [STRIP_TAB_KIND.TRANSCRIPT]: (held, drawn) =>
     held.transcripts.filter((each) => drawsTranscript(each, drawn)),
   [STRIP_TAB_KIND.THREAD]: (held, drawn) => held.threads.filter((each) => drawsThread(each, drawn)),
+  [STRIP_TAB_KIND.INBOX_THREAD]: (held, drawn) =>
+    held.inboxThreads.filter(() => drawsInboxThread(drawn)),
   [STRIP_TAB_KIND.SUBAGENT]: drawnSubagents,
   [STRIP_TAB_KIND.FILE]: (held, drawn) => drawnFiles(held, drawn).map((file) => fileTab(file)),
   [STRIP_TAB_KIND.CHANGES]: (held, drawn) =>
@@ -1750,6 +1768,8 @@ function withTabLetGo(held: HeldState, tab: SidePanelTab, drawn: DrawnTabs): Hel
       return { ...held, transcripts: held.transcripts.filter((each) => !sameTab(each, tab)) };
     case STRIP_TAB_KIND.THREAD:
       return { ...held, threads: held.threads.filter((each) => !sameTab(each, tab)) };
+    case STRIP_TAB_KIND.INBOX_THREAD:
+      return { ...held, inboxThreads: held.inboxThreads.filter((each) => !sameTab(each, tab)) };
     case STRIP_TAB_KIND.SUBAGENT:
       return held.subagents.some((each) => sameTab(each, tab))
         ? { ...held, subagents: held.subagents.filter((each) => !sameTab(each, tab)) }
@@ -1876,6 +1896,7 @@ function absentOn(held: HeldState, choices: TaskTabs, tab: SidePanelTab): boolea
       return !held.files.some((each) => each.path === tab.file);
     case STRIP_TAB_KIND.TRANSCRIPT:
     case STRIP_TAB_KIND.THREAD:
+    case STRIP_TAB_KIND.INBOX_THREAD:
     case STRIP_TAB_KIND.SUBAGENT:
     case STRIP_TAB_KIND.PAGE:
     case STRIP_TAB_KIND.TERMINAL:
@@ -1991,6 +2012,7 @@ function settled(state: SidePanelState): HeldState {
     subagents: [],
     transcripts: [],
     threads: [],
+    inboxThreads: [],
     files: [],
     pages: [],
     terminals: [],
@@ -2142,6 +2164,8 @@ function keptDrawn(
       return drawsTranscript(kept, drawn);
     case STRIP_TAB_KIND.THREAD:
       return drawsThread(kept, drawn);
+    case STRIP_TAB_KIND.INBOX_THREAD:
+      return drawsInboxThread(drawn);
     case STRIP_TAB_KIND.CHANGES:
     case STRIP_TAB_KIND.TURN_CHANGES:
       return changes.some((each) => sameTab(each, kept));
