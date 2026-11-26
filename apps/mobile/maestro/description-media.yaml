@@ -1,4 +1,4 @@
-# description-media.yaml -- a description's table, file and picture drawn in its field as its page reads them, the table as its grid, a PDF as its card and a picture at its own place in its line, while the words are edited in place.
+# description-media.yaml -- a description's table, file, picture and diagram drawn in its field as its page reads them, the table as its grid, a PDF as its card, a picture at its own place in its line, and a Mermaid diagram as its picture under its head, while the words are edited in place.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -7,13 +7,14 @@ env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, as every flow is, so no server is
-# reached; the fixture's Teammate invitations holds a table, then ends its
-# description with a PDF, "Invite flow spec", and a picture, "The invite
-# page".
+# reached; the fixture's Teammate invitations holds a table, then a PDF,
+# "Invite flow spec", and a picture, "The invite page", and, as
+# `descriptionDiagram` asks of this flow alone, ends with a Mermaid diagram.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
+      descriptionDiagram: "true"
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 30000
@@ -79,3 +80,15 @@ env:
       BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd
 - takeScreenshot: description-media-picture
+# The diagram stands under its head as the picture the app's Mermaid
+# renderer drew, where it once drew a card saying to edit it on the desktop.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Diagram"
+      BESIDE: ${FLOATING_TABS}
+- extendedWaitUntil:
+    visible: "Diagram"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: description-media-diagram

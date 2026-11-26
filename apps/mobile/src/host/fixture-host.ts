@@ -182,6 +182,29 @@ const SETUP_OWED = new WeakSet<object>();
 /** The runs whose account stands with its Inbox turned off, as `-inboxOff true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
 const INBOX_OFF = new WeakSet<object>();
 
+/** The runs whose Teammate invitations description ends with a Mermaid diagram, as `-descriptionDiagram true` asks, by the store each stages. */
+const DESCRIPTION_DIAGRAM = new WeakSet<object>();
+
+/** The diagram `-descriptionDiagram true` ends Teammate invitations' description with: a short Mermaid flow of an invite. */
+const INVITE_DIAGRAM = [
+  "",
+  "## Flow",
+  "",
+  "```mermaid",
+  "flowchart TD",
+  "  A[Invite sent] --> B{Link opened?}",
+  "  B -->|Yes| C[Member added]",
+  "  B -->|No| D[Invite expires]",
+  "```",
+  "",
+].join("\n");
+
+/** Each held tasks slice with the diagram laid on Teammate invitations' description, one object for each, so staging it again patches nothing. */
+const DIAGRAMMED = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.HELD_TASK],
+  AppStateSnapshot[typeof LIVE_READ.HELD_TASK]
+>();
+
 /** Where an account owed setup stands until it moves: its first step, set up for itself. */
 const SETUP_START = setupPlaceStored({ audience: SETUP_AUDIENCE.ME, at: 0 });
 
@@ -270,6 +293,35 @@ function withInboxOff(held: AppStateSnapshot, inboxOff: boolean): AppStateSnapsh
   if (!inboxOff || settings === undefined || settings.stored.inbox !== undefined) return held;
 
   return { ...held, settings: { ...settings, stored: { ...settings.stored, inbox: false } } };
+}
+
+/**
+ * The document as held, or, where the launch asks for a description diagram,
+ * with Teammate invitations' description ending in one, so only the flow
+ * that asks (`maestro/description-media.yaml`) sees a Mermaid fence.
+ */
+function withDescriptionDiagram(held: AppStateSnapshot, diagram: boolean): AppStateSnapshot {
+  const tasks = held[LIVE_READ.HELD_TASK];
+  const invites = tasks[FIXTURE_IDS.TASK]?.rows;
+
+  if (!diagram || invites === undefined || !("task" in invites)) return held;
+  const laid = DIAGRAMMED.get(tasks);
+
+  if (laid !== undefined) return { ...held, [LIVE_READ.HELD_TASK]: laid };
+  const { task } = invites;
+  const body = `${task.description.body.trimEnd()}\n${INVITE_DIAGRAM}`;
+
+  const diagrammed = {
+    ...tasks,
+    [FIXTURE_IDS.TASK]: {
+      rows: { ...invites, task: { ...task, description: { ...task.description, body } } },
+    },
+  };
+
+  DIAGRAMMED.set(tasks, diagrammed);
+  DIAGRAMMED.set(diagrammed, diagrammed);
+
+  return { ...held, [LIVE_READ.HELD_TASK]: diagrammed };
 }
 
 function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateSnapshot["network"] {
@@ -445,7 +497,10 @@ function keepSend(
  * Where `machineAsk`, as `-machineAsk true` asks, the run holds an ask of
  * Ada's MacBook for an agent's command from then on (`maestro/machine-ask.yaml`).
  * Where `inboxOff`, as `-inboxOff true` asks, the account reads its Inbox
- * turned off until the run turns it on (`maestro/inbox-off.yaml`).
+ * turned off until the run turns it on (`maestro/inbox-off.yaml`). Where
+ * `descriptionDiagram`, as `-descriptionDiagram true` asks, Teammate
+ * invitations' description ends with a Mermaid diagram
+ * (`maestro/description-media.yaml`).
  */
 export function stageFixture(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
@@ -453,12 +508,15 @@ export function stageFixture(
   machineAsk = false,
   setupOwed = false,
   inboxOff = false,
+  descriptionDiagram = false,
 ): void {
   if (machineAsk) MACHINE_ASKED.add(state);
 
   if (setupOwed) SETUP_OWED.add(state);
 
   if (inboxOff) INBOX_OFF.add(state);
+
+  if (descriptionDiagram) DESCRIPTION_DIAGRAM.add(state);
 
   const snapshot = state.snapshot();
 
@@ -510,7 +568,10 @@ export function stageFixture(
   );
 
   const staged = {
-    ...withInboxOff(withSetupOwed(reminded, SETUP_OWED.has(state)), INBOX_OFF.has(state)),
+    ...withDescriptionDiagram(
+      withInboxOff(withSetupOwed(reminded, SETUP_OWED.has(state)), INBOX_OFF.has(state)),
+      DESCRIPTION_DIAGRAM.has(state),
+    ),
     tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
     [LIVE_READ.PROVIDER_KEYS]: stagedKeys(inbox),
