@@ -1,0 +1,21 @@
+-- jm10757: main pinned to 2c7272a1bc: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+EXCEPTION (the Manager 23:16 UTC Nov 25): flow-only PR over Vmain14 (natives from 938bbc656d), missing #10759 AgentsLiveActivity.swift and #10966 ClaudeMark/OpenAIMark assets
+pinned to 4456558596
+== bundle PJjm10757 base 4456558596
+  built 4456558596 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-agent: fails 1 shots 15 Tap on "${REPLY}" at 5%, 50%... FAILED
+iphone-light-automations: fails 1 shots 9 Tap on "Where it runs" at 5%, 50%... FAILED
+iphone-light-compose: fails 0 shots 13 
+iphone-light-new-agent: fails 0 shots 4 
+iphone-light-person: fails 1 shots 2 Assert that "Open link" is visible... FAILED
+iphone-light-tasks: fails 1 shots 18 Tap on "Invites sent in the staging workspace.*" at 5%, 50%... FAILED
+ipad27-light-agent: fails 1 shots 15 Tap on "${REPLY}" at 5%, 50%... FAILED
+ipad27-light-automations: fails 1 shots 9 Tap on "Where it runs" at 5%, 50%... FAILED
+ipad27-light-compose: fails 2 shots 8   Tap on id: agent-model-chip... FAILED
+ipad27-light-new-agent: fails 2 shots 4   Tap on "Add a Resend button beside each pending invite."... FAILED
+ipad27-light-person: fails 1 shots 2 Assert that "Open link" is visible... FAILED
+ipad27-light-tasks: fails 2 shots 15   Tap on "Created by .*"... FAILED

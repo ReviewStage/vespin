@@ -1,0 +1,238 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPad Pro 11 M5 (lane B) - iOS 27.2 - 9A4CF9AD-6100-42BA-937A-E7829B30BBC4
+ > Flow .kbd-agent
+  > On Flow Complete
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Set orientation LANDSCAPE_LEFT... COMPLETED
+Run flow when true is true... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Assert that "expired-invites.csv.*3 lines" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-latest... COMPLETED
+Assert that "Waiting for approval" is visible... COMPLETED
+Assert that "Always allow" is visible... COMPLETED
+Assert that "Always allow won.t ask again for pnpm test \* in any of your agents\." is visible... COMPLETED
+Assert that "Waiting on you · 1 approval" is visible... COMPLETED
+Take screenshot agent-held... COMPLETED
+Tap on "Edited.*"... COMPLETED
+Assert that "Input" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-call... COMPLETED
+Tap on "Edited.*"... COMPLETED
+Run subflows/scroll-to.yaml...
+  Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+    Repeat while "${ELEMENT}", Below id: ${BELOW} is not visible (up to 40 times)...
+      Swipe from (85%, 40%) to (85%, 54%) in 1500 ms... COMPLETED
+    Repeat while "${ELEMENT}", Below id: ${BELOW} is not visible (up to 40 times)... COMPLETED
+    Swipe from (85%, 40%) to (85%, 54%) in 1500 ms... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE != ''} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end within 5000 ms... COMPLETED
+Run subflows/scroll-to.yaml... COMPLETED
+Take screenshot agent-page-card... COMPLETED
+Tap on "Invite funnel, Page"... COMPLETED
+Assert that "Invites sent in the staging workspace.*" is visible... COMPLETED
+Assert that "Loading" is not visible... COMPLETED
+Take screenshot agent-page... COMPLETED
+Tap on (Optional) id: BackButton... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+    Assert that "${ELEMENT}" is visible... COMPLETED
+  Run flow when true is true... COMPLETED
+Run subflows/scroll-in.yaml... COMPLETED
+Assert that id: video-player is visible... COMPLETED
+Assert that ".*can't play here.*" is not visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-recording... COMPLETED
+Run subflows/scroll-to.yaml...
+  Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE != ''} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+    Run scroll-in.yaml...
+      Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+      Run flow when false is true... SKIPPED
+      Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+        Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+          Swipe from (85%, 40%) to (85%, 65%) in 1200 ms... COMPLETED
+        Repeat while "${ELEMENT}" is not visible (up to 40 times)... COMPLETED
+        Assert that "${ELEMENT}" is visible... COMPLETED
+      Run flow when true is true... COMPLETED
+      Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+      Run flow when false is true... SKIPPED
+    Run scroll-in.yaml... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+    Swipe from (85%, 40%) to (85%, 60%) in 1200 ms... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end within 5000 ms... COMPLETED
+Run subflows/scroll-to.yaml... COMPLETED
+Take screenshot agent-pictures... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+    Assert that "${ELEMENT}" is visible... COMPLETED
+  Run flow when true is true... COMPLETED
+Run subflows/scroll-in.yaml... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-pull-request... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+    Assert that "${ELEMENT}" is visible... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+Run subflows/scroll-in.yaml... COMPLETED
+Run subflows/scroll-to.yaml...
+  Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+    Repeat while "${ELEMENT}", Below id: ${BELOW} is not visible (up to 40 times)...
+    Repeat while "${ELEMENT}", Below id: ${BELOW} is not visible (up to 40 times)... SKIPPED
+    Swipe from (85%, 40%) to (85%, 54%) in 1500 ms... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE != ''} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end within 5000 ms... COMPLETED
+Run subflows/scroll-to.yaml... COMPLETED
+Tap on ".*tool calls.*"... COMPLETED
+Assert that "Read.*" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-fold... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)... SKIPPED
+    Assert that "${ELEMENT}" is visible... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+Run subflows/scroll-in.yaml... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+Run flow when false is true... SKIPPED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Swipe from (85%, 30%) to (85%, 80%) in 400 ms... COMPLETED
+Run flow when true is true... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Assert that "Try again" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-older-failed... COMPLETED
+Tap on "Try again"... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)...
+      Swipe from (85%, 40%) to (85%, 65%) in 1200 ms... COMPLETED
+    Repeat while "${ELEMENT}" is not visible (up to 40 times)... COMPLETED
+    Assert that "${ELEMENT}" is visible... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+Run subflows/scroll-in.yaml... COMPLETED
+Assert that "Before you build anything.*" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-older... COMPLETED
+Tap on "Jump to latest"... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-jump... COMPLETED
+Tap on "Allow"... COMPLETED
+Assert that "Allowed" is visible... COMPLETED
+Assert that "Waiting on you · 1 approval" is not visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-allowed... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+  Assert that "Pin" is visible... COMPLETED
+  Assert that "Archive" is visible... COMPLETED
+Run flow when true is true... COMPLETED
+Tap on "More"... COMPLETED
+Assert that "Copy link" is visible... COMPLETED
+Assert that "Rename" is visible... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+Run flow when false is true... SKIPPED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot agent-menu... COMPLETED
+Tap on "${REPLY}" at 5%, 50%... FAILED
+Set orientation PORTRAIT... COMPLETED
+
+Element not found: Text matching regex: .*A resend mints a fresh link.*
+
+Element with Text matching regex: .*A resend mints a fresh link.* not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjm10757/ipad27-light-agent/2026-11-25_221839

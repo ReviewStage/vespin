@@ -1,0 +1,57 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPad Pro 11 M5 (lane B) - iOS 27.2 - 9A4CF9AD-6100-42BA-937A-E7829B30BBC4
+ > Flow .kbd-new-agent
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+    Assert that "${TAB}" is visible... COMPLETED
+    Tap on "${TAB}", Index: -1... COMPLETED
+  Run flow when true is true... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Scrolling DOWN until "Teammate invitations" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Scrolling DOWN until "New agent" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "New agent"... COMPLETED
+Assert that "Ask to make changes" is visible... COMPLETED
+Assert that "Opus 5.5.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-agent-sheet... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text Add a Resend button beside each pending invite.... COMPLETED
+Swipe from (50%, 25%) to (50%, 15%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Opus 5.5.*"... COMPLETED
+Assert that "Effort" is visible... COMPLETED
+Assert that ".*Sonnet 5.5" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-agent-models... COMPLETED
+Tap on ".*Sonnet 5.5"... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when "Done" is not visible...
+  Tap on "Add a Resend button beside each pending invite."... FAILED
+Run flow when "Done" is not visible... FAILED
+
+Element not found: Text matching regex: Add a Resend button beside each pending invite.
+
+Element with Text matching regex: Add a Resend button beside each pending invite. not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjm10757/ipad27-light-new-agent/2026-11-25_223250
