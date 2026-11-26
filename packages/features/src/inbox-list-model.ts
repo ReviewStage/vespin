@@ -949,6 +949,12 @@ export type InboxRun = (typeof INBOX_RUN)[keyof typeof INBOX_RUN];
 /** Every run, in the order a list stands them. */
 export const INBOX_RUNS: readonly InboxRun[] = [INBOX_RUN.PINNED, INBOX_RUN.REST];
 
+/** What each run's heading is called, Pinned as the sidebar calls the pinned. */
+export const INBOX_RUN_LABEL = {
+  [INBOX_RUN.PINNED]: "Pinned",
+  [INBOX_RUN.REST]: "Everything else",
+} as const satisfies Record<InboxRun, string>;
+
 /** A list's runs as it drew them: how many items each holds, folded or not, and which the reader folded. */
 export interface InboxRunsView {
   readonly counts: Readonly<Record<InboxRun, number>>;

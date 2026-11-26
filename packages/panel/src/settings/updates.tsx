@@ -21,6 +21,7 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { pressMutation } from "../act-mutations.js";
 import { failureShown, type ShownFailure } from "../failure-report.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * An install a read-only volume refused, as its note reports it: a refusal
@@ -96,7 +97,9 @@ function updateButton(action: UpdateRowAction, control: UpdateControl): React.JS
 /**
  * Where the build stands against the latest release, and what it changed: the
  * About page's one group, while the sidebar's update row carries the news
- * outside. A platform that offers no updates draws the changelog alone.
+ * outside. The group is headed Updates, with Open changelog at its head's
+ * end, as Members' Invite stands; a platform that offers no updates draws
+ * the changelog alone, as a row.
  *
  * The group is `@repo/ui`'s `SettingsSection` and each line its
  * `SettingsRow`, every act the outline `Button` or, where it opens a page, `ButtonLink`. Note that each row stands
@@ -115,77 +118,85 @@ export function UpdatesSection({
     pressMutation(ACT_KIND.UPDATE_OPEN_CHANGELOG),
   );
 
+  // What the versions the row talks about actually changed: a trip to the fixed changelog page in the browser.
+  const changelog = (
+    <ButtonLink
+      variant={BUTTON_VARIANT.OUTLINE}
+      icon={<ExternalIcon />}
+      href={UPDATE_ENDPOINT.CHANGELOG_PAGE_URL}
+      onClick={(event) => {
+        event.preventDefault();
+        sendUpdateOpenChangelog();
+      }}
+    >
+      Open changelog
+    </ButtonLink>
+  );
+
+  // Note that with no updates the changelog is all the page holds, so it stands as a row rather than an action over nothing.
+  if (!offered) {
+    return (
+      <SettingsSection>
+        <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.CHANGELOG)}>
+          <SettingsRow label="Changelog">{() => changelog}</SettingsRow>
+        </div>
+      </SettingsSection>
+    );
+  }
+
   const row = updateRow(control.update, control.build);
 
   return (
-    <SettingsSection>
-      {offered ? (
-        <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.UPDATES)}>
-          <SettingsRow
-            label={
-              <Inline gap={GAP.ICON} wrap={false}>
-                {row.title}
-                {row.current ? <CheckIcon /> : null}
-              </Inline>
-            }
-            description={
-              row.failed ? undefined : (
-                <>
-                  {row.detail}
-                  {/* Note that the bar is the picture of the detail's numbers, so it says nothing to a reader. */}
-                  {row.progress === undefined ? null : <Progress value={row.progress} />}
-                </>
-              )
-            }
-            // Note that a failure is a `FailureNote` under the row, an alert
-            // announced as it lands, with Retry where asking again can mend
-            // it; every other detail is read with the row rather than spoken
-            // over whatever the reader is on.
-            below={
-              row.failed
-                ? () => (
-                    <FailureNote
-                      failure={failureShown(
-                        row.action === UPDATE_ROW_ACTION.MOVE
-                          ? READ_ONLY_VOLUME_FAILURE
-                          : {
-                              surface: FAILURE_SURFACE.UPDATE_CHECK,
-                              cause: FAILURE_CONDITION.UNREAD,
-                            },
-                      )}
-                      onRetry={
-                        row.action === UPDATE_ROW_ACTION.RETRY
-                          ? () => void control.onCheck()
-                          : undefined
-                      }
-                    >
-                      {row.detail}
-                    </FailureNote>
-                  )
-                : undefined
-            }
-          >
-            {() => updateButton(row.action, control)}
-          </SettingsRow>
-        </div>
-      ) : null}
-      {/* What the versions the row talks about actually changed — beside the
-          version, as a trip to the fixed changelog page in the browser. */}
-      <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.CHANGELOG)}>
-        <SettingsRow label="Changelog">
-          {() => (
-            <ButtonLink
-              variant={BUTTON_VARIANT.OUTLINE}
-              icon={<ExternalIcon />}
-              href={UPDATE_ENDPOINT.CHANGELOG_PAGE_URL}
-              onClick={(event) => {
-                event.preventDefault();
-                sendUpdateOpenChangelog();
-              }}
-            >
-              Open changelog
-            </ButtonLink>
-          )}
+    <SettingsSection
+      {...settingsSectionHead(SECTION.ABOUT_UPDATES)}
+      action={<span {...searchAnchorProps(SETTINGS_SEARCH_ROW.CHANGELOG)}>{changelog}</span>}
+    >
+      <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.UPDATES)}>
+        <SettingsRow
+          label={
+            <Inline gap={GAP.ICON} wrap={false}>
+              {row.title}
+              {row.current ? <CheckIcon /> : null}
+            </Inline>
+          }
+          description={
+            row.failed ? undefined : (
+              <>
+                {row.detail}
+                {/* Note that the bar is the picture of the detail's numbers, so it says nothing to a reader. */}
+                {row.progress === undefined ? null : <Progress value={row.progress} />}
+              </>
+            )
+          }
+          // Note that a failure is a `FailureNote` under the row, an alert
+          // announced as it lands, with Retry where asking again can mend
+          // it; every other detail is read with the row rather than spoken
+          // over whatever the reader is on.
+          below={
+            row.failed
+              ? () => (
+                  <FailureNote
+                    failure={failureShown(
+                      row.action === UPDATE_ROW_ACTION.MOVE
+                        ? READ_ONLY_VOLUME_FAILURE
+                        : {
+                            surface: FAILURE_SURFACE.UPDATE_CHECK,
+                            cause: FAILURE_CONDITION.UNREAD,
+                          },
+                    )}
+                    onRetry={
+                      row.action === UPDATE_ROW_ACTION.RETRY
+                        ? () => void control.onCheck()
+                        : undefined
+                    }
+                  >
+                    {row.detail}
+                  </FailureNote>
+                )
+              : undefined
+          }
+        >
+          {() => updateButton(row.action, control)}
         </SettingsRow>
       </div>
     </SettingsSection>

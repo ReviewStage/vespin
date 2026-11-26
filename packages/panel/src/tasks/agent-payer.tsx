@@ -5,6 +5,7 @@ import type { SubscriptionKeySummary } from "@repo/features/provider-key-wire";
 import {
   GLYPH_INK,
   GlyphSlot,
+  HarnessMark,
   type MenuLastLine,
   OutsideLink,
   USAGE_METERS_WIDTH,
@@ -15,7 +16,6 @@ import { ICON_SIZE, KeyRoundIcon, LaptopIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useQuery } from "@tanstack/react-query";
 import { ActorLine, ActorRef } from "../actor-ref.js";
-import { HarnessMark } from "../harness-marks.js";
 import { providerKeysQuery } from "../live-reads.js";
 import { planUsageMeters } from "../plan-usage.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";

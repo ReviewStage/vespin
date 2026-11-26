@@ -206,6 +206,17 @@ body,
   --agent-composer-field-cap: calc(var(--ui-stage-height) * 0.3);
 }
 
+/* A phone's Inbox box is docked under the thread (`inbox-pane.tsx`), its
+   open ask over its field. The ask stops growing at the field's own share
+   of what is seen and scrolls past it, so however tall a form, and however
+   short the screen or the room the keyboard leaves, its fields, the box's
+   field and Send, and the thread over the box each keep a part of it. */
+.inbox-answer-dock .inbox-draft-ask {
+  max-height: calc(var(--ui-stage-height) * 0.3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* A thread opened over a narrow room's description spans the column rather than
    standing a margin card's width at its right over the words, so its reply
    box has the column's room. */
@@ -890,7 +901,7 @@ body,
    measure in the middle of the column, as they keep to it in a wide side
    panel, so the list's card and the composer's share both edges. The
    Inbox's pane is laid out the same way, its thread at that measure, the
-   box flowing at the thread's end, and what stands docked under it too.
+   box flowing at the thread's end, or on a phone docked under it.
    The thread's log is named by both its classes, so it keeps this inset
    over the one a side panel gives a transcript's log. */
 .desktop-agent,
@@ -913,7 +924,7 @@ body,
 .desktop-agent .draft-fork-dock,
 .desktop-agent .agent-composer,
 .desktop-inbox .conversation-log.inbox-board,
-.desktop-inbox > .agent-composer {
+.desktop-inbox > .inbox-answer-dock .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
 
@@ -924,6 +935,13 @@ body,
    beside it (the Manager's face, and the actions, which differ by side and
    take no width). A phone's room keeps a narrower share, as its face and
    actions take more of the column there. */
+/* A Manager's chat spans its pane, as a chat app's channel does: no reading
+   room beside it, so its messages, docks, and box keep only the page's
+   side inset (`--content-inset`), however wide the pane. */
+.agent-page[data-chat] .desktop-agent {
+  --reading-room: 0px;
+}
+
 .agent-page[data-chat] .transcript-message:has(> .ui-chat-bubble-row) {
   max-width: 100%;
 }

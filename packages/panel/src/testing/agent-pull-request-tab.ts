@@ -538,7 +538,7 @@ function ToolbarItems({ actions }: { actions: TabActionGroups | undefined }) {
           type: "button",
           disabled: "disabled" in action ? action.disabled : undefined,
           onClick: (event: React.MouseEvent<HTMLElement>) => {
-            if ("items" in action || "panel" in action) return;
+            if ("items" in action || "panel" in action || "groups" in action) return;
 
             if ("onAsk" in action) action.onAsk(event.currentTarget);
             else action.onSelect();

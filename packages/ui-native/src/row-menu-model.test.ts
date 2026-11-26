@@ -213,7 +213,7 @@ describe("markLook", () => {
     },
     {
       mark: { kind: CHOICE_MARK.HARNESS, provider: MODEL_PROVIDER.ANTHROPIC } as const,
-      look: { kind: MENU_ICON.MARK, asset: "ClawdMark", sized: true },
+      look: { kind: MENU_ICON.MARK, asset: "ClaudeMark", sized: true },
     },
     {
       mark: {

@@ -16,7 +16,7 @@ import { pushDevicesProcedures } from "./push-devices-procedures.js";
 /**
  * A phone registered for pushes through the account's procedures, over a
  * real dialect: a register lands the token under the bearer's account, in
- * lower case, and again under another account moves it there; an unregister
+ * lower case, with the hosted API version its build named, and again under another account moves it there; an unregister
  * takes it out, and one of a token the account does not hold is done all the
  * same; a phone's standing is read and its "Notify me" set by its own
  * account alone, another's answered not found; and a token that is not
@@ -80,13 +80,21 @@ const answer = (procedures: ReturnType<typeof pushDevicesProcedures>, request: R
     return { status: response.status, body } satisfies Answer;
   });
 
-function post(path: string, userId: string, body: WireBoundaryInput) {
+function post(
+  path: string,
+  userId: string,
+  body: WireBoundaryInput,
+  client: Readonly<Record<string, string>> = {},
+) {
   return new Request(new URL(path, ORIGIN), {
     method: HTTP_METHOD.POST,
-    headers: { "content-type": "application/json", authorization: `Bearer ${userId}` },
+    headers: { "content-type": "application/json", authorization: `Bearer ${userId}`, ...client },
     body: JSON.stringify(body),
   });
 }
+
+/** The headers an iOS build at hosted API version 8 names itself by. */
+const IOS_AT_8 = { "vespin-client": "ios/1.4.0", "vespin-api-version": "8" };
 
 /** A device token as Apple spells one, 32 bytes of hex, synthetic, in upper case to see it lowered. */
 const token = () => randomUUID().replaceAll("-", "").repeat(2).toUpperCase();
@@ -95,7 +103,7 @@ const DONE: Answer = { status: HOSTED_HTTP_STATUS.OK, body: { done: true } };
 
 it.layer(getTestDB())("the push devices route", (it) => {
   it.effect(
-    "a register lands the phone under the bearer's account and moves it to another that registers it, and an unregister takes it out",
+    "a register lands the phone under the bearer's account with the API version its build named, and moves it to another that registers it, and an unregister takes it out",
     () =>
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts;
@@ -109,9 +117,14 @@ it.layer(getTestDB())("the push devices route", (it) => {
         const phonesOf = (userId: string) =>
           Effect.map(listPushDevices(userId), (rows) => rows.map((row) => row.token));
 
+        const versionsOf = (userId: string) =>
+          Effect.map(listPushDevices(userId), (rows) => rows.map((row) => row.apiVersion));
+
         assert.deepEqual(yield* ask(post(REGISTER_PATH, owner, phone)), DONE);
-        assert.deepEqual(yield* ask(post(REGISTER_PATH, owner, phone)), DONE);
+        assert.deepEqual(yield* versionsOf(owner), [null]);
+        assert.deepEqual(yield* ask(post(REGISTER_PATH, owner, phone, IOS_AT_8)), DONE);
         assert.deepEqual(yield* phonesOf(owner), [phone.token.toLowerCase()]);
+        assert.deepEqual(yield* versionsOf(owner), [8]);
 
         assert.deepEqual(yield* ask(post(REGISTER_PATH, other, phone)), DONE);
         assert.deepEqual(yield* phonesOf(owner), []);

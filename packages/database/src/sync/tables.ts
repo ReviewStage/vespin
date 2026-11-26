@@ -679,7 +679,8 @@ export const inboxItemReadSync = defineSyncTable(inboxItemRead, {
  * A file or a picture, on its task's topic and, for an inbox item's, the
  * item's agent's. Note that its bytes, and a recording's MP4 copy, are
  * ignored, because only what the row says of them is read live, and an
- * update comparing them would weigh every row's bytes.
+ * update comparing them would weigh every row's bytes; so are their
+ * pathnames in the Blob store, which only the service reads.
  */
 export const attachmentSync = defineSyncTable(attachment, {
   topics: [
@@ -691,7 +692,7 @@ export const attachmentSync = defineSyncTable(attachment, {
       topics: [{ kind: TOPIC.AGENT, column: inboxItem.agentId }],
     },
   ],
-  ignore: [attachment.bytes, attachment.mp4Bytes],
+  ignore: [attachment.bytes, attachment.blobKey, attachment.mp4Bytes, attachment.phoneBlobKey],
   log: LOG.EVERY,
 });
 

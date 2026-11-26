@@ -37,6 +37,7 @@ import type { ColorCode } from "@repo/host/task-code-remote";
 import { HOST_CAPABILITY, NO_EXPERIMENTS } from "@repo/settings";
 import { Context, Effect, Layer, SubscriptionRef } from "effect";
 import { BrowserWindow, net, type WebContents } from "electron";
+import { buildForEndToEnd } from "../bootstrap";
 import { registerDesktopIpc } from "../ipc/register-desktop-ipc";
 import { moveToApplications } from "../move-to-applications";
 import { createElectronUpdaterEngine } from "../update-installer";
@@ -231,9 +232,14 @@ export function composeDesktop(
 
       // Nothing to install without a signed build, a network, and the platform
       // Squirrel serves; the row says so rather than offering a press that could
-      // not land, and the document says so from its first version.
+      // not land, and the document says so from its first version. An
+      // end-to-end build has none either, since its feed is on github.com and
+      // that run reaches nothing off loopback.
       const updateEngine =
-        config.packaged && config.runMode.sendsNetwork && config.platform === "darwin"
+        config.packaged &&
+        config.runMode.sendsNetwork &&
+        config.platform === "darwin" &&
+        !buildForEndToEnd()
           ? createElectronUpdaterEngine()
           : undefined;
 

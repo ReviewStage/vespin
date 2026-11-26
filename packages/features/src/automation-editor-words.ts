@@ -94,11 +94,7 @@ export const GITHUB_SENDERS: readonly EditorChoice<GitHubSender>[] = [
 export const PULL_REQUEST_MOMENTS: readonly EditorChoice<PullRequestMoment>[] = [
   { value: PULL_REQUEST_MOMENT.OPENED, label: "When opened" },
   { value: PULL_REQUEST_MOMENT.READY, label: "When marked ready" },
-  {
-    value: PULL_REQUEST_MOMENT.PUSHED,
-    label: "When pushed to",
-    detail: `Never for a push by ${PRODUCT_NAME}'s agents.`,
-  },
+  { value: PULL_REQUEST_MOMENT.PUSHED, label: "When pushed to" },
 ];
 
 /** The GitHub events a pull request's drafts and forks speak to. */

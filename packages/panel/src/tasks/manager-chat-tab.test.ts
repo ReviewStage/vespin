@@ -15,11 +15,14 @@ import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
+import { runAppCommand } from "../app-commands.js";
+import { FindScope } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
 import { FAKE_ANSWER, fakeActs } from "../testing/app-bridge.js";
 import { handMembers, handState } from "../testing/app-state.js";
@@ -41,8 +44,8 @@ import { ThreadDoorsProvider } from "./manager-chat-threads.js";
 /**
  * manager-chat-tab.test.ts -- a Manager's page as its own chat, drawn from
  * the chat's rows: the reader's messages at the right and everyone else's at
- * the left, each sender named over their run; an ended turn's work folded
- * over the Manager's first message of the turn; Reply beside any message,
+ * the left, each sender named over their run; an ended turn's work a press
+ * away from the Manager's first message of the turn, and found by ⌘F; Reply beside any message,
  * the Manager's or a person's, quoting it whole into the box, which sends it
  * to the chat; a call the Manager holds for an answer standing at the chat's
  * foot with its answers; Retry sending a refused message again with its
@@ -111,6 +114,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   window.localStorage.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 /**
@@ -158,6 +162,8 @@ async function drawChat(
     readonly before?: number;
     /** Whether the thread opened stands with no chat beside it. */
     readonly alone?: boolean;
+    /** Whether a find may open over the chat, as the page's scope lets ⌘F open one. */
+    readonly findable?: boolean;
   } = {},
 ) {
   const manager = held.manager ?? MANAGER;
@@ -232,12 +238,16 @@ async function drawChat(
         createElement(MemberDirectory, {
           workspace: { id: "workspace-acme", memberCount: 2 },
           readerId: DEAN.userId,
-          children: createElement(ChatBesideThread, {
-            agent: manager,
-            control,
-            opened: held.opened,
-            alone: held.alone === true,
-          }),
+          children: createElement(
+            FindScope,
+            { active: held.findable === true, subject: { agent: manager.id } },
+            createElement(ChatBesideThread, {
+              agent: manager,
+              control,
+              opened: held.opened,
+              alone: held.alone === true,
+            }),
+          ),
         }),
       ),
     ),
@@ -322,6 +332,32 @@ test("each message is a row under its sender's name where their run opens, a thr
 
   assert.deepEqual(sent, ["And the nightly?"]);
   assert.deepEqual(threads, ["first"]);
+});
+
+test("a message's menu, a right-click or a long press, leads with Reply in thread, which opens its thread beside the chat", async () => {
+  const { container } = await drawChat([row("first", 1, "On it.")]);
+
+  const words =
+    [...container.querySelectorAll(".ui-channel-message-words")].find(
+      (each) => each.textContent === "On it.",
+    ) ?? assert.fail("the message stands");
+
+  act(() => {
+    words.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
+    );
+  });
+
+  const items = [...document.querySelectorAll<HTMLElement>("[role='menuitem']")];
+  assert.deepEqual(
+    items.map((item) => item.textContent),
+    ["Reply in thread", "Reply", "Copy"],
+  );
+
+  act(() => items[0]?.click());
+  await settleQueries();
+
+  assert.ok(container.querySelector("[data-thread-tab]"), "the thread opens beside the chat");
 });
 
 test("a person's picture stands as its chip where their words name it, not as a marker over a copy of it, and each line they typed stays its own", async () => {
@@ -434,7 +470,7 @@ test("a thread whose message is gone from the chat, its start read, says so rath
   assert.match(thread.textContent ?? "", /This thread is no longer in the chat\./u);
 });
 
-test("an ended turn's work stands folded over the Manager's first message of the turn, saying how long the turn worked, and opens onto its calls", async () => {
+test("an ended turn's work is offered as Show work beside the Manager's first message of the turn and in its menu, which opens it under the message and folds it again", async () => {
   const { container } = await drawChat(
     [
       row("ask", 1, "What first?", DEAN),
@@ -466,24 +502,123 @@ test("an ended turn's work stands folded over the Manager's first message of the
   const first =
     container.querySelector('[data-message-id="told"]') ?? assert.fail("the turn's first message");
 
-  const words = first.textContent ?? "";
-  const fold = words.indexOf("Worked for 1m 18s");
-  assert.ok(
-    fold >= 0 && fold < words.indexOf("The invite flow."),
-    "the fold stands over the words",
-  );
-  assert.equal(
-    container.querySelector('[data-message-id="then"]')?.textContent?.includes("Worked for"),
-    false,
-    "and over the turn's first message alone",
-  );
-  assert.equal(first.querySelector('[data-call-id="list-1"]'), null, "folded");
+  const then =
+    container.querySelector('[data-message-id="then"]') ?? assert.fail("the turn's next message");
 
-  const line = first.querySelector("summary") ?? assert.fail("the fold's line");
-  await act(async () => line.click());
+  assert.equal(first.querySelector('[data-call-id="list-1"]'), null, "closed until asked");
+
+  pointerCross(document.body, then);
+  assert.equal(
+    then.querySelector('button[aria-label="Show work"]'),
+    null,
+    "only the turn's first message offers its work",
+  );
+
+  pointerCross(then, first);
+
+  const show =
+    first.querySelector<HTMLButtonElement>('button[aria-label="Show work"]') ??
+    assert.fail("Show work stands beside the message");
+
+  await act(async () => show.click());
   await settleQueries();
 
-  assert.ok(first.querySelector('[data-call-id="list-1"]'), "the fold opens onto the turn's call");
+  const bubble =
+    [...first.querySelectorAll(".ui-channel-message-words")].find(
+      (each) => each.textContent === "The invite flow.",
+    ) ?? assert.fail("the message's words");
+
+  const call =
+    first.querySelector('[data-call-id="list-1"]') ?? assert.fail("the turn's call opens");
+
+  assert.ok(
+    bubble.compareDocumentPosition(call) & Node.DOCUMENT_POSITION_FOLLOWING,
+    "under the message's words",
+  );
+
+  act(() => {
+    bubble.dispatchEvent(
+      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
+    );
+  });
+  await act(async () => menuItem("Hide work").click());
+  await settleQueries();
+
+  assert.equal(first.querySelector('[data-call-id="list-1"]'), null, "the menu folds it away");
+});
+
+test("⌘F finds words in an ended turn's work while it stands closed, deep in a call's long output, and opens it under the message as Show work does", async () => {
+  // jsdom paints no highlights; the find's are kept as a browser keeps them.
+  vi.stubGlobal("CSS", { highlights: new Map(), escape: (words: string) => words });
+  vi.stubGlobal("Highlight", Set);
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+
+  const { container } = await drawChat(
+    [
+      row("ask", 1, "What first?", DEAN),
+      { ...row("told", 2, "The invite flow."), turnId: "turn-1" },
+    ],
+    {
+      findable: true,
+      transcript: [
+        {
+          id: "turn-1",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            { type: "step-start" },
+            {
+              type: "tool-run_command",
+              toolCallId: "run-1",
+              state: "output-available",
+              input: { command: "cat invites.log" },
+              // Note that the match stands past the 40 lines a code card shows before its cut, which a find opens too.
+              output: Array.from({ length: 60 }, (_, at) =>
+                at === 50 ? "the lantern invite" : `invite ${at}`,
+              ).join("\n"),
+            },
+          ],
+          startedAt: 1_000,
+          finishedAt: 79_000,
+        },
+      ],
+    },
+  );
+
+  act(() => {
+    runAppCommand(APP_COMMAND.FIND);
+  });
+
+  const field =
+    document.querySelector<HTMLInputElement>('.find-bar input[aria-label="Find"]') ??
+    assert.fail("the find bar stands open");
+
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
+      field,
+      "lantern",
+    );
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await settleQueries();
+
+  assert.equal(
+    document.querySelector('[role="search"][aria-label="Find"] .ui-search-field-tally')
+      ?.textContent,
+    "1 of 1",
+  );
+
+  const work =
+    container.querySelector('[data-message-id="told"] [data-turn-work]') ??
+    assert.fail("the turn's work is drawn");
+
+  assert.equal(work.hasAttribute("hidden"), false, "and shown, the match in it");
+
+  const told = container.querySelector('[data-message-id="told"]') ?? assert.fail("the message");
+  pointerCross(document.body, told);
+  assert.ok(
+    told.querySelector('button[aria-label="Hide work"]'),
+    "its press now folds the work away, as once Show work opened it",
+  );
 });
 
 test.each([

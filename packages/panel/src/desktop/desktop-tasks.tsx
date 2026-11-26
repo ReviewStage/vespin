@@ -1,4 +1,5 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { NO_ITEMS, taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
@@ -17,6 +18,7 @@ import type {
 import { RENAME_FAILED_NOTE, TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
+import { taskKey } from "@repo/features/workspace-key";
 import { EXPERIMENT, INTRO } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -57,6 +59,7 @@ import { Activity, Fragment, memo, useCallback, useEffect, useMemo, useRef, useS
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
+import { EntityGlyph, TaskStatusGlyph } from "../entities/entity-glyph.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { FIND_PAGE, FindScope, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
@@ -104,7 +107,11 @@ import { taskLinkDestination, useOfferTaskRename } from "../tasks/task-menu-item
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
-import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
+import {
+  parentOf,
+  type TaskRepositoryDoor,
+  type TaskStandingDoor,
+} from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
 import { agentsNow, useTaskAgentName, useTaskPullRequestsOf } from "../tasks/use-agents.js";
@@ -439,6 +446,50 @@ const PHONE_THING = {
   [TASK_PANE.AGENT]: "Agent",
   [TASK_PANE.PANEL]: "Tab",
 } as const satisfies Record<TaskPane, string>;
+
+/** What stands between the steps of a phone's task path ("ada/relay › AL-42"). */
+const PHONE_PATH_STEP = " › ";
+
+/**
+ * A task's path as a phone's head names it on Overview, as the description's
+ * own path over its title reads: its repository's `owner/name` and its key,
+ * each where it has one; none where it has neither.
+ */
+function phonePath(
+  task: { readonly repository?: string | null | undefined; readonly number?: number | undefined },
+  workspaceName: string,
+): string | undefined {
+  const key =
+    task.number === undefined || workspaceName === ""
+      ? undefined
+      : taskKey(workspaceName, task.number);
+
+  const steps = [task.repository ?? undefined, key].filter((step) => step !== undefined);
+
+  return steps.length === 0 ? undefined : steps.join(PHONE_PATH_STEP);
+}
+
+/** What a phone's ⋯ calls opening the task's parent. */
+const OPEN_PARENT = "Open parent task";
+
+/**
+ * A phone's way to the task's parent, which its path's crumb presses
+ * elsewhere: the ⋯'s first item on Overview, by the parent's status mark,
+ * naming the parent under its words.
+ */
+function parentItem(parent: TaskSummary, onOpen: (taskId: string) => void): MenuEntry {
+  return {
+    label: OPEN_PARENT,
+    detail: parent.name,
+    icon:
+      parent.status === undefined ? (
+        <EntityGlyph kind={ENTITY_KIND.PLAN} />
+      ) : (
+        <TaskStatusGlyph status={parent.status} />
+      ),
+    onSelect: () => onOpen(parent.id),
+  };
+}
 
 /** What a phone's header's ⋯ calls letting a draft go. */
 const DISCARD_DRAFT = "Discard draft";
@@ -1131,8 +1182,19 @@ function DescriptionDocument({
       onOpenTask: openTask,
       relations,
       inSight: descriptionShown,
+      // A phone's bar names the path, and its ⋯ offers the repository and the parent the path's crumbs press (`parentItem`).
+      pathless: phone,
     }),
-    [workspaceName, setStanding, repositoryDoor, blockTasks, openTask, relations, descriptionShown],
+    [
+      workspaceName,
+      setStanding,
+      repositoryDoor,
+      blockTasks,
+      openTask,
+      relations,
+      descriptionShown,
+      phone,
+    ],
   );
 
   const reveal = revealed?.taskId === openedId ? revealed?.reveal : undefined;
@@ -1535,9 +1597,14 @@ function DescriptionDocument({
   // What the header's ⋯ offers follows what is on screen: the task's own menu on Overview, the
   // agent's on its screen, Discard draft on a draft's, and the tab's on one of the panel's, each
   // agent's item left unnamed, since the header names the agent.
+  const parent = parentOf(listed, blockTasks);
+
   const shownGroups = (opener: HTMLElement): readonly (readonly MenuEntry[])[] =>
     pane === TASK_PANE.OVERVIEW
-      ? descriptionMenu.groups()
+      ? [
+          ...(parent === undefined ? [] : [[parentItem(parent, openTask)]]),
+          ...descriptionMenu.groups(),
+        ]
       : draftShown !== undefined
         ? [
             [
@@ -1563,7 +1630,10 @@ function DescriptionDocument({
               ? columnLabel
               : undefined
       }
+      path={pane === TASK_PANE.OVERVIEW ? phonePath(listed, workspaceName) : undefined}
       pickUp={{ name: descriptionHeading.name, shown: descriptionHeading.away }}
+      // Note that New agent stands before the ⋯ on Overview alone, as the page's Agents "+" starts one; an agent's screen and a tab's offer their own menus.
+      newAgent={pane === TASK_PANE.OVERVIEW ? newAgentStarts(mainTabs, agents)[0] : undefined}
       rename={{
         editing: rename.editing,
         onEnd: (end) => {

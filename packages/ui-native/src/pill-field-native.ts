@@ -32,9 +32,14 @@ export interface NativeLook {
   readonly pillGlyph: ColorValue;
 }
 
-/** What the view tells as its words or its caret move: the Markdown, the caret's line before and after it, each pill as the object character, where the caret stands in the drawn words, whether words are selected, and how many changes have been typed. */
+/** A run of the words as the view tells it: plain words as typed, or one pill by the Markdown it stands for. */
+export type NativeToldRun =
+  | { readonly text: string }
+  | { readonly pill: { readonly markdown: string } };
+
+/** What the view tells as its words or its caret move: its runs, the caret's line before and after it, each pill as the object character, where the caret stands in the drawn words, whether words are selected, and how many changes have been typed. */
 export interface NativeWords {
-  readonly markdown: string;
+  readonly runs: readonly NativeToldRun[];
   readonly before: string;
   readonly after: string;
   readonly caret: number;

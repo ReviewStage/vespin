@@ -1,6 +1,10 @@
 import type { StoreFailure } from "@repo/database/core/query";
 import type { ApprovalStatus } from "@repo/features/agent-approval-wire";
-import type { LocalAgentRefusal, RefusedDevice } from "@repo/features/agent-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  type LocalAgentRefusal,
+  type RefusedDevice,
+} from "@repo/features/agent-wire";
 import type { BillingRefusal } from "@repo/features/billing-refusal-wire";
 import type { InstalledSkillRefusal } from "@repo/features/installed-skill-wire";
 import type { ModelProvider } from "@repo/features/models-wire";
@@ -342,6 +346,22 @@ export const HOSTED_BYTES_HEADERS = {
   "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
   "cross-origin-resource-policy": "same-origin",
 } as const;
+
+/** How a file of a kind no reader runs is served: to be saved rather than opened, whatever a tab opened on its path would make of it. */
+const SAVED_BYTES_HEADERS = {
+  ...HOSTED_BYTES_HEADERS,
+  "content-disposition": "attachment",
+} as const;
+
+/**
+ * The headers a member's or an agent's file is served under, by the type it
+ * is served as: a file of any other kind (`AGENT_ATTACHMENT_TYPE.OTHER`)
+ * also marked to be saved, never shown inline from this origin, and every
+ * other under `HOSTED_BYTES_HEADERS` alone.
+ */
+export function servedBytesHeaders(contentType: string): Readonly<Record<string, string>> {
+  return contentType === AGENT_ATTACHMENT_TYPE.OTHER ? SAVED_BYTES_HEADERS : HOSTED_BYTES_HEADERS;
+}
 
 /**
  * The video a byte route's caller plays, as its `Accept` names it: an MP4

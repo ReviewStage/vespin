@@ -1026,6 +1026,9 @@ const MANAGER_STARTED = LANDED - 2 * HOUR;
  * started the invitations and digest agents, which its overview lists with
  * the invitations agent's pull request.
  */
+/** The repositories the Manager works in, its checkout first, so its Settings name more than one. */
+const MANAGER_REPOSITORIES = ["ada/relay", "ada/ledger"] as const;
+
 const MANAGER: AgentSummary = {
   ...agentOn(AGENT.MANAGER, "", "Release manager", AGENT_STATUS.COMPLETED, 2 * HOUR),
   taskId: null,
@@ -1804,7 +1807,7 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
   const manager = {
     ...MANAGER,
     workspaceId: FIXTURE_IDS.WORKSPACE,
-    repository: null,
+    repository: MANAGER_REPOSITORIES[0],
     settledAt: MANAGER.createdAt,
   };
 
@@ -3891,12 +3894,20 @@ const ANSWERS: StagedAnswers = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     const task = [...OWN_TASKS, ...LISTED_TASKS].find((each) => each.id === held.taskId);
 
+    const repositories: readonly string[] =
+      held.id === AGENT.MANAGER
+        ? MANAGER_REPOSITORIES
+        : task?.repository == null
+          ? []
+          : [task.repository];
+
     return {
       agent: {
         ...held,
         automationId: null,
         workspaceId: FIXTURE_IDS.WORKSPACE,
-        repository: task?.repository ?? null,
+        repository: repositories[0] ?? null,
+        repositories,
       },
     };
   },

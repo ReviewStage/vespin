@@ -1,0 +1,64 @@
+# automation-editor.yaml -- the automation editor on the Inbox fixture: New automation's sheet from the Automations tab's bar, its Name field taking the keyboard, put away by its ✕; then Edit on Weekly digest's page, its sheet holding what the automation holds.
+#
+# Launched on the host's Inbox fixture, whose workspace holds three
+# automations (`@repo/host/fixture-inbox`'s `inboxAutomationsAppState`), so no
+# server is reached and nothing is saved.
+#
+# Note that a fresh simulator's keyboard may stand its swipe-typing tip
+# over the sheet the first time it rises, its Continue holding the screen
+# until pressed, so the flow presses it wherever it shows.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Automations
+- extendedWaitUntil:
+    visible: "Weekly digest"
+    timeout: 30000
+# New automation stands in the bar, or in its overflow where the bar has no room for it.
+- runFlow:
+    when:
+      notVisible: "New automation"
+    commands:
+      - tapOn:
+          text: "More"
+          index: -1
+      - waitForAnimationToEnd
+- tapOn: "New automation"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+      - waitForAnimationToEnd
+- assertVisible: "Name"
+- takeScreenshot: automation-editor-new
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+      - waitForAnimationToEnd
+# Edit on an automation's page opens the same sheet over what it holds.
+- extendedWaitUntil:
+    visible: "Weekly digest"
+    timeout: 10000
+- tapOn: "Weekly digest"
+- waitForAnimationToEnd
+- tapOn: "Edit"
+- waitForAnimationToEnd
+- assertVisible: "Edit automation"
+- takeScreenshot: automation-editor-edit
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+- assertVisible: "Recent runs"

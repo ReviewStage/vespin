@@ -1038,14 +1038,17 @@ function AppWindow(): React.JSX.Element {
                               {/* The plans, the open plan's agents and files, every command the
           window can run now, and the settings, behind ⌘K, past the sign-in
           alone. */}
-                              <SettingsPalette
-                                available={!accountGated}
-                                tab={tab}
-                                onTabChange={changeTab}
-                                tasks={tasks}
-                                links={copyLink}
-                                doors={settingsDoors}
-                              />
+                              {/* In the stage's room, which a phone draws as its Search tab's page. */}
+                              <ShellRoomContext value={room}>
+                                <SettingsPalette
+                                  available={!accountGated}
+                                  tab={tab}
+                                  onTabChange={changeTab}
+                                  tasks={tasks}
+                                  links={copyLink}
+                                  doors={settingsDoors}
+                                />
+                              </ShellRoomContext>
                               {/* The screens stood on last, Back's steps across every task, behind ⌃Tab, on a desktop app past the sign-in; in the stage's room, which names a phone's places as it stands them. */}
                               <ShellRoomContext value={room}>
                                 <TabSwitcher

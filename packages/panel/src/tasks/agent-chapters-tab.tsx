@@ -36,6 +36,7 @@ import {
   FILL_FLOW,
   Fill,
   GAP,
+  HarnessMark,
   HoverCard,
   HoverCardHead,
   HoverCardNote,
@@ -93,7 +94,6 @@ import { actMutation } from "../act-mutations.js";
 import { ActionMenu } from "../desktop/action-menu.js";
 import { PANE_EDGE, usePaneSlide } from "../desktop/pane-motion.js";
 import { failureShown, unreadShown } from "../failure-report.js";
-import { HarnessMark } from "../harness-marks.js";
 import { SettingsPageLink } from "../open-settings.js";
 import { refusalToast } from "../settings/row-write.js";
 import {

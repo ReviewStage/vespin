@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# CodeRabbit reads AGENTS.md and CLAUDE.md on its own; REVIEW.md says what a review here reports.
+reviews:
+  path_filters:
+    - "!apps/web/server/api-rewrites.json"
+    - "!packages/*/fixtures/**"
+    - "!packages/database/migrations/**/snapshot.json"
+    - "!CHANGELOG.md"
+    - "!pnpm-lock.yaml"
+knowledge_base:
+  code_guidelines:
+    filePatterns:
+      - "REVIEW.md"

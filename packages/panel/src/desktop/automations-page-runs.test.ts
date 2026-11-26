@@ -1077,7 +1077,7 @@ test("on a narrow stage a link to a run opens on its runs, with the run marked a
   assert.ok(document.activeElement === button(SWEEP.name), "the focus on the way back");
 });
 
-test("on a narrow stage each row says when it runs next before what fires it, under its name, a far run with its year, and a lone owner's card is headed in place of each row's owner", async () => {
+test("on a narrow stage each row says when it runs next before what fires it, or Off, under its name, and how its newest run went; each owner's heading counts its rows, and no row names its owner", async () => {
   world.standing = [
     { ...SWEEP, nextRunAt: Date.UTC(2026, 9, 22, 9) },
     { ...FAILING, enabled: false },
@@ -1089,9 +1089,10 @@ test("on a narrow stage each row says when it runs next before what fires it, un
   const page = mountNarrow({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
 
+  // The heading names its owner, then counts its three rows, said with their noun.
   assert.deepEqual(
     [...page.querySelectorAll(".automation-group h2")].map((heading) => heading.textContent),
-    ["Acme"],
+    ["Acme3 automations"],
   );
   assert.equal(page.querySelector(".automation-owner") === null, true, "no row names its owner");
 
@@ -1099,13 +1100,31 @@ test("on a narrow stage each row says when it runs next before what fires it, un
     rowOf(page, name).querySelector(".ui-list-row-description")?.textContent ?? "";
 
   assert.match(line("Nightly flaky-test sweep"), /^Next: .+ \(Weekdays at 9:00 AM\)$/u);
-  assert.equal(line("Dependency bumps"), "Weekdays at 9:00 AM");
+  assert.equal(line("Dependency bumps"), "Off · Weekdays at 9:00 AM");
   assert.match(
     line("Yearly audit"),
     /^Next: .*2099.* \(Weekdays at 9:00 AM\)$/u,
     "a far run names its year",
   );
+  assert.match(rowOf(page, "Yearly audit").textContent ?? "", /Hasn't run yet/u);
   assert.ok(rowOf(page, "Dependency bumps").querySelector(".failed-mark"));
+});
+
+test("on a narrow stage a row draws no switch, and its menu turns it off beside Run now", async () => {
+  const page = mountNarrow({ kind: AUTOMATIONS_PAGE.LIST });
+  await settle();
+  const row = rowOf(page, SWEEP.name);
+  assert.equal(row.querySelector("[role=switch]"), null, "the row draws no switch");
+
+  const press = row.querySelector("button");
+  assert.ok(press, "the row is a press");
+  act(() =>
+    press.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })),
+  );
+  assert.ok(menuItem("Run now"), "the menu runs it");
+  act(() => menuItem("Turn off").click());
+  await settle();
+  assert.deepEqual(world.changes.at(-1), { automationId: SWEEP.id, change: { enabled: false } });
 });
 
 /** An automation fired by Sentry alerts from two projects at the error level. */
@@ -1322,7 +1341,7 @@ test("Sentry chosen before the read says the deployment holds no Sentry integrat
   assert.match(page.textContent ?? "", /Vespin cannot receive Sentry events here/u);
 });
 
-test("on a phone the list is headed by New automation and one ⋯ holding Create with an agent, its title centered between them", async () => {
+test("on a phone the list is headed by its title and one ⋯ holding New automation and Create with an agent, the start corner left to the workspace's tile", async () => {
   const page = mountNarrow({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
   const head = page.querySelector<HTMLElement>(".automations-head");
@@ -1331,10 +1350,11 @@ test("on a phone the list is headed by New automation and one ⋯ holding Create
     [...head.querySelectorAll("button")].map(
       (each) => each.textContent?.trim() || each.getAttribute("aria-label"),
     ),
-    ["New automation", "Automation list actions"],
+    ["Automation list actions"],
   );
   assert.equal(head.querySelector("h1")?.textContent, "Automations");
   act(() => button("Automation list actions").click());
+  assert.ok(menuItem("New automation"), "the ⋯ holds New automation");
   assert.ok(menuItem("Create with an agent"), "the ⋯ holds Create with an agent");
 });
 

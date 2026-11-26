@@ -66,13 +66,16 @@ const roots: Root[] = [];
  * them: a section write's writes, a task's pin as its mark, and a pin given
  * a place as its move, each landing.
  */
-function hearWrites(asked: Partial<Asked>): void {
+function hearWrites(
+  asked: Partial<Asked>,
+  answered: Promise<boolean> = Promise.resolve(true),
+): void {
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_WRITE_SECTION]: ({ writes }) => {
       asked.writes?.push(...writes);
 
-      return Promise.resolve(true);
+      return answered;
     },
     [ACT_KIND.TASKS_PIN]: ({ taskId, pinned, position }) => {
       if (position === undefined)
@@ -2226,6 +2229,58 @@ test("⇧⌘↓ on a task in a section moves the task within it, and ⇧⌘↑ o
   assert.deepEqual(
     workspaceSections(written(), WORKSPACE.id).map((section) => section.title),
     [...before].reverse(),
+  );
+});
+
+test("a section moved twice before the first move is handed back stands where the second move put it", async () => {
+  const asked = noneAsked();
+
+  const section = (id: string, title: string, position: string, createdAt: number) => ({
+    id,
+    workspaceId: WORKSPACE.id,
+    title,
+    position,
+    createdAt,
+  });
+
+  const placed: TaskSections = {
+    sections: [
+      section(LAUNCH, "Launch", "a0", 1),
+      section(SOMEDAY, "Someday", "a1", 2),
+      section(STARS, "Stars", "a2", 3),
+    ],
+    entries: [],
+    agentEntries: [],
+  };
+
+  const sidebar = await mountDraggable([], placed, asked);
+  // Note that the section writes are heard but answered only at the end, as main has not yet handed its state back.
+  const { promise: answered, resolve: answer } = Promise.withResolvers<boolean>();
+  hearWrites(asked, answered);
+  onTestFinished(() => answer(true));
+
+  // Note that the writes are heard but never handed back, as main's state has not yet reached the window.
+  const moveDown = async (title: string) => {
+    const fold = sectionHeader(sidebar, title).querySelector<HTMLElement>("button[aria-expanded]");
+    await act(async () => fold?.focus());
+    await act(async () => {
+      runAppCommand(APP_COMMAND.MOVE_ROW_DOWN);
+    });
+  };
+
+  await moveDown("Launch");
+  // Note that the first move is drawn before the second is pressed, as a window draws it before the next key, since the test's client hands its writes to React on a timer of its own.
+  await vi.waitFor(() => assert.deepEqual(sectionTitles(sidebar), ["Someday", "Launch", "Stars"]));
+  await moveDown("Someday");
+
+  const written = asked.writes.reduce(
+    (state, write) => applySectionWrite(state, write, AFTER_FIXTURES),
+    placed,
+  );
+
+  assert.deepEqual(
+    workspaceSections(written, WORKSPACE.id).map(({ title }) => title),
+    ["Launch", "Someday", "Stars"],
   );
 });
 

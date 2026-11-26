@@ -12,6 +12,7 @@ import { noMatchWords, TERM } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BUTTON_SIZE,
+  type ButtonSize,
   GROUP_ACTION_STATE,
   GroupAction,
   IconButton,
@@ -185,6 +186,7 @@ export function TaskViewOptions({
   control,
   shared,
   filtered,
+  size = BUTTON_SIZE.COMPACT,
 }: {
   /** Whether the sidebar is on screen, for the menu not to outlive it. */
   shown: boolean;
@@ -193,6 +195,8 @@ export function TaskViewOptions({
   shared: boolean;
   /** Whether the list holds anything but the reader's own, which keeps the button standing and dotted. */
   filtered: boolean;
+  /** How big its button is: compact on the Tasks head, a control's in a phone's bar. */
+  size?: ButtonSize;
 }): React.JSX.Element {
   const menu = useMenu(shown);
   const reader = useMemberDirectory();
@@ -203,7 +207,7 @@ export function TaskViewOptions({
         <IconButton
           icon={<SlidersHorizontalIcon />}
           label={VIEW_OPTIONS}
-          size={BUTTON_SIZE.COMPACT}
+          size={size}
           aria-description={filtered ? FILTERED : undefined}
           {...menu.trigger()}
         />

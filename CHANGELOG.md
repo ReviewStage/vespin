@@ -74,6 +74,44 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.42.0 — 2026-11-25
+
+### Vespin in your phone's browser
+
+On a phone, Vespin's web app now has a tab bar with Inbox, Tasks,
+Automations, and Search, opens New task as a full-height sheet, and puts
+New agent in a task's bar.
+
+[#10928](https://github.com/ReviewStage/vespin/pull/10928),
+[#10941](https://github.com/ReviewStage/vespin/pull/10941),
+[#10929](https://github.com/ReviewStage/vespin/pull/10929),
+[#10942](https://github.com/ReviewStage/vespin/pull/10942),
+[#10933](https://github.com/ReviewStage/vespin/pull/10933)
+
+### Improvements
+
+- Opening a task, New task, and typing in a message box are faster
+  ([#10857](https://github.com/ReviewStage/vespin/pull/10857),
+  [#10882](https://github.com/ReviewStage/vespin/pull/10882),
+  [#10888](https://github.com/ReviewStage/vespin/pull/10888),
+  [#10858](https://github.com/ReviewStage/vespin/pull/10858),
+  [#10874](https://github.com/ReviewStage/vespin/pull/10874),
+  [#10885](https://github.com/ReviewStage/vespin/pull/10885),
+  [#10864](https://github.com/ReviewStage/vespin/pull/10864),
+  [#10905](https://github.com/ReviewStage/vespin/pull/10905),
+  [#10910](https://github.com/ReviewStage/vespin/pull/10910))
+- An agent cut off mid-turn now keeps carrying on, shown as one short line
+  ([#10800](https://github.com/ReviewStage/vespin/pull/10800),
+  [#10791](https://github.com/ReviewStage/vespin/pull/10791))
+- Claude and Codex now show one logo each on agents, models, plans, and keys
+  ([#10966](https://github.com/ReviewStage/vespin/pull/10966))
+- A pull request trigger that hears agents now fires on their pushes too
+  ([#10955](https://github.com/ReviewStage/vespin/pull/10955))
+- Settings › About puts Open changelog at the head of Updates
+  ([#10926](https://github.com/ReviewStage/vespin/pull/10926))
+- Settings › Billing reads in plainer words
+  ([#10922](https://github.com/ReviewStage/vespin/pull/10922))
+
 ## 0.41.1 — 2026-11-24
 
 ### Improvements
