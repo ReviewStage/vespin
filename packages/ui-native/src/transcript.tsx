@@ -15,6 +15,7 @@ import {
   type AccessibilityActionEvent,
   AccessibilityInfo,
   ActivityIndicator,
+  Animated,
   type HostInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -166,6 +167,16 @@ const styles = StyleSheet.create({
   // Note that while there are no rows the content fills the list, so the empty state has room to center in.
   emptyContent: { flexGrow: 1 },
   emptyHost: { flex: 1 },
+  // Note that a landed row's wash stands a step in from the row's sides, rounded as a card, as the panel's stands a step around the place it lights.
+  landed: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    marginHorizontal: SPACE.EDGE / 2,
+    borderRadius: RADIUS.CARD,
+  },
   row: { paddingHorizontal: SPACE.EDGE, paddingVertical: SPACE.TIGHT },
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
@@ -355,8 +366,8 @@ function ChannelSaid({
         <MessageMenu
           words={item.words}
           at={item.at}
-          // Note that the Manager's message offers no link or rewind, as the panel's offers none; every message leads with Reply in thread, then what the page offers every chat message, such as Edit.
-          link={sender.manager ? undefined : drawing.messageLink?.(item.place.row)}
+          // Note that every message offers its link, the Manager's as much as a person's, as the panel's menu offers Copy link; every message leads with Reply in thread, then what the page offers every chat message, such as Edit.
+          link={drawing.messageLink?.(item.place.row)}
           more={[...threadAct, ...(drawing.messageMore?.(item) ?? [])]}
           width={width}
         >
@@ -1527,17 +1538,89 @@ type AgentTranscriptProps = Omit<RowDrawing, "now" | "column"> & {
   readonly now?: number | undefined;
   /** The pages older than the oldest row, read as the reader scrolls up to it; none where nothing older stands. */
   readonly older?: OlderPages | undefined;
-  /** A call's row to scroll into view, such as the one a held approval waits on, each ask a serial of its own so the same call is shown again. */
+  /** A row to scroll into view, such as the call a held approval waits on or the message a link names, each ask a serial of its own so the same row is shown again. */
   readonly reveal?: TranscriptReveal | undefined;
   /** Told the rows on screen each time they change, so a page reads only what it shows, such as a pull request card's state or a picture's bytes. */
   readonly onRowsShown?: ((items: readonly TranscriptItem[]) => void) | undefined;
 };
 
-/** A call's row the transcript is asked to bring into view, the ask told apart by its serial. */
-export type TranscriptReveal = { readonly callId: string; readonly serial: number };
+/** A row the transcript is asked to bring into view, the ask told apart by its serial: a call's, which then takes VoiceOver's focus, or a message's, by its row's id, which is lit once as it lands (`LandedWash`). */
+export type TranscriptReveal =
+  | { readonly callId: string; readonly serial: number }
+  | { readonly messageId: string; readonly serial: number };
+
+/** The row a message the transcript was asked to bring into view stands in, by its key (`itemKey`), lit once as it lands, each ask its own. */
+type LandedRow = { readonly key: string; readonly serial: number };
+
+/**
+ * The index of the row a reveal names, below 0 where no row is it: its
+ * call's line, or its message's: the line someone said, by its row's id,
+ * as a Manager's chat names each message, else the first row of the turn
+ * a transcript's message is.
+ */
+function revealedIndex(items: readonly TranscriptItem[], reveal: TranscriptReveal): number {
+  if ("callId" in reveal) {
+    return items.findIndex(
+      (item) => item.kind === TRANSCRIPT_ITEM.CALL && item.callId === reveal.callId,
+    );
+  }
+
+  const said = items.findIndex(
+    (item) => item.kind === TRANSCRIPT_ITEM.SAID && item.place.row === reveal.messageId,
+  );
+
+  return said >= 0 ? said : items.findIndex((item) => item.place.message === reveal.messageId);
+}
+
+/** How long a landed row's wash stands, then fades, in milliseconds: the panel's (`landed.css`'s `--ui-confirm-delay` and `--ui-duration-shape`). */
+const LANDED_MS = { HOLD: 1200, FADE: 460 } as const;
+
+/** The accent's share in a landed row's wash, as a hex color's alpha: the panel's 18%. */
+const LANDED_ALPHA = "2e";
+
+/**
+ * "You landed here", as the panel lights a place a link brought the eye to
+ * (`@repo/ui/landed`): a wash of the accent behind the row, standing for a
+ * moment and then fading. Reduce Motion drops the fade alone, so the wash
+ * still stands, still, for as long.
+ */
+function LandedWash({ children }: { readonly children: ReactNode }) {
+  const colors = useColors();
+  const reduceMotion = useReduceMotion();
+  const [light] = useState(() => new Animated.Value(1));
+
+  useEffect(() => {
+    const fade = Animated.timing(light, {
+      toValue: 0,
+      delay: LANDED_MS.HOLD,
+      duration: reduceMotion ? 0 : LANDED_MS.FADE,
+      useNativeDriver: true,
+    });
+
+    fade.start();
+
+    return () => fade.stop();
+  }, [light, reduceMotion]);
+
+  return (
+    <View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.landed,
+          { backgroundColor: `${colors.ACCENT}${LANDED_ALPHA}`, opacity: light },
+        ]}
+      />
+      {children}
+    </View>
+  );
+}
 
 /** How long a revealed row's scroll takes to settle at most, in milliseconds, after which its row takes VoiceOver's focus where the scroll's own end did not send it: the system's scroll animation, with room. */
 const REVEAL_SETTLE_MS = 600;
+
+/** How the list opens at a row a reveal asked for before it first stood: with the row at its top, which the reveal's own scroll then moves to its place. */
+const OPEN_AT_REVEAL = { viewOffset: 0 } as const;
 
 /** Where a revealed row stands in the screen, from its top: a little above the middle, clear of the composer docked over the foot. */
 const REVEAL_POSITION = 0.35;
@@ -1637,6 +1720,15 @@ export function AgentTranscript({
   // Note that the list waits for its own width, so no row is ever laid out unbounded, and its first render, which starts from its newest row, has the rows to start from.
   const measured = width > 0;
   const hasRows = items.length > 0;
+  // The row a reveal already asked for as the list first stands with rows, which it opens at rather than its newest, so the list's own first scroll, which it may apply again as it settles, never takes the reader back off it; -1 where none was asked.
+  // Note that it is chosen as the render that first measures the list, before the list mounts, so the list is first drawn with it.
+  const [opensAtReveal, setOpensAtReveal] = useState<number | undefined>(undefined);
+
+  if (measured && hasRows && opensAtReveal === undefined) {
+    setOpensAtReveal(reveal === undefined ? -1 : revealedIndex(items, reveal));
+  }
+
+  const revealOpening = opensAtReveal ?? -1;
   const keyboard = useDockKeyboard();
   const dock = useDockRoom();
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript, and no more, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`). While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the bar stands right on it.
@@ -1690,6 +1782,9 @@ export function AgentTranscript({
     [onScrollSettled],
   );
 
+  // The message a link brought into view, whose row is lit once.
+  const [landed, setLanded] = useState<LandedRow | undefined>(undefined);
+
   // The rows as they stand now, which a reveal reads without being asked anew as each lands.
   const itemsNow = useRef(items);
   useEffect(() => {
@@ -1697,28 +1792,37 @@ export function AgentTranscript({
   }, [items]);
 
   // Note that a revealed row lets the anchor go, so a row landing at the end does not scroll it away again.
+  // Note that an ask made before the list has its width waits for it, since the list stands only once measured, and its scroll waits a frame, past the list's own first scroll to its newest row.
   useEffect(() => {
-    if (reveal === undefined) return;
+    if (reveal === undefined || !measured) return;
 
-    const index = itemsNow.current.findIndex(
-      (item) => item.kind === TRANSCRIPT_ITEM.CALL && item.callId === reveal.callId,
-    );
+    const index = revealedIndex(itemsNow.current, reveal);
+    const row = itemsNow.current[index];
 
-    if (index < 0) return;
+    if (row === undefined) return;
     anchored.current = false;
-    sentTo.current = reveal.callId;
-    settled.current = false;
-    void list.current?.scrollToIndex({
-      index,
-      viewPosition: REVEAL_POSITION,
-      animated: !reduceMotion,
+
+    if ("callId" in reveal) {
+      sentTo.current = reveal.callId;
+      settled.current = false;
+    } else setLanded({ key: itemKey(row), serial: reveal.serial });
+
+    const frame = requestAnimationFrame(() => {
+      void list.current?.scrollToIndex({
+        index,
+        viewPosition: REVEAL_POSITION,
+        animated: !reduceMotion,
+      });
     });
 
     // Note that a scroll that moves the list ends in its momentum's end, which sends the focus, while one that has nowhere to go, the row already in view, ends at once, so the focus is also sent once the scroll would have settled.
     const settling = setTimeout(focusSentTo, reduceMotion ? 0 : REVEAL_SETTLE_MS);
 
-    return () => clearTimeout(settling);
-  }, [reveal, reduceMotion, focusSentTo]);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(settling);
+    };
+  }, [reveal, measured, reduceMotion, focusSentTo]);
 
   // Note that the keyboard rising under a reader at the newest row brings the row up with it, as Messages' does, rather than leaving it behind the keyboard; the list's inset has already grown for it, so its end is the row clear of the bar.
   useEffect(() => {
@@ -1744,9 +1848,17 @@ export function AgentTranscript({
           // Note that each row's pictures are one set its viewer swipes through, a message's or a showing's own, since rows scrolled away are drawn no longer.
           renderItem={({ item }) => (
             <PictureSetProvider key={itemKey(item)}>
-              <TranscriptRow item={item} drawing={rowDrawing} />
+              {landed !== undefined && itemKey(item) === landed.key ? (
+                <LandedWash key={landed.serial}>
+                  <TranscriptRow item={item} drawing={rowDrawing} />
+                </LandedWash>
+              ) : (
+                <TranscriptRow item={item} drawing={rowDrawing} />
+              )}
             </PictureSetProvider>
           )}
+          // Note that a row lit as it lands is drawn again, since FlashList draws a row again only as its data or this moves.
+          extraData={landed}
           ListHeaderComponent={
             <>
               {head}
@@ -1770,8 +1882,12 @@ export function AgentTranscript({
           ]}
           contentInsetAdjustmentBehavior="automatic"
           // Note that FlashList opens at its newest row's top, so the list asks it for an offset past that row which the scroll view clamps to the content's end, and a newest row taller than the screen opens at its end, clear of the composer, as the rest do.
-          initialScrollIndex={hasRows ? items.length - 1 : undefined}
-          initialScrollIndexParams={{ viewOffset: OPEN_PAST_NEWEST }}
+          initialScrollIndex={
+            !hasRows ? undefined : revealOpening >= 0 ? revealOpening : items.length - 1
+          }
+          initialScrollIndexParams={
+            revealOpening >= 0 ? OPEN_AT_REVEAL : { viewOffset: OPEN_PAST_NEWEST }
+          }
           // Note that the list opens at its newest row, keeps it in view as rows land while the reader stands near it, and, as an older page lands before the oldest row, leaves the row the reader reads where it stood, as FlashList's chat lists do.
           maintainVisibleContentPosition={{
             startRenderingFromBottom: true,

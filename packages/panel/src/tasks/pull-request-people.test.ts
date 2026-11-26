@@ -193,7 +193,7 @@ test("a pull request's card says who opened it and lists its reviewers by where 
   const strip = await draw(card(PEOPLE));
 
   const opener =
-    strip.querySelector(".ui-hover-card-row [data-actor-ref]") ??
+    strip.querySelector('[data-pull-request-opener] [data-actor-ref]:not([data-kind="agent"])') ??
     assert.fail("who opened it is named");
 
   assert.deepEqual(
@@ -222,10 +222,11 @@ test("who opened the pull request is named alone, whoever the agent wrote as", a
     // Note that each draw's window holds the members anew, so the host lays them for it.
     handMembers(() => ({ rows: { members: [CHARLES] } }));
     const drawn = await draw(card(people));
-    const row = drawn.querySelector(".ui-hover-card-row");
+    const row = drawn.querySelector("[data-pull-request-opener]");
 
     const named = [
-      row?.querySelector(".ui-inline-ref-label")?.textContent,
+      row?.querySelector('[data-actor-ref]:not([data-kind="agent"]) .ui-inline-ref-label')
+        ?.textContent,
       /as the GitHub App/u.test(row?.textContent ?? ""),
     ];
 
@@ -252,14 +253,18 @@ test("who opened the pull request is named alone, whoever the agent wrote as", a
 test("a pull request's tab card says who opened it and its reviewers once its tab has read them, and neither before", async () => {
   const unread = await draw(card(undefined));
   assert.equal(unread.querySelector('[aria-label="Reviewers"]'), null);
-  assert.doesNotMatch(unread.textContent ?? "", /Opened by/u);
+  assert.equal(
+    unread.querySelector('[data-pull-request-opener] [data-actor-ref]:not([data-kind="agent"])'),
+    null,
+    "the agent alone is named as opening it before the tab has read who did",
+  );
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
   // Note that each draw's window holds the members anew, so the host lays them for it.
   handMembers(() => ({ rows: { members: [CHARLES] } }));
   const read = await draw(card(PEOPLE));
-  assert.match(read.textContent ?? "", /Opened by luke-agent/u);
+  assert.match(read.textContent ?? "", /Opened by Expiry job for luke-agent/u);
   assert.equal(read.querySelectorAll('[aria-label="Reviewers"] > li').length, 4);
 });
 

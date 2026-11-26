@@ -607,7 +607,7 @@ export function SettingsFacts({
 /** The complete green's check a saved credential or a connected row ends in. */
 export function SettingsSavedMark(): React.JSX.Element {
   return (
-    <span className="ui-settings-saved-mark inline-flex text-complete in-[.ui-button]:ml-ui-4">
+    <span className="ui-settings-saved-mark inline-flex text-complete in-[.ui-button]:ml-icon-gap">
       <CheckIcon />
     </span>
   );

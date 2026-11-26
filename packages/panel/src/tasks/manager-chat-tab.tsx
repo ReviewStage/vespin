@@ -48,16 +48,20 @@ import {
 } from "@repo/features/agent-wire";
 import { keptPictureSchema } from "@repo/features/conversation-picture-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import {
+  CHAT_LANDING,
   CHAT_RUN_ALONE,
   type ChatRunPlace,
+  chatMessageLanding,
   type ManagerChatLine,
   managerChatView,
 } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MessageFileChip } from "@repo/features/message-files";
+import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import {
@@ -65,6 +69,7 @@ import {
   EmptyState,
   GlyphSlot,
   NewMessagesRule,
+  STATUS_TONE,
   ThreadRule,
   TIME_LOOK,
   Time,
@@ -91,6 +96,7 @@ import { useFindOpen } from "../find-in-tab.js";
 import { managerChatQuery, managerChatRetryMutation } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { keepPictureRead } from "../picture-query.js";
+import { useToast } from "../toast.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import {
@@ -141,6 +147,7 @@ import {
   ThreadSummary,
   useThreadDoors,
 } from "./manager-chat-threads.js";
+import { CHAT_MESSAGE_GONE, useMessageReveal } from "./message-links.js";
 import { useMoveToCloud } from "./move-agent.js";
 import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { SentMessage } from "./skill-chip.js";
@@ -168,6 +175,8 @@ interface ChatManagerLook {
 
 /** What each message of the chat reads beside its row: the Manager it is the chat of, the reader, and how each turn's work is drawn. */
 interface ChatDoors {
+  /** The Manager whose chat it is, which each message's link names it under. */
+  readonly agentId: string;
   readonly manager: ChatManagerLook;
   readonly readerId: string | undefined;
   readonly delegation: DelegationDoors;
@@ -215,6 +224,11 @@ function threadOf(message: ManagerChatLiveMessage, doors: ChatDoors): RowThread 
       />
     ),
   };
+}
+
+/** The place a message of the chat is linked by: under its Manager, by the chat's own id for it, as a transcript's message is (`message-links.tsx`), whether it stands in the chat or in a thread. */
+function chatMessagePlace(doors: ChatDoors, messageId: string): LinkDestination {
+  return { kind: LINK_DESTINATION.MESSAGE, agentId: doors.agentId, messageId };
 }
 
 /** When a message was sent, as its row's head names it. */
@@ -320,9 +334,10 @@ function ManagerMessage({
   const thread = threadOf(message, doors);
   const toggle = useWorkToggle();
   const workToggle = work === null ? undefined : toggle;
+  const link = chatMessagePlace(doors, message.id);
   const { markUnread } = doors;
   const onMarkUnread = markUnread === undefined ? undefined : () => markUnread(message);
-  const menu = useChatMessageMenu(message.text, thread.onOpen, workToggle, onMarkUnread);
+  const menu = useChatMessageMenu(message.text, thread.onOpen, workToggle, link, onMarkUnread);
   const workAction = workToggle === undefined ? null : <WorkMessageAction toggle={workToggle} />;
   // Note that while a find stands open the closed work is drawn hidden until found, so ⌘F reaches it and a match there opens it, as a closed fold's body is.
   const finding = useFindOpen();
@@ -419,9 +434,10 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   const ownLine = lineId === undefined ? undefined : doors.lines.get(lineId);
   const editor = useMessageEdit(lineId ?? "");
   const thread = threadOf(message, doors);
+  const link = chatMessagePlace(doors, message.id);
   const { markUnread } = doors;
   const onMarkUnread = markUnread === undefined ? undefined : () => markUnread(message);
-  const menu = useChatMessageMenu(message.text, thread.onOpen, undefined, onMarkUnread);
+  const menu = useChatMessageMenu(message.text, thread.onOpen, undefined, link, onMarkUnread);
   const reactions = <ReactMessageActions message={message} react={doors.react} />;
 
   if (ownLine !== undefined && editor !== undefined) {
@@ -654,6 +670,17 @@ function chatRowsOf(
   ];
 }
 
+/** Each message's row key by the message's id, as a log keeps its rows (`messageRowOf`), but for `but`, a thread's own root. */
+function rowKeysById(rows: readonly ChatRow[], but?: string): ReadonlyMap<string, string> {
+  return new Map(
+    rows.flatMap((row) =>
+      row.kind === CHAT_ROW.MESSAGE && row.line.message.id !== but
+        ? [[row.line.message.id, row.key] as const]
+        : [],
+    ),
+  );
+}
+
 /** A thread's log as rows: the message it stands on, the rule counting its replies, its replies oldest first, and the reader's on their way after them. */
 function threadRowsOf(
   root: ManagerChatLine,
@@ -745,6 +772,9 @@ const NONE_SENDING: readonly ManagerChatSending[] = [];
 
 /** No row, while a thread's message is not read yet. */
 const NO_ROWS: readonly ChatRow[] = [];
+
+/** Nothing to do. */
+const NOTHING = (): void => {};
 
 /** No reply in a thread. */
 const NO_LINES: readonly ManagerChatLine[] = [];
@@ -934,8 +964,8 @@ function useManagerChatBox({
 
   // Note that these doors open no thread; the chat's own rows add theirs.
   const doors: ChatDoors = useMemo(
-    () => ({ manager, readerId: control.me, delegation, lines, react }),
-    [manager, control.me, delegation, lines, react],
+    () => ({ agentId: agent.id, manager, readerId: control.me, delegation, lines, react }),
+    [agent.id, manager, control.me, delegation, lines, react],
   );
 
   /** The rows of one turn's work, by the transcript line that opened it, which Show work opens under the Manager's first message of the turn. */
@@ -1129,6 +1159,55 @@ export function ManagerChatTab({
   useVirtualFind({ root: list, rows: findRows, handle: rowsHandle, findable: keys.length > 0 });
   const rowClassOf = useChatRowClass(rows, newKey);
   const asks = approvals.asks;
+
+  // A link to a message of the chat lands on it once read, older pages read for it: on its row in the chat,
+  // or, for a reply that stands in its thread alone, in the thread's tab, which the chat opens beside it to land there.
+  const toast = useToast();
+  const rowKeys = useMemo(() => rowKeysById(rows), [rows]);
+
+  useMessageReveal({
+    agentId: agent.id,
+    shown,
+    caughtUp: chat !== undefined,
+    whole: before === undefined,
+    olderFailed,
+    loadOlder: () => onNearTop?.(),
+    pages: chat?.messages.length ?? 0,
+    // Note that the chat is followed as it is written, so a message read whole and not found is gone.
+    settled: true,
+    drawn: (messageId) => {
+      const landing = chatMessageLanding(view, messageId).kind;
+
+      return (
+        landing === CHAT_LANDING.CHAT || (landing === CHAT_LANDING.THREAD && opener !== undefined)
+      );
+    },
+    bringIn: (messageId, then) => {
+      const landing = chatMessageLanding(view, messageId);
+      const key = rowKeys.get(messageId);
+
+      if (landing.kind === CHAT_LANDING.CHAT && key !== undefined) {
+        return rowsHandle.current?.bringIn(key, then) ?? false;
+      }
+
+      if (landing.kind !== CHAT_LANDING.THREAD || opener === undefined) return false;
+      opener.onOpen(landing.root);
+
+      return true;
+    },
+    gone: () =>
+      toast({
+        replayUnmasked: true,
+        words: CHAT_MESSAGE_GONE,
+        tone: STATUS_TONE.DANGER,
+        failure: {
+          surface: FAILURE_SURFACE.MESSAGE_REVEAL,
+          cause: FAILURE_CONDITION.GONE,
+          about: { agentId: agent.id },
+          refused: true,
+        },
+      }),
+  });
 
   const workingWords =
     approvals.waiting > 0
@@ -1383,6 +1462,27 @@ export function ManagerThreadTab({
   const findRows = useMemo(() => (finding ? rows.map(findRowOf) : NO_FIND_ROWS), [finding, rows]);
   useVirtualFind({ root: list, rows: findRows, handle: rowsHandle, findable: keys.length > 0 });
   const rowClassOf = useChatRowClass(rows);
+
+  // Note that a link to a reply is the chat's to find, which opens its thread here to land on it, so the thread never says one gone.
+  const replyKeys = useMemo(() => rowKeysById(rows, root), [rows, root]);
+
+  useMessageReveal({
+    agentId: agent.id,
+    shown,
+    caughtUp: rootLine !== undefined,
+    whole: false,
+    olderFailed: false,
+    loadOlder: NOTHING,
+    pages: 0,
+    settled: false,
+    drawn: (messageId) => replyKeys.has(messageId),
+    bringIn: (messageId, then) => {
+      const key = replyKeys.get(messageId);
+
+      return key !== undefined && (rowsHandle.current?.bringIn(key, then) ?? false);
+    },
+    gone: NOTHING,
+  });
 
   /** One row of the thread, as its kind draws it. */
   const drawRow = (row: ChatRow): ReactNode => {

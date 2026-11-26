@@ -444,10 +444,10 @@ const CHEVRON_CLASS =
  */
 const LEAD_CLASS = {
   [LIST_ROW_LEAD.DESCRIPTION]:
-    "ui-list-row-lead me-ui-4 inline-flex max-w-list-row-lead items-center gap-ui-2 rounded-ui-6 bg-fill-strong px-ui-4 py-0 align-bottom text-muted-foreground",
+    "ui-list-row-lead me-ui-4 inline-flex max-w-list-row-lead items-center gap-icon-gap-compact rounded-ui-6 bg-fill-strong px-ui-4 py-0 align-bottom text-muted-foreground",
   [LIST_ROW_LEAD.INLINE]:
-    "ui-list-row-lead inline-flex max-w-full items-center gap-ui-4 align-bottom text-muted-foreground",
-  [LIST_ROW_LEAD.ABOVE]: "ui-list-row-lead flex min-w-0 items-center gap-ui-6",
+    "ui-list-row-lead inline-flex max-w-full items-center gap-icon-gap-compact align-bottom text-muted-foreground",
+  [LIST_ROW_LEAD.ABOVE]: "ui-list-row-lead flex min-w-0 items-center gap-icon-gap-regular",
 } as const satisfies Record<ListRowLeadAt, string>;
 
 /** What stands between a lead's plain words and the description they lead. */

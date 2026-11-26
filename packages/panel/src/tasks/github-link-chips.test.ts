@@ -473,9 +473,11 @@ function cardNotes(chip: Element | undefined): (string | null)[] {
   assert.ok(chip, "the link is drawn as its chip");
   const card = cardOf(chip);
 
-  const notes = [...(card?.querySelectorAll(".ui-hover-card-note, .ui-hover-card-row") ?? [])].map(
-    readable,
-  );
+  const notes = [
+    ...(card?.querySelectorAll(
+      ".ui-hover-card-note, .ui-hover-card-row, .pull-request-card-branches",
+    ) ?? []),
+  ].map(readable);
 
   act(() => {
     chip.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
@@ -524,20 +526,16 @@ test("a pull request's and an issue's cards say who opened them, as the workspac
 
   assert.deepEqual(
     cardHead(pullRequest),
-    ["acme/relay#42 · Merged", "2h"],
-    "the head keys it by its repository and says at its corner how long ago it merged",
+    ["acme/relay#42 · 2h ago", "Merged"],
+    "the head keys it by its repository and how long ago it merged, and says at its corner where it stands",
   );
-  assert.deepEqual(cardNotes(pullRequest), [
-    "+120 −30 in 4 files · 7 comments · 1 commit",
-    "main ← invite-expiry",
-    "Opened by octo-dev",
-  ]);
+  assert.deepEqual(cardNotes(pullRequest), ["maininvite-expiry+120 −30", "Opened by octo-dev"]);
   assert.deepEqual(cardNotes(opened), ["relay#7 · Open", "Opened by octo-dev"]);
   assert.deepEqual(cardNotes(shelved), ["relay#9 · Not planned"]);
   assert.deepEqual(cardNotes(unreached), [UNREACHED]);
   assert.deepEqual(
     openerFace(pullRequest),
-    ["github", `${AVATAR}&s=28`],
+    ["github", `${AVATAR}&s=32`],
     "the pull request's opener wears their GitHub avatar",
   );
   assert.deepEqual(
@@ -572,7 +570,7 @@ test("a pull request's card names its labels, and one read from an older service
   const [whole, older] = container.querySelectorAll("[data-mention-ref]");
 
   assert.deepEqual(cardLabels(whole), ["service", "not a color"]);
-  assert.deepEqual(cardHead(older), ["acme/relay#44 · Open", undefined]);
+  assert.deepEqual(cardHead(older), ["acme/relay#44", "Open"]);
   assert.deepEqual(cardNotes(older), []);
   assert.deepEqual(cardLabels(older), []);
 });
@@ -604,11 +602,7 @@ test("a pull request's link standing alone in words drawn as a document is a row
 
   assert.equal(container.querySelectorAll("[data-mention-ref]").length, 0, "the link is its row");
   assert.deepEqual(cardNotes(row), chipNotes);
-  assert.deepEqual(cardNotes(row), [
-    "+120 −30 in 4 files · 7 comments · 1 commit",
-    "main ← invite-expiry",
-    "Opened by octo-dev",
-  ]);
+  assert.deepEqual(cardNotes(row), ["maininvite-expiry+120 −30", "Opened by octo-dev"]);
 });
 
 test("a pull request's chip whose place knows no more than its line hangs the card its link's chip hangs, read through the place's workspace", async () => {
@@ -636,11 +630,7 @@ test("a pull request's chip whose place knows no more than its line hangs the ca
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
 
-  assert.deepEqual(cardNotes(chip), [
-    "+120 −30 in 4 files · Checks passing · 7 comments · 1 commit",
-    "main ← invite-expiry",
-    "Opened by octo-dev",
-  ]);
+  assert.deepEqual(cardNotes(chip), ["maininvite-expiry+120 −30", "Opened by octo-dev"]);
 });
 
 /** An agent's merged pull request's row pinned over its box. */

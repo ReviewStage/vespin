@@ -322,7 +322,6 @@ export function AgentListRow({
               pullRequest={pullRequest}
               place={{ taskId: agent.taskId }}
               lines={pullRequest}
-              files={pullRequest.changedFiles}
               opener={people?.author ?? openerOf(pullRequest)}
               agent={{ subject, models, onOpen: onPress }}
               reviewers={people?.reviewers}
