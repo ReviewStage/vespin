@@ -18,6 +18,7 @@ import {
   accessibilityElement,
   accessibilityHidden,
   accessibilityHint,
+  accessibilityIdentifier,
   accessibilityLabel,
   animation,
   buttonStyle,
@@ -66,6 +67,9 @@ import { Video } from "./video.js";
 
 /** What a press on a message's writer is heard to do. */
 const WRITER_HINT = "Opens their page";
+
+/** The writer's press, as a flow finds it, since a message after its run's head is a container heard by the same words. */
+const WRITER_ID = "thread-writer";
 
 /** Between a writer's face and their name. */
 const WRITER_GAP = SPACE.TIGHT * 2;
@@ -569,7 +573,12 @@ function MessageView({
             ) : (
               <Button
                 onPress={writer.onOpen}
-                modifiers={[buttonStyle("plain"), ...writerHeard, accessibilityHint(WRITER_HINT)]}
+                modifiers={[
+                  buttonStyle("plain"),
+                  ...writerHeard,
+                  accessibilityHint(WRITER_HINT),
+                  accessibilityIdentifier(WRITER_ID),
+                ]}
               >
                 <HStack spacing={WRITER_GAP}>{writerLine}</HStack>
               </Button>

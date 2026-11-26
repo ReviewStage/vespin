@@ -67,14 +67,21 @@ env:
     visible: "Recorded the invite flow"
     timeout: 30000
 - tapOn: "Recorded the invite flow"
-- runFlow:
-    file: subflows/scroll-to.yaml
-    env:
-      ELEMENT: "Build teammate invitations, .*"
-      DIRECTION: UP
+# Note that the writer's press is found by its id with its words, since a
+# message after its run's head is a container heard by the same words, which
+# a search by words alone may stop on and tap, opening nothing.
+- scrollUntilVisible:
+    element:
+      id: "thread-writer"
+      text: "Build teammate invitations, .*"
+    direction: UP
+    centerElement: true
+    timeout: 60000
 - waitForAnimationToEnd
 - takeScreenshot: sender-thread
-- tapOn: "Build teammate invitations, .*"
+- tapOn:
+    id: "thread-writer"
+    text: "Build teammate invitations, .*"
 - extendedWaitUntil:
     visible: "Add a way to resend an invite that expired."
     timeout: 10000
