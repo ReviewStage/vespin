@@ -551,7 +551,11 @@ const starting = new Set<string>();
  * to send.
  */
 export function useThreadAnswer(
-  listed: { readonly holder: InboxAnyHolder; readonly item: InboxItem },
+  listed: {
+    readonly holder: InboxAnyHolder;
+    readonly item: InboxItem;
+    readonly reading?: true;
+  },
   readerId: string | undefined,
   onStarted?: (itemId: string) => void,
 ): ThreadAnswer {
@@ -941,15 +945,16 @@ export function useThreadAnswer(
     }));
   };
 
-  // A notification's action held for this thread, taken once and sent as though pressed here.
+  // A notification's action held for this thread, taken once and sent as though pressed here, once its messages are read, since the ask it answers stands among them.
   const pressed = store.get(itemId)?.pressed;
+  const reading = listed.reading === true;
   useEffect(() => {
-    if (pressed === undefined) return;
+    if (pressed === undefined || reading) return;
     hold(itemId, ({ pressed: _taken, ...was }) => was);
     const sending = pressedDraft(thread, pressed);
 
     if (sending !== undefined) send(sending);
-  }, [pressed]);
+  }, [pressed, reading]);
 
   return {
     draft,

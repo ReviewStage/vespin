@@ -293,6 +293,8 @@ export function useInboxListing(view: {
 export interface InboxThreadHeld {
   readonly holder: InboxAnyHolder;
   readonly item: InboxItem;
+  /** Where the phone keeps the Inbox on disk, that the thread's messages are still being read, so its thread stands empty until they load. */
+  readonly reading?: true;
 }
 
 /** The threads either side of the thread in front, by id, and how its screen opens one; none at an end. */
@@ -466,7 +468,16 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   const homeless = found !== undefined && found.taskId === null;
   const homed = useHomeGroups(found?.taskId ?? undefined);
   const outside = useSendsDrawn(homed.groups);
-  const listed = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
+  const shown = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
+
+  // Note that a thread of the feed kept on disk says so until its messages load, so what acts on its thread, a notification's choice among it, waits for them.
+  const listed = useMemo(
+    () =>
+      shown !== undefined && shown === inFeed && stored && messages === undefined
+        ? { ...shown, reading: true as const }
+        : shown,
+    [shown, inFeed, stored, messages],
+  );
 
   const feed = !lookedFor
     ? listed !== undefined || !held || tasksRead === TASKS_READ.READY
