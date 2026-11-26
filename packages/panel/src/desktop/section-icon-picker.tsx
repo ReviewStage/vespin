@@ -1,3 +1,4 @@
+import { type EmojiGroup, emojiGroups, findEmoji } from "@repo/features/emoji-model";
 import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_COLOR,
@@ -35,9 +36,6 @@ import {
 import { drawnDark } from "@repo/ui/appearance";
 import { SmilePlusIcon } from "@repo/ui/icons";
 import {
-  type EmojiGroup,
-  emojiGroups,
-  findEmoji,
   findGlyphs,
   glyphChoices,
   glyphKey,

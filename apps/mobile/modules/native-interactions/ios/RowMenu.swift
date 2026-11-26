@@ -29,10 +29,17 @@ private struct MenuIconData: Decodable {
   let size: Double?
   let emoji: String?
   let corner: Double?
+  let disc: Disc?
 
   struct UnderGlyph: Decodable {
     let asset: String
     let opacity: Double
+  }
+
+  /// The disc an emoji stands on, in the light theme's fill and the dark's, as a Manager's emoji face stands on its color.
+  struct Disc: Decodable {
+    let light: String
+    let dark: String
   }
 }
 
@@ -159,17 +166,38 @@ private func photoIcon(_ icon: MenuIconData) -> Image? {
   return Image(uiImage: round.withRenderingMode(.alwaysOriginal))
 }
 
-/// An emoji in a system menu, drawn into a square at its size and kept as it is, as `@expo/ui`'s patched image draws one (`emojiContent`), so a menu keeps its colors and lines its words up with its glyphs' items.
-private func emojiIcon(_ icon: MenuIconData) -> Image? {
-  guard let side = icon.size, side > 0, let emoji = icon.emoji, !emoji.isEmpty else { return nil }
+/// How much of a disc's side the emoji on it fills, as a Manager's emoji face is drawn (`manager-face-look.ts`'s `MANAGER_FACE_EMOJI_SCALE`), and how much of a bare emoji's square it fills, since its line stands taller than its face.
+private let discEmojiScale = 0.62
+private let bareEmojiScale = 0.8
+
+/// An emoji drawn into a square of `side`, centered, on a disc of `fill` where one is given.
+private func emojiSquare(_ emoji: String, side: Double, fill: UIColor?) -> UIImage {
   let size = CGSize(width: side, height: side)
-  // Note that the emoji is set a little under the square's side, since its line stands taller than its face.
-  let words = NSAttributedString(string: emoji, attributes: [.font: UIFont.systemFont(ofSize: side * 0.8)])
+  let scale = fill == nil ? bareEmojiScale : discEmojiScale
+  let words = NSAttributedString(string: emoji, attributes: [.font: UIFont.systemFont(ofSize: side * scale)])
   let face = words.size()
   let drawn = UIGraphicsImageRenderer(size: size).image { _ in
+    if let fill {
+      fill.setFill()
+      UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).fill()
+    }
     words.draw(at: CGPoint(x: (side - face.width) / 2, y: (side - face.height) / 2))
   }
-  return Image(uiImage: drawn.withRenderingMode(.alwaysOriginal))
+  return drawn.withRenderingMode(.alwaysOriginal)
+}
+
+/// An emoji in a system menu, drawn into a square at its size and kept as it is, as `@expo/ui`'s patched image draws one (`emojiContent`), so a menu keeps its colors and lines its words up with its glyphs' items; on its disc where it has one, as a Manager's emoji face stands on its color. Note that a disc's light and dark fills are kept as one image's two appearances, so the menu draws the one its theme asks for.
+private func emojiIcon(_ icon: MenuIconData) -> Image? {
+  guard let side = icon.size, side > 0, let emoji = icon.emoji, !emoji.isEmpty else { return nil }
+  guard let disc = icon.disc else {
+    return Image(uiImage: emojiSquare(emoji, side: side, fill: nil))
+  }
+  let light = UITraitCollection(userInterfaceStyle: .light)
+  let dark = UITraitCollection(userInterfaceStyle: .dark)
+  let appearances = UIImageAsset()
+  appearances.register(emojiSquare(emoji, side: side, fill: UIColor(vespinHex: disc.light)), with: light)
+  appearances.register(emojiSquare(emoji, side: side, fill: UIColor(vespinHex: disc.dark)), with: dark)
+  return Image(uiImage: appearances.image(with: UITraitCollection.current))
 }
 
 /// A catalog mark, such as a model's harness, fit in a square of its size, as `@expo/ui`'s patched image draws one (`assetSize`), a template mark such as Cursor's cube staying a template so it takes the menu's ink; the mark as the catalog keeps it where it has no size.

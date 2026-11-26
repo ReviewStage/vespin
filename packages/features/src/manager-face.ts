@@ -156,3 +156,15 @@ export function managerFacesFound(query: string): readonly ManagerFace[] {
 
 /** What a client says where a change of a Manager's face did not take. */
 export const MANAGER_FACE_FAILED = "Couldn't change the Manager's face.";
+
+/** Whether two faces are one: the same character and color, and the same emoji or none, so a pick that changes the emoji alone is a change. */
+export function sameManagerFace(
+  one: ManagerFace | undefined,
+  other: ManagerFace | undefined,
+): boolean {
+  return (
+    one?.character === other?.character &&
+    one?.color === other?.color &&
+    one?.emoji === other?.emoji
+  );
+}

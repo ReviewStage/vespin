@@ -3,6 +3,7 @@
 import { Image, Label } from "@expo/ui/swift-ui";
 import { font, tag } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
+import { useColorScheme } from "react-native";
 import { type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { type ChoiceLook, MENU_ICON, type MenuPhotoFile } from "./row-menu-model.js";
 import { Text } from "./text.js";
@@ -101,7 +102,8 @@ function GlyphLabel({
 /**
  * A choice's head as a system menu draws it (`choiceLook`): its glyph in
  * its tone's ink, with a faint glyph under it where it has one; its photo,
- * drawn round; its emoji; or its integration's mark, each kept in its own
+ * drawn round; its emoji, on its disc where it has one, as a Manager's
+ * emoji face stands on its color; or its integration's mark, each kept in its own
  * colors, which a menu would otherwise template in its ink.
  */
 export function LookIcon({
@@ -111,6 +113,8 @@ export function LookIcon({
   readonly look: ChoiceLook;
   readonly toneInk: (tone: StatusTone) => string;
 }) {
+  const dark = useColorScheme() === "dark";
+
   switch (look.kind) {
     case MENU_ICON.GLYPH:
       return (
@@ -123,7 +127,15 @@ export function LookIcon({
     case MENU_ICON.PHOTO:
       return <MenuPhoto photo={look.photo} corner={look.corner} />;
     case MENU_ICON.EMOJI:
-      return <Image emoji={look.emoji} emojiSize={MARK_SIZE.MENU_PHOTO} />;
+      return (
+        <Image
+          emoji={look.emoji}
+          emojiSize={MARK_SIZE.MENU_PHOTO}
+          {...(look.disc === undefined
+            ? {}
+            : { emojiDisc: dark ? look.disc.dark : look.disc.light })}
+        />
+      );
     case MENU_ICON.MARK:
       return look.sized ? (
         <Image assetName={look.asset} assetSize={MARK_SIZE.MENU_PHOTO} />

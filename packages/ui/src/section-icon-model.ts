@@ -1,5 +1,5 @@
 /**
- * section-icon-model.ts -- what a sidebar section's icon picker offers and finds: every Lucide glyph by its kebab-case name, every emoji by category, and the words a search finds each by.
+ * section-icon-model.ts -- what a sidebar section's icon picker offers and finds: every Lucide glyph by its kebab-case name, and the words a search finds each by.
  *
  * A glyph travels by its kebab-case name (`@repo/features/task-section-wire`)
  * and is drawn from Lucide's `icons` map, whose keys are the same name in
@@ -10,10 +10,10 @@
  * glyphs a section could wear before the picker offered them all keep
  * their names, `flask` among them, which Lucide calls `flask-conical`.
  *
- * Lucide ships no tags, so a glyph is found by the words of its name. An
- * emoji is found by its Unicode name, and one newer than macOS draws is
- * left out. Every function is pure over the data it is handed, so the
- * picker loads that data when it opens rather than with the window.
+ * Lucide ships no tags, so a glyph is found by the words of its name. Every
+ * function is pure over the data it is handed, so the picker loads that
+ * data when it opens rather than with the window. The emoji it offers are
+ * `@repo/features/emoji-model`'s.
  */
 
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
@@ -22,9 +22,6 @@ import {
   TASK_SECTION_ICON_KIND,
   type TaskSectionIcon,
 } from "@repo/features/task-section-wire";
-
-/** The newest emoji version offered: one newer is not yet drawn by every macOS a Mac may run. */
-const NEWEST_EMOJI_VERSION = 15.1;
 
 /** The glyphs whose stored name is not Lucide's own, and the Lucide icon each is drawn as. */
 const RENAMED_GLYPH = new Map<string, string>([[TASK_SECTION_GLYPH.FLASK, "flask-conical"]]);
@@ -39,31 +36,6 @@ export interface GlyphChoice {
   readonly glyph: string;
   readonly label: string;
   readonly words: readonly string[];
-}
-
-/** One emoji the picker offers, and its Unicode name, which it is found by. */
-interface EmojiChoice {
-  readonly emoji: string;
-  readonly name: string;
-}
-
-/** One category of emoji, in Unicode's order. */
-export interface EmojiGroup {
-  readonly name: string;
-  readonly emojis: readonly EmojiChoice[];
-}
-
-/** An emoji as `unicode-emoji-json`'s `data-by-group.json` lists it, of which only these keys are read. */
-interface UnicodeEmoji {
-  readonly emoji: string;
-  readonly name: string;
-  readonly emoji_version: string;
-}
-
-/** A category as `unicode-emoji-json`'s `data-by-group.json` lists it. */
-export interface UnicodeEmojiGroup {
-  readonly name: string;
-  readonly emojis: readonly UnicodeEmoji[];
 }
 
 /**
@@ -139,28 +111,4 @@ export function findGlyphs(choices: readonly GlyphChoice[], query: string): read
   if (tokens.length === 0) return choices;
 
   return choices.filter((choice) => matchesTokens(choice.words, tokens));
-}
-
-/** Every emoji every Mac draws, by category in Unicode's order, from `unicode-emoji-json`'s groups. */
-export function emojiGroups(groups: readonly UnicodeEmojiGroup[]): EmojiGroup[] {
-  return groups.flatMap((group) => {
-    const emojis = group.emojis
-      .filter((one) => Number(one.emoji_version) <= NEWEST_EMOJI_VERSION)
-      .map((one) => ({ emoji: one.emoji, name: one.name }));
-
-    return emojis.length === 0 ? [] : [{ name: group.name, emojis }];
-  });
-}
-
-/** The emoji a query finds, each category keeping only what it found and none left empty; every one for a blank query. */
-export function findEmoji(groups: readonly EmojiGroup[], query: string): readonly EmojiGroup[] {
-  const tokens = searchTokens(query);
-
-  if (tokens.length === 0) return groups;
-
-  return groups.flatMap((group) => {
-    const emojis = group.emojis.filter((one) => matchesTokens([one.name], tokens));
-
-    return emojis.length === 0 ? [] : [{ name: group.name, emojis }];
-  });
 }
