@@ -164,7 +164,9 @@ interface Sent {
  * they are held beside the screens, so a refusal that lands once the page
  * was left still finds them, and in memory alone, since pictures may run to
  * megabytes: a relaunch, or a line sent from another device, keeps its line
- * and words but none of its pictures' bytes (`undeliveredWhole`).
+ * and words but none of its pictures' bytes (`undeliveredWhole`). They are
+ * never written anywhere, and a sign-out lets them all go
+ * (`useHeldSendsSignOut`).
  */
 const heldSends = new Map<string, Sent>();
 
@@ -187,6 +189,20 @@ function letGoUndrawn(agentId: string, drawn: readonly SendingMessage[] | undefi
     goingSends.delete(lineId);
     heldSends.delete(lineId);
   }
+}
+
+/** Lets go of every line's pictures this phone holds when the account signs out, an account switch's sign-out among them, so they never outlive the account that sent them. */
+export function useHeldSendsSignOut(signedIn: boolean): void {
+  const wasSignedIn = useRef(signedIn);
+
+  useEffect(() => {
+    if (wasSignedIn.current && !signedIn) {
+      heldSends.clear();
+      goingSends.clear();
+    }
+
+    wasSignedIn.current = signedIn;
+  }, [signedIn]);
 }
 
 /** A file a chat message went with as the field holds it again: its picture drawn from its own bytes, a text file with no thumbnail. */

@@ -22,6 +22,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useIsFocused } from "exp
 import { type ReactElement, type ReactNode, useMemo } from "react";
 import { useColorScheme } from "react-native";
 import { MachineAsks } from "../agents/machine-asks.js";
+import { useHeldSendsSignOut } from "../agents/use-agent-composer.js";
 import { useAppNotReadyCount } from "../app-ready.js";
 import { useCrashReports } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -200,6 +201,7 @@ function GuardedScreens() {
   useSystemActivity(signedIn);
   useRecentOpenedSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
+  useHeldSendsSignOut(signedIn);
   useCrashReports();
   useOfflineNotice();
   useNoticeForAccount();
