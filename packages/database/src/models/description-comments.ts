@@ -44,6 +44,7 @@ import { user } from "../schemas/auth.js";
 import { descriptionComment, descriptionCommentThread } from "../schemas/description-comment.js";
 import { task } from "../schemas/task.js";
 import { taskPageVersion } from "../schemas/task-page.js";
+import { type AttachmentBody, attachmentBodyFields, attachmentBodyOf } from "./attachment-body.js";
 import { InstantColumnSchema } from "./columns.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import { reachableTask, taskReachableBy } from "./workspace-store.js";
@@ -438,12 +439,16 @@ const findCommentFile = SqlSchema.findOneOption({
   }),
   Result: Schema.Struct({
     contentType: Schema.Literals(Object.values(AGENT_ATTACHMENT_TYPE)),
-    bytes: Schema.Uint8Array,
+    ...attachmentBodyFields,
   }),
   execute: ({ userId, taskId, attachmentId }) =>
     Database.use((db) =>
       db
-        .select({ contentType: attachment.contentType, bytes: attachment.bytes })
+        .select({
+          contentType: attachment.contentType,
+          bytes: attachment.bytes,
+          blobKey: attachment.blobKey,
+        })
         .from(attachment)
         .innerJoin(task, eq(task.id, attachment.taskId))
         .where(
@@ -1238,8 +1243,8 @@ export function withdrawDescriptionCommentAsk(
 }
 
 /**
- * One file a comment of the description carries, its bytes under the type it
- * traveled as, where the account reaches the plan; nothing for a plan of a
+ * One file a comment of the description carries, where its bytes stand,
+ * under the type it traveled as, where the account reaches the plan; nothing for a plan of a
  * workspace the account is not in, and for an id that names no comment's
  * file of this plan, a description's picture among them.
  */
@@ -1250,10 +1255,13 @@ export function readDescriptionCommentFile(
 ): TaskStoreEffect<
   Option.Option<{
     readonly contentType: AgentAttachment["mediaType"];
-    readonly bytes: Uint8Array;
+    readonly body: AttachmentBody;
   }>
 > {
-  return findCommentFile({ userId, taskId, attachmentId });
+  return Effect.map(
+    findCommentFile({ userId, taskId, attachmentId }),
+    Option.map(({ contentType, ...row }) => ({ contentType, body: attachmentBodyOf(row) })),
+  );
 }
 
 /** Where the open editor reported its anchors, in the text it sent. */

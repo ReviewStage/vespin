@@ -7,7 +7,13 @@ import { user } from "@repo/database/schemas/auth";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { inboxMessage } from "@repo/database/schemas/inbox-message";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/database/testing";
+import {
+  getTestDB,
+  inlineBytesOf,
+  joinWorkspace,
+  openWorkspace,
+  startTask,
+} from "@repo/database/testing";
 import { AGENT_ATTACHMENT_TYPE, type AgentAttachment } from "@repo/features/agent-wire";
 import { inboxAttachmentOf } from "@repo/features/inbox-attachment-link";
 import {
@@ -357,7 +363,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         const [file] = answer?.files ?? [];
         assert.ok(file);
         const served = yield* readInboxAttachment(teammate, id, file.attachmentId);
-        assert.deepEqual(new Uint8Array(Option.getOrThrow(served).bytes), TRACE);
+        assert.deepEqual(new Uint8Array(inlineBytesOf(Option.getOrThrow(served).body)), TRACE);
         assert.deepEqual(
           [answered.status, answered.revision, answered.answeredBy?.userId],
           [INBOX_STATUS.ANSWERED, 1, teammate],
@@ -692,7 +698,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         ]);
         assert.ok(question?.text.endsWith("`![x](shots/before.png)`"));
         const served = yield* readInboxAttachment(other.userId, asked.id, kept.attachmentId);
-        assert.deepEqual(new Uint8Array(Option.getOrThrow(served).bytes), SHOT);
+        assert.deepEqual(new Uint8Array(inlineBytesOf(Option.getOrThrow(served).body)), SHOT);
 
         yield* later;
 

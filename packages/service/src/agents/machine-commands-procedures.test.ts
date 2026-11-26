@@ -37,7 +37,13 @@ import { user } from "@repo/database/schemas/auth";
 import { device } from "@repo/database/schemas/device";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
-import { DEVICE_LAYOUT, getTestDB, openTaskAgent, openWorkspace } from "@repo/database/testing";
+import {
+  DEVICE_LAYOUT,
+  getTestDB,
+  inlineBytesOf,
+  openTaskAgent,
+  openWorkspace,
+} from "@repo/database/testing";
 import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   COMPUTER_ACTION,
@@ -807,7 +813,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           assert.equal(answer.path, `/workspace/.agent/attachments/${saved[0]?.name}`);
           const kept = yield* readConversationPicture(row.id, answer.picture.id);
           assert.ok(Option.isSome(kept), "kept beside the transcript");
-          assert.deepEqual(kept.value.bytes, video);
+          assert.deepEqual(inlineBytesOf(kept.value.body), video);
         }),
       ),
   );

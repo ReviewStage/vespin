@@ -7,6 +7,11 @@ import {
   type StoreFailure,
 } from "@repo/database/core/query";
 import { CURRENT_TXID } from "@repo/database/core/txid";
+import {
+  type AttachmentBody,
+  attachmentBodyFields,
+  attachmentBodyOf,
+} from "@repo/database/models/attachment-body";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import {
   agentReachableBy,
@@ -1024,7 +1029,7 @@ function attachmentQuery(
 /** The attachment as it was kept: its type and its bytes. */
 const findAttachment = SqlSchema.findOneOption({
   Request: AttachmentAskSchema,
-  Result: Schema.Struct({ contentType: inboxFileTypeSchema, bytes: Schema.Uint8Array }),
+  Result: Schema.Struct({ contentType: inboxFileTypeSchema, ...attachmentBodyFields }),
   execute: (ask) => attachmentQuery(ask, PLAYABLE_VIDEO_TYPE.WEBM),
 });
 
@@ -1033,7 +1038,7 @@ const findServedAttachment = SqlSchema.findOneOption({
   Request: Schema.Struct({ ...AttachmentAskSchema.fields, playable: playableVideoTypeSchema }),
   Result: Schema.Struct({
     contentType: Schema.Union([inboxFileTypeSchema, Schema.Literal(MP4_TYPE)]),
-    bytes: Schema.Uint8Array,
+    ...attachmentBodyFields,
   }),
   execute: ({ playable, ...ask }) => attachmentQuery(ask, playable),
 });
@@ -2781,13 +2786,18 @@ export function postInboxThread(
   );
 }
 
-/** The picture or the answer's file, where it is the item's: its type and its bytes; nothing where the account reaches no such item or the item carries no such attachment. */
+/** The picture or the answer's file, where it is the item's: its type and where its bytes stand; nothing where the account reaches no such item or the item carries no such attachment. */
 export function readInboxAttachment(
   userId: string,
   itemId: string,
   attachmentId: string,
-): InboxStoreEffect<Option.Option<InboxFile>> {
-  return findAttachment({ userId, itemId, attachmentId });
+): InboxStoreEffect<
+  Option.Option<{ readonly contentType: InboxFile["contentType"]; readonly body: AttachmentBody }>
+> {
+  return Effect.map(
+    findAttachment({ userId, itemId, attachmentId }),
+    Option.map(({ contentType, ...row }) => ({ contentType, body: attachmentBodyOf(row) })),
+  );
 }
 
 /** The attachment as `readInboxAttachment` reads it, served to a reader that plays the video given: a recording's MP4 copy where it plays MP4 and one is kept, and its WebM otherwise. */
@@ -2796,8 +2806,13 @@ export function readServedInboxAttachment(
   itemId: string,
   attachmentId: string,
   playable: PlayableVideoType,
-): InboxStoreEffect<Option.Option<{ readonly contentType: string; readonly bytes: Uint8Array }>> {
-  return findServedAttachment({ userId, itemId, attachmentId, playable });
+): InboxStoreEffect<
+  Option.Option<{ readonly contentType: string; readonly body: AttachmentBody }>
+> {
+  return Effect.map(
+    findServedAttachment({ userId, itemId, attachmentId, playable }),
+    Option.map(({ contentType, ...row }) => ({ contentType, body: attachmentBodyOf(row) })),
+  );
 }
 
 /**

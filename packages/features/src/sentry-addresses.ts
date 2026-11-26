@@ -37,6 +37,13 @@ function scrubbedSegment(segment: string): string {
   return redactCredentials(segment) === segment ? segment : REDACTED;
 }
 
+/**
+ * A query parameter a presigned Vercel Blob URL carries its grant in, and
+ * its value: whoever holds the delegation and the signature reads the
+ * object until the URL expires.
+ */
+const PRESIGNED_GRANT_PATTERN = /(vercel-blob-[a-z-]+)=[^\s&"'#]*/gi;
+
 /** A query string with every value redacted and its names kept, but for one shaped like a credential, so the shape of a request still reads. */
 function scrubbedQuery(query: string): string {
   return query
@@ -79,8 +86,10 @@ export function scrubbedUrl(address: string): string {
  * The attributes that carry an address, a path, or a query, by the names
  * Effect's HTTP spans and the browser's and Electron's request spans
  * (`url.*`), Sentry's HTTP integrations (`http.*`), a breadcrumb (`url`),
- * and the browser's HTTP context, which sets the page's referrer on every
- * segment span as a one-string array (`http.request.header.referer`), give
+ * the browser's HTTP context, which sets the page's referrer on every
+ * segment span as a one-string array (`http.request.header.referer`), and
+ * a redirect's target where a span records its response's headers
+ * (`http.response.header.location`), a presigned Blob URL among them, give
  * them, each with how it is scrubbed.
  */
 const URL_ATTRIBUTES: ReadonlyMap<string, (value: string) => string> = new Map([
@@ -94,7 +103,17 @@ const URL_ATTRIBUTES: ReadonlyMap<string, (value: string) => string> = new Map([
   ["http.fragment", () => REDACTED],
   ["url", scrubbedUrl],
   ["http.request.header.referer", scrubbedUrl],
+  ["http.response.header.location", scrubbedUrl],
 ]);
+
+/**
+ * Free text, a log line's or an error's words, with the grant of every
+ * presigned Blob URL in it redacted and the rest word for word, so an
+ * address a message quotes whole names its object but never opens it.
+ */
+export function withoutPresignedGrants(text: string): string {
+  return text.replace(PRESIGNED_GRANT_PATTERN, `$1=${REDACTED}`);
+}
 
 /** Whether an attribute of this name carries an address, and so is scrubbed by `scrubbedAttributes`. */
 export function isAddressAttribute(name: string): boolean {

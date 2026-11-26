@@ -661,7 +661,9 @@ data with:
 Your data is stored on servers provided by our infrastructure partners: our
 database is hosted by Neon, the bytes of attachments (pictures, recordings,
 sound clips, and files kept with transcripts, descriptions, and Inbox threads)
-are kept in a private Vercel Blob store, and agents' checkouts and session files live in
+are kept in a private Vercel Blob store, from which the Mac and iOS apps may
+load a picture, recording, or sound clip you may see directly, at an address
+the service makes for that one file and for five minutes, and agents' checkouts and session files live in
 Vercel Sandboxes and on Vercel Drives: each agent's
 checkout on a drive of its own, and one drive per workspace holding the default
 branch of every repository it connects, member-token ones included, which each

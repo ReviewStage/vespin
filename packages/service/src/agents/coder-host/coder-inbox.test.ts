@@ -14,6 +14,7 @@ import { messages } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
+  inlineBytesOf,
   joinWorkspace,
   leaveWorkspace,
   openRunningTurn,
@@ -785,7 +786,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           message?.files?.[0]?.attachmentId ?? "",
         );
 
-        assert.deepEqual(new Uint8Array(Option.getOrThrow(kept).bytes), PNG);
+        assert.deepEqual(new Uint8Array(inlineBytesOf(Option.getOrThrow(kept).body)), PNG);
 
         const web = yield* post(agent, {
           key: "web-only",
@@ -847,7 +848,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         );
 
         assert.deepEqual(
-          Option.map(kept, (file) => [file.contentType, new Uint8Array(file.bytes)]),
+          Option.map(kept, (file) => [file.contentType, new Uint8Array(inlineBytesOf(file.body))]),
           Option.some([INBOX_FILE_TYPE.PDF, PDF]),
         );
       }),
@@ -919,7 +920,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         );
 
         assert.deepEqual(
-          Option.map(kept, (file) => [file.contentType, file.bytes.byteLength]),
+          Option.map(kept, (file) => [file.contentType, inlineBytesOf(file.body).byteLength]),
           Option.some([INBOX_FILE_TYPE.WEBM, recording.byteLength]),
         );
       }),
@@ -1025,7 +1026,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           named?.attachmentId ?? "",
         );
 
-        assert.deepEqual(new Uint8Array(Option.getOrThrow(kept).bytes), PNG);
+        assert.deepEqual(new Uint8Array(inlineBytesOf(Option.getOrThrow(kept).body)), PNG);
       }),
   );
 
@@ -1081,7 +1082,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           const named = inboxAttachmentOf(written);
           assert.equal(named?.itemId, item.id, written);
           const copy = yield* readInboxAttachment(agent.userId, item.id, named?.attachmentId ?? "");
-          copies.push(new Uint8Array(Option.getOrThrow(copy).bytes));
+          copies.push(new Uint8Array(inlineBytesOf(Option.getOrThrow(copy).body)));
         }
 
         assert.deepEqual(copies, [shot, plan]);

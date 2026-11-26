@@ -10,7 +10,7 @@ import { attachment } from "../../schemas/attachment.js";
 import { user } from "../../schemas/auth.js";
 import { conversations } from "../../schemas/storage.js";
 import { CONVERSATION_KIND } from "../../storage-vocabulary.js";
-import { fillConversationPictures, getTestDB } from "../../testing/index.js";
+import { fillConversationPictures, getTestDB, inlineBytesOf } from "../../testing/index.js";
 import { deleteConversations } from "../conversation-delete.js";
 import {
   keepConversationPicture,
@@ -75,7 +75,7 @@ it.layer(getTestDB())("a conversation's pictures", (it) => {
       );
       const read = yield* readConversationPicture(owner.conversationId, first.value.id);
       assert.deepEqual(
-        Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
+        Option.map(read, (stored) => [stored.contentType, [...inlineBytesOf(stored.body)]]),
         Option.some([INBOX_IMAGE_TYPE.PNG, [...picture(1).bytes]]),
       );
       assert.deepEqual(

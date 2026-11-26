@@ -84,6 +84,13 @@ export interface BlobObjectHead {
   readonly etag: string;
 }
 
+/** One object's bytes as a stream, with what the store holds about it. */
+export interface BlobObjectStream {
+  readonly stream: ReadableStream<Uint8Array>;
+  readonly size: number;
+  readonly contentType: string;
+}
+
 export interface PresignGetOptions {
   /** How long the URL opens the object, at most `BLOB_PRESIGN_MAX_SECONDS`. */
   readonly validForSeconds: number;
@@ -111,6 +118,10 @@ export interface BlobStoreValues {
   ) => Effect.Effect<Option.Option<BlobObjectHead>, BlobStoreFailure>;
   /** The object's bytes, or nothing where none stands. */
   readonly get: (pathname: string) => Effect.Effect<Option.Option<Uint8Array>, BlobStoreFailure>;
+  /** The object's bytes as a stream, read as its reader reads it, or nothing where none stands; the stream is the caller's to read to its end or cancel. */
+  readonly stream: (
+    pathname: string,
+  ) => Effect.Effect<Option.Option<BlobObjectStream>, BlobStoreFailure>;
   /** The object's first `byteCount` bytes, fewer where it is shorter, or nothing where none stands. */
   readonly getFirstBytes: (
     pathname: string,
@@ -130,7 +141,34 @@ export interface BlobStoreValues {
   readonly delete: (pathnames: ReadonlyArray<string>) => Effect.Effect<void, BlobStoreFailure>;
 }
 
-export class BlobStore extends Context.Service<BlobStore, BlobStoreValues>()("BlobStore") {}
+/**
+ * The store a runtime reads attachment bytes from and writes them to:
+ * unconfigured by default, as a test or a local run has it, and the one the
+ * deployment names wherever its runtime is built over
+ * `blobStoreFromEnvironment`. Note that it is a reference rather than a
+ * service a caller must be handed, because a reader of an attachment's
+ * bytes sits beneath nearly every send to an agent (a lost line handed
+ * over again, a picture forwarded), as the deployment's other queues and
+ * stores do (`TurnQueue`, `VoiceCallLeases`).
+ */
+export const BlobStore = Context.Reference<BlobStoreValues>("BlobStore", {
+  defaultValue: unconfiguredStore,
+});
+
+/**
+ * The failure as one line: the store's operation and why it failed, and
+ * nothing it carried, since its cause's words may name an address. Note
+ * that a store the deployment names none of is an error rather than a
+ * warning, because a row whose bytes stand there then reads as unavailable
+ * on every read until the runtime is built over `blobStoreFromEnvironment`.
+ */
+export function logBlobStoreFailure(failure: BlobStoreFailure): Effect.Effect<void> {
+  const line = `Blob store unavailable: ${failure.operation} ${failure.reason}`;
+
+  return failure.reason === BLOB_STORE_FAILURE.UNCONFIGURED
+    ? Effect.logError(line)
+    : Effect.logWarning(line);
+}
 
 /** Asserts a lifetime Blob would sign: a whole number of seconds, above zero and within its seven days. */
 export function assertPresignLifetime(validForSeconds: number): void {
@@ -197,6 +235,7 @@ function unconfiguredStore(): BlobStoreValues {
     put: (pathname) => refuse(BLOB_STORE_OPERATION.PUT, [pathname]),
     head: (pathname) => refuse(BLOB_STORE_OPERATION.HEAD, [pathname]),
     get: (pathname) => refuse(BLOB_STORE_OPERATION.GET, [pathname]),
+    stream: (pathname) => refuse(BLOB_STORE_OPERATION.GET, [pathname]),
     getFirstBytes: (pathname) => refuse(BLOB_STORE_OPERATION.GET, [pathname]),
     presignGet: (pathname) => refuse(BLOB_STORE_OPERATION.PRESIGN_GET, [pathname]),
     presignPut: (pathname) => refuse(BLOB_STORE_OPERATION.PRESIGN_PUT, [pathname]),
@@ -259,6 +298,19 @@ function vercelBlobStore(storeId: string): BlobStoreValues {
         if (found === null || found.statusCode !== 200) return Option.none();
 
         return Option.some(new Uint8Array(await new Response(found.stream).arrayBuffer()));
+      }),
+
+    stream: (pathname) =>
+      call(BLOB_STORE_OPERATION.GET, [pathname], async (abortSignal) => {
+        const found = await get(pathname, { access: ACCESS, storeId, abortSignal });
+
+        if (found === null || found.statusCode !== 200) return Option.none();
+
+        return Option.some({
+          stream: found.stream,
+          size: found.blob.size,
+          contentType: found.blob.contentType,
+        });
       }),
 
     getFirstBytes: (pathname, byteCount) =>
@@ -350,7 +402,7 @@ function vercelBlobStore(storeId: string): BlobStoreValues {
  * are built; one that reaches nothing without `BLOB_STORE_ID`, saying so
  * once by the variable's name.
  */
-export const blobStoreFromEnvironment: Layer.Layer<BlobStore> = Layer.effect(
+export const blobStoreFromEnvironment: Layer.Layer<never> = Layer.effect(
   BlobStore,
   Effect.gen(function* () {
     const read = yield* Config.option(Config.String(BLOB_STORE_ENVIRONMENT.STORE_ID)).pipe(

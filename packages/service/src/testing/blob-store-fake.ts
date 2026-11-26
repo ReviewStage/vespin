@@ -27,7 +27,7 @@ export interface MemoryBlobPresign {
 }
 
 export interface MemoryBlobStore {
-  readonly layer: Layer.Layer<BlobStore>;
+  readonly layer: Layer.Layer<never>;
   /** Every object the store holds, by pathname. */
   readonly objects: Map<string, MemoryBlobObject>;
   /** Every presigned URL the store minted, in order. */
@@ -70,6 +70,14 @@ export function memoryBlobStore(): MemoryBlobStore {
     get: (pathname) =>
       Effect.sync(() =>
         Option.map(Option.fromNullishOr(objects.get(pathname)), (found) => found.bytes.slice()),
+      ),
+    stream: (pathname) =>
+      Effect.sync(() =>
+        Option.map(Option.fromNullishOr(objects.get(pathname)), (found) => ({
+          stream: new Blob([found.bytes.slice()]).stream(),
+          size: found.bytes.length,
+          contentType: found.contentType,
+        })),
       ),
     getFirstBytes: (pathname, byteCount) =>
       Effect.sync(() =>

@@ -1,3 +1,5 @@
+export * from "./attachment-bodies.js";
+
 export * from "./conversation-picture-budget.js";
 
 export * from "./devices.js";

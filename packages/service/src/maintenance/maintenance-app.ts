@@ -39,7 +39,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
 ): Effect.fn.Return<
   Response,
   unknown,
-  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox | BlobStore
+  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
   const environment = yield* HostedEnvironment;
   // The reap asks the agents' machines where their runners stand, over the deployment's own client.
@@ -73,7 +73,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
  * since `vercel.json` sends the function only its own path.
  */
 export function maintenanceApp(): WebRoutes<
-  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox | BlobStore
+  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
   return Layer.mergeAll(
     // `ANY_METHOD`, not `GET`: the handler decides its own method refusal, so a
