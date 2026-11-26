@@ -16,9 +16,8 @@ import { CatalogSection } from "../section";
 /**
  * fold-motion.tsx -- a settings page whose card folds open what its rows own,
  * as Settings › Workspace's connections do: a GitHub account's repositories
- * unrolling under its row, and the integrations under it in the card and the
- * section under the card gliding down on the same spring, then closing over
- * it as it rolls up.
+ * standing under its row while it is open, at once, and the integrations and
+ * section under it jumping to their new places.
  */
 
 /** A provider's mark, at the size a row's leading mark stands. */
