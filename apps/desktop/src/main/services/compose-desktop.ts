@@ -372,11 +372,7 @@ export function composeDesktop(
         yield* linkNetworkWatch({
           state,
           online: SubscriptionRef.changes(online),
-          // A connection that outlived the network going may be dead without a word, so the calls on it are asked again on a new one.
-          regained: Effect.andThen(
-            Effect.sync(() => hostedConnection.reconnect()),
-            operator.host.tasksRegained(),
-          ),
+          regained: operator.host.tasksRegained(),
           report: config.report,
         });
       }
@@ -410,7 +406,13 @@ export function composeDesktop(
         unsavedWork,
         menuOffers: offers,
         handoff: handedOff,
-        tellOnline: (found) => void run(SubscriptionRef.set(online, found)),
+        // Note that a connection that outlived the network going may be dead without a word, so the calls on it are asked again on a new one; only the network coming back says so, never the service answering again, whose answer is on that very connection.
+        tellOnline: (found) =>
+          void run(
+            Effect.map(SubscriptionRef.getAndSet(online, found), (was) => {
+              if (found && !was) hostedConnection.reconnect();
+            }),
+          ),
         askBeforeLeaving: askFirst,
       };
     }),
