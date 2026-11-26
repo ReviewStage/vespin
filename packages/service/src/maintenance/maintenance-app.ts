@@ -18,6 +18,8 @@ import { type CronMonitor, sentryCronCheckIns } from "../observability/sentry.js
 import { releaseHeldPushes } from "../push/inbox-pushes.js";
 import { refreshLiveActivities } from "../push/live-activities.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
+import { purgeAttachmentBlobs } from "../storage/attachment-blob-purge.js";
+import { BlobStore } from "../storage/blob-store.js";
 import { MAINTENANCE_SWEEP, MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
 import { handleMaintenanceSweep } from "./maintenance-sweep.js";
 
@@ -37,11 +39,12 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
 ): Effect.fn.Return<
   Response,
   unknown,
-  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox
+  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox | BlobStore
 > {
   const environment = yield* HostedEnvironment;
   // The reap asks the agents' machines where their runners stand, over the deployment's own client.
   const http = yield* HttpClient.HttpClient;
+  const blobs = yield* BlobStore;
 
   return yield* handleMaintenanceSweep({
     request,
@@ -60,6 +63,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
       markCommandsAwayDevices(now, Duration.toMillis(MACHINE_LISTENER_FRESH)),
     pruneMachineAsks,
     releaseSandboxes: releaseUnusedSandboxes,
+    purgeAttachmentBlobs: () => Effect.provideService(purgeAttachmentBlobs(), BlobStore, blobs),
   });
 });
 
@@ -69,7 +73,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
  * since `vercel.json` sends the function only its own path.
  */
 export function maintenanceApp(): WebRoutes<
-  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox
+  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox | BlobStore
 > {
   return Layer.mergeAll(
     // `ANY_METHOD`, not `GET`: the handler decides its own method refusal, so a

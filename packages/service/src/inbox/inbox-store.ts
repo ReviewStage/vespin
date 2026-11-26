@@ -801,6 +801,7 @@ const insertMessageFiles = SqlSchema.void({
           ...file,
           ...pictureSizeOf(file.bytes),
           mp4Bytes: mp4Bytes ?? null,
+          phoneByteCount: mp4Bytes?.byteLength ?? null,
           inboxItemId: itemId,
           inboxMessageId: messageId,
           kind: INBOX_ATTACHMENT_KIND.MESSAGE,

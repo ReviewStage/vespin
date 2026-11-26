@@ -635,8 +635,9 @@ data with:
   Notification service, which receives your phone's push token and each
   notification's title, body and, for a post, its words as written, as the
   Notifications section says.
-- **Infrastructure providers:** Vercel (hosting, agent sandboxes, and Vercel
-  Connect, which holds integration tokens), Neon (database), PostHog (usage
+- **Infrastructure providers:** Vercel (hosting, agent sandboxes, Vercel
+  Connect, which holds integration tokens, and Vercel Blob, which keeps
+  attachment bytes), Neon (database), PostHog (usage
   data, screen recordings, feedback, and setup answers), Sentry (error and
   performance monitoring), Resend (email: for onboarding emails and product updates,
   Resend is told your email address, your first name, when you signed up, whether
@@ -658,7 +659,9 @@ data with:
 ## 6\. Data storage and security
 
 Your data is stored on servers provided by our infrastructure partners: our
-database is hosted by Neon, and agents' checkouts and session files live in
+database is hosted by Neon, the bytes of attachments (pictures, recordings,
+sound clips, and files kept with transcripts, descriptions, and Inbox threads)
+are kept in a private Vercel Blob store, and agents' checkouts and session files live in
 Vercel Sandboxes and on Vercel Drives: each agent's
 checkout on a drive of its own, and one drive per workspace holding the default
 branch of every repository it connects, member-token ones included, which each
