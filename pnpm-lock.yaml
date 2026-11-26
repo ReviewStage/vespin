@@ -702,6 +702,9 @@ importers:
       '@repo/host':
         specifier: workspace:*
         version: link:../../packages/host
+      '@repo/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@repo/settings':
         specifier: workspace:*
         version: link:../../packages/settings
@@ -820,9 +823,6 @@ importers:
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(vitest@5.1.1)
-      '@repo/runtime':
-        specifier: workspace:*
-        version: link:../../packages/runtime
       '@repo/wire':
         specifier: workspace:*
         version: link:../../packages/wire
