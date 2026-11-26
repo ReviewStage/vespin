@@ -72,9 +72,14 @@ body,
 
 /* The Mac panel window's page is clear under the shell, whose frame tint and
    solid sheet paint everything there is, so the window's sidebar material
-   (`panel-manager.ts`) frosts through the frame. */
+   (`panel-manager.ts`) frosts through the frame. Note that the body and the
+   root are named one selector each, never as one `:is()`, because Chromium
+   files a rule by its last compound's class, id, or element, and one whose
+   last compound is an `:is()` is tried on every element the window
+   restyles. */
 :root[data-ui-profile="desktop"]:has(.desktop-shell),
-:root[data-ui-profile="desktop"]:has(.desktop-shell) :is(body, #root) {
+:root[data-ui-profile="desktop"]:has(.desktop-shell) body,
+:root[data-ui-profile="desktop"]:has(.desktop-shell) #root {
   background: transparent;
 }
 
@@ -682,12 +687,20 @@ body,
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-/* The panel stands no wider than its column, which holds its widest. */
+/* The panel stands no wider than its column, which holds its widest. Note
+   that the boxes a task's grid places are named one selector each, never as
+   a last `:is()`, which Chromium tries on every element the window restyles
+   (as the page's root is, above). */
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > .desktop-main
   .desktop-task:has(> .desktop-task-main)
-  > :is(.side-panel:not([data-full-screen="true"]), .side-panel-room) {
+  > .side-panel:not([data-full-screen="true"]),
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task:has(> .desktop-task-main)
+  > .side-panel-room {
   max-width: 100%;
 }
 
@@ -715,7 +728,12 @@ body,
   .desktop-shell
   > .desktop-main
   .desktop-task:has(> .desktop-task-main)
-  > :is(.side-panel, .side-panel-room) {
+  > .side-panel,
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task:has(> .desktop-task-main)
+  > .side-panel-room {
   grid-column: 2;
   grid-row: 2;
 }
@@ -724,7 +742,12 @@ body,
   .desktop-shell
   > .desktop-main
   .desktop-task:has(> .desktop-task-main)
-  > :is(.desktop-task-main, .side-panel)::before {
+  > .desktop-task-main::before,
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task:has(> .desktop-task-main)
+  > .side-panel::before {
   top: 0;
 }
 
