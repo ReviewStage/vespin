@@ -674,7 +674,47 @@ const GENERATED = [
   "} as const;",
 ];
 
-/** The files the ready pull request changes, as GitHub lists them: a change in place, files added, one deleted, one moved, a picture GitHub sends no patch for, a lockfile, and a long generated table. */
+/**
+ * The invitation flow's tests the ready pull request touches, one line each,
+ * so its Files list runs well past a phone's window, as a real pull
+ * request's 40 files do, and a flow scrolls a row mid-list under the bar's
+ * search field. Note that they stand under `test/`, which the tree lists
+ * after `src/`, so the rows a flow finds at rest keep their places.
+ */
+const TEST_FILES: readonly AgentChangedFile[] = [
+  "accept",
+  "audit-log",
+  "bounce",
+  "cancel",
+  "copy",
+  "decline",
+  "digest",
+  "domain-allowlist",
+  "duplicate",
+  "email-preview",
+  "guest",
+  "join-link",
+  "limits",
+  "locale",
+  "magic-link",
+  "notify-admins",
+  "owner-transfer",
+  "pending-list",
+  "permissions",
+  "rate-limit",
+  "reminder",
+  "revoke",
+  "role-picker",
+  "seat-count",
+  "sso",
+  "team-picker",
+  "templates",
+  "throttle",
+  "token",
+  "webhook",
+].map((name) => changedFile(`test/invites/${name}.test.ts`, {}));
+
+/** The files the ready pull request changes, as GitHub lists them: a change in place, files added, one deleted, one moved, a picture GitHub sends no patch for, a lockfile, a long generated table, and the tests it touches. */
 const READY_FILES: readonly AgentChangedFile[] = [
   changedFile("src/invites/resend.ts", {
     additions: 9,
@@ -745,6 +785,7 @@ const READY_FILES: readonly AgentChangedFile[] = [
     deletions: 0,
     patch: addedPatch(GENERATED),
   }),
+  ...TEST_FILES,
 ];
 
 /**
