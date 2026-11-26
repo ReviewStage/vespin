@@ -1,6 +1,7 @@
 import { RESOLVE } from "@repo/features/inbox-ask-words";
+import type { InboxFields } from "@repo/features/inbox-digest";
 import { type InboxAnyHolder, type InboxListed, isUnread } from "@repo/features/inbox-list-model";
-import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import { INBOX_STATUS } from "@repo/features/inbox-wire";
 import { markedNote } from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { MailIcon, type SelectionGlyphAct, STATUS_TONE } from "@repo/ui";
@@ -66,7 +67,7 @@ export function useInboxSelection({
   /** Sets or clears the reminder of several items; none where the list offers no reminder. */
   onRemindMany?: InboxRemindMany | undefined;
   /** Opens the date picker by the items chosen for a time of the reader's own, handing it to `onAt`. */
-  onPick?: ((items: readonly InboxItem[], onAt: (at: number) => void) => void) | undefined;
+  onPick?: ((items: readonly InboxFields[], onAt: (at: number) => void) => void) | undefined;
 }): InboxSelection {
   const toast = useToast();
   // The items chosen as of the latest draw, which a time picked after the picker opened is set on.

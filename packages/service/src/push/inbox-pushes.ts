@@ -89,6 +89,7 @@ import { turnAsker } from "@repo/database/models/turn-asker";
 import type { SettledAgentTurn } from "@repo/database/models/writer";
 import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
 import { AGENT_KIND } from "@repo/features/agent-wire";
+import { inboxAgentsTurn, inboxRowOf } from "@repo/features/inbox-digest";
 import { PUSH_CATEGORY, PUSH_KIND } from "@repo/features/inbox-push-wire";
 import {
   INBOX_ASK,
@@ -97,7 +98,6 @@ import {
   INBOX_STATUS,
   type InboxItem,
   type InboxMessage,
-  inboxAgentsTurn,
   knownAsk,
   openAskOf,
   recommendedLabels,
@@ -564,7 +564,7 @@ function stillWaitingPost(userId: string, itemId: string) {
 
     if (Option.isNone(stored)) return Option.none<ThreadPushPost>();
     const { item } = stored.value;
-    const asks = openAskOf(item.thread ?? []) !== undefined && !inboxAgentsTurn(item);
+    const asks = openAskOf(item.thread ?? []) !== undefined && !inboxAgentsTurn(inboxRowOf(item));
 
     const waiting =
       item.status === INBOX_STATUS.OPEN &&

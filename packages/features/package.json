@@ -172,6 +172,7 @@
     "./inbox-draft": "./src/inbox-draft.js",
     "./inbox-undelivered": "./src/inbox-undelivered.js",
     "./inbox-list-model": "./src/inbox-list-model.js",
+    "./inbox-digest": "./src/inbox-digest.js",
     "./inbox-widget-model": "./src/inbox-widget-model.js",
     "./inbox-remind-times": "./src/inbox-remind-times.js",
     "./composer-markdown": "./src/composer-markdown.js",

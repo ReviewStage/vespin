@@ -10,7 +10,6 @@ import {
 } from "@repo/features/task-section-wire";
 import { noMatchWords, readingWords } from "@repo/features/words";
 import {
-  AnchoredPopover,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
@@ -18,20 +17,14 @@ import {
   type ButtonVariant,
   CHOICE_BAR_LOOK,
   ChoiceBar,
-  ICON_PICKER_ASIDE,
+  ICON_BUTTON_SIZE,
   IconButton,
   IconPicker,
   IconPickerChoice,
   IconPickerGroup,
   NOTE_LINE_LOOK,
   NoteLine,
-  POPOVER_ALIGN,
-  POPOVER_PANEL_LOOK,
-  POPOVER_WIDTH,
   PopoverIconButton,
-  PopoverPanel,
-  ROVING_ORIENTATION,
-  useRovingKeys,
 } from "@repo/ui";
 import { drawnDark } from "@repo/ui/appearance";
 import { SmilePlusIcon } from "@repo/ui/icons";
@@ -61,16 +54,7 @@ import {
   StarIcon,
   ZapIcon,
 } from "lucide-react";
-import {
-  memo,
-  type RefObject,
-  useCallback,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, type RefObject, useCallback, useId, useMemo, useRef, useState } from "react";
 import { readKept, writeKept } from "../kept-storage.js";
 import { QUERY_ROOT } from "../query-keys.js";
 
@@ -95,8 +79,11 @@ import { QUERY_ROOT } from "../query-keys.js";
  * its color; Emoji offers every emoji by category. A search finds glyphs and
  * emoji alike, each under its kind, and an emoji typed or picked into it
  * (⌃⌘Space) is offered first, so one newer than the grid's still can be
- * chosen. An emoji pressed is chosen at once. A glyph pressed opens its
- * colors under its row, asked every time, as a submenu would: the text's own
+ * chosen. An emoji pressed is chosen at once. A glyph pressed floats its
+ * colors from it, asked every time, as a submenu would, placed by the
+ * window's edges rather than the scrolling grid's (`IconPickerChoice`'s
+ * flyout), so on a phone's narrow window they turn, slide, and stand over
+ * the picker's own choices rather than being cut: the text's own
  * and the palette's, starting on the icon's own color where the glyph is the
  * icon chosen and on the color it was chosen in last where it is a recent
  * one; a color pressed there chooses the glyph in it, so a glyph is
@@ -364,79 +351,28 @@ function textInkLabel(): string {
 }
 
 /**
- * A pressed glyph's colors, hung over the grid from the glyph as a menu
- * is: the glyph drawn in each of them, the text's own first, which the
- * window's theme draws white or black as it draws the text, then the
- * palette's, which answer the theme too. The one it starts on is pressed
- * and takes the focus; the arrows walk them, a press chooses the glyph in
- * that color, and Escape or the focus leaving puts them away, Escape
- * handing the focus back to the glyph.
+ * A pressed glyph's colors, floated from it: the glyph drawn in each of
+ * them, the text's own first, which the window's theme draws white or black
+ * as it draws the text, then the palette's, which answer the theme too. The
+ * one it starts on is pressed and takes the focus as they open; a press
+ * chooses the glyph in that color.
  */
-function GlyphColors({
-  Glyph,
-  label,
-  starts,
-  onColor,
-  onClose,
-}: {
-  Glyph: LucideIcon | undefined;
-  label: string;
-  starts: TaskSectionIconColor | undefined;
-  onColor: (color: TaskSectionIconColor | undefined) => void;
-  onClose: (byKey: boolean) => void;
-}): React.JSX.Element {
-  const start = useRef<HTMLButtonElement | null>(null);
-  const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.BOTH });
-  const holder = useRef<HTMLDivElement | null>(null);
-
-  return (
-    <PopoverPanel
-      open
-      title={`${label} color`}
-      replayUnmasked
-      look={POPOVER_PANEL_LOOK.MENU}
-      initialFocus={start}
-      onDismiss={() => onClose(true)}
-      // Note that a press on the glyph's own cell is no leaving, so its click closes the colors rather than their putting themselves away and the click opening them again: the focus goes to the glyph first where the engine focuses a pressed button, and leaves for nowhere where it does not, as Safari's, while the pointer stands over the cell. A press anywhere else puts them away (`onPressAway`).
-      onLeave={(left) => {
-        const cell = holder.current?.closest(".section-icon-cell");
-
-        const toCell =
-          left instanceof Node ? cell?.contains(left) === true : cell?.matches(":hover") === true;
-
-        if (!toCell) onClose(false);
-      }}
-    >
-      <div
-        ref={(element) => {
-          holder.current = element;
-          roving.ref(element);
-        }}
-        data-roving={roving["data-roving"]}
-        role="toolbar"
-        aria-label={`${label} color`}
-        className={`section-icon-colors ${ICON_PICKER_ASIDE} grid grid-cols-5 gap-tight-gap p-tight-gap`}
-        onKeyDown={roving.onKeyDown}
-        onFocus={roving.onFocus}
-      >
-        {GLYPH_COLORS.map((value) => (
-          <IconButton
-            key={value ?? "text"}
-            ref={value === starts ? start : undefined}
-            icon={
-              Glyph === undefined ? null : (
-                <Glyph data-icon-color={value} className={inkOf(value)} />
-              )
-            }
-            label={value === undefined ? textInkLabel() : COLOR_LABEL[value]}
-            pressed={value === starts}
-            roving
-            onClick={() => onColor(value)}
-          />
-        ))}
-      </div>
-    </PopoverPanel>
-  );
+function glyphColors(
+  Glyph: LucideIcon | undefined,
+  starts: TaskSectionIconColor | undefined,
+  onColor: (color: TaskSectionIconColor | undefined) => void,
+): React.JSX.Element[] {
+  return GLYPH_COLORS.map((value) => (
+    <IconButton
+      key={value ?? "text"}
+      size={ICON_BUTTON_SIZE.PICKER}
+      icon={Glyph === undefined ? null : <Glyph data-icon-color={value} className={inkOf(value)} />}
+      label={value === undefined ? textInkLabel() : COLOR_LABEL[value]}
+      pressed={value === starts}
+      roving
+      onClick={() => onColor(value)}
+    />
+  ));
 }
 
 /** What a panel says in its grid's place while its set loads, failed to, or holds nothing the search found. */
@@ -459,7 +395,7 @@ interface GridProps {
   readonly onIcon: (icon: TaskSectionIcon) => void;
   readonly onOpen: (opened: OpenedGlyph) => void;
   readonly onColor: (color: TaskSectionIconColor | undefined) => void;
-  readonly onCloseColors: (byKey: boolean) => void;
+  readonly onCloseColors: () => void;
 }
 
 /** The color a glyph's strip starts on: the icon's own where the glyph is the icon chosen, else `kept`, the color it was chosen in last. */
@@ -474,11 +410,10 @@ function startingColor(
 }
 
 /**
- * One glyph's cell in `group`, in `color`, whose press opens its colors
- * over the grid, starting on `starts`, while `open`. Note that it is drawn
- * again only where what it shows changed, so opening a glyph's colors draws
- * that one cell and not some two thousand around it, and that the cell
- * stands in a box of its own, which its colors hang from.
+ * One glyph's cell in `group`, in `color`, whose press floats its colors
+ * from it, starting on `starts`, while `open`. Note that it is drawn again
+ * only where what it shows changed, so opening a glyph's colors draws that
+ * one cell and not some two thousand around it.
  */
 const GlyphCell = memo(function GlyphCell({
   Glyph,
@@ -508,45 +443,32 @@ const GlyphCell = memo(function GlyphCell({
   open: boolean;
   onOpen: (opened: OpenedGlyph) => void;
   onColor: (color: TaskSectionIconColor | undefined) => void;
-  onClose: (byKey: boolean) => void;
+  onClose: () => void;
 }): React.JSX.Element {
   return (
-    <span className="section-icon-cell relative grid">
-      <IconPickerChoice
-        label={label}
-        pressed={pressed}
-        stop={stop}
-        face={
-          Glyph === undefined ? null : (
-            <Glyph data-icon-color={color} className={inked ? inkOf(color) : undefined} />
-          )
-        }
-        popup
-        onPress={() => onOpen({ group, glyph, color: starts })}
-      />
-      {open ? (
-        <AnchoredPopover
-          open
-          align={POPOVER_ALIGN.START}
-          width={POPOVER_WIDTH.FIT}
-          onPressAway={() => onClose(false)}
-        >
-          <GlyphColors
-            Glyph={Glyph}
-            label={label}
-            starts={starts}
-            onColor={onColor}
-            onClose={onClose}
-          />
-        </AnchoredPopover>
-      ) : null}
-    </span>
+    <IconPickerChoice
+      label={label}
+      pressed={pressed}
+      stop={stop}
+      face={
+        Glyph === undefined ? null : (
+          <Glyph data-icon-color={color} className={inked ? inkOf(color) : undefined} />
+        )
+      }
+      popup
+      flyout={
+        open
+          ? { label: `${label} color`, content: glyphColors(Glyph, starts, onColor), onClose }
+          : undefined
+      }
+      onPress={() => onOpen({ group, glyph, color: starts })}
+    />
   );
 });
 
 /**
  * A group of glyphs, each in the chosen icon's color where it is that icon
- * and the text's own otherwise, `opened` hanging its colors and `stop` the
+ * and the text's own otherwise, `opened` floating its colors and `stop` the
  * grid's tab stop. Note that it is drawn again only where what it holds
  * changed, so opening a glyph's colors walks the group it stands in and
  * not the other groups' some two thousand cells.
@@ -572,7 +494,7 @@ const GlyphGroup = memo(function GlyphGroup({
   stop: string | undefined;
   onOpen: (opened: OpenedGlyph) => void;
   onColor: (color: TaskSectionIconColor | undefined) => void;
-  onClose: (byKey: boolean) => void;
+  onClose: () => void;
 }): React.JSX.Element {
   return (
     <IconPickerGroup name={name}>
@@ -859,8 +781,6 @@ function SectionIconPicker({
   const [query, setQuery] = useState("");
   const [recent] = useState(readRecent);
   const [opened, setOpened] = useState<OpenedGlyph | undefined>(undefined);
-  const opener = useRef<Element | null>(null);
-  const refocus = useRef(false);
   const panelId = useId();
 
   const tabIds = {
@@ -868,13 +788,6 @@ function SectionIconPicker({
     [ICON_TAB.EMOJI]: useId(),
   } satisfies Record<IconTab, string>;
 
-  // Note that colors Escape put away hand the focus back to the glyph they opened from once they are gone.
-  useLayoutEffect(() => {
-    if (opened !== undefined || !refocus.current) return;
-    refocus.current = false;
-
-    if (opener.current instanceof HTMLElement) opener.current.focus();
-  });
   // Note that the grid's doors read the latest owner and opened glyph through refs, so they stand the same from draw to draw and a press redraws none of the cells it reaches.
   const latest = useRef({ onIcon, opened });
   latest.current = { onIcon, opened };
@@ -886,7 +799,6 @@ function SectionIconPicker({
 
   // A glyph pressed again closes the colors it opened, as a disclosure does.
   const open = useCallback((next: OpenedGlyph) => {
-    opener.current = document.activeElement;
     setOpened((was) => (was?.group === next.group && was.glyph === next.glyph ? undefined : next));
   }, []);
 
@@ -899,10 +811,7 @@ function SectionIconPicker({
     [choose],
   );
 
-  const closeColors = useCallback((byKey: boolean) => {
-    refocus.current = byKey;
-    setOpened(undefined);
-  }, []);
+  const closeColors = useCallback(() => setOpened(undefined), []);
 
   const searching = query.trim() !== "";
 

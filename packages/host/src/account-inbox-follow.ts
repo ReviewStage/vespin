@@ -6,7 +6,6 @@ import {
   accountInboxOfLiveRows,
   nextFailedRunExpiry,
 } from "@repo/features/inbox-live";
-import type { InboxItem } from "@repo/features/inbox-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
 import { Clock, Duration, Effect, Queue, RcMap, type Scope, Stream, SubscriptionRef } from "effect";
 import {
@@ -15,6 +14,7 @@ import {
   INBOX_CHANGE,
   INBOX_ITEM,
   type InboxChange,
+  type PlacedInboxItem,
   settles,
 } from "./inbox-collections.js";
 import { answeredCollection, rowsOf } from "./live-collection.js";
@@ -239,7 +239,7 @@ export function accountInboxes(
         /** Whether the read lists the item `id` names, open. */
         const lists = (id: string) => answered?.items.some((entry) => entry.id === id) === true;
 
-        const writes: HeldRows<InboxItem, InboxChange> = yield* dependencies.pool.stand(
+        const writes: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
           INBOX_ITEM,
           {
             redraw: () => Effect.asVoid(drawn),

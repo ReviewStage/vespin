@@ -5,12 +5,12 @@
    character's body is drawn in, one to each color a face may be. */
 
 :root {
-  --ui-color-manager-face-yellow: light-dark(#f9c74f, #ffd882);
-  --ui-color-manager-face-green: light-dark(#8fd47a, #a6e191);
-  --ui-color-manager-face-blue: light-dark(#6cc4f5, #83d1fb);
-  --ui-color-manager-face-pink: light-dark(#f78fcb, #fda7dc);
-  --ui-color-manager-face-purple: light-dark(#b08cff, #c5a6ff);
-  --ui-color-manager-face-peach: light-dark(#ff9a6c, #ffb08a);
+  --ui-color-manager-face-yellow: light-dark(#e7ce8d, #ffe7a5);
+  --ui-color-manager-face-green: light-dark(#8ac893, #a7e3ad);
+  --ui-color-manager-face-blue: light-dark(#86b9e9, #aad3ff);
+  --ui-color-manager-face-pink: light-dark(#ee8ea0, #ffabbc);
+  --ui-color-manager-face-purple: light-dark(#ce8fdc, #e9abf5);
+  --ui-color-manager-face-peach: light-dark(#eab08a, #ffcba3);
   --ui-color-manager-face-red: light-dark(#f08f89, #ffaba3);
   --ui-color-manager-face-orange: light-dark(#eab08a, #ffcba3);
   --ui-color-manager-face-teal: light-dark(#8ecbd0, #ace5ea);

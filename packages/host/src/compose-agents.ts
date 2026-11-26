@@ -138,9 +138,11 @@ import {
   accountWideReads,
   INBOX_CHANGE,
   INBOX_ITEM,
+  INBOX_SCOPED_ITEM,
   type InboxChange,
   type InboxWritten,
   inboxSent,
+  type PlacedInboxItem,
 } from "./inbox-collections.js";
 import {
   AgentPictureKey,
@@ -335,6 +337,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
   focus: WindowFocus;
   /** The member signed in now, as an answer or a close drawn before the service says how it stands names them; none where nobody is. */
   reader?: () => InboxReader | undefined;
+  /** Whether the platform keeps the Inbox kind on disk (`LocalCopy.keepsCollections`), so a plan's inbox read stands apart from the kept feed it would otherwise be drawn in; none keeps none. */
+  keepsInbox?: boolean;
   /**
    * Waits for a write's transaction to arrive on the task list followed
    * live, which holds every agent's row (`TasksComposer.listed`), so a
@@ -558,6 +562,7 @@ export function composeAgents(
         ),
       accountId: dependencies.accountId,
       pool: dependencies.pool,
+      ...(dependencies.keepsInbox === true ? { kind: INBOX_SCOPED_ITEM } : undefined),
     });
 
     const accounts = yield* accountInboxes({
@@ -1113,7 +1118,7 @@ function composed(
       readonly input: Schema.Codec<Input, unknown>;
       readonly queued: (input: Input) => Answer;
     },
-  ): WriteDeclaration<InboxItem, InboxChange, Input, Answer> => ({
+  ): WriteDeclaration<PlacedInboxItem, InboxChange, Input, Answer> => ({
     kind: INBOX_ITEM,
     keys,
     change,
@@ -1128,7 +1133,12 @@ function composed(
 
   /** A nod or a close that waits, answered as taken over the item as the reads now draw it, or unanswered where none holds it. */
   const settledAs = ({ itemId }: { readonly itemId: string }): AgentInboxAnsweredView => {
-    const item = dependencies.pool.row(INBOX_ITEM, itemId);
+    // Note that a thread a plan's read alone holds stands apart from the kept feed where the platform keeps it, so it is answered as that read draws it.
+    const item =
+      dependencies.pool.row(INBOX_ITEM, itemId) ??
+      (dependencies.keepsInbox === true
+        ? dependencies.pool.row(INBOX_SCOPED_ITEM, itemId)
+        : undefined);
 
     return item === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : { item, taken: true };
   };
