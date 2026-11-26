@@ -1,4 +1,4 @@
-# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
+# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯ and the page listing its repositories, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -61,7 +61,7 @@ env:
 - waitForAnimationToEnd
 - takeScreenshot: managers-chat
 # Its ⋯ offers Settings… in Rename's place: its name and model to change,
-# its checkout and machine standing as it was made.
+# its repositories and machine standing as it was made.
 - tapOn: "More"
 - tapOn: "Settings…"
 - extendedWaitUntil:
@@ -83,6 +83,17 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: managers-settings-face
+# Its Repositories row names its checkout and counts the rest, as the
+# desktop's chip does, and its press lists every one on a page of their own.
+- tapOn: "Repositories"
+- extendedWaitUntil:
+    visible: "ada/ledger"
+    timeout: 10000
+- assertVisible: "ada/relay"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: managers-repositories
+- tapOn: "Back"
 - tapOn: "Cancel"
 # The bar's Overview opens what the Manager is doing: its counts, the two
 # agents it started, and the pull request the invitations agent opened.

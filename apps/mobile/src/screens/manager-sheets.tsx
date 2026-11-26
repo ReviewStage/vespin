@@ -16,7 +16,10 @@ import {
   ManagerFaceRow,
   ManagerFaceSheet,
   MenuPickRow,
+  MenuRow,
   PickRows,
+  PUSH_ROW_GOES,
+  PushRow,
   Screen,
   SettingsForm,
   useAsyncAction,
@@ -27,7 +30,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { useFollowedAgent } from "../agents/use-agent.js";
+import { useAgentRepositories, useFollowedAgent } from "../agents/use-agent.js";
 import { useAgentActions } from "../agents/use-agent-actions.js";
 import { useAgentModelPick } from "../agents/use-agent-model.js";
 import { useCreateManager } from "../agents/use-managers.js";
@@ -62,6 +65,9 @@ const WORDS = {
   FIXED_AFTER_CREATE: "Fixed once the Manager is made.",
   NO_REPOSITORIES: "This workspace reaches no repositories yet.",
 } as const;
+
+/** The page a Manager's repositories are listed on, pushed in its Settings sheet. */
+const REPOSITORIES_ROUTE = "/manager-settings/repositories";
 
 /** What a flow finds the name field by. */
 const NAME_FIELD_ID = "manager-name";
@@ -113,6 +119,52 @@ function SheetBar({
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
     </>
+  );
+}
+
+/** The bar of a page pushed in the sheet: its title, the system's back chevron leading it, on the sheet's ground. */
+function PushedBar({ title }: { readonly title: string }) {
+  const colors = useColors();
+
+  return (
+    <Stack.Screen
+      options={{
+        headerShown: true,
+        title,
+        headerTintColor: colors.TEXT,
+        headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+        headerShadowVisible: false,
+        contentStyle: { backgroundColor: colors.GROUPED },
+      }}
+    />
+  );
+}
+
+/**
+ * The Settings sheet's Repositories row, as the desktop's chip names them: the
+ * one it works in, or "—" for none; or, for several, its checkout with the
+ * rest counted after it ("acme/relay +2"), a press pushing the page that
+ * lists them all (`ManagerRepositoriesScreen`).
+ */
+function RepositoriesRow({
+  agentId,
+  repositories,
+}: {
+  readonly agentId: string;
+  readonly repositories: readonly string[];
+}) {
+  const router = useRouter();
+  const [checkout, ...rest] = repositories;
+
+  if (rest.length === 0) return <ValueRow label={WORDS.REPOSITORIES} value={checkout ?? "—"} />;
+
+  return (
+    <PushRow
+      label={WORDS.REPOSITORIES}
+      detail={`${checkout} +${rest.length}`}
+      goes={PUSH_ROW_GOES.PAGE}
+      onPress={() => router.push({ pathname: REPOSITORIES_ROUTE, params: { agent: agentId } })}
+    />
   );
 }
 
@@ -309,9 +361,10 @@ export function NewManagerScreen() {
  * chat, as the desktop's Settings… opens the same card in its edit look:
  * its name, saved on Done where it changed (the agent's Rename); its model
  * and effort, each changed at once as picked, as the agent's model sheet
- * changes them, a refusal saying why under them; and its checkout and where
- * it runs, standing as it was made and saying so, since neither changes
- * after. Its face, picked from the same faces the desktop's card offers,
+ * changes them, a refusal saying why under them; and its repositories and
+ * where it runs, standing as it was made and saying so, since neither
+ * changes after, several repositories named by the checkout and a count
+ * whose press lists them all. Its face, picked from the same faces the desktop's card offers,
  * changes at once as picked (`AGENTS_FACE`), as its model does, the ring
  * moving once the change lands and a refusal saying why under it.
  */
@@ -319,6 +372,7 @@ export function ManagerSettingsScreen() {
   const { agent: agentId = "" } = useLocalSearchParams<{ agent: string }>();
   const leave = useCloseSheet();
   const agent = useFollowedAgent(agentId);
+  const repositories = useAgentRepositories(agentId, agent?.repository);
   const actions = useAgentActions(agentId, undefined);
   const model = useAgentModelPick(agentId);
   const [name, setName] = useState<string | undefined>(undefined);
@@ -374,7 +428,7 @@ export function ManagerSettingsScreen() {
                 />
               </ListSection>
               <ListSection footer={WORDS.FIXED_AFTER_CREATE}>
-                <ValueRow label={WORDS.REPOSITORIES} value={agent.repository ?? "—"} />
+                <RepositoriesRow agentId={agentId} repositories={repositories} />
                 <ValueRow label={WORDS.MACHINE} value={agentRunsOnWords(agent)} />
               </ListSection>
             </>
@@ -387,6 +441,33 @@ export function ManagerSettingsScreen() {
         onDismiss={() => setFacePicking(false)}
         onPick={actions.changeFace}
       />
+    </>
+  );
+}
+
+/**
+ * Every repository a Manager works in, named by the route's `agent`, on a page
+ * pushed in its Settings sheet, its checkout first, one to a row, as the
+ * desktop's chip lists them on its card; the page scrolls as a form does, and
+ * says under them that they stand as the Manager was made.
+ */
+export function ManagerRepositoriesScreen() {
+  const { agent: agentId = "" } = useLocalSearchParams<{ agent: string }>();
+  const agent = useFollowedAgent(agentId);
+  const repositories = useAgentRepositories(agentId, agent?.repository);
+
+  return (
+    <>
+      <PushedBar title={WORDS.REPOSITORIES} />
+      <Screen>
+        <SettingsForm>
+          <ListSection footer={WORDS.FIXED_AFTER_CREATE}>
+            {repositories.map((repository) => (
+              <MenuRow key={repository} label={repository} symbol={GLYPH.REPOSITORY} acts={[]} />
+            ))}
+          </ListSection>
+        </SettingsForm>
+      </Screen>
     </>
   );
 }

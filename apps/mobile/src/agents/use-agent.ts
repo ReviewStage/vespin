@@ -173,6 +173,37 @@ export function useShownAgent(agentId: string): FollowedAgent | undefined {
   return listed ?? page;
 }
 
+/** Every repository an answer to the agent's own read names, its checkout first; none where it could not be read. */
+function repositoriesOfAnswer(answer: AgentPageAnswerView): readonly string[] | undefined {
+  if ("failure" in answer) return undefined;
+  const { repositories, repository } = answer.agent;
+
+  // Note that a service from before the read named them all names the checkout alone.
+  return repositories ?? (repository === null ? [] : [repository]);
+}
+
+/**
+ * Every repository the agent works in, its checkout first, as its own read
+ * names them, as the panel's Manager settings read them; `checkout` alone,
+ * the one the list holds, until that read answers or where it failed, and
+ * none for an agent with none.
+ */
+export function useAgentRepositories(
+  agentId: string,
+  checkout: string | null | undefined,
+): readonly string[] {
+  const acts = useHostActs();
+  const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
+
+  const named = useQuery({
+    ...agentPageQuery(acts, accountId ?? "", agentId),
+    enabled: agentId !== "" && accountId !== undefined,
+    select: repositoriesOfAnswer,
+  }).data;
+
+  return useMemo(() => named ?? (checkout == null ? [] : [checkout]), [named, checkout]);
+}
+
 /** Reads one agent afresh by its id, whether the list holds it or not; none where it could not be read. */
 export function useReadAgent(): (agentId: string) => Promise<ListedAgent | undefined> {
   const acts = useHostActs();
