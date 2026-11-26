@@ -1,23 +1,27 @@
-// icon-picker.tsx -- the app's one icon picker on iOS, as the panel's `IconPicker` is the desktop's: a sheet with a search over named groups of choices, each a picture or an emoji in a grid, the ones chosen ringed in copper.
+// icon-picker.tsx -- the app's one icon picker on iOS, as the panel's `IconPicker` is the desktop's: a sheet with a search over named groups of choices, each a picture or an emoji in a grid, the ones chosen ringed in copper, a bar of the groups across its top and the name of the group in view standing at the grid's top.
 
 import {
   BottomSheet,
+  Divider,
   Group,
   Host,
   HStack,
   Image,
   LazyVStack,
   NavigationStack,
+  Rectangle,
   ScrollView,
   Spacer,
   Button as SwiftUIButton,
   Toolbar,
   ToolbarItem,
   useNativeState,
+  VStack,
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
+  accessibilityHidden,
   accessibilityLabel,
   background,
   buttonStyle,
@@ -31,12 +35,16 @@ import {
   presentationDetents,
   presentationDragIndicator,
   resizable,
+  scrollPosition,
+  scrollTargetLayout,
   searchable,
   strokeBorder,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
+import type { Glyph } from "./glyph.js";
+import { GlyphImage } from "./glyph-label.js";
 import { Text } from "./text.js";
 import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -58,6 +66,15 @@ const EMOJI_SHARE = 0.85;
 /** What the sheet's bar names its act. */
 const DONE = "Done";
 
+/** A group's picture or emoji in the bar of groups, in points at the default text size, a step smaller than a choice's. */
+const BAR_PICTURE_SIDE = 24;
+
+/** The rule under the group in view in the bar of groups, in points. */
+const BAR_RULE_HEIGHT = 2;
+
+/** Clear, a ring's or a rule's ink where it stands for nothing, which keeps its room so nothing shifts. */
+const CLEAR = "#00000000";
+
 /** How many rows past those on screen the grid keeps built on each side, so a fling lands on drawn choices. */
 const OVERSCAN_ROWS = 12;
 
@@ -74,11 +91,12 @@ type IconPickerChoice = {
   readonly picked: boolean;
 } & ({ readonly picture: string } | { readonly emoji: string });
 
-/** A named group of the picker's choices, such as a character's faces. */
+/** A named group of the picker's choices, such as a character's faces, and the glyph the bar of groups draws it by, such as an emoji category's; its first choice where it has none. */
 type IconPickerGroup = {
   readonly key: string;
   readonly name: string;
   readonly choices: readonly IconPickerChoice[];
+  readonly glyph?: Glyph | undefined;
 };
 
 type IconPickerSheetProps = {
@@ -123,7 +141,7 @@ function Choice({
           frame({ width: ringed, height: ringed }),
           // Note that every choice keeps its ring's room, clear where it is not chosen, so a pick never shifts the grid.
           strokeBorder({
-            content: choice.picked ? colors.ACCENT : "#00000000",
+            content: choice.picked ? colors.ACCENT : CLEAR,
             // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
             shape: "circle",
             style: { lineWidth: RING_WIDTH },
@@ -161,6 +179,141 @@ function gridRows(groups: readonly IconPickerGroup[]): readonly GridRow[] {
   ]);
 }
 
+/** A group's name as a list's section header stands, over its choices in the grid, and standing at the grid's top while they scroll under it (`NameBand`). */
+function GroupName({ name }: { readonly name: string }) {
+  const colors = useColors();
+
+  return (
+    <HStack modifiers={[padding({ top: SPACE.EDGE, bottom: SPACE.TIGHT })]}>
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "semibold" }),
+          foregroundStyle(colors.TEXT_MUTED),
+          accessibilityAddTraits(["isHeader"]),
+        ]}
+      >
+        {name}
+      </Text>
+      <Spacer />
+    </HStack>
+  );
+}
+
+/**
+ * The name of the group in view, standing over the grid's top on the
+ * sheet's own ground while its choices scroll under it, as Slack's emoji
+ * picker's headers stick. Note that it is drawn over the grid rather than
+ * pinned in it, because a recycled row cannot be a section's pinned header;
+ * it stands where the group's own name row stands at the top, so the two
+ * meet as one, and a reader hears the row's name alone.
+ */
+function NameBand({ name }: { readonly name: string }) {
+  const colors = useColors();
+
+  return (
+    <VStack
+      modifiers={[
+        padding({ horizontal: SPACE.PAGE }),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        background(colors.GROUPED),
+        accessibilityHidden(true),
+      ]}
+    >
+      <GroupName name={name} />
+    </VStack>
+  );
+}
+
+/** What a group's tab in the bar of groups wears: its glyph, else its first choice's picture or emoji, a step smaller than a choice. */
+function GroupMark({ group }: { readonly group: IconPickerGroup }) {
+  const colors = useColors();
+  const side = useScaledSize(BAR_PICTURE_SIDE);
+  const first = group.choices[0];
+
+  if (group.glyph !== undefined)
+    return <GlyphImage glyph={group.glyph} color={colors.TEXT_MUTED} />;
+
+  if (first === undefined) return null;
+
+  if ("picture" in first)
+    return (
+      <Image
+        assetName={first.picture}
+        modifiers={[resizable(), frame({ width: side, height: side })]}
+      />
+    );
+
+  return <Text modifiers={[font({ size: side * EMOJI_SHARE })]}>{first.emoji}</Text>;
+}
+
+/**
+ * The bar of groups across the sheet's top, as the panel's emoji picker's
+ * category bar: each group's mark, a press scrolling the grid to the
+ * group's name, the group in view ruled under in the ink and heard as
+ * selected.
+ */
+function GroupBar({
+  groups,
+  inView,
+  onJump,
+}: {
+  readonly groups: readonly IconPickerGroup[];
+  readonly inView: string | undefined;
+  readonly onJump: (group: string) => void;
+}) {
+  const colors = useColors();
+
+  return (
+    <HStack
+      spacing={0}
+      modifiers={[
+        padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT }),
+        accessibilityAddTraits(["isTabBar"]),
+      ]}
+    >
+      {groups.map((group) => {
+        const current = group.key === inView;
+
+        return (
+          <SwiftUIButton
+            key={group.key}
+            onPress={() => onJump(group.key)}
+            modifiers={[
+              buttonStyle("plain"),
+              accessibilityLabel(group.name),
+              ...(current ? [accessibilityAddTraits(["isSelected"])] : []),
+            ]}
+          >
+            <VStack
+              spacing={SPACE.TIGHT}
+              modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY })]}
+            >
+              <GroupMark group={group} />
+              <Rectangle
+                modifiers={[
+                  frame({ height: BAR_RULE_HEIGHT }),
+                  foregroundStyle(current ? colors.TEXT : CLEAR),
+                ]}
+              />
+            </VStack>
+          </SwiftUIButton>
+        );
+      })}
+    </HStack>
+  );
+}
+
+/** Each group's name row's key in the grid, by the group's key, which the bar of groups scrolls to. */
+function nameRows(rows: readonly GridRow[]): ReadonlyMap<string, string> {
+  const places = new Map<string, string>();
+
+  rows.forEach((row, at) => {
+    if (row.kind === GRID_ROW.NAME) places.set(row.group, gridRowKey(row, at));
+  });
+
+  return places;
+}
+
 /** One row of the grid as it is drawn: a group's name as a list's section header stands, or its choices from the row's leading edge, so the columns line up down the group. */
 function GridRowView({
   row,
@@ -169,22 +322,7 @@ function GridRowView({
   readonly row: GridRow;
   readonly onPick: (key: string) => void;
 }) {
-  const colors = useColors();
-
-  if (row.kind === GRID_ROW.NAME)
-    return (
-      <HStack modifiers={[padding({ top: SPACE.EDGE, bottom: SPACE.TIGHT })]}>
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "semibold" }),
-            foregroundStyle(colors.TEXT_MUTED),
-          ]}
-        >
-          {row.name}
-        </Text>
-        <Spacer />
-      </HStack>
-    );
+  if (row.kind === GRID_ROW.NAME) return <GroupName name={row.name} />;
 
   return (
     <HStack spacing={SPACE.ROW}>
@@ -201,13 +339,41 @@ function gridRowKey(_row: GridRow, at: number): string {
   return String(at);
 }
 
-/** The picker's page: its search in the bar's drawer, its groups under their names in one lazy stack of recycled rows, and Done. */
+/**
+ * The picker's page: its search in the bar's drawer, the bar of groups
+ * while nothing is searched and it offers more than one, its groups under
+ * their names in one lazy stack of recycled rows, the name of the group in
+ * view standing at the top (`NameBand`), and Done. The group in view is the
+ * one whose row leads the grid, as the scroll view reports it
+ * (`scrollPosition`, by the rows' keys), the first until it reports one;
+ * a press in the bar scrolls its group's name row there.
+ */
 function IconPickerPage(props: IconPickerSheetProps) {
   const colors = useColors();
   const query = useNativeState("");
-  const { groups, onPick } = props;
+  const position = useNativeState<string | null>(null);
+  const [leading, setLeading] = useState<string | undefined>(undefined);
+  const [searching, setSearching] = useState(false);
+  const { groups, onPick, onQuery } = props;
   const rows = useMemo(() => gridRows(groups), [groups]);
+  const names = useMemo(() => nameRows(rows), [rows]);
   const rowSide = useScaledSize(CHOICE_SIDE) + 2 * (RING_GAP + RING_WIDTH);
+  const leadRow = leading === undefined ? undefined : rows[Number(leading)];
+  const inView = groups.find((group) => group.key === (leadRow?.group ?? groups[0]?.key));
+
+  const jump = (group: string) => {
+    const key = names.get(group);
+
+    if (key === undefined) return;
+    position.value = key;
+    setLeading(key);
+  };
+
+  const search = (words: string) => {
+    setSearching(words.trim() !== "");
+    setLeading(undefined);
+    onQuery(words);
+  };
 
   const drawRow = useCallback(
     ({ item }: { readonly item: GridRow }) => <GridRowView row={item} onPick={onPick} />,
@@ -217,7 +383,8 @@ function IconPickerPage(props: IconPickerSheetProps) {
   return (
     <NavigationStack modifiers={[tint(colors.TEXT)]}>
       <Toolbar>
-        <ScrollView
+        <VStack
+          spacing={0}
           modifiers={[
             background(colors.GROUPED),
             navigationTitle(props.title),
@@ -225,31 +392,54 @@ function IconPickerPage(props: IconPickerSheetProps) {
             searchable(query, {
               placement: "navigationBarDrawer",
               prompt: props.searchPrompt,
-              onChange: props.onQuery,
+              onChange: search,
             }),
           ]}
         >
-          <LazyVStack
-            alignment="leading"
-            spacing={SPACE.TIGHT}
-            modifiers={[padding({ horizontal: SPACE.PAGE, bottom: SPACE.PAGE })]}
-          >
-            {props.groups.length === 0 ? (
-              <Text modifiers={[foregroundStyle(colors.TEXT_MUTED), padding({ top: SPACE.EDGE })]}>
-                {props.empty}
-              </Text>
-            ) : (
-              <LazyVStack.ForEach
-                data={rows}
-                keyExtractor={gridRowKey}
-                overscanCount={OVERSCAN_ROWS}
-                estimatedItemSize={rowSide}
+          {groups.length > 1 && !searching ? (
+            <>
+              <GroupBar groups={groups} inView={inView?.key} onJump={jump} />
+              <Divider />
+            </>
+          ) : null}
+          <ZStack alignment="top">
+            <ScrollView
+              modifiers={[
+                scrollPosition(position, {
+                  anchor: "top",
+                  onChange: (key) => setLeading(key ?? undefined),
+                }),
+              ]}
+            >
+              <LazyVStack
+                alignment="leading"
+                spacing={SPACE.TIGHT}
+                modifiers={[
+                  padding({ horizontal: SPACE.PAGE, bottom: SPACE.PAGE }),
+                  scrollTargetLayout(),
+                ]}
               >
-                {drawRow}
-              </LazyVStack.ForEach>
-            )}
-          </LazyVStack>
-        </ScrollView>
+                {props.groups.length === 0 ? (
+                  <Text
+                    modifiers={[foregroundStyle(colors.TEXT_MUTED), padding({ top: SPACE.EDGE })]}
+                  >
+                    {props.empty}
+                  </Text>
+                ) : (
+                  <LazyVStack.ForEach
+                    data={rows}
+                    keyExtractor={gridRowKey}
+                    overscanCount={OVERSCAN_ROWS}
+                    estimatedItemSize={rowSide}
+                  >
+                    {drawRow}
+                  </LazyVStack.ForEach>
+                )}
+              </LazyVStack>
+            </ScrollView>
+            {inView === undefined ? null : <NameBand name={inView.name} />}
+          </ZStack>
+        </VStack>
         <Toolbar.Content>
           <ToolbarItem placement="confirmationAction">
             <SwiftUIButton label={DONE} onPress={props.onDismiss} />
@@ -268,7 +458,12 @@ function IconPickerPage(props: IconPickerSheetProps) {
  * a grid six wide of pictures or emoji, the ones chosen ringed in copper,
  * as a picked option is. Its rows stand in one lazy stack that builds only
  * those near the screen and reuses them as it scrolls
- * (`LazyVStack.ForEach`), so a picker of every emoji lists them all. The caller narrows its groups by the search's words
+ * (`LazyVStack.ForEach`), so a picker of every emoji lists them all. Where
+ * it offers more than one group and nothing is searched, a bar of them
+ * stands across its top, as the panel's category bar does, each group's
+ * glyph or first choice scrolling to it, the group in view ruled under; and
+ * the name of the group in view stands at the grid's top while its choices
+ * scroll under it. The caller narrows its groups by the search's words
  * (`onQuery`), so a search finds what the panel's would; a press hands on
  * the choice's key and the caller decides whether the sheet goes. It stands
  * on the lifted ground in a host of its own beside its screen, as every

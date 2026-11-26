@@ -216,6 +216,16 @@ export const GLYPH = {
   UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),
   /** A webhook, what fires an automation called at its address, the panel's Lucide Webhook, among every glyph the catalog holds. */
   WEBHOOK: catalogLucide("Webhook"),
+  // An emoji picker's bar of categories, the panel's own glyphs for them (`@repo/ui`'s `GLYPH.EMOJI_*`): the owner's own group leading it, as a reaction's quick ones, then each of Slack's categories (`EMOJI_CATEGORY`), among every glyph the catalog holds.
+  EMOJI_LEAD: catalogLucide("ClockFading"),
+  EMOJI_SMILEYS_PEOPLE: catalogLucide("FaceSlightlySmiling"),
+  EMOJI_NATURE: catalogLucide("Leaf"),
+  EMOJI_FOOD: catalogLucide("Coffee"),
+  EMOJI_TRAVEL: catalogLucide("CarFront"),
+  EMOJI_ACTIVITIES: catalogLucide("Volleyball"),
+  EMOJI_OBJECTS: catalogLucide("Lamp"),
+  EMOJI_SYMBOLS: lucide(LUCIDE_SYMBOL.HEART),
+  EMOJI_FLAGS: lucide(LUCIDE_SYMBOL.FLAG),
   /** Open, which brings a row's lifted preview up to its whole page in the app; the arrow out is kept for what leaves it. */
   OPEN: lucide(LUCIDE_SYMBOL.MAXIMIZE_2),
   OPEN_EXTERNALLY: lucide(LUCIDE_SYMBOL.EXTERNAL_LINK),

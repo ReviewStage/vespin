@@ -2,6 +2,8 @@
 
 import { EMOJI_DATA } from "@repo/features/emoji-data";
 import {
+  EMOJI_CATEGORY,
+  type EmojiCategory,
   type EmojiChoice,
   type EmojiGroup,
   emojiGroups,
@@ -10,6 +12,7 @@ import {
 import { slackEmojiIndex } from "@repo/features/slack-emoji";
 import { SLACK_EMOJI_NAMES } from "@repo/features/slack-emoji-names";
 import { useMemo, useState } from "react";
+import { GLYPH, type Glyph } from "./glyph.js";
 import { IconPickerSheet } from "./icon-picker.js";
 
 /** What the sheet's search asks for and says where it finds nothing, as the panel's picker words them. */
@@ -44,6 +47,23 @@ export function emojiIndex(): ReturnType<typeof slackEmojiIndex> {
 /** An emoji without its variation selectors, as two spellings of one emoji are matched. */
 function bareEmoji(emoji: string): string {
   return emoji.replace(VARIATION_SELECTOR, "");
+}
+
+/** The glyph each category wears in the sheet's bar of groups, as the panel's category bar draws it. */
+const CATEGORY_GLYPH = {
+  [EMOJI_CATEGORY.SMILEYS_PEOPLE]: GLYPH.EMOJI_SMILEYS_PEOPLE,
+  [EMOJI_CATEGORY.NATURE]: GLYPH.EMOJI_NATURE,
+  [EMOJI_CATEGORY.FOOD]: GLYPH.EMOJI_FOOD,
+  [EMOJI_CATEGORY.TRAVEL]: GLYPH.EMOJI_TRAVEL,
+  [EMOJI_CATEGORY.ACTIVITIES]: GLYPH.EMOJI_ACTIVITIES,
+  [EMOJI_CATEGORY.OBJECTS]: GLYPH.EMOJI_OBJECTS,
+  [EMOJI_CATEGORY.SYMBOLS]: GLYPH.EMOJI_SYMBOLS,
+  [EMOJI_CATEGORY.FLAGS]: GLYPH.EMOJI_FLAGS,
+} as const satisfies Record<EmojiCategory, Glyph>;
+
+/** The glyph a group wears in the bar: its category's, or the lead's, an owner's own group standing under none. */
+function groupGlyph(group: EmojiGroup): Glyph {
+  return group.category === undefined ? GLYPH.EMOJI_LEAD : CATEGORY_GLYPH[group.category];
 }
 
 /** The emoji `query` is, as the table lists it, where it is one emoji of the table, as a keyboard's emoji key types one; none otherwise. */
@@ -122,6 +142,7 @@ export function IconPickerEmojiSheet({
       groups={listed.map((group) => ({
         key: group.name,
         name: group.name,
+        glyph: groupGlyph(group),
         choices: group.emojis.map((one) => ({
           key: one.emoji,
           label: one.name,
