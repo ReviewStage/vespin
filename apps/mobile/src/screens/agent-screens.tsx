@@ -620,7 +620,11 @@ function AgentComposerArea({
  */
 function agentAddMenu(composer: AgentComposer, submenus: readonly BarMenu[]): ComposerMenu {
   return {
-    actions: [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
+    // Note that Photos steps aside while the field holds a Manager chat message's words to save, which takes no file.
+    actions:
+      composer.attach === undefined
+        ? []
+        : [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
     submenus,
   };
 }
@@ -1203,12 +1207,9 @@ const AgentConversation = memo(function AgentConversation({
   const talk = useAgentTalk(id, taskId);
   const otherCall = useStandingCallCard(id);
 
-  // Each chat message by its row, to the line it went as, which its Edit rewinds to; null for the Manager's own, which went as none.
-  const chatLines = useMemo(
-    () =>
-      chat
-        ? new Map((chatPage?.messages ?? []).map((message) => [message.id, message.lineId]))
-        : undefined,
+  // Note that only a message the chat holds is edited in place, never one still on its way or refused, which goes by its send's key.
+  const chatMessages = useMemo(
+    () => (chat ? new Set((chatPage?.messages ?? []).map((message) => message.id)) : undefined),
     [chat, chatPage?.messages],
   );
 
@@ -1219,7 +1220,7 @@ const AgentConversation = memo(function AgentConversation({
     readerId,
     composer,
     calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
-    chatLines,
+    chatMessages,
     markUnread: chatMark.markUnread,
   });
 

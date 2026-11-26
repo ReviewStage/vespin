@@ -1900,6 +1900,24 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue
   user-select: text;
 }
 
+/* A box that writes words again where they stand (`AgentComposer`'s
+   `inPlace`, a Manager chat message's edit) takes no dock's room. Its field
+   sits a step in from the card's edge, not a box's full inset, and the card
+   overhangs the words by that edge and that step on the start, the top, and
+   the end, so the words open at the very place, line, and width they stood
+   at, as a row's editor overhangs its glyph by a step (#11095). The step
+   is small enough that the card stays clear of the row above it in a
+   sender's run. */
+.agent-composer-in-place {
+  margin-block-start: calc(-1 * (var(--ui-space-4) + 1px));
+  margin-inline: calc(-1 * (var(--ui-space-6) + 1px));
+}
+
+.agent-composer-in-place .agent-composer-input {
+  padding-block-start: var(--ui-space-4);
+  padding-inline: var(--ui-space-6);
+}
+
 .agent-composer-input[aria-disabled="true"] {
   opacity: 0.6;
 }
@@ -1966,7 +1984,8 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue
   container: composer / inline-size;
 }
 
-.agent-composer > .message-box {
+.agent-composer > .message-box,
+.agent-composer-in-place > .message-box {
   container-name: composer ui-room;
 }
 

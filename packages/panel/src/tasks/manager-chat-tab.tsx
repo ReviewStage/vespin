@@ -28,13 +28,17 @@
  * after the reader's mark, where the chat stood unread as the page opened
  * or where the reader marked one of its messages unread, stands under New
  * (`manager-chat-looks.ts`).
+ * The reader's own message offers Edit, which writes its words again where
+ * it stands, as a channel's edit does, marking it edited and telling the
+ * Manager, and never takes the Manager back (`manager-chat-edit.tsx`). No
+ * message of the chat offers Rewind conversation to here, as a channel takes
+ * nothing back; the rewind itself stays the agent tab's (`rewind-action.tsx`).
  */
 
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { endLineReason } from "@repo/features/agent-continue-model";
 import { computerAppsOf } from "@repo/features/agent-parts";
 import type { ShownPicture } from "@repo/features/agent-pictures-model";
-import { REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
 import type {
   AgentChatSendParams,
   ManagerChatSending,
@@ -63,7 +67,6 @@ import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MessageFileChip } from "@repo/features/message-files";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
 import {
   ChannelMessage,
   EmptyState,
@@ -97,7 +100,6 @@ import { managerChatQuery, managerChatRetryMutation } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { keepPictureRead } from "../picture-query.js";
 import { useToast } from "../toast.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import {
   ApprovalsProvider,
@@ -133,7 +135,12 @@ import { TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { useChatMessageMenu } from "./chat-message-menu.js";
 import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
 import { CopyMessageAction } from "./copy-message.js";
-import { EditComposer } from "./edit-composer.js";
+import {
+  type ChatEdit,
+  ChatEditField,
+  EditChatMessageAction,
+  useChatEdit,
+} from "./manager-chat-edit.js";
 import { useManagerChatLooks } from "./manager-chat-looks.js";
 import {
   type ChatReact,
@@ -149,7 +156,6 @@ import {
 } from "./manager-chat-threads.js";
 import { CHAT_MESSAGE_GONE, useMessageReveal } from "./message-links.js";
 import { useMoveToCloud } from "./move-agent.js";
-import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { SentMessage } from "./skill-chip.js";
 import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
 import { TranscriptWords } from "./transcript-blocks.js";
@@ -186,6 +192,8 @@ interface ChatDoors {
   readonly thread?: ChatThreadDoors | undefined;
   /** Gives a message the reader's 👍 or 👎, or takes it off. */
   readonly react: ChatReact;
+  /** The reader's edit of their own messages: which stands open, and its presses. */
+  readonly edit: ChatEdit;
   /** Moves the reader's mark of the chat back to just before one of its messages, which its menu's Mark as unread presses; none in a thread's tab. */
   readonly markUnread?: ((message: ManagerChatLiveMessage) => void) | undefined;
 }
@@ -375,9 +383,8 @@ function ManagerMessage({
           ) : (
             <CopyMessageAction
               words={message.text}
-              // Note that a turn's journal stands under the turn's own id, which Rewind conversation to here names it by.
+              // Note that a turn's journal stands under the turn's own id, which its Copy link names it by; a Manager's chat offers no rewind, as a channel takes nothing back.
               messageId={place.closes && message.turnId !== null ? message.turnId : undefined}
-              rewind={place.closes && message.turnId !== null ? REWIND_ACTION.REVERT : undefined}
               lead={
                 <>
                   {reactions}
@@ -421,7 +428,9 @@ function ManagerMessage({
  * does wherever the window names them (`ActorRef`), its files over the words, Reply in thread and
  * Copy beside it and in its menu, as every message of the chat offers them, Mark as unread in
  * its menu where the chat offers it, and when it
- * was sent under the run's last.
+ * was sent under the run's last. The reader's own offers Edit beside them,
+ * which opens its words in a box where they stand; one edited says so after
+ * its words.
  */
 function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoors }): ReactNode {
   const { message, place } = line;
@@ -436,16 +445,40 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   const files = fileChipsOf(message, NONE_SHOWN);
   const lineId = own ? (message.lineId ?? undefined) : undefined;
   const ownLine = lineId === undefined ? undefined : doors.lines.get(lineId);
-  const editor = useMessageEdit(lineId ?? "");
   const thread = threadOf(message, doors);
   const link = chatMessagePlace(doors, message.id);
   const { markUnread } = doors;
   const onMarkUnread = markUnread === undefined ? undefined : () => markUnread(message);
   const menu = useChatMessageMenu(message.text, thread.onOpen, undefined, link, onMarkUnread);
   const reactions = <ReactMessageActions message={message} react={doors.react} />;
+  const { edit } = doors;
 
-  if (ownLine !== undefined && editor !== undefined) {
-    return <EditComposer message={ownLine} words={message.text} edit={editor} />;
+  const editAction = own ? <EditChatMessageAction onEdit={() => edit.onOpen(message.id)} /> : null;
+
+  // Note that the message open for writing again stands in its own row under its sender, its files over the box as over its words, since an edit writes its words alone.
+  if (own && edit.editing === message.id) {
+    return (
+      <SentMessage files={files} words={message.text}>
+        {(body) => (
+          <ChannelMessage
+            messageId={message.id}
+            avatar={<ActorRef actor={sender} size={ACTOR_SIZE.CARD} faceOnly />}
+            name={<ActorRef actor={sender} nameOnly byName />}
+            at={sentTime(message.createdAt)}
+            continues={!place.opens}
+          >
+            {body.files}
+            <ChatEditField
+              messageId={message.id}
+              words={message.text}
+              box={edit.box}
+              onSave={(text) => edit.onSave(message.id, text, message.text)}
+              onCancel={edit.onClose}
+            />
+          </ChannelMessage>
+        )}
+      </SentMessage>
+    );
   }
 
   return (
@@ -460,22 +493,24 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
             continues={!place.opens}
             open={thread.open}
             contextMenu={menu.contextMenu}
+            edited={message.editedAt !== null}
             actions={
-              // Note that a message of files alone has no words to copy, so it offers its reactions and its thread alone.
+              // Note that a message of files alone has no words to copy, so it offers its reactions, its thread, and its Edit alone.
               message.text === "" ? (
                 <>
                   {reactions}
                   {thread.action}
+                  {editAction}
                 </>
               ) : (
                 <CopyMessageAction
                   words={message.text}
                   messageId={ownLine === undefined ? undefined : lineId}
-                  rewind={ownLine === undefined ? undefined : REWIND_ACTION.EDIT}
                   lead={
                     <>
                       {reactions}
                       {thread.action}
+                      {editAction}
                     </>
                   }
                 />
@@ -859,16 +894,8 @@ function useManagerChatBox({
   };
 
   // Note that a message to the chat answers as a message to the agent does, with the id the chat holds it under beside it, which the host draws it by.
-  const send: MessageSender = useApprovingSend(async (agentId, message) => {
+  const send: MessageSender = useApprovingSend((agentId, message) => {
     keepFiles(message.clientKey, message);
-
-    // Note that an edit takes the Manager back to just before its line first, which drops the line's row from the chat, and then sends its words to the chat as a message of its own.
-    if (message.rewinds !== undefined) {
-      const { messageId, restoreFiles } = message.rewinds;
-      const rewound = await control.onRewind(agentId, messageId, restoreFiles);
-
-      if ("failure" in rewound) return rewound;
-    }
 
     return sendChat({
       agentId,
@@ -908,8 +935,6 @@ function useManagerChatBox({
     running: agent.status === AGENT_STATUS.RUNNING,
     send,
     unsend,
-    // Note that a line is written again only where it stands in the chat itself, so a thread's box takes the Manager back nowhere.
-    rewind: thread === undefined ? control.onRewind : undefined,
     starter,
     shown,
   });
@@ -966,10 +991,18 @@ function useManagerChatBox({
 
   const react = useChatReact(agent.id);
 
+  // Note that the edit box reads what the chat's own box reads, so it offers the same lists and dictation.
+  const editBox = useMemo(
+    () => ({ agentId: agent.id, keywords: control.keywords, skills: control.readSkills }),
+    [agent.id, control.keywords, control.readSkills],
+  );
+
+  const edit = useChatEdit(editBox);
+
   // Note that these doors open no thread; the chat's own rows add theirs.
   const doors: ChatDoors = useMemo(
-    () => ({ agentId: agent.id, manager, readerId: control.me, delegation, lines, react }),
-    [agent.id, manager, control.me, delegation, lines, react],
+    () => ({ agentId: agent.id, manager, readerId: control.me, delegation, lines, react, edit }),
+    [agent.id, manager, control.me, delegation, lines, react, edit],
   );
 
   /** The rows of one turn's work, by the transcript line that opened it, which Show work opens under the Manager's first message of the turn. */
@@ -1078,44 +1111,6 @@ export function ManagerChatTab({
   const { newAfter, newOverOwn, markUnread } = useManagerChatLooks(agent.id, agent);
 
   const { endPress, endTrail, continuable } = ends;
-
-  // A rewind writes in the box, so it is offered only while the box takes words, and nothing is rewound under a call into the Manager.
-  const rewinds = chatBox.boxOpen && transcript.calls.length === 0;
-
-  const restores =
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.REWIND_FILES) }).data === true;
-
-  const pendingSends = composer.sent.length > 0;
-
-  const points = useMemo(
-    () => rewindPoints(transcript.messages, pendingSends, control.me, composer.going, restores),
-    [transcript.messages, pendingSends, control.me, composer.going, restores],
-  );
-
-  // Note that the line's box reads what the tab's own box reads, as it opens.
-  const editorProps = useRef({
-    agentId: agent.id,
-    keywords: control.keywords,
-    skills: control.readSkills,
-  });
-
-  editorProps.current = {
-    agentId: agent.id,
-    keywords: control.keywords,
-    skills: control.readSkills,
-  };
-
-  const rewind = rewinds
-    ? {
-        editing: composer.editing,
-        onEdit: composer.edit,
-        onCancelEdit: composer.dropEdit,
-        onSendEdit: composer.sendEdit,
-        onRevert: composer.revert,
-        editor: () => editorProps.current,
-        ...points,
-      }
-    : undefined;
 
   // Note that a message's thread opens in its page's side panel, where one stands beside the chat; elsewhere its messages offer none.
   const opener = useThreadDoors();
@@ -1339,18 +1334,16 @@ export function ManagerChatTab({
     <AgentTabFrame label={name}>
       <AgentPicturesProvider value={pictures}>
         <UndeliveredLines value={marks}>
-          <RewindProvider value={rewind}>
-            {log}
-            <AgentTabFoot>
-              <ThreadsDock threads={threads} />
-              {chatBox.dock({
-                box,
-                approvalsWaiting: approvals.waiting,
-                transcript,
-                queue: { controls: true, working: standing.working, editing: queueEditing },
-              })}
-            </AgentTabFoot>
-          </RewindProvider>
+          {log}
+          <AgentTabFoot>
+            <ThreadsDock threads={threads} />
+            {chatBox.dock({
+              box,
+              approvalsWaiting: approvals.waiting,
+              transcript,
+              queue: { controls: true, working: standing.working, editing: queueEditing },
+            })}
+          </AgentTabFoot>
         </UndeliveredLines>
       </AgentPicturesProvider>
     </AgentTabFrame>

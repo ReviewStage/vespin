@@ -311,6 +311,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly channel?: ChatSender | undefined;
       /** In a Manager's chat's channel, the thread it stands in, which Reply in thread opens, its replies summed under it; none in a thread's own page, or outside a chat. */
       readonly thread?: ChatThreadMark | undefined;
+      /** In a Manager's chat, whether its sender edited its words since it was sent, which a mark after them says; none outside one. */
+      readonly edited?: boolean | undefined;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
@@ -1590,6 +1592,7 @@ function chatLineItems(
     joinsBelow: false,
     channel: chatSenderOf(message, reading),
     thread: threads ? threadMarkOf(line, view) : undefined,
+    edited: message.editedAt !== null,
   } as const;
 
   if (message.authorKind === MANAGER_CHAT_AUTHOR.PERSON) {

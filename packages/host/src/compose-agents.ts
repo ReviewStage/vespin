@@ -43,6 +43,7 @@ import {
   agentPinParamsSchema,
   agentRenameParamsSchema,
   agentStartParamsSchema,
+  type ManagerChatEditParams,
   type ManagerChatReactParams,
   type ReplyButtonPressParams,
 } from "@repo/features/agent-view";
@@ -258,6 +259,7 @@ export type AgentClient = Pick<
   | "messagesBefore"
   | "message"
   | "chatReact"
+  | "chatEdit"
   | "chatSend"
   | "choose"
   | "rename"
@@ -997,6 +999,11 @@ function composed(
     asked(client.chatReact(agentId, messageId, request)),
   );
 
+  /** A member's edit of their own message of a Manager's chat, after every write of the agent's asked before it, so the Manager is told of its messages and edits in the order they were written. */
+  const chatEdited = queues.inTurn(({ agentId, messageId, ...request }: ManagerChatEditParams) =>
+    asked(client.chatEdit(agentId, messageId, request)),
+  );
+
   /** A suggestion in an agent's reply sent from its draft, after every write of the agent's asked before it, so the agent takes the lines in the order they were sent. */
   const pressed = queues.inTurn((params: ReplyButtonPressParams) =>
     asked(client.pressReplyButton(params)),
@@ -1357,6 +1364,8 @@ function composed(
     AGENTS_CHAT_UNSEND: managerChats.unsend,
     // Note that a reaction the service takes is written into the chat held, so it stands before the chat's next read carries it.
     AGENTS_CHAT_REACT: managerChats.reacting(declaredWrite(dependencies.pool, chatReacted)),
+    // Note that an edit the service takes is written into the chat held, so its words stand before the chat's next read carries them.
+    AGENTS_CHAT_EDIT: managerChats.editing(declaredWrite(dependencies.pool, chatEdited)),
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),

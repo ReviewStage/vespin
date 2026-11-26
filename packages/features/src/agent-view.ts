@@ -63,7 +63,10 @@ import {
   liveActivityTokenRequestSchema,
 } from "./live-activity-wire.js";
 import { machineAskAnswerRequestSchema } from "./machine-ask-wire.js";
-import { managerChatReactRequestSchema } from "./manager-chat-live.js";
+import {
+  managerChatEditRequestSchema,
+  managerChatReactRequestSchema,
+} from "./manager-chat-live.js";
 import {
   MEMORY_QUERY,
   memoryIdSchema,
@@ -858,6 +861,20 @@ export type ManagerChatReactParams = typeof managerChatReactParamsSchema.Type;
 export const managerChatReactAnswerViewSchema = answerView(messagesContract.chatReact);
 
 export type ManagerChatReactAnswerView = typeof managerChatReactAnswerViewSchema.Type;
+
+/** A member's edit of their own message of a Manager's chat, as the window asks it: the Manager, the message, and the edit as the service takes it (`managerChatEditRequestSchema`). */
+export const managerChatEditParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  messageId: EffectSchema.NonEmptyString,
+  ...managerChatEditRequestSchema.fields,
+});
+
+export type ManagerChatEditParams = typeof managerChatEditParamsSchema.Type;
+
+/** A member's edit of a message of a Manager's chat, as the host hears the service answer it: whether it changed the words, or why it was not taken. */
+export const managerChatEditAnswerViewSchema = answerView(messagesContract.chatEdit);
+
+export type ManagerChatEditAnswerView = typeof managerChatEditAnswerViewSchema.Type;
 
 /**
  * One change of an agent's queue, as the window asks it: the agent, the

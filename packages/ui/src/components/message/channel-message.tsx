@@ -15,6 +15,9 @@
  * the keyboard is on it, as a channel's do, so they add nothing to its
  * height.
  *
+ * A message whose words were edited since it was sent says so right after
+ * its last word (`edited`), in the muted ink, as a channel's do.
+ *
  * A message others answered in its thread says so under its words
  * (`ThreadReplies`): the faces of who answered and how many replies, in the
  * accent's ink, which opens the thread. The thread stands in a tab of the
@@ -27,8 +30,9 @@
  */
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
-import { CHAT_NEW_WORDS, repliesWords } from "@repo/features/manager-chat-view";
+import { CHAT_EDIT_WORDS, CHAT_NEW_WORDS, repliesWords } from "@repo/features/manager-chat-view";
 import type { ReactNode } from "react";
+import { ReplayUnmask } from "../../session-replay-marks.js";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { OneLine } from "../one-line/one-line.js";
 import { MessageActions, MessageFrame } from "./message.js";
@@ -52,6 +56,7 @@ export function ChannelMessage({
   contextMenu,
   under,
   messageId,
+  edited = false,
   children,
 }: {
   avatar: ReactNode;
@@ -68,6 +73,8 @@ export function ChannelMessage({
   under?: ReactNode;
   /** The message's id, which a reader finds its row by. */
   messageId?: string | undefined;
+  /** Whether its words were edited since it was sent, which a mark after them says. */
+  edited?: boolean | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
@@ -93,8 +100,16 @@ export function ChannelMessage({
             )}
           </div>
         )}
-        <div className="ui-channel-message-words min-w-0 text-body leading-reading text-foreground">
+        {/* Note that an edited message's mark runs on after its last paragraph, as Slack's does: the words' own block and that paragraph stand inline, so the mark follows the last word. */}
+        <div
+          className={`ui-channel-message-words min-w-0 text-body leading-reading text-foreground ${edited ? "[&>:nth-last-child(2)>p:last-child]:inline [&>:nth-last-child(2)]:inline" : ""}`}
+        >
           {children}
+          {edited ? (
+            <span className="ui-channel-message-edited ms-ui-4 text-caption text-muted-foreground">
+              <ReplayUnmask>{CHAT_EDIT_WORDS.EDITED}</ReplayUnmask>
+            </span>
+          ) : null}
         </div>
         {under}
       </div>
