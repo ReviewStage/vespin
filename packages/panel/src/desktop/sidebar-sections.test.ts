@@ -1008,6 +1008,19 @@ async function press(field: HTMLElement, key: string, shiftKey = false): Promise
   });
 }
 
+/**
+ * The glyph color named `label` once it holds the focus. Note that it is
+ * waited for, because the colors' popover hands its first focus over on
+ * the next animation frame rather than as it opens.
+ */
+async function colorTakesFocus(label: string): Promise<HTMLElement> {
+  await vi.waitFor(() => assert.equal(document.activeElement?.getAttribute("aria-label"), label));
+  const focused = document.activeElement;
+  assert.ok(focused instanceof HTMLElement);
+
+  return focused;
+}
+
 /** Opens the menu of the section titled `title`, then chooses `label` on it. */
 function sectionMenuChoose(sidebar: HTMLElement, title: string, label: string): void {
   const actions =
@@ -1518,7 +1531,7 @@ test("a glyph found by searching asks its color in a flyout, the text's own name
   const colors =
     document.querySelector(".ui-icon-picker-flyout") ?? assert.fail("the glyph's colors are asked");
 
-  assert.equal(document.activeElement, colors.querySelector('[aria-label="White"]'));
+  assert.equal(await colorTakesFocus("White"), colors.querySelector('[aria-label="White"]'));
   await act(async () => dialogButton("Teal").click());
   assert.equal(
     document.querySelector('input[aria-label="Search icons and emoji"]'),
@@ -1641,9 +1654,7 @@ test("Shift-Enter in the search presses the first glyph it found, as Enter does,
   typeInto(search, "telescope");
   await settleLoaded();
   await press(search, "Enter", true);
-  const noColor = document.activeElement ?? assert.fail("nothing has the focus");
-  assert.equal(noColor.getAttribute("aria-label"), "Black");
-  assert.ok(noColor instanceof HTMLElement);
+  const noColor = await colorTakesFocus("Black");
   await press(noColor, "ArrowRight");
   const red = document.activeElement;
   assert.equal(red?.getAttribute("aria-label"), "Red");
@@ -1652,8 +1663,7 @@ test("Shift-Enter in the search presses the first glyph it found, as Enter does,
   assert.equal(document.querySelector(".ui-icon-picker-flyout"), null);
   assert.ok(dialogField("Search icons and emoji"), "Escape leaves the picker standing");
   await act(async () => dialogButton("Telescope").click());
-  const focused = document.activeElement;
-  assert.ok(focused instanceof HTMLElement);
+  const focused = await colorTakesFocus("Black");
   await act(async () => focused.click());
   typeInto(dialogField("Name"), "Stars");
   await act(async () => dialogButton("Create section").click());
@@ -1717,7 +1727,7 @@ test("with a glyph's colors open, the arrows step the glyphs past them, and anot
   assert.equal(document.activeElement?.getAttribute("aria-label"), "Heart");
 
   await act(async () => dialogButton("Star").click());
-  assert.equal(document.activeElement?.getAttribute("aria-label"), "Black");
+  await colorTakesFocus("Black");
   assert.equal(document.querySelectorAll(".ui-icon-picker-flyout").length, 1);
 });
 
