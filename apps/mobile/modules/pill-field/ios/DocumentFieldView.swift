@@ -630,7 +630,7 @@ extension UIFont {
 
 // MARK: - The field
 
-final class DocumentFieldView: ExpoView, UITextViewDelegate {
+final class DocumentFieldView: ExpoView, UITextViewDelegate, UIGestureRecognizerDelegate {
   let onLines = EventDispatcher()
   let onHeight = EventDispatcher()
   let onFocusChange = EventDispatcher()
@@ -638,12 +638,16 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   let onCaret = EventDispatcher()
   let onCommentOpen = EventDispatcher()
   let onCommentAsk = EventDispatcher()
+  let onOpenLink = EventDispatcher()
+  let onOpenMedia = EventDispatcher()
 
   private let textView = UITextView(usingTextLayoutManager: true)
   /// What each picture the lines name holds, which JavaScript hands apart from the words, since a picture lands after them.
   private let media = MediaShelf()
   /// The tables standing in the words, each a container of its cells, which VoiceOver reaches beside the words.
   private let tables = NSHashTable<UIView>.weakObjects()
+  /// The pills standing in the words while they rest, each a link VoiceOver and a press reach beside the words.
+  private let pills = NSHashTable<UIView>.weakObjects()
   /// The page the field stands in scrolling, which tells each picture whether it stands near the window.
   private var pageScrolled: NSKeyValueObservation?
   /// The count of each block's open comment threads, standing at its first line's trailing edge.
@@ -687,7 +691,106 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   }
 
   var editable = true {
-    didSet { textView.isEditable = editable }
+    didSet { standEditable() }
+  }
+
+  /// Whether the field stands read-only until a press on its words, as a description stands on its page, as Notion's does: a press on a link, a mention or a picture opens it, a long press selects words to copy or comment on, and a press on words takes the keyboard with the caret where it landed. The words stand editable while the keyboard does, and read-only again once it goes.
+  var tapsToEdit = false {
+    didSet {
+      guard tapsToEdit != oldValue else { return }
+      restTap.isEnabled = tapsToEdit
+      // Note that the words are drawn again, so each pill at rest stands as a link of its own.
+      if textView.textStorage.length > 0 { redraw(heldLines()) }
+      textView.accessibilityCustomActions = tapsToEdit
+        ? [UIAccessibilityCustomAction(name: "Edit") { [weak self] _ in self?.focusAtEnd(); return true }]
+        : nil
+      standEditable()
+    }
+  }
+
+  /// The press on the words at rest, which opens what it lands on or takes the keyboard there.
+  private lazy var restTap: UITapGestureRecognizer = {
+    let tap = UITapGestureRecognizer(target: self, action: #selector(pressedAtRest(_:)))
+    tap.cancelsTouchesInView = false
+    tap.delegate = self
+    tap.isEnabled = false
+    return tap
+  }()
+
+  /// Stands the words editable where the field takes keys, and, where it stands read-only until a press, only while the keyboard stands.
+  private func standEditable() {
+    textView.isEditable = editable && (!tapsToEdit || textView.isFirstResponder)
+  }
+
+  /// Takes the keyboard, the words made editable first where they stand read-only at rest.
+  private func takeKeyboard() {
+    textView.isEditable = editable
+    textView.becomeFirstResponder()
+  }
+
+  /// Takes the keyboard with the caret at the words' end, as VoiceOver's Edit asks.
+  private func focusAtEnd() {
+    takeKeyboard()
+    textView.selectedRange = NSRange(location: textView.textStorage.length, length: 0)
+    revealCaret()
+  }
+
+  /// A press on the words at rest: a link or a mention opens its address, a picture opens in the app's viewer and a file in Quick Look, and anything else takes the keyboard with the caret where the press landed.
+  @objc private func pressedAtRest(_ tap: UITapGestureRecognizer) {
+    guard tapsToEdit, tap.state == .ended, !textView.isFirstResponder else { return }
+    let point = tap.location(in: textView)
+    if let at = pressedCharacter(point), openedAtRest(at) { return }
+    guard editable else { return }
+    let landed = textView.closestPosition(to: point) ?? textView.endOfDocument
+    takeKeyboard()
+    textView.selectedTextRange = textView.textRange(from: landed, to: landed)
+    revealCaret()
+  }
+
+  /// The character a press at `point` landed on, where it landed on one rather than beside the words.
+  private func pressedCharacter(_ point: CGPoint) -> Int? {
+    guard let range = textView.characterRange(at: point) else { return nil }
+    let at = textView.offset(from: textView.beginningOfDocument, to: range.start)
+    return at < textView.textStorage.length ? at : nil
+  }
+
+  /// Opens what the character at `at` is, told to JavaScript: a link's address or a mention's, which it opens as a link the app reads, or a picture's or a file's, which it opens in the app's viewer or in Quick Look, as the read rows' picture and file chip open. Answers whether it opened anything.
+  private func openedAtRest(_ at: Int) -> Bool {
+    let attributes = textView.textStorage.attributes(at: at, effectiveRange: nil)
+
+    if let address = attributes[linkKey] as? String {
+      onOpenLink(["address": address])
+      return true
+    }
+
+    if let pill = attributes[.attachment] as? PillAttachment, let address = pillAddress(pill.pill.markdown) {
+      onOpenLink(["address": address])
+      return true
+    }
+
+    if let shown = attributes[.attachment] as? MediaAttachment, media.opensAtRest(shown.run.address) {
+      onOpenMedia(["address": shown.run.address, "alt": shown.run.alt])
+      return true
+    }
+
+    return false
+  }
+
+  /// Takes a touch for the press at rest only where it lands on the words, never on a count, a play button, or another control standing over them.
+  func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    var view = touch.view
+    while let current = view, current !== textView {
+      if current is UIControl { return false }
+      view = current.superview
+    }
+    return true
+  }
+
+  func gestureRecognizer(
+    _ gestureRecognizer: UIGestureRecognizer,
+    shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+  ) -> Bool {
+    true
   }
 
   /// Whether the field grows to its words inside the page that holds it, as a description edited in place stands in its task's list, rather than scrolling them itself; it then tells JavaScript the height its words ask for.
@@ -765,6 +868,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     textView.delegate = self
+    textView.addGestureRecognizer(restTap)
     media.relay = { [weak self] address in self?.relayMedia(address) }
     // Note that each paragraph is laid out by a fragment that draws its item's mark, since the system's list markers draw in the words' full ink at their own size.
     textView.textLayoutManager?.delegate = self
@@ -810,6 +914,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     super.layoutSubviews()
     // Note that words laid out at another width wrap anew, so they are laid out whole again.
     if textView.frame.width != bounds.width { laidWhole = false }
+    if textView.frame.size != bounds.size { forgetRestParagraphs() }
     textView.frame = bounds
     tellHeight()
     media.reckonNear()
@@ -952,12 +1057,76 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   }
 
   /// What VoiceOver and the flows reach in the field, in reading order: the text view, which iOS hears as one element of its words, and each view standing in its words, which that element would hide, such as a picture or a video under its play button.
+  ///
+  /// Note that words at rest are reached a paragraph at a time, as the read rows' blocks were, each framed where TextKit lays it out, so VoiceOver reads them block by block and a flow presses the words it names; while they are typed, the text view alone stands for them, so VoiceOver reads, moves the caret through and edits them as the system's own field.
   override var accessibilityElements: [Any]? {
     get {
       let standing: [UIView] = standingViews().filter { $0.window != nil }
-      return [textView] + standing.sorted { $0.convert($0.bounds, to: nil).minY < $1.convert($1.bounds, to: nil).minY }
+      let placed = standing.map { (view: $0 as Any, top: convert($0.bounds, from: $0).minY) }
+      guard tapsToEdit, !textView.isFirstResponder else {
+        return [textView] + placed.sorted { $0.top < $1.top }.map { $0.view }
+      }
+      let paragraphs = restParagraphs().map { (view: $0 as Any, top: $0.accessibilityFrameInContainerSpace.minY) }
+      // Note that words holding no paragraph, as an empty description holds none, stand as the text view, heard by its placeholder, whose Edit takes the keyboard, so a reader can start writing them.
+      let words = paragraphs.isEmpty ? [(view: textView as Any, top: CGFloat(0))] : paragraphs
+      return (words + placed).sorted { $0.top < $1.top }.map { $0.view }
     }
     set {}
+  }
+
+  /// The paragraphs of the words at rest as VoiceOver and the flows reach them, kept until the words or their layout change, so VoiceOver's place among them holds.
+  private var restKept: [UIAccessibilityElement]?
+
+  /// Each paragraph of the words at rest that holds any: its words, a pill heard by its own words among them, framed where TextKit lays it out in the field's space.
+  private func restParagraphs() -> [UIAccessibilityElement] {
+    if let restKept { return restKept }
+    guard let layout = textView.textLayoutManager, let content = layout.textContentManager else { return [] }
+    let string = textView.textStorage.string as NSString
+    var elements: [UIAccessibilityElement] = []
+    var location = 0
+
+    while location < string.length {
+      let paragraph = string.paragraphRange(for: NSRange(location: location, length: 0))
+      location = NSMaxRange(paragraph)
+      let words = heardWords(in: paragraph)
+      guard !words.isEmpty,
+        let start = content.location(content.documentRange.location, offsetBy: paragraph.location),
+        let fragment = layout.textLayoutFragment(for: start)
+      else { continue }
+      let laid = fragment.layoutFragmentFrame.offsetBy(dx: textView.textContainerInset.left, dy: textView.textContainerInset.top)
+      let element = UIAccessibilityElement(accessibilityContainer: self)
+      element.accessibilityLabel = words
+      element.accessibilityTraits = .staticText
+      element.accessibilityHint = editable ? "Double-tap to edit." : nil
+      element.accessibilityFrameInContainerSpace = textView.convert(laid, to: self)
+      elements.append(element)
+    }
+
+    restKept = elements
+    return elements
+  }
+
+  /// A paragraph's words as VoiceOver hears them: its words, a pill's and a task box's heard among them, a card by its words; a picture, a table and a rule stand as elements of their own, or as none.
+  private func heardWords(in paragraph: NSRange) -> String {
+    let storage = textView.textStorage
+    var heard: [String] = []
+    storage.enumerateAttributes(in: paragraph) { attributes, range, _ in
+      switch attributes[.attachment] {
+      case let pill as PillAttachment: heard.append(pill.pill.heard)
+      case let box as TaskBoxAttachment: heard.append(box.accessibilityLabel ?? "")
+      case let block as BlockAttachment: if block.card != nil { heard.append(block.accessibilityLabel ?? "") }
+      case is NSTextAttachment: break
+      default: heard.append((storage.string as NSString).substring(with: range))
+      }
+    }
+    return heard.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  /// Lets the paragraphs at rest go, the words or their layout changed, and tells VoiceOver the field's elements changed.
+  private func forgetRestParagraphs() {
+    guard restKept != nil else { return }
+    restKept = nil
+    UIAccessibility.post(notification: .layoutChanged, argument: nil)
   }
 
   /// The name a flow finds the field by, which the text view carries too, so a find of the words by it reaches the element that reads and types them.
@@ -967,7 +1136,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// The views standing in the words that VoiceOver reaches beside them.
   private func standingViews() -> [UIView] {
-    media.shownViews() + tables.allObjects + comments.shown
+    media.shownViews() + tables.allObjects + comments.shown + (tapsToEdit ? pills.allObjects : [])
   }
 
   /// Takes what each picture the lines name holds, drawing again only the pictures that changed.
@@ -978,6 +1147,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// Lays out again the lines a picture stands in, once its size is read, and tells the height they now ask for: only those lines, never the words around them.
   private func relayMedia(_ address: String) {
+    forgetRestParagraphs()
     guard let layout = textView.textLayoutManager, let content = layout.textContentManager else { return }
     let storage = textView.textStorage
     storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
@@ -1004,6 +1174,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// Lays each paragraph of `blocks` in its style again, which holds its words short of a count where one stands; only their looks, never their words or the caret.
   private func restyle(_ blocks: Set<Int>) {
+    forgetRestParagraphs()
     let storage = textView.textStorage
     quiet = true
     storage.beginEditing()
@@ -1053,7 +1224,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
       return
     }
 
-    textView.becomeFirstResponder()
+    takeKeyboard()
     revealCaret()
   }
 
@@ -1099,14 +1270,14 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     }
 
     guard let start = textView.position(from: textView.beginningOfDocument, offset: min(location, string.length)) else {
-      textView.becomeFirstResponder()
+      takeKeyboard()
       return
     }
 
     let top = textView.caretRect(for: start).minY
     let point = CGPoint(x: textView.textContainerInset.left + x, y: top + y)
     let landed = textView.closestPosition(to: point) ?? start
-    textView.becomeFirstResponder()
+    takeKeyboard()
     textView.selectedRange = NSRange(location: textView.offset(from: textView.beginningOfDocument, to: landed), length: 0)
     revealCaret()
   }
@@ -1139,6 +1310,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   func textViewDidChange(_ textView: UITextView) {
     guard !quiet else { return }
+    forgetRestParagraphs()
     let edit = landed ?? typed
     // Note that the words the text itself saw laid in are the ones carried on to, the range asked about being the field's guess before the keyboard lays them.
     if let piece = landed ?? typed {
@@ -1167,10 +1339,18 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   }
 
   func textViewDidBeginEditing(_ textView: UITextView) {
+    // Note that the words being typed stand as the text view alone, so VoiceOver is told the field's elements changed.
+    if tapsToEdit { UIAccessibility.post(notification: .layoutChanged, argument: textView) }
     onFocusChange(["focused": true])
   }
 
   func textViewDidEndEditing(_ textView: UITextView) {
+    // Note that words at rest stand read-only again once the keyboard goes, so a press on a link opens it rather than placing the caret.
+    if tapsToEdit {
+      textView.isEditable = false
+      restKept = nil
+      UIAccessibility.post(notification: .layoutChanged, argument: nil)
+    }
     onFocusChange(["focused": false])
   }
 
@@ -1200,7 +1380,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     suggestedActions: [UIMenuElement]
   ) -> UIMenu? {
     var children = suggestedActions
-    if editable, let menu = formatMenu() { children.append(menu) }
+    // Note that words at rest offer no Format, which only words being typed take.
+    if editable, textView.isEditable, let menu = formatMenu() { children.append(menu) }
     if let comment = commentAction(for: range) { children.append(comment) }
     return children.count == suggestedActions.count ? nil : UIMenu(children: children)
   }
@@ -1224,6 +1405,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// Draws the lines anew, keeping the caret where it stood, as near as the new words allow. Words laid in whole leave nothing for undo's earlier steps to stand on, so they are let go, but where the words are the same as before, as a block's change of kind leaves them, which keeps its own undo.
   private func redraw(_ lines: [DocumentLine], keepUndo: Bool = false) {
+    forgetRestParagraphs()
     let selected = textView.selectedRange
     quiet = true
     pendingLine = nil
@@ -1332,9 +1514,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
         case .words(let text, let marks, let link):
           piece.append(NSAttributedString(string: text, attributes: wordAttributes(kind, line.facts.level, marks, link)))
         case .pill(let pill):
-          let character = NSMutableAttributedString(
-            attributedString: NSAttributedString(attachment: PillAttachment(pill: pill, look: look))
-          )
+          let attachment = PillAttachment(pill: pill, look: look)
+          // Note that a pill of words at rest is reached as a link of its own, which a press opens.
+          if tapsToEdit { attachment.standing = pills }
+          let character = NSMutableAttributedString(attributedString: NSAttributedString(attachment: attachment))
           character.addAttributes(wordAttributes(kind, line.facts.level, [], nil), range: NSRange(location: 0, length: 1))
           piece.append(character)
         case .card(let card):
@@ -2518,4 +2701,11 @@ extension DocumentFieldView: NSTextLayoutManagerDelegate {
   ) -> NSTextLayoutFragment {
     ItemMarkFragment(textElement: textElement, range: textElement.elementRange)
   }
+}
+
+/// The address a mention's Markdown links to, `[@Name](address)`; none where it names none.
+func pillAddress(_ markdown: String) -> String? {
+  guard let open = markdown.range(of: "](", options: .backwards), markdown.hasSuffix(")") else { return nil }
+  let address = markdown[open.upperBound..<markdown.index(before: markdown.endIndex)]
+  return address.isEmpty ? nil : String(address)
 }

@@ -1,12 +1,15 @@
 // pill-look.test.ts -- a pill draws what its chip draws once the words are sent, and a file's marker the file it names.
 
+import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
 import { filePill, mentionPill } from "@repo/features/pill-words";
 import { describe, expect, it } from "vitest";
 import { CHIP_MARK, type ChipMarkOf } from "./chip-mark-model.js";
 import { GLYPH } from "./glyph.js";
 import { pillLook } from "./pill-look.js";
+import { STATUS_TONE } from "./tokens/status-tone.js";
 
 const READING = { repository: "ReviewStage/vespin", now: Date.UTC(2026, 10, 20, 16), zone: "UTC" };
 
@@ -42,5 +45,37 @@ describe("pillLook", () => {
       words: "Release manager",
       glyph: "ManagerFaces/cat-rest-pink",
     });
+  });
+
+  // Note that a description's field draws its pills at rest in place of the read rows' chips, so a pull request merged since it was written must stand so in its pill too.
+  it("draws a pull request's pill as GitHub says it stands", () => {
+    const page = "https://github.com/ada/relay/pull/128";
+    const pill = mentionPill("#128 Invite a teammate by email", page);
+
+    const merged: LinkStanding = {
+      key: page,
+      title: "Invite a teammate by email",
+      state: "Merged",
+      pullRequest: {
+        number: 128,
+        state: PULL_REQUEST_STATE.MERGED,
+        lines: undefined,
+        files: undefined,
+        when: undefined,
+        branches: undefined,
+        labels: [],
+        comments: undefined,
+        commits: undefined,
+      },
+      issue: undefined,
+      opener: undefined,
+    };
+
+    const look = pillLook(pill, READING, undefined, (asked) =>
+      asked === page ? merged : undefined,
+    );
+
+    expect(look).toMatchObject({ words: "#128", glyph: GLYPH.MERGED, tone: STATUS_TONE.MERGED });
+    expect(look.heard).toContain("Merged");
   });
 });

@@ -1,5 +1,5 @@
 /**
- * use-inline-description.ts -- a task's description edited in place on its page, as the desktop's and Notion's are: a press on its words puts the caret there, the words save on a pause, on Done, as the page is left and as the app goes to the background, and a conflict asks the panel's choice.
+ * use-inline-description.ts -- a task's description as one view on its page, as the desktop's and Notion's are: a press on its words puts the caret there, the words save on a pause, as the keyboard goes, as the page is left and as the app goes to the background, and a conflict asks the panel's choice.
  *
  * The editor is the panel's (`@repo/features/description-edit-model`), the
  * sheet's before it: the service lays a save over anything written
@@ -39,10 +39,8 @@ import {
   askToChoose,
   type CaretAtWord,
   type DocumentFieldHandle,
-  type DocumentFieldOpening,
   type DocumentPageMentions,
   NOTICE_KIND,
-  OPENS_AT_START,
   useFailureNotices,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -82,15 +80,15 @@ interface PressedAt {
 
 /** The description edited in place, as the page draws it. */
 export interface InlineDescription {
-  /** Whether the words stand as the field, the caret in them; read otherwise. */
+  /** Whether the words are being typed: from the field taking the keyboard until what was typed is the service's. */
   readonly editing: boolean;
-  /** Puts the words in the field with the caret where a press landed, or at their start. */
+  /** Puts the keyboard in the field, the caret at the words' start. */
   readonly start: (at?: PressedAt) => void;
-  /** Saves what is typed and leaves the field once the service holds it. */
+  /** Puts the keyboard away and saves what is typed, the words standing at rest once the service holds them. */
   readonly done: () => void;
+  /** Hears the field take the keyboard, which starts editing, and let it go, which is Done. */
+  readonly focused: (focused: boolean) => void;
   readonly field: RefObject<DocumentFieldHandle | null>;
-  /** Where the field takes the keyboard as it comes to stand: where the press landed, or the words' start. */
-  readonly opensAt: DocumentFieldOpening | undefined;
   readonly draft: string;
   readonly onChange: (words: string) => void;
   /** Whether the field takes keys: not while a save it waits on is out. */
@@ -198,7 +196,6 @@ export function useInlineDescription(
   // The editor as it stands now, read by a save's answer, a choice's press and a pause's timer, which land after the render that set them.
   const live = useRef(editor);
   const field = useRef<DocumentFieldHandle | null>(null);
-  const [opening, setOpening] = useState<DocumentFieldOpening | undefined>(undefined);
   const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
   // Whether the page still stands, so a Try again after it went sends nothing it no longer holds.
   const standing = useRef(true);
@@ -356,22 +353,45 @@ export function useInlineDescription(
     };
   }, []);
 
-  const start = (at?: PressedAt) => {
-    if (editing) return;
-    // Note that the field takes the keyboard itself once it stands, where the press landed, so nothing here waits on it.
-    setOpening(at ?? OPENS_AT_START);
-    // Note that the field opens on the words as the page last read them, the base its saves are laid against.
+  // Note that at rest the words follow the description as the page reads it, an agent's edit among them, once nothing typed waits to be saved.
+  useEffect(() => {
+    const now = live.current;
+
+    if (
+      editing ||
+      now.sending !== undefined ||
+      pendingSave(now) !== undefined ||
+      now.draft === body
+    )
+      return;
     update(editorOpened(body));
-    setEditing(true);
+  }, [editing, body]);
+
+  const start = () => {
+    field.current?.focus();
   };
 
   const done = () => {
     field.current?.flush();
+    field.current?.blur();
     update(editorCloseAsked(live.current));
     save();
 
-    // Note that words already the service's leave at once, since no save goes out to settle them.
+    // Note that words already the service's go back to rest at once, since no save goes out to settle them.
     if (editorCloses(live.current)) setEditing(false);
+  };
+
+  // Note that the field taking the keyboard starts editing on the words as they stand, the base its saves are laid against, and the keyboard going is Done, whether the ✓ put it away or a drag down the page did.
+  const focused = (on: boolean) => {
+    if (on) {
+      // Note that a press back into the words while Done's save is out keeps editing once it lands, rather than putting the words to rest under the caret.
+      if (live.current.closing) update({ ...live.current, closing: false });
+      setEditing(true);
+
+      return;
+    }
+
+    if (editing && !live.current.closing) done();
   };
 
   const offered: DocumentPageMentions | undefined =
@@ -398,7 +418,7 @@ export function useInlineDescription(
   useEffect(
     () =>
       chrome.bind({
-        start: (at) => doors.current.start(at),
+        start: () => doors.current.start(),
         done: () => doors.current.done(),
       }),
     [chrome],
@@ -408,8 +428,8 @@ export function useInlineDescription(
     editing,
     start,
     done,
+    focused,
     field,
-    opensAt: opening,
     draft: editor.draft,
     onChange: (words) => update(editorTyped(live.current, words)),
     editable: editor.sending === undefined || !editor.closing,

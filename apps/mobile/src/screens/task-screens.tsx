@@ -2868,14 +2868,11 @@ function OverviewDescription({
   overview,
   body,
   edit,
-  onPressBlock,
 }: {
   readonly overview: TaskOverview;
   readonly body: string;
   /** Edit at the header's end; none where the description can't be edited here. */
   readonly edit: SectionEdit | undefined;
-  /** Edits the words in place, the caret where a press on a block landed, by where the block starts in the Markdown; none where they can't be edited here. */
-  readonly onPressBlock?: ((at: number, x: number, y: number) => void) | undefined;
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -2916,7 +2913,6 @@ function OverviewDescription({
           videoAt={videoAt}
           fileAt={fileAt}
           linkStanding={linkStanding}
-          onPressAt={onPressBlock === undefined ? undefined : (x, y) => onPressBlock(0, x, y)}
         />
       </ListSection>
     );
@@ -2940,9 +2936,6 @@ function OverviewDescription({
               fileAt={fileAt}
               linkStanding={linkStanding}
               last={block.from === blocks.at(-1)?.from}
-              onPressAt={
-                onPressBlock === undefined ? undefined : (x, y) => onPressBlock(block.from, x, y)
-              }
               menuActions={
                 block.quote === undefined
                   ? undefined
@@ -3134,13 +3127,15 @@ function TaskReading() {
 }
 
 /**
- * The Description section edited in place, as the desktop's and Notion's
- * are: read as its blocks until a press on its words, or Edit, puts it in
- * its field there, the caret where the press landed, and Done, in the
- * section's header and the page's bar, takes it back. Note that it holds
- * the editor itself and publishes to the page's `chrome` only what the page
- * stands of it, so a press and each key draw this section, the bar's Done
- * and the dock again, never the page's other sections.
+ * The Description section as one view, as the desktop's and Notion's are:
+ * the description's field, its words read-only until a press on them puts
+ * the caret where it landed, with no swap to other rows and no Edit, the
+ * system's ✓ in the page's bar putting the keyboard away while it stands. At
+ * rest a press on a link or a mention opens it, a picture opens full screen,
+ * and a long press selects words to copy or comment on, as the read rows
+ * offered. Note that it holds the editor itself and publishes to the page's
+ * `chrome` only what the page stands of it, so a press and each key draw this
+ * section, the bar's ✓ and the dock again, never the page's other sections.
  */
 function InlineDescriptionSection({
   overview,
@@ -3154,13 +3149,23 @@ function InlineDescriptionSection({
   const { task } = overview;
   const inline = useInlineDescription(task.id, overview.workspace?.id, body, chrome);
   const { field } = inline;
-  // Note that the field reads the description's pictures only while it edits, since the read rows read their own while they stand.
-  const media = useDescriptionPictures(inline.editing ? body : undefined);
+  const media = useDescriptionPictures(body);
+  const openLink = useOpenLink(task.workspaceId);
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+
+  // Note that a chip's pull request or issue is read through the task's own workspace, as the read rows read it, so its pill draws and is heard by where it stands, following each change GitHub answers.
+  const linkStanding = useLinkStandings(
+    useMemo(() => [body], [body]),
+    task.repository,
+    workspaces.find((each) => each.id === task.workspaceId),
+    true,
+  );
+
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const threads = useTaskComments(task.id);
 
-  // The open threads on the words, whose counts stand beside the field's blocks as the read rows stand them, a press opening the oldest, and Comment in the field's edit menu, which starts one on the block, as a long press on a read row does.
+  // The open threads on the words, whose counts stand beside the field's blocks as the read rows stood them, a press opening the oldest, and Comment in the field's edit menu, which starts one on the block, as a long press on a read row did.
   const comments = useMemo(
     (): DocumentComments => ({
       markdown: body,
@@ -3191,59 +3196,34 @@ function InlineDescriptionSection({
   // Note that what an `@` offers docks over the keyboard on a pushed page, so the caret's line keeps clear of it as of the keyboard; a split view's column ends over the offer at its foot, which the field clears on its own, and no dock stands around it there.
   const room = useDockRoom();
 
-  const start: SectionEdit = {
-    label: WORDS.EDIT,
-    heard: WORDS.EDIT_DESCRIPTION,
-    onPress: () => inline.start(),
-  };
-
-  if (inline.editing) {
-    return (
-      <ListSection
-        title={WORDS.DESCRIPTION}
-        act={{ label: WORDS.DONE, heard: WORDS.DONE_EDITING, onPress: inline.done }}
-      >
-        {inline.problem === undefined ? null : <ProblemLine text={inline.problem} />}
-        <FieldRow>
-          <DocumentField
-            ref={field}
-            value={inline.draft}
-            onChange={inline.onChange}
-            repository={task.repository}
-            placeholder={DESCRIPTION_EDIT_WORDS.PLACEHOLDER}
-            editable={inline.editable}
-            onAtWord={inline.onAtWord}
-            fitsWords
-            keepClear={inline.mentions === undefined ? undefined : room}
-            opensAt={inline.opensAt}
-            media={media}
-            comments={comments}
-            testID={DESCRIPTION_FIELD_ID}
-          />
-        </FieldRow>
-      </ListSection>
-    );
-  }
-
-  if (body.trim() === "") {
-    return (
-      <ListSection title={WORDS.DESCRIPTION} footer={WORDS.NO_DESCRIPTION} act={start}>
-        {null}
-      </ListSection>
-    );
-  }
-
   return (
-    <OverviewDescription
-      overview={overview}
-      body={body}
-      edit={start}
-      onPressBlock={(at, x, y) => inline.start({ at, x, y })}
-    />
+    <ListSection title={WORDS.DESCRIPTION}>
+      {inline.problem === undefined ? null : <ProblemLine text={inline.problem} />}
+      <FieldRow>
+        <DocumentField
+          ref={field}
+          value={inline.draft}
+          onChange={inline.onChange}
+          repository={task.repository}
+          placeholder={DESCRIPTION_EDIT_WORDS.PLACEHOLDER}
+          editable={inline.editable}
+          onAtWord={inline.onAtWord}
+          fitsWords
+          tapsToEdit
+          onFocusChange={inline.focused}
+          onOpenLink={openLink}
+          linkStanding={linkStanding}
+          keepClear={inline.mentions === undefined ? undefined : room}
+          media={media}
+          comments={comments}
+          testID={DESCRIPTION_FIELD_ID}
+        />
+      </FieldRow>
+    </ListSection>
   );
 }
 
-/** The page's bar while its description is edited in place: Done in the place of what it stands otherwise, read from the page's `chrome` so the page itself draws nothing again. */
+/** The page's bar while its description holds the keyboard: the system's ✓ in the place of what it stands otherwise, as Notes stands it while a note is typed, putting the keyboard away; read from the page's `chrome` so the page itself draws nothing again. */
 function InlineBar({
   chrome,
   children,
@@ -3257,9 +3237,11 @@ function InlineBar({
 
   return (
     <Stack.Toolbar placement="right">
-      <Stack.Toolbar.Button accessibilityLabel={WORDS.DONE_EDITING} onPress={chrome.done}>
-        {WORDS.DONE}
-      </Stack.Toolbar.Button>
+      <Stack.Toolbar.Button
+        icon={glyphSymbol(GLYPH.CHECK)}
+        accessibilityLabel={WORDS.DONE_EDITING}
+        onPress={chrome.done}
+      />
     </Stack.Toolbar>
   );
 }
@@ -3277,8 +3259,8 @@ function InlineFoot({
 
 /**
  * A split view whose detail's description may be edited in place: while it
- * is, Done stands at the detail bar's trailing edge in the place of its acts
- * and ⋯, as the pushed page's bar stands it. Note that it reads the detail's
+ * holds the keyboard, the system's ✓ stands at the detail bar's trailing
+ * edge in the place of its acts and ⋯, as the pushed page's bar stands it. Note that it reads the detail's
  * `chrome` itself, so a press on the words draws the split view's bar again
  * and never the list or the page, whose elements it hands on unchanged.
  */
@@ -3295,7 +3277,7 @@ function InlineSplitView({
           ...detailBar,
           acts: undefined,
           menu: undefined,
-          action: { label: WORDS.DONE, onPress: chrome.done },
+          action: { label: WORDS.DONE_EDITING, symbol: GLYPH.CHECK, onPress: chrome.done },
         }
       : detailBar;
 
@@ -3572,15 +3554,12 @@ function useTaskDetail(
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
 
-  // Note that the menu's Edit description edits it in place, as the pushed page's does, but for a description too long to, which it opens in the sheet.
+  // Note that a description edited in place offers no Edit description, since its words are the way in, as Notion's are; one too long to stands read as its rows, and the menu opens it in the sheet.
   const inPlace =
     overview?.document !== undefined &&
     overview.document.description.body.length <= INLINE_EDIT_MOST_CHARS;
 
-  const editDescription =
-    editDoor === undefined
-      ? undefined
-      : (task: TaskSummary) => (inPlace ? chrome.start() : editDoor(task));
+  const editDescription = inPlace ? undefined : editDoor;
 
   const detail =
     overview !== undefined ? (
@@ -3761,15 +3740,12 @@ export function TaskScreen() {
   // What the page holds of its description edited in place, its section editing it, so its Done stands in the bar and what an `@` offers docks over the keyboard.
   const chrome = useInlineChrome();
 
-  // Note that the menu's Edit description edits it in place too, the caret at its start, but for a description too long to, which it opens in the sheet.
+  // Note that a description edited in place offers no Edit description, since its words are the way in, as Notion's are; one too long to stands read as its rows, and the menu opens it in the sheet.
   const inPlace =
     overview?.document !== undefined &&
     overview.document.description.body.length <= INLINE_EDIT_MOST_CHARS;
 
-  const editDescription =
-    editDoor === undefined
-      ? undefined
-      : (task: TaskSummary) => (inPlace ? chrome.start() : editDoor(task));
+  const editDescription = inPlace ? undefined : editDoor;
 
   const menu =
     overview === undefined

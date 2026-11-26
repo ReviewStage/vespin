@@ -1,4 +1,4 @@
-# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block with its words quoted and the comment field taking the keyboard; Send opens the thread at once with the words as its first comment.
+# description-comment.yaml -- a task's description in one view, read a paragraph at a time at rest, a block's count of the open comment threads on it, and a long press on a paragraph's words offering Comment in the system's edit menu, which opens a new thread on that block with its words quoted and the comment field taking the keyboard; Send opens the thread at once with the words as its first comment.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -36,8 +36,8 @@ appId: dev.vespin.ios
 - assertVisible: "Goal"
 - waitForAnimationToEnd
 - takeScreenshot: description-blocks
-# A long press on a block lifts it over the system's menu, which offers
-# Comment.
+# A long press on a paragraph's words selects one and opens the system's
+# edit menu, which offers Comment on its block.
 - longPressOn: "Goal"
 - assertVisible: "Comment"
 - waitForAnimationToEnd

@@ -193,6 +193,12 @@ final class MediaShelf {
     views.allObjects
   }
 
+  /// Whether the address holds what a press at rest opens: a picture drawn, which opens in the app's viewer, or a file read, which opens in Quick Look.
+  func opensAtRest(_ address: String) -> Bool {
+    let media = media(address)
+    return (media.kind == .picture || media.kind == .file) && media.file != nil
+  }
+
   /// How tall the media at `address` stands in a line `width` wide: a diagram's head and its picture or code, or the media's frame.
   func height(of address: String, width: CGFloat) -> CGFloat {
     let media = media(address)

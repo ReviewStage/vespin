@@ -17,6 +17,7 @@ import {
   writtenPieces,
 } from "@repo/features/document-blocks";
 import { drawnPictureAddresses } from "@repo/features/drawn-pictures";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import { markdownTree, markdownTreeKept } from "@repo/features/markdown-tree";
 import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import {
@@ -67,18 +68,19 @@ import {
   type NativeFormatAct,
   type NativeFormats,
   type NativeMedia,
-  type NativeOpening,
   type NativeTable,
   type NativeToldLine,
   type NativeToldRun,
 } from "./document-field-native.js";
 import { fieldTable } from "./document-field-table.js";
 import { GLYPH, WRITING_GLYPH } from "./glyph.js";
+import { useKeptOpen, usePicturesView } from "./held-menu.js";
+import { KEPT_KIND } from "./keep-model.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import type { MarkdownReading } from "./markdown-model.js";
 import { pillLook } from "./pill-look.js";
 import { askForWords, WORDS_KIND, type WordsAct } from "./system-asks.js";
-import { useColors } from "./tokens/colors.js";
+import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
 
 /** What a card says a locked block is, as the description page names it. */
 const CARD_TITLE: Readonly<Record<LockedKind, string>> = {
@@ -194,14 +196,6 @@ export interface DocumentFieldHandle {
   readonly flush: () => void;
 }
 
-/** Where a field opens its caret as it comes to stand: where a press on the words as read landed, in the block that starts at `at` in the Markdown, `x` and `y` points in from its start; or at the words' start. */
-export type DocumentFieldOpening =
-  | { readonly at: number; readonly x: number; readonly y: number }
-  | typeof OPENS_AT_START;
-
-/** A field that opens with its caret at the words' start. */
-export const OPENS_AT_START = "start";
-
 interface DocumentFieldProps {
   readonly ref?: Ref<DocumentFieldHandle> | undefined;
   /** The document, as the Markdown it is saved as. */
@@ -221,12 +215,18 @@ interface DocumentFieldProps {
   readonly fitsWords?: boolean | undefined;
   /** How far over the keyboard the caret's line keeps clear while something stands over the field's foot, such as what an `@` offers docked over the keyboard (none in a column that ends over its offer, which the field keeps clear of on its own); none while nothing stands there. The caret's line is brought back into sight as it comes and goes. */
   readonly keepClear?: number | undefined;
-  /** Where the field takes the keyboard with its caret once it stands, read as it mounts; none leaves the keyboard alone. */
-  readonly opensAt?: DocumentFieldOpening | undefined;
   /** How the document's pictures are drawn, each as the media it names in its own line, as the read rows draw it; none draws each as a pill of its words. */
   readonly media?: DocumentMedia | undefined;
   /** The document's open comment threads, whose counts stand beside its blocks, and Comment in its edit menu; none stands none. */
   readonly comments?: DocumentComments | undefined;
+  /** Whether the field stands read-only until a press on its words, which takes the keyboard where it landed, as Notion's page does; a press on a link or a mention opens it (`onOpenLink`), and on a picture opens it in Quick Look. */
+  readonly tapsToEdit?: boolean | undefined;
+  /** Opens a link's or a mention's address pressed while the field stands at rest. */
+  readonly onOpenLink?: ((address: string) => void) | undefined;
+  /** What GitHub holds of the pull request or issue a mention names, as the host read it, which its pill draws its state by, as the read rows' chip does; none draws each by its kind. */
+  readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
+  /** Whether the field holds the keyboard, as it takes it and lets it go. */
+  readonly onFocusChange?: ((focused: boolean) => void) | undefined;
 }
 
 /** What the field last told: the Markdown it wrote, the Markdown that was written against, and its lines as the blocks it wrote read them. */
@@ -252,23 +252,6 @@ interface PendingLines {
 
 /** No blocks, which the field holds while its words stand read only. */
 const NO_BLOCKS: readonly DocumentBlock[] = [];
-
-/** Which of the document's blocks as read holds the Markdown at `at`: the last that starts at or before it, each found in turn in the Markdown it was read from. */
-function blockAt(blocks: readonly DocumentBlock[], markdown: string, at: number): number {
-  let held = 0;
-  let from = 0;
-
-  blocks.forEach((block, index) => {
-    const start = markdown.indexOf(block.source, from);
-
-    if (start === -1) return;
-
-    if (start <= at) held = index;
-    from = start + block.source.length;
-  });
-
-  return held;
-}
 
 /** The least a field grown to its words stands before it first tells its height: one body line and its insets. */
 const FIT_LEAST = 44;
@@ -432,11 +415,18 @@ function nativeRun(
   reading: MarkdownReading,
   markOf: ChipMarkOf,
   drawn: DrawnBlocks | undefined,
+  linkStanding: ((page: string) => LinkStanding | undefined) | undefined,
+  colors: BrandColors,
 ): NativeDocumentRun {
   if (run.kind === INLINE_RUN.WORDS) return { text: run.text, marks: run.marks, link: run.link };
 
-  if (run.kind === INLINE_RUN.PILL)
-    return { pill: { markdown: run.pill.markdown, ...pillLook(run.pill, reading, markOf) } };
+  if (run.kind === INLINE_RUN.PILL) {
+    const { tone, ...look } = pillLook(run.pill, reading, markOf, linkStanding);
+    // Note that a GitHub page's glyph stands in its state's color, as the read rows' chip stands it.
+    const tint = tone === undefined ? undefined : toneColor(colors, tone);
+
+    return { pill: { markdown: run.pill.markdown, ...look, tint } };
+  }
 
   if (line.kind === BLOCK_KIND.LOCKED) {
     const code = drawn?.diagrams.get(run.source);
@@ -524,9 +514,12 @@ function FieldWords({
   testID,
   fitsWords = false,
   keepClear,
-  opensAt,
   media,
   comments,
+  tapsToEdit = false,
+  onOpenLink,
+  linkStanding,
+  onFocusChange,
 }: DocumentFieldProps) {
   const colors = useColors();
   const native = useRef<NativeDocumentFieldDoors>(null);
@@ -584,12 +577,14 @@ function FieldWords({
     const lines = laid.map(
       (line): NativeDocumentLine => ({
         ...line,
-        runs: line.runs.map((run) => nativeRun(run, line, reading, markOf, drawn)),
+        runs: line.runs.map((run) =>
+          nativeRun(run, line, reading, markOf, drawn, linkStanding, colors),
+        ),
       }),
     );
 
     return { markdown: base, value: { lines, seen } };
-  }, [own, told, read, base, repository, seen, markOf, drawn]);
+  }, [own, told, read, base, repository, seen, markOf, drawn, linkStanding, colors]);
 
   // What each picture and diagram the document draws holds, handed apart from the words, so one landing draws only it again.
   const held = useMemo(
@@ -622,6 +617,26 @@ function FieldWords({
         : blockThreads(anchored, comments),
     [anchored, comments],
   );
+
+  // Note that what a press at rest lands on opens as the read rows opened it: a file in Quick Look, as its chip opened it, named by its words, and a picture full screen in the app's viewer, drawn from the file its read wrote.
+  const viewPictures = usePicturesView();
+  const openKept = useKeptOpen();
+
+  const openMedia = (address: string, alt: string) => {
+    const file = media?.fileAt(address);
+
+    if (file !== undefined) {
+      const name = alt.trim() === "" ? UNNAMED_FILE : alt.trim();
+      openKept?.({ kind: KEPT_KIND.FILE, source: file.source, name, mediaType: file.mediaType });
+
+      return;
+    }
+
+    const source = media?.pictureSource(address);
+
+    if (source == null || viewPictures === undefined) return;
+    viewPictures([{ source, title: alt, subtitle: undefined }], 0);
+  };
 
   const look = {
     text: colors.TEXT,
@@ -716,19 +731,6 @@ function FieldWords({
     latest.current = write;
   });
 
-  // Where the field takes the keyboard as it comes to stand, on the first line the pressed block of the document as read became, handed to the view, which lays it once it stands in a window, as a list builds a row only in sight.
-  const opening = useMemo((): NativeOpening | undefined => {
-    if (opensAt === undefined) return undefined;
-
-    if (opensAt === OPENS_AT_START) return { nonce: 1, start: true, line: 0, x: 0, y: 0 };
-
-    const block = blockAt(read, base, opensAt.at);
-    const found = handed.value.lines.findIndex((each) => each.from === block);
-    const line = Math.max(0, found);
-
-    return { nonce: 1, start: false, line, x: opensAt.x, y: opensAt.y };
-  }, [opensAt, read, base, handed]);
-
   const onLines = ({ nativeEvent }: NativeSyntheticEvent<NativeToldEvent>) => {
     pending.current = { told: nativeEvent, base: handed.markdown };
     frame.current ??= requestAnimationFrame(() => latest.current());
@@ -792,7 +794,6 @@ function FieldWords({
       style={fitsWords ? [style, { height: height ?? FIT_LEAST }] : style}
       fitsWords={fitsWords}
       keepClear={keepClear}
-      opening={opening}
       onHeight={fitsWords ? ({ nativeEvent }) => setHeight(nativeEvent.height) : undefined}
       value={handed.value}
       media={held}
@@ -813,7 +814,10 @@ function FieldWords({
       onLinkAsk={onLinkAsk}
       onCaret={onCaret}
       onLines={onLines}
-      onFocusChange={() => undefined}
+      onFocusChange={({ nativeEvent }) => onFocusChange?.(nativeEvent.focused)}
+      tapsToEdit={tapsToEdit}
+      onOpenLink={({ nativeEvent }) => onOpenLink?.(nativeEvent.address)}
+      onOpenMedia={({ nativeEvent }) => openMedia(nativeEvent.address, nativeEvent.alt)}
     />
   );
 }

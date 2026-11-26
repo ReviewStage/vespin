@@ -322,6 +322,15 @@ export function useQuickLook(kept: Kept | undefined): (() => void) | undefined {
   return () => keeping.open(kept);
 }
 
+/** Opens any kept thing in Quick Look through the app's keeping, as a file's chip opens its file; none where no app answers it. */
+export function useKeptOpen(): ((kept: Kept) => void) | undefined {
+  const keeping = useContext(KeepingDoor);
+
+  if (keeping === undefined) return undefined;
+
+  return (kept) => keeping.open(kept);
+}
+
 /** The words of a message's acts beyond its Copy, as the panel and iOS's own apps say them. */
 const MESSAGE_ACT_WORDS = {
   COPY_LINK: "Copy link",
