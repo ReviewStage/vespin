@@ -157,6 +157,7 @@ import { useAgentActions } from "../agents/use-agent-actions.js";
 import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-approvals.js";
 import {
   type AgentComposer,
+  heldFiles,
   type SuggestedSend,
   type UndeliveredActs,
   undeliveredWhole,
@@ -945,7 +946,7 @@ const AgentConversation = memo(function AgentConversation({
     () =>
       chat
         ? undefined
-        : transcriptItems(withSending(messages ?? [], sending ?? []), {
+        : transcriptItems(withSending(messages ?? [], sending ?? [], heldFiles), {
             writing,
             readerId,
             toggles,
