@@ -44,7 +44,9 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
  * smaller as WebP otherwise, as a feedback screenshot is
  * (`./feedback-images.ts`); a PDF is kept as it is; anything else comes
  * as a text file where its bytes spell UTF-8 with no NUL in them, whatever
- * its extension, since code arrives under every extension there is. Each
+ * its extension, since code arrives under every extension there is, and as
+ * a file of any other kind (`AGENT_ATTACHMENT_TYPE.OTHER`) where they do
+ * not, whatever its extension says, which the agent opens from its machine. Each
  * is held to its type's bound, a message to ten files and to 3 MB
  * together, and the first file that cannot come says why in the box's
  * note while the ones that can still come.
@@ -69,7 +71,6 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
 
 /** Why a file did not come, in the words the box's note says. */
 const REFUSAL = {
-  KIND: (name: string) => `${name} can't be attached. Attach images, PDFs, or text files.`,
   TOO_LARGE: (name: string) => `${name} is too large to attach.`,
   EMPTY: (name: string) => `${name} is empty.`,
   UNREADABLE: (name: string) => `${name} couldn't be read.`,
@@ -108,7 +109,11 @@ async function attachmentOf(file: File): Promise<FileRead> {
   }
 
   const pdf = file.type === AGENT_ATTACHMENT_TYPE.PDF || name.toLowerCase().endsWith(".pdf");
-  const bound = pdf ? AGENT_BOUNDS.MAX_PDF_BYTES : AGENT_BOUNDS.MAX_TEXT_BYTES;
+
+  // Note that a file's kind is known only once its bytes are read, so it is held to the larger of the bounds it may come under first.
+  const bound = pdf
+    ? AGENT_BOUNDS.MAX_PDF_BYTES
+    : Math.max(AGENT_BOUNDS.MAX_TEXT_BYTES, AGENT_BOUNDS.MAX_FILE_BYTES);
 
   if (file.size > bound) {
     countAttachmentTooLarge(pdf ? PRODUCT_ATTACHMENT_KIND.PDF : attachmentKindOf(file), file.size);
@@ -130,8 +135,11 @@ async function attachmentOf(file: File): Promise<FileRead> {
 
   if (bytes.length === 0) return { refusal: REFUSAL.EMPTY(name) };
 
-  if (!pdf && !spellsText(bytes)) return { refusal: REFUSAL.KIND(name) };
-  const mediaType = pdf ? AGENT_ATTACHMENT_TYPE.PDF : AGENT_ATTACHMENT_TYPE.TEXT;
+  const mediaType = pdf
+    ? AGENT_ATTACHMENT_TYPE.PDF
+    : spellsText(bytes)
+      ? AGENT_ATTACHMENT_TYPE.TEXT
+      : AGENT_ATTACHMENT_TYPE.OTHER;
 
   return { attachment: { name, mediaType, data: base64Of(bytes) } };
 }
