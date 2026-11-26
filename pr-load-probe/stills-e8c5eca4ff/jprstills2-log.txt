@@ -1,0 +1,13 @@
+pinned to e8c5eca4ff
+== bundle PJjprstills2 base 979ff9e943
+  built 979ff9e943 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 1 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+    apps/mobile/src/agents/use-agent-composer.ts(108,38): error TS2307: Cannot find module './composer-drafts.js' or its corresponding type declarations.
+    apps/mobile/src/agents/use-agent-composer.ts(324,15): error TS7006: Parameter 'typed' implicitly has an 'any' type.
+    apps/mobile/src/agents/use-agent-composer.ts(404,15): error TS7006: Parameter 'typed' implicitly has an 'any' type.
+    apps/mobile/src/agents/use-agent-composer.ts(900,22): error TS7006: Parameter 'typedSince' implicitly has an 'any' type.
+    apps/mobile/src/app/_layout.tsx(24,42): error TS2307: Cannot find module '../agents/composer-drafts.js' or its corresponding type declarations.
+  type errors in 2 files; PRs to drop: none (no merged PR's diff holds an erroring file)
+  export 1 (simulator-bundle.sh)
+  signed 1
