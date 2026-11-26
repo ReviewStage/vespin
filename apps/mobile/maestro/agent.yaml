@@ -242,10 +242,18 @@ env:
 # let go first, by a tap on the transcript at the window's leading edge,
 # since on the iPhone the menu, which drops from ⋯ at the trailing edge,
 # reaches the middle of its top, where a tap opened Copy transcript.
+# Note that a menu or popover is put away by a tap off it at a point,
+# because iOS takes everything under it out of the accessibility tree, so no
+# named control behind it can be pressed (#10757's rig run); the flow then
+# asserts it gone and the page as it stood, so a tap that ever lands on a
+# live control fails here. Its wait is capped, as every wait on this page is.
 - tapOn:
     point: "4%, 50%"
 - waitForAnimationToEnd:
     timeout: 5000
+- assertNotVisible: "Rename"
+- assertVisible:
+    id: "agent-model-chip"
 - tapOn:
     id: "agent-model-chip"
 - assertVisible: "Effort"
@@ -339,6 +347,8 @@ env:
           env:
             POINT: "5%, 50%"
 - assertNotVisible: "Effort.*"
+- assertVisible:
+    id: "agent-model-chip"
 # Rename asks for the name in the system's alert, holding the name as it
 # stands; the new one is drawn in the bar at once.
 - tapOn: "More"
@@ -399,7 +409,8 @@ env:
 - takeScreenshot: agent-move-to
 - tapOn:
     point: "50%, 20%"
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - assertNotVisible: "build-box.*"
 # Note that the tap puts away only Move to's submenu, leaving the ⋯ menu it
 # opened from, whose Permanently delete is its alone, standing over the bar;
@@ -412,6 +423,7 @@ env:
       - runFlow:
           file: subflows/dismiss.yaml
 - assertNotVisible: "Permanently delete"
+- assertVisible: "Invite by email"
 # Archive asks first, in the panel's words, since the agent still works and
 # archiving it stops it; putting the question away (its Cancel, on the
 # iPhone's action sheet and the iPad's alert alike) leaves it.

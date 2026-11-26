@@ -82,7 +82,14 @@ env:
 - assertVisible: "Manage in workspace settings"
 - waitForAnimationToEnd
 - takeScreenshot: person-menu
+# Note that a menu or popover is put away by a tap off it at a point, through
+# `dismiss.yaml`, because iOS takes everything under it out of the
+# accessibility tree, so no named control behind it can be pressed (#10757's
+# rig run); the flow then asserts it gone and the page as it stood, so a tap
+# that ever lands on a live control fails here.
 - runFlow: subflows/dismiss.yaml
+- assertNotVisible: "Copy email"
+- assertVisible: "Grace Hopper"
 - runFlow:
     when:
       visible:

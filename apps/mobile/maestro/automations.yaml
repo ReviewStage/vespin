@@ -78,8 +78,15 @@ env:
 - assertVisible: "Delete"
 - waitForAnimationToEnd
 - takeScreenshot: automation-page-more
+# Note that a menu or popover is put away by a tap off it at a point, through
+# `dismiss.yaml`, because iOS takes everything under it out of the
+# accessibility tree, so no named control behind it can be pressed (#10757's
+# rig run); the flow then asserts it gone and the page as it stood, so a tap
+# that ever lands on a live control fails here.
 - runFlow:
     file: subflows/dismiss.yaml
+- assertNotVisible: "Copy link"
+- assertVisible: "Where it runs"
 - scrollUntilVisible:
     element: "Send the weekly digest"
 - waitForAnimationToEnd

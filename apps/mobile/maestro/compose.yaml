@@ -119,6 +119,9 @@ env:
           element: "Done"
           direction: UP
       - tapOn: "Done"
+- assertNotVisible: "Full access.*"
+- assertVisible:
+    id: "agent-model-chip"
 # A `/` typed offers the task's skills over the field, narrowed as the name
 # is typed, and a press writes the skill's word into the message.
 - tapOn:

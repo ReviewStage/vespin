@@ -67,6 +67,7 @@ appId: dev.vespin.ios
       visible: "Done"
     commands:
       - tapOn: "Done"
+- assertNotVisible: "Effort"
 - assertVisible: "Sonnet 5.5.*"
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-picked
