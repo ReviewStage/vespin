@@ -74,6 +74,80 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.43.0 — 2026-11-25
+
+### Panes, folds, and buttons answer at once
+
+Vespin drops its decorative motion: the sidebar, side panel, folds, and
+buttons now open, close, and respond the moment you press them.
+
+[#11024](https://github.com/ReviewStage/vespin/pull/11024),
+[#10880](https://github.com/ReviewStage/vespin/pull/10880),
+[#10861](https://github.com/ReviewStage/vespin/pull/10861),
+[#10855](https://github.com/ReviewStage/vespin/pull/10855)
+
+### Improvements
+
+- On a phone, the Tasks list counts each header and opens its menu on a
+  long press ([#10937](https://github.com/ReviewStage/vespin/pull/10937))
+- On a phone, Search's Recent now lists agents you opened
+  ([#10948](https://github.com/ReviewStage/vespin/pull/10948))
+- On a phone, an Inbox thread's message box now stays at the bottom
+  ([#10940](https://github.com/ReviewStage/vespin/pull/10940))
+- The Automations list can now be ordered by Last updated
+  ([#10994](https://github.com/ReviewStage/vespin/pull/10994))
+- Vespin comes back to the front once you grant a permission in System
+  Settings ([#10985](https://github.com/ReviewStage/vespin/pull/10985))
+- The page your browser shows after signing in now matches Vespin's look
+  ([#11000](https://github.com/ReviewStage/vespin/pull/11000))
+- Agents now write dates and times as date chips
+  ([#10998](https://github.com/ReviewStage/vespin/pull/10998))
+
+### Fixes
+
+- Fixed a dragged sidebar row jumping back for a moment after you let go
+  ([#10766](https://github.com/ReviewStage/vespin/pull/10766))
+- Fixed Forked to and Continued in lines sitting out of line with tool rows
+  ([#10982](https://github.com/ReviewStage/vespin/pull/10982))
+
+## 0.42.0 — 2026-11-25
+
+### Vespin in your phone's browser
+
+On a phone, Vespin's web app now has a tab bar with Inbox, Tasks,
+Automations, and Search, opens New task as a full-height sheet, and puts
+New agent in a task's bar.
+
+[#10928](https://github.com/ReviewStage/vespin/pull/10928),
+[#10941](https://github.com/ReviewStage/vespin/pull/10941),
+[#10929](https://github.com/ReviewStage/vespin/pull/10929),
+[#10942](https://github.com/ReviewStage/vespin/pull/10942),
+[#10933](https://github.com/ReviewStage/vespin/pull/10933)
+
+### Improvements
+
+- Opening a task, New task, and typing in a message box are faster
+  ([#10857](https://github.com/ReviewStage/vespin/pull/10857),
+  [#10882](https://github.com/ReviewStage/vespin/pull/10882),
+  [#10888](https://github.com/ReviewStage/vespin/pull/10888),
+  [#10858](https://github.com/ReviewStage/vespin/pull/10858),
+  [#10874](https://github.com/ReviewStage/vespin/pull/10874),
+  [#10885](https://github.com/ReviewStage/vespin/pull/10885),
+  [#10864](https://github.com/ReviewStage/vespin/pull/10864),
+  [#10905](https://github.com/ReviewStage/vespin/pull/10905),
+  [#10910](https://github.com/ReviewStage/vespin/pull/10910))
+- An agent cut off mid-turn now keeps carrying on, shown as one short line
+  ([#10800](https://github.com/ReviewStage/vespin/pull/10800),
+  [#10791](https://github.com/ReviewStage/vespin/pull/10791))
+- Claude and Codex now show one logo each on agents, models, plans, and keys
+  ([#10966](https://github.com/ReviewStage/vespin/pull/10966))
+- A pull request trigger that hears agents now fires on their pushes too
+  ([#10955](https://github.com/ReviewStage/vespin/pull/10955))
+- Settings › About puts Open changelog at the head of Updates
+  ([#10926](https://github.com/ReviewStage/vespin/pull/10926))
+- Settings › Billing reads in plainer words
+  ([#10922](https://github.com/ReviewStage/vespin/pull/10922))
+
 ## 0.41.1 — 2026-11-24
 
 ### Improvements

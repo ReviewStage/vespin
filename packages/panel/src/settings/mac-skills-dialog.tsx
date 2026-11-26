@@ -25,6 +25,7 @@ import {
   ErrorState,
   GAP,
   GlyphSlot,
+  HarnessMark,
   Inline,
   SETTINGS_ROW_CONTROLS,
   SettingsLine,
@@ -45,7 +46,6 @@ import { useState } from "react";
 import { type ActVariables, askAct } from "../act.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
-import { HarnessMark } from "../harness-marks.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { pressTakeBack, type TakeBackWrite } from "../undo-stack.js";

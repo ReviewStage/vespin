@@ -1,7 +1,6 @@
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import type { ReactNode } from "react";
 import { PlayIcon } from "../../icons/lucide-glyphs.js";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { Tooltip } from "../tooltip/hint.js";
 
@@ -92,7 +91,7 @@ function OptionMediaTile({ piece }: { piece: OptionMediaPiece }): React.JSX.Elem
           type="button"
           className="group/option-media m-0 flex w-full min-w-0 flex-col gap-ui-4 rounded-control border-0 bg-transparent p-0 text-start text-inherit [font:inherit]"
           aria-label={`${KIND_WORD[piece.kind]}: ${caption}`}
-          onClick={pulseOnPress(() => piece.onOpen(), PRESS_PULSE.QUIET)}
+          onClick={() => piece.onOpen()}
         >
           <span className="relative block transition-opacity duration-(--ui-duration-hover) group-hover/option-media:opacity-90">
             {piece.thumb}

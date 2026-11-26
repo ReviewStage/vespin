@@ -19,7 +19,6 @@ export const MOTION_TOKEN = {
   SPRING: "--ui-spring",
   SPRING_FAST: "--ui-spring-fast",
   EASE_EXIT: "--ui-motion-exit",
-  EASE_PANE: "--ui-motion-pane",
 } as const;
 
 /** A CSS time, `240ms` or `0.24s`, in milliseconds; anything else is none. */

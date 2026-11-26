@@ -1,6 +1,6 @@
 // pull-request-page.tsx -- a pull request's page: its heading with where it stands, who opened it and its branches, the rows of its checks and reviews, each with its face, the line a change GitHub refused leaves, and the question an act asks first.
 
-import { HStack, Menu, ScrollView, Text, Toggle, VStack } from "@expo/ui/swift-ui";
+import { HStack, Menu, ScrollView, Toggle, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
@@ -32,9 +32,11 @@ import { FieldChip, type FieldMenu, LabelChip } from "./button.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { useRowInset } from "./layout-margin.js";
+import { LineCounts, lineCountsHeard } from "./line-counts.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
 import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
+import { Text } from "./text.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -326,6 +328,8 @@ type MarkRowProps = {
   readonly opens?: string | undefined;
   /** Whether a press on it pushes a page of its own, such as the checks' list, marked at its end by the chevron; none where it opens an address or takes no press. */
   readonly pushes?: boolean | undefined;
+  /** The lines it counts after its words, in green and red (`LineCounts`), such as the files changed's; none where it counts none. */
+  readonly lines?: { readonly additions: number; readonly deletions: number } | undefined;
 };
 
 /** What a row that opens an address out of the app is heard to do, in the arrow's place: GitHub by name where the address is GitHub's, since a check's run may be another CI's page. */
@@ -354,10 +358,21 @@ function opensHeard(address: string): string {
  * mark moving to the line's end before its words, as the panel's facepile
  * wears where each stands; a check's App stands by its avatar beside the
  * mark. A row that opens an address out of the app ends in its arrow, and one
- * that pushes a page of its own, such as the checks' list, in the chevron. The row is heard as one
+ * that pushes a page of its own, such as the checks' list, in the chevron;
+ * one that counts lines ends its words with them in green and red. The row is heard as one
  * element: its name, where it stands, its words, and where a press goes.
  */
-export function MarkRow({ id, mark, title, detail, standing, face, opens, pushes }: MarkRowProps) {
+export function MarkRow({
+  id,
+  mark,
+  title,
+  detail,
+  standing,
+  face,
+  opens,
+  pushes,
+  lines,
+}: MarkRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.FACE);
   const glyph = <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.ROW_TITLE} />;
@@ -382,6 +397,17 @@ export function MarkRow({ id, mark, title, detail, standing, face, opens, pushes
       </Text>
     );
 
+  // Note that the lines stand after the words in their own inks, as the pull request card ends with them.
+  const said =
+    lines === undefined ? (
+      words
+    ) : (
+      <HStack spacing={SPACE.TIGHT + 2}>
+        {words}
+        <LineCounts additions={lines.additions} deletions={lines.deletions} />
+      </HStack>
+    );
+
   const row: ReactElement = (
     <RowHead
       unread={false}
@@ -395,10 +421,10 @@ export function MarkRow({ id, mark, title, detail, standing, face, opens, pushes
         leads ? (
           <HStack spacing={SPACE.TIGHT}>
             {glyph}
-            {words}
+            {said}
           </HStack>
         ) : (
-          words
+          said
         )
       }
       trail={
@@ -421,6 +447,7 @@ export function MarkRow({ id, mark, title, detail, standing, face, opens, pushes
           face?.of.bot === true && BOT_TAG_WORDS,
           standing !== detail && standing,
           detail,
+          lines !== undefined && lineCountsHeard(lines.additions, lines.deletions),
           opens !== undefined && opensHeard(opens),
         ],
       }}

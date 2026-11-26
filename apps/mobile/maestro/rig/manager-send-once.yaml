@@ -1,0 +1,62 @@
+# manager-send-once.yaml -- a message typed into a Manager's chat while JavaScript is behind the field goes once, as the whole of what the field shows: keys typed and two presses of Send that reach JavaScript together, in one batch, post one message of every word typed, and leave the field empty.
+#
+# It lives under maestro/rig/ rather than maestro/, so the screenshot run,
+# which runs every flow at maestro/'s top, never runs it. `-busyRender`
+# holds each render of the agent's page for twenty seconds while its composer
+# holds words (`rig-busy-render.ts`), as a Manager's page at work holds
+# JavaScript, so every key typed and both presses after the first key land
+# while JavaScript is still drawing that key, and reach it in one batch, as
+# Charles's "What abo" did, posted twice and cut off. The press is Send's own, found by its name, and every wait is on what
+# the screen shows.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture and opened on its release Manager's
+# chat by `-agent <id>`; a message the run sends lands as the chat's row
+# (`fixture-host.ts`'s `keepChatSend`); nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 81e2a425-6d3f-4a07-92df-9eafb0c1d2e8
+      busyRender: "20000"
+- extendedWaitUntil:
+    visible: "Left before it ships.*"
+    timeout: 60000
+# Note that the chat draws before the composer's field does, each render held
+# by the rig, so the field is waited for before it is pressed.
+- extendedWaitUntil:
+    visible:
+      id: "composer-field"
+    timeout: 60000
+- tapOn:
+    id: "composer-field"
+# The first words land and are drawn, so Send stands.
+- inputText: "What abo"
+- extendedWaitUntil:
+    visible:
+      text: "Send"
+      enabled: true
+    timeout: 120000
+# The rest is typed and Send pressed twice while the page draws the first
+# word, held, so the keys and both presses reach JavaScript together once
+# it lets go.
+- inputText: "ut the release"
+- tapOn: "Send"
+- tapOn: "Send"
+# Note that the field shows every key at once, natively, so its words match
+# the message's before anything is sent; the flow waits for JavaScript to
+# take the presses, which empties the composer and takes Send away, before
+# it reads the chat.
+- extendedWaitUntil:
+    notVisible: "Send"
+    timeout: 180000
+# The chat shows the whole message once, and nothing on the screen holds a
+# piece of it: no row cut off, and no word left in the field.
+- assertVisible: "What about the release"
+- assertNotVisible:
+    text: "What about the release"
+    index: 1
+# Note that Maestro reads text without regard to case, so the pieces are
+# matched whole, where the Manager's own name and its "what's left" hold none.
+- assertNotVisible: "(?!What about the release$).*(What abo|ut the rel).*"
+- takeScreenshot: manager-send-once

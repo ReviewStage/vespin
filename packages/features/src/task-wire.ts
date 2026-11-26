@@ -259,7 +259,7 @@ const taskAgentStartSchema = EffectSchema.Struct({
   permissionMode: agentStartRequestFields.permissionMode,
   /** An agent handed nothing, as Talk in New task's box starts one, whose first words are said on the call that opens on it. */
   blank: agentStartRequestFields.blank,
-  /** The repositories beside the task's, which released desktop builds send and the service passes over, since every connected repository is on the workspace drive. */
+  /** The repositories beside the task's, which released desktop builds send and the service passes over: the agent is started in the task's repository alone. */
   alsoRepositories: EffectSchema.optionalKey(
     EffectSchema.Array(
       EffectSchema.Struct({

@@ -8,6 +8,7 @@ import {
 } from "@repo/database/models/agent-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { githubRepositoryFullNameSchema } from "@repo/features/link-grammar";
 import { type TaskStatus, taskStatusSchema } from "@repo/features/task-wire";
 import { describeWire } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
@@ -44,7 +45,8 @@ export const AGENT_LIST_FILTER_REFUSAL = {
   UNREADABLE:
     "Not run: narrow the list by a taskId, by words of an agent's title or its " +
     `task's name of at most ${AGENT_BOUNDS.MAX_SEARCH_CHARS} characters, by archived, ` +
-    "startedBy, automation, automationId, or a task status, and page it by an offset of 0 or more.",
+    "startedBy, automation, automationId, a task status, or a pullRequest (its repository as " +
+    "owner/name and its number), and page it by an offset of 0 or more.",
   THIS_TASK_KEY:
     "Not run: list_agents takes no thisTask; pass your own task's id, the taskId your " +
     "instructions name, as taskId.",
@@ -100,6 +102,16 @@ export const AGENT_LIST_INPUT = Schema.Struct({
   taskStatus: Schema.optionalKey(
     describeWire(taskStatusSchema, "Only the agents on a task that stands here, such as done."),
   ),
+  pullRequest: Schema.optionalKey(
+    describeWire(
+      Schema.Struct({
+        repository: githubRepositoryFullNameSchema,
+        number: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+      }),
+      "Only the agents behind this pull request, which opened it or work on its branch, by its " +
+        "repository as owner/name and its number; their task says what it was for.",
+    ),
+  ),
   offset: Schema.optionalKey(
     describeWire(
       Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
@@ -124,7 +136,7 @@ export interface WorkspaceAgents {
   readonly nextOffset: number | null;
 }
 
-/** What a list's input narrows it to: one task where it names one, words to search by, the agents' archive, starter (by their account's id), automation and task's status where named, and the page to read. */
+/** What a list's input narrows it to: one task where it names one, words to search by, the agents' archive, starter (by their account's id), automation, task's status, and pull request where named, and the page to read. */
 export interface AgentListFilter {
   readonly taskId: string | undefined;
   readonly words: string | undefined;
@@ -133,6 +145,7 @@ export interface AgentListFilter {
   readonly automation: boolean | undefined;
   readonly automationId: string | undefined;
   readonly taskStatus: TaskStatus | undefined;
+  readonly pullRequest: { readonly repository: string; readonly number: number } | undefined;
   readonly offset: number;
 }
 
@@ -172,13 +185,14 @@ export function listedFilter(input: UnparsedWireValue): Result.Result<AgentListF
     automation: narrowed.automation,
     automationId: narrowed.automationId,
     taskStatus: narrowed.taskStatus,
+    pullRequest: narrowed.pullRequest,
     offset: offset ?? 0,
   });
 }
 
-/** The store's narrowing for a list's archive, starter, automation and task's status, each left out where the filter names none. */
+/** The store's narrowing for a list's archive, starter, automation, task's status, and pull request, each left out where the filter names none. */
 function storeNarrowingOf(filter: AgentListFilter) {
-  const { archived, startedBy, automation, automationId, taskStatus } = filter;
+  const { archived, startedBy, automation, automationId, taskStatus, pullRequest } = filter;
 
   return {
     // An archived agent is listed unless the filter asks for only those not archived.
@@ -188,6 +202,7 @@ function storeNarrowingOf(filter: AgentListFilter) {
     ...(automation === undefined ? undefined : { automation }),
     ...(automationId === undefined ? undefined : { automationId }),
     ...(taskStatus === undefined ? undefined : { taskStatus }),
+    ...(pullRequest === undefined ? undefined : { pullRequest }),
   };
 }
 

@@ -1,0 +1,224 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { it } from "@effect/vitest";
+import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { inArray } from "drizzle-orm";
+import { Effect } from "effect";
+import { Database } from "../../core/query.js";
+import { attachment } from "../../schemas/attachment.js";
+import { attachmentBlobTombstone } from "../../schemas/attachment-blob-tombstone.js";
+import { user } from "../../schemas/auth.js";
+import { conversations } from "../../schemas/storage.js";
+import { CONVERSATION_KIND } from "../../storage-vocabulary.js";
+import { getTestDB } from "../../testing/index.js";
+import {
+  dropAttachmentBlobTombstones,
+  readAttachmentBlobTombstones,
+  tombstoneUnwrittenUploads,
+} from "../attachment-blob-tombstones.js";
+import { deleteConversations } from "../conversation-delete.js";
+
+/**
+ * attachment-blob-tombstones.test.ts -- a stored attachment's objects tombstoned by its owner's cascade, and the sweep's batch read and drop of them.
+ *
+ * Synthetic accounts, pathnames, and bytes throughout.
+ */
+
+const openConversation = Effect.gen(function* () {
+  const db = yield* Database;
+  const userId = `user-${randomUUID()}`;
+  yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
+  const [row] = yield* db
+    .insert(conversations)
+    .values({ userId, kind: CONVERSATION_KIND.AGENT })
+    .returning({ id: conversations.id });
+
+  assert.ok(row);
+
+  return { userId, conversationId: row.id };
+});
+
+/** A conversation's picture's columns but its bytes and where they stand. */
+const pictureOf = (userId: string, conversationId: string) => ({
+  id: randomUUID(),
+  userId,
+  conversationId,
+  sha256: randomUUID(),
+  width: 1280,
+  height: 720,
+  createdAt: new Date(),
+});
+
+it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
+  it.effect(
+    "a conversation's delete tombstones its stored recording and its copy for a phone, and an inline picture leaves none",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { userId, conversationId } = yield* openConversation;
+        const stored = pictureOf(userId, conversationId);
+        const inline = pictureOf(userId, conversationId);
+        const blobKey = `attachments/${stored.id}`;
+        const phoneBlobKey = `attachments/${stored.id}/phone`;
+
+        yield* db.insert(attachment).values([
+          {
+            ...stored,
+            contentType: CONVERSATION_MEDIA_TYPE.WEBM,
+            byteCount: 2_000,
+            blobKey,
+            phoneBlobKey,
+            phoneByteCount: 1_500,
+          },
+          {
+            ...inline,
+            contentType: CONVERSATION_MEDIA_TYPE.PNG,
+            byteCount: 3,
+            bytes: new Uint8Array([1, 2, 3]),
+          },
+        ]);
+
+        yield* deleteConversations([conversationId]);
+
+        const tombstoned = (yield* readAttachmentBlobTombstones(1_000)).map(
+          (tombstone) => tombstone.key,
+        );
+
+        assert.deepEqual(
+          tombstoned.filter((key) => key.includes(stored.id) || key.includes(inline.id)),
+          [blobKey, phoneBlobKey],
+        );
+      }),
+  );
+
+  it.effect("a batch reads the oldest first, and a dropped tombstone is not read again", () =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const oldest = `attachments/${randomUUID()}`;
+      const older = `attachments/${randomUUID()}`;
+
+      // Note that these stand before any other test's tombstones, so the batch reads them first.
+      yield* db.insert(attachmentBlobTombstone).values([
+        { key: older, createdAt: new Date("2000-01-02T00:00:00Z") },
+        { key: oldest, createdAt: new Date("2000-01-01T00:00:00Z") },
+      ]);
+
+      const batch = yield* readAttachmentBlobTombstones(2);
+
+      assert.deepEqual(
+        batch.map((tombstone) => tombstone.key),
+        [oldest, older],
+      );
+
+      yield* dropAttachmentBlobTombstones(batch.slice(0, 1));
+
+      const rest = yield* readAttachmentBlobTombstones(1);
+
+      assert.deepEqual(
+        rest.map((tombstone) => tombstone.key),
+        [older],
+      );
+
+      yield* dropAttachmentBlobTombstones(rest);
+    }),
+  );
+
+  it.effect(
+    "an upload whose row was never written is tombstoned, and one whose row stands is not",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { userId, conversationId } = yield* openConversation;
+        const written = pictureOf(userId, conversationId);
+        const unwritten = randomUUID();
+        const writtenKey = `attachments/${written.id}`;
+        const unwrittenKey = `attachments/${unwritten}`;
+
+        yield* db.insert(attachment).values({
+          ...written,
+          contentType: CONVERSATION_MEDIA_TYPE.PNG,
+          byteCount: 3,
+          blobKey: writtenKey,
+        });
+
+        yield* tombstoneUnwrittenUploads(
+          [
+            { id: written.id, keys: [writtenKey] },
+            { id: unwritten, keys: [unwrittenKey] },
+          ],
+          0,
+        );
+
+        const tombstoned = (yield* readAttachmentBlobTombstones(1_000)).filter(
+          (tombstone) => tombstone.key === writtenKey || tombstone.key === unwrittenKey,
+        );
+
+        assert.deepEqual(
+          tombstoned.map((tombstone) => tombstone.key),
+          [unwrittenKey],
+        );
+
+        yield* dropAttachmentBlobTombstones(tombstoned);
+      }),
+  );
+
+  it.effect(
+    "a phone copy a stored row does not name is tombstoned and purged within the minute, and a key the row names is never purged",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { userId, conversationId } = yield* openConversation;
+        const kept = pictureOf(userId, conversationId);
+        const blobKey = `attachments/${kept.id}`;
+        const phoneKey = `attachments/${kept.id}/phone`;
+
+        // A recording kept without the copy for a phone its upload reserved, as one whose copy failed its checks is.
+        yield* db.insert(attachment).values({
+          ...kept,
+          contentType: CONVERSATION_MEDIA_TYPE.WEBM,
+          byteCount: 2_000,
+          blobKey,
+        });
+
+        yield* tombstoneUnwrittenUploads([{ id: kept.id, keys: [blobKey, phoneKey] }], 0);
+
+        const tombstoned = yield* db
+          .select({ key: attachmentBlobTombstone.key })
+          .from(attachmentBlobTombstone)
+          .where(inArray(attachmentBlobTombstone.key, [blobKey, phoneKey]));
+
+        assert.deepEqual(
+          tombstoned.map((row) => row.key),
+          [phoneKey],
+        );
+
+        // A tombstone that stood on the row's own key anyway, as no writer leaves one, is still never read.
+        yield* db.insert(attachmentBlobTombstone).values({ key: blobKey });
+
+        const purgeable = (yield* readAttachmentBlobTombstones(100_000))
+          .map((tombstone) => tombstone.key)
+          .filter((key) => key === blobKey || key === phoneKey);
+
+        assert.deepEqual(purgeable, [phoneKey]);
+      }),
+  );
+
+  it.effect(
+    "an unwritten upload's tombstone is not read while a URL handed out for it may still land an upload",
+    () =>
+      Effect.gen(function* () {
+        const pending = `attachments/${randomUUID()}`;
+        const due = `attachments/${randomUUID()}`;
+
+        yield* tombstoneUnwrittenUploads([{ id: randomUUID(), keys: [pending] }], 3_600);
+        yield* tombstoneUnwrittenUploads([{ id: randomUUID(), keys: [due] }], 0);
+
+        const read = (yield* readAttachmentBlobTombstones(100_000))
+          .map((tombstone) => tombstone.key)
+          .filter((key) => key === pending || key === due);
+
+        assert.deepEqual(read, [due]);
+      }),
+  );
+});

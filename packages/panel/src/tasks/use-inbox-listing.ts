@@ -1,3 +1,4 @@
+import { inboxReadRows } from "@repo/features/inbox-digest";
 import {
   anyToMarkRead,
   EVERYONES,
@@ -10,7 +11,9 @@ import {
   inboxAtNow,
   inboxCounts,
   inboxGroups,
+  inboxItemAtNow,
   inboxRunOf,
+  inboxSearchWordsOf,
   listedItems,
   taskGroups,
 } from "@repo/features/inbox-list-model";
@@ -32,6 +35,7 @@ import {
 } from "../task-list-collections.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
+import { wholeInboxItems } from "./inbox-whole-items.js";
 import { useAgents, useTaskAgents } from "./use-agents.js";
 import { useHeldInboxList } from "./use-held-inbox-list.js";
 import { taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
@@ -287,11 +291,11 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
 
   const taskId = chosenTask?.id;
 
-  const { groups: taskless, ...tasklessFeed } = useTasklessInboxGroups(
-    tasks.workspace?.id,
-    tasks.agentsCarried,
-    tasks.agents.models,
-  );
+  const {
+    groups: taskless,
+    whole: tasklessWhole,
+    ...tasklessFeed
+  } = useTasklessInboxGroups(tasks.workspace?.id, tasks.agentsCarried, tasks.agents.models);
 
   // The agent on no task holding the item asked for, whose threads the feed alone holds.
   const askedItemId = asked?.itemId;
@@ -385,8 +389,11 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
       return task === undefined ? [] : [task];
     });
 
-    return [...inboxGroups(held, { tasks: holdings, listed: holders }), ...taskless];
+    return [...inboxGroups(inboxReadRows(held), { tasks: holdings, listed: holders }), ...taskless];
   }, [held, holdings, holderRows, taskless]);
+
+  // Note that the list draws rows, and the pane and the search read each item whole, found by its id in the reads the rows are made from.
+  const whole = useMemo(() => wholeInboxItems(held, tasklessWhole), [held, tasklessWhole]);
 
   // Note that a reminder is weighed on the window's clock, since no read of the service's may read one, so an item comes back within the minute its reminder comes due.
   const now = useMinute();
@@ -401,7 +408,13 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: tasks.me });
   // The list's search, which narrows what it lists, never what it counts.
   const [query, setQuery] = useState("");
-  const search = useMemo(() => searchTokens(query), [query]);
+  const tokens = useMemo(() => searchTokens(query), [query]);
+
+  const search = useMemo(
+    () => ({ tokens, wordsOf: inboxSearchWordsOf((itemId) => whole.get(itemId)) }),
+    [tokens, whole],
+  );
+
   const me = tasks.me;
   // Note that a task's items are listed whole, under no view (`TASK_LISTS`).
   const { show, whose, pinnedFirst, folded } = narrowedTask === undefined ? choices : TASK_LISTS;
@@ -440,9 +453,16 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
 
   // Note that a thread on no task stands beside the list as a task's does.
   const chosen = askedListed;
+  const chosenWhole = chosen === undefined ? undefined : whole.get(chosen.item.id);
+
+  // Note that the pane draws the whole item as the list stood its row at the minute (`inboxAtNow`), a reminder come due let go.
+  const chosenItem = useMemo(
+    () => (chosenWhole === undefined ? undefined : inboxItemAtNow(chosenWhole, now)),
+    [chosenWhole, now],
+  );
 
   // Note that a scope leaving out every item listed is said apart from an Inbox holding none.
-  const searched = search.length > 0 ? query : undefined;
+  const searched = tokens.length > 0 ? query : undefined;
 
   const filteredOut =
     searched === undefined &&
@@ -535,6 +555,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     steps,
     onPointing,
     chosen,
+    chosenItem,
     filteredOut,
     search: { query, onQuery: setQuery },
     searched,

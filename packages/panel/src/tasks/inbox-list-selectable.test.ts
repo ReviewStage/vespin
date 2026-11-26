@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import type { InboxListView } from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
@@ -73,7 +74,7 @@ const VIEW: InboxListView = {
   readerId: undefined,
   items: [1, 2, 3, 4, 5].map((number) => ({
     holder: { task: TASK },
-    item: item(number),
+    item: inboxRowOf(item(number)),
   })),
 };
 

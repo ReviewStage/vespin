@@ -1,4 +1,4 @@
-# description-edit.yaml -- a task's description edited in place on its page, as the desktop and Notion edit one: a press on its words putting the caret there, its blocks drawn with no syntax, a table as a card, the bar over the keyboard, a person mentioned from an `@`, a list's item moved in and back out, and Done.
+# description-edit.yaml -- a task's description edited in place on its page, as the desktop and Notion edit one: a press on its words putting the caret there, its blocks drawn with no syntax, a table as a card, the bar over the keyboard, a person mentioned from an `@`, a list's item moved in and back out, Done, and a word selected and formatted from the edit menu's Format.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -30,9 +30,9 @@ env:
 # and the quote drawn as the page draws them, with no Markdown syntax, and
 # the table as a card the phone does not edit. The press lands in the middle
 # of the Context's paragraph, read as its words before the field stands.
-# Note that no step selects words for the edit menu's Format here: the field
-# stands as tall as the description, so a tap at a share of its height can
-# land off the screen.
+# Note that the edit menu's Format is reached last, from a word near the
+# field's top, since a tap at a share of the field's height can land off the
+# screen once it stands as tall as the description.
 # Note that on an iPhone the words are scrolled to the screen's middle, clear
 # of the floating tab bar, which takes a press on words scrolled only into
 # sight at the screen's foot; an iPad's split view scrolls its detail column
@@ -186,6 +186,76 @@ env:
     below: "People"
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-foot-mentioned
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "Done editing description"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: "Done"
+- extendedWaitUntil:
+    notVisible:
+      id: "description-words"
+    timeout: 10000
+# A word selected opens the system's edit menu, its Format after the
+# system's own acts: Bold, Italic, Strikethrough, Code and Link, then Turn
+# into, in the panel's words. Note that the menu's next page is the system's
+# own chevron, which VoiceOver hears as Next Page; a wide window stands
+# Format on the first page already. A press on the Context paragraph opens
+# the field where the page read it, and the word selected is the Context
+# heading's, at the field's leading edge a little below its top, which
+# stands in sight above the paragraph however tall the field grows. The
+# word is selected as a person selects without a double tap: a tap stands
+# the caret at the word, a tap on the caret opens the edit menu, and its
+# Select takes the word, so no step waits on a double tap's timing.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - scrollUntilVisible:
+          element: "Only an admin can add.*"
+          direction: UP
+          centerElement: true
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-in.yaml
+          env:
+            ELEMENT: "Only an admin can add.*"
+            DIRECTION: UP
+            BESIDE: "true"
+- tapOn: "Only an admin can add.*"
+- extendedWaitUntil:
+    visible:
+      id: "description-words"
+    timeout: 10000
+- waitForAnimationToEnd
+- tapOn:
+    id: "description-words"
+    point: "8%,2%"
+- waitForAnimationToEnd
+- tapOn:
+    id: "description-words"
+    point: "8%,2%"
+- tapOn: "Select"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      notVisible: "Format"
+    commands:
+      - tapOn: "Next Page"
+- tapOn: "Format"
+- assertVisible: "Turn into"
+- waitForAnimationToEnd
+- takeScreenshot: description-edit-format
+- tapOn: "Italic"
+- waitForAnimationToEnd
+- takeScreenshot: description-edit-formatted
 - runFlow:
     when:
       true: ${FLOATING_TABS != 'true'}

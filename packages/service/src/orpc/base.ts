@@ -35,7 +35,7 @@ import { keepWriteReceipt, writeReceiptStands } from "@repo/database/models/writ
 import { IDEMPOTENCY_KEY } from "@repo/features";
 import { type HostedContract, hostedContract } from "@repo/features/contract";
 import { MACHINE_OWNER } from "@repo/features/device-agent-wire";
-import { Context, Effect, Option, References, Result, Tracer } from "effect";
+import { Clock, Context, Effect, Option, References, Result, Tracer } from "effect";
 import { Headers } from "effect/http";
 import {
   admittedHostVersion,
@@ -43,6 +43,11 @@ import {
   presentedHostVersion,
   presentedPollSecret,
 } from "../auth/device-secret.js";
+import {
+  droppedLateSessionCookies,
+  SessionCookies,
+  withoutSessionCookies,
+} from "../auth/session-cookies.js";
 import { sessionCredential } from "../auth/session-credential.js";
 import { HostedEnvironment } from "../environment.js";
 import {
@@ -85,6 +90,30 @@ export interface HostedSessionCaller extends HostedCaller {
 }
 
 /**
+ * The attribute a procedure's span counts the session cookies its answer
+ * dropped under, for leaving too late to hand them on safely
+ * (`auth/session-cookies.ts`), keyed in words Sentry's scrubber leaves be.
+ */
+const LATE_HANDOFF_DROPPED = "caller.handoff.dropped";
+
+/** Drops the session cookies kept for an answer that leaves too late, counting them on the procedure's span. */
+function lateSessionCookiesDropped(
+  services: Context.Context<WebServices>,
+  span: Tracer.Span,
+  askedAt: number,
+): Effect.Effect<void> {
+  const place = Context.getOption(services, SessionCookies);
+
+  if (Option.isNone(place)) return Effect.void;
+
+  return Effect.map(Clock.currentTimeMillis, (now) => {
+    const dropped = droppedLateSessionCookies(place.value.kept, now - askedAt);
+
+    if (dropped > 0) span.attribute(LATE_HANDOFF_DROPPED, dropped);
+  });
+}
+
+/**
  * Every procedure runs under a server span named by its path, whose parent
  * is the caller's trace as its `sentry-trace` names it, or its `traceparent`
  * where it sent none (`observability/caller-trace.ts`), and every log line it
@@ -99,6 +128,10 @@ export interface HostedSessionCaller extends HostedCaller {
  * (`observability/sentry.ts`'s `sentryTelemetry`), and no other header value
  * reaches a span or a log line. An unsampled call is a span that records
  * nothing but still names the caller's trace id, so its lines carry it too.
+ *
+ * Its answer's session cookies are dropped as it ends where it ends too late
+ * to hand them on safely, and counted on its span
+ * (`lateSessionCookiesDropped`).
  *
  * Note that the span and the annotations are set on the services handed to
  * the handler, not with `Effect.withSpan` or `Effect.annotateLogs` around
@@ -127,7 +160,13 @@ const procedureTraced = middlewareGen<HostedContext, WithEffectContext<WebServic
         : { client: `${client.platform}/${client.version}`, apiVersion: client.apiVersion }),
     });
 
-    return next({ context: { "effect/context": Context.add(annotated, Tracer.ParentSpan, span) } });
+    const handedOn = next({
+      context: { "effect/context": Context.add(annotated, Tracer.ParentSpan, span) },
+    });
+
+    return Effect.flatMap(Clock.currentTimeMillis, (askedAt) =>
+      handedOn.pipe(Effect.onExit(() => lateSessionCookiesDropped(services, span, askedAt))),
+    );
   });
 });
 
@@ -157,6 +196,20 @@ export const hosted: RouterImplementerWithMiddlewares<
   HostedContext,
   WithEffectContext<WebServices>
 > = implement(hostedContract).$context<HostedContext>().use(procedureTraced);
+
+/**
+ * A read whose answer is held until its rows move: its services lose the
+ * request's place for session cookies (`auth/session-cookies.ts`), so a
+ * browser's session is read without extending it and no cookie rides on an
+ * answer a sign-in in another tab may have overtaken.
+ */
+export const heldReadMiddleware = middlewareGen<HostedContext, WithEffectContext<WebServices>>(
+  function* ({ context, next }) {
+    return yield* next({
+      context: { "effect/context": withoutSessionCookies(context["effect/context"]) },
+    });
+  },
+);
 
 /** The caller by its bearer, or with no `Authorization` at all, the browser's session cookie (`auth/bearer.ts`'s `resolveHostedUserId`). */
 export function accountMiddleware(resolveUserId: UserIdResolver) {

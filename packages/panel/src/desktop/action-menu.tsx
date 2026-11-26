@@ -56,8 +56,15 @@ export interface MenuSubmenu {
   subject?: ShortcutSubject | undefined;
 }
 
-/** One line of a menu: an action, a submenu of them, or a panel its owner draws beside it as its submenu (`@repo/ui`'s `MenuPanel`). */
-export type MenuEntry = MenuAction | MenuSubmenu | MenuPanel;
+/** An item that opens a page of the window's own groups, a phone's More, which a floating menu draws in its place (`@repo/ui`'s `MenuPage`). */
+export interface MenuPage {
+  label: string;
+  icon?: React.JSX.Element;
+  groups: readonly (readonly MenuEntry[])[];
+}
+
+/** One line of a menu: an action, a submenu of them, a panel its owner draws beside it as its submenu (`@repo/ui`'s `MenuPanel`), or a page of its own groups. */
+export type MenuEntry = MenuAction | MenuSubmenu | MenuPanel | MenuPage;
 
 /** What a menu draws beyond its items: what it acts on, which heads it as a phone's sheet, and a foot under the items, as a task's menu says who created and last edited it. */
 export interface MenuEnds {
@@ -96,6 +103,9 @@ function sharedAction({ command, subject, chord, ...action }: MenuAction): Share
 
 function sharedEntry(entry: MenuEntry): SharedMenuEntry {
   if ("panel" in entry) return entry;
+
+  if ("groups" in entry)
+    return { ...entry, groups: entry.groups.map((group) => group.map(sharedEntry)) };
 
   if (!("items" in entry)) return sharedAction(entry);
   const { command, subject, ...submenu } = entry;

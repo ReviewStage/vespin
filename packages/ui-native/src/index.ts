@@ -92,6 +92,7 @@ export {
   type ComposerSendAs,
   DICTATION_PHASE,
   type DictationPhase,
+  wordsHandedBack,
 } from "./composer.js";
 
 export {
@@ -105,6 +106,8 @@ export {
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
+
+export type { ComposerSend } from "./composer-press.js";
 
 export {
   ConversationEntryRow,

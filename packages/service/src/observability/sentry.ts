@@ -26,7 +26,9 @@
  * instructions, messages, tool arguments, tool results, or replies, and no
  * request's body leaves either; and every
  * address a span, an event, or a log line carries leaves with its query's
- * values and its credential-shaped path segments redacted. The rest of
+ * values and its credential-shaped path segments redacted, and a presigned
+ * Blob URL quoted in an event's or a log line's words with its grant
+ * redacted. The rest of
  * `dataCollection` is left as the SDK ships it, which `PRIVACY.md` describes.
  * A deployment without
  * `SENTRY_DSN` starts the SDK disabled, and every layer here then sends
@@ -38,6 +40,7 @@ import {
   scrubbedAttributes,
   scrubbedQueryParams,
   scrubbedUrl,
+  withoutPresignedGrants,
 } from "@repo/features/sentry-addresses";
 import * as Sentry from "@sentry/effect";
 import {
@@ -325,13 +328,28 @@ function dropAnsweredToolRefusals(event: ErrorEvent, hint: EventHint): ErrorEven
   return null;
 }
 
-/** An event with the addresses its request, its trace, and its breadcrumbs carry scrubbed. */
+/**
+ * An event with the addresses its request, its trace, and its breadcrumbs
+ * carry scrubbed, and the grant of any presigned Blob URL its words quote
+ * (its message, an exception's, a breadcrumb's) redacted.
+ */
 function scrubbedEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
-  const { request, contexts, breadcrumbs } = event;
+  const { request, contexts, breadcrumbs, exception } = event;
   const trace = contexts?.trace;
 
   return {
     ...event,
+    ...(event.message !== undefined && { message: withoutPresignedGrants(event.message) }),
+    ...(exception?.values && {
+      exception: {
+        ...exception,
+        values: exception.values.map((value) =>
+          value.value === undefined
+            ? value
+            : { ...value, value: withoutPresignedGrants(value.value) },
+        ),
+      },
+    }),
     ...(request && {
       request: {
         ...request,
@@ -345,9 +363,11 @@ function scrubbedEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
       contexts: { ...contexts, trace: { ...trace, data: scrubbedSpanAttributes(trace.data) } },
     }),
     ...(breadcrumbs && {
-      breadcrumbs: breadcrumbs.map((crumb) =>
-        crumb.data ? { ...crumb, data: scrubbedAttributes(crumb.data) } : crumb,
-      ),
+      breadcrumbs: breadcrumbs.map((crumb) => ({
+        ...crumb,
+        ...(crumb.message !== undefined && { message: withoutPresignedGrants(crumb.message) }),
+        ...(crumb.data && { data: scrubbedAttributes(crumb.data) }),
+      })),
     }),
   };
 }
@@ -386,8 +406,11 @@ export function sentryOptions(): SentryOptions {
     beforeSendSpan: Sentry.withStreamedSpan((span) =>
       namedForStatement({ ...span, attributes: scrubbedSpanAttributes(span.attributes) }),
     ),
-    beforeSendLog: (log) =>
-      log.attributes ? { ...log, attributes: scrubbedAttributes(log.attributes) } : log,
+    beforeSendLog: (log) => ({
+      ...log,
+      message: Predicate.isString(log.message) ? withoutPresignedGrants(log.message) : log.message,
+      ...(log.attributes && { attributes: scrubbedAttributes(log.attributes) }),
+    }),
   };
 }
 

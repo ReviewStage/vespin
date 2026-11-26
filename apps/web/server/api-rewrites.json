@@ -127,6 +127,10 @@
     "dest": "/api/default.js?route=agents/runner-lines"
   },
   {
+    "src": "/api/agents/runner-pictures",
+    "dest": "/api/default.js?route=agents/runner-pictures"
+  },
+  {
     "src": "/api/agents/runner-token",
     "dest": "/api/default.js?route=agents/runner-token"
   },

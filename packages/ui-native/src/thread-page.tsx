@@ -6,7 +6,6 @@ import {
   RNHostView,
   ScrollView,
   Spacer,
-  Text,
   Toolbar,
   ToolbarItem,
   VStack,
@@ -54,6 +53,7 @@ import {
   barActItems,
   PathTitle,
 } from "./split-view.js";
+import { Text } from "./text.js";
 import { newestRuns, threadRuns } from "./thread-group-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";

@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
-  actOnDescriptionCommentThread,
   DESCRIPTION_COMMENT_OUTCOME,
   type DescriptionCommentOutcome,
   type DescriptionCommentWriterRef,
@@ -32,6 +31,7 @@ import {
   wireUuidSchema,
 } from "../core.js";
 import { logStoreFailure } from "../http/store-failure.js";
+import { actOnDescriptionCommentThread } from "./description-comment-writes.js";
 
 /**
  * comment-tools.ts -- a description's comments, and its task's pages', as the coding agents read and answer them: one implementation of `read_comments`, `reply_to_comment`, and `update_comment`.

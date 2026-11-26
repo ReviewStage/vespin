@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import { LANDING_TONE, type LandingTone } from "@repo/features/landing-outcome";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SIGN_IN_FAILURE } from "@repo/features/words";
 import { Deferred, Duration, Effect, Exit, Option, Result, type Scope, Semaphore } from "effect";
@@ -15,7 +16,7 @@ import {
   type LoopbackConsentOptions,
   type LoopbackConsentOutcome,
 } from "./consent.js";
-import { accountLoopbackPage, LOOPBACK_PAGE_TONE, type LoopbackPageTone } from "./loopback-page.js";
+import { accountLoopbackPage } from "./loopback-page.js";
 import { codeChallenge, createCodeVerifier } from "./pkce.js";
 
 /**
@@ -74,7 +75,6 @@ const SHARED_REASON = {
  * because it says nothing about the provider: the trip it belongs to is spent.
  */
 const ALREADY_USED_CARD = {
-  badge: "Already used",
   title: "This sign-in has already been used",
   body: `You can close this tab and return to ${PRODUCT_NAME}.`,
 } as const;
@@ -232,7 +232,7 @@ export function loopbackConsent<Grant extends object>(
 
   function card(
     status: number,
-    tone: LoopbackPageTone,
+    tone: LandingTone,
     page: LoopbackConsentCard,
   ): HttpServerResponse.HttpServerResponse {
     return HttpServerResponse.text(accountLoopbackPage({ tone, ...page, source: options.source }), {
@@ -281,7 +281,7 @@ export function loopbackConsent<Grant extends object>(
       if (isWithdrawn(trip)) return NOT_FOUND;
 
       if (trip.phase === TRIP_PHASE.CLAIMED) {
-        return card(RESPONSE_STATUS.ALREADY_USED, LOOPBACK_PAGE_TONE.COMPLETE, ALREADY_USED_CARD);
+        return card(RESPONSE_STATUS.ALREADY_USED, LANDING_TONE.COMPLETE, ALREADY_USED_CARD);
       }
 
       trip.phase = TRIP_PHASE.CLAIMED;
@@ -327,7 +327,7 @@ export function loopbackConsent<Grant extends object>(
 
       return card(
         RESPONSE_STATUS.ANSWERED,
-        granted ? LOOPBACK_PAGE_TONE.COMPLETE : LOOPBACK_PAGE_TONE.ATTENTION,
+        granted ? LANDING_TONE.COMPLETE : LANDING_TONE.DANGER,
         granted ? options.pages.granted : options.pages.notGranted,
       );
     });

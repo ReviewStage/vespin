@@ -25,8 +25,7 @@ export const updatedAt = () => timestamptz("updated_at").notNull().defaultNow();
 
 /**
  * A column of raw bytes, `bytea`, read and written as a `Uint8Array`: a
- * picture kept beside the row it belongs to, since this deployment keeps no
- * blob store.
+ * file kept in the row it belongs to.
  */
 export const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
   dataType: () => "bytea",

@@ -1,0 +1,1 @@
+ALTER TABLE "push_device" ADD COLUMN "api_version" integer;

@@ -23,6 +23,7 @@
  */
 
 import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import { inboxLineKind, inboxPreview } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
@@ -166,11 +167,13 @@ function WaitingRow({
   const nameOf = (member: Parameters<typeof personActor>[0]) =>
     actorName(personActor(member, directory.members, directory.readerId, directory.former));
 
+  const row = inboxRowOf(item);
+
   return (
     <ListRow
-      leading={inboxLineGlyph(inboxLineKind(item))}
+      leading={inboxLineGlyph(inboxLineKind(row))}
       title={item.title}
-      description={inboxPreview(item, nameOf)}
+      description={inboxPreview(row, nameOf)}
       chevron
       onPress={() => threads.onOpen(item)}
     />

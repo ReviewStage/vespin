@@ -1522,6 +1522,47 @@ test("in a sheet a panel opens in its place with its field taking the keyboard, 
   expect(focused()).toBe("MCP servers");
 });
 
+/** A menu of Rename over Others, a page holding Copy link and an Order by submenu, as a phone's row menu gathers its less used acts under More. */
+function pageGroups(chosen: Chosen): readonly (readonly MenuEntry[])[] {
+  return [
+    [action("Rename", chosen)],
+    [
+      {
+        label: "Others",
+        groups: [
+          [action("Copy link", chosen)],
+          [{ label: "Order by", items: [action("Name", chosen)] }],
+        ],
+      },
+    ],
+  ];
+}
+
+test("a page opens in a sheet's place and its own submenu in its place in turn, each way back going up one page; a floating menu draws the page's items where it stands", () => {
+  vi.stubGlobal("ResizeObserver", StandInResizeObserver);
+  const chosen: Chosen = [];
+  mount(createElement(Harness, { groups: pageGroups(chosen) }));
+  const more = button("More");
+  press(more);
+  expect(openMenu()?.textContent).toContain("Copy link");
+  press(button("Copy link"));
+  expect(chosen).toEqual(["Copy link"]);
+  inPhoneLayout();
+  press(more);
+  expect(openMenu()?.textContent).not.toContain("Copy link");
+  press(button("Others"));
+  expect(openMenu("Others")?.textContent).toContain("Copy link");
+  press(button("Order by"));
+  expect(openMenu("Order by")).not.toBeNull();
+  press(button("Others"));
+  expect(openMenu("Others")).not.toBeNull();
+  expect(focused()).toBe("Order by");
+  press(button("Order by"));
+  press(button("Name"));
+  expect(chosen).toEqual(["Copy link", "Name"]);
+  expect(sheet()).toBeNull();
+});
+
 test("Escape or a press on the dimmed window puts a sheet away and hands focus back to what opened it", () => {
   inPhoneLayout();
   mount(createElement(Harness, { groups: taskGroups([]) }));

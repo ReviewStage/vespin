@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { test } from "vitest";
 import {
+  locateRecording,
   RECORDER_SOURCE,
   RECORDING_READ_EXIT,
   RECORDING_START_EXIT,
   RECORDING_START_OUTPUT,
-  readRecording,
-  recordingBytesOf,
+  recordingFileOf,
   recordingStartOf,
   recordingStopOf,
   SANDBOX_RECORDING,
@@ -64,22 +64,18 @@ test("a stop's run is the video's length and size, a known failure, or an encode
   }
 });
 
-test("a read prints the video's absolute path, then the video as base64, and its run is the path and the bytes or nothing", () => {
-  const ask = readRecording(4_000_000);
-  const video = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3]);
+test("a locate prints the video's absolute path, then its size, and its run is the path and the size or nothing", () => {
   const path = `/home/vercel-sandbox/${SANDBOX_RECORDING.VIDEO}`;
-  const printed = `${path}\n${Buffer.from(video).toString("base64")}`;
+  const printed = `${path}\n2048\n`;
 
-  assert.ok(
-    ask.args.includes("4000001"),
-    "it reads one byte past the bound, so a larger file shows",
-  );
-  assert.deepEqual(recordingBytesOf(run(printed), 4_000_000), { path, bytes: video });
-  assert.equal(recordingBytesOf(run("", RECORDING_READ_EXIT.NO_VIDEO), 4_000_000), undefined);
-  assert.equal(recordingBytesOf(run(printed), 6), undefined);
+  assert.ok(locateRecording().args.includes(SANDBOX_RECORDING.VIDEO));
+  assert.deepEqual(recordingFileOf(run(printed), 4_000_000), { path, size: 2048 });
+  assert.equal(recordingFileOf(run("", RECORDING_READ_EXIT.NO_VIDEO), 4_000_000), undefined);
+  assert.equal(recordingFileOf(run(printed), 2047), undefined, "a video past the bound");
+  assert.equal(recordingFileOf(run(`${path}\n0\n`), 4_000_000), undefined, "an empty video");
   assert.equal(
-    recordingBytesOf(run(Buffer.from(video).toString("base64")), 4_000_000),
+    recordingFileOf(run("2048\n"), 4_000_000),
     undefined,
-    "a read naming no path is no video an agent can post",
+    "a locate naming no path is no video an agent can post",
   );
 });

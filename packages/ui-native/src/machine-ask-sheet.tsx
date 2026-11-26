@@ -8,7 +8,6 @@ import {
   Image,
   ScrollView,
   Spacer,
-  Text,
   TextField,
   useNativeState,
   VStack,
@@ -33,6 +32,7 @@ import { timeLeftText } from "@repo/features/time-format";
 import { type ReactNode, useEffect, useState } from "react";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, glyphImage } from "./glyph.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

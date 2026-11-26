@@ -63,7 +63,9 @@ agent's reply and reasoning summaries, each tool call with its input and
 output, and the model, token counts, and timing. Tool output can include files
 from your repository, command output, web pages, screenshots of the agent's
 browser, windows of apps on your Mac you let agents use, and answers from your
-integrations. We also store the agent harness's
+integrations. We also keep the pictures an agent's own tools read or make,
+such as images and PDF pages it reads, beside its transcript, and delete them
+with it. We also store the agent harness's
 own record of its session, Claude Code's transcript or Codex's thread, its
 thinking text included, so the agent can resume it and an agent continued or
 forked from it goes on from it. Transcripts and descriptions are stored
@@ -299,6 +301,12 @@ a description's, or a comment's), its size rounded to a step (under 100 KB,
 500 KB, 1 MB, 3 MB, or larger), and the app's build number, never which
 picture it was or what it showed. They go through the Service, as the Mac
 app's do, and the app holds no PostHog key of its own.
+
+The Mac app and the web app also count each file Vespin refuses to attach
+because it is too large: what kind of file it was (an image, a PDF, a text
+file, a video, a sound clip, or another kind) and its size rounded to a step
+(under 3 MB, 7 MB, 25 MB, 100 MB, or 250 MB, or larger), never its name, its
+type, or where you added it.
 
 While you are signed in, the Mac app and the web app record how you use
 Vespin's window, such as the screens you visit and where you click, never your
@@ -629,8 +637,9 @@ data with:
   Notification service, which receives your phone's push token and each
   notification's title, body and, for a post, its words as written, as the
   Notifications section says.
-- **Infrastructure providers:** Vercel (hosting, agent sandboxes, and Vercel
-  Connect, which holds integration tokens), Neon (database), PostHog (usage
+- **Infrastructure providers:** Vercel (hosting, agent sandboxes, Vercel
+  Connect, which holds integration tokens, and Vercel Blob, which keeps
+  attachment bytes), Neon (database), PostHog (usage
   data, screen recordings, feedback, and setup answers), Sentry (error and
   performance monitoring), Resend (email: for onboarding emails and product updates,
   Resend is told your email address, your first name, when you signed up, whether
@@ -652,7 +661,11 @@ data with:
 ## 6\. Data storage and security
 
 Your data is stored on servers provided by our infrastructure partners: our
-database is hosted by Neon, and agents' checkouts and session files live in
+database is hosted by Neon, the bytes of attachments (pictures, recordings,
+sound clips, and files kept with transcripts, descriptions, and Inbox threads)
+are kept in a private Vercel Blob store, from which the Mac and iOS apps may
+load a picture, recording, or sound clip you may see directly, at an address
+the service makes for that one file and for five minutes, and agents' checkouts and session files live in
 Vercel Sandboxes and on Vercel Drives: each agent's
 checkout on a drive of its own, and one drive per workspace holding the default
 branch of every repository it connects, member-token ones included, which each
@@ -674,8 +687,10 @@ affected users and relevant authorities as required by applicable law.
 
 We retain your data for as long as your account is active and as needed to
 provide the Service. Deleting a task deletes it at once with its history,
-pages, inbox items, and pictures, and its agents' transcripts. Deleting an
-agent deletes its transcript at once. Deleting an agent asks Vercel to delete
+pages, and inbox items, and its agents' transcripts. The pictures, videos,
+sound clips, and files kept with any of these, or with anything else deleted
+below, become unreachable at once and are purged from storage within about a
+minute. Deleting an agent deletes its transcript at once. Deleting an agent asks Vercel to delete
 its sandbox and the drive holding its checkout; where that fails or does not
 finish in time, the delete goes ahead anyway, and the sandbox and drive may
 remain. Archiving an agent deletes neither: its sandbox and drive are deleted once

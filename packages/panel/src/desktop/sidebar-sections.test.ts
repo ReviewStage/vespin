@@ -66,13 +66,16 @@ const roots: Root[] = [];
  * them: a section write's writes, a task's pin as its mark, and a pin given
  * a place as its move, each landing.
  */
-function hearWrites(asked: Partial<Asked>): void {
+function hearWrites(
+  asked: Partial<Asked>,
+  answered: Promise<boolean> = Promise.resolve(true),
+): void {
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_WRITE_SECTION]: ({ writes }) => {
       asked.writes?.push(...writes);
 
-      return Promise.resolve(true);
+      return answered;
     },
     [ACT_KIND.TASKS_PIN]: ({ taskId, pinned, position }) => {
       if (position === undefined)
@@ -1005,6 +1008,19 @@ async function press(field: HTMLElement, key: string, shiftKey = false): Promise
   });
 }
 
+/**
+ * The glyph color named `label` once it holds the focus. Note that it is
+ * waited for, because the colors' popover hands its first focus over on
+ * the next animation frame rather than as it opens.
+ */
+async function colorTakesFocus(label: string): Promise<HTMLElement> {
+  await vi.waitFor(() => assert.equal(document.activeElement?.getAttribute("aria-label"), label));
+  const focused = document.activeElement;
+  assert.ok(focused instanceof HTMLElement);
+
+  return focused;
+}
+
 /** Opens the menu of the section titled `title`, then chooses `label` on it. */
 function sectionMenuChoose(sidebar: HTMLElement, title: string, label: string): void {
   const actions =
@@ -1501,7 +1517,7 @@ test("a pin dragged below the next one reorders the pins", async () => {
   assert.ok((asked.moves[0]?.position ?? "") > second.pinPosition, "it sorts after Pin review");
 });
 
-test("a glyph found by searching asks its color over the grid, the text's own named as the dark window draws it, and the color pressed there makes it the new section's and this Mac's most recent", async () => {
+test("a glyph found by searching asks its color in a flyout, the text's own named as the dark window draws it, and the color pressed there makes it the new section's and this Mac's most recent", async () => {
   document.documentElement.setAttribute("data-ui-theme", "dark");
   onTestFinished(() => document.documentElement.removeAttribute("data-ui-theme"));
   const writes: TaskSectionWrite[] = [];
@@ -1513,9 +1529,9 @@ test("a glyph found by searching asks its color over the grid, the text's own na
   await act(async () => dialogButton("Telescope").click());
 
   const colors =
-    document.querySelector(".section-icon-colors") ?? assert.fail("the glyph's colors are asked");
+    document.querySelector(".ui-icon-picker-flyout") ?? assert.fail("the glyph's colors are asked");
 
-  assert.equal(document.activeElement, colors.querySelector('[aria-label="White"]'));
+  assert.equal(await colorTakesFocus("White"), colors.querySelector('[aria-label="White"]'));
   await act(async () => dialogButton("Teal").click());
   assert.equal(
     document.querySelector('input[aria-label="Search icons and emoji"]'),
@@ -1638,19 +1654,16 @@ test("Shift-Enter in the search presses the first glyph it found, as Enter does,
   typeInto(search, "telescope");
   await settleLoaded();
   await press(search, "Enter", true);
-  const noColor = document.activeElement ?? assert.fail("nothing has the focus");
-  assert.equal(noColor.getAttribute("aria-label"), "Black");
-  assert.ok(noColor instanceof HTMLElement);
+  const noColor = await colorTakesFocus("Black");
   await press(noColor, "ArrowRight");
   const red = document.activeElement;
   assert.equal(red?.getAttribute("aria-label"), "Red");
   assert.ok(red instanceof HTMLElement);
   await press(red, "Escape");
-  assert.equal(document.querySelector(".section-icon-colors"), null);
+  assert.equal(document.querySelector(".ui-icon-picker-flyout"), null);
   assert.ok(dialogField("Search icons and emoji"), "Escape leaves the picker standing");
   await act(async () => dialogButton("Telescope").click());
-  const focused = document.activeElement;
-  assert.ok(focused instanceof HTMLElement);
+  const focused = await colorTakesFocus("Black");
   await act(async () => focused.click());
   typeInto(dialogField("Name"), "Stars");
   await act(async () => dialogButton("Create section").click());
@@ -1714,8 +1727,33 @@ test("with a glyph's colors open, the arrows step the glyphs past them, and anot
   assert.equal(document.activeElement?.getAttribute("aria-label"), "Heart");
 
   await act(async () => dialogButton("Star").click());
+  await colorTakesFocus("Black");
+  assert.equal(document.querySelectorAll(".ui-icon-picker-flyout").length, 1);
+});
+
+test("a glyph's colors take the focus as they open, not a frame later, so a key pressed at once lands on a color", async () => {
+  const sidebar = await mountSidebar([]);
+
+  await dialogPicker(sidebar);
+  // No frame runs, so nothing that waits a frame to move the focus can.
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 0);
+  await act(async () => dialogButton("Folder").click());
+
   assert.equal(document.activeElement?.getAttribute("aria-label"), "Black");
-  assert.equal(document.querySelectorAll(".section-icon-colors").length, 1);
+});
+
+test("Escape closes a glyph's colors even once the focus has gone back to the glyph", async () => {
+  const sidebar = await mountSidebar([]);
+
+  await dialogPicker(sidebar);
+  const folder = dialogButton("Folder");
+  await act(async () => folder.click());
+  await colorTakesFocus("Black");
+  await act(async () => folder.focus());
+  await press(folder, "Escape");
+
+  assert.equal(document.querySelector(".ui-icon-picker-flyout"), null);
+  assert.ok(dialogField("Search icons and emoji"), "Escape leaves the picker standing");
 });
 
 test("a glyph pressed again while its colors stand open closes them, its press taking the focus first as a pointer's does", async () => {
@@ -1724,11 +1762,11 @@ test("a glyph pressed again while its colors stand open closes them, its press t
   await dialogPicker(sidebar);
   const folder = dialogButton("Folder");
   await act(async () => folder.click());
-  assert.ok(document.querySelector(".section-icon-colors"), "the colors are asked");
+  assert.ok(document.querySelector(".ui-icon-picker-flyout"), "the colors are asked");
   await act(async () => folder.focus());
   await act(async () => folder.click());
 
-  assert.equal(document.querySelector(".section-icon-colors"), null);
+  assert.equal(document.querySelector(".ui-icon-picker-flyout"), null);
 });
 
 test("an emoji typed into the search is offered first, one the grid leaves out included", async () => {
@@ -2226,6 +2264,58 @@ test("⇧⌘↓ on a task in a section moves the task within it, and ⇧⌘↑ o
   assert.deepEqual(
     workspaceSections(written(), WORKSPACE.id).map((section) => section.title),
     [...before].reverse(),
+  );
+});
+
+test("a section moved twice before the first move is handed back stands where the second move put it", async () => {
+  const asked = noneAsked();
+
+  const section = (id: string, title: string, position: string, createdAt: number) => ({
+    id,
+    workspaceId: WORKSPACE.id,
+    title,
+    position,
+    createdAt,
+  });
+
+  const placed: TaskSections = {
+    sections: [
+      section(LAUNCH, "Launch", "a0", 1),
+      section(SOMEDAY, "Someday", "a1", 2),
+      section(STARS, "Stars", "a2", 3),
+    ],
+    entries: [],
+    agentEntries: [],
+  };
+
+  const sidebar = await mountDraggable([], placed, asked);
+  // Note that the section writes are heard but answered only at the end, as main has not yet handed its state back.
+  const { promise: answered, resolve: answer } = Promise.withResolvers<boolean>();
+  hearWrites(asked, answered);
+  onTestFinished(() => answer(true));
+
+  // Note that the writes are heard but never handed back, as main's state has not yet reached the window.
+  const moveDown = async (title: string) => {
+    const fold = sectionHeader(sidebar, title).querySelector<HTMLElement>("button[aria-expanded]");
+    await act(async () => fold?.focus());
+    await act(async () => {
+      runAppCommand(APP_COMMAND.MOVE_ROW_DOWN);
+    });
+  };
+
+  await moveDown("Launch");
+  // Note that the first move is drawn before the second is pressed, as a window draws it before the next key, since the test's client hands its writes to React on a timer of its own.
+  await vi.waitFor(() => assert.deepEqual(sectionTitles(sidebar), ["Someday", "Launch", "Stars"]));
+  await moveDown("Someday");
+
+  const written = asked.writes.reduce(
+    (state, write) => applySectionWrite(state, write, AFTER_FIXTURES),
+    placed,
+  );
+
+  assert.deepEqual(
+    workspaceSections(written, WORKSPACE.id).map(({ title }) => title),
+    ["Launch", "Someday", "Stars"],
   );
 });
 

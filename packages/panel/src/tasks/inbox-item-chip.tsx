@@ -1,6 +1,7 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import type { InboxFields } from "@repo/features/inbox-digest";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import { type InboxListed, NEEDS_YOU, taskHolder } from "@repo/features/inbox-list-model";
-import type { InboxItem } from "@repo/features/inbox-wire";
 import type { AppInboxItems, AppInboxSlice, AppInboxWaitingItem } from "@repo/host/app-state";
 import { HoverCard, HoverCardHead, HoverCardNote, Time, useMinute } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
@@ -39,7 +40,7 @@ function waitingTaskOf(inbox: AppInboxSlice | undefined, itemId: string): string
 
 /** An item the feed holds, and the plan it holds it under. */
 interface FedItem {
-  readonly item: InboxItem;
+  readonly item: InboxFields;
   readonly taskId: string;
 }
 
@@ -48,7 +49,7 @@ function fedItemOf(fed: AppInboxItems | undefined, place: InboxItemPlace): FedIt
   if (fed === undefined) return undefined;
   const plans = fed[INBOX_SCOPE_KIND.TASK];
 
-  const named = (item: InboxItem) =>
+  const named = (item: InboxFields) =>
     item.id === place.itemId && (!("agentId" in place) || item.agentId === place.agentId);
 
   if ("taskId" in place) {
@@ -93,7 +94,7 @@ function useLinkedItem(place: InboxItemPlace): InboxListed | undefined {
   return useMemo(() => {
     if (item === undefined || task === undefined) return undefined;
 
-    return { holder: taskHolder(task), item };
+    return { holder: taskHolder(task), item: inboxRowOf(item) };
   }, [item, task]);
 }
 

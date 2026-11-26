@@ -38,6 +38,7 @@ import { randomUUID } from "node:crypto";
 import type { ContractedRouter } from "@orpc/server";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { markAgentRead } from "@repo/database/models/agent-chat-reads";
+import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
   type Agent,
   type AgentCommitted,
@@ -490,6 +491,10 @@ export function agentsProcedures(
       const names = yield* hostedStoreOrUnavailable(readAccountNames(pageAccounts(agent)));
       const continuedBy = yield* continuedByOf(userId, [agent.id]);
       const macs = yield* hostedStoreOrUnavailable(machinesNamed(summaryDevices([agent])));
+
+      // Note that they are read as the reader, who reached the agent above, since its starter may have left the workspace.
+      const repositories = yield* hostedStoreOrUnavailable(readAgentRepositories(userId, agent.id));
+
       const now = yield* Clock.currentTimeMillis;
 
       return {
@@ -500,6 +505,7 @@ export function agentsProcedures(
           names,
           continuedBy(agent.id),
           macs,
+          repositories.map((each) => each.repository),
         ),
       };
     }),

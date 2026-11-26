@@ -59,6 +59,9 @@ export const BAR_MARGIN = SPACE.ROW + 2;
 /** How far apart the row's pieces stand: not at all, since a press's frame holds the room around its mark that the row's spacing held before. */
 export const BAR_ROW_SPACING = 0;
 
+/** How far what stands under a bar's row, such as a composer's capsules and Send under its field, stands from the row: one tight step, since its presses' frames already stand their marks well clear of the words. */
+export const BAR_FOOT_GAP = SPACE.TIGHT;
+
 /** How far what heads the bar, such as queued messages, stands in from its edge, where the row's marks stand in theirs. */
 export const BAR_HEAD_INSET = {
   leading: SPACE.ROW + 2,
@@ -310,8 +313,14 @@ export function GlassBar({
       ) : (
         <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
           {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
-          {row}
-          {foot}
+          {foot === undefined ? (
+            row
+          ) : (
+            <VStack alignment="leading" spacing={BAR_FOOT_GAP}>
+              {row}
+              {foot}
+            </VStack>
+          )}
         </VStack>
       )}
     </Host>

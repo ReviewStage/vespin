@@ -58,6 +58,7 @@ import {
   type DialogQuestion,
   GAP,
   type Gap,
+  HarnessMark,
   MARK_PROVIDER,
   MoreButton,
   moreLabel,
@@ -109,7 +110,6 @@ import { copyThroughShell } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
-import { HarnessMark } from "../harness-marks.js";
 import { providerKeysQuery, providerKeysRetryMutation } from "../live-reads.js";
 import { type PlanUsageMeters, planUsageMeters } from "../plan-usage.js";
 import { renameWrite } from "../rename-write.js";

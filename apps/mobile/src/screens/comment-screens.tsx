@@ -319,7 +319,9 @@ function CommentThread({
             icon={glyphSymbol(threadOpen(thread) ? GLYPH.CHECK : GLYPH.RESTORE)}
             accessibilityLabel={threadOpen(thread) ? WORDS.RESOLVE : WORDS.REOPEN}
             onPress={() => settle(thread)}
-          />
+          >
+            {threadOpen(thread) ? WORDS.RESOLVE : WORDS.REOPEN}
+          </Stack.Toolbar.Button>
         </Stack.Toolbar>
       )}
       {thread === undefined ? (
@@ -411,11 +413,11 @@ function NewComment({
   const task = overview?.task.id ?? taskId;
 
   // Note that the start is a declared write, drawn under its own id at once, so its thread opens in this screen's place as it goes; a refusal reopens this field on the words, under the same key, where the thread still stands in front.
-  const send = () => {
-    if (held === undefined) return;
+  const send = (typed: string): boolean => {
+    if (held === undefined) return false;
     const measured = held;
 
-    const threadId = start.send((refused, noticed) => {
+    const threadId = start.send(typed, (refused, noticed) => {
       const reopening = { taskId: task, from, to, quote, again: refused.threadId };
       const reopen = standingThreads.get(refused.threadId);
 
@@ -439,11 +441,13 @@ function NewComment({
       if (!noticed) notices.say({ kind: NOTICE_KIND.REFUSED, words: refused.note });
     });
 
-    if (threadId === undefined) return;
+    if (threadId === undefined) return false;
     // Note that the same words sent again go under the same thread's id, so a refusal parked for an earlier send of them is let go rather than reopening this one.
     earlyRefusals.delete(threadId);
     openingThreads.add(threadId);
     router.replace({ pathname: onOwnTab("/tasks/comments/[id]"), params: { id: threadId, task } });
+
+    return true;
   };
 
   const composer = {

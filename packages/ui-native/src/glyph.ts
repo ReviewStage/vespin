@@ -210,8 +210,6 @@ export const GLYPH = {
   EDIT: system("pencil"),
   WRITE: lucide(LUCIDE_SYMBOL.FILE_PEN),
   COPY: system("doc.on.doc"),
-  /** Reply, which quotes a message into the composer, as Mail and Messages draw it. */
-  REPLY: system("arrowshape.turn.up.left"),
   /** Reply in thread, which opens a Manager chat message's thread, the panel's Lucide MessageSquareReply, among every glyph the catalog holds. */
   REPLY_IN_THREAD: catalogLucide("MessageSquareReply"),
   SAVE: system("square.and.arrow.down"),

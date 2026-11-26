@@ -958,6 +958,7 @@ function callItems(
     part.tool,
     part.input,
     part.output,
+    part.pictures,
   ).flatMap((each) =>
     each.kept
       ? [

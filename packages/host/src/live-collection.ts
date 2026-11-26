@@ -22,6 +22,7 @@
  * declares (`HOST_READ_SLICE`).
  */
 
+import type { FailureFacts } from "@repo/features/failure-facts";
 import type { LiveRead } from "@repo/features/live-wire";
 import {
   type EntityPool,
@@ -520,8 +521,8 @@ export type SliceKeyed = {
 export interface HeldAnswers<Rows> {
   /** The rows its read answered, which stand as where it is until the next answer. */
   readonly answered: (rows: Rows) => void;
-  /** That its read did not answer: failed where it never has, and kept as it stood otherwise, since its next answer brings it up to date. */
-  readonly unanswered: () => void;
+  /** That its read did not answer, with what failed beneath it where the read said: failed where it never has, and kept as it stood otherwise, since its next answer brings it up to date. */
+  readonly unanswered: (cause?: FailureFacts) => void;
   /** That its read is asked again, as Try again asks: unread meanwhile where it had failed, so it draws as loading. */
   readonly retried: () => void;
   /** The rows its read holds now, as its last answer left them; none before it first answers. */
@@ -658,8 +659,10 @@ export function heldSlice<Slice extends SliceKeyed, Key>(options: {
     const answers = (key: Key): HeldAnswers<AppHostReads[Slice]> => ({
       answered: (rows) => lay(key, { rows }),
       // Note that a read that stops answering keeps its rows, since its next answer brings them up to date.
-      unanswered: () => {
-        if (readOf(key)?.rows === undefined) lay(key, { failed: true });
+      unanswered: (cause) => {
+        if (readOf(key)?.rows === undefined) {
+          lay(key, cause === undefined ? { failed: true } : { failed: true, cause });
+        }
       },
       retried: () => {
         if (readOf(key)?.failed === true) lay(key, UNREAD);

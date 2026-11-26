@@ -72,6 +72,7 @@ import { DesktopInbox } from "../desktop/desktop-inbox.js";
 import { DesktopSidebar } from "../desktop/desktop-sidebar.js";
 import { useInboxRoute } from "../inbox-route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { ShellRoomContext } from "../stage-room.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
 import type { InboxChoice } from "../tasks/use-tasks-tab.js";
 import { forgetToasts, ToastHost } from "../toast.js";
@@ -872,10 +873,15 @@ export function mount({
       },
     });
 
+    // Note that the room is handed to the Inbox and stood around it, as the shell does both (`stage-room.ts`).
     const inbox =
       drawnWhileOpen && !inboxOpen
         ? null
-        : createElement(DesktopInbox, { tasks: control, room: room ?? SHELL_ROOM.WIDE });
+        : createElement(
+            ShellRoomContext.Provider,
+            { value: room ?? SHELL_ROOM.WIDE },
+            createElement(DesktopInbox, { tasks: control, room: room ?? SHELL_ROOM.WIDE }),
+          );
 
     return withSidebar
       ? createElement(Fragment, null, createElement(DesktopSidebar, sidebarProps(control)), inbox)

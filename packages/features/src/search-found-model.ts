@@ -16,7 +16,7 @@ import {
   holderName,
   type InboxAnyHolder,
   type InboxListed,
-  inboxItemWords,
+  type InboxSearch,
 } from "./inbox-list-model.js";
 import { agentName } from "./model-label.js";
 import { cardTitle } from "./plain-words.js";
@@ -166,12 +166,15 @@ export function taskSearchSubject(
   };
 }
 
-/** What an Inbox item's row is searched by: its title and its task's name, or its agent's for a thread on no task, and else everything its thread says. */
-export function inboxSearchSubject({ holder, item }: InboxListed<InboxAnyHolder>): SearchSubject {
+/** What an Inbox item's row is searched by: its title and its task's name, or its agent's for a thread on no task, and else everything its thread says, as the list's search reads it (`InboxSearch`'s `wordsOf`). */
+export function inboxSearchSubject(
+  { holder, item }: InboxListed<InboxAnyHolder>,
+  wordsOf: InboxSearch["wordsOf"],
+): SearchSubject {
   return {
     label: cardTitle(item.title),
     lines: [holderName(holder)],
-    keywords: inboxItemWords(item),
+    keywords: wordsOf(item),
   };
 }
 

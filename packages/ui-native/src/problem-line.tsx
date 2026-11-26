@@ -1,9 +1,10 @@
 // problem-line.tsx -- what went wrong, said in a row's line: the muted words led by the alert glyph in the attention ink, never red words, since the act beside them says how to mend it.
 
-import { HStack, Text } from "@expo/ui/swift-ui";
+import { HStack } from "@expo/ui/swift-ui";
 import { accessibilityIdentifier, font, foregroundStyle } from "@expo/ui/swift-ui/modifiers";
 import { GLYPH } from "./glyph.js";
 import { GlyphImage } from "./glyph-label.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

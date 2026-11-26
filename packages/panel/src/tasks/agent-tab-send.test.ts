@@ -10,12 +10,14 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import { type ShownFailureSentry, sendShownFailure } from "@repo/features/shown-failure";
 import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
+import { installShownFailureReporter } from "../failure-report.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import {
   composerEditor,
@@ -24,7 +26,7 @@ import {
   pressInComposer,
   typeInComposer,
 } from "../testing/composer.js";
-import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { menuItem } from "../testing/desktop-inbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
@@ -434,6 +436,54 @@ test("a message the plan's usage limit refused says the limit's words where Not 
     tab.sent.map((each) => each.text),
     ["Rebase on main", "Rebase on main"],
   );
+});
+
+test("a line the plan's usage limit refused is reported as the service's refusal, by its word, and opens no issue", async () => {
+  const reported: Parameters<ShownFailureSentry["logger"]["warn"]>[] = [];
+  let issues = 0;
+
+  const recording: ShownFailureSentry = {
+    captureException: () => {
+      issues += 1;
+
+      return "";
+    },
+    logger: {
+      warn: (_message, attributes) => reported.push(["warn", attributes]),
+      error: (_message, attributes) => reported.push(["error", attributes]),
+    },
+    getActiveSpan: () => undefined,
+    getCurrentScope: () => ({
+      getPropagationContext: () => ({ traceId: "0af7651916cd43dd8448eb211c80319c" }),
+    }),
+  };
+
+  const uninstall = installShownFailureReporter(
+    (report) => sendShownFailure(recording, report),
+    testQueryClientNow(),
+  );
+
+  try {
+    const tab = await drawnTab([]);
+    await tab.send("Rebase on main");
+    await tab.answer(0, {
+      failure: AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED,
+      resetsAt: Date.UTC(2026, 10, 10, 4),
+    });
+  } finally {
+    uninstall();
+  }
+
+  assert.deepEqual(
+    reported.map(([level, attributes]) => [
+      level,
+      attributes["failure.surface"],
+      attributes["failure.kind"],
+      attributes["failure.code"],
+    ]),
+    [["warn", "agent.send", "refused", AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED]],
+  );
+  assert.equal(issues, 0);
 });
 
 test("Edit takes a message that did not go back into the box, ahead of the words written since, and lets its line go", async () => {
