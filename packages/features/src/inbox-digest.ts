@@ -169,7 +169,11 @@ function carriedThread(digest: InboxDigest): readonly InboxMessage[] {
     [...digest.openAsks, ...digest.tail].map((message) => [message.id, message] as const),
   );
 
-  return [...byId.values()].sort((one, other) => one.createdAt - other.createdAt);
+  return [...byId.values()].sort(
+    // Note that messages written at one instant stand by id, as a read orders a thread (`inbox-live.ts`).
+    (one, other) =>
+      one.createdAt - other.createdAt || (one.id < other.id ? -1 : one.id > other.id ? 1 : 0),
+  );
 }
 
 /**
@@ -198,8 +202,13 @@ export function inboxRowDrawn(
   const allMember =
     digest.tail.length === 0 ? drawn.allMember : digest.allMember && drawn.allMember;
 
+  // Note that the ask the latest message answers may stand beyond what the digest carries, so it is kept where the latest message is the one that answered it.
+  const answeredAsk =
+    drawn.answeredAsk ??
+    (drawn.tail.at(-1)?.id === digest.tail.at(-1)?.id ? digest.answeredAsk : undefined);
+
   return {
     ...rest,
-    digest: { ...drawn, allMember, withdrawn: digest.withdrawn || drawn.withdrawn },
+    digest: { ...drawn, answeredAsk, allMember, withdrawn: digest.withdrawn || drawn.withdrawn },
   };
 }

@@ -81,3 +81,57 @@ describe("inboxRowDrawn", () => {
     }).toEqual({ openAsks: [OLDER_ASK], latest: "reply-1", allMember: false });
   });
 });
+
+describe("inboxRowDrawn over a row whose thread it does not carry whole", () => {
+  /** A thread of `messages`, read and open, as its row is kept. */
+  function rowOf(messages: readonly InboxMessage[]) {
+    return inboxRowOf({
+      id: "item-2",
+      agentId: "agent-1",
+      key: "route",
+      revision: 1,
+      version: INBOX_WIRE_VERSION,
+      title: "Which way?",
+      needsReply: false,
+      status: INBOX_STATUS.OPEN,
+      thread: messages,
+      postedAt: 1,
+      updatedAt: 9,
+    });
+  }
+
+  it("keeps the ask its latest message answers, from beyond the tail, through a change that writes no message", () => {
+    const answer: InboxMessage = {
+      id: "reply-1",
+      author: INBOX_MESSAGE_AUTHOR.MEMBER,
+      text: "Right",
+      answers: { ask: OLDER_ASK, reply: INBOX_REPLY.ANSWERED, choices: ["Right"] },
+      createdAt: 9,
+    };
+
+    const asked: InboxMessage = {
+      ...message(OLDER_ASK, 1),
+      ask: {
+        type: INBOX_ASK.DECIDE,
+        status: INBOX_ASK_STATUS.ANSWERED,
+        options: [{ label: "Left" }, { label: "Right" }],
+      },
+    };
+
+    // Note that the answered ask stands eight messages back, past the six the row's tail keeps, and is no longer open.
+    const thread = [asked, ...[2, 3, 4, 5, 6, 7, 8].map((at) => message(`said-${at}`, at)), answer];
+
+    const drawn = inboxRowDrawn(rowOf(thread), (whole) => ({ ...whole, unread: true }));
+
+    expect(drawn?.digest.answeredAsk?.type).toBe(INBOX_ASK.DECIDE);
+  });
+
+  it("keeps two messages written at one instant in the order of their ids, whichever of them asks", () => {
+    const first = message("a-said", 5);
+    const asking = message("b-asks", 5, true);
+
+    const drawn = inboxRowDrawn(rowOf([first, asking]), (whole) => ({ ...whole, unread: true }));
+
+    expect(drawn?.digest.tail.map((each) => each.id)).toEqual(["a-said", "b-asks"]);
+  });
+});
