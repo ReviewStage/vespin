@@ -104,6 +104,41 @@ it.layer(getTestDB())("a new Manager's face", (it) => {
       }),
   );
 
+  it.effect("counts a Manager stored in peach as wearing orange, which peach is drawn as", () =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const owner = yield* openAccount;
+      const workspaceId = yield* openWorkspace(owner);
+
+      const orangeGhost = {
+        character: MANAGER_FACE_CHARACTER.GHOST,
+        color: MANAGER_FACE_COLOR.ORANGE,
+      };
+
+      const free = { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.TEAL };
+
+      // Every face is worn but the orange ghost, which a peach ghost wears, and one other.
+      const worn = [
+        ...EVERY_FACE.filter(
+          (face) => faceKey(face) !== faceKey(orangeGhost) && faceKey(face) !== faceKey(free),
+        ),
+        { character: MANAGER_FACE_CHARACTER.GHOST, color: MANAGER_FACE_COLOR.PEACH },
+      ];
+
+      for (const face of worn) {
+        const made = yield* openManager(owner, workspaceId);
+        yield* db.update(agentTable).set({ face }).where(eq(agentTable.id, made.id));
+      }
+
+      // Note that each new Manager's seed is its random id, so several are made, each archived before the next, for the walk to meet the orange ghost first.
+      for (let count = 0; count < 8; count++) {
+        const next = yield* openManager(owner, workspaceId);
+        assert.equal(faceKey(next.face), faceKey(free));
+        yield* archiveAgent(owner, next.id, true);
+      }
+    }),
+  );
+
   it.effect(
     "wears a picked face though another Manager wears it, takes a new pick with its emoji, and leaves a coder and an outsider unchanged",
     () =>
