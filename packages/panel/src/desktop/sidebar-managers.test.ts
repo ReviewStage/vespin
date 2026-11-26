@@ -335,11 +335,38 @@ test("a Manager's row offers Rename and Change face › beside Settings…, and 
   assert.ok(change, "Change face stands");
   act(() => change.click());
 
-  const purpleCat =
-    document.querySelector<HTMLButtonElement>('button[aria-label="Purple cat"]') ??
-    assert.fail("the picker offers every face");
+  const cat =
+    document.querySelector<HTMLButtonElement>('button[aria-label="Cat"]') ??
+    assert.fail("the picker offers every character");
 
-  act(() => purpleCat.click());
+  await act(async () => cat.click());
+  const colors = () => document.querySelector(".ui-icon-picker-flyout");
+  const gray = colors()?.querySelector<HTMLElement>('[aria-label="Gray"]');
+
+  assert.equal(document.activeElement, gray, "the cat's colors take the focus, the menu standing");
+  // The pointer coming back onto the colors from outside leaves the keyboard on them.
+  await act(async () =>
+    gray?.dispatchEvent(
+      new MouseEvent("pointerover", { bubbles: true, relatedTarget: document.body }),
+    ),
+  );
+  assert.equal(
+    document.activeElement,
+    gray,
+    "the pointer coming back leaves the focus on the colors",
+  );
+  await act(async () =>
+    gray?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+  );
+  assert.equal(colors(), null, "Escape puts the colors away");
+  assert.equal(document.activeElement, cat, "and the menu stands, the focus back on the cat");
+  await act(async () => cat.click());
+
+  const purple =
+    document.querySelector<HTMLButtonElement>('.ui-icon-picker-flyout [aria-label="Purple"]') ??
+    assert.fail("the cat asks its colors");
+
+  await act(async () => purple.click());
   await vi.waitFor(() =>
     assert.deepEqual(faced, [{ agentId: FRONTEND, face: { character: "cat", color: "purple" } }]),
   );

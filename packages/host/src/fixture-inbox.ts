@@ -138,6 +138,7 @@ import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
   type ManagerFace,
+  sameManagerFace,
 } from "@repo/features/manager-face";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
@@ -3290,18 +3291,13 @@ const CHANGED_FIELDS = [
   "title",
 ] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face" | "archived">[];
 
-/** Whether every field of the change already stands on the agent, a face by its character and color. */
+/** Whether every field of the change already stands on the agent, a face by its character, color, and emoji. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
   const { face, archived } = change;
 
   if (archived !== undefined && archived !== (agent.archivedAt !== undefined)) return false;
 
-  if (
-    face !== undefined &&
-    (face.character !== agent.face?.character || face.color !== agent.face?.color)
-  ) {
-    return false;
-  }
+  if (face !== undefined && !sameManagerFace(face, agent.face)) return false;
 
   return CHANGED_FIELDS.every((key) => {
     const value = change[key];

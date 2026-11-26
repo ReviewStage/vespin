@@ -90,6 +90,7 @@ import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuAction } from "./action-menu.js";
 import { AutomationRows } from "./automations-page.js";
+import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
 import { ManagerPeopleSection } from "./manager-people-section.js";
 import { useAutomations } from "./use-automations.js";
 
@@ -219,6 +220,7 @@ function IdentityRow({
       leading={
         <ManagerFaceWell
           face={agent.face}
+          recent={RECENT_MANAGER_FACES}
           open={picking}
           onOpenChange={setPicking}
           onChange={pick}

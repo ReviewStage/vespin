@@ -52,6 +52,7 @@ import { appStateQuery, selectCapability } from "../use-app-state.js";
 import type { MenuAction, MenuEntry, MenuSubmenu } from "./action-menu.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
 import { useAgentDelete } from "./agent-delete.js";
+import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
 import {
   type ManagerSettingsSubject,
   useManagerSettingsDialog,
@@ -493,6 +494,7 @@ export function useAgentActions(
               panel: ({ close }) => (
                 <ManagerFaceMenuPanel
                   face={agent.face}
+                  recent={RECENT_MANAGER_FACES}
                   onChange={(face) => {
                     changeFace(face);
                     close();
