@@ -1742,6 +1742,20 @@ test("a glyph's colors take the focus as they open, not a frame later, so a key 
   assert.equal(document.activeElement?.getAttribute("aria-label"), "Black");
 });
 
+test("Escape closes a glyph's colors even once the focus has gone back to the glyph", async () => {
+  const sidebar = await mountSidebar([]);
+
+  await dialogPicker(sidebar);
+  const folder = dialogButton("Folder");
+  await act(async () => folder.click());
+  await colorTakesFocus("Black");
+  await act(async () => folder.focus());
+  await press(folder, "Escape");
+
+  assert.equal(document.querySelector(".ui-icon-picker-flyout"), null);
+  assert.ok(dialogField("Search icons and emoji"), "Escape leaves the picker standing");
+});
+
 test("a glyph pressed again while its colors stand open closes them, its press taking the focus first as a pointer's does", async () => {
   const sidebar = await mountSidebar([]);
 
