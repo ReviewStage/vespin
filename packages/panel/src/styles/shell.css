@@ -47,7 +47,7 @@
   --content-inset: calc(var(--column-inset) + var(--row-inset));
   /* The sidebar's default width (`SIDEBAR_WIDTH.DEFAULT`), and its width as
      drawn, which the app stage carries once the developer has dragged it. */
-  --sidebar-width-default: 264px;
+  --sidebar-width-default: 360px;
   --sidebar-width: var(--sidebar-width-default);
   /* The widest a narrow room's drawer stands, a phone's drawer's usual
      width, so a task's name keeps its room beside its time and its ⋯. */
