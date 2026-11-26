@@ -40,3 +40,17 @@ export const MAINTENANCE_SWEEP = {
   /** The schedule the root `vercel.json` calls the sweep on, which its Sentry monitor expects a check-in against. */
   CRONTAB: "* * * * *",
 } as const;
+
+/**
+ * The purge of attachments' objects from the Blob store (`attachment-blob-purge.ts`).
+ * Note that a delete is free and outside the store's 75 advanced operations
+ * a second on Pro, so the bound is the sweep's own minute: ten requests a
+ * sweep, one after another, keep well inside it and clear a deleted
+ * workspace's thousand objects a minute.
+ */
+export const ATTACHMENT_BLOB_PURGE = {
+  /** How many tombstones one sweep takes at most. */
+  TOMBSTONES_PER_SWEEP: 1_000,
+  /** How many pathnames one delete request names. */
+  PATHNAMES_PER_DELETE: 100,
+} as const;

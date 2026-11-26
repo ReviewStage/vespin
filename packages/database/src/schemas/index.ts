@@ -36,6 +36,8 @@ export * from "./agent-wakeup.js";
 
 export * from "./attachment.js";
 
+export * from "./attachment-blob-tombstone.js";
+
 export * from "./auth.js";
 
 export * from "./automation.js";

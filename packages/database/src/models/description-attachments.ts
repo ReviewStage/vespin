@@ -99,7 +99,12 @@ const insertPicture = SqlSchema.void({
     mp4Bytes: Schema.NullOr(Schema.Uint8Array),
     createdAt: Schema.Date,
   }),
-  execute: (row) => Database.use((db) => db.insert(attachment).values(row)),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .insert(attachment)
+        .values({ ...row, phoneByteCount: row.mp4Bytes === null ? null : row.mp4Bytes.byteLength }),
+    ),
 });
 
 /** Which picture of which plan an account reads. */

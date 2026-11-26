@@ -128,6 +128,7 @@ const insertPictures = SqlSchema.findAll({
             conversationId,
             bytes,
             mp4Bytes: mp4Bytes ?? null,
+            phoneByteCount: mp4Bytes?.byteLength ?? null,
             byteCount: bytes.byteLength,
             createdAt: now,
           })),

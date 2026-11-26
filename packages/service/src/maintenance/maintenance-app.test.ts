@@ -12,6 +12,7 @@ import { afterEach, vi } from "vitest";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { type ModelCatalog, modelCatalogOf } from "../providers/model-catalog.js";
+import { memoryBlobStore } from "../testing/blob-store-fake.js";
 import { fixtureGitHubApp, overNoGitHub } from "../testing/github-app-fake.js";
 import { recordingSentry, type SentItem, sentOfType } from "../testing/sentry-transport.js";
 import { maintenanceApp } from "./maintenance-app.js";
@@ -80,6 +81,7 @@ const sweep = (
   Effect.gen(function* () {
     const services = Layer.mergeAll(
       memorySandbox().layer,
+      memoryBlobStore().layer,
       database,
       reached,
       Layer.succeed(HostedEnvironment, environment(cronSecret)),
