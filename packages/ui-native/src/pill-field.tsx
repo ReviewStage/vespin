@@ -218,13 +218,15 @@ export function PillField({
         }
 
         heard({ ...EMPTIED, changes: taken.changes });
+        // Note that the words taken are written as a telling's are, a marker typed as words escaped, so a send carries what the panel's box would.
+        const words = toldMarkdown(taken.runs);
 
         return {
-          words: taken.markdown,
+          words,
           giveBack: () => {
-            if (taken.markdown === "") return;
-            heard({ ...EMPTIED, markdown: taken.markdown, changes: taken.changes });
-            void field.putBack(runsOf(taken.markdown));
+            if (words === "") return;
+            heard({ ...EMPTIED, runs: taken.runs, changes: taken.changes });
+            void field.putBack(runsOf(words));
           },
         };
       },

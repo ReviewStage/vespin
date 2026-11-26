@@ -53,9 +53,9 @@ export interface NativeWord {
   readonly text: string;
 }
 
-/** The words a send took out of the view: their Markdown, and the count of changes the emptying stands at. */
+/** The words a send took out of the view: its runs, as it tells them, and the count of changes the emptying stands at. */
 export interface NativeTaken {
-  readonly markdown: string;
+  readonly runs: readonly NativeToldRun[];
   readonly changes: number;
 }
 
