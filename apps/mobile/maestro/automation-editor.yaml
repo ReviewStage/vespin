@@ -61,4 +61,4 @@ env:
 - takeScreenshot: automation-editor-edit
 - tapOn: "Cancel"
 - waitForAnimationToEnd
-- assertVisible: "Recent runs"
+- assertVisible: "Run now"
