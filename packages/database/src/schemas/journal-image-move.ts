@@ -1,4 +1,4 @@
-import { index, integer, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 
 /**
@@ -7,13 +7,15 @@ import { timestamptz } from "./_helpers.js";
  * Lines written before a kept image was named by id (#4603) keep each image
  * as a file part over a `data:` URL, its bytes in `messages.parts`. The
  * migration that made these tables queued every such row once
- * (`20261126012658_journal_image_move`), so the sweep's move
+ * (`20261126014826_journal_image_move`), so the sweep's move
  * (`packages/service/src/storage/journal-image-move.ts`) reads this small
  * queue rather than the journal: it keeps each image as a picture of the
  * row's conversation whose bytes stand in the Blob store, rewrites its part
  * to the kept shape (`attached-file-parts.ts`), and drops the row from the
- * queue. A row whose image cannot be kept stays, naming why, and is not
- * taken again. Both tables go with the move, in a later migration.
+ * queue. A sweep claims a row for a lease longer than any sweep runs, and
+ * records each upload on it before making it, so an upload a failure left
+ * unnamed is tombstoned by whichever sweep takes the row next. A row whose
+ * image cannot be kept stays, naming why, and is not taken again. Both tables go with the move, in a later migration.
  */
 
 /** Why a row's image cannot be kept as a conversation's picture. */
@@ -27,12 +29,22 @@ export const JOURNAL_IMAGE_MOVE_FAILURE = {
 export type JournalImageMoveFailure =
   (typeof JOURNAL_IMAGE_MOVE_FAILURE)[keyof typeof JOURNAL_IMAGE_MOVE_FAILURE];
 
+/** An upload made for a queued row: the attachment row it was made for, and the pathnames it wrote. */
+export interface JournalImageUpload {
+  readonly id: string;
+  readonly keys: readonly string[];
+}
+
 /** A row of the journal that still holds an image as a `data:` URL, waiting for the sweep to move it. */
 export const journalImageMove = pgTable("journal_image_move", {
   /** The journal's row. Note that it names no foreign key, because adding one to `messages` would hold off every write to the journal until the migration committed; the move passes over a row since deleted. */
   messageId: uuid("message_id").primaryKey(),
   /** Why one of its images cannot be kept as a conversation's picture, which keeps the row from being taken again; null while it waits. */
   failure: text("failure").$type<JournalImageMoveFailure>(),
+  /** Until when a sweep holds the row while it moves it, so no other sweep takes it meanwhile; null where none ever took it. */
+  claimedUntil: timestamptz("claimed_until"),
+  /** The uploads made for the row that no committed picture may name yet, each recorded before it is made, so a sweep that died between an upload and its tombstone leaves the next one what to tombstone. */
+  uploads: jsonb("uploads").$type<readonly JournalImageUpload[]>().notNull().default([]),
 });
 
 /**

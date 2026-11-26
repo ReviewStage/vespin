@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "d7ec41e4-2888-4412-8dcc-33acbfc0fd82",
+  "id": "c9bb39e2-e3ba-4466-9f50-983745e15874",
   "prevIds": ["79dda5e2-5f95-4303-bfe8-0c8471d1eb7a"],
   "ddl": [
     {
@@ -9977,6 +9977,32 @@
       "generated": null,
       "identity": null,
       "name": "failure",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "journal_image_move"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "claimed_until",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "journal_image_move"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'[]'",
+      "generated": null,
+      "identity": null,
+      "name": "uploads",
       "entityType": "columns",
       "schema": "public",
       "table": "journal_image_move"

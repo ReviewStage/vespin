@@ -5,12 +5,14 @@ import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
 import { pngBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
+import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { attachment } from "../../schemas/attachment.js";
 import { journalImageMove } from "../../schemas/journal-image-move.js";
 import { messages } from "../../schemas/storage.js";
 import { getTestDB, inlineImagePart, queueJournalLine } from "../../testing/index.js";
 import {
+  claimJournalImageMoves,
   JOURNAL_IMAGE_SETTLED,
   type JournalImageRow,
   readJournalImageRow,
@@ -18,7 +20,7 @@ import {
 } from "../journal-image-moves.js";
 
 /**
- * journal-image-moves.test.ts -- a queued line is rewritten only as it was read: one changed since writes nothing and stays queued, and one gone leaves the queue.
+ * journal-image-moves.test.ts -- a queued line is taken by one sweep at a time, and rewritten only as it was read: one changed since writes nothing and stays queued, and one gone leaves the queue.
  *
  * The move's whole path, over a store, is `packages/service/src/storage/journal-image-move.test.ts`'s.
  * Synthetic accounts and pictures throughout.
@@ -65,6 +67,21 @@ const settleAsStored = (row: JournalImageRow) => {
 };
 
 it.layer(getTestDB())("a queued line's settle", (it) => {
+  it.effect("a line a sweep holds is not taken by another until its lease has passed", () =>
+    Effect.gen(function* () {
+      const line = yield* queueJournalLine([
+        inlineImagePart(pngBytes(64, 64, 4), INBOX_IMAGE_TYPE.PNG, "held.png"),
+      ]);
+
+      const taken = (claimed: readonly string[]) => claimed.includes(line.messageId);
+
+      assert.equal(taken(yield* claimJournalImageMoves(1_000, 60_000)), true);
+      assert.equal(taken(yield* claimJournalImageMoves(1_000, 60_000)), false);
+      yield* TestClock.adjust("61 seconds");
+      assert.equal(taken(yield* claimJournalImageMoves(1_000, 60_000)), true);
+    }),
+  );
+
   it.effect("a line changed since it was read is written nothing and stays queued", () =>
     Effect.gen(function* () {
       const db = yield* Database;

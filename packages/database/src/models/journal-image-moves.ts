@@ -1,18 +1,20 @@
 import type { InboxImageType } from "@repo/features/inbox-wire";
 import { LEGACY_APP_WORD } from "@repo/wire";
 import type { FileUIPart } from "ai";
-import { and, asc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, or, type SQL, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { attachment } from "../schemas/attachment.js";
 import {
   type JournalImageMoveFailure,
+  type JournalImageUpload,
   journalImageMove,
   journalImageRewrite,
 } from "../schemas/journal-image-move.js";
 import { conversations, messages } from "../schemas/storage.js";
 import { keptImageMetadata } from "./attached-file-parts.js";
+import { tombstoneUnwrittenUploads } from "./attachment-blob-tombstones.js";
 import { bumpedRevision, landedRevision } from "./writer.js";
 
 /**
@@ -26,6 +28,10 @@ import { bumpedRevision, landedRevision } from "./writer.js";
  * the kept shape (`attached-file-parts.ts`) under a bump of the journal's
  * revision, each rewrite logged, and the row taken off the queue. A row
  * changed since it was read is left queued for the next sweep to read again.
+ * A sweep claims its rows for a lease, and records each upload on its row
+ * before making it; the uploads no committed picture names are tombstoned
+ * as the row is released or dropped, or by the next sweep to take it where
+ * the last one died first.
  * The pictures are written past the conversation's budget, since their
  * bytes were already kept, in the row.
  */
@@ -120,6 +126,10 @@ const decodeQueuedRow = Schema.decodeUnknownEffect(QueuedRowSchema);
 
 const decodeDigests = Schema.decodeUnknownEffect(Schema.Array(Schema.String));
 
+const decodeUploads = Schema.decodeUnknownEffect(
+  Schema.Array(Schema.Struct({ id: Schema.String, keys: Schema.Array(Schema.String) })),
+);
+
 /** The part rewritten to name the picture it was kept as: no bytes, and the picture's id under today's provider key in place of any legacy one. */
 function keptPart(part: FileUIPart, attachmentId: string): FileUIPart {
   const { [LEGACY_APP_WORD]: _legacy, ...metadata } = part.providerMetadata ?? {};
@@ -209,19 +219,95 @@ export function readKeptJournalPictures(
   );
 }
 
-/** Up to `limit` queued rows that wait to be moved, by their id. */
-export function readJournalImageMoves(limit: number): MoveEffect<readonly string[]> {
-  return Effect.map(
+/**
+ * Claims up to `limit` queued rows that wait to be moved and that no sweep
+ * holds, until `leaseMillis` from now, answering their ids. Note that a row
+ * another sweep is claiming at the same moment is passed over rather than
+ * waited on.
+ */
+export function claimJournalImageMoves(
+  limit: number,
+  leaseMillis: number,
+): MoveEffect<readonly string[]> {
+  return Effect.gen(function* () {
+    const db = yield* Database;
+    const now = yield* DateTime.nowAsDate;
+
+    const waiting = db
+      .select({ messageId: journalImageMove.messageId })
+      .from(journalImageMove)
+      .where(
+        and(
+          isNull(journalImageMove.failure),
+          or(isNull(journalImageMove.claimedUntil), lt(journalImageMove.claimedUntil, now)),
+        ),
+      )
+      .orderBy(asc(journalImageMove.messageId))
+      .limit(limit)
+      .for("update", { skipLocked: true });
+
+    const claimed = yield* db
+      .update(journalImageMove)
+      .set({ claimedUntil: new Date(now.getTime() + leaseMillis) })
+      .where(inArray(journalImageMove.messageId, waiting))
+      .returning({ messageId: journalImageMove.messageId });
+
+    return claimed.map((row) => row.messageId).sort();
+  });
+}
+
+/** Records an upload on its row before it is made, so it is tombstoned whatever becomes of the sweep making it. */
+export function recordJournalImageUpload(
+  messageId: string,
+  upload: JournalImageUpload,
+): MoveEffect<void> {
+  return Effect.asVoid(
     Database.use((db) =>
       db
-        .select({ messageId: journalImageMove.messageId })
-        .from(journalImageMove)
-        .where(isNull(journalImageMove.failure))
-        .orderBy(asc(journalImageMove.messageId))
-        .limit(limit),
+        .update(journalImageMove)
+        .set({
+          uploads: sql`${journalImageMove.uploads} || jsonb_build_array(${JSON.stringify(upload)}::jsonb)`,
+        })
+        .where(eq(journalImageMove.messageId, messageId)),
     ),
-    (rows) => rows.map((row) => row.messageId),
   );
+}
+
+/** Tombstones the row's recorded uploads that no picture names, and forgets them. */
+export function tombstoneJournalImageUploads(messageId: string): MoveEffect<void> {
+  return Effect.gen(function* () {
+    const db = yield* Database;
+
+    const [row] = yield* db
+      .select({ uploads: journalImageMove.uploads })
+      .from(journalImageMove)
+      .where(eq(journalImageMove.messageId, messageId));
+
+    if (row === undefined) return;
+    const uploads = yield* decodeUploads(row.uploads);
+
+    if (uploads.length === 0) return;
+    yield* tombstoneUnwrittenUploads(uploads);
+
+    yield* db
+      .update(journalImageMove)
+      .set({ uploads: [] })
+      .where(eq(journalImageMove.messageId, messageId));
+  });
+}
+
+/** Lets a row the sweep holds go, its uploads no picture names tombstoned, for the next sweep to take where it still waits. */
+export function releaseJournalImageMove(messageId: string): MoveEffect<void> {
+  return Effect.gen(function* () {
+    yield* tombstoneJournalImageUploads(messageId);
+
+    yield* Database.use((db) =>
+      db
+        .update(journalImageMove)
+        .set({ claimedUntil: null })
+        .where(eq(journalImageMove.messageId, messageId)),
+    );
+  });
 }
 
 /** A queued row's image parts as it stands; nothing where the row is gone. */
@@ -326,13 +412,15 @@ export function settleJournalImageRow(
   return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(settle));
 }
 
-/** Takes a row off the queue, as one gone or holding no image to move. */
+/** Takes a row off the queue, as one moved, gone, or holding no image to move, its uploads no picture names tombstoned first. */
 export function dropJournalImageMove(messageId: string): MoveEffect<void> {
-  return Effect.asVoid(
-    Database.use((db) =>
+  return Effect.gen(function* () {
+    yield* tombstoneJournalImageUploads(messageId);
+
+    yield* Database.use((db) =>
       db.delete(journalImageMove).where(eq(journalImageMove.messageId, messageId)),
-    ),
-  );
+    );
+  });
 }
 
 /** Keeps a queued row from being taken again, naming why one of its images cannot be kept. */

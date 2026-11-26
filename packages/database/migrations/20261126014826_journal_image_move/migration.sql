@@ -1,6 +1,8 @@
 CREATE TABLE "journal_image_move" (
 	"message_id" uuid PRIMARY KEY,
-	"failure" text
+	"failure" text,
+	"claimed_until" timestamp with time zone,
+	"uploads" jsonb DEFAULT '[]' NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "journal_image_rewrite" (

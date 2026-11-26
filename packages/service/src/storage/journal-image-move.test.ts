@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
@@ -146,6 +146,39 @@ it.layer(Layer.merge(getTestDB(), store.layer))("the journal image move over a s
 
         assert.deepEqual(yield* partsOf(line.messageId), parts);
         assert.deepEqual(yield* queuedOf(line.messageId), { failure: "unsupported" });
+      }),
+  );
+
+  it.effect(
+    "an upload a sweep recorded and died before naming or tombstoning is tombstoned by the next sweep to take its row",
+    () =>
+      Effect.gen(function* () {
+        const line = yield* queueJournalLine([
+          inlineImagePart(pngBytes(320, 200, 5), INBOX_IMAGE_TYPE.PNG, "again.png"),
+        ]);
+
+        const orphanId = randomUUID();
+        const orphan = attachmentBlobPath(orphanId);
+
+        // The row as a sweep left it that uploaded once and then lost the database.
+        yield* Database.use((db) =>
+          db
+            .update(journalImageMove)
+            .set({ uploads: [{ id: orphanId, keys: [orphan] }] })
+            .where(eq(journalImageMove.messageId, line.messageId)),
+        );
+
+        assert.equal(yield* moveJournalImages(), 1);
+
+        const tombstoned = yield* Database.use((db) =>
+          db
+            .select({ key: attachmentBlobTombstone.key })
+            .from(attachmentBlobTombstone)
+            .where(eq(attachmentBlobTombstone.key, orphan)),
+        );
+
+        assert.deepEqual(tombstoned, [{ key: orphan }]);
+        assert.equal(yield* queuedOf(line.messageId), undefined);
       }),
   );
 });

@@ -65,4 +65,6 @@ export const ATTACHMENT_BLOB_PURGE = {
 export const JOURNAL_IMAGE_MOVE = {
   /** How many queued rows one sweep takes at most. */
   ROWS_PER_SWEEP: 5,
+  /** How long a sweep holds the rows it takes: past the longest any sweep may run, so a row is only taken again from one that ended. */
+  CLAIM_MILLIS: 2 * MAINTENANCE_SWEEP.MAX_DURATION_SECONDS * 1000,
 } as const;

@@ -17,21 +17,20 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import {
-  type AttachmentUpload,
-  tombstoneUnwrittenUploads,
-} from "@repo/database/models/attachment-blob-tombstones";
-import {
+  claimJournalImageMoves,
   dropJournalImageMove,
   failJournalImageMove,
   type HeldJournalPicture,
   type JournalImagePart,
   type JournalImageRewrite,
   type JournalImageRow,
-  readJournalImageMoves,
   readJournalImageRow,
   readKeptJournalPictures,
+  recordJournalImageUpload,
+  releaseJournalImageMove,
   type StoredJournalPicture,
   settleJournalImageRow,
+  tombstoneJournalImageUploads,
 } from "@repo/database/models/journal-image-moves";
 import {
   JOURNAL_IMAGE_MOVE_FAILURE,
@@ -104,13 +103,10 @@ function decodedImageOf(image: JournalImagePart): DecodedImage | RefusedImage {
 /**
  * Stores each image the conversation does not keep yet, once per distinct
  * hash, and answers the picture each hash is to be named by. Each upload is
- * recorded before it is made, so one that fails partway is still tombstoned.
+ * recorded on its row before it is made, so one a failure leaves unnamed is
+ * tombstoned, by this sweep or by the next to take the row.
  */
-const storeImages = (
-  row: JournalImageRow,
-  decoded: readonly DecodedImage[],
-  uploads: AttachmentUpload[],
-) =>
+const storeImages = (row: JournalImageRow, decoded: readonly DecodedImage[]) =>
   Effect.gen(function* () {
     const store = yield* BlobStore;
     const distinct = new Map(decoded.map((image) => [image.sha256, image]));
@@ -128,7 +124,7 @@ const storeImages = (
       const id = randomUUID();
       const blobKey = attachmentBlobPath(id);
 
-      uploads.push({ id, keys: [blobKey] });
+      yield* recordJournalImageUpload(row.messageId, { id, keys: [blobKey] });
       yield* store.put(blobKey, image.bytes, image.contentType);
       const readBack = yield* store.get(blobKey);
 
@@ -153,6 +149,8 @@ const storeImages = (
 /** Moves one queued row's images, answering how many of its parts were rewritten. */
 const moveRow = (messageId: string) =>
   Effect.gen(function* () {
+    // Note that a sweep that died holding the row may have left uploads no picture names.
+    yield* tombstoneJournalImageUploads(messageId);
     const found = yield* readJournalImageRow(messageId);
 
     if (Option.isNone(found) || found.value.images.length === 0) {
@@ -177,29 +175,24 @@ const moveRow = (messageId: string) =>
       images.push({ image, decoded });
     }
 
-    const uploads: AttachmentUpload[] = [];
-
-    // Note that the tombstones are written after the settle's transaction has ended, whatever it answered.
-    return yield* Effect.gen(function* () {
-      const pictures = yield* storeImages(
-        row,
-        images.map((one) => one.decoded),
-        uploads,
-      );
-
-      const rewrites = images.flatMap(({ image, decoded: one }): JournalImageRewrite[] => {
-        const picture = pictures.get(one.sha256);
-
-        return picture === undefined ? [] : [{ ...image, picture }];
-      });
-
-      const settlement = yield* settleJournalImageRow(row, rewrites);
-
-      return settlement.rewritten;
-    }).pipe(
-      Effect.ensuring(Effect.ignore(Effect.suspend(() => tombstoneUnwrittenUploads(uploads)))),
+    const pictures = yield* storeImages(
+      row,
+      images.map((one) => one.decoded),
     );
-  });
+
+    const rewrites = images.flatMap(({ image, decoded: one }): JournalImageRewrite[] => {
+      const picture = pictures.get(one.sha256);
+
+      return picture === undefined ? [] : [{ ...image, picture }];
+    });
+
+    const settlement = yield* settleJournalImageRow(row, rewrites);
+
+    return settlement.rewritten;
+  }).pipe(
+    // Note that the row is released after the settle's transaction has ended, whatever it answered; a release that fails leaves its uploads recorded for the next sweep.
+    Effect.ensuring(Effect.ignore(releaseJournalImageMove(messageId))),
+  );
 
 /**
  * Moves a sweep's worth of queued rows, answering how many parts it
@@ -208,7 +201,11 @@ const moveRow = (messageId: string) =>
  */
 export const moveJournalImages = /* @__PURE__ */ Effect.fn("storage/moveJournalImages")(
   function* () {
-    const queued = yield* readJournalImageMoves(JOURNAL_IMAGE_MOVE.ROWS_PER_SWEEP);
+    const queued = yield* claimJournalImageMoves(
+      JOURNAL_IMAGE_MOVE.ROWS_PER_SWEEP,
+      JOURNAL_IMAGE_MOVE.CLAIM_MILLIS,
+    );
+
     let rewritten = 0;
 
     for (const messageId of queued) {
