@@ -52,6 +52,7 @@ import {
   type FailureAbout,
   type FailureKind,
   type FailureSurface,
+  READ_SURFACES,
   type ShownFailureReport,
   type ShownFailureSent,
   shownFailureDetails,
@@ -92,12 +93,6 @@ export type ShownFailureReporter = (report: ShownFailureReport) => ShownFailureS
 
 /** The account's state where no document has been read yet. */
 const ACCOUNT_UNREAD = "unread";
-
-/** The conditions only a write fails with: not kept, or another write landed first. */
-const WRITE_CONDITIONS: ReadonlySet<unknown> = new Set([
-  FAILURE_CONDITION.NOT_KEPT,
-  FAILURE_CONDITION.CONFLICT,
-]);
 
 /** The answers an act refuses with: refused, or not supported where it was asked. */
 const REFUSED_ANSWERS: ReadonlySet<unknown> = new Set([
@@ -214,16 +209,13 @@ function now(): number {
 
 /**
  * Whether `failure` is a read the window's connection explains while the app
- * does not reach the service: answering no act, naming no write's
- * condition, and named no refusal. Note that a write's failure is still said
- * in place, since the mark does not say what was not kept.
+ * does not reach the service: shown on a read's surface (`READ_SURFACES`),
+ * and named no refusal. Note that a write's failure, a Start or a Revert
+ * among them, is still said in place, since nothing sends it again by
+ * itself once the service answers.
  */
 function readOfConnection(failure: ShownFailure): boolean {
-  return (
-    failure.act === undefined &&
-    !WRITE_CONDITIONS.has(failure.cause) &&
-    kindOf(failure) !== FAILURE_KIND.REFUSED
-  );
+  return READ_SURFACES.has(failure.surface) && kindOf(failure) !== FAILURE_KIND.REFUSED;
 }
 
 /**

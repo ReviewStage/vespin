@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { RepositoryChangesAnswerView } from "@repo/features/pull-request-view";
+import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   DESCRIPTION_ACTOR,
   type DescriptionRevisionLine,
@@ -12,6 +13,7 @@ import {
 import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { UPDATE_STATUS } from "@repo/settings/update";
+import { ErrorState } from "@repo/ui";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -21,6 +23,7 @@ import { DesktopInbox } from "./desktop/desktop-inbox.js";
 import { DesktopVersionHistory, taskVersionSubject } from "./desktop/desktop-version-history.js";
 import { OfflineMark } from "./desktop/offline-mark.js";
 import { SIDEBAR_OVERLAY } from "./desktop/sidebar-collapse.js";
+import { failureShown } from "./failure-report.js";
 import { PANEL_TAB } from "./panel-tabs.js";
 import { AgentAuthSection } from "./settings/agent-auth-section.js";
 import { WorkspacePage } from "./settings/workspace-page.js";
@@ -285,6 +288,31 @@ test("the Inbox's reads failing while the app does not reach the service keep th
   assert.ok(page.textContent?.includes(THRESHOLD.title), "the item held still stands");
   assert.equal(page.querySelector('[role="alert"]') === null, true, "no surface says it again");
   assert.doesNotMatch(page.textContent ?? "", /could not be read/u);
+});
+
+test("a Start that got no answer while the app does not reach the service still says so beside the Offline mark, since nothing sends it again", async () => {
+  handState({}, { network: { online: true, reachable: false } });
+
+  const page = await mount(
+    createElement(
+      "div",
+      null,
+      createElement(OfflineMark),
+      createElement(ErrorState, {
+        failure: failureShown({ surface: FAILURE_SURFACE.AGENT_START, cause: UNANSWERED }),
+        children: "The agent could not be started.",
+      }),
+    ),
+  );
+
+  await vi.waitFor(() =>
+    assert.ok(page.querySelector('.offline-mark[aria-label="Offline"]'), "the mark says it"),
+  );
+  await settle();
+  assert.equal(
+    page.querySelector('[role="alert"]')?.textContent,
+    "The agent could not be started.",
+  );
 });
 
 test("a side panel tab whose read failed says so alike, and Retry reads them again", async () => {
