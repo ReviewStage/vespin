@@ -384,8 +384,15 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
 
           if (standing?.status === SANDBOX_STATUS.RUNNING) return listedOf(standing);
 
-          // A sandbox not up kept nothing but its drive, so it is deleted and made anew, its own drive mounted again.
+          // A sandbox not up kept nothing but its drive, so it is deleted and made anew, its own drive
+          // mounted again; its sessions go with it, its ended ones handed on first, as a delete hands them.
           if (standing !== undefined) {
+            const gone = state.sessions.filter((session) => session.sandboxName === ask.name);
+            const ended = gone.filter((session) => session.ended !== undefined);
+
+            if (ended.length > 0) yield* (yield* EndedSessionsOnDelete)(ended);
+
+            for (const session of gone) state.sessions.splice(state.sessions.indexOf(session), 1);
             state.sandboxes.delete(ask.name);
             state.deleted.push(ask.name);
           }

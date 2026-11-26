@@ -745,16 +745,16 @@ async function replacedWhileStopped(
   signal: AbortSignal,
   captures: DeleteCapture[],
 ): Promise<boolean> {
-  // Note that the sessions are read beside the lookup rather than after, so a get waits on no read of its own.
-  const [standing, read] = await Promise.all([
-    SdkSandbox.get({ ...under, name, resume: false, signal }).catch(absentIfNotFound),
-    sessionsRead(name, under, signal),
-  ]);
+  const standing = await SdkSandbox.get({ ...under, name, resume: false, signal }).catch(
+    absentIfNotFound,
+  );
 
   if (standing === undefined) return false;
 
   if (STATUS_OF_VERCEL.get(standing.status) !== SANDBOX_STATUS.STOPPED) return false;
-  // Note that a read that saw a session still stopping, beside a lookup that saw it stopped, is read again, so its figures are not lost to the race.
+  // Note that the sessions are read only once the lookup saw it stopped, so opening one up waits on
+  // no read of them, and read again where that read still saw one stopping, so its figures are whole.
+  const read = await sessionsRead(name, under, signal);
   captures.push(unsettled(read) ? await captured(name, under, signal) : endedOf(read));
   await standing.delete({ deleteOrphanSnapshots: true, signal }).catch(absentIfNotFound);
 
@@ -979,9 +979,9 @@ type DeleteCapture =
 /**
  * The named sandbox's sessions, ended or not, read before its delete;
  * never throws, so a delete goes on whatever the read answered. Note that
- * the read is cut off at `STOP_WAIT.READ` and answers unread, because a
- * resume waits on it beside its lookups, and a stalled list must not stall
- * every resume.
+ * the read is cut off at `STOP_WAIT.READ` and answers unread, because an
+ * open that makes a stopped sandbox again waits on it, and a stalled list
+ * must not stall every such open.
  */
 function sessionsRead(name: string, under: Under, signal: AbortSignal): Promise<DeleteCapture> {
   const bounded = AbortSignal.any([signal, AbortSignal.timeout(Duration.toMillis(STOP_WAIT.READ))]);

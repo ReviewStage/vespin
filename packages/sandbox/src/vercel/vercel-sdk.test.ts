@@ -226,19 +226,8 @@ it.effect(
       );
       assert.equal(setUpOnFound, 0);
       assert.deepEqual(setUp, [SESSION, SESSION]);
-      // Each open first looks for a stopped sandbox to make again, its sessions read beside, and neither resumes anything.
-      assert.deepEqual(gets, [
-        null,
-        "false",
-        "true",
-        null,
-        "false",
-        "true",
-        null,
-        "false",
-        "true",
-        "true",
-      ]);
+      // Each open first looks for a stopped sandbox to make again, which resumes nothing; none stopped, no session is read.
+      assert.deepEqual(gets, ["false", "true", "false", "true", "false", "true", "true"]);
       assert.equal(refused._tag, "SandboxNameTaken");
       assert.equal(refused.call, SANDBOX_CALL.CREATE);
 

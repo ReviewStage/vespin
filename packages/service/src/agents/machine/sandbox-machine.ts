@@ -288,10 +288,11 @@ const RUNNER_UPLOADS = Object.values(RUNNER_UNIT).map((name) => `${RUNNER_UPLOAD
  * The `agent` user put in the `docker` group on each launch, root's, so the
  * harness and every command it runs reach the daemon the image's `docker`
  * starts (`apps/web/agent-image/Dockerfile`). Note that it is asked only
- * where the user is not already in it, since the runner started after it
- * takes the user's groups as it starts.
+ * where the group stands, so a sandbox up on an image without Docker still
+ * launches, and only where the user is not already in it, since the runner
+ * started after it takes the user's groups as it starts.
  */
-const JOIN_DOCKER_GROUP = `if ! id -nG ${AGENT_USER} | grep -qw docker; then usermod -aG docker ${AGENT_USER}; fi`;
+const JOIN_DOCKER_GROUP = `if getent group docker > /dev/null && ! id -nG ${AGENT_USER} | grep -qw docker; then usermod -aG docker ${AGENT_USER}; fi`;
 
 /** Where pnpm keeps its store for a checkout on the workspace's drive, where an install that ran as the default user put it: the drive's root, the first folder up from the checkout it may write on that drive. */
 const DRIVE_PNPM_STORE = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/.pnpm-store`;
