@@ -13,6 +13,7 @@
 
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   bigserial,
   boolean,
   index,
@@ -26,6 +27,19 @@ import { createdAt } from "./_helpers.js";
 import { conversations } from "./storage.js";
 
 /**
+ * What a resume may leave out of a transcript row: a conversation entry
+ * before the latest compaction's start (`resumeFrom`) is left out, the
+ * compaction's own row among them; any other kind never is.
+ */
+export const RESUME_ROLE = {
+  CONVERSATION: "conversation",
+  COMPACTION: "compaction",
+  OTHER: "other",
+} as const;
+
+export type ResumeRole = (typeof RESUME_ROLE)[keyof typeof RESUME_ROLE];
+
+/**
  * One transcript entry, in the order it was appended (`id`). `subpath` is
  * null for the main transcript and names a subagent's transcript otherwise.
  * `entry` is the line as the CLI wrote it, opaque to us but for whether it
@@ -33,6 +47,15 @@ import { conversations } from "./storage.js";
  * first line of a Codex rollout, marked in the insert that carries it
  * (`../models/claude-session-entries.ts`), so a session the store holds
  * from its first entry is told from one it holds only a tail of.
+ *
+ * Beside it, each row says what a resume may leave out of it
+ * (`resumeRole`), marked as it is inserted: a Claude Code conversation
+ * entry (`user`, `assistant`, `system`, `attachment`, as the CLI itself
+ * sorts them) and its `uuid` (`entryUuid`), a compaction among them, or any other kind.
+ * A compaction keeps where a resume may start (`resumeFrom`): its own row,
+ * or the earliest of the messages it preserves where they stand before
+ * it, none where one of them is not stored. A row from before the marks
+ * has none, and is never left out.
  */
 export const claudeSessionEntries = pgTable(
   "claude_session_entries",
@@ -46,6 +69,9 @@ export const claudeSessionEntries = pgTable(
     subpath: text("subpath"),
     entry: jsonb("entry").notNull(),
     opens: boolean("opens").notNull().default(false),
+    resumeRole: text("resume_role").$type<ResumeRole>(),
+    entryUuid: text("entry_uuid"),
+    resumeFrom: bigint("resume_from", { mode: "number" }),
     createdAt: createdAt(),
   },
   (table) => [
