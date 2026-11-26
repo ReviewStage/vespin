@@ -4051,14 +4051,33 @@ const ANSWERS: StagedAnswers = {
   },
   // The invitations task's repository's skills, as the service finds them.
   [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
-  // The invitations task's repository's tree, read whole as an `@` reads its files and folders; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
+  // The invitations task's repository's tree, read whole as an `@` reads its files and folders, through the task or, as the Manager's box reads it, through the workspace; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
   [ACT_KIND.TASKS_TREE]: (asked) =>
-    "taskId" in asked &&
-    asked.taskId === TASK.INVITES &&
     asked.recursive === true &&
-    asked.path === ""
+    asked.path === "" &&
+    ("taskId" in asked
+      ? asked.taskId === TASK.INVITES
+      : asked.repository === INVITES_TREE.repository)
       ? { folder: INVITES_TREE }
       : { failure: TASK_CALL_FAILURE.UNANSWERED },
+  // The machines of the workspace's members an `@` offers: Ada's own, the one away offline.
+  [ACT_KIND.WORKSPACE_MACHINES_READ]: () => ({
+    machines: HOSTS.flatMap((host) =>
+      host.platform === undefined
+        ? []
+        : [
+            {
+              id: host.id,
+              name: host.name,
+              platform: host.platform,
+              userId: ADA.userId,
+              online: host.away !== true,
+            },
+          ],
+    ),
+  }),
+  // Ada's machines always allow no app, so an `@` offers none of theirs.
+  [ACT_KIND.HOSTS_ALLOWED_APPS]: () => ({ machines: [] }),
   [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
     const held = stagedAgent(agentId);
 
