@@ -354,7 +354,7 @@ function mcpCall(item: WireValue): Option.Option<Answered> {
         }
       : failure === undefined
         ? { workspaceTool: false, text: read.text, output: read.text, pictures: read.pictures }
-        : { workspaceTool: false, text: failure, output: failure };
+        : { workspaceTool: false, text: failure, output: failure, pictures: read.pictures };
 
     return {
       callId: call.id,
