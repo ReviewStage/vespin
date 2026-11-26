@@ -44,6 +44,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { type TaskOverview, useTaskOverview } from "../tasks/use-tasks.js";
 import { DISCARD_CHANGES_WORDS, useKeptWords } from "../use-kept-words.js";
 import { useMentionOffer } from "../use-mention-offer.js";
@@ -214,6 +215,9 @@ function DescriptionEditor({
     },
   );
 
+  // Note that the pictures are read from the description as it was opened, which a phone's edit adds none to, so typing parses nothing again.
+  const media = useDescriptionPictures(body);
+
   const kept = useKeptWords(editor.draft !== editor.base);
   const close = useCloseSheet(kept);
 
@@ -367,6 +371,7 @@ function DescriptionEditor({
         problem={problemOf(editor, conflict?.note)}
         repository={task.repository}
         onAtWord={setAtWord}
+        media={media}
         mentions={
           mentions === undefined
             ? undefined

@@ -98,6 +98,10 @@ public final class PillFieldModule: Module {
         view.take(value.lines.map(DocumentLine.init), seen: value.seen)
       }
 
+      Prop("media") { (view: DocumentFieldView, media: [MediaRecord]?) in
+        view.takeMedia(media ?? [])
+      }
+
       Prop("look") { (view: DocumentFieldView, look: LookRecord) in
         view.look = Look(look)
       }

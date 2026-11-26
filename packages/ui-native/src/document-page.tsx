@@ -10,7 +10,7 @@ import {
   type MentionSuggestionGroup,
   MentionSuggestions,
 } from "./composer-head.js";
-import { DocumentField, type DocumentFieldHandle } from "./document-field.js";
+import { DocumentField, type DocumentFieldHandle, type DocumentMedia } from "./document-field.js";
 import {
   BAR_EDGE,
   BAR_GLASS,
@@ -50,6 +50,8 @@ interface DocumentPageProps {
   readonly onAtWord?: ((word: CaretAtWord | undefined) => void) | undefined;
   /** What the `@` word offers; none while the caret stands in no `@` word. */
   readonly mentions?: DocumentPageMentions | undefined;
+  /** How the document's pictures are drawn, each as the media it names; none draws each as a pill. */
+  readonly media?: DocumentMedia | undefined;
   readonly testID?: string | undefined;
 }
 
@@ -86,6 +88,7 @@ function PageWords({
         placeholder={props.placeholder}
         editable={props.editable}
         onAtWord={props.onAtWord}
+        media={props.media}
         style={[styles.field, { marginBottom: foot }]}
         testID={props.testID}
       />

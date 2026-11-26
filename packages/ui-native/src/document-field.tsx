@@ -16,6 +16,7 @@ import {
   type LockedKind,
   writtenDocument,
 } from "@repo/features/document-blocks";
+import { drawnPictureAddresses } from "@repo/features/drawn-pictures";
 import { markdownTreeKept } from "@repo/features/markdown-tree";
 import { PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
 import {
@@ -46,6 +47,7 @@ import { editedBlocks, editedLines, type FieldLine, fieldLines } from "./documen
 import {
   FORMAT_ACT,
   type FormatAct,
+  MEDIA_KIND,
   type NativeCard,
   NativeDocumentField,
   type NativeDocumentFieldDoors,
@@ -53,12 +55,13 @@ import {
   type NativeDocumentRun,
   type NativeFormatAct,
   type NativeFormats,
+  type NativeMedia,
   type NativeOpening,
   type NativeToldLine,
   type NativeToldRun,
 } from "./document-field-native.js";
 import { GLYPH, WRITING_GLYPH } from "./glyph.js";
-import { Markdown } from "./markdown.js";
+import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import type { MarkdownReading } from "./markdown-model.js";
 import { pillLook } from "./pill-look.js";
 import { askForWords, WORDS_KIND, type WordsAct } from "./system-asks.js";
@@ -133,6 +136,20 @@ const FORMATS: NativeFormats = {
 /** What a picture or a line break kept as its source draws as in the words. */
 const RAW_WORDS = { PICTURE: "Picture", BREAK: "Line break" } as const;
 
+/** What a file a picture's address names is called where its words name it nothing, as the read rows' chip calls it. */
+const UNNAMED_FILE = "Attachment";
+
+/** A picture's words in its Markdown, `![words](address)`, its escapes read. */
+const PICTURE_WORDS = /^!\[((?:\\.|[^\\\]])*)\]/u;
+
+/** How a document's pictures are drawn, as its read rows draw them (`Markdown`'s `pictureSource`, `videoAt` and `fileAt`): each address's picture, video or sound clip, or file, read apart from the words. */
+export interface DocumentMedia {
+  /** The file a picture is drawn from; none while it is on its way, and `null` where it could not be read. */
+  readonly pictureSource: (written: string) => string | null | undefined;
+  readonly videoAt: (written: string) => MarkdownVideo | undefined;
+  readonly fileAt: (written: string) => MarkdownFile | undefined;
+}
+
 /** The looks the field tells back that a block's runs keep. */
 const MARKS: ReadonlySet<string> = new Set(Object.values(INLINE_MARK));
 
@@ -174,6 +191,8 @@ interface DocumentFieldProps {
   readonly keepClear?: number | undefined;
   /** Where the field takes the keyboard with its caret once it stands, read as it mounts; none leaves the keyboard alone. */
   readonly opensAt?: DocumentFieldOpening | undefined;
+  /** How the document's pictures are drawn, each as the media it names in its own line, as the read rows draw it; none draws each as a pill of its words. */
+  readonly media?: DocumentMedia | undefined;
 }
 
 /** What the field last told: the Markdown it wrote, the Markdown that was written against, and its lines as the blocks it wrote read them. */
@@ -238,12 +257,79 @@ function cardOf(locked: LockedKind, source: string): NativeCard {
   return { source, title: CARD_TITLE[locked], detail };
 }
 
-/** A run as the native field takes it: words, a pill drawn as the panel's chip, a picture or break kept as its source as a pill of its own, or a locked block's card. */
+/** A picture's words, as its Markdown writes them. */
+function pictureWords(source: string): string {
+  return (PICTURE_WORDS.exec(source)?.[1] ?? "").replaceAll(/\\(.)/gu, "$1");
+}
+
+/** What a picture's address holds as the field draws it, as the read rows' picture block reads it: a file, a video or a sound clip, then a picture, on its way, or unread. */
+function heldMedia(address: string, alt: string, media: DocumentMedia): NativeMedia {
+  const file = media.fileAt(address);
+
+  if (file !== undefined) {
+    const label = alt.trim() === "" ? UNNAMED_FILE : alt.trim();
+
+    return { address, kind: MEDIA_KIND.FILE, file: file.source, label, detail: file.size };
+  }
+
+  const video = media.videoAt(address);
+
+  if (video !== undefined) {
+    const kind = video.audio === true ? MEDIA_KIND.AUDIO : MEDIA_KIND.VIDEO;
+
+    // Note that a recording whose file is not there yet stands on its way, and one that could not be read stands unread, as the read rows' player says.
+    if (video.source === undefined)
+      return { address, kind: MEDIA_KIND.READING, label: video.label };
+
+    if (video.source === null) return { address, kind: MEDIA_KIND.UNREAD, label: video.label };
+
+    return { address, kind, file: video.source, label: video.label };
+  }
+
+  const source = media.pictureSource(address);
+
+  if (source === undefined) return { address, kind: MEDIA_KIND.READING, label: "" };
+
+  if (source === null) return { address, kind: MEDIA_KIND.UNREAD, label: "" };
+
+  return { address, kind: MEDIA_KIND.PICTURE, file: source, label: "" };
+}
+
+/**
+ * What each picture the document's blocks draw as media holds, each address
+ * once, in the order first drawn. Note that it is read from the blocks the
+ * field's lines stand on, which change only with the Markdown they were
+ * read from, never on a key, so typing hands the view none of it; a
+ * picture a key took out stands on, unread by any line.
+ */
+function blocksMedia(
+  blocks: readonly DocumentBlock[],
+  media: DocumentMedia,
+): readonly NativeMedia[] {
+  const held = new Map<string, NativeMedia>();
+
+  for (const block of blocks) {
+    for (const line of block.lines) {
+      for (const run of line.runs) {
+        if (run.kind !== INLINE_RUN.RAW || !run.source.startsWith("![")) continue;
+        const address = drawnPictureAddresses(run.source)[0];
+
+        if (address === undefined || held.has(address)) continue;
+        held.set(address, heldMedia(address, pictureWords(run.source), media));
+      }
+    }
+  }
+
+  return [...held.values()];
+}
+
+/** A run as the native field takes it: words, a pill drawn as the panel's chip, a picture drawn as the media it names where the field draws media, a picture or break kept as its source as a pill of its own, or a locked block's card. */
 function nativeRun(
   run: InlineRun,
   line: FieldLine,
   reading: MarkdownReading,
   markOf: ChipMarkOf,
+  drawsMedia: boolean,
 ): NativeDocumentRun {
   if (run.kind === INLINE_RUN.WORDS) return { text: run.text, marks: run.marks, link: run.link };
 
@@ -254,6 +340,11 @@ function nativeRun(
     return { card: cardOf(line.locked ?? LOCKED_KIND.OTHER, run.source) };
 
   const picture = run.source.startsWith("![");
+  const address = picture && drawsMedia ? drawnPictureAddresses(run.source)[0] : undefined;
+
+  if (address !== undefined)
+    return { media: { source: run.source, address, alt: pictureWords(run.source) } };
+
   const words = picture ? RAW_WORDS.PICTURE : RAW_WORDS.BREAK;
 
   return {
@@ -272,6 +363,8 @@ function toldRun(run: NativeToldRun, files: ReadonlySet<string>): InlineRun {
   }
 
   if ("card" in run) return { kind: INLINE_RUN.RAW, source: run.card.source };
+
+  if ("media" in run) return { kind: INLINE_RUN.RAW, source: run.media.source };
   const [only, ...rest] = pillRuns(run.pill.markdown, files);
 
   if (only?.kind === PILL_RUN.PILL && rest.length === 0)
@@ -328,6 +421,7 @@ export function DocumentField({
   fitsWords = false,
   keepClear,
   opensAt,
+  media,
 }: DocumentFieldProps) {
   const colors = useColors();
   const native = useRef<NativeDocumentFieldDoors>(null);
@@ -369,12 +463,18 @@ export function DocumentField({
     const lines = laid.map(
       (line): NativeDocumentLine => ({
         ...line,
-        runs: line.runs.map((run) => nativeRun(run, line, reading, markOf)),
+        runs: line.runs.map((run) => nativeRun(run, line, reading, markOf, media !== undefined)),
       }),
     );
 
     return { markdown: base, value: { lines, seen } };
-  }, [own, told, read, base, repository, seen, markOf]);
+  }, [own, told, read, base, repository, seen, markOf, media]);
+
+  // What each picture the document draws holds, handed apart from the words, so a picture landing draws only that picture again.
+  const held = useMemo(
+    () => (media === undefined ? undefined : blocksMedia(read, media)),
+    [media, read],
+  );
 
   const look = {
     text: colors.TEXT,
@@ -531,6 +631,7 @@ export function DocumentField({
       opening={opening}
       onHeight={fitsWords ? ({ nativeEvent }) => setHeight(nativeEvent.height) : undefined}
       value={handed.value}
+      media={held}
       look={look}
       placeholder={placeholder}
       editable={editable}

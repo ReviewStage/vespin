@@ -1,0 +1,71 @@
+# description-media.yaml -- a description's file and picture drawn in its field as its page reads them, a PDF as its card and a picture at its own place in its line, while the words are edited in place.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, as every flow is, so no server is
+# reached; the fixture's Teammate invitations ends its description with a
+# PDF, "Invite flow spec", and a picture, "The invite page".
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- scrollUntilVisible:
+    element: "Teammate invitations"
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+# A press on the words puts the description in its field, as
+# `description-edit.yaml` presses them.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - scrollUntilVisible:
+          element: "Only an admin can add.*"
+          centerElement: true
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-in.yaml
+          env:
+            ELEMENT: "Only an admin can add.*"
+            BESIDE: "true"
+      - swipe:
+          start: "85%, 65%"
+          end: "85%, 45%"
+          duration: 1200
+- tapOn: "Only an admin can add.*"
+- extendedWaitUntil:
+    visible:
+      id: "description-words"
+    timeout: 10000
+- waitForAnimationToEnd
+# The field draws the PDF as its card, heard by its name and size, and the
+# picture as the picture, heard by its words, each on a line of its own,
+# where it once drew each as a pill of the word "Picture".
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Invite flow spec.*"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: description-media-file
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "The invite page"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: description-media-picture
