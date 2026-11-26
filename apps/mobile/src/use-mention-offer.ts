@@ -48,6 +48,7 @@ import {
   type MentionSources,
   machineCandidates,
   mentionOffer,
+  mentionPaths,
   type PickedMention,
   pageCandidate,
   pathCandidates,
@@ -401,7 +402,7 @@ export function useMentionOffer(
       tasks: taskRows,
       people: members.map((member) => personCandidate(member, member.you, step)),
       pages,
-      files: pathCandidates(paths ?? [], { workspace: step, repository }),
+      files: mentionPaths(pathCandidates(paths ?? [], { workspace: step, repository })),
       threads,
       automations: (automations ?? []).map((automation) =>
         automationCandidate(
