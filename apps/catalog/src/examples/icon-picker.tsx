@@ -1,11 +1,13 @@
 import {
-  IconButton,
+  CHOICE_BAR_LOOK,
+  ChoiceBar,
   IconPicker,
   IconPickerChoice,
-  type IconPickerFlyout,
+  type IconPickerColor,
+  IconPickerColors,
+  IconPickerEmoji,
+  IconPickerEmojiChoice,
   IconPickerGroup,
-  NOTE_LINE_LOOK,
-  NoteLine,
 } from "@repo/ui";
 import {
   BookmarkIcon,
@@ -17,23 +19,19 @@ import {
   StarIcon,
   ZapIcon,
 } from "@repo/ui/icons";
+import type { EmojiGroup } from "@repo/ui/section-icon-model";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**
- * icon-picker.tsx -- the app's one icon picker, its frame alone: a search
- * over named groups of choices in rows of ten, the one chosen pressed, the
- * arrows walking the grid, and Enter in the search picking the first found;
- * Flag floats a flyout of inks, as a section glyph's colors float; a
- * section's icon picker and a Manager's face picker are drawn in it.
+ * icon-picker.tsx -- the app's one icon picker: a search over named groups
+ * of choices in rows of ten, the one chosen pressed, the arrows walking the
+ * grid, and Enter in the search picking the first found; a glyph's press
+ * floats its colors from it (a choice's flyout), as a submenu would, an
+ * emoji's chooses it at once, and a search finds glyphs and emoji alike, an emoji typed into it
+ * first. A section's icon picker and a Manager's face picker are drawn in it.
  */
-
-/** The inks the flyout offers a flag in, as a section glyph's colors are offered. */
-const FLAG_INKS = [
-  { label: "Flag in the text's ink", ink: "text-foreground" },
-  { label: "Flag in the quiet ink", ink: "text-muted-foreground" },
-] as const;
 
 /** The glyphs the example offers, under the group each stands in. */
 const GROUPS: readonly { name: string; glyphs: readonly { label: string; Glyph: LucideIcon }[] }[] =
@@ -57,85 +55,172 @@ const GROUPS: readonly { name: string; glyphs: readonly { label: string; Glyph: 
     },
   ];
 
-/** Flag's flyout while it stands open: the flag in each ink, a press choosing it. */
-function flagFlyout(
-  open: boolean,
-  onChoose: () => void,
-  onClose: () => void,
-): IconPickerFlyout | undefined {
-  if (!open) return undefined;
+/** The inks a glyph is asked in, the text's own first, each a theme color `@repo/ui`'s own sources spell, so the catalog's Tailwind keeps it. */
+const INKS = {
+  TEXT: "text-foreground",
+  RED: "text-danger",
+  PURPLE: "text-merged",
+} as const;
 
-  return {
-    label: "Flag ink",
-    content: FLAG_INKS.map(({ label, ink }) => (
-      <IconButton
-        key={label}
-        icon={<FlagIcon className={ink} />}
-        label={label}
-        roving
-        onClick={onChoose}
-      />
-    )),
-    onClose,
-  };
-}
+type Ink = (typeof INKS)[keyof typeof INKS];
+
+const COLORS: readonly IconPickerColor<Ink>[] = [
+  { value: INKS.TEXT, label: "White" },
+  { value: INKS.RED, label: "Red" },
+  { value: INKS.PURPLE, label: "Purple" },
+];
+
+/** A few emoji by category, as the picker loads them. */
+const EMOJI: readonly EmojiGroup[] = [
+  {
+    name: "Smileys & Emotion",
+    emojis: [
+      { emoji: "😀", name: "grinning face" },
+      { emoji: "😎", name: "smiling face with sunglasses" },
+      { emoji: "🤔", name: "thinking face" },
+    ],
+  },
+  {
+    name: "Travel & Places",
+    emojis: [
+      { emoji: "🚀", name: "rocket" },
+      { emoji: "🛻", name: "pickup truck" },
+    ],
+  },
+];
+
+/** The emoji the example's picker offers as chosen last. */
+const RECENT_EMOJI = "🚀";
+
+/** The picker's two tabs. */
+const TAB = {
+  ICONS: "icons",
+  EMOJI: "emoji",
+} as const;
+
+type Tab = (typeof TAB)[keyof typeof TAB];
+
+/** What the example's picker holds chosen: a glyph in an ink, or an emoji. */
+type Chosen = { glyph: string; ink: Ink } | { emoji: string };
 
 function IconPickers(): React.JSX.Element {
   const [query, setQuery] = useState("");
-  const [chosen, setChosen] = useState("Star");
-  const [flagOpen, setFlagOpen] = useState(false);
+  const [chosen, setChosen] = useState<Chosen>({ glyph: "Star", ink: INKS.PURPLE });
+  const [opened, setOpened] = useState<string | undefined>(undefined);
+  const [tab, setTab] = useState<Tab>(TAB.ICONS);
   const words = query.trim().toLowerCase();
+  const chosenGlyph = "glyph" in chosen ? chosen : undefined;
+  const chosenEmoji = "emoji" in chosen ? chosen.emoji : undefined;
+  const all = GROUPS.flatMap((group) => group.glyphs);
+  const found = all.filter((glyph) => glyph.label.toLowerCase().includes(words));
 
-  const shown = GROUPS.flatMap((group) => {
-    const glyphs = group.glyphs.filter((glyph) => glyph.label.toLowerCase().includes(words));
+  // The tab stop is the choice pressed, else the first: the recent emoji where it is chosen, else the glyph chosen, else the first glyph.
+  const stopAt =
+    chosenEmoji === RECENT_EMOJI
+      ? RECENT_EMOJI
+      : (all.find((glyph) => glyph.label === chosenGlyph?.glyph) ?? all[0])?.label;
 
-    return glyphs.length === 0 ? [] : [{ ...group, glyphs }];
-  });
-
-  const labels = shown.flatMap((group) => group.glyphs.map((glyph) => glyph.label));
-  const stop = labels.includes(chosen) ? chosen : labels[0];
+  const cell = ({ label, Glyph }: { label: string; Glyph: LucideIcon }, stop: boolean) => (
+    <IconPickerChoice
+      key={label}
+      label={label}
+      pressed={label === chosenGlyph?.glyph}
+      stop={stop}
+      face={<Glyph className={label === chosenGlyph?.glyph ? chosenGlyph.ink : undefined} />}
+      popup
+      flyout={
+        opened === label
+          ? {
+              label: `${label} color`,
+              content: (
+                <IconPickerColors
+                  colors={COLORS}
+                  starts={label === chosenGlyph?.glyph ? chosenGlyph.ink : INKS.TEXT}
+                  face={(ink) => <Glyph className={ink} />}
+                  onColor={(ink) => {
+                    setChosen({ glyph: label, ink });
+                    setOpened(undefined);
+                  }}
+                />
+              ),
+              onClose: () => setOpened(undefined),
+            }
+          : undefined
+      }
+      onPress={() => setOpened(opened === label ? undefined : label)}
+    />
+  );
 
   return (
     <CatalogSection id="icon-picker" title="Picking">
       <IconPicker
-        searchLabel="Search icons"
+        searchLabel="Search icons and emoji"
         query={query}
         onQuery={(next) => {
-          setFlagOpen(false);
+          setOpened(undefined);
           setQuery(next);
         }}
-        legend="Icons"
+        bar={
+          <ChoiceBar<Tab>
+            label="Icon kind"
+            items={[
+              { value: TAB.ICONS, label: "Icons" },
+              { value: TAB.EMOJI, label: "Emoji" },
+            ]}
+            value={tab}
+            onChange={(next) => {
+              setOpened(undefined);
+              setTab(next);
+            }}
+            look={CHOICE_BAR_LOOK.SEGMENTED}
+          />
+        }
+        legend={tab === TAB.ICONS ? "Icons" : "Emoji"}
       >
-        {shown.length === 0 ? (
-          <NoteLine look={NOTE_LINE_LOOK.LIST}>No icons match.</NoteLine>
-        ) : (
-          shown.map((group) => (
-            <IconPickerGroup key={group.name} name={group.name}>
-              {group.glyphs.map(({ label, Glyph }) => (
-                <IconPickerChoice
-                  key={label}
-                  label={label}
-                  pressed={label === chosen}
-                  stop={label === stop}
-                  face={<Glyph />}
-                  popup={label === "Flag"}
-                  flyout={
-                    label === "Flag"
-                      ? flagFlyout(
-                          flagOpen,
-                          () => {
-                            setChosen("Flag");
-                            setFlagOpen(false);
-                          },
-                          () => setFlagOpen(false),
-                        )
-                      : undefined
-                  }
-                  onPress={() => (label === "Flag" ? setFlagOpen((was) => !was) : setChosen(label))}
-                />
-              ))}
+        {words === "" && tab === TAB.ICONS ? (
+          <>
+            <IconPickerGroup name="Recent">
+              <IconPickerEmojiChoice
+                emoji={RECENT_EMOJI}
+                label={RECENT_EMOJI}
+                pressed={chosenEmoji === RECENT_EMOJI}
+                stop={stopAt === RECENT_EMOJI}
+                onPress={() => setChosen({ emoji: RECENT_EMOJI })}
+              />
+              <IconPickerChoice
+                label="Heart, red"
+                pressed={chosenGlyph?.glyph === "Heart" && chosenGlyph.ink === INKS.RED}
+                stop={false}
+                face={<HeartIcon className={INKS.RED} />}
+                onPress={() => setChosen({ glyph: "Heart", ink: INKS.RED })}
+              />
             </IconPickerGroup>
-          ))
+            {GROUPS.map((group) => (
+              <IconPickerGroup key={group.name} name={group.name}>
+                {group.glyphs.map((glyph) => cell(glyph, glyph.label === stopAt))}
+              </IconPickerGroup>
+            ))}
+          </>
+        ) : (
+          <IconPickerEmoji
+            groups={EMOJI}
+            failed={false}
+            query={query}
+            chosen={chosenEmoji}
+            onEmoji={(emoji) => setChosen({ emoji })}
+            beside={{
+              found:
+                found.length === 0
+                  ? undefined
+                  : (stop) => (
+                      <IconPickerGroup name="Icons">
+                        {found.map((glyph, at) => cell(glyph, stop && at === 0))}
+                      </IconPickerGroup>
+                    ),
+              unloaded: undefined,
+              noMatch: "No icons or emoji match.",
+            }}
+          />
         )}
       </IconPicker>
     </CatalogSection>

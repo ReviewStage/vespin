@@ -123,8 +123,7 @@
     "react-dom": "catalog:",
     "recharts": "catalog:",
     "rehype-raw": "7.0.0",
-    "remark-breaks": "4.0.0",
-    "unicode-emoji-json": "0.9.0"
+    "remark-breaks": "4.0.0"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
@@ -138,6 +137,7 @@
     "jsdom": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
+    "unicode-emoji-json": "0.9.0",
     "vitest": "catalog:"
   }
 }
