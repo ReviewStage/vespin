@@ -151,6 +151,26 @@ export function withKeptPictures(
   };
 }
 
+const keptPicturesMetadataSchema = EffectSchema.Struct({
+  [KEPT_IMAGE_PROVIDER_KEY]: EffectSchema.Struct({
+    pictures: EffectSchema.Array(keptPictureSchema),
+  }),
+});
+
+const readKeptPicturesMetadata = EffectSchema.decodeUnknownOption(keptPicturesMetadataSchema);
+
+/** The pictures a settled tool part's `resultProviderMetadata` names its runner kept (`withKeptPictures`); none where it names none. */
+export function keptPicturesOf(
+  resultProviderMetadata: WireBoundaryInput,
+): readonly KeptPicture[] | undefined {
+  return Option.getOrUndefined(
+    Option.map(
+      readKeptPicturesMetadata(resultProviderMetadata),
+      (read) => read[KEPT_IMAGE_PROVIDER_KEY].pictures,
+    ),
+  );
+}
+
 /** What an image file part names of its picture under that key: the attachment it was kept as, or why it was not kept. */
 const keptImageSchema = EffectSchema.Union([
   EffectSchema.Struct({ attachmentId: EffectSchema.String }),
