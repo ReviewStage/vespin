@@ -143,20 +143,30 @@ export function KeepingProvider({
 /** The acts every picture, recording, and file under it leads its long press menu with, ahead of its own; none outside one. */
 const LeadDoor = createContext<readonly HeldAct[]>([]);
 
+/** The groups every picture, recording, and file under it ends its long press menu with, after its own acts; none outside one. */
+const LeadGroupsDoor = createContext<readonly LongPressGroup[]>([]);
+
 /**
  * Hands every picture, recording, and file under it the acts its long press
  * menu leads with, ahead of its own Copy, Save, and Share, as Messages leads
- * a photo's with Reply, such as a chat message's Reply in thread, so a
- * message of files alone offers what its words' menu would.
+ * a photo's with Reply, such as a chat message's Reply in thread, and the
+ * groups it ends with, such as a chat message's Add reaction, so a message
+ * of files alone offers what its words' menu would.
  */
 export function HeldLeadProvider({
   acts,
+  groups = [],
   children,
 }: {
   readonly acts: readonly HeldAct[];
+  readonly groups?: readonly LongPressGroup[] | undefined;
   readonly children: ReactNode;
 }) {
-  return <LeadDoor value={acts}>{children}</LeadDoor>;
+  return (
+    <LeadDoor value={acts}>
+      <LeadGroupsDoor value={groups}>{children}</LeadGroupsDoor>
+    </LeadDoor>
+  );
 }
 
 /** Names who showed the pictures under it and when, for their viewer's bar. */
@@ -582,13 +592,13 @@ export function HeldSwiftMenu({
  */
 export function HeldMenu({
   acts,
-  groups = [],
+  groups: own = [],
   title,
   width: known,
   children,
 }: {
   readonly acts: readonly HeldAct[];
-  /** Groups the menu holds after the held views' own acts, each set apart by a divider, such as a Manager chat message's Add reaction. */
+  /** Groups the menu holds after the held views' own acts, each set apart by a divider, such as a Manager chat message's Add reaction; any its holder hands down (`HeldLeadProvider`) follow them. */
   readonly groups?: readonly LongPressGroup[] | undefined;
   /** What heads the menu, such as when a message was sent. */
   readonly title?: string | undefined;
@@ -597,6 +607,8 @@ export function HeldMenu({
   readonly children: ReactElement;
 }) {
   const [measured, setWidth] = useState<number | undefined>(undefined);
+  // Note that a picture's or a file's menu under a message ends with what the message offers every thing it carried (`HeldLeadProvider`), such as Add reaction.
+  const groups = [...own, ...useContext(LeadGroupsDoor)];
   // Note that a width known up front bounds the views on their first layout, since one measured comes a frame later, and the views laid out unbounded in that frame stood one line wide past the screen, their host's height a step behind their words.
   const width = known ?? measured;
 

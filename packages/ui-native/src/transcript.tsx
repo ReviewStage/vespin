@@ -465,8 +465,8 @@ function ChannelSaid({
       stamp={item.stamp}
       onOpenLink={drawing.onOpenLink}
     >
-      {/* Note that a message's pictures name who sent it and when in their viewer's bar, and each of them and its files leads its long press with Reply in thread, as Messages leads a photo's with Reply, so a message of files alone opens its thread too. */}
-      <HeldLeadProvider acts={threadAct}>
+      {/* Note that a message's pictures name who sent it and when in their viewer's bar, and each of them and its files leads its long press with Reply in thread, as Messages leads a photo's with Reply, and ends it with Add reaction, so a message of files alone opens its thread and takes a reaction too. */}
+      <HeldLeadProvider acts={threadAct} groups={reacting}>
         <PictureOriginProvider origin={{ by: sender.name, at: item.at }}>
           <PictureSet
             atEnd={false}
