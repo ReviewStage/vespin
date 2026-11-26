@@ -7,7 +7,8 @@
  * an "(edited)" mark. The Manager is told in a turn of its own, naming the
  * words before and after (`AGENTS_CHAT_EDIT`), and answers in the chat as
  * it answers any message. Only the reader's own messages offer Edit, and
- * only their words are written again; Save with the words as they stand
+ * only their words are written again, in the chat's own box
+ * (`AgentComposer`) less its files; Save with the words as they stand
  * closes the box and asks nothing.
  *
  * A save is drawn at once (`useChatEdit`): over the window's document
@@ -17,7 +18,7 @@
  */
 
 import { REWIND_WORDS } from "@repo/features/agent-rewind-model";
-import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { AGENT_STATUS } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { type ManagerChatEditPress, withEditPress } from "@repo/features/manager-chat-live";
 import { CHAT_EDIT_WORDS } from "@repo/features/manager-chat-view";
@@ -28,18 +29,29 @@ import { BUTTON_SIZE, BUTTON_VARIANT, Button, STATUS_TONE } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { pressMutation } from "../act-mutations.js";
 import { MessageAction } from "../ai-elements/message.js";
+import {
+  DRAFT_PLACE,
+  type EditPlace,
+  EMPTY_DRAFT,
+  useDraft,
+  useDraftWriter,
+} from "../composer-drafts.js";
 import { showToast } from "../toast.js";
 import { drawAhead } from "../use-app-state.js";
+import { AgentComposer, type ComposerWords } from "./agent-composer.js";
 import { useHandedWords } from "./box-words.js";
-import { REPLY_LOOK, REPLY_VARIANT } from "./comment-variant.js";
-import { MessageBox, useMessageBox } from "./message-box.js";
+import type { HeldUpdate } from "./refused-send.js";
+import type { SkillSource } from "./skill-picker.js";
+import type { AgentComposerControl } from "./use-agent-composer.js";
 
 /** What a chat's messages read of the reader's edit: the message open for writing again, by its id, and the presses that open, close, and save it. */
 export interface ChatEdit {
   readonly editing: string | undefined;
+  /** What the edit box is drawn with beside the chat's own box. */
+  readonly box: ChatEditBox;
   readonly onOpen: (messageId: string) => void;
   readonly onClose: () => void;
   /** Saves the words given in place of the message's, which stood as `was`. */
@@ -74,7 +86,8 @@ function withChatEdit(
  * once; one the host or the service refused says so on a toast, and opens
  * the message again on the words that did not go.
  */
-export function useChatEdit(agentId: string): ChatEdit {
+export function useChatEdit(box: ChatEditBox): ChatEdit {
+  const { agentId } = box;
   const client = useQueryClient();
   const { mutateAsync: edit } = useMutation(pressMutation(ACT_KIND.AGENTS_CHAT_EDIT));
   const [editing, setEditing] = useState<string | undefined>(undefined);
@@ -120,11 +133,12 @@ export function useChatEdit(agentId: string): ChatEdit {
   return useMemo(
     () => ({
       editing,
+      box,
       onOpen: setEditing,
       onClose: () => setEditing(undefined),
       onSave,
     }),
-    [editing, onSave],
+    [editing, box, onSave],
   );
 }
 
@@ -137,44 +151,104 @@ export function EditChatMessageAction({ onEdit }: { onEdit: () => void }): React
   );
 }
 
-/** The message's words open for writing again where it stands, in the box a comment's edit opens: Cancel, or Escape, closes it and keeps nothing; Save, or Enter, saves the words. */
+/** What the edit box is drawn with beside the chat's own box: the Manager, and the words a dictation may say and the skills a `/` offers, as the chat's box reads them. */
+export interface ChatEditBox {
+  readonly agentId: string;
+  readonly keywords?: readonly string[] | undefined;
+  readonly skills?: SkillSource | undefined;
+}
+
+/** How the edit box words its field and its round button. */
+const EDIT_WORDING: ComposerWords = {
+  placeholder: REWIND_WORDS.EDIT,
+  label: REWIND_WORDS.EDIT,
+  send: CHAT_EDIT_WORDS.SAVE,
+};
+
+const noop = () => undefined;
+
+/**
+ * The message's words open for writing again where it stands, in the box
+ * the chat's own box is (`AgentComposer`), its `@` and `/` lists, Dictate,
+ * its formatting and paste, and its keys alike, but for files, since an
+ * edit writes words alone: Enter saves, and Cancel, or Escape where no list
+ * or dictation takes it, closes it. Its draft is its own, kept by the
+ * Manager and the message (`composer-drafts.ts`), so a Cancel, an Escape,
+ * or a switch away keeps what was written, which Edit opens on again; Save
+ * lets it go, and so does writing the words back as they stand.
+ */
 export function ChatEditField({
+  messageId,
   words,
+  box,
   onSave,
   onCancel,
 }: {
+  messageId: string;
   /** The message's words as they stand, which the box opens on. */
   words: string;
+  box: ChatEditBox;
   onSave: (text: string) => void;
   onCancel: () => void;
 }): React.JSX.Element {
-  const [draft, setDraft] = useState(words);
+  const place: EditPlace = { kind: DRAFT_PLACE.EDIT, agentId: box.agentId, messageId };
+  const kept = useDraft(place).draft;
+  const writer = useDraftWriter();
+  // A draft kept from an earlier Edit is what the box opens on.
+  const [draft, setDraft] = useState(() => (kept === EMPTY_DRAFT ? words : kept.text));
+  const held = useRef(draft);
+  held.current = draft;
 
-  const box = useMessageBox({
-    draft: useHandedWords(draft),
-    setDraft,
-    placeholder: REWIND_WORDS.EDIT,
-    label: REWIND_WORDS.EDIT,
-    maxLength: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
-    takesFiles: false,
-    onLeave: onCancel,
-    onSubmit: () => onSave(draft),
-    focus: true,
-  });
+  // Note that every change lands the one way every box's does, moved on from what the box holds as it lands (`refused-send.ts`), and the draft is let go where the words stand as the message's.
+  const updateHeld: HeldUpdate = (next) => {
+    const moved = next({ text: held.current, attachments: [] });
+
+    if (moved === undefined) return;
+    held.current = moved.text;
+    setDraft(moved.text);
+    writer.update(place, (was) =>
+      moved.text === words ? EMPTY_DRAFT : { ...was, text: moved.text },
+    );
+  };
+
+  const composer: AgentComposerControl = {
+    held: { words: useHandedWords(draft), attachments: [] },
+    updateHeld,
+    sending: false,
+    note: undefined,
+    closed: undefined,
+    send: () => {
+      writer.update(place, () => EMPTY_DRAFT);
+      onSave(held.current);
+    },
+    retry: noop,
+    sent: [],
+  };
 
   return (
-    <MessageBox
-      box={box}
-      look={REPLY_LOOK[REPLY_VARIANT.EDIT]}
-      data-chat-edit=""
-      dictates={false}
-      beforeSend={
+    <AgentComposer
+      agentId={box.agentId}
+      // Note that the box's round button saves while it is open, whatever the Manager is doing.
+      status={AGENT_STATUS.COMPLETED}
+      composer={composer}
+      model={undefined}
+      models={undefined}
+      modelsFailed={false}
+      readModels={noop}
+      usage={undefined}
+      servers={undefined}
+      onStop={() => Promise.resolve(false)}
+      followsUp
+      keywords={box.keywords}
+      skills={box.skills}
+      takesFiles={false}
+      wording={EDIT_WORDING}
+      onLeave={onCancel}
+      beforeSend={() => (
         <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onCancel}>
           <ReplayUnmask>{CHAT_EDIT_WORDS.CANCEL}</ReplayUnmask>
         </Button>
-      }
-      // Note that an edit emptied changes nothing, so Save stays pressable and closes the box, and that a save is drawn on the press, which closes the box, so it is never busy.
-      send={{ label: CHAT_EDIT_WORDS.SAVE, empty: false, inWords: true }}
+      )}
     />
   );
 }

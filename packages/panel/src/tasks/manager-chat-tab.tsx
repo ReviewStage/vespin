@@ -430,7 +430,9 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
           >
             {body.files}
             <ChatEditField
+              messageId={message.id}
               words={message.text}
+              box={edit.box}
               onSave={(text) => edit.onSave(message.id, text, message.text)}
               onCancel={edit.onClose}
             />
@@ -915,7 +917,14 @@ function useManagerChatBox({
   );
 
   const react = useChatReact(agent.id);
-  const edit = useChatEdit(agent.id);
+
+  // Note that the edit box reads what the chat's own box reads, so it offers the same lists and dictation.
+  const editBox = useMemo(
+    () => ({ agentId: agent.id, keywords: control.keywords, skills: control.readSkills }),
+    [agent.id, control.keywords, control.readSkills],
+  );
+
+  const edit = useChatEdit(editBox);
 
   // Note that these doors open no thread; the chat's own rows add theirs.
   const doors: ChatDoors = useMemo(

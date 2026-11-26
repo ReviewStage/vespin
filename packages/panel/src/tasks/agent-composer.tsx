@@ -354,6 +354,7 @@ export function AgentComposer({
   replyDoor,
   sendsEmpty = false,
   closedRemedy,
+  takesFiles = true,
   wording,
   maxLength = AGENT_BOUNDS.MAX_MESSAGE_CHARS,
   tools,
@@ -422,6 +423,8 @@ export function AgentComposer({
   sendsEmpty?: boolean;
   /** What mends a box closed for good, drawn after its note: Continue in new agent (`continue-agent.tsx`); none where nothing does. */
   closedRemedy?: ReactNode;
+  /** Whether the box takes files at all; one that writes words alone, as a Manager chat message's edit, offers no + and takes no drop or pasted file. */
+  takesFiles?: boolean;
   /** What the box asks for, calls its field, and calls its round button, where its owner says other than an agent's box does, as New task's does. */
   wording?: ComposerWords | undefined;
   /** The most the words may spell: a message to an agent's bound, unless the owner sends them elsewhere, as New task's Plan mode sends a task's brief. */
@@ -537,6 +540,7 @@ export function AgentComposer({
     label: wording?.label ?? "Message to the agent",
     maxLength,
     held,
+    takesFiles,
     holder: {
       attachments: composer.held.attachments,
       update: (next) =>
