@@ -242,6 +242,7 @@ export function ChatEditField({
       keywords={box.keywords}
       skills={box.skills}
       takesFiles={false}
+      inPlace
       wording={EDIT_WORDING}
       onLeave={onCancel}
       beforeSend={() => (
