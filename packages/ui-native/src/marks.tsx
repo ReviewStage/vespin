@@ -7,7 +7,6 @@ import {
   Image,
   RNHostView,
   RoundedRectangle,
-  Text,
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
@@ -69,6 +68,7 @@ import {
   priorityMarkUnder,
   STATUS_MARK_SYMBOL,
 } from "./status-mark-model.js";
+import { Text } from "./text.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -391,7 +391,7 @@ export function Avatar({
 /**
  * An agent's tile, as the panel's messages lead an agent's words with it: a
  * rounded square on the brand's well, the mark of the harness the agent runs
- * in on it (Claude Code's Clawd, Codex's picture), or the ink's hard hat where
+ * in on it (Claude's spark, OpenAI's blossom, Cursor's cube), or the ink's hard hat where
  * the harness is not known, so an agent never reads as a person. It is never
  * heard, since it always stands beside the name it leads, as `HarnessMark`
  * is: heard as the name too, it read the name twice, and in an agent's row
@@ -545,7 +545,7 @@ export const ManagerFace = memo(function ManagerFace({
   );
 });
 
-/** The mark of the harness a model runs in, as the panel leads a model's name with it: Claude Code's Clawd or Codex's picture, in its own colors, at `size`, unheard beside the name it leads. */
+/** The mark of the harness a model runs in, as the panel leads a model's name with it: Claude's spark in its clay, OpenAI's blossom or Cursor's cube in the text's ink, at `size`, unheard beside the name it leads. */
 export function HarnessMark({
   provider,
   size = MARK_SIZE.FACE,
@@ -555,7 +555,7 @@ export function HarnessMark({
 }) {
   const colors = useColors();
 
-  // Note that the text's ink reaches Cursor's cube alone, a template; Clawd and Codex's picture keep their own colors.
+  // Note that the text's ink reaches the blossom and the cube, templates; Claude's spark keeps its clay.
   return (
     <Image
       assetName={HARNESS_MARK_ASSET[provider]}

@@ -33,7 +33,6 @@ import {
   zoomedByWheel,
   zoomedTo,
 } from "../../image-zoom.js";
-import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 
 /** How far a press may wander, in pixels, and still be a press rather than a drag. */
 const PRESS_SLACK_PX = 4;
@@ -427,7 +426,6 @@ export function useImageZoom(
 
         // A drag that ends on the picture moved it, and is no press.
         if (held?.moved === true) return;
-        pulsePress(event.currentTarget, PRESS_PULSE.QUIET);
 
         if (frame.current === null) return;
         const at = pointIn(frame.current, event.clientX, event.clientY);
@@ -448,8 +446,7 @@ export function useImageZoom(
 /**
  * The picture `zoom` zooms, drawn as its transform over the size that fits
  * its frame: a press zooms it in where it is fitted, and zoomed, it is held
- * and dragged, and a press puts it back (zoom-image.css). A press answers
- * with the quiet pulse a wide shape gives; a drag is no press.
+ * and dragged, and a press puts it back (zoom-image.css); a drag is no press.
  */
 export function ZoomImage({
   zoom,

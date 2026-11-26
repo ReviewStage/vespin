@@ -1,4 +1,3 @@
-import { pulseOnPress } from "../../press-pulse.js";
 import {
   PAGINATION_ITEM,
   PaginationEllipsis,
@@ -93,13 +92,7 @@ function Step({
     words = rel === "prev" ? `${arrow} ${step.text}` : `${step.text} ${arrow}`;
 
   return (
-    <a
-      className={PAGINATION_ITEM}
-      href={step.href}
-      rel={rel}
-      aria-label={step.label}
-      onClick={pulseOnPress()}
-    >
+    <a className={PAGINATION_ITEM} href={step.href} rel={rel} aria-label={step.label}>
       {words}
     </a>
   );
@@ -148,12 +141,7 @@ export function Pagination({
             }
 
             return (
-              <a
-                key={number}
-                className={PAGINATION_ITEM}
-                href={pages.href(number)}
-                onClick={pulseOnPress()}
-              >
+              <a key={number} className={PAGINATION_ITEM} href={pages.href(number)}>
                 {number}
               </a>
             );

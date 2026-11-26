@@ -194,6 +194,10 @@ export * from "./components/hover-card/hover-card.js";
 
 export * from "./components/icon-picker/icon-picker.js";
 
+export * from "./components/icon-picker/icon-picker-colors.js";
+
+export * from "./components/icon-picker/icon-picker-emoji.js";
+
 export * from "./components/inline-edit/inline-edit.js";
 
 export * from "./components/inline-edit/renamable-name.js";
@@ -320,6 +324,8 @@ export * from "./components/public-page/public-page.js";
 
 export * from "./components/quiet-words/quiet-words.js";
 
+export * from "./components/reaction-chip/reaction-chip.js";
+
 export * from "./components/readable-controls/readable-controls.js";
 
 export * from "./components/rect-float/rect-float.js";
@@ -388,11 +394,11 @@ export * from "./components/settings-row/settings-row-fold.js";
 
 export * from "./components/settings-section/settings-section.js";
 
-export * from "./components/shimmer/shimmer.js";
-
 export * from "./components/shortcut/shortcut.js";
 
 export * from "./components/show-more-row/show-more-row.js";
+
+export * from "./components/side-split/side-split.js";
 
 export * from "./components/sidebar/sidebar.js";
 

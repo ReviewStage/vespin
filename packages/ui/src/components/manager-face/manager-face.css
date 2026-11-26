@@ -1,20 +1,82 @@
-/* manager-face.css -- the gentle bob a Manager's face makes while it works.
+/* manager-face.css -- a Manager's face sized to its seat: its emoji, and the typing bubble at its corner while it works.
 
-   The body rises a little and settles, once each 1.6s, the working mark's
-   own lap, so the face and the mark beside it keep one time. It is an
-   endless loop held by --ui-loop-motion, so its period may be a literal
-   (docs/DESIGN.md), and reduced motion and a capture run hold it at rest,
-   its first frame. */
+   Every length here is a share of the face's side (--ui-manager-face-side,
+   its seat's token), so an emoji and the bubble keep their proportions at a
+   row's 20px, a message's 32px, and among words. The bubble's dots light in
+   turn, once each 1.2s; it is an endless loop held by --ui-loop-motion, so
+   its period may be a literal (docs/DESIGN.md), and reduced motion and a
+   capture run hold it. Note that the dots start behind their own time
+   (negative delays), so the held frame lights the first dot and the second
+   half, and still reads as typing. */
 
 @layer components {
-  .ui-manager-face[data-working] .ui-manager-face-body {
-    animation: ui-manager-face-bob 0.8s ease-in-out infinite alternate;
+  .ui-manager-face[data-size="row"] {
+    --ui-manager-face-side: var(--spacing-manager-face-row);
+  }
+
+  .ui-manager-face[data-size="message"] {
+    --ui-manager-face-side: var(--spacing-manager-face-message);
+  }
+
+  .ui-manager-face[data-size="words"] {
+    --ui-manager-face-side: var(--spacing-words-glyph);
+  }
+
+  /* An emoji, about two thirds of its disc, so the fill rings it. */
+  .ui-manager-face-emoji {
+    display: block;
+    font-size: calc(var(--ui-manager-face-side) * 0.64);
+    line-height: 1;
+  }
+
+  /* The typing bubble: the ground in a hairline ring, its tail corner toward the face. */
+  .ui-manager-face-typing {
+    position: absolute;
+    inset-inline-end: calc(var(--ui-manager-face-side) * -0.3);
+    inset-block-start: calc(var(--ui-manager-face-side) * -0.22);
+    display: inline-flex;
+    align-items: center;
+    gap: calc(var(--ui-manager-face-side) * 0.075);
+    padding: calc(var(--ui-manager-face-side) * 0.1) calc(var(--ui-manager-face-side) * 0.14);
+    border-radius: var(--ui-radius-full) var(--ui-radius-full) var(--ui-radius-full)
+      calc(var(--ui-manager-face-side) * 0.1);
+    background: var(--ui-color-ground);
+    box-shadow: 0 0 0 1px var(--ui-color-border);
+    color: var(--ui-color-text);
+    pointer-events: none;
+  }
+
+  .ui-manager-face-typing > span {
+    inline-size: calc(var(--ui-manager-face-side) * 0.12);
+    block-size: calc(var(--ui-manager-face-side) * 0.12);
+    border-radius: var(--radius-disc);
+    background: currentColor;
+    opacity: 0.35;
+    animation: ui-manager-face-dot 1.2s ease-in-out -0.36s infinite;
     animation-play-state: var(--ui-loop-motion);
   }
 
-  @keyframes ui-manager-face-bob {
-    to {
-      translate: 0 -8%;
+  .ui-manager-face-typing > span:nth-child(2) {
+    animation: ui-manager-face-dot 1.2s ease-in-out -0.16s infinite;
+    animation-play-state: var(--ui-loop-motion);
+  }
+
+  .ui-manager-face-typing > span:nth-child(3) {
+    animation: ui-manager-face-dot 1.2s ease-in-out -1.16s infinite;
+    animation-play-state: var(--ui-loop-motion);
+  }
+
+  @keyframes ui-manager-face-dot {
+    0%,
+    60%,
+    100% {
+      opacity: 0.35;
+      translate: 0 0;
+    }
+
+    30% {
+      opacity: 1;
+      translate: 0 calc(var(--ui-manager-face-side) * -0.075);
     }
   }
 }

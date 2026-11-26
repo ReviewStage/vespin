@@ -130,6 +130,7 @@ export function PageScreen({
       {address === undefined ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={PAGE_WORDS.MORE}>
+            <Stack.Toolbar.Label>{PAGE_WORDS.MORE}</Stack.Toolbar.Label>
             <Stack.Toolbar.MenuAction
               icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
               onPress={() => openInSafari(address)}

@@ -68,6 +68,7 @@ import {
   TRANSCRIPT_KIND,
 } from "@repo/features/agent-view";
 import { AUTOMATION_FOLLOW, type AutomationFollow } from "@repo/features/automation-view";
+import type { FailureFacts } from "@repo/features/failure-facts";
 import type { IntegrationProviderParams } from "@repo/features/integration-view";
 import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -117,10 +118,18 @@ type LiveReadId = string | number;
 /** A live read's query key: its name, then its ids in its slice's order; its name alone where a surface names no ids. */
 type LiveReadKey<Read extends LiveReadName> = readonly [Read, ...LiveReadId[]];
 
-/** The read a live read's query stands for: the host could not answer it before it ever had. */
+/**
+ * The read a live read's query stands for: the host could not answer it
+ * before it ever had. Note that what failed beneath it, where the host said,
+ * is its `cause`, which a shown failure's report reads down (`@repo/features/shown-failure`),
+ * so a read that got no answer is reported as the network's failure rather than the app's.
+ */
 class LiveReadFailed extends Error {
-  constructor(readonly read: LiveReadName) {
-    super(`The host could not read ${read}.`);
+  constructor(
+    readonly read: LiveReadName,
+    cause: FailureFacts | undefined,
+  ) {
+    super(`The host could not read ${read}.`, cause === undefined ? undefined : { cause });
     this.name = "LiveReadFailed";
   }
 }
@@ -288,8 +297,6 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
     askAct(ACT_KIND.WORKSPACE_MEMBERS_FOLLOW, { workspaceId: String(workspaceId) }),
   [LIVE_READ.WORKSPACE_INVITATIONS]: ([workspaceId = ""]) =>
     askAct(ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW, { workspaceId: String(workspaceId) }),
-  [LIVE_READ.WORKSPACE_MACHINES]: ([workspaceId = ""]) =>
-    askAct(ACT_KIND.WORKSPACE_OWNED_MACHINES_FOLLOW, { workspaceId: String(workspaceId) }),
   [LIVE_READ.AUTOMATIONS]: automationsFollow(AUTOMATION_FOLLOW.WORKSPACE),
   [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: automationsFollow(AUTOMATION_FOLLOW.WORKSPACE_RUNS),
   [LIVE_READ.AUTOMATION_RUNS]: automationsFollow(AUTOMATION_FOLLOW.RUNS),
@@ -373,7 +380,6 @@ const LIVE_QUERY_READS = [
   LIVE_READ.TOKEN_REPOSITORIES,
   LIVE_READ.WORKSPACE_MEMBERS,
   LIVE_READ.WORKSPACE_INVITATIONS,
-  LIVE_READ.WORKSPACE_MACHINES,
   LIVE_READ.WORKSPACE_PHOTOS,
   LIVE_READ.AUTOMATIONS,
   LIVE_READ.AUTOMATION_WORKSPACE_RUNS,
@@ -485,7 +491,9 @@ function firstAnswer<Read extends LiveReadName>(
       answered = true;
       stop?.();
       resume(
-        held.rows === undefined ? Effect.fail(new LiveReadFailed(read)) : Effect.succeed(held.rows),
+        held.rows === undefined
+          ? Effect.fail(new LiveReadFailed(read, held.cause))
+          : Effect.succeed(held.rows),
       );
     };
 
@@ -741,10 +749,6 @@ export const workspaceMembersQuery = (workspaceId: string | undefined) =>
 export const workspaceInvitationsQuery = (workspaceId: string | undefined) =>
   liveReadQuery(LIVE_READ.WORKSPACE_INVITATIONS, oneId(workspaceId));
 
-/** The machines a workspace owns, which every member's agents may run on, by the workspace. */
-export const workspaceOwnedMachinesQuery = (workspaceId: string | undefined) =>
-  liveReadQuery(LIVE_READ.WORKSPACE_MACHINES, oneId(workspaceId));
-
 /** A listed workspace's photo, by the workspace, which the host fetches as its version moves and holds for the session. */
 export const workspacePhotoQuery = (workspaceId: string | undefined) =>
   liveReadQuery(LIVE_READ.WORKSPACE_PHOTOS, oneId(workspaceId));
@@ -843,10 +847,6 @@ export const workspaceMembersRetryMutation = () => actMutation(ACT_KIND.WORKSPAC
 /** Try again on a workspace's invitations. */
 export const workspaceInvitationsRetryMutation = () =>
   actMutation(ACT_KIND.WORKSPACE_INVITATIONS_RETRY);
-
-/** Try again on the machines a workspace owns. */
-export const workspaceOwnedMachinesRetryMutation = () =>
-  actMutation(ACT_KIND.WORKSPACE_OWNED_MACHINES_RETRY);
 
 /** Try again on one automations list or history, by what it holds and its id (`AutomationFollow`). */
 export const automationsRetryMutation = () => actMutation(ACT_KIND.AUTOMATIONS_RETRY);

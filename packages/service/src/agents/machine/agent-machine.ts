@@ -69,6 +69,7 @@ import type {
 } from "../sandbox-firewall.js";
 import type { KeyRefusal, PlanRefusal } from "../sessions/agent-sessions.js";
 import type { AgentSandbox } from "../terminal/agent-sandbox.js";
+import type { FileProbe, SandboxUpload } from "./sandbox-upload.js";
 
 /** Where a session runs now, as its machine names it: a sandbox's run, or a local agent's id on its Mac. Opaque to every caller but the machine. */
 export type MachineRunning = string & Brand.Brand<"MachineRunning">;
@@ -563,6 +564,15 @@ export interface AgentMachineService {
     file: { readonly name: string; readonly contents: Uint8Array },
   ) => Effect.Effect<string, SandboxError | LaunchRefused>;
   /**
+   * How the session's place uploads a file to the Blob store itself, by a
+   * presigned URL (`sandbox-upload.ts`): a cloud sandbox does, so a file it
+   * holds never passes through a function as base64; a Mac answers none,
+   * and its files are read and put by the service as before.
+   */
+  readonly selfUpload: (
+    session: string,
+  ) => Effect.Effect<SelfUpload | undefined, SandboxError | LaunchRefused>;
+  /**
    * An H.264 MP4 of the WebM recording at the path, made on the session's
    * place as the agent's own user (`phone-video.ts`), for a player that
    * plays no WebM; nothing where the place has no encoder, as a Mac and a
@@ -581,6 +591,34 @@ export interface AgentMachineService {
     session: string,
     path: string,
   ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
+}
+
+/** Which copy for a phone a place makes: an MP4 of a WebM recording, or an AAC M4A of an Ogg clip. */
+export const PHONE_COPY = {
+  VIDEO: "video",
+  AUDIO: "audio",
+} as const;
+
+export type PhoneCopyKind = (typeof PHONE_COPY)[keyof typeof PHONE_COPY];
+
+/**
+ * A place's own uploads to the Blob store, each by one presigned URL: what a
+ * file is, read as its size and first bytes; the file put at the URL; and
+ * the phone's copy of a recording or a clip made and put at the URL,
+ * answering whether one was made. What landed is read back from the store,
+ * never taken from the place's word.
+ */
+export interface SelfUpload {
+  readonly probe: (
+    path: string,
+    headBytes: number,
+  ) => Effect.Effect<FileProbe | undefined, SandboxError>;
+  readonly upload: (path: string, upload: SandboxUpload) => Effect.Effect<void, SandboxError>;
+  readonly uploadPhoneCopy: (
+    path: string,
+    kind: PhoneCopyKind,
+    upload: SandboxUpload,
+  ) => Effect.Effect<boolean, SandboxError>;
 }
 
 /** What a machine does to a place it already opened: everything but where it keeps things, opening a place or running it again, checking out what the place does not hold yet, handing a runner its credentials, and launching a runner in it. */

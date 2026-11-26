@@ -44,6 +44,14 @@ interface MaintenanceSweeps {
   pruneMachineAsks: (now: number) => SweepRead<number>;
   /** Queues the release of the cloud agents' sandboxes unused past their keep, and of those whose release stands unfinished, a sweep's worth, or only logs them where deleting is off (`agents/session-sandboxes.ts`'s `releaseUnusedSandboxes`). */
   releaseSandboxes: (now: number) => SweepRead<SandboxReleaseSweep>;
+  /** Deletes from the Blob store the objects of deleted attachments, a sweep's worth, and then their tombstones, answering how many (`storage/attachment-blob-purge.ts`). */
+  purgeAttachmentBlobs: (now: number) => SweepRead<number>;
+  /** Moves into the Blob store the bytes of attachments still kept inline, a sweep's worth, answering how many rows moved (`storage/attachment-blob-backfill.ts`). */
+  moveAttachmentsToBlob: (now: number) => SweepRead<number>;
+  /** Moves the images the journal's rows still keep as `data:` URLs into Blob-backed pictures, a sweep's worth of the rows its migration queued, answering how many parts it rewrote (`storage/journal-image-move.ts`). */
+  moveJournalImages: (now: number) => SweepRead<number>;
+  /** Marks the agents' stored CLI transcripts from before the resume marks, a sweep's worth of sessions found and rows marked, answering how many it read (`@repo/database`'s `markSessionsForResume`). */
+  markTranscriptsForResume: (now: number) => SweepRead<number>;
 }
 
 /**
@@ -86,6 +94,14 @@ interface MaintenanceSweepAnswer {
   machineAsks: Swept<number>;
   /** Cloud agents' sandboxes due for release, and the releases published. */
   sandboxReleases: Swept<SandboxReleaseSweep>;
+  /** Deleted attachments' objects purged from the Blob store. */
+  attachmentBlobs: Swept<number>;
+  /** Attachments kept inline whose bytes moved into the Blob store. */
+  attachmentsMoved: Swept<number>;
+  /** Journal parts rewritten from a `data:` URL to the Blob-backed picture they were kept as. */
+  journalImages: Swept<number>;
+  /** Stored CLI transcript sessions scanned, and rows from before the resume marks read and marked. */
+  transcriptMarks: Swept<number>;
 }
 
 /** What a sweep that failed answers in its place: the failure is logged, and the other sweeps run on. */
@@ -132,6 +148,13 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     commandsAway: yield* isolated("markCommandsAway", sweeps.markCommandsAway(now)),
     machineAsks: yield* isolated("pruneMachineAsks", sweeps.pruneMachineAsks(now)),
     sandboxReleases: yield* isolated("releaseSandboxes", sweeps.releaseSandboxes(now)),
+    attachmentBlobs: yield* isolated("purgeAttachmentBlobs", sweeps.purgeAttachmentBlobs(now)),
+    attachmentsMoved: yield* isolated("moveAttachmentsToBlob", sweeps.moveAttachmentsToBlob(now)),
+    journalImages: yield* isolated("moveJournalImages", sweeps.moveJournalImages(now)),
+    transcriptMarks: yield* isolated(
+      "markTranscriptsForResume",
+      sweeps.markTranscriptsForResume(now),
+    ),
   };
 });
 

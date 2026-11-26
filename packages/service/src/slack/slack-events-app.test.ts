@@ -47,6 +47,7 @@ import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { postInboxThread, readInboxItem } from "../inbox/inbox-store.js";
 import { modelCatalogOf } from "../providers/model-catalog.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
+import { memoryBlobStore } from "../testing/blob-store-fake.js";
 import {
   connectWorkspaceGitHub,
   githubReaching,
@@ -313,6 +314,7 @@ const answer = (
   Effect.gen(function* () {
     const services = Layer.mergeAll(
       memorySandbox().layer,
+      memoryBlobStore().layer,
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),

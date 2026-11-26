@@ -43,6 +43,8 @@ import {
   agentPinParamsSchema,
   agentRenameParamsSchema,
   agentStartParamsSchema,
+  type ManagerChatEditParams,
+  type ManagerChatReactParams,
   type ReplyButtonPressParams,
 } from "@repo/features/agent-view";
 import { AGENT_ARCHIVER, type AgentSummary, CONTEXT_WINDOW } from "@repo/features/agent-wire";
@@ -71,7 +73,7 @@ import type { ModelsAnswer } from "@repo/features/models-wire";
 import { REPOSITORY_PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
 import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
 import type { RepositoryPullRequestPartParams } from "@repo/features/pull-request-view";
-import { markedAs } from "@repo/features/read-mark";
+import { markedAs, unreadThroughOf } from "@repo/features/read-mark";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
@@ -137,9 +139,11 @@ import {
   accountWideReads,
   INBOX_CHANGE,
   INBOX_ITEM,
+  INBOX_SCOPED_ITEM,
   type InboxChange,
   type InboxWritten,
   inboxSent,
+  type PlacedInboxItem,
 } from "./inbox-collections.js";
 import {
   AgentPictureKey,
@@ -254,6 +258,8 @@ export type AgentClient = Pick<
   | "messagesNewest"
   | "messagesBefore"
   | "message"
+  | "chatReact"
+  | "chatEdit"
   | "chatSend"
   | "choose"
   | "rename"
@@ -333,6 +339,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
   focus: WindowFocus;
   /** The member signed in now, as an answer or a close drawn before the service says how it stands names them; none where nobody is. */
   reader?: () => InboxReader | undefined;
+  /** Whether the platform keeps the Inbox kind on disk (`LocalCopy.keepsCollections`), so a plan's inbox read stands apart from the kept feed it would otherwise be drawn in; none keeps none. */
+  keepsInbox?: boolean;
   /**
    * Waits for a write's transaction to arrive on the task list followed
    * live, which holds every agent's row (`TasksComposer.listed`), so a
@@ -556,6 +564,7 @@ export function composeAgents(
         ),
       accountId: dependencies.accountId,
       pool: dependencies.pool,
+      ...(dependencies.keepsInbox === true ? { kind: INBOX_SCOPED_ITEM } : undefined),
     });
 
     const accounts = yield* accountInboxes({
@@ -985,6 +994,16 @@ function composed(
     asked(client.chatSend(agentId, request)),
   );
 
+  /** A member's reaction to a message of a Manager's chat, after every write of the agent's asked before it, so a reaction given and taken back lands in the order it was pressed. */
+  const chatReacted = queues.inTurn(({ agentId, messageId, ...request }: ManagerChatReactParams) =>
+    asked(client.chatReact(agentId, messageId, request)),
+  );
+
+  /** A member's edit of their own message of a Manager's chat, after every write of the agent's asked before it, so the Manager is told of its messages and edits in the order they were written. */
+  const chatEdited = queues.inTurn(({ agentId, messageId, ...request }: ManagerChatEditParams) =>
+    asked(client.chatEdit(agentId, messageId, request)),
+  );
+
   /** A suggestion in an agent's reply sent from its draft, after every write of the agent's asked before it, so the agent takes the lines in the order they were sent. */
   const pressed = queues.inTurn((params: ReplyButtonPressParams) =>
     asked(client.pressReplyButton(params)),
@@ -1029,12 +1048,19 @@ function composed(
     { name: AGENT_QUEUED_WRITE.PIN, input: agentPinParamsSchema },
   );
 
-  /** A look at a Manager's chat, drawn on the reader's mark of its row at once, never moved back, and kept once the list carries the service's instant. */
+  /**
+   * A look at a Manager's chat, drawn on the reader's mark of its row at
+   * once, never moved back, or Mark unread from one of its messages, drawn
+   * just before it; each kept once the list carries the service's instant.
+   */
   const markedRead = agentWrite<AgentMarkReadParams>(
-    ({ readMark }) =>
+    ({ readMark, unreadFrom }) =>
       (row) =>
-        markedAs(readMark, row, kernel.now()),
-    ({ agentId, readMark }, key) => asked(client.markRead(agentId, readMark, key)),
+        unreadFrom === undefined
+          ? markedAs(readMark, row, kernel.now())
+          : { readThrough: unreadThroughOf(unreadFrom.sentAt), markedUnread: true },
+    ({ agentId, readMark, unreadFrom }, key) =>
+      asked(client.markRead(agentId, readMark, key, unreadFrom?.messageId)),
   );
 
   /**
@@ -1106,7 +1132,7 @@ function composed(
       readonly input: Schema.Codec<Input, unknown>;
       readonly queued: (input: Input) => Answer;
     },
-  ): WriteDeclaration<InboxItem, InboxChange, Input, Answer> => ({
+  ): WriteDeclaration<PlacedInboxItem, InboxChange, Input, Answer> => ({
     kind: INBOX_ITEM,
     keys,
     change,
@@ -1121,7 +1147,12 @@ function composed(
 
   /** A nod or a close that waits, answered as taken over the item as the reads now draw it, or unanswered where none holds it. */
   const settledAs = ({ itemId }: { readonly itemId: string }): AgentInboxAnsweredView => {
-    const item = dependencies.pool.row(INBOX_ITEM, itemId);
+    // Note that a thread a plan's read alone holds stands apart from the kept feed where the platform keeps it, so it is answered as that read draws it.
+    const item =
+      dependencies.pool.row(INBOX_ITEM, itemId) ??
+      (dependencies.keepsInbox === true
+        ? dependencies.pool.row(INBOX_SCOPED_ITEM, itemId)
+        : undefined);
 
     return item === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : { item, taken: true };
   };
@@ -1331,6 +1362,10 @@ function composed(
     // Note that a message to a Manager's chat stands drawn on the chat on its way, until its row lands there.
     AGENTS_CHAT_SEND: managerChats.sending(declaredWrite(dependencies.pool, chatSent)),
     AGENTS_CHAT_UNSEND: managerChats.unsend,
+    // Note that a reaction the service takes is written into the chat held, so it stands before the chat's next read carries it.
+    AGENTS_CHAT_REACT: managerChats.reacting(declaredWrite(dependencies.pool, chatReacted)),
+    // Note that an edit the service takes is written into the chat held, so its words stand before the chat's next read carries them.
+    AGENTS_CHAT_EDIT: managerChats.editing(declaredWrite(dependencies.pool, chatEdited)),
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),

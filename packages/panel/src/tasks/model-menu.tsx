@@ -24,6 +24,7 @@ import { PERMISSION_MODE_LABEL } from "@repo/settings";
 import {
   ErrorState,
   type FootRow,
+  HarnessMark,
   type MenuLastLine,
   type MenuRow,
   type PopoverAlign,
@@ -33,7 +34,6 @@ import {
   Spinner,
 } from "@repo/ui";
 import { unreadShown } from "../failure-report.js";
-import { HarnessMark } from "../harness-marks.js";
 import { OPEN_SETTINGS_LABEL } from "../open-settings.js";
 import {
   type AgentModeControl,

@@ -3,7 +3,7 @@ import {
   type PushEnvironment,
   type PushNotify,
 } from "@repo/features/push-device-wire";
-import { index, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 
@@ -20,6 +20,12 @@ import { user } from "./auth.js";
  * `environment` names, under `bundle_id` as its topic, and deletes the row
  * when Apple says the token will never take another push. The row belongs
  * to the account and leaves with it.
+ *
+ * `api_version` is the hosted API version the app was built against
+ * (`HOSTED_API_VERSION`), as its latest register named it, so a push the
+ * service shapes for a newer build goes only to a phone that reads it; null
+ * for a phone that has not registered since the column was added, which
+ * reads only what every released build reads.
  *
  * `notify` is the phone's own "Notify me" (`PUSH_NOTIFY`), which the app's
  * Settings sets and a register leaves alone. What became of its pushes is
@@ -47,6 +53,8 @@ export const pushDevice = pgTable(
     createdAt: createdAt(),
     /** When the phone last registered. */
     lastSeenAt: timestamptz("last_seen_at").notNull(),
+    /** The hosted API version the app named at its latest register; null before one named it. */
+    apiVersion: integer("api_version"),
     /** When the phone takes an alert (`PUSH_NOTIFY`): away holds one while the member is at their desk. */
     notify: text("notify").$type<PushNotify>().notNull().default(PUSH_NOTIFY.AWAY),
     /** When a push to the phone last reached Apple; null before the first. */

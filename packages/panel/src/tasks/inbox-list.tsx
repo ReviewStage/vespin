@@ -1,9 +1,11 @@
+import type { InboxFields, InboxRow } from "@repo/features/inbox-digest";
 import { inboxShownTicks } from "@repo/features/inbox-draft";
 import {
   EVERYONES,
   holderName,
   INBOX_NOT_READ,
   INBOX_RUN,
+  INBOX_RUN_LABEL,
   INBOX_SCOPES,
   INBOX_SHOW,
   INBOX_SHOW_EMPTY,
@@ -32,7 +34,7 @@ import {
   READING_INBOX,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
-import { INBOX_STATUS, type InboxItem, inboxAddressedTo } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, inboxAddressedTo } from "@repo/features/inbox-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -377,7 +379,7 @@ type InboxRowDraftResult = { readonly drafted: boolean; readonly ticked: readonl
  */
 export function inboxRowDraft(
   draft: InboxRowDraft | undefined,
-  item: InboxItem,
+  item: InboxRow,
   open: boolean,
 ): InboxRowDraftResult {
   const picks = rowPicks(draft, item);
@@ -512,7 +514,7 @@ export const InboxItemRow = memo(function InboxItemRow({
   /** Sets the item's reminder, or cancels it; none where the row offers no reminder. */
   onRemind?: InboxReminder | undefined;
   /** Opens the date picker on the row for a reminder at the reader's own time, where the row offers a reminder. */
-  onPickRemind?: ((item: InboxItem) => void) | undefined;
+  onPickRemind?: ((item: InboxFields) => void) | undefined;
   /** The selection the row stands chosen in among several, whose acts its menu offers in place of its own; none elsewhere. */
   several?: InboxChosen | undefined;
   /** Where the row stands in a run drawing only the rows near the view (`VirtualRows`); none where every row is drawn. */
@@ -1534,12 +1536,6 @@ function InboxRows({
   );
 }
 
-/** What each run's heading is called, Pinned as the sidebar calls the pinned. */
-const RUN_WORDS = {
-  [INBOX_RUN.PINNED]: "Pinned",
-  [INBOX_RUN.REST]: "Everything else",
-} as const satisfies Record<InboxRun, string>;
-
 /** The one run a list stands its items in where nothing pinned heads them: Everything else, under no heading (`InboxRuns`). */
 function oneRun(view: InboxListView<InboxAnyHolder>): readonly InboxPinnedRun<InboxAnyHolder>[] {
   return [{ run: INBOX_RUN.REST, items: view.items, count: view.items.length, folded: false }];
@@ -1582,7 +1578,7 @@ function InboxRuns({
             look={GROUP_LOOK.SECTION}
             heading={GROUP_HEADING.NONE}
             head={headed ? GROUP_HEAD.STICKS : GROUP_HEAD.NONE}
-            label={RUN_WORDS[run]}
+            label={INBOX_RUN_LABEL[run]}
             count={{ ...groupCount(count, TERM.INBOX_ITEM), shown: NAV_COUNT_SHOWN.ALWAYS }}
             fold={
               onFold === undefined || !headed

@@ -70,3 +70,12 @@ export function markedAs(mark: ReadMark, standing: ReadMarked, now: number): Rea
       return { markedUnread: true };
   }
 }
+
+/**
+ * The instant Mark unread leaves a Manager's chat's mark at, asked from a
+ * message sent at `sentAt`: the least before it the chat's instants tell
+ * apart, so the message itself and every one after it read unread.
+ */
+export function unreadThroughOf(sentAt: number): number {
+  return sentAt - 1;
+}

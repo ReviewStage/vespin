@@ -72,9 +72,14 @@ body,
 
 /* The Mac panel window's page is clear under the shell, whose frame tint and
    solid sheet paint everything there is, so the window's sidebar material
-   (`panel-manager.ts`) frosts through the frame. */
+   (`panel-manager.ts`) frosts through the frame. Note that the body and the
+   root are named one selector each, never as one `:is()`, because Chromium
+   files a rule by its last compound's class, id, or element, and one whose
+   last compound is an `:is()` is tried on every element the window
+   restyles. */
 :root[data-ui-profile="desktop"]:has(.desktop-shell),
-:root[data-ui-profile="desktop"]:has(.desktop-shell) :is(body, #root) {
+:root[data-ui-profile="desktop"]:has(.desktop-shell) body,
+:root[data-ui-profile="desktop"]:has(.desktop-shell) #root {
   background: transparent;
 }
 
@@ -206,6 +211,17 @@ body,
   --agent-composer-field-cap: calc(var(--ui-stage-height) * 0.3);
 }
 
+/* A phone's Inbox box is docked under the thread (`inbox-pane.tsx`), its
+   open ask over its field. The ask stops growing at the field's own share
+   of what is seen and scrolls past it, so however tall a form, and however
+   short the screen or the room the keyboard leaves, its fields, the box's
+   field and Send, and the thread over the box each keep a part of it. */
+.inbox-answer-dock .inbox-draft-ask {
+  max-height: calc(var(--ui-stage-height) * 0.3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 /* A thread opened over a narrow room's description spans the column rather than
    standing a margin card's width at its right over the words, so its reply
    box has the column's room. */
@@ -243,15 +259,6 @@ body,
   -webkit-app-region: no-drag;
 }
 
-/* Note that the side panel of the Inbox kept hidden between visits (`desktop-shell.tsx`) stands nowhere. */
-.desktop-shell[data-sidebar-collapsed="true"][data-sidebar-overlay="closed"]:has(
-  .side-panel[data-full-screen="true"]:not([data-inbox-shown="false"] > [data-page="inbox"] *)
-) .title-bar-controls:not([data-edge]),
-.desktop-shell:has(.side-panel:not([data-inbox-shown="false"] > [data-page="inbox"] *))
-  .title-bar-controls[data-edge="end"] {
-  --title-bar-ground: var(--ui-color-ground);
-}
-
 /* Every page stands its top row on the frame (shell.css), so the toggle at
    the right and, while the sidebar is folded, the buttons at the left rest
    on the frame as those rows do, with no ground of their own. */
@@ -260,6 +267,17 @@ body,
   .desktop-shell[data-sidebar-collapsed="true"][data-sidebar-overlay="closed"]
   .title-bar-controls:not([data-edge]) {
   --title-bar-ground: transparent;
+}
+
+/* Over a side panel, though, they stand on the panel's ground. Note that
+   the side panel of the Inbox kept hidden between visits
+   (`desktop-shell.tsx`) stands nowhere, and holds no mark on the shell
+   (`shell-marks.tsx`); and that this follows the rule above, which it ties,
+   so it is the one that holds. */
+.desktop-shell[data-sidebar-collapsed="true"][data-sidebar-overlay="closed"][data-full-screen-panel]
+.title-bar-controls:not([data-edge]),
+.desktop-shell[data-side-panel] .title-bar-controls[data-edge="end"] {
+  --title-bar-ground: var(--ui-color-ground);
 }
 
 /* Where the side panel's toggle stands in from the window's right edge: at
@@ -394,7 +412,7 @@ body,
    list, which its fold folds together, so the first of them stands a tight
    gap under it rather than a section's (sidebar-task-view.tsx). Note that
    the gap is the fold's body's own padding rather than its first group's
-   margin, so the fold unrolls and rolls up the whole of it. */
+   margin, so the fold shows and hides the whole of it. */
 .sidebar-tasks-head > .ui-group-header > .ui-disclosure-body {
   padding-top: var(--ui-tight-gap);
 }
@@ -625,7 +643,7 @@ body,
    title-bar middles tall. They rest on the frame as the tabs beside them do,
    with no ground of their own, the panel open or not. */
 :where(:root):not([data-ui-room="narrow"])
-  .desktop-shell:has(> .desktop-main .desktop-task > .task-tabs)
+  .desktop-shell[data-agents-row]
   > .title-bar-controls[data-edge="end"] {
   --title-bar-ground: transparent;
   top: calc(2 * var(--title-bar-middle));
@@ -651,26 +669,41 @@ body,
    tabs beside it, parted by a hairline rather than a gap, since they are
    the agent's (`use-side-panel.ts`'s `ownerOf`), not the task's. The row
    spans both columns of the grid; the column and the panel, or the room a
-   panel full screen keeps, stand side by side under it. */
+   panel full screen keeps, stand side by side under it.
+
+   The panel's widest leaves the conversation its reserve, as it did beside
+   it: the conversation's column keeps the reserve, or all but the panel's
+   least width where the page is narrower than both, and the panel's column
+   takes the panel's own width out of what is left. Note that the grid is no
+   size container that would read the page's width (`100cqi`), because
+   Chromium lays out every item of a container again whenever any of them
+   changes, so each line an agent writes laid the whole panel out again. */
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > .desktop-main
   .desktop-task:has(> .desktop-task-main) {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns:
+    minmax(max(0px, min(var(--document-reserve), calc(100% - 280px))), 1fr)
+    minmax(0, max-content);
   grid-template-rows: auto minmax(0, 1fr);
-  container-type: inline-size;
 }
 
-/* Note that the panel's widest is read off the page rather than its own
-   column, which a percentage would read in a grid, so it leaves the
-   conversation its reserve as it did beside it. */
+/* The panel stands no wider than its column, which holds its widest. Note
+   that the boxes a task's grid places are named one selector each, never as
+   a last `:is()`, which Chromium tries on every element the window restyles
+   (as the page's root is, above). */
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > .desktop-main
   .desktop-task:has(> .desktop-task-main)
-  > :is(.side-panel:not([data-full-screen="true"]), .side-panel-room) {
-  max-width: max(280px, calc(100cqi - var(--document-reserve)));
+  > .side-panel:not([data-full-screen="true"]),
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task:has(> .desktop-task-main)
+  > .side-panel-room {
+  max-width: 100%;
 }
 
 /* Note that only a task's page holds the row, so it is placed without asking the page what it holds. */
@@ -697,7 +730,12 @@ body,
   .desktop-shell
   > .desktop-main
   .desktop-task:has(> .desktop-task-main)
-  > :is(.side-panel, .side-panel-room) {
+  > .side-panel,
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task:has(> .desktop-task-main)
+  > .side-panel-room {
   grid-column: 2;
   grid-row: 2;
 }
@@ -706,7 +744,12 @@ body,
   .desktop-shell
   > .desktop-main
   .desktop-task:has(> .desktop-task-main)
-  > :is(.desktop-task-main, .side-panel)::before {
+  > .desktop-task-main::before,
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task:has(> .desktop-task-main)
+  > .side-panel::before {
   top: 0;
 }
 
@@ -890,7 +933,7 @@ body,
    measure in the middle of the column, as they keep to it in a wide side
    panel, so the list's card and the composer's share both edges. The
    Inbox's pane is laid out the same way, its thread at that measure, the
-   box flowing at the thread's end, and what stands docked under it too.
+   box flowing at the thread's end, or on a phone docked under it.
    The thread's log is named by both its classes, so it keeps this inset
    over the one a side panel gives a transcript's log. */
 .desktop-agent,
@@ -913,7 +956,7 @@ body,
 .desktop-agent .draft-fork-dock,
 .desktop-agent .agent-composer,
 .desktop-inbox .conversation-log.inbox-board,
-.desktop-inbox > .agent-composer {
+.desktop-inbox > .inbox-answer-dock .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
 
@@ -924,6 +967,13 @@ body,
    beside it (the Manager's face, and the actions, which differ by side and
    take no width). A phone's room keeps a narrower share, as its face and
    actions take more of the column there. */
+/* A Manager's chat spans its pane, as a chat app's channel does: no reading
+   room beside it, so its messages, docks, and box keep only the page's
+   side inset (`--content-inset`), however wide the pane. */
+.agent-page[data-chat] .desktop-agent {
+  --reading-room: 0px;
+}
+
 .agent-page[data-chat] .transcript-message:has(> .ui-chat-bubble-row) {
   max-width: 100%;
 }
@@ -1531,15 +1581,6 @@ body,
   border-left: 0;
 }
 
-/* Shutting, it gives the document its room at once and slides out over it. */
-.side-panel[data-leaving="close"] {
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  right: 0;
-  bottom: 0;
-}
-
 /* A drag the edge's snap took away from under the pointer is still the
    edge's (`@repo/ui`'s ResizeEdge marks the root), so the whole window wears
    its cursor and selects nothing. Note that this stays out of the layers,
@@ -1672,6 +1713,12 @@ body,
 .side-panel-content .draft-fork-dock,
 .side-panel-content .agent-tab-foot .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
+}
+
+/* A Manager's thread beside its chat (`desktop-agent-page.tsx`) stands its
+   box on the content edge its messages and its head's words stand on. */
+.manager-thread-pane .agent-tab-foot .agent-composer {
+  padding-inline: var(--content-inset);
 }
 /* The apps an agent is using float at the right edge of that same column,
    and across it in a narrow foot (`tasks.css`). */

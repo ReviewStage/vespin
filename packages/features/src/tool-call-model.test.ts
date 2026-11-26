@@ -356,7 +356,7 @@ test("a patch names the first file it touches and how many more, a moved file by
   });
 
   assert.equal(view.kind, CALL_KIND.EDIT);
-  assert.equal(view.subject, "apps/web/moved.ts +1");
+  assert.equal(view.subject, "apps/web/moved.ts +1 more");
   assert.deepEqual(
     view.files,
     [],

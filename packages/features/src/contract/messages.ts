@@ -40,12 +40,21 @@ import {
   VOICE_LINE_BOUNDS,
 } from "../agent-wire.js";
 import { transcriptNowAnswerSchema } from "../live-wire.js";
+import {
+  managerChatEditAnswerSchema,
+  managerChatEditRequestSchema,
+  managerChatReactAnswerSchema,
+  managerChatReactRequestSchema,
+} from "../manager-chat-live.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
 import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
 
 /** A message is its words, its files, and a key: the bound's characters at JSON's widest escape, the files, and room for the keys around them. */
 const MESSAGE_BODY_BYTES =
   6 * AGENT_BOUNDS.MAX_MESSAGE_CHARS + MAXIMUM_ATTACHMENTS_BODY_BYTES + 1_024;
+
+/** An edit of a chat message is its words, at JSON's widest escape, and room for its key and the keys around them. */
+const EDIT_BODY_BYTES = 6 * AGENT_BOUNDS.MAX_MESSAGE_CHARS + 1_024;
 
 /** A line of a call is its words, at JSON's widest escape, and room for its ids and the keys around them. */
 const VOICE_LINE_BODY_BYTES = 6 * VOICE_LINE_BOUNDS.TEXT_CHARS + 1_024;
@@ -96,11 +105,19 @@ const voiceLineProcedure = declaredProcedure.errors(
   refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED),
 );
 
+/** A member's reaction on a Manager's chat refuses an agent not found or not the caller's to write to, or a message the chat holds none of. */
+const reactionProcedure = declaredProcedure.errors(
+  refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED),
+);
+
 /** A query value as the handler reads it, checked there rather than here. */
 const queryValue = EffectSchema.optionalKey(EffectSchema.String);
 
 /** One agent, by the id its path names. */
 const byId = { id: EffectSchema.String };
+
+/** One message of a Manager's chat, by the Manager's id and the message's. */
+const byChatMessage = { id: EffectSchema.String, message: EffectSchema.String };
 
 /** One worker, by its parent's id and the delegation call that started it. */
 const byCall = { id: EffectSchema.String, call: EffectSchema.String };
@@ -159,6 +176,29 @@ export const messagesContract = {
     )
     .input(exactBodyInput(EffectSchema.Struct(byId), agentChatSendRequestSchema))
     .output(EffectSchema.flip(agentChatSendAnswerSchema)),
+  /** One member's reaction given a message of a Manager's chat, or taken off it, as they ask; it opens no turn. */
+  chatReact: reactionProcedure
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: "/api/agents/{id}/chat-messages/{message}/reactions",
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(EffectSchema.Struct(byChatMessage), managerChatReactRequestSchema))
+    .output(EffectSchema.flip(managerChatReactAnswerSchema)),
+  /** One member's edit of their own message of a Manager's chat, its words changed in place and marked edited; where they changed, the Manager is told in a line of its own, which steers its turn or opens one as a message does, and nothing of the chat is dropped. */
+  chatEdit: messageProcedure
+    .meta(bodyCap(EDIT_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.PATCH,
+        path: "/api/agents/{id}/chat-messages/{message}",
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(EffectSchema.Struct(byChatMessage), managerChatEditRequestSchema))
+    .output(EffectSchema.flip(managerChatEditAnswerSchema)),
   /** One change of an agent's queue of messages waiting behind its turn, answering the queue as it then stands. */
   queue: messageProcedure
     .meta(bodyCap(MESSAGE_BODY_BYTES))

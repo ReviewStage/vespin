@@ -11,7 +11,6 @@ import {
   keptImageOfLine,
   textOf,
 } from "@repo/database/models/attached-file-parts";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import { COALESCED_LINE_SEPARATOR } from "@repo/database/models/message-reads";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
@@ -20,15 +19,12 @@ import {
   type AgentAttachment,
   isInlinedText,
 } from "@repo/features/agent-wire";
-import {
-  CONVERSATION_PICTURE_BOUNDS,
-  PICTURE_OMISSION,
-} from "@repo/features/conversation-picture-wire";
 import { placedFiles } from "@repo/features/file-marker";
-import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
 import { MENTION_KIND, memberMentionOf } from "@repo/features/mention-link";
 import type { FileUIPart, UserContent } from "ai";
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
+import { keepPictureNote } from "../storage/attachment-keeps.js";
+import type { BlobStoreFailure } from "../storage/blob-store.js";
 
 /**
  * attached-files.ts -- the files a developer attached to a coding agent's message: as its session is handed them, and as a receipt of them reads back. How the journal keeps them is `@repo/database/models/attached-file-parts`.
@@ -38,11 +34,13 @@ import { Effect, Option } from "effect";
  * by its name and fenced, since no provider path takes a text file as a
  * file, then each image and PDF as a file part over a `data:` URL, which
  * the runner hands on as an image block or writes into the agent's machine
- * (`coder-host/runner-sessions.ts`). A text file too large to inline
- * (`isInlinedText`) goes as a PDF does, a file part written into the
- * machine, and the line naming its path inlines its first lines
- * (`writtenTextLine`), so the model knows what it holds and reads the rest
- * with its own tools. The journal keeps the words
+ * (`coder-host/runner-sessions.ts`). A file of any other kind
+ * (`AGENT_ATTACHMENT_TYPE.OTHER`) goes as a PDF does, a file part the
+ * runner writes into the machine and names by its type, size, and path
+ * (`writtenFileLine`), and never reaches the model as a file. A text file
+ * too large to inline (`isInlinedText`) goes the same way, and the line
+ * naming its path inlines its first lines (`writtenTextLine`), so the model
+ * knows what it holds and reads the rest with its own tools. The journal keeps the words
  * as the row's first part, empty where there are none, and every file
  * after it as the SDK's file part over the same `data:` URL, a text file
  * under `text/plain`, so the transcript draws a thumbnail or a name for
@@ -84,35 +82,30 @@ const WRITTEN_PATH_BYTES = 512;
 type ContentPart = Exclude<UserContent, string>[number];
 
 /** The types an attached file is a picture under, which a conversation keeps. */
-const IMAGE_TYPES: ReadonlySet<string> = new Set([
+const KEPT_IMAGE_TYPES: ReadonlySet<string> = new Set([
   AGENT_ATTACHMENT_TYPE.PNG,
   AGENT_ATTACHMENT_TYPE.JPEG,
   AGENT_ATTACHMENT_TYPE.WEBP,
 ]);
 
-/** One image kept beside the conversation, as its bytes are sniffed and measured, or why it was not kept. */
+/**
+ * The types an attached file is handed to a session as a picture under,
+ * ahead of the words: the kept ones and a still GIF. Note that a GIF is not
+ * kept beside the conversation, because a transcript's picture a released
+ * client reads is one of the kept three alone, so its row keeps its bytes as
+ * a PDF's does.
+ */
+const IMAGE_TYPES: ReadonlySet<string> = new Set([...KEPT_IMAGE_TYPES, AGENT_ATTACHMENT_TYPE.GIF]);
+
+/** One image kept beside the conversation, as its bytes are sniffed and measured (`keepPictureNote`), or why it was not kept. */
 function keptImage(
   target: ConversationTarget,
   file: AgentAttachment,
-): Effect.Effect<KeptImage, TaskStoreFailure, DatabaseServices> {
-  return Effect.gen(function* () {
-    const bytes = new Uint8Array(Buffer.from(file.data, "base64"));
-
-    if (bytes.byteLength > CONVERSATION_PICTURE_BOUNDS.MAX_BYTES) {
-      return { omitted: PICTURE_OMISSION.TOO_LARGE };
-    }
-
-    const contentType = sniffImageType(bytes);
-    const dimensions = contentType === undefined ? undefined : imageDimensions(bytes, contentType);
-
-    if (contentType === undefined || dimensions === undefined) {
-      return { omitted: PICTURE_OMISSION.UNSUPPORTED };
-    }
-
-    const kept = yield* keepConversationPicture(target, { bytes, contentType, ...dimensions });
-
-    return Option.isSome(kept) ? { id: kept.value.id } : { omitted: PICTURE_OMISSION.LIMIT };
-  });
+): Effect.Effect<KeptImage, TaskStoreFailure | BlobStoreFailure, DatabaseServices> {
+  return Effect.map(
+    keepPictureNote(target, new Uint8Array(Buffer.from(file.data, "base64"))),
+    (note): KeptImage => ("picture" in note ? { id: note.picture.id } : { omitted: note.omitted }),
+  );
 }
 
 /**
@@ -126,9 +119,9 @@ function keptImage(
 export function keptHandedImages(
   target: ConversationTarget,
   files: readonly AgentAttachment[],
-): Effect.Effect<readonly HandedFile[], TaskStoreFailure, DatabaseServices> {
+): Effect.Effect<readonly HandedFile[], TaskStoreFailure | BlobStoreFailure, DatabaseServices> {
   return Effect.forEach(files, (file) =>
-    IMAGE_TYPES.has(file.mediaType)
+    KEPT_IMAGE_TYPES.has(file.mediaType)
       ? Effect.map(keptImage(target, file), (kept): HandedFile => ({ ...file, kept }))
       : Effect.succeed<HandedFile>(file),
   );
@@ -205,6 +198,27 @@ function headOf(text: string): string {
   return head;
 }
 
+/** A written file's size as its line says it, in bytes, so the agent knows what it holds before it opens it. */
+function sizeWords(bytes: Uint8Array): string {
+  return `${bytes.byteLength.toLocaleString("en-US")} bytes`;
+}
+
+/**
+ * The line a session is handed for a file written into the agent's machine
+ * that is not a text file: a PDF, or a file of any other kind
+ * (`AGENT_ATTACHMENT_TYPE.OTHER`), which no model is handed. It names the
+ * file, the type it traveled as, its size, and the path it was written to,
+ * from which the agent opens it with its own tools.
+ */
+export function writtenFileLine(
+  name: string,
+  mediaType: string,
+  path: string,
+  bytes: Uint8Array,
+): string {
+  return `[${name} (${mediaType}, ${sizeWords(bytes)}) was attached: it is at ${path}, read it from there with your own tools]`;
+}
+
 /**
  * The line a session is handed for a text file written into the agent's
  * machine, too large to inline (`isInlinedText`): its name, its size, the
@@ -216,7 +230,7 @@ export function writtenTextLine(name: string, path: string, bytes: Uint8Array): 
   const head = headOf(text);
   const lines = lineCount(text);
   const shown = lineCount(head);
-  const size = `${bytes.byteLength.toLocaleString("en-US")} bytes, ${lines.toLocaleString("en-US")} lines`;
+  const size = `${sizeWords(bytes)}, ${lines.toLocaleString("en-US")} lines`;
   const intro = `[${name} (${AGENT_ATTACHMENT_TYPE.TEXT}, ${size}) was attached: it is at ${path}, too large to inline, so read it from there. Its first ${shown === 1 ? "line" : `${shown} lines`}:]`;
 
   return `${intro}\n${inlinedFile(name, head)}`;

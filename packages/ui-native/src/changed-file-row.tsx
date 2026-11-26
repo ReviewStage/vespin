@@ -1,6 +1,6 @@
 // changed-file-row.tsx -- one file a pull request changes, as its Files list draws it: the letter of what became of it in its tone, its name, the lines it adds and removes at the line's end, and the folder it stands in muted under its name.
 
-import { HStack, Text, VStack } from "@expo/ui/swift-ui";
+import { HStack, VStack } from "@expo/ui/swift-ui";
 import {
   font,
   foregroundStyle,
@@ -14,9 +14,10 @@ import { CHANGED_FILE_STATUS } from "@repo/features/agent-wire";
 import { folderAndName, STATUS_LETTER, STATUS_WORDS } from "@repo/features/changed-files";
 import type { ReactElement } from "react";
 import { useScaledSize } from "./accessibility.js";
+import { lineCount } from "./line-counts.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { UnreadDot } from "./marks.js";
-import { lineCount } from "./pull-request-card.js";
+import { Text } from "./text.js";
 import { STATUS_TONE, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

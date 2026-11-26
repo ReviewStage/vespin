@@ -27,7 +27,7 @@ import {
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
 import { INBOX_ASK } from "@repo/features/inbox-wire";
-import { DateTime, Duration, Effect, Option, Result } from "effect";
+import { DateTime, Duration, Effect, Layer, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { TASKLESS_LIVE } from "../agents/taskless-reads.js";
 import {
@@ -39,6 +39,7 @@ import {
 import { accountInboxRead } from "../live/reads/account-inbox.js";
 import { inboxItemsRead } from "../live/reads/inbox-items.js";
 import { agentInboxRead, taskInboxRead } from "../live/reads/scope-inbox.js";
+import { memoryBlobStore } from "../testing/blob-store-fake.js";
 import type { LiveParams } from "./live-query.js";
 
 /**
@@ -144,7 +145,10 @@ const postQuestion = (world: InboxWorld) =>
     },
   );
 
-it.layer(getTestDB())("what moves an inbox notifies", (it) => {
+/** The suite's database, and the Blob store a message's files are put in. */
+const SUITE = Layer.merge(getTestDB(), memoryBlobStore().layer);
+
+it.layer(SUITE)("what moves an inbox notifies", (it) => {
   it.effect(
     "an agent's post wakes the task's and the agent's inbox, and every member's account-level reads",
     () =>

@@ -248,6 +248,7 @@ const RUNNER_FILES = [
 const EVENTS_URL = "https://app.test/api/agents/runner/events";
 const LINES_URL = "https://app.test/api/agents/runner-lines";
 const TRANSCRIPTS_URL = "https://app.test/api/agents/runner-transcripts";
+const PICTURES_URL = "https://app.test/api/agents/runner-pictures";
 
 /** The query every URL a runner is handed names its launch by, here the agent's first. */
 const FIRST_LAUNCH = "?runnerLaunch=1";
@@ -390,6 +391,7 @@ function sessionsFor(userId: string, sequence: { next: number }) {
     linesUrl: LINES_URL,
     mcpUrl: MCP_URL,
     transcriptsUrl: TRANSCRIPTS_URL,
+    picturesUrl: PICTURES_URL,
     integrations: () => Effect.succeed([LINEAR_SERVER]),
     instructions: () => Effect.succeed(INSTRUCTIONS),
     nextSequence: () => Effect.sync(() => sequence.next),
@@ -1028,6 +1030,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           append: INSTRUCTIONS,
           firstSequence: 0,
           eventsUrl: `${EVENTS_URL}${FIRST_LAUNCH}`,
+          picturesUrl: `${PICTURES_URL}${FIRST_LAUNCH}`,
           linesUrl: `${LINES_URL}${FIRST_LAUNCH}`,
           mcpUrl: MCP_URL,
           transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
@@ -1777,7 +1780,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a PDF attached to the first message or a later one is written into the sandbox and named by its path, where an image goes as a block",
+    "a PDF or a file of any other kind attached to the first message or a later one is written into the sandbox and named by its type, size, and path, where an image goes as a block",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -1789,16 +1792,23 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         );
 
         const pdf = "%PDF-1.7 the spec";
+        const docx = "PK\u0003\u0004 the notes";
         const png = Buffer.from("png bytes").toString("base64");
 
-        const withFiles = (line: ReturnType<typeof message>, text: string, filename: string) => ({
+        const withFiles = (
+          line: ReturnType<typeof message>,
+          text: string,
+          filename: string,
+          mediaType: string,
+          bytes: string,
+        ) => ({
           ...line,
           message: [
             { type: "text" as const, text },
             {
               type: "file" as const,
-              data: `data:application/pdf;base64,${Buffer.from(pdf).toString("base64")}`,
-              mediaType: "application/pdf",
+              data: `data:${mediaType};base64,${Buffer.from(bytes).toString("base64")}`,
+              mediaType,
               filename,
             },
             { type: "file" as const, data: png, mediaType: "image/png", filename: "shot.png" },
@@ -1810,7 +1820,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         const opened = yield* deliveredOpen(
           sessions,
-          withFiles(first, "Read the spec.", "Spec v2.pdf"),
+          withFiles(first, "Read the spec.", "Spec v2.pdf", "application/pdf", pdf),
         );
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
@@ -1819,16 +1829,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         const sent = yield* sessions.send(
           opened.sessionId,
-          withFiles(later, "And this one.", "../../etc/notes.pdf"),
+          withFiles(
+            later,
+            "And this one.",
+            "../../etc/notes.docx",
+            "application/octet-stream",
+            docx,
+          ),
         );
 
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
 
         const firstPath = `/workspace/.agent/attachments/${firstId}/2-Spec-v2.pdf`;
-        const laterPath = `/workspace/.agent/attachments/${laterId}/2-etc-notes.pdf`;
+        const laterPath = `/workspace/.agent/attachments/${laterId}/2-etc-notes.docx`;
         const written = new Map(api.uploads.flatMap((upload) => [...upload]));
         assert.equal(written.get(firstPath), pdf);
-        assert.equal(written.get(laterPath), pdf);
+        assert.equal(written.get(laterPath), docx);
 
         const messages = (yield* launchRead(api.commands[0], readClaudeCodeConfig)).lines.filter(
           (each) => each.type === INPUT_LINE.MESSAGE,
@@ -1841,7 +1857,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
               { type: "text", text: "Read the spec." },
               {
                 type: "text",
-                text: `[Spec v2.pdf (application/pdf) was attached: it is at ${firstPath}, read it from there]`,
+                text: `[Spec v2.pdf (application/pdf, 17 bytes) was attached: it is at ${firstPath}, read it from there with your own tools]`,
               },
               { type: "image", source: { type: "base64", media_type: "image/png", data: png } },
             ],
@@ -1849,7 +1865,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
               { type: "text", text: "And this one." },
               {
                 type: "text",
-                text: `[../../etc/notes.pdf (application/pdf) was attached: it is at ${laterPath}, read it from there]`,
+                text: `[../../etc/notes.docx (application/octet-stream, 14 bytes) was attached: it is at ${laterPath}, read it from there with your own tools]`,
               },
               { type: "image", source: { type: "base64", media_type: "image/png", data: png } },
             ],
@@ -4261,6 +4277,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           linesUrl: LINES_URL,
           mcpUrl: MCP_URL,
           transcriptsUrl: TRANSCRIPTS_URL,
+          picturesUrl: PICTURES_URL,
           integrations: () => Effect.sync(() => handed.servers),
           instructions: () => Effect.succeed(INSTRUCTIONS),
           nextSequence: () => Effect.sync(() => sequence.next),

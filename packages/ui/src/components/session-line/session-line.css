@@ -1,0 +1,19 @@
+/* session-line.css -- the words a carry-on's line folds. */
+
+@layer components {
+  /* They stand where the line's words do, past the row's hairline inset,
+     its 16px glyph, and the glyph's gap (line-button.tsx's row), in the
+     caption's type and the muted ink, keeping the breaks they were sent
+     with, and selectable in a window that holds its other words still. */
+  .ui-carry-on-words {
+    margin: var(--ui-tight-gap) 0 0 calc(var(--ui-space-4) + var(--ui-icon-16) + var(--ui-icon-gap));
+    color: var(--ui-color-text-muted);
+    font-family: var(--ui-font-sans);
+    font-size: var(--ui-type-caption-size);
+    line-height: var(--ui-type-caption-leading);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}

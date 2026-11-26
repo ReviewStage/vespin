@@ -122,7 +122,7 @@ export function ProgressCount({
   }
 
   return (
-    <span className="ui-progress-count inline-flex flex-none items-center gap-tight-gap text-caption-inline text-muted-foreground tabular-nums">
+    <span className="ui-progress-count inline-flex flex-none items-center gap-icon-gap-compact text-caption-inline text-muted-foreground tabular-nums">
       {ring}
       {figures}
     </span>

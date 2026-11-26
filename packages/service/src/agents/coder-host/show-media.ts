@@ -1,31 +1,37 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
-import { keepConversationPictures } from "@repo/database/models/conversation-pictures";
-import type { TaskStoreFailure } from "@repo/database/models/task-store";
+import type { PictureToKeep } from "@repo/database/models/conversation-pictures";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { asPictureList } from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   CONVERSATION_PICTURE_BOUNDS,
   isPlayedType,
-  type KeptPicture,
 } from "@repo/features/conversation-picture-wire";
 import { INBOX_BOUNDS } from "@repo/features/inbox-wire";
 import { measuredMedia, sniffMediaType } from "@repo/features/media-signature";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
-import { SqlClient } from "effect/sql";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue, type WireRecord } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
-import { type InboxSandboxDoor, phoneCopyOfSandbox, readSandboxImage } from "./inbox-image.js";
+import { keepStoredPictures, sha256Hex } from "../../storage/attachment-keeps.js";
+import { type AttachmentUploads, withAttachmentUploads } from "../../storage/attachment-uploads.js";
+import type { BlobStoreFailure } from "../../storage/blob-store.js";
+import {
+  type InboxSandboxDoor,
+  retypedStored,
+  storePhoneCopy,
+  storeSandboxImage,
+} from "./inbox-image.js";
 import { MANAGER_SAID, writeManagerSaid } from "./manager-chat-row.js";
 
 /**
  * show-media.ts -- a coding agent or its worker shows the developer pictures, recordings, and sound clips from its sandbox, kept beside its transcript as one set.
  *
  * The agent names each file by its path and says in a line what it shows;
- * the service reads each through the same door the agent's file tools reach
- * the sandbox by (`inbox-image.ts`), each held to its type's bound, a
+ * the service keeps each in the Blob store through the same door the agent's
+ * file tools reach the sandbox by (`inbox-image.ts`), uploaded by the
+ * sandbox itself where it can and read back, each held to its type's bound, a
  * still to a thread's so that it may be posted as shown, and to the three
  * types, a recording the agent made of what it did, a WebM or an H.264
  * MP4, which the transcript plays in a picture's place, or a sound clip it
@@ -114,37 +120,17 @@ export interface ShowMediaBinding {
   readonly chat?: ShowMediaChat | undefined;
 }
 
-/** One file read and measured, ready to keep, with a recording's MP4 or an Ogg clip's M4A where its sandbox made one. */
-interface ReadPicture {
-  readonly bytes: Uint8Array;
-  readonly contentType: KeptPicture["mediaType"];
-  readonly width: number;
-  readonly height: number;
-  readonly mp4Bytes?: Uint8Array | undefined;
-}
-
-/** The file at the path, read, held to the bound, and measured, a WebM or an Ogg with its copy for a phone made beside it; or the sentence refusing it. */
+/**
+ * The file at the path kept in the store, held to the bound, and measured,
+ * its type settled from all of its bytes, a WebM or an Ogg with its copy for
+ * a phone kept beside it; or the sentence refusing it.
+ */
 function readPicture(
   binding: ShowMediaBinding,
   path: string,
-): Effect.Effect<Result.Result<ReadPicture, string>> {
-  return Effect.flatMap(measuredPicture(binding, path), (read) =>
-    Result.isFailure(read)
-      ? Effect.succeed<Result.Result<ReadPicture, string>>(read)
-      : Effect.map(
-          phoneCopyOfSandbox(binding.sandbox, path, read.success.contentType),
-          (mp4Bytes) => Result.succeed({ ...read.success, mp4Bytes }),
-        ),
-  );
-}
-
-/** The file at the path, read, held to its type's bound, and measured, its type settled from all of its bytes; or the sentence refusing it. */
-function measuredPicture(
-  binding: ShowMediaBinding,
-  path: string,
-): Effect.Effect<Result.Result<ReadPicture, string>> {
-  return Effect.map(
-    readSandboxImage(binding.sandbox, path, {
+): Effect.Effect<Result.Result<PictureToKeep, string>, BlobStoreFailure, AttachmentUploads> {
+  return Effect.gen(function* () {
+    const read = yield* storeSandboxImage(binding.sandbox, path, {
       maxBytes: CONVERSATION_PICTURE_BOUNDS.MAX_BYTES,
       sniff: sniffMediaType,
       refusals: {
@@ -153,44 +139,39 @@ function measuredPicture(
         TOO_LARGE: SHOW_MEDIA_REFUSAL.TOO_LARGE,
         UNREADABLE: SHOW_MEDIA_REFUSAL.UNREADABLE_FILE,
       },
-    }),
-    Result.flatMap((file) => {
-      const measured = measuredMedia(file.bytes, file.contentType);
+    });
 
-      if (measured === undefined) return Result.fail(`${SHOW_MEDIA_REFUSAL.NOT_IMAGE} ${path}`);
+    if (Result.isFailure(read)) return Result.fail(read.failure);
+    const file = read.success;
+    const measured = measuredMedia(file.bytes, file.contentType);
 
-      // Note that a still is held to a thread's bound, because one shown here is posted as it is.
-      if (
-        !isPlayedType(measured.contentType) &&
-        file.bytes.byteLength > INBOX_BOUNDS.MAX_IMAGE_BYTES
-      ) {
-        return Result.fail(`${SHOW_MEDIA_REFUSAL.TOO_LARGE} ${path}`);
-      }
+    if (measured === undefined) return Result.fail(`${SHOW_MEDIA_REFUSAL.NOT_IMAGE} ${path}`);
 
-      return Result.succeed({ bytes: file.bytes, ...measured });
-    }),
-  );
+    // Note that a still is held to a thread's bound, because one shown here is posted as it is.
+    if (
+      !isPlayedType(measured.contentType) &&
+      file.bytes.byteLength > INBOX_BOUNDS.MAX_IMAGE_BYTES
+    ) {
+      return Result.fail(`${SHOW_MEDIA_REFUSAL.TOO_LARGE} ${path}`);
+    }
+
+    yield* retypedStored(file, measured.contentType);
+    const phone = yield* storePhoneCopy(binding.sandbox, path, measured.contentType, file.reserved);
+
+    return Result.succeed({
+      stored: phone === undefined ? file.stored : { ...file.stored, phone },
+      sha256: sha256Hex(file.bytes),
+      ...measured,
+    });
+  });
 }
 
 /**
- * Every picture kept, in order, in one transaction; nothing where the
- * transcript has room for only part of the set. Note that the set is kept
- * in one transaction, because its budget is read before its rows are
- * written.
- */
-function keepAll(
-  target: ConversationTarget,
-  pictures: readonly ReadPicture[],
-): Effect.Effect<Option.Option<readonly KeptPicture[]>, TaskStoreFailure, DatabaseServices> {
-  return Effect.flatMap(SqlClient.SqlClient, (client) =>
-    client.withTransaction(keepConversationPictures(target, pictures)),
-  );
-}
-
-/**
- * One `show_media` call: every file read before any is kept, so a refused
- * file shows nothing; then each kept beside the transcript in the order
- * given, the same bytes answered as the row already kept. A store that
+ * One `show_media` call: every file read and put in the store before any
+ * row is written, so a refused file shows nothing and the uploads of the
+ * rest are tombstoned; then each kept beside the transcript in the order
+ * given, the same bytes answered as the row already kept, in one
+ * transaction, since the set's budget is read before its rows are written. A store that
  * fails answers that the call may be made again, as a page's does.
  */
 export function runShowMedia(
@@ -201,7 +182,7 @@ export function runShowMedia(
     const read = readEither(SHOW_MEDIA_INPUT)(asPictureList(input));
 
     if (Result.isFailure(read)) return showMediaRejected(SHOW_MEDIA_REFUSAL.UNREADABLE);
-    const pictures: ReadPicture[] = [];
+    const pictures: PictureToKeep[] = [];
 
     for (const image of read.success.images) {
       const picture = yield* readPicture(binding, image.path);
@@ -210,7 +191,7 @@ export function runShowMedia(
       pictures.push(picture.success);
     }
 
-    const kept = yield* keepAll(binding.target, pictures);
+    const kept = yield* keepStoredPictures(binding.target, pictures);
 
     if (Option.isNone(kept)) return showMediaRejected(SHOW_MEDIA_REFUSAL.FULL);
 
@@ -239,6 +220,7 @@ export function runShowMedia(
 
     return { ...answer, message_id: written.id };
   }).pipe(
+    withAttachmentUploads,
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(showMediaRejected(SHOW_MEDIA_REFUSAL.UNAVAILABLE))),
   );

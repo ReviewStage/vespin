@@ -548,6 +548,24 @@ function keepSentReply(
   stageFixture(state);
 }
 
+/**
+ * Lays a comment thread the fixture started, replied to, resolved, or
+ * reopened over the document at once, as the host draws a declared write,
+ * since the fixture answers it before it reaches the host; nothing for any
+ * other act, or one the fixture refused. Note that the fixture keeps the
+ * thread itself as it answers (`inboxAppState`'s comments), so this only
+ * stages the run again.
+ */
+function keepCommentThread(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  answer: PortActResult<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.TASKS_COMMENT_START && kind !== ACT_KIND.TASKS_COMMENT_ACT) return;
+
+  if (Predicate.isObject(answer) && "thread" in answer) stageFixture(state);
+}
+
 /** A picture a reply of this run carried, read back as the service answers one; none for any other act or attachment. */
 function sentFileRead(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
@@ -847,7 +865,9 @@ function memberAt<Member>(
  * the list there, and a change of an agent's model, permission
  * mode, servers, name, or pin moves the agent there, as the host draws one,
  * and a change to its queue moves the queue there, a Stop pausing it, so a
- * flow may move a queued message and Resume.
+ * flow may move a queued message and Resume, and a description comment
+ * thread started, replied to, resolved, or reopened stands so on its task's
+ * comments there (`keepCommentThread`).
  * Where `refusesWrites`, the writes `REFUSED_WRITES` names are refused
  * before anything else answers them, so a flow sees the failure notice.
  */
@@ -921,6 +941,8 @@ export function fixtureActs(
         keepMachineAnswer(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepSentReply(state, kind as PortActKind, payload, staged.answer);
+        // SAFETY: as above.
+        keepCommentThread(state, kind as PortActKind, staged.answer);
         // Note that a message the run took stands in its agent's transcript on its way, as a sent line does until its row lands, since nothing the run stages moves.
         // SAFETY: as above.
         keepSend(state, kind as PortActKind, payload, false);

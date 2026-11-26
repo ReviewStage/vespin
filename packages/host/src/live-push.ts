@@ -1,3 +1,4 @@
+import type { FailureFacts } from "@repo/features/failure-facts";
 import { Effect, Option, Stream } from "effect";
 import {
   LiveBroken,
@@ -35,8 +36,8 @@ export interface LivePushDependencies<Part extends string, Value> {
   readonly seal: (poll: boolean, after?: string) => Effect.Effect<SealedRead<Part> | LiveFailure>;
   /** The value a delivery's rows stand for, none where they do not decode. */
   readonly decode: (rows: Readonly<Record<Part, readonly unknown[]>>) => Option.Option<Value>;
-  /** Takes the value as it now stands each time it moves, or that it could not be followed. */
-  readonly publish: (value: Value | undefined) => Effect.Effect<void>;
+  /** Takes the value as it now stands each time it moves, or that it could not be followed, with what failed beneath where the service did not answer and the client said why. */
+  readonly publish: (value: Value | undefined, cause?: FailureFacts) => Effect.Effect<void>;
 }
 
 /** The read followed until interrupted, each change published, or until the service refuses it for good. */
@@ -51,7 +52,7 @@ export function pushLive<Part extends string, Value>(
     const sealed = yield* dependencies.seal(false);
 
     if ("failure" in sealed) {
-      yield* dependencies.publish(undefined);
+      yield* dependencies.publish(undefined, sealed.cause);
 
       if (sealed.gone === true) return false;
       fruitless += 1;

@@ -9,7 +9,6 @@ import {
   Overlay,
   Section,
   Spacer,
-  Text,
   ZStack,
 } from "@expo/ui/swift-ui";
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
@@ -71,10 +70,12 @@ import { menuPressAt, menuTree } from "./row-menu-model.js";
 import {
   RowChoosingContext,
   RowOpenContext,
+  RowPickContext,
   RowSearchedContext,
   RowSelectedContext,
 } from "./row-open.js";
 import { sectionInk } from "./section-ink.js";
+import { Text } from "./text.js";
 import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -288,6 +289,7 @@ export function RowList({
   // Whether a two-finger drag started Select mode before the list was drawn in it.
   const dragged = useRef(false);
   const chooses = choosing !== undefined;
+  const picked = useContext(RowPickContext);
 
   useEffect(() => {
     if (!chooses) dragged.current = false;
@@ -335,7 +337,9 @@ export function RowList({
 
         const id = selectedId(selection);
 
-        if (id !== undefined) onSelect?.(id);
+        if (id === undefined || onSelect === undefined) return;
+        picked?.();
+        onSelect(id);
       }}
       modifiers={[
         listStyle(look),

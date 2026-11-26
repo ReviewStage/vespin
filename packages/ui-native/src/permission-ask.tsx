@@ -1,6 +1,6 @@
 // permission-ask.tsx -- a row heading a list that asks the reader to turn on something the app needs, in the place it matters, as Apple asks: its glyph, a title and one line of why, the act that raises the system's own question or opens Settings, and Not Now.
 
-import { HStack, Text, VStack } from "@expo/ui/swift-ui";
+import { HStack, VStack } from "@expo/ui/swift-ui";
 import {
   font,
   foregroundStyle,
@@ -12,6 +12,7 @@ import {
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import type { Glyph } from "./glyph.js";
 import { GlyphImage } from "./glyph-label.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 

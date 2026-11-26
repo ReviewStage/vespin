@@ -1,6 +1,6 @@
 // video.tsx -- a video a message carried, played in iOS's own player through expo-video, at its own shape held to the media's one rule, or saying so where its bytes did not land.
 
-import { HStack, Image, Button as SwiftUIButton, Text as SwiftUIText } from "@expo/ui/swift-ui";
+import { HStack, Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHint,
@@ -35,6 +35,7 @@ import {
   usePictureRef,
 } from "./picture-source.js";
 import { Press } from "./press.js";
+import { Text as SwiftUIText } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { ROLE_SIZE, TYPE_ROLE } from "./tokens/type.js";

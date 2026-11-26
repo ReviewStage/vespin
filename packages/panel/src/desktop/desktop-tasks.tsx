@@ -1,5 +1,6 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
-import { NO_ITEMS, taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   LINK_DESTINATION,
@@ -17,6 +18,7 @@ import type {
 import { RENAME_FAILED_NOTE, TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
+import { taskKey } from "@repo/features/workspace-key";
 import { EXPERIMENT, INTRO } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -57,6 +59,7 @@ import { Activity, Fragment, memo, useCallback, useEffect, useMemo, useRef, useS
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
+import { EntityGlyph, TaskStatusGlyph } from "../entities/entity-glyph.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { FIND_PAGE, FindScope, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
@@ -94,17 +97,16 @@ import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
-import {
-  heldTaskMentions,
-  TaskMentions,
-  type TaskMentionsValue,
-  useMentionAgentsReader,
-} from "../tasks/task-mentions.js";
+import { TaskMentions, useHeldTaskMentions } from "../tasks/task-mentions.js";
 import { taskLinkDestination, useOfferTaskRename } from "../tasks/task-menu-items.js";
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
-import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
+import {
+  parentOf,
+  type TaskRepositoryDoor,
+  type TaskStandingDoor,
+} from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
 import { agentsNow, useTaskAgentName, useTaskPullRequestsOf } from "../tasks/use-agents.js";
@@ -153,6 +155,7 @@ import {
   phoneFindGroups,
   type TaskHeadBack,
 } from "./phone-head.js";
+import { SHELL_MARK, useShellMark } from "./shell-marks.js";
 import {
   listedAgentOf,
   SIDE_PANEL_HOLDER,
@@ -230,6 +233,9 @@ import { useStandingDoor } from "./task-row-parts.js";
  * which, with the press that moves it there (`stranded-task-banner.tsx`).
  */
 
+/** No thread of an agent's waiting on the developer, one array so an agent with none hands down the same one. */
+const NO_WAITING: readonly InboxItem[] = [];
+
 /** No task open: what a task's relation menus offer while none is. */
 const NO_TASKS: readonly TaskSummary[] = [];
 
@@ -265,6 +271,8 @@ function TaskPage({
   column: React.ReactNode;
   children?: React.ReactNode;
 }): React.JSX.Element {
+  useShellMark(SHELL_MARK.TASK_PAGE);
+
   return (
     <div
       ref={areaRef}
@@ -299,6 +307,8 @@ function TaskTabsRow({
   hidden: boolean;
   children: React.ReactNode;
 }): React.JSX.Element {
+  useShellMark(hidden ? undefined : SHELL_MARK.AGENTS_ROW);
+
   return (
     <div className={hidden ? undefined : "task-tabs contents"} hidden={hidden}>
       {children}
@@ -439,6 +449,50 @@ const PHONE_THING = {
   [TASK_PANE.AGENT]: "Agent",
   [TASK_PANE.PANEL]: "Tab",
 } as const satisfies Record<TaskPane, string>;
+
+/** What stands between the steps of a phone's task path ("ada/relay › AL-42"). */
+const PHONE_PATH_STEP = " › ";
+
+/**
+ * A task's path as a phone's head names it on Overview, as the description's
+ * own path over its title reads: its repository's `owner/name` and its key,
+ * each where it has one; none where it has neither.
+ */
+function phonePath(
+  task: { readonly repository?: string | null | undefined; readonly number?: number | undefined },
+  workspaceName: string,
+): string | undefined {
+  const key =
+    task.number === undefined || workspaceName === ""
+      ? undefined
+      : taskKey(workspaceName, task.number);
+
+  const steps = [task.repository ?? undefined, key].filter((step) => step !== undefined);
+
+  return steps.length === 0 ? undefined : steps.join(PHONE_PATH_STEP);
+}
+
+/** What a phone's ⋯ calls opening the task's parent. */
+const OPEN_PARENT = "Open parent task";
+
+/**
+ * A phone's way to the task's parent, which its path's crumb presses
+ * elsewhere: the ⋯'s first item on Overview, by the parent's status mark,
+ * naming the parent under its words.
+ */
+function parentItem(parent: TaskSummary, onOpen: (taskId: string) => void): MenuEntry {
+  return {
+    label: OPEN_PARENT,
+    detail: parent.name,
+    icon:
+      parent.status === undefined ? (
+        <EntityGlyph kind={ENTITY_KIND.PLAN} />
+      ) : (
+        <TaskStatusGlyph status={parent.status} />
+      ),
+    onSelect: () => onOpen(parent.id),
+  };
+}
 
 /** What a phone's header's ⋯ calls letting a draft go. */
 const DISCARD_DRAFT = "Discard draft";
@@ -629,12 +683,8 @@ function DescriptionDocument({
 
   const stranded = useStrandedTaskBanner(tasks, listedOpen);
 
-  // The workspace's agents an `@` offers after the task's own, named by the tasks the window lists.
-  const readMentionAgents = useMentionAgentsReader(
-    opened?.workspaceId,
-    useTaskNames(tasks.typedNames),
-    tasks.agents.models,
-  );
+  // The tasks the window lists, which name the workspace's agents an `@` offers after the task's own.
+  const taskNames = useTaskNames(tasks.typedNames);
 
   const openMention = tasks.onShowMention;
   const revealed = tasks.sectionReveal;
@@ -976,7 +1026,7 @@ function DescriptionDocument({
       .filter((item) => item.agentId === tabAgent)
       .toSorted((a, b) => b.updatedAt - a.updatedAt);
 
-    const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
+    const waiting = waitingOf.get(tabAgent) ?? NO_WAITING;
 
     return posted.length === 0 ? undefined : { waiting, posted, onOpen: openWaitingThread };
   }, [tabAgent, boardOpen, boardSettled, waitingOf, openWaitingThread]);
@@ -1131,8 +1181,19 @@ function DescriptionDocument({
       onOpenTask: openTask,
       relations,
       inSight: descriptionShown,
+      // A phone's bar names the path, and its ⋯ offers the repository and the parent the path's crumbs press (`parentItem`).
+      pathless: phone,
     }),
-    [workspaceName, setStanding, repositoryDoor, blockTasks, openTask, relations, descriptionShown],
+    [
+      workspaceName,
+      setStanding,
+      repositoryDoor,
+      blockTasks,
+      openTask,
+      relations,
+      descriptionShown,
+      phone,
+    ],
   );
 
   const reveal = revealed?.taskId === openedId ? revealed?.reveal : undefined;
@@ -1301,35 +1362,20 @@ function DescriptionDocument({
   );
 
   // What every place on the page that picks or draws a mention reads (`task-mentions.tsx`).
-  const mentions = useMemo<TaskMentionsValue | undefined>(() => {
-    if (opened === undefined || workspace === undefined) return undefined;
-
-    return heldTaskMentions(
-      opened,
-      workspace,
-      read?.description.body,
-      { pages, agents, readAgents: readMentionAgents },
-      {
-        onOpenTask: openMention,
-        onOpenFile: openMentionedFileDoor,
-        onOpenTurnChanges: openTurnChangesDoor,
-        agentOf: agentLookDoor,
-        pullRequestOf: pullRequestCardDoor,
-      },
-    );
-  }, [
+  const mentions = useHeldTaskMentions(
     opened,
-    read,
     workspace,
-    pages,
-    agents,
-    readMentionAgents,
-    openMention,
-    openMentionedFileDoor,
-    openTurnChangesDoor,
-    agentLookDoor,
-    pullRequestCardDoor,
-  ]);
+    read?.description.body,
+    { pages, agents },
+    { tasks: taskNames, models: tasks.agents.models },
+    {
+      onOpenTask: openMention,
+      onOpenFile: openMentionedFileDoor,
+      onOpenTurnChanges: openTurnChangesDoor,
+      agentOf: agentLookDoor,
+      pullRequestOf: pullRequestCardDoor,
+    },
+  );
 
   // Note that a task the list does not hold, as a link may open, waits on its description, which alone names it.
   if (region.kind === TASK_REGION.READING && opened === undefined) {
@@ -1535,9 +1581,14 @@ function DescriptionDocument({
   // What the header's ⋯ offers follows what is on screen: the task's own menu on Overview, the
   // agent's on its screen, Discard draft on a draft's, and the tab's on one of the panel's, each
   // agent's item left unnamed, since the header names the agent.
+  const parent = parentOf(listed, blockTasks);
+
   const shownGroups = (opener: HTMLElement): readonly (readonly MenuEntry[])[] =>
     pane === TASK_PANE.OVERVIEW
-      ? descriptionMenu.groups()
+      ? [
+          ...(parent === undefined ? [] : [[parentItem(parent, openTask)]]),
+          ...descriptionMenu.groups(),
+        ]
       : draftShown !== undefined
         ? [
             [
@@ -1563,7 +1614,10 @@ function DescriptionDocument({
               ? columnLabel
               : undefined
       }
+      path={pane === TASK_PANE.OVERVIEW ? phonePath(listed, workspaceName) : undefined}
       pickUp={{ name: descriptionHeading.name, shown: descriptionHeading.away }}
+      // Note that New agent stands before the ⋯ on Overview alone, as the page's Agents "+" starts one; an agent's screen and a tab's offer their own menus.
+      newAgent={pane === TASK_PANE.OVERVIEW ? newAgentStarts(mainTabs, agents)[0] : undefined}
       rename={{
         editing: rename.editing,
         onEnd: (end) => {

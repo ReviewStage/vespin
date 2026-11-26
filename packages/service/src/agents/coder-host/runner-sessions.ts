@@ -232,7 +232,7 @@ import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpanAttributes, sentryRunnerTrace } from "../../observability/sentry.js";
 import { agentSandboxName, agentSandboxOf } from "../agent-sandbox-open.js";
-import { writtenTextLine } from "../attached-files.js";
+import { writtenFileLine, writtenTextLine } from "../attached-files.js";
 import {
   AgentMachine,
   type AgentMachineService,
@@ -332,6 +332,8 @@ export interface RunnerSessionsOptions {
   readonly mcpUrl: string;
   /** Where a runner on a machine that keeps it keeps the CLI's transcript (`RUNNER_TRANSCRIPTS`), which the composing edge names. */
   readonly transcriptsUrl: string;
+  /** Where a runner keeps a picture its harness's tool answered apart from its events (`RUNNER_KEPT_PICTURE_KEY`), which the composing edge names. */
+  readonly picturesUrl: string;
   /** The integrations the agent is handed as its launch starts, each an MCP server of its own beside ours. */
   readonly integrations: (agent: Agent) => Effect.Effect<readonly IntegrationServer[]>;
   /** Our coder instructions for the agent, naming its checkout and the files the service reads back where its machine keeps them, which the harness's config carries. */
@@ -573,9 +575,10 @@ type RunnerContentResult = {
 /**
  * A message's content as the runner's lines carry it, and the files it
  * names: words as text, an image as an image block, and any other file,
- * such as a PDF or a text file too large to inline, written into the
- * machine under the line's own folder of the attachments folder given and
- * named by its path, a text file's first lines inlined after it
+ * such as a PDF, a text file too large to inline, or a file of any other
+ * kind, written into the machine under the line's own folder of the
+ * attachments folder given and named by its type, size, and path
+ * (`writtenFileLine`), a text file's first lines inlined after it
  * (`writtenTextLine`). A file whose bytes
  * are not in the message, a URL
  * elsewhere, is named as not passed.
@@ -632,7 +635,7 @@ function runnerContent(
         text:
           mediaType === AGENT_ATTACHMENT_TYPE.TEXT
             ? writtenTextLine(name, path, contents)
-            : `[${name} (${mediaType}) was attached: it is at ${path}, read it from there]`,
+            : writtenFileLine(name, mediaType, path, contents),
       },
     ];
   });
@@ -1227,6 +1230,7 @@ export const runnerSessions = <
               config: {
                 ...config,
                 eventsUrl: named(config.eventsUrl),
+                picturesUrl: named(options.picturesUrl),
                 ...("tokenUrl" in config ? { tokenUrl: named(config.tokenUrl) } : undefined),
                 ...(layout.linesRead ? { linesUrl: named(options.linesUrl) } : undefined),
                 ...(resumed.fromDisk !== true

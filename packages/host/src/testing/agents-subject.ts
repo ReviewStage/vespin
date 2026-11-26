@@ -16,6 +16,8 @@ import {
   type AgentQueueAnswerView,
   type DevicePresenceAnswerView,
   type HostDoneAnswerView,
+  type ManagerChatEditAnswerView,
+  type ManagerChatReactAnswerView,
   type MemoriesAnswerView,
   type MemorySaveAnswerView,
   type SoundStateView,
@@ -32,7 +34,7 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
+import { FAILURE_FACT, type FailureFacts, GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { GITHUB_TOKEN_STATUS, type GitHubTokenSummary } from "@repo/features/github-token-wire";
 import { HOSTS_READ } from "@repo/features/host-live";
@@ -279,7 +281,9 @@ function fakeService() {
     memories: polledLive(MEMORIES_PARTS),
     origin: polledLive(["origin"]),
     // A Manager's chat: its newest page, followed; and the older page a read before a `seq` is answered at once, whatever `seq` it names.
-    managerChat: polledLive(["messages"]),
+    managerChat: polledLive<"messages", { readonly failure: string; readonly cause: FailureFacts }>(
+      ["messages"],
+    ),
     managerChatOlder: polledLive(["messages"]),
     hosts: polledLive(["hosts"]),
     // Note that the account stored no preferences and keeps no clip until a test sets a row, as a new account has none.
@@ -309,6 +313,8 @@ function fakeService() {
   let startTxid: string | undefined;
   // Whether a Start goes unanswered, as one sent offline does.
   let startsUnanswered = false;
+  /** Whether each close goes unanswered, as one sent offline does. */
+  let closesUnanswered = false;
   // The transaction the service says each inbox write committed in; none says it changed nothing.
   let committedIn: CommittedIn = {};
   /** The item as the agent changed it first, which a close is answered not taken with; none takes every close. */
@@ -327,6 +333,10 @@ function fakeService() {
   // What a message sent to a Manager's chat answers; none answers it taken, under one id.
   let chatAnswer: AgentChatSendAnswerView | undefined;
   let chatSendGate: Effect.Effect<void> = Effect.void;
+  // What a reaction to a message of a Manager's chat answers; taken, changing what stood, from the start.
+  let reactAnswer: ManagerChatReactAnswerView = { changed: true };
+  // What an edit of a message of a Manager's chat answers; taken, its words changed.
+  const editAnswer: ManagerChatEditAnswerView = { changed: true };
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -461,8 +471,9 @@ function fakeService() {
       poll?: { readonly after?: string | undefined },
     ) =>
       Effect.suspend((): Effect.Effect<unknown> => {
-        const answered = <Part extends string>(script: PolledLive<Part>) =>
-          poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after);
+        const answered = (
+          script: Pick<PolledLive<string, { readonly failure: string }>, "first" | "poll">,
+        ) => (poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after));
 
         switch (read.name) {
           case HOSTS_READ.name:
@@ -611,6 +622,18 @@ function fakeService() {
         );
 
         return { messages: SAID.messages, before: "3" };
+      }),
+    chatReact: (agentId, messageId, request) =>
+      Effect.sync(() => {
+        asked.push(`chatReact:${agentId}:${messageId}:${request.kind}:${request.reacted}`);
+
+        return reactAnswer;
+      }),
+    chatEdit: (agentId, messageId, request) =>
+      Effect.sync(() => {
+        asked.push(`chatEdit:${agentId}:${messageId}:${request.text}`);
+
+        return editAnswer;
       }),
     chatSend: (agentId, request) =>
       Effect.andThen(
@@ -1010,6 +1033,13 @@ function fakeService() {
         asked.push(`close:${itemId}:${request.revision}:${request.clientKey}`);
       }).pipe(
         Effect.map(() => {
+          if (closesUnanswered) {
+            return {
+              failure: AGENT_CALL_FAILURE.UNANSWERED,
+              cause: { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: CALL_FAULT.NETWORK },
+            };
+          }
+
           if (changedFirst !== undefined) return { item: changedFirst, taken: false };
 
           return {
@@ -1087,6 +1117,10 @@ function fakeService() {
       chatAnswer = answer;
       chatSendGate = gate;
     },
+    /** What a reaction to a message of a Manager's chat answers from now on. */
+    answerReact: (answer: ManagerChatReactAnswerView) => {
+      reactAnswer = answer;
+    },
     /** What a change of an agent's queue answers from now on, once `gate` lets it. */
     answerQueue: (answer: AgentQueueAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       queueAnswer = answer;
@@ -1123,6 +1157,10 @@ function fakeService() {
     /** Whether each Start from now on goes unanswered, as one sent offline does. */
     leaveStartsUnanswered: (unanswered: boolean) => {
       startsUnanswered = unanswered;
+    },
+    /** Whether each close from now on goes unanswered, as one sent offline does. */
+    leaveClosesUnanswered: (unanswered: boolean) => {
+      closesUnanswered = unanswered;
     },
     /** What each host's removal answers from now on, and what it waits on before it does. */
     answerRemoves: (answer: HostDoneAnswerView, gate: Effect.Effect<void> = Effect.void) => {
@@ -1368,6 +1406,7 @@ export function subject(
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
     fileDownload?: FileDownloadSeam;
+    keepsInbox?: boolean;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1391,6 +1430,7 @@ export function subject(
 
     const composer = yield* composeAgents({
       kernel,
+      ...(options.keepsInbox === undefined ? undefined : { keepsInbox: options.keepsInbox }),
       recordProductEvent: () => undefined,
       account,
       accountId,
@@ -1479,6 +1519,7 @@ export function subject(
       queueChanges: service.queueChanges,
       startCommits: service.startCommits,
       leaveStartsUnanswered: service.leaveStartsUnanswered,
+      leaveClosesUnanswered: service.leaveClosesUnanswered,
       answerRemoves: service.answerRemoves,
       answerForgets: service.answerForgets,
       answerRenames: service.answerRenames,
@@ -1499,6 +1540,7 @@ export function subject(
       answerQueue: service.answerQueue,
       answerMessage: service.answerMessage,
       answerChat: service.answerChat,
+      answerReact: service.answerReact,
       sealScope: service.sealScope,
       sealAccount: service.sealAccount,
       sealItems: service.sealItems,

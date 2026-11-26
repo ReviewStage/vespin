@@ -26,7 +26,9 @@
  * the app opens the thread and answers it by (`InboxPushIds`), and a post's
  * Markdown itself (`markdown`), as much as Apple's 4 KB bound leaves room
  * for, which the app's expanded notification draws formatted.
- * Its `thread-id` groups the phone's notifications by task; its `category` is the actions the app offers on it
+ * Its `thread-id` groups the phone's notifications by task, or by agent for
+ * a thread on no task, a Manager's, which goes only to a phone whose build
+ * opens one (`TASKLESS_THREAD_PUSH_API_VERSION`); its `category` is the actions the app offers on it
  * (`PUSH_CATEGORY`): a decide that takes one option offers each as a button,
  * whose labels the payload's `options` carries for the app to set on that
  * notification alone, since a category's actions are otherwise fixed; any other
@@ -87,6 +89,7 @@ import { turnAsker } from "@repo/database/models/turn-asker";
 import type { SettledAgentTurn } from "@repo/database/models/writer";
 import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
 import { AGENT_KIND } from "@repo/features/agent-wire";
+import { inboxAgentsTurn, inboxRowOf } from "@repo/features/inbox-digest";
 import { PUSH_CATEGORY, PUSH_KIND } from "@repo/features/inbox-push-wire";
 import {
   INBOX_ASK,
@@ -95,7 +98,6 @@ import {
   INBOX_STATUS,
   type InboxItem,
   type InboxMessage,
-  inboxAgentsTurn,
   knownAsk,
   openAskOf,
   recommendedLabels,
@@ -137,11 +139,20 @@ const TURN_FINISHED_BODY = "Your agent finished.";
 /** The most holds one sweep takes, and how many it sends at once; the rest wait for the next minute's. */
 const HELD_PUSH_SWEEP = { BATCH: 100, CONCURRENCY: 8 } as const;
 
-/** One notification as a push composes it for the badge, before it is addressed to each phone. */
+/**
+ * The first hosted API version (`HOSTED_API_VERSION`) whose iOS builds open
+ * a thread's alert that names no task, a Manager's, on the thread in their
+ * Inbox. Note that a build before it, or a phone that has not registered
+ * since the service kept its version, is never sent one.
+ */
+const TASKLESS_THREAD_PUSH_API_VERSION = 9;
+
+/** One notification as a push composes it for the badge, before it is addressed to each phone, and the API version a phone must have named to be sent it, where an older build cannot open it. */
 interface MemberNotification {
   readonly pushType: typeof APNS_PUSH_TYPE.ALERT | typeof APNS_PUSH_TYPE.BACKGROUND;
   readonly payload: ApnsPayload;
   readonly collapseId?: string;
+  readonly minApiVersion?: number;
 }
 
 /** What an alert tells of, which a hold names so the sweep can read it again. */
@@ -155,17 +166,17 @@ interface InboxPushIds {
   /** The agent's message the alert is about: the ask an answer names, or the post a reply follows. */
   readonly messageId: string;
   readonly agentId: string;
-  /** The task the thread stands on; optional on the wire, for a released app, and always sent. */
+  /** The task the thread stands on; none for a thread on no task, a Manager's. */
   readonly taskId?: string;
   /** The thread's revision, which a nod or a close names. */
   readonly revision: number;
 }
 
-/** An agent's post as a push reads it: the item as the post wrote it, whether it asked, and the task its agent works on. */
+/** An agent's post as a push reads it: the item as the post wrote it, whether it asked, and the task its agent works on, none for a Manager. */
 export interface ThreadPushPost {
   readonly item: InboxItem;
   readonly asked: boolean;
-  readonly taskId: string;
+  readonly taskId: string | null;
 }
 
 /**
@@ -225,7 +236,17 @@ function actionsOf(message: InboxMessage) {
   };
 }
 
-/** Sends the notification `compose` writes for the member's badge to each phone named; nothing for none, and the badge is counted only once one stands. */
+/** Whether the phone's build reads the notification: any does where it names no version, else one whose register named that version or later. */
+function readsNotification(device: PushDevice, notification: MemberNotification): boolean {
+  const { minApiVersion } = notification;
+
+  return (
+    minApiVersion === undefined ||
+    (device.apiVersion !== null && device.apiVersion >= minApiVersion)
+  );
+}
+
+/** Sends the notification `compose` writes for the member's badge to each phone named whose build reads it; nothing for none, and the badge is counted only once one stands. */
 function sendToDevices(
   userId: string,
   devices: readonly PushDevice[],
@@ -235,9 +256,11 @@ function sendToDevices(
     const sender = yield* Effect.serviceOption(ApnsSender);
 
     if (Option.isNone(sender) || devices.length === 0) return;
-    const notification = compose(yield* inboxWaitingCount(userId, yield* Clock.currentTimeMillis));
+    const composed = compose(yield* inboxWaitingCount(userId, yield* Clock.currentTimeMillis));
+    const { minApiVersion: _gate, ...notification } = composed;
+
     yield* Effect.forEach(
-      devices,
+      devices.filter((device) => readsNotification(device, composed)),
       ({ token, environment, bundleId }) =>
         sender.value.send({ ...notification, device: { token, environment, bundleId } }),
       { discard: true },
@@ -341,7 +364,7 @@ function threadPostNotification(
     itemId: item.id,
     messageId: message.id,
     agentId: item.agentId,
-    taskId,
+    ...(taskId === null ? undefined : { taskId }),
     revision: item.revision,
   };
 
@@ -353,11 +376,13 @@ function threadPostNotification(
   return (badge) => ({
     pushType: APNS_PUSH_TYPE.ALERT,
     collapseId: item.id,
+    ...(taskId === null ? { minApiVersion: TASKLESS_THREAD_PUSH_API_VERSION } : undefined),
     payload: withMarkdown(
       {
         aps: {
           alert,
-          "thread-id": taskId,
+          // Note that a thread on no task threads its alerts by its agent, as its task would.
+          "thread-id": taskId ?? item.agentId,
           category,
           "mutable-content": 1,
           sound: "default",
@@ -539,7 +564,7 @@ function stillWaitingPost(userId: string, itemId: string) {
 
     if (Option.isNone(stored)) return Option.none<ThreadPushPost>();
     const { item } = stored.value;
-    const asks = openAskOf(item.thread ?? []) !== undefined && !inboxAgentsTurn(item);
+    const asks = openAskOf(item.thread ?? []) !== undefined && !inboxAgentsTurn(inboxRowOf(item));
 
     const waiting =
       item.status === INBOX_STATUS.OPEN &&
@@ -549,10 +574,7 @@ function stillWaitingPost(userId: string, itemId: string) {
     if (!waiting) return Option.none<ThreadPushPost>();
     const home = yield* readInboxItemHome(userId, itemId);
 
-    // Note that an item on no task is not pushed, since a released iPhone opens an alert on its task.
-    return Option.flatMap(home, ({ taskId }) =>
-      taskId === null ? Option.none() : Option.some({ item, asked: asks, taskId }),
-    );
+    return Option.map(home, ({ taskId }) => ({ item, asked: asks, taskId }));
   });
 }
 

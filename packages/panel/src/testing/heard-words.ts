@@ -4,7 +4,7 @@
 
 /**
  * What a reader hears of `element`: its words but what it hides from them
- * (`aria-hidden`), such as the copy a shimmer's light is drawn with, and the
+ * (`aria-hidden`), such as a glyph drawn beside its words, and the
  * words drawn for a reader alone heard apart from those beside them, as a
  * browser hears a box of their own.
  */

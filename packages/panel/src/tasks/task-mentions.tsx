@@ -1,5 +1,11 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { descriptionSections } from "@repo/features/description-sections";
+import {
+  holderRepository,
+  holderTask,
+  holderWorkspaceId,
+  type InboxAnyHolder,
+} from "@repo/features/inbox-list-model";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import { type MentionPlace, sectionAnchors } from "@repo/features/mention-link";
 import type { CatalogModel } from "@repo/features/models-wire";
@@ -64,10 +70,16 @@ import { workspaceAgentSearchQueryOptions } from "./workspace-agent-search.js";
  * carries them and those words name as the service finds them, through
  * `useMentionAgentsReader`, each named by its task.
  *
- * The Inbox's box on a thread of a task hands what the task's page does
- * (`heldTaskMentions`), off that page: the description's sections as last saved
- * (`useSavedDescriptionText`), and the pages, agents, and pull requests the
- * Inbox holds of the task.
+ * Every place reads them through one of three hooks, so none wires its own:
+ * a task's page through `useHeldTaskMentions`; a place no task holds, New
+ * task's composer, an automation's prompt, and a Manager's own page, through
+ * `useTasklessMentions`; and the Inbox's box on a thread through
+ * `useHolderMentions`, which is the other two by what holds the thread. It
+ * hands what the thread's holder's own page does: for a task, what the
+ * task's page does (`heldTaskMentions`), off that page: the description's
+ * sections as last saved (`useSavedDescriptionText`), and the pages,
+ * agents, and pull requests the Inbox holds of the task; for a Manager or
+ * any agent on no task, what its own page does (`tasklessMentions`).
  *
  * The page also carries a mention made elsewhere on it into the agent's
  * message box drawn there: the box drawn now takes it in (`useMentionBox`),
@@ -199,6 +211,55 @@ export function tasklessMentions(
   };
 }
 
+/** What names the workspace's agents an `@` offers: the tasks the window lists, which name each agent's task, and the models, which name its tab. */
+export interface MentionNaming {
+  readonly tasks: readonly { readonly id: string; readonly name: string }[];
+  readonly models: readonly CatalogModel[] | undefined;
+}
+
+/**
+ * The mentions of a place no task holds, read the one way for every such
+ * place: its workspace's agents through `useMentionAgentsReader`, and the
+ * rest through `tasklessMentions`, kept while the place says the same.
+ * None where no place is known yet.
+ */
+export function useTasklessMentions(
+  place: TasklessPlace,
+  naming: MentionNaming,
+  onOpenTask: MentionDoors["onOpenTask"],
+  onOpenFile?: MentionDoors["onOpenFile"],
+): TaskMentionsValue;
+export function useTasklessMentions(
+  place: TasklessPlace | undefined,
+  naming: MentionNaming,
+  onOpenTask: MentionDoors["onOpenTask"],
+  onOpenFile?: MentionDoors["onOpenFile"],
+): TaskMentionsValue | undefined;
+export function useTasklessMentions(
+  place: TasklessPlace | undefined,
+  naming: MentionNaming,
+  onOpenTask: MentionDoors["onOpenTask"],
+  onOpenFile?: MentionDoors["onOpenFile"],
+): TaskMentionsValue | undefined {
+  const readAgents = useMentionAgentsReader(place?.workspaceId, naming.tasks, naming.models);
+  const workspace = place?.workspace;
+  const workspaceId = place?.workspaceId;
+  const repository = place?.repository ?? null;
+
+  return useMemo(
+    () =>
+      workspace === undefined || workspaceId === undefined
+        ? undefined
+        : tasklessMentions(
+            { workspace, workspaceId, repository },
+            onOpenTask,
+            readAgents,
+            onOpenFile,
+          ),
+    [workspace, workspaceId, repository, onOpenTask, readAgents, onOpenFile],
+  );
+}
+
 /** The agents of no read. */
 const NO_AGENTS: readonly MentionableAgent[] = [];
 
@@ -222,7 +283,7 @@ interface TaskHolding {
  * thread is judged against the description's sections, since none would be found
  * and each would be drawn gone.
  */
-export function heldTaskMentions(
+function heldTaskMentions(
   task: Pick<TaskSummary, "id" | "name" | "repository">,
   workspace: string,
   text: string | undefined,
@@ -306,7 +367,7 @@ async function newestRevisionText(taskId: string): Promise<string | null> {
  * the words last read standing meanwhile; none until first read, or where
  * the read failed. A description with no revision yet has no words to offer.
  */
-export function useSavedDescriptionText(
+function useSavedDescriptionText(
   task: Pick<TaskSummary, "id" | "updatedAt"> | undefined,
 ): string | undefined {
   const held = useQuery({ ...heldTaskQuery(task?.id), enabled: false }).data;
@@ -324,6 +385,93 @@ export function useSavedDescriptionText(
   if (openText !== undefined) return openText;
 
   return reading === undefined ? undefined : (revision.data ?? undefined);
+}
+
+/** The doors a task's chips open through, as its page or a place off it hands them. */
+type HeldTaskDoors = Pick<
+  MentionDoors,
+  "onOpenTask" | "onOpenFile" | "onOpenTurnChanges" | "agentOf" | "pullRequestOf"
+>;
+
+/**
+ * The mentions of a task, read the one way wherever they are offered: its
+ * page, and the Inbox's box on a thread of it (`useHolderMentions`). The
+ * workspace's agents are read through `useMentionAgentsReader` and the rest
+ * through `heldTaskMentions`, kept while what they are made of stands, so a
+ * page handing steady doors draws nothing under it again. None until the
+ * task and the workspace its mentions are written under are known.
+ */
+export function useHeldTaskMentions(
+  task: Pick<TaskSummary, "id" | "name" | "repository" | "workspaceId"> | undefined,
+  workspace: string | undefined,
+  text: string | undefined,
+  held: Omit<TaskHolding, "readAgents">,
+  naming: MentionNaming,
+  doors: HeldTaskDoors,
+): TaskMentionsValue | undefined {
+  const readAgents = useMentionAgentsReader(task?.workspaceId, naming.tasks, naming.models);
+  const { pages, agents } = held;
+  const { onOpenTask, onOpenFile, onOpenTurnChanges, agentOf, pullRequestOf } = doors;
+
+  return useMemo(
+    () =>
+      task === undefined || workspace === undefined
+        ? undefined
+        : heldTaskMentions(
+            task,
+            workspace,
+            text,
+            { pages, agents, readAgents },
+            { onOpenTask, onOpenFile, onOpenTurnChanges, agentOf, pullRequestOf },
+          ),
+    [
+      task,
+      workspace,
+      text,
+      pages,
+      agents,
+      readAgents,
+      onOpenTask,
+      onOpenFile,
+      onOpenTurnChanges,
+      agentOf,
+      pullRequestOf,
+    ],
+  );
+}
+
+/**
+ * What the Inbox's box on a thread offers an `@`, whatever holds the
+ * thread: a task's thread what the task's page does (`heldTaskMentions`),
+ * its description's sections as last saved; a thread on no task, a
+ * Manager's, what the agent's own page does (`tasklessMentions`), its
+ * repository's files where it works on one, its skills, the servers, and
+ * the workspace's agents. Either is read under `workspace`, the slug the
+ * thread's links are written under; none until a thread is chosen.
+ */
+export function useHolderMentions(
+  holder: InboxAnyHolder | undefined,
+  workspace: string | undefined,
+  held: Omit<TaskHolding, "readAgents">,
+  naming: MentionNaming,
+  doors: Pick<MentionDoors, "onOpenTask" | "onOpenFile">,
+): TaskMentionsValue | undefined {
+  const task = holderTask(holder);
+  const text = useSavedDescriptionText(task);
+  const ofTask = useHeldTaskMentions(task, workspace, text, held, naming, doors);
+  const repository = holder === undefined ? null : holderRepository(holder);
+
+  // Note that a thread on no task names a file only where its agent works on a repository, as its own page does.
+  const ofAgent = useTasklessMentions(
+    holder === undefined || task !== undefined || workspace === undefined
+      ? undefined
+      : { workspace, workspaceId: holderWorkspaceId(holder), repository },
+    naming,
+    doors.onOpenTask,
+    repository === null ? undefined : doors.onOpenFile,
+  );
+
+  return task === undefined ? ofAgent : ofTask;
 }
 
 /**

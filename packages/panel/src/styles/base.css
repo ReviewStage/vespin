@@ -345,7 +345,7 @@ body,
    stage, so a hint, a menu, the palette, or a toast drawn at the body's end,
    which none stands under, holds still too. */
 .app-stage[data-capture="true"],
-body:has(.app-stage[data-capture="true"]) {
+body[data-capture="true"] {
   --ui-duration-shape: 0s;
   --ui-duration-showcase: 0s;
   --ui-duration-exit: 0s;

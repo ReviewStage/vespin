@@ -1,7 +1,12 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
-import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
-import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import {
+  AGENT_MACHINE,
+  AGENT_STATUS,
+  type AgentStatus,
+  type ListedAgent,
+} from "@repo/features/agent-wire";
+import { PRODUCT_STANDING_FIELD, PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionHead } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
@@ -166,6 +171,7 @@ import {
   type RowSubmenu,
   type RowSwipe,
   repositoryChoice,
+  runsOnGlyph,
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
@@ -201,7 +207,6 @@ import {
 } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { useAgentPlaceGlyph } from "../agents/use-agent-place.js";
 import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useWholeListRead } from "../host/host-provider.js";
@@ -222,6 +227,7 @@ import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useTabDrawnCount } from "../tab-drawn.js";
 
 import { useOnOwnTab } from "../tab-route.js";
+import { standingPressed, useStandingDrawnCount } from "../tasks/standing-drawn.js";
 import {
   threadComments,
   threadOpen,
@@ -244,6 +250,7 @@ import {
 } from "../tasks/use-inline-description.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
+import { useDevicePlatform } from "../tasks/use-start.js";
 import {
   type ReadListing,
   type RowAsks,
@@ -1781,11 +1788,33 @@ function standingMenus(
   const { task } = overview;
 
   return {
-    status: { label: WORDS.STATUS, choices: statusSubmenu(task, overview.setStatus).choices },
-    priority: { label: WORDS.PRIORITY, choices: priorityChoices(task, overview.setPriority) },
+    status: {
+      label: WORDS.STATUS,
+      choices: statusSubmenu(task, overview.setStatus).choices,
+    },
+    priority: {
+      label: WORDS.PRIORITY,
+      choices: priorityChoices(task, (taskId, priority) => {
+        // Note that a pick of the priority already shown draws nothing new, so it starts no wait.
+        if (priority !== task.priority) {
+          standingPressed(taskId, PRODUCT_STANDING_FIELD.PRIORITY, priority);
+        }
+
+        overview.setPriority(taskId, priority);
+      }),
+    },
     assignee: {
       label: WORDS.ASSIGNEE,
-      choices: assigneeChoices(task, members, photoOf, overview.setAssignee),
+      choices: assigneeChoices(task, members, photoOf, (taskId, assignee) => {
+        const userId = assignee?.userId ?? null;
+
+        // Note that a pick of whoever is already assigned draws nothing new, so it starts no wait.
+        if (userId !== (task.assignee?.userId ?? null)) {
+          standingPressed(taskId, PRODUCT_STANDING_FIELD.ASSIGNEE, userId);
+        }
+
+        overview.setAssignee(taskId, assignee);
+      }),
     },
   };
 }
@@ -1836,6 +1865,7 @@ function assigneeChoices(
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const now = useMinute();
   const { task } = overview;
+  useStandingDrawnCount(task);
   const pictureOf = useMemberPictures();
   const following = useFollowingChip(task.id);
   const members = useListedMembers(task.workspaceId);
@@ -2554,8 +2584,8 @@ export function TaskAgentRow({
   const runsOn = agentRunsOnWords(agent);
   const { acts } = useAgentRowParts(agent, name, asking);
 
-  // Note that a machine's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac, whether it is the member's device or the workspace's.
-  const placeGlyph = useAgentPlaceGlyph(agent);
+  // Note that a device's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac.
+  const platform = useDevicePlatform(agent.mac?.deviceId);
 
   return (
     <AgentRow
@@ -2565,7 +2595,7 @@ export function TaskAgentRow({
       face={agent.face}
       state={agentState(agent.status)}
       runsOn={runsOn}
-      runsOnGlyph={placeGlyph}
+      runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
       waiting={waiting}
       depth={nest?.depth}
       fold={nest?.fold}
@@ -3431,7 +3461,9 @@ function TasksStackList({
           icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
           accessibilityLabel={compose.label}
           onPress={compose.onPress}
-        />
+        >
+          {compose.label}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         <TasksTree
@@ -3460,6 +3492,27 @@ type TaskDetail = {
 
 /** What a task's status set asks through before its Overview is read. */
 const NO_STATUS_DOORS = { setStatus: () => undefined, workingAgents: () => 0 } as const;
+
+/**
+ * The task page's status doors, each write timed for its chip as it goes out
+ * (`standingPressed`). Note that a settle asked about first is timed from its
+ * confirmation, not the press, since the time spent reading the question is
+ * nobody's wait for a draw; and a status the task already holds starts none.
+ */
+function timedStatusDoors(
+  overview: TaskOverview,
+): Pick<TaskOverview, "setStatus" | "workingAgents"> {
+  return {
+    workingAgents: overview.workingAgents,
+    setStatus: (taskId, status, stopAgents) => {
+      if (status !== overview.task.status) {
+        standingPressed(taskId, PRODUCT_STANDING_FIELD.STATUS, status);
+      }
+
+      overview.setStatus(taskId, status, stopAgents);
+    },
+  };
+}
 
 /**
  * A task's page as the Tasks split view's detail draws its list's pick: the
@@ -3655,7 +3708,12 @@ export function TaskScreen() {
   const pushStarted = usePushStarted();
   const held = useTaskOverview(found.taskId, pushStarted);
 
-  const { setStatus, question } = useStatusAsk(held ?? NO_STATUS_DOORS);
+  const statusDoors = useMemo(
+    () => (held === undefined ? NO_STATUS_DOORS : timedStatusDoors(held)),
+    [held],
+  );
+
+  const { setStatus, question } = useStatusAsk(statusDoors);
 
   const overview = held === undefined ? undefined : { ...held, setStatus };
   const { remove } = useTaskWrites();
@@ -3730,7 +3788,9 @@ export function TaskScreen() {
               icon={glyphSymbol(GLYPH.AGENT)}
               accessibilityLabel={WORDS.NEW_AGENT}
               onPress={() => newAgent(overview.task)}
-            />
+            >
+              {WORDS.NEW_AGENT}
+            </Stack.Toolbar.Button>
           </Stack.Toolbar>
         )}
       </InlineBar>

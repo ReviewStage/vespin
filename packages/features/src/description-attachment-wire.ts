@@ -52,7 +52,8 @@ export const DESCRIPTION_FILE_TYPE = {
   PDF: AGENT_ATTACHMENT_TYPE.PDF,
 } as const;
 
-type DescriptionFileType = (typeof DESCRIPTION_FILE_TYPE)[keyof typeof DESCRIPTION_FILE_TYPE];
+export type DescriptionFileType =
+  (typeof DESCRIPTION_FILE_TYPE)[keyof typeof DESCRIPTION_FILE_TYPE];
 
 /** A description's own file's media type as the wire carries it. */
 export const descriptionFileTypeSchema = EffectSchema.Literals(

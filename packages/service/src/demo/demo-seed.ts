@@ -2,11 +2,9 @@ import type { DB } from "@better-auth/drizzle-adapter";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { type Agent, createAgent } from "@repo/database/models/agent-store";
 import {
-  actOnDescriptionCommentThread,
   DESCRIPTION_COMMENT_OUTCOME,
   type DescriptionCommentOutcome,
   type DescriptionCommentWriterRef,
-  startDescriptionCommentThread,
 } from "@repo/database/models/description-comments";
 import { enrollOwnDevice } from "@repo/database/models/host-store";
 import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-key-seal";
@@ -80,6 +78,11 @@ import {
   startInboxThread,
 } from "../inbox/inbox-store.js";
 import { providerKeyHint } from "../providers/provider-key-check.js";
+import type { BlobStoreFailure } from "../storage/blob-store.js";
+import {
+  actOnDescriptionCommentThread,
+  startDescriptionCommentThread,
+} from "../tasks/description-comment-writes.js";
 import {
   DEMO_AGENTS,
   DEMO_BLOCKS,
@@ -206,7 +209,7 @@ interface DemoPlace {
 
 const DEMO_IN_THE_CLOUD: DemoPlace = { machine: AGENT_MACHINE.VERCEL, deviceId: undefined };
 
-/** Every way the seed fails: a refused step, Better Auth's own failure, or the store's. */
+/** Every way the seed fails: a refused step, Better Auth's own failure, or the store's, the Blob store's among them. */
 type DemoSeedEffect<A> = Effect.Effect<
   A,
   | DemoSeedRefused
@@ -216,7 +219,8 @@ type DemoSeedEffect<A> = Effect.Effect<
   | TaskTreeRepositoryLocked
   | TaskBlockSelf
   | TaskBlockAcrossWorkspaces
-  | TaskBlockCycle,
+  | TaskBlockCycle
+  | BlobStoreFailure,
   DatabaseServices
 >;
 

@@ -36,6 +36,7 @@ import { agentMachinesLayer } from "../machine/agent-machines.js";
 import type { SandboxRunner } from "../machine/sandbox-checkout.js";
 import { RUNNER_EVENTS_PATH } from "../native-events/runner-events-app.js";
 import { RUNNER_LINES_PATH } from "../native-events/runner-lines-app.js";
+import { RUNNER_PICTURES_PATH } from "../native-events/runner-pictures-app.js";
 import { RUNNER_TOKEN_PATH } from "../native-events/runner-token-app.js";
 import { RUNNER_TRANSCRIPTS_PATH } from "../native-events/runner-transcripts-app.js";
 import { standingOfAgent } from "../tool-catalog/gates.js";
@@ -171,6 +172,7 @@ export function nativeAgentSessionsLayer(
         linesUrl: new URL(RUNNER_LINES_PATH, origin).href,
         mcpUrl: new URL(WORKSPACE_MCP_PATH, origin).href,
         transcriptsUrl: new URL(RUNNER_TRANSCRIPTS_PATH, origin).href,
+        picturesUrl: new URL(RUNNER_PICTURES_PATH, origin).href,
         integrations: (agent) =>
           nativeIntegrations(account, agent, origin).pipe(
             Effect.provideContext(context),

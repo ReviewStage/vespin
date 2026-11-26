@@ -189,20 +189,33 @@ export function recordedVideosOf(
  * each named by its place (`screenshot-1`); a computer call's window, named
  * by its app; an integration's pictures, each
  * named after the remote tool that answered it (`extract_images-1`), or the
- * call's own name where it names none; nothing for an output that is
- * neither, as every other call's is.
+ * call's own name where it names none; a coding agent's own tool's
+ * pictures its runner kept beside the transcript (`runnerKept`, the part's
+ * `pictures`), named after the call the same way; nothing for an output that
+ * is none of these, as every other call's is.
  */
 export function calledPicturesOf(
   tool: string,
   input: UnparsedWireValue,
   output: UnparsedWireValue,
+  runnerKept: readonly KeptPicture[] = [],
 ): readonly CalledPicture[] {
   if (tool === AGENT_TOOL.BROWSER) return screenshotsOf(output);
 
   if (tool === AGENT_TOOL.COMPUTER) return windowOf(output);
 
-  if (!Array.isArray(output)) return [];
   const named = isRecord(input) && isWireString(input.remoteTool) ? input.remoteTool : tool;
+
+  // Note that a runner's kept pictures stand in its answer's words as `[image]` alone, so they are the call's whole set.
+  if (runnerKept.length > 0) {
+    return runnerKept.map((picture, index) => ({
+      kept: true,
+      picture,
+      name: `${named}-${String(index + 1)}`,
+    }));
+  }
+
+  if (!Array.isArray(output)) return [];
   const found: CalledPicture[] = [];
 
   for (const block of output) {

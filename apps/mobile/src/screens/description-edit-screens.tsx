@@ -15,7 +15,6 @@ import {
   pendingSave,
 } from "@repo/features/description-edit-model";
 import { KEEP_MINE, lastEditConflict } from "@repo/features/description-edit-words";
-import { mentionPill } from "@repo/features/pill-words";
 import { TASK_BOUNDS } from "@repo/features/task-wire";
 import type { TasksEditAnswer } from "@repo/features/tasks-view";
 import { ACT_UNREACHED_WORDS, readFailedWords, readingWords } from "@repo/features/words";
@@ -26,7 +25,6 @@ import {
   BUTTON_LOOK,
   BUZZ,
   buzz,
-  type CaretAtWord,
   ConfirmAsk,
   type DocumentFieldHandle,
   DocumentPage,
@@ -45,8 +43,8 @@ import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { type TaskOverview, useTaskOverview } from "../tasks/use-tasks.js";
+import { useDocumentMentions } from "../use-document-mentions.js";
 import { DISCARD_CHANGES_WORDS, useKeptWords } from "../use-kept-words.js";
-import { useMentionOffer } from "../use-mention-offer.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** What the sheet says, in the panel's words where it has them. */
@@ -129,7 +127,9 @@ function EditorBar({
           icon={glyphSymbol(GLYPH.CLOSE)}
           accessibilityLabel={WORDS.CANCEL}
           onPress={onCancel}
-        />
+        >
+          {WORDS.CANCEL}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
@@ -201,15 +201,10 @@ function DescriptionEditor({
 
   // The field's door, and the `@` word its caret stands in, which offers what the task can mention.
   const field = useRef<DocumentFieldHandle>(null);
-  const [atWord, setAtWord] = useState<CaretAtWord | undefined>(undefined);
 
-  const mentions = useMentionOffer(
+  const { mentions, onAtWord } = useDocumentMentions(
     { workspaceId: overview.workspace?.id, taskId: task.id, description: editor.draft },
-    {
-      word: atWord,
-      pick: (mention) => field.current?.pick(mentionPill(mention.name, mention.target)),
-      rewrite: (words) => field.current?.rewrite(words),
-    },
+    field,
   );
 
   const kept = useKeptWords(editor.draft !== editor.base);
@@ -364,17 +359,8 @@ function DescriptionEditor({
         editable={editor.sending === undefined}
         problem={problemOf(editor, conflict?.note)}
         repository={task.repository}
-        onAtWord={setAtWord}
-        mentions={
-          mentions === undefined
-            ? undefined
-            : {
-                groups: mentions.groups,
-                empty: mentions.empty,
-                crumb: mentions.crumb,
-                onPick: mentions.pick,
-              }
-        }
+        onAtWord={onAtWord}
+        mentions={mentions}
         testID={WORDS_TEST_ID}
       />
     </>

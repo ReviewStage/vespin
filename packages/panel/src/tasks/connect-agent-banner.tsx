@@ -6,13 +6,13 @@ import {
   Banner,
   BUTTON_VARIANT,
   Button,
+  HarnessMark,
   PlugIcon,
   STATUS_TONE,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
 } from "@repo/ui";
-import { HarnessMark } from "../harness-marks.js";
 import type { ConnectFailure } from "./agent-model.js";
 import { useRepositoryRemedy } from "./repository-remedy.js";
 

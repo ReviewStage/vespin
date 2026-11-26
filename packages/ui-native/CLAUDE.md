@@ -463,13 +463,20 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
-  its checks and reviewers as rows, each glyph the panel's own
-  (`pull-request-look.ts`); the merge's press under the heading in every
+  its checks and files changed as rows counting them as the panel's tabs
+  do ("✓ 5", "4"), each glyph the panel's own (`pull-request-look.ts`), the
+  lines it changes after its branches; its reviewers as faces in its heading after who
+  opened it, each wearing where they stand at its corner, as the panel's
+  people line draws them; its Description and Conversation folding under
+  their headings (`ListSection`'s `foldable`), as the panel's do; the merge's
+  press under the heading in every
   window, as the panel's head stands Merge under the title, a large button
   as wide as its words (`MergeActRow`), and a split button where the
   repository merges more than one way, its chevron choosing the way as the
-  panel's merge box does; and the rest of its acts in the bar's ⋯, an act
-  that asks first asking in `ConfirmAsk`. The bar holds no press of words,
+  panel's merge box does; its title edited from a tap on it and where it
+  stands changed from its state chip, as the panel's title and pill change
+  them, an act that asks first asking in `ConfirmAsk`; and in the bar's ⋯
+  only Copy GitHub link and Open on GitHub, as the panel's toolbar ⋯. The bar holds no press of words,
   which pushed the page's path out of a compact bar.
 - **The tab bar** is `NativeTabs`: each tab labeled in every window, since a
   compact window's icons alone read as empty (the developer, Nov 23, 2026),

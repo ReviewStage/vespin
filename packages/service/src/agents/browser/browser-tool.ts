@@ -51,7 +51,6 @@ import {
   pointBrowserTab,
   upsertBrowserTab,
 } from "@repo/database/models/agent-browser-tabs";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
@@ -69,17 +68,19 @@ import {
 import {
   CONVERSATION_MEDIA_TYPE,
   CONVERSATION_PICTURE_BOUNDS,
-  type KeptPicture,
-  PICTURE_OMISSION,
-  type PictureOmission,
 } from "@repo/features/conversation-picture-wire";
-import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
 import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { webmDimensions } from "@repo/features/video-signature";
 import { isRecord, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
-import { DateTime, Duration, Effect, Option, Predicate, Result, Schema } from "effect";
+import { DateTime, Duration, Effect, Predicate, Result, Schema } from "effect";
 import { logStoreFailure } from "../../http/store-failure.js";
+import { type KeptPictureNote, keepPictureNote } from "../../storage/attachment-keeps.js";
+import {
+  reserveAttachmentUpload,
+  withAttachmentUploads,
+} from "../../storage/attachment-uploads.js";
+import type { BlobStoreFailure } from "../../storage/blob-store.js";
 import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "../recording-keep.js";
 import { AgentBrowser, type BrowserUnreachable } from "./agent-browser.js";
 import {
@@ -145,15 +146,10 @@ type ScreenshotStep = Extract<
   { readonly action: typeof BROWSER_AGENT_ACTION.SCREENSHOT; readonly status: "done" }
 >;
 
-/** What the transcript kept of a screenshot: the picture by id, or why it was not kept and its size. */
-type KeptNote =
-  | { readonly picture: { readonly [Key in keyof KeptPicture]: KeptPicture[Key] } }
-  | { readonly omitted: PictureOmission; readonly byteCount: number };
-
 /** A step as the tool answers it: a screenshot's transcript copy replaced by what was kept of it, every other step as it ran. */
 type BrowserToolStep =
   | Exclude<BrowserAgentStep, ScreenshotStep>
-  | (Omit<ScreenshotStep, "kept"> & (KeptNote | Record<never, never>));
+  | (Omit<ScreenshotStep, "kept"> & (KeptPictureNote | Record<never, never>));
 
 // A type rather than an interface, so a result is a `WireRecord` the model is handed as it stands.
 export type BrowserToolResult =
@@ -549,10 +545,17 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
     stop: (caption) =>
       Effect.gen(function* () {
         const browser = yield* AgentBrowser;
+        const reserved = yield* reserveAttachmentUpload;
 
         const read = yield* browser
-          .stopRecording(call.browserSession, CONVERSATION_PICTURE_BOUNDS.MAX_BYTES)
-          .pipe(Effect.mapError(unreachable));
+          .stopRecording(call.browserSession, CONVERSATION_PICTURE_BOUNDS.MAX_BYTES, reserved)
+          .pipe(
+            Effect.catchTags({
+              BrowserUnreachable: (failure) => Effect.fail(unreachable(failure)),
+              BlobStoreFailure: (failure) =>
+                Effect.andThen(logStoreFailure(failure), Effect.fail(RECORDING_REFUSAL.UNKEPT)),
+            }),
+          );
 
         if (!read.ok) return yield* Effect.fail(RECORDING_REFUSAL[read.reason]);
         const dimensions = webmDimensions(read.bytes);
@@ -566,11 +569,11 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
             bytes: read.bytes,
             contentType: CONVERSATION_MEDIA_TYPE.WEBM,
             ...dimensions,
-            mp4Bytes: read.mp4Bytes,
+            stored: read.stored,
           },
           { seconds: read.seconds, caption, path: read.path },
         );
-      }),
+      }).pipe(withAttachmentUploads),
   };
 }
 
@@ -603,35 +606,12 @@ function runOn(cdp: CdpSession, call: BrowserCall, actions: readonly BrowserAgen
   });
 }
 
-/**
- * What the transcript keeps of one screenshot's copy: the picture, sniffed
- * and measured from its own bytes, kept beside the transcript; why not
- * where its bytes are no picture or the transcript has no room left.
- */
+/** What the transcript keeps of one screenshot's copy, kept from its own bytes (`keepPictureNote`). */
 function keepScreenshot(
   transcript: ConversationTarget,
   kept: BrowserKeptScreenshot,
-): Effect.Effect<KeptNote, TaskStoreFailure, DatabaseServices> {
-  return Effect.gen(function* () {
-    const bytes = new Uint8Array(Buffer.from(kept.data, "base64"));
-    const contentType = sniffImageType(bytes);
-    const dimensions = contentType === undefined ? undefined : imageDimensions(bytes, contentType);
-
-    if (contentType === undefined || dimensions === undefined) {
-      return { omitted: PICTURE_OMISSION.UNSUPPORTED, byteCount: bytes.byteLength };
-    }
-
-    const picture = yield* keepConversationPicture(transcript, {
-      bytes,
-      contentType,
-      ...dimensions,
-    });
-
-    if (Option.isNone(picture))
-      return { omitted: PICTURE_OMISSION.LIMIT, byteCount: bytes.byteLength };
-
-    return { picture: { ...picture.value } };
-  });
+): Effect.Effect<KeptPictureNote, TaskStoreFailure | BlobStoreFailure, DatabaseServices> {
+  return keepPictureNote(transcript, new Uint8Array(Buffer.from(kept.data, "base64")));
 }
 
 /**
