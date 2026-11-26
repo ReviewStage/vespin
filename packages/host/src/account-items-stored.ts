@@ -334,14 +334,11 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
       const aged = found.filter((id) => pending?.has(id) !== true);
 
       if (aged.length === 0) return;
-      // Note that an item's messages go before it, so a launch never finds an item kept whose thread is gone.
+      // Note that an item's words and messages go before it, so a launch never finds an item kept whose thread is gone, and one cut short deletes the rest again.
+      yield* wordsWritten(follow.words.rewritten(aged, []));
       const left = yield* threadMessageIds(pool, aged);
 
-      if (left.size > 0) {
-        yield* follow.messages.answer([], { gone: [...left] });
-        yield* wordsWritten(follow.words.moved([], [...left]));
-      }
-
+      if (left.size > 0) yield* follow.messages.answer([], { gone: [...left] });
       yield* items.answer([], { gone: aged });
     });
 
@@ -372,7 +369,9 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
         } else {
           const moved = yield* movedMessages(pool, placed, standing.gone);
           yield* follow.messages.answer(moved.rows, { gone: moved.gone });
-          yield* wordsWritten(follow.words.moved(said, moved.gone));
+          yield* wordsWritten(
+            follow.words.rewritten([...placed.map(({ item }) => item.id), ...standing.gone], said),
+          );
         }
 
         // Note that a whole answer names every item there is, so it replaces what the database keeps; one past a sync id names only what moved, and what stands no longer.

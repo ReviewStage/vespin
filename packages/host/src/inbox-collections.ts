@@ -31,6 +31,7 @@ import { type InboxRow, inboxRowDrawn, inboxRowOf } from "@repo/features/inbox-d
 import { INBOX_STATUS, type InboxItem, inboxItemSchema } from "@repo/features/inbox-wire";
 import type { Refused, RowKind, Written } from "@repo/sync";
 import { Effect, Schema, type Scope } from "effect";
+import { INBOX_KEPT_VERSION } from "./inbox-messages.js";
 import { confirmWrite, type TxWait } from "./live-follow.js";
 
 /** What a member's write does to the items it names. */
@@ -274,8 +275,8 @@ export type PlacedInboxFields = Omit<InboxItem, "thread"> & { readonly taskId: s
 /** An inbox thread as the pool keeps it where the account's database keeps the Inbox, by its id, every write to it drawn over its digest. */
 export const INBOX_THREAD: RowKind<PlacedInboxRow, InboxChange> = {
   key: (row) => row.id,
-  // Note that the version moves with the row's shape, so a build that changes it reads its threads again.
-  stored: { name: "inboxThread", version: 1 },
+  // Note that the version moves with the row's shape or the message's, so a build that changes either reads its threads, their messages, and their words again (`INBOX_KEPT_VERSION`).
+  stored: { name: "inboxThread", version: INBOX_KEPT_VERSION },
   drawn: (change, row) => (row === undefined ? undefined : drawnRow(change, row)),
 };
 

@@ -152,7 +152,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
 
   const words: KeptWords = {
     replaced: (rows) => wordsNow().replaced(rows),
-    moved: (rows, gone) => wordsNow().moved(rows, gone),
+    rewritten: (threadIds, rows) => wordsNow().rewritten(threadIds, rows),
     threadsSaying: (tokens) => wordsNow().threadsSaying(tokens),
   };
 

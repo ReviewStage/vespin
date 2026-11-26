@@ -2691,6 +2691,17 @@ it.effect(
       yield* toldTimes(launch.accountItems, 1);
       const kept = yield* keptMessageIds(launch.pool);
 
+      // Note that a word row is left for a message the thread no longer holds, as a write the collection took and the words missed would leave it, and another for a thread no collection holds.
+      yield* Effect.promise(() =>
+        launch.local.words.rewritten(
+          [],
+          [
+            { messageId: "missed", threadId: HELD_ITEM.id, words: "stale" },
+            { messageId: "orphan", threadId: "gone-thread", words: "stale" },
+          ],
+        ),
+      );
+
       // Note that the item moves as a message lands on it, since the read's poll answers only once a stamp moves.
       const moved = { ...HELD_ITEM, updatedAt: HELD_ITEM.updatedAt + 1 };
 
@@ -2717,9 +2728,10 @@ it.effect(
         {
           kept: yield* searchedThreads(next, ["at 3"]),
           dropped: yield* searchedThreads(next, ["at 1"]),
+          stale: yield* searchedThreads(next, ["stale"]),
         },
-        { kept: [HELD_ITEM.id], dropped: [] },
-        "a search finds a thread by the words its kept messages say, in SQLite, and no longer by those of a message the delta took away",
+        { kept: [HELD_ITEM.id], dropped: [], stale: ["gone-thread"] },
+        "a search finds a thread by the words its kept messages say, in SQLite, and the thread's words are rewritten whole as its next answer lands, so neither a message the delta took away nor one the words missed is found; a thread no answer names keeps its words, which no row the list draws reads",
       );
       assert.deepEqual(
         yield* keptThreadOf(next.pool, HELD_ITEM.id),
@@ -2878,8 +2890,16 @@ it.effect(
       first.sealItems(LIVE_ANSWERED);
       yield* first.open;
       yield* settled;
-      deliverItems(first.live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+
+      first.live.items.set({
+        stamps: [stampOf(HELD_ITEM, TASK_ID)],
+        items: [{ ...ITEM_ROW, ...HELD_ITEM }],
+        messages: [messageRowOf(HELD_ITEM, "0d1e2f3a-4b5c-4d6e-8f7a-8b9c0d1e2f3a", 1)],
+        files: [],
+      });
+
       yield* toldTimes(first.accountItems, 1);
+      const said = yield* searchedThreads(first, ["said"]);
       yield* first.local.forget;
 
       yield* first.local.open("user-sam", {
@@ -2890,6 +2910,11 @@ it.effect(
 
       assert.equal(existsSync(join(root, "accounts", "user-dana")), false);
       assert.deepEqual(yield* keptItemIds(first.pool), []);
+      assert.deepEqual(
+        { before: said, after: yield* searchedThreads(first, ["said"]) },
+        { before: [HELD_ITEM.id], after: [] },
+        "the next account's search finds none of the first's messages' words",
+      );
     }).pipe(Effect.provide(keptPlatform)),
 );
 

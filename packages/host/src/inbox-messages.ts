@@ -21,6 +21,15 @@ export const threadMessageSchema = Schema.Struct({
 
 export type ThreadMessage = typeof threadMessageSchema.Type;
 
+/**
+ * The version both of the Inbox's stored kinds are kept at, threads and
+ * messages alike. Note that the threads' collection keeps the sync id the
+ * messages are read past, so a build that changes either shape moves both,
+ * and the threads, the messages, and their words are all read whole again,
+ * never a thread past an id its messages were dropped behind.
+ */
+export const INBOX_KEPT_VERSION = 1;
+
 /** No write changes a message row. */
 type NoChange = never;
 
@@ -53,6 +62,6 @@ export function threadOfRows(rows: readonly ThreadMessage[]): readonly InboxMess
 /** A message of a thread, by its id, kept on disk where the account's database keeps the Inbox. */
 export const INBOX_MESSAGE: RowKind<ThreadMessage, NoChange> = {
   key: (message) => message.id,
-  stored: { name: "inboxMessage", version: 1 },
+  stored: { name: "inboxMessage", version: INBOX_KEPT_VERSION },
   drawn: () => undefined,
 };

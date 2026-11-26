@@ -1,22 +1,27 @@
 /**
  * kept-words.ts -- the words each kept Inbox message says, in a table of their own beside the account's kept collections, which a search reads in SQLite off the JavaScript thread and answers with the threads alone.
  *
- * TanStack DB's persistence runs a filter in SQLite only where it can say
- * in SQL just what its JavaScript would find, and a word anywhere in a
- * message's words is not among them (`compileSafeSqlPrefilter`), so a query
- * of the message kind by its words reads and decodes every message kept on
- * each word typed. So the words stand here instead, lowercased as a search
+ * TanStack's SQLite persistence pushes only a prefix `like` into SQL
+ * (`compileSafeSqlPrefilter`), so a substring search over messages would
+ * decode every kept message in JS. So the words stand here instead,
+ * lowercased as a search
  * lowercases what it reads (`matchesTokens`), one row to a message, in a
  * database file of their own driven through the platform's async API
  * (`KeptWordsDatabase`), and a search answers only which of a thread's
  * messages say each word typed.
  *
  * The follow that answers every message (`account-items-stored.ts`) is the
- * one writer: a whole answer replaces every row, one past a sync id writes
- * what moved and deletes what went, and an aged thread's messages go with
- * it. A sign-out deletes the file with the account's folder. Where the
- * database will not open, the words are kept in memory for the launch, as
- * the kinds beside them are.
+ * one writer, and the scope follow, whose threads are held in memory
+ * alone, never writes here. Nothing commits the words with the messages,
+ * so they are derived and rewritten rather than kept in step: a whole
+ * answer replaces every row, and each thread an answer past a sync id
+ * carries or takes away has its rows rewritten whole, as an aged thread
+ * has its taken away. So a write missed as a launch is cut short heals on
+ * the next answer for that thread, and a search is only ever read over the
+ * rows the thread kind holds, so a row left for a thread gone names
+ * nothing a list draws. A sign-out, and so an account switch, deletes the
+ * file with the account's folder. Where the database will not open, the
+ * words are kept in memory for the launch, as the kinds beside them are.
  */
 
 import { inboxMessageWords } from "@repo/features/inbox-list-model";
@@ -27,7 +32,8 @@ const WORDS_SCHEMA = `CREATE TABLE IF NOT EXISTS message_words (
   message_id TEXT PRIMARY KEY,
   thread_id TEXT NOT NULL,
   words TEXT NOT NULL
-)`;
+);
+CREATE INDEX IF NOT EXISTS message_words_thread ON message_words (thread_id)`;
 
 /** How many rows one statement writes or deletes, each batch handed as one JSON value, so a whole answer is a few statements and never one value the size of the account's every message. */
 const BATCH = 500;
@@ -64,8 +70,11 @@ export interface MessageWords {
 export interface KeptWords {
   /** Every message's words there are, in place of those kept. */
   readonly replaced: (rows: readonly MessageWords[]) => Promise<void>;
-  /** The words of the messages that moved written, and those of the messages `gone` names deleted. */
-  readonly moved: (rows: readonly MessageWords[], gone: readonly string[]) => Promise<void>;
+  /** The words of every message of the threads `threadIds` names rewritten whole as `rows`, those threads' rows kept before deleted. */
+  readonly rewritten: (
+    threadIds: readonly string[],
+    rows: readonly MessageWords[],
+  ) => Promise<void>;
   /** Each thread whose kept messages say any of `tokens`, each already lowercased, with those they say; none where none is typed. */
   readonly threadsSaying: (
     tokens: readonly string[],
@@ -118,10 +127,10 @@ export async function keptWordsIn(database: KeptWordsDatabase): Promise<KeptWord
     }
   };
 
-  const deleted = async (ids: readonly string[]) => {
-    for (const batch of batched(ids)) {
+  const deleted = async (threadIds: readonly string[]) => {
+    for (const batch of batched(threadIds)) {
       await database.run(
-        "DELETE FROM message_words WHERE message_id IN (SELECT value FROM json_each(?))",
+        "DELETE FROM message_words WHERE thread_id IN (SELECT value FROM json_each(?))",
         [JSON.stringify(batch)],
       );
     }
@@ -147,9 +156,9 @@ export async function keptWordsIn(database: KeptWordsDatabase): Promise<KeptWord
         await database.exec("DELETE FROM message_words");
         await written(rows);
       }),
-    moved: (rows, gone) =>
+    rewritten: (threadIds, rows) =>
       transaction(async () => {
-        await deleted(gone);
+        await deleted(threadIds);
         await written(rows);
       }),
     threadsSaying: (typed) => {
@@ -198,8 +207,10 @@ export function keptWordsInMemory(): KeptWords {
       kept.clear();
       put(rows);
     },
-    moved: async (rows, gone) => {
-      for (const id of gone) kept.delete(id);
+    rewritten: async (threadIds, rows) => {
+      const rewriting = new Set(threadIds);
+
+      for (const [id, row] of kept) if (rewriting.has(row.threadId)) kept.delete(id);
       put(rows);
     },
     threadsSaying: async (tokens) => {
