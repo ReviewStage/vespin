@@ -1,0 +1,1 @@
+VOID (3134f892 13:45 UTC Nov 26): this folder is NOT the #4374 after. The 13:06 UTC Nov 26 build was plain main 33db3f634f (the on-main check matched an unrelated old PR #4374, 87a968eca3, so fix/ios-manager-chat-dock-open a10c7bafd0 was never merged), and its lanes were lost to a hard disk stop. The rerun (vjnat4374, with a fix guard) writes a new folder.
