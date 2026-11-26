@@ -1650,7 +1650,7 @@ type AutomationRowProps = {
   readonly title: string;
   /** What fires it and when it runs next, or why a run stands as it does. */
   readonly line: string;
-  /** Where its newest run stands, which its lead wears: the working or failed mark, else its glyph. */
+  /** Where its newest run stands: the working mark in its lead's place, or the failed mark at its end, its lead keeping its glyph. */
   readonly standing: AutomationRunStanding;
   /** A last line, such as how its newest run went ("Last run: Finished"); none for a run's own row, whose line already says it. */
   readonly standingWords?: string | undefined;
@@ -1676,11 +1676,12 @@ type AutomationRowProps = {
 
 /**
  * An automation, or one of its runs, as Settings lists them, as the panel's
- * Automations rows draw them on a phone: its lead wearing where its newest
- * run stands (the working mark, the failed mark, else its glyph), its name,
- * the line of what fires it and when it runs next under it, and how its
- * newest run went; then when that run fired, and the
- * chevron where a press opens it. Its acts, such as Run now, stand behind
+ * Automations rows draw them on a phone: its lead the mark of what fires it,
+ * or the working mark while its newest run works, its name, the line of
+ * what fires it and when it runs next under it, and how its newest run
+ * went; then the failed mark where that run failed, as the panel's
+ * `stateEndMark` ends its row, when that run fired, and the chevron where a
+ * press opens it. Its acts, such as Run now, stand behind
  * a swipe from the leading edge, as Mail's Read stands there, and in the
  * menu a long press opens. VoiceOver hears it as one element, its name then
  * its lines, and offers its acts among its actions.
@@ -1706,11 +1707,11 @@ export function AutomationRow({
   const leadSize = useScaledSize(LEAD_GLYPH_SIZE);
   const ink = faded ? colors.TEXT_MUTED : colors.TEXT;
 
+  const failed = standing === AUTOMATION_RUN_STANDING.FAILED;
+
   const lead =
     standing === AUTOMATION_RUN_STANDING.WORKING ? (
       <WorkingMark />
-    ) : standing === AUTOMATION_RUN_STANDING.FAILED ? (
-      <FailedMark />
     ) : mark !== undefined ? (
       <ProviderLead mark={mark} size={leadSize} />
     ) : (
@@ -1750,10 +1751,15 @@ export function AutomationRow({
           </VStack>
         }
         end={
-          when === undefined ? null : (
-            <Text modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(VALUE_INK)]}>
-              {when}
-            </Text>
+          !failed && when === undefined ? null : (
+            <HStack spacing={SPACE.TIGHT}>
+              {failed ? <FailedMark /> : null}
+              {when === undefined ? null : (
+                <Text modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(VALUE_INK)]}>
+                  {when}
+                </Text>
+              )}
+            </HStack>
           )
         }
       />
