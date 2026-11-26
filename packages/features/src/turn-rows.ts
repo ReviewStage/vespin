@@ -579,7 +579,7 @@ export function calledFile(
 
 /** How many files a call named past the first, which its row says after the first one's chip; none for one file. */
 export function moreFiles(files: readonly string[] | undefined): string | undefined {
-  return files === undefined || files.length < 2 ? undefined : `+${files.length - 1}`;
+  return files === undefined || files.length < 2 ? undefined : `+${files.length - 1} more`;
 }
 
 /** A web address, as a website chip reads one. */

@@ -140,6 +140,7 @@ import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
   type ManagerFace,
+  sameManagerFace,
 } from "@repo/features/manager-face";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
@@ -3298,18 +3299,13 @@ const CHANGED_FIELDS = [
   "title",
 ] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face" | "archived">[];
 
-/** Whether every field of the change already stands on the agent, a face by its character and color. */
+/** Whether every field of the change already stands on the agent, a face by its character, color, and emoji. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
   const { face, archived } = change;
 
   if (archived !== undefined && archived !== (agent.archivedAt !== undefined)) return false;
 
-  if (
-    face !== undefined &&
-    (face.character !== agent.face?.character || face.color !== agent.face?.color)
-  ) {
-    return false;
-  }
+  if (face !== undefined && !sameManagerFace(face, agent.face)) return false;
 
   return CHANGED_FIELDS.every((key) => {
     const value = change[key];
@@ -4073,14 +4069,33 @@ const ANSWERS: StagedAnswers = {
   },
   // The invitations task's repository's skills, as the service finds them.
   [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
-  // The invitations task's repository's tree, read whole as an `@` reads its files and folders; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
+  // The invitations task's repository's tree, read whole as an `@` reads its files and folders, through the task or, as the Manager's box reads it, through the workspace; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
   [ACT_KIND.TASKS_TREE]: (asked) =>
-    "taskId" in asked &&
-    asked.taskId === TASK.INVITES &&
     asked.recursive === true &&
-    asked.path === ""
+    asked.path === "" &&
+    ("taskId" in asked
+      ? asked.taskId === TASK.INVITES
+      : asked.repository === INVITES_TREE.repository)
       ? { folder: INVITES_TREE }
       : { failure: TASK_CALL_FAILURE.UNANSWERED },
+  // The machines of the workspace's members an `@` offers: Ada's own, the one away offline.
+  [ACT_KIND.WORKSPACE_MACHINES_READ]: () => ({
+    machines: HOSTS.flatMap((host) =>
+      host.platform === undefined
+        ? []
+        : [
+            {
+              id: host.id,
+              name: host.name,
+              platform: host.platform,
+              userId: ADA.userId,
+              online: host.away !== true,
+            },
+          ],
+    ),
+  }),
+  // Ada's machines always allow no app, so an `@` offers none of theirs.
+  [ACT_KIND.HOSTS_ALLOWED_APPS]: () => ({ machines: [] }),
   [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
     const held = stagedAgent(agentId);
 

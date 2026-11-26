@@ -7,8 +7,8 @@
  * it names one. The account's membership of the Manager's workspace is
  * joined, so a member taken out of the workspace stops hearing the chat at
  * once rather than at the next seal. Each message carries its reactions as
- * three lists of one length, each kind given in `MANAGER_CHAT_REACTION`'s
- * order, how many gave it, and whether the account did. It reads no clock, as a live read must
+ * lists of one length, each kind given in `MANAGER_CHAT_REACTION`'s
+ * order, how many gave it, whether the account did, and its emoji. It reads no clock, as a live read must
  * (`live-statement.ts`).
  *
  * It is woken by a message written, edited, or deleted, a reaction given
@@ -40,6 +40,7 @@ import {
   type ManagerChatAttachment,
   type ManagerChatReaction,
 } from "@repo/features/manager-chat-live";
+import { MANAGER_CHAT_REACTION_FACES } from "@repo/features/manager-chat-view";
 import { and, desc, eq, lt, type SQL, sql } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
@@ -61,17 +62,27 @@ const REACTION_ORDER = sql`array[${sql.join(
   sql`, `,
 )}]`;
 
+/** Each kind's emoji, written into the statement as SQL, a kind the service takes as `kind` reads. */
+const REACTION_EMOJI = sql`case ${managerChatReaction.kind} ${sql.join(
+  Object.values(MANAGER_CHAT_REACTION).map(
+    (kind) =>
+      sql`when ${sql.raw(`'${kind}'`)} then ${sql.raw(`'${MANAGER_CHAT_REACTION_FACES[kind].emoji}'`)}`,
+  ),
+  sql` `,
+)} else '' end`;
+
 /** The lists a message's reactions are delivered in, by the column of its grouped read each takes. */
 const REACTION_LIST = {
   KINDS: "kind",
   COUNTS: "count",
   REACTED: "reacted",
+  EMOJI: "emoji",
 } as const;
 
 /**
  * One list of the message's reactions, a kind's `field` at each place:
- * the kinds given, how many gave each, or whether the account did, each
- * in `REACTION_ORDER`, so the three lists line up; none given is an empty
+ * the kinds given, how many gave each, whether the account did, or each
+ * kind's emoji, each in `REACTION_ORDER`, so the lists line up; none given is an empty
  * list. Note that each is an `array(...)` of a grouped read rather than a
  * JSON aggregate, which Postgres marks only stable.
  */
@@ -85,7 +96,8 @@ function reactionListOf<Value>(
       select
         ${managerChatReaction.kind} as kind,
         count(*)::int as count,
-        coalesce(bool_or(${managerChatReaction.reactorUserId} = ${userId}), false) as reacted
+        coalesce(bool_or(${managerChatReaction.reactorUserId} = ${userId}), false) as reacted,
+        ${REACTION_EMOJI} as emoji
       from ${managerChatReaction}
       where ${managerChatReaction.agentId} = ${managerChatMessage.agentId}
         and ${managerChatReaction.messageId} = ${managerChatMessage.id}
@@ -118,6 +130,7 @@ function messagesStatement(userId: string, agentId: string, before: string) {
         reactionKinds: reactionListOf<ManagerChatReaction>(userId, REACTION_LIST.KINDS),
         reactionCounts: reactionListOf<number>(userId, REACTION_LIST.COUNTS),
         reactionsReacted: reactionListOf<boolean>(userId, REACTION_LIST.REACTED),
+        reactionEmoji: reactionListOf<string>(userId, REACTION_LIST.EMOJI),
       },
       instants: { createdAt: managerChatMessage.createdAt, editedAt: managerChatMessage.editedAt },
     },

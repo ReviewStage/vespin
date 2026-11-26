@@ -31,7 +31,7 @@ import type { VisuallyHiddenUnder } from "../visually-hidden/visually-hidden.js"
  * on one line, fading them out at their end where the row cuts them short,
  * in their own direction (`<bdi>`), and any other spelling draws it neutral.
  *
- * A badge may stand lit (`lit`), in the ink, as a pressed filter chip does:
+ * A badge may stand lit (`lit`), in the accent, as a pressed reaction chip does:
  * the reader's own reaction where it cannot be pressed. In a narrow room
  * (`hideWordsUnder`) a badge gives its words up to a reader alone wherever
  * something else says its state in their place: its glyph, its swatch, or
@@ -101,7 +101,7 @@ export function Badge({
   swatch?: string | undefined;
   /** A provider's color the badge is filled with, its words on one line; any color but six hex digits draws it neutral. */
   fill?: string | undefined;
-  /** Whether it stands in the ink, as a pressed filter chip does: the reader's own. */
+  /** Whether it stands in the accent, as a pressed reaction chip does: the reader's own. */
   lit?: boolean;
   /** Give the words up, to a reader alone, once the room around the badge (a `ui-room` container) is narrower than this step; kept drawn where no `icon`, `swatch`, or tone's dot says the state in their place. */
   hideWordsUnder?: VisuallyHiddenUnder | undefined;

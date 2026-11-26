@@ -111,6 +111,8 @@ function mount(
     room?: boolean;
     rows?: readonly MenuRow[];
     note?: React.ReactNode;
+    /** The menu's last line, pressed by nothing, under the pinned rows. */
+    lastLine?: string;
     bounds?: PopoverBounds | undefined;
     embedded?: boolean;
   } = {},
@@ -141,6 +143,7 @@ function mount(
         onClose: () => asked.said.push("close"),
         onLeave: () => asked.left.push("leave"),
         foot: options.foot === true ? footOf(asked.said, options.staying === true) : undefined,
+        lastLine: options.lastLine === undefined ? undefined : { words: options.lastLine },
         ...(options.embedded === true
           ? { layer: SEARCHABLE_MENU_LAYER.EMBEDDED }
           : { align: POPOVER_ALIGN.START, bounds: options.bounds }),
@@ -619,6 +622,84 @@ test("the pointer crossing a pinned row on its way into the submenu beside anoth
       vi.advanceTimersByTime(MOTION_DELAY_MS.SETTLE);
     });
     assert.deepEqual([opened, crossed, effortOpen()], [true, true, false]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("the pointer moving off the rows onto the menu's last line highlights nothing and closes the submenu standing", () => {
+  // Note that the Effort submenu stands right of its row, from x=330 and y=100 down to y=200.
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.classList.contains("ui-searchable-menu-submenu")
+      ? new DOMRect(330, 100, 200, 100)
+      : new DOMRect(0, 0, 0, 0);
+  });
+  mount({ placeholder: "Search models", foot: true, lastLine: "Your Codex plan" });
+  const effortOpen = () => document.querySelector('[aria-label="Effort"][role="listbox"]') !== null;
+
+  const lastLine =
+    [...document.querySelectorAll<HTMLElement>("p")].find(
+      (line) => line.textContent === "Your Codex plan",
+    ) ?? assert.fail("the last line");
+
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+
+  try {
+    mouseOver(pinned("Effort"), 300, 116);
+    const opened = [effortOpen(), announced()];
+    // Down and to the left, away from the submenu, onto the plan under the pinned rows.
+    mouseOver(lastLine, 100, 260);
+    act(() => {
+      vi.advanceTimersByTime(MOTION_DELAY_MS.SETTLE);
+    });
+    assert.deepEqual(
+      [opened, [effortOpen(), announced()]],
+      [
+        [true, "High"],
+        [false, undefined],
+      ],
+    );
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("the pointer brushing the list's inset and back onto the row whose submenu stands leaves that submenu standing", () => {
+  // Note that the tab's submenu stands right of its row, from x=330 and y=100 down to y=200.
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.classList.contains("ui-searchable-menu-submenu")
+      ? new DOMRect(330, 100, 200, 100)
+      : new DOMRect(0, 0, 0, 0);
+  });
+  mount({ placeholder: "Search tabs", rows: browserRows([]) });
+
+  const submenuOpen = () =>
+    document.querySelector('[aria-label="Open the tab in"][role="listbox"]') !== null;
+
+  const row =
+    [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (option) => option.textContent === "New Browser tab",
+    ) ?? assert.fail("the tab's row");
+
+  const list =
+    document.querySelector<HTMLElement>('[role="listbox"][aria-label="Model"]') ??
+    assert.fail("the list");
+
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+
+  try {
+    mouseOver(row, 300, 116);
+    // Right, toward the submenu, onto the list's own inset, and on back onto the row.
+    mouseOver(list, 305, 117);
+    mouseOver(row, 310, 117);
+    act(() => {
+      vi.advanceTimersByTime(MOTION_DELAY_MS.SETTLE);
+    });
+    assert.deepEqual([submenuOpen(), announced()], [true, "Invite expiry"]);
   } finally {
     vi.useRealTimers();
   }

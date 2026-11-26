@@ -36,6 +36,7 @@ import {
   POPOVER_WIDTH,
   type PopoverWidth,
 } from "../anchored-popover/anchored-popover.js";
+import { iconPickerChoiceOf } from "../icon-picker/icon-picker.js";
 import { OneLine } from "../one-line/one-line.js";
 import { ROVING_STOP, rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { SCROLL_FADE, SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
@@ -741,9 +742,11 @@ function keyedEntryOf(
 /**
  * Whether a press landed on the card an item of one of `menus` hangs, or on
  * a card hung from a control on that card, as a person named on an agent's
- * card hangs their own. Each card stands apart from the menu, portaled to
- * the body, so it is traced back through the control it hangs from
- * (`hintedControlOf`), card by card, until one stands in a menu.
+ * card hangs their own, or on the colors an icon picker's choice floats in
+ * a panel, as a Manager's face's do. Each stands apart from the menu,
+ * portaled to the body, so it is traced back through the control it hangs
+ * from (`hintedControlOf`, `iconPickerChoiceOf`), one by one, until one
+ * stands in a menu.
  */
 function onItemCard(target: Node | null, menus: readonly (HTMLElement | null)[]): boolean {
   const seen = new Set<Node>();
@@ -751,7 +754,7 @@ function onItemCard(target: Node | null, menus: readonly (HTMLElement | null)[])
 
   while (on !== null && !seen.has(on)) {
     seen.add(on);
-    const control = hintedControlOf(on);
+    const control = hintedControlOf(on) ?? iconPickerChoiceOf(on);
 
     if (control === undefined) return false;
 
@@ -1516,9 +1519,18 @@ function namedItemOf(
 /** What in a panel may take the keyboard as it opens, after its search field. */
 const PANEL_CONTROL = 'button, [href], [tabindex]:not([tabindex="-1"])';
 
+/** Whether the focus stands in `panel`, or in the colors an icon picker's choice in it floats (`iconPickerChoiceOf`), portaled to the body. */
+function focusIn(panel: HTMLElement): boolean {
+  const focused = document.activeElement;
+
+  if (focused === null) return false;
+
+  return panel.contains(focused) || panel.contains(iconPickerChoiceOf(focused) ?? null);
+}
+
 /** Takes the keyboard into `panel`, where its own drawing has not already: its search field first, then its first control, else the panel. */
 function focusInto(panel: HTMLElement): void {
-  if (panel.contains(document.activeElement)) return;
+  if (focusIn(panel)) return;
 
   const start =
     panel.querySelector<HTMLElement>('input:not([type="hidden"]), textarea') ??
