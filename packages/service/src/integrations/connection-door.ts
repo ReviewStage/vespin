@@ -37,9 +37,8 @@
  * listed, because a list carries no account's data and a warm runner lists
  * them only as it launches.
  *
- * A Manager, shared across its workspace, acts instead for whoever asked
- * where its workspace has Managers act for whoever asked on
- * (`EXPERIMENT.MANAGER_ACTS_FOR_ASKER`): each call is read under the member
+ * A Manager, shared across its workspace, acts instead for whoever asked:
+ * each call is read under the member
  * who asked for its turn under way (`turnAsker`), read again at each call,
  * on their own grant under the connection's name, and never falls back to
  * the owner's; one who has not connected it is refused with the sentence
@@ -79,7 +78,6 @@ import { turnAsker } from "@repo/database/models/turn-asker";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { causeKind } from "@repo/runtime/effect";
-import { EXPERIMENT } from "@repo/settings";
 import { isRecord, type WireRecord } from "@repo/wire";
 import { DateTime, Duration, Effect, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
@@ -87,7 +85,6 @@ import { CONNECTION_POLICY } from "../agents/agent-runtime/role.js";
 import { type HandedConnection, turnServers } from "../agents/agent-runtime/servers.js";
 import { heldProjection, turnServersOf } from "../agents/native-events/native-projection.js";
 import type { AdmittedConversation } from "../agents/sessions/admitted-conversation.js";
-import { experimentOnIn } from "../agents/workspace-experiment-on.js";
 import { ACTION_RESULT_STATUS } from "../core.js";
 import type { GitHubApp } from "../github/github-app.js";
 import type { IntegrationConnect } from "./integration-connect.js";
@@ -179,9 +176,8 @@ interface CallActor {
 }
 
 /**
- * Who a call acts for, as the module says: for a Manager whose workspace has
- * Managers act for whoever asked on, the member who asked for its turn under
- * way (`turnAsker`), its owner standing in where no member did; for every
+ * Who a call acts for, as the module says: for a Manager, the member who
+ * asked for its turn under way (`turnAsker`), its owner standing in where no member did; for every
  * other agent, the starter the runner's bearer admitted. A read that fails
  * fails the call rather than falling back to the owner.
  */
@@ -194,10 +190,6 @@ function callActor(
     const agent = yield* readAgentOfConversation(userId, conversationId);
 
     if (Option.isNone(agent) || agent.value.kind !== AGENT_KIND.MANAGER) return starter;
-
-    if (!(yield* experimentOnIn(agent.value.organizationId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER))) {
-      return starter;
-    }
 
     const asker = yield* turnAsker(admitted.target);
 
