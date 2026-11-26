@@ -27,13 +27,13 @@ import { inboxLineKind } from "@repo/features/inbox-list-model";
 import {
   LINK_DESTINATION,
   type LinkDestination,
-  linkOf,
   linkWorkspaceStep,
   MENTION_SIGIL,
 } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_FROM, typedMentionKind } from "@repo/features/mention-kind";
 import {
+  agentCandidate,
   automationCandidate,
   dateCandidates,
   descriptionCandidates,
@@ -49,14 +49,18 @@ import {
   machineCandidates,
   mentionOffer,
   type PickedMention,
+  pageCandidate,
   pathCandidates,
+  personCandidate,
+  pullRequestCandidate,
   type RepositoryPath,
+  taskCandidate,
+  threadCandidate,
 } from "@repo/features/mention-offer";
 import { agentName } from "@repo/features/model-label";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_TREE_ENTRY } from "@repo/features/task-wire";
-import { sinceText } from "@repo/features/time-format";
 import { taskKey } from "@repo/features/workspace-key";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -92,12 +96,6 @@ import { useInboxRows } from "./inbox/inbox-rows.js";
 import { useListedMembers } from "./member-pictures.js";
 import { useModelCatalog } from "./tasks/use-start.js";
 import { useWorkspaceMachines } from "./workspace-machines.js";
-
-/** What a person's row says after their name where it is the reader, as the panel's picker says it. */
-const YOU = "You";
-
-/** What a pull request's row says after its name where no agent is named for it, in the panel's words. */
-const PULL_REQUEST_DETAIL = "Pull request";
 
 /** The glyph each kind's row leads with, as the panel's rows lead with their kind's. */
 const KIND_GLYPH = {
@@ -148,11 +146,6 @@ async function repositoryPaths(
   }));
 }
 
-/** What a page's row says after its name, as the panel's: a version past its first, else when it was shown. */
-function pageDetail(version: number, at: number, now: number): string {
-  return version > 1 ? `Version ${version}` : sinceText(at, now);
-}
-
 /** The task's pages and the account's Inbox threads, as the host holds them, as a `select`. */
 function heldOf(taskId: string | undefined) {
   return (state: AppStateSnapshot) => ({
@@ -164,6 +157,26 @@ function heldOf(taskId: string | undefined) {
 /** A thread an `@` offers, and whether it is the task's own, which Suggested holds. */
 interface ThreadCandidate extends MentionCandidate {
   readonly own: boolean;
+}
+
+/** The entity an agent's, a task's, or a person's row names by its id, whose chip's mark the row wears. */
+const ROW_DESTINATION = {
+  [MENTION_OFFER_KIND.AGENT]: (agentId: string) => ({ kind: LINK_DESTINATION.AGENT, agentId }),
+  [MENTION_OFFER_KIND.TASK]: (taskId: string) => ({ kind: LINK_DESTINATION.TASK, taskId }),
+  [MENTION_OFFER_KIND.PERSON]: (userId: string) => ({ kind: LINK_DESTINATION.PERSON, userId }),
+} as const satisfies Partial<Record<MentionOfferKind, (id: string) => LinkDestination>>;
+
+/** Each agent's, task's and person's row's entity, by the link a pick writes. */
+function namedOf(rows: readonly MentionCandidate[]): ReadonlyMap<string, LinkDestination> {
+  return new Map(
+    rows.flatMap((row): [string, LinkDestination][] =>
+      row.kind === MENTION_OFFER_KIND.AGENT ||
+      row.kind === MENTION_OFFER_KIND.TASK ||
+      row.kind === MENTION_OFFER_KIND.PERSON
+        ? [[row.target, ROW_DESTINATION[row.kind](row.id)]]
+        : [],
+    ),
+  );
 }
 
 /** No offer: what stands before the place's workspace is known, or before the words typed are taken up. */
@@ -305,27 +318,15 @@ export function useMentionOffer(
   const candidates = useMemo((): Candidates | undefined => {
     if (!asking || step === undefined) return undefined;
     const now = Date.now();
-    const named = new Map<string, LinkDestination>();
     const marks = new Map<string, ChipMark>();
-
-    const linked = (destination: LinkDestination): string => {
-      const target = linkOf(destination, step);
-      named.set(target, destination);
-
-      return target;
-    };
 
     const ownAgents = agents.filter(
       (agent) =>
         agent.workspaceId === workspaceId && agent.archivedAt === undefined && agent.id !== agentId,
     );
 
-    const agentRow = (agent: (typeof ownAgents)[number]): MentionCandidate => ({
-      id: agent.id,
-      kind: MENTION_OFFER_KIND.AGENT,
-      name: agentName(agent, catalog?.models),
-      target: linked({ kind: LINK_DESTINATION.AGENT, agentId: agent.id }),
-    });
+    const agentRow = (agent: (typeof ownAgents)[number]): MentionCandidate =>
+      agentCandidate({ id: agent.id, name: agentName(agent, catalog?.models) }, step);
 
     const ownTasks = tasks.filter((task) => task.workspaceId === workspaceId);
     const taskNamed = new Map(ownTasks.map((task) => [task.id, task.name]));
@@ -336,34 +337,14 @@ export function useMentionOffer(
     // Note that a description's task stands as its description whole rather than among the tasks, as the panel's does.
     const describing = description === undefined ? undefined : taskId;
 
-    const taskRows = ownTasks.flatMap((task): MentionCandidate[] => {
-      if (task.id === describing) return [];
-      const key = keyOf(task.number);
-
-      return [
-        {
-          id: task.id,
-          kind: MENTION_OFFER_KIND.TASK,
-          name: task.name,
-          detail: key,
-          key,
-          target: linked({ kind: LINK_DESTINATION.TASK, taskId: task.id }),
-        },
-      ];
-    });
-
-    const pages = (taskId === undefined ? [] : (held?.pages ?? [])).map(
-      (page): MentionCandidate => ({
-        id: page.id,
-        kind: MENTION_OFFER_KIND.PAGE,
-        name: page.title,
-        detail: pageDetail(page.version, page.at, now),
-        target: linkOf(
-          { kind: LINK_DESTINATION.PAGE, taskId: taskId ?? "", pageId: page.id },
-          step,
-        ),
-      }),
+    const taskRows = ownTasks.flatMap((task): MentionCandidate[] =>
+      task.id === describing ? [] : [taskCandidate(task, keyOf(task.number), step)],
     );
+
+    const pages =
+      taskId === undefined
+        ? []
+        : (held?.pages ?? []).map((page) => pageCandidate(page, taskId, now, step));
 
     // Note that the task's own threads come first, then the newest changed, as the panel's list orders them.
     const threads = Object.entries(heldThreads ?? {})
@@ -379,25 +360,15 @@ export function useMentionOffer(
           Number(other.own) - Number(one.own) || other.item.updatedAt - one.item.updatedAt,
       )
       .map(({ item, holder, own }): ThreadCandidate => {
-        // Note that a thread is linked by itself alone, as the panel's mention writes it.
-        const target = linkOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id }, step);
-
+        const row = threadCandidate(item, holder, step);
         // Note that a thread wears what its last line asks, as its Inbox row does, and a plain message keeps the thread's glyph.
         const look = INBOX_LINE_LOOK[inboxLineKind(inboxRowOf(item))];
 
         if (look !== undefined) {
-          marks.set(target, { kind: CHIP_MARK.GLYPH, glyph: look.symbol, tone: look.tone });
+          marks.set(row.target, { kind: CHIP_MARK.GLYPH, glyph: look.symbol, tone: look.tone });
         }
 
-        return {
-          id: item.id,
-          kind: MENTION_OFFER_KIND.THREAD,
-          name: item.title,
-          detail: holder,
-          terms: [holder],
-          target,
-          own,
-        };
+        return { ...row, own };
       });
 
     // Note that a pull request with no address yet offers nothing, since a pick writes its GitHub address.
@@ -411,14 +382,10 @@ export function useMentionOffer(
         marks.set(url, { kind: CHIP_MARK.GLYPH, glyph: look.symbol, tone: look.tone });
 
         return [
-          {
-            id: url,
-            kind: MENTION_OFFER_KIND.PULL_REQUEST,
-            name: `#${pullRequest.number} ${pullRequest.title}`,
-            detail: publisher === undefined ? PULL_REQUEST_DETAIL : agentName(publisher),
-            terms: [PULL_REQUEST_DETAIL],
-            target: url,
-          },
+          pullRequestCandidate(
+            { url, number: pullRequest.number, title: pullRequest.title },
+            publisher === undefined ? undefined : agentName(publisher),
+          ),
         ];
       },
     );
@@ -432,14 +399,7 @@ export function useMentionOffer(
       ],
       agents: ownAgents.map(agentRow),
       tasks: taskRows,
-      people: members.map((member) => ({
-        id: member.userId,
-        kind: MENTION_OFFER_KIND.PERSON,
-        name: member.name,
-        detail: member.you ? YOU : member.email,
-        terms: [member.email],
-        target: linked({ kind: LINK_DESTINATION.PERSON, userId: member.userId }),
-      })),
+      people: members.map((member) => personCandidate(member, member.you, step)),
       pages,
       files: pathCandidates(paths ?? [], { workspace: step, repository }),
       threads,
@@ -469,6 +429,9 @@ export function useMentionOffer(
       ),
       pending,
     };
+
+    // Note that only the workspace's agents, tasks and people wear their entity's chip mark, never the description whole, which names its task too.
+    const named = namedOf([...sources.agents, ...sources.tasks, ...sources.people]);
 
     return { sources, named, marks };
   }, [
