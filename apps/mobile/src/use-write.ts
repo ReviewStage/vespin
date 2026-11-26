@@ -146,7 +146,7 @@ export const OFFLINE_MARKS: ReadonlySet<LiveMark | undefined> = new Set([
  * service refused once they were sent again, as the panel's toast does,
  * each taken back where it was drawn; the count is cleared as it is said,
  * since this phone's host keeps its own. The root mounts it once, over
- * every screen.
+ * every screen, after `useNoticeForAccount`, whose clear must come first.
  */
 export function useOfflineNotice(): void {
   const notices = useFailureNotices();
@@ -158,11 +158,17 @@ export function useOfflineNotice(): void {
     select: (state) => state.network.offlineRefused ?? 0,
   });
 
+  const { data: accountId } = useQuery({
+    ...appStateQuery,
+    select: (state) => signedInAccountId(state.account),
+  });
+
+  // Note that it is said anew for each account, after `useNoticeForAccount` let the last one's notices go, so a launch offline or a sign-in while offline still says it.
   useEffect(() => {
     if (mark !== undefined && OFFLINE_MARKS.has(mark)) {
       notices.say({ kind: NOTICE_KIND.OFFLINE, words: LIVE_MARK_WORDS[mark].hint });
     } else notices.online();
-  }, [mark, notices]);
+  }, [mark, accountId, notices]);
   useEffect(() => {
     if (refused === 0) return;
     buzz(BUZZ.ERROR);

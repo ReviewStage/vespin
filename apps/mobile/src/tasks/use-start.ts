@@ -352,14 +352,12 @@ export function useWorkspaceRepositories(workspaceId: string | undefined): Works
 
   const { data: rows } = useQuery({ ...appStateQuery, select });
   const { data: failed = false } = useQuery({ ...appStateQuery, select: failedSelect });
-  const reached = useServiceReached();
 
   return useMemo(
     () => ({
       listed: rows?.repositories.map(({ fullName }) => fullName) ?? NO_REPOSITORIES,
       read: rows !== undefined,
-      // Note that a read that failed while the phone does not reach the service says nothing, since the app's one offline notice said why.
-      failed: reached && failed && rows === undefined,
+      failed: failed && rows === undefined,
       retry: () => {
         if (workspaceId === undefined) return;
         acts[ACT_KIND.TASKS_REPOSITORIES_RETRY]({ workspaceId }).catch(
@@ -367,7 +365,7 @@ export function useWorkspaceRepositories(workspaceId: string | undefined): Works
         );
       },
     }),
-    [rows, failed, reached, workspaceId, acts],
+    [rows, failed, workspaceId, acts],
   );
 }
 
@@ -383,6 +381,7 @@ export function useRepositoryPick(
   drafted?: string | undefined,
 ): RepositoryPick {
   const { listed, read, failed, retry } = useWorkspaceRepositories(workspace?.id);
+  const serviceReached = useServiceReached();
   const pictureOf = useMenuRepositoryPictures(listed);
   const tasks = useListedTasks();
   const [picked, setPicked] = useState<string | undefined>(drafted);
@@ -406,7 +405,9 @@ export function useRepositoryPick(
     picked: kept ?? starting,
     pick: setPicked,
     read,
-    failed: failed ? repositoryFailureNote(TASK_CALL_FAILURE.UNANSWERED) : undefined,
+    // Note that a read that failed while the phone does not reach the service says nothing here, since the app's one offline notice said why; the list's own `failed` still stands for a screen that draws its region's state.
+    failed:
+      failed && serviceReached ? repositoryFailureNote(TASK_CALL_FAILURE.UNANSWERED) : undefined,
     retry,
   };
 }

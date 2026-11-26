@@ -205,8 +205,9 @@ function GuardedScreens() {
   useComposerDraftsSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
   useCrashReports();
-  useOfflineNotice();
+  // Note that the account's clear runs before the offline notice is said, since effects run in order and a clear after it would take a launch's offline notice away.
   useNoticeForAccount();
+  useOfflineNotice();
   useShareSheet(updateNeeded);
   useHostConnectLink(signedIn && !updateNeeded);
   const app = signedIn && !updateNeeded;
