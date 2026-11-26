@@ -36,6 +36,7 @@ import {
   CHANNEL_SEAT,
   type ChannelFaces,
   ChannelMessage,
+  NewRule,
   SenderPress,
   ThreadReplies,
   ThreadRule,
@@ -78,6 +79,7 @@ import {
   type CallStanding,
   type ChatSender,
   type OriginPart,
+  RULE_LOOK,
   type SaidFile,
   type SaidPicture,
   SHOWN_MEDIA,
@@ -1230,7 +1232,11 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.RULE:
       return (
         <View style={[styles.row, { paddingVertical: SPACE.ROW }]}>
-          <ThreadRule words={item.words} />
+          {item.look === RULE_LOOK.NEW ? (
+            <NewRule words={item.words} />
+          ) : (
+            <ThreadRule words={item.words} />
+          )}
         </View>
       );
     case TRANSCRIPT_ITEM.WORDS:

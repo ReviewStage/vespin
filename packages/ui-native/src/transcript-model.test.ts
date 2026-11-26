@@ -983,6 +983,38 @@ describe("managerChatItems", () => {
     });
   });
 
+  it("stands New over the first message after the reader's mark, skipping their own unless they marked the chat unread", () => {
+    // Note that the chat's rows stand newest first, as the slice holds them.
+    const rows = [
+      row("m2", 4, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, text: "Shipped." }),
+      row("a1", 3, { authorKind: MANAGER_CHAT_AUTHOR.PERSON, authorUserId: "u1", text: "Go." }),
+      row("m1", 2, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, text: "Ready?" }),
+    ];
+
+    const view = managerChatView(rows, [], { running: undefined });
+
+    /** The chat's items as words, a rule as its kind and words, read with New after the mark, over the reader's own or not. */
+    const drawn = (newOverOwn: boolean) =>
+      managerChatItems(view, [], {
+        writing: false,
+        readerId: "u1",
+        toggles: NO_TOGGLES,
+        now: 5 * minute,
+        pullRequests: [],
+        newAfter: 2.5 * minute,
+        newOverOwn,
+      }).map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? item.words
+          : [item.kind, "words" in item && item.words],
+      );
+
+    expect([drawn(false), drawn(true)]).toEqual([
+      ["Ready?", "Go.", [TRANSCRIPT_ITEM.RULE, "New"], "Shipped."],
+      ["Ready?", [TRANSCRIPT_ITEM.RULE, "New"], "Go.", "Shipped."],
+    ]);
+  });
+
   it("stands a thread's replies on its own page, the channel summing them under the message they answer: the root alone, a rule counting them, the replies, and the reader's reply on its way", () => {
     const rows = [
       row("r2", 4, {

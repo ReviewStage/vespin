@@ -879,7 +879,7 @@ const AgentConversation = memo(function AgentConversation({
 
   // Note that a Manager's page is its chat, never its transcript, as the panel draws it: the chat's own rows (`managerChat`), its transcript read only for the work each turn did.
   const chat = shown?.kind === AGENT_KIND.MANAGER;
-  useManagerChatLooks(shown);
+  const chatMark = useManagerChatLooks(shown);
   const chatFaces = useChatFaces(chat ? shown : undefined, readerId);
   const chatHeld = useManagerChat(id, chat);
   const chatPage = chatHeld?.rows;
@@ -926,6 +926,8 @@ const AgentConversation = memo(function AgentConversation({
             sending: chatPage.sending,
             managerName: chatFaces?.managerName,
             readerName: chatFaces?.readerName,
+            newAfter: chatMark.newAfter,
+            newOverOwn: chatMark.newOverOwn,
             // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
             greeting:
               shown !== undefined && chatPage.before === undefined
@@ -946,6 +948,8 @@ const AgentConversation = memo(function AgentConversation({
       waitingCalls,
       shown,
       chatFaces,
+      chatMark.newAfter,
+      chatMark.newOverOwn,
     ],
   );
 
@@ -1217,6 +1221,7 @@ const AgentConversation = memo(function AgentConversation({
     composer,
     calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
     chatMessages,
+    markUnread: chatMark.markUnread,
   });
 
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;

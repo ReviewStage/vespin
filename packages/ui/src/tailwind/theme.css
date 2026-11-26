@@ -1174,6 +1174,8 @@
   --spacing-description-unit-row: calc(var(--description-unit-row-room) + var(--ui-space-6));
   --spacing-description-changed-note: 22px; /* off-scale: the line's room, which its button overhangs */
   --color-description-changed: color-mix(in srgb, var(--accent) 9%, transparent);
+  /* A channel message whose thread stands open (`channel-message.tsx`): a still wash of the app's accent, as the changed section's. */
+  --color-message-open: color-mix(in srgb, var(--ui-color-accent) 14%, transparent);
   /* A transcript (`ai-elements/`): its column's inset; a reply's reading
      leading; a bubble, the developer's and a received one alike, at most
      enough short of the column that the two sides stand apart, at a large

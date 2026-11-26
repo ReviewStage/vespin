@@ -1431,16 +1431,19 @@ export class HostedAgentClient {
     );
   }
 
-  /** Moves the account's own read mark of a Manager's chat, under the idempotency key given where one is, answering the agent as it then stands. */
+  /** Moves the account's own read mark of a Manager's chat, back to just before the message `unreadFrom` names where it names one, under the idempotency key given where one is, answering the agent as it then stands. */
   markRead(
     agentId: string,
     readMark: ReadMark,
     key?: string,
+    unreadFrom?: string,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    const body = unreadFrom === undefined ? { readMark } : { readMark, unreadFrom };
+
     return Effect.map(
       hostedCall(
         this.#hosted.agents.change,
-        { params: { id: agentId }, body: { readMark } },
+        { params: { id: agentId }, body },
         { as: AGENT_NOT_FOUND_RENAMES, ...keyed(key) },
       ),
       rowWritten,

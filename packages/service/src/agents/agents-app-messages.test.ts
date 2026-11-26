@@ -28,7 +28,7 @@ import { sentLineStands } from "@repo/database/models/message-reads";
 import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import { writePage } from "@repo/database/models/task-pages";
 import { createTask, readTask } from "@repo/database/models/task-store";
-import { agentPin } from "@repo/database/schemas";
+import { agentPin, agentRead } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
@@ -2076,6 +2076,75 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           ),
         );
         assert.equal(agentSessions.sent.length, 1);
+      }),
+  );
+
+  it.effect(
+    "Mark unread from a person's message the Manager has not answered, the sender's own last line and a teammate's alike, marks each asker's chat unread by hand just before it, until their own next open; one naming no message of the chat is not found",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, agent, ask, task } = yield* messagedAgent(fakeAgentSessions(), {
+          running: false,
+        });
+
+        yield* joinWorkspace(task.workspaceId, other);
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const body = { text: "Ship the invites.", clientKey: randomUUID() };
+
+        const sent = readAnswer(
+          agentChatSendAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(request(AGENT_CHAT_MESSAGES, owner, { method: "POST", id: agent.id, body })),
+        );
+
+        const marked = (userId: string, mark: { readMark: string; unreadFrom?: string }) =>
+          ask(request(AGENT, userId, { method: "PATCH", id: agent.id, body: mark }));
+
+        const unread = (userId: string, unreadFrom: string) =>
+          marked(userId, { readMark: READ_MARK.UNREAD, unreadFrom });
+
+        const marks = Effect.map(
+          db
+            .select({
+              userId: agentRead.userId,
+              readThrough: agentRead.readThrough,
+              markedUnread: agentRead.markedUnread,
+            })
+            .from(agentRead)
+            .where(eq(agentRead.agentId, agent.id)),
+          (rows) =>
+            new Map(rows.map((row) => [row.userId, [row.readThrough.getTime(), row.markedUnread]])),
+        );
+
+        const stored = Option.getOrThrow(
+          yield* readManagerChatMessage(owner, agent.id, sent.messageId),
+        );
+
+        const before = stored.createdAt.getTime() - 1;
+
+        // The owner marks their own last line unread, and their teammate the same line, a teammate's the Manager has not answered.
+        assert.equal((yield* unread(owner, sent.messageId)).status, HOSTED_HTTP_STATUS.OK);
+        assert.equal((yield* unread(other, sent.messageId)).status, HOSTED_HTTP_STATUS.OK);
+        const asked = yield* marks;
+        // Leaving the chat leaves the mark by hand standing; only the owner's own next open takes theirs back.
+        yield* marked(other, { readMark: READ_MARK.SEEN });
+        yield* marked(owner, { readMark: READ_MARK.READ });
+        const after = yield* marks;
+
+        assert.deepEqual(
+          [asked.get(owner), asked.get(other), after.get(owner)?.[1], after.get(other)?.[1]],
+          [[before, true], [before, true], false, true],
+        );
+        assert.deepEqual(
+          yield* unread(owner, "no-such-message"),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+        );
       }),
   );
 

@@ -73,7 +73,7 @@ import type { ModelsAnswer } from "@repo/features/models-wire";
 import { REPOSITORY_PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
 import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
 import type { RepositoryPullRequestPartParams } from "@repo/features/pull-request-view";
-import { markedAs } from "@repo/features/read-mark";
+import { markedAs, unreadThroughOf } from "@repo/features/read-mark";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
@@ -1048,12 +1048,19 @@ function composed(
     { name: AGENT_QUEUED_WRITE.PIN, input: agentPinParamsSchema },
   );
 
-  /** A look at a Manager's chat, drawn on the reader's mark of its row at once, never moved back, and kept once the list carries the service's instant. */
+  /**
+   * A look at a Manager's chat, drawn on the reader's mark of its row at
+   * once, never moved back, or Mark unread from one of its messages, drawn
+   * just before it; each kept once the list carries the service's instant.
+   */
   const markedRead = agentWrite<AgentMarkReadParams>(
-    ({ readMark }) =>
+    ({ readMark, unreadFrom }) =>
       (row) =>
-        markedAs(readMark, row, kernel.now()),
-    ({ agentId, readMark }, key) => asked(client.markRead(agentId, readMark, key)),
+        unreadFrom === undefined
+          ? markedAs(readMark, row, kernel.now())
+          : { readThrough: unreadThroughOf(unreadFrom.sentAt), markedUnread: true },
+    ({ agentId, readMark, unreadFrom }, key) =>
+      asked(client.markRead(agentId, readMark, key, unreadFrom?.messageId)),
   );
 
   /**

@@ -17,13 +17,15 @@
  * (`ThreadReplies`): the faces of who answered and how many replies, in the
  * accent's ink, which opens the thread. The thread stands in a tab of the
  * side panel beside the channel: the message it answers, then the replies
- * under a rule that counts them (`ThreadRule`).
+ * under a rule that counts them (`ThreadRule`). The first message after
+ * the reader's mark of the channel stands under a rule in the accent's ink
+ * that says New (`NewMessagesRule`), as a channel's New line does.
  *
  * It is drawn in the Tailwind theme's utilities.
  */
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
-import { CHAT_EDIT_WORDS, repliesWords } from "@repo/features/manager-chat-view";
+import { CHAT_EDIT_WORDS, CHAT_NEW_WORDS, repliesWords } from "@repo/features/manager-chat-view";
 import type { ReactNode } from "react";
 import { ReplayUnmask } from "../../session-replay-marks.js";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
@@ -44,6 +46,7 @@ export function ChannelMessage({
   name,
   at,
   continues = false,
+  open = false,
   actions,
   contextMenu,
   under,
@@ -57,6 +60,8 @@ export function ChannelMessage({
   at?: ReactNode;
   /** Whether it goes on its sender's run, drawn with no picture, name, or time. */
   continues?: boolean | undefined;
+  /** Whether its thread stands open beside the channel, which holds the row in a steady tint. */
+  open?: boolean | undefined;
   actions?: ReactNode;
   /** The menu a right-click or a long press on it opens; none where it has none. */
   contextMenu?: ContextMenuProps | undefined;
@@ -70,8 +75,9 @@ export function ChannelMessage({
   return (
     <MessageFrame
       revealActionsOnTap
-      className={`ui-channel-message relative flex w-full min-w-0 gap-ui-8 rounded-ui-6 px-ui-8 hover:bg-muted ${continues ? "py-ui-2" : "pt-ui-6 pb-ui-2"}`}
+      className={`ui-channel-message relative flex w-full min-w-0 gap-ui-8 rounded-ui-6 px-ui-8 hover:bg-muted data-[open]:bg-message-open data-[open]:hover:bg-message-open ${continues ? "py-ui-2" : "pt-ui-6 pb-ui-2"}`}
       data-continues={continues ? "" : undefined}
+      data-open={open ? "" : undefined}
       data-message-id={messageId}
     >
       <span className="ui-channel-message-avatar inline-flex w-channel-avatar flex-none items-start justify-center">
@@ -157,6 +163,16 @@ export function ThreadRule({ count }: { count: number }): React.JSX.Element | nu
     <div className="ui-thread-rule flex items-center gap-ui-8 px-ui-8 py-ui-6 text-caption text-muted-foreground">
       <span className="flex-none">{repliesWords(count)}</span>
       <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+/** The rule over the first message after the reader's mark of the channel, in the accent's ink, saying New at its end. */
+export function NewMessagesRule(): React.JSX.Element {
+  return (
+    <div className="ui-new-messages-rule flex items-center gap-ui-8 px-ui-8 pb-ui-6 text-caption font-ui-semibold text-accent-ink">
+      <span className="h-px flex-1 bg-accent-ink" />
+      <span className="flex-none">{CHAT_NEW_WORDS}</span>
     </div>
   );
 }
