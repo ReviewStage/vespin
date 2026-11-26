@@ -1,0 +1,22 @@
+pinned to bdcada4a73
+== bundle PJjsend4a base bdcada4a73
+  built bdcada4a73 base app Vsend6cae.app (6cae4d2b64 (vjnatsend's native build of main + #10993))
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-manager-send-once-after: fails 0 shots 1 
+  step 3 assertConditionCommand {"condition": {"visible": {"textRegex": "Left before it ships.*", "optional": false}}, "ti COMPLETED at 1795653671143 took 5997 ms
+  step 4 assertConditionCommand {"condition": {"visible": {"idRegex": "composer-field", "optional": false}}, "timeout": "6 COMPLETED at 1795653677141 took 218 ms
+  step 5 tapOnElement {"selector": {"idRegex": "composer-field", "optional": false}, "retryIfNoChange": false, " COMPLETED at 1795653677361 took 1486 ms
+  step 6 runFlowCommand {"commands": [{"tapOnElement": {"selector": {"textRegex": "Continue", "optional": false},  SKIPPED at 1795653678849 took 7342 ms
+  step 7 assertConditionCommand {"condition": {"visible": {"textRegex": "space", "optional": false}}, "label": "RIG: the s COMPLETED at 1795653686192 took 222 ms
+  step 8 inputTextCommand {"text": "What abo", "optional": false} COMPLETED at 1795653686415 took 1537 ms
+  step 9 assertConditionCommand {"condition": {"visible": {"textRegex": "Send", "enabled": true, "optional": false}}, "tim COMPLETED at 1795653687954 took 18914 ms
+  step 10 inputTextCommand {"text": "ut the release", "optional": false} COMPLETED at 1795653706870 took 1745 ms
+  step 11 tapOnElement {"selector": {"textRegex": "Send", "optional": false}, "retryIfNoChange": false, "waitUnti COMPLETED at 1795653708616 took 1746 ms
+  step 12 tapOnElement {"selector": {"textRegex": "Send", "optional": false}, "retryIfNoChange": false, "waitUnti COMPLETED at 1795653710363 took 1978 ms
+  step 13 assertConditionCommand {"condition": {"notVisible": {"textRegex": "Send", "optional": false}}, "timeout": "180000 COMPLETED at 1795653712342 took 35322 ms
+  step 14 assertConditionCommand {"condition": {"visible": {"textRegex": "What about the release", "optional": false}}, "op COMPLETED at 1795653747666 took 258 ms
+  step 15 assertConditionCommand {"condition": {"notVisible": {"textRegex": "What about the release", "index": "1", "option COMPLETED at 1795653747927 took 1169 ms
+  step 16 assertConditionCommand {"condition": {"notVisible": {"textRegex": "(?!What about the release$).*(What abo|ut the  COMPLETED at 1795653749097 took 1317 ms
