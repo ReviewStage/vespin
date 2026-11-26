@@ -343,7 +343,7 @@ function followInteractionsWithLongFrames(
  * longest split between script and render, and the script that ran longest,
  * by its invoker, function name, and bundle path.
  *
- * The window profiles while it is in use (`profileWhileInUse`,
+ * About one window in ten profiles while it is in use (`profileWhileInUse`,
  * `SENTRY_PROFILING`): from its start and from each click, key, or scroll,
  * until it has gone ten seconds without one, so every span it times then,
  * and every interaction's, names the profile its stacks are in. Main's SDK
