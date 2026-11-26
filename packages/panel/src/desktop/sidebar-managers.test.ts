@@ -43,7 +43,8 @@ import {
  * Managers of the live task list's agents, listed under their head where
  * the workspace has the experiment on, each opening its page, and no head
  * at all where it is off; its View options' sort; a Manager's row's Change
- * face ›, which changes its face, and Settings…, which renames it and
+ * face, which opens its name's field with the face's picker and changes its
+ * face, and Settings…, which renames it and
  * changes its model; and
  * New Manager, whose edited retry is a request of its own. Synthetic
  * throughout.
@@ -305,9 +306,10 @@ test("Managers folded leaves the open Manager's row standing and folds the rest 
   assert.deepEqual(named(), ["Frontend Manager"], "the open Manager stays");
 });
 
-test("a Manager's row offers Rename and Change face › beside Settings…, and a face picked there is changed and puts the menu away", async () => {
+test("a Manager's row's Change face opens its name's field with the face's picker open, a face picked there is changed and hands the focus back to the name, and Escape ends the edit", async () => {
   const faced: { agentId: string; face: ManagerFace }[] = [];
-  const sidebar = await mountSidebar(true, [], undefined, [], [], [], faced);
+  const renamed: AgentRenameAsk[] = [];
+  const sidebar = await mountSidebar(true, [], undefined, [], renamed, [], faced);
   const list = sidebar.querySelector('nav[aria-label="Managers"]');
 
   const row =
@@ -333,44 +335,39 @@ test("a Manager's row offers Rename and Change face › beside Settings…, and 
   const change = items().find((item) => item.textContent?.startsWith("Change face"));
 
   assert.ok(change, "Change face stands");
-  act(() => change.click());
+  await act(async () => change.click());
+
+  const field = () => list?.querySelector<HTMLInputElement>('input[aria-label="Agent name"]');
+
+  assert.ok(field(), "the row's name opens as a field");
 
   const cat =
     document.querySelector<HTMLButtonElement>('button[aria-label="Cat"]') ??
-    assert.fail("the picker offers every character");
+    assert.fail("the picker stands open, offering every character");
 
-  await act(async () => cat.click());
-  const colors = () => document.querySelector(".ui-icon-picker-flyout");
-  const gray = colors()?.querySelector<HTMLElement>('[aria-label="Gray"]');
-
-  assert.equal(document.activeElement, gray, "the cat's colors take the focus, the menu standing");
-  // The pointer coming back onto the colors from outside leaves the keyboard on them.
-  await act(async () =>
-    gray?.dispatchEvent(
-      new MouseEvent("pointerover", { bubbles: true, relatedTarget: document.body }),
-    ),
-  );
-  assert.equal(
-    document.activeElement,
-    gray,
-    "the pointer coming back leaves the focus on the colors",
-  );
-  await act(async () =>
-    gray?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
-  );
-  assert.equal(colors(), null, "Escape puts the colors away");
-  assert.equal(document.activeElement, cat, "and the menu stands, the focus back on the cat");
   await act(async () => cat.click());
 
   const purple =
     document.querySelector<HTMLButtonElement>('.ui-icon-picker-flyout [aria-label="Purple"]') ??
     assert.fail("the cat asks its colors");
 
+  assert.ok(field(), "the colors taking the focus end no edit");
   await act(async () => purple.click());
   await vi.waitFor(() =>
     assert.deepEqual(faced, [{ agentId: FRONTEND, face: { character: "cat", color: "purple" } }]),
   );
-  await vi.waitFor(() => assert.equal(items().length, 0, "the menu is put away"));
+  await vi.waitFor(() => assert.equal(document.activeElement, field(), "the name takes the focus"));
+  assert.equal(document.querySelector('button[aria-label="Cat"]'), null, "the picker is put away");
+
+  const name = field() ?? assert.fail("the edit stands");
+
+  await act(async () =>
+    name.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    ),
+  );
+  assert.equal(field(), null, "Escape ends the edit");
+  assert.deepEqual(renamed, [], "and renames nothing");
 });
 
 test("a Manager's row's Settings… opens its settings, whose name renames it in place and whose model chip changes its model as picked", async () => {
