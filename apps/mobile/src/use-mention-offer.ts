@@ -22,6 +22,7 @@ import { automationTriggerText } from "@repo/features/automation-list-model";
 import { readerZone } from "@repo/features/date-mention";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { entityOfDestination } from "@repo/features/entity-kind";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import { inboxLineKind } from "@repo/features/inbox-list-model";
 import {
   LINK_DESTINATION,
@@ -382,7 +383,7 @@ export function useMentionOffer(
         const target = linkOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id }, step);
 
         // Note that a thread wears what its last line asks, as its Inbox row does, and a plain message keeps the thread's glyph.
-        const look = INBOX_LINE_LOOK[inboxLineKind(item)];
+        const look = INBOX_LINE_LOOK[inboxLineKind(inboxRowOf(item))];
 
         if (look !== undefined) {
           marks.set(target, { kind: CHIP_MARK.GLYPH, glyph: look.symbol, tone: look.tone });

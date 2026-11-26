@@ -17,6 +17,7 @@ import { descriptionSections } from "@repo/features/description-sections";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND, type EntityKind, entityOfMention } from "@repo/features/entity-kind";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
@@ -1593,7 +1594,7 @@ function RowGlyph({ row, workspace }: { row: MentionRow; workspace: string }): R
 
   if ("picksDate" in row) return <EntityGlyph kind={ENTITY_KIND.DATE} />;
 
-  if ("thread" in row) return inboxItemGlyph(row.item);
+  if ("thread" in row) return inboxItemGlyph(inboxRowOf(row.item));
 
   if ("automation" in row) {
     return <ActorMark actor={automationActor(row.automation)} size={ACTOR_SIZE.INLINE} />;

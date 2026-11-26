@@ -9,7 +9,11 @@
  * stands to open, so no line stands either.
  */
 
-import { type AgentThreadsLine, agentThreadsLine } from "@repo/features/inbox-list-model";
+import {
+  type AgentThreadsLine,
+  agentThreadsLine,
+  inboxRowGroups,
+} from "@repo/features/inbox-list-model";
 import { selectInboxReader } from "@repo/host/app-state-reads";
 import { INBOX_REACH, type InboxReach } from "@repo/host/inbox-rows";
 import { useMinute } from "@repo/ui-native";
@@ -34,7 +38,7 @@ export function useAgentThreadsLine(agentId: string): AgentThreadsLine | undefin
     () =>
       shown
         ? agentThreadsLine(
-            groups.flatMap((group) => group.items),
+            inboxRowGroups(groups).flatMap((group) => group.items),
             agentId,
             readerId,
             now,

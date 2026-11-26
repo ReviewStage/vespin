@@ -1,4 +1,4 @@
-import type { InboxItem } from "@repo/features/inbox-wire";
+import type { InboxFields } from "@repo/features/inbox-digest";
 import type { RefObject } from "react";
 import { useSteadyDoor } from "../steady-door.js";
 import type { InboxResolver } from "./inbox-close.js";
@@ -30,14 +30,14 @@ interface InboxRowDoors {
   readonly onMark: InboxListMark | undefined;
   readonly onResolve: InboxResolver | undefined;
   readonly onRemind: InboxReminder | undefined;
-  readonly onPickRemind: ((item: InboxItem) => void) | undefined;
+  readonly onPickRemind: ((item: InboxFields) => void) | undefined;
 }
 
 /** The rows' acts: what each row is handed, the date picker opened on an item, and the picker, drawn while it stands. */
 interface InboxRowActs {
   readonly row: InboxRowDoors;
   /** Opens the date picker on the item's row, setting its reminder unless `onAt` takes the time picked. */
-  readonly onPick: (item: InboxItem, onAt?: (at: number) => void) => void;
+  readonly onPick: (item: InboxFields, onAt?: (at: number) => void) => void;
   readonly layers: React.ReactNode;
 }
 
@@ -56,7 +56,7 @@ export function useInboxRowActs({
   doors: InboxListDoors;
   room: RefObject<HTMLElement | null>;
   rowOf: (itemId: string) => HTMLElement | undefined;
-  chosen: InboxItem | undefined;
+  chosen: InboxFields | undefined;
   shown: boolean;
 }): InboxRowActs {
   const { onMark, onResolve, onRemind } = doors;

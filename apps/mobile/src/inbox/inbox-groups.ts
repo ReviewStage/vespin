@@ -17,7 +17,12 @@
  * reads them there as before.
  */
 
-import type { InboxAnyHolder, InboxGroup } from "@repo/features/inbox-list-model";
+import {
+  type InboxAnyHolder,
+  type InboxGroup,
+  inboxRowGroups,
+} from "@repo/features/inbox-list-model";
+import type { InboxItem } from "@repo/features/inbox-wire";
 import { inboxGroupsIn, selectInboxHoldings } from "@repo/host/app-state-reads";
 import { INBOX_ATTENTION, type InboxReach, inboxHoldingsOfRows } from "@repo/host/inbox-rows";
 import { useQuery } from "@tanstack/react-query";
@@ -28,7 +33,7 @@ import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 import { useInboxRows } from "./inbox-rows.js";
 
 /** No holder grouped: what a read before the document lands answers. */
-const NO_GROUPS: readonly InboxGroup<InboxAnyHolder>[] = [];
+const NO_GROUPS: readonly InboxGroup<InboxAnyHolder, InboxItem>[] = [];
 
 /** No task holds items: what a read before the document lands names. */
 const NO_HOLDERS: readonly string[] = [];
@@ -40,12 +45,14 @@ const NO_HOLDERS: readonly string[] = [];
  * what Open, Questions, and Reminders can list unless it says otherwise;
  * every workspace's where none is named, and none before the document lands
  * or the kept items are read. Grouped again only as the feed, what holds
- * items, or a task holding items moves.
+ * items, or a task holding items moves. Each group holds its whole items,
+ * which a screen reads as the list's rows (`inboxRowGroups`) once it has
+ * drawn the reader's sends on them (`useSendsDrawn`).
  */
 export function useInboxGroupsIn(
   workspaceId: string | undefined,
   reach: InboxReach = INBOX_ATTENTION,
-): readonly InboxGroup<InboxAnyHolder>[] {
+): readonly InboxGroup<InboxAnyHolder, InboxItem>[] {
   const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
   const rows = useInboxRows(told?.stored === true ? reach : undefined);
 
@@ -84,4 +91,14 @@ export function useInboxGroupsIn(
         : inboxGroupsIn(holdings, listed, workspaceId, listedAgents),
     [holdings, listed, workspaceId, listedAgents],
   );
+}
+
+/** The same holders (`useInboxGroupsIn`) as the list reads them, each item as its row (`inboxRowGroups`), for a screen that draws no send of the reader's on them. */
+export function useInboxRowGroupsIn(
+  workspaceId: string | undefined,
+  reach: InboxReach = INBOX_ATTENTION,
+): readonly InboxGroup<InboxAnyHolder>[] {
+  const groups = useInboxGroupsIn(workspaceId, reach);
+
+  return useMemo(() => inboxRowGroups(groups), [groups]);
 }
