@@ -9,7 +9,6 @@ import {
   Overlay,
   Section,
   Spacer,
-  Text,
   ZStack,
 } from "@expo/ui/swift-ui";
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
@@ -75,6 +74,7 @@ import {
   RowSelectedContext,
 } from "./row-open.js";
 import { sectionInk } from "./section-ink.js";
+import { Text } from "./text.js";
 import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

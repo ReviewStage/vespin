@@ -10,7 +10,6 @@ import {
   Spacer,
   Button as SwiftUIButton,
   SwipeActions,
-  Text,
   Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
@@ -57,6 +56,7 @@ import { actionButton, LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./
 import { Avatar, FailedMark, HarnessMark, RepositoryPicture, WorkingMark } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { CHOICE_MARK, type ChoiceMark, markLook } from "./row-menu-model.js";
+import { Text } from "./text.js";
 import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { SYSTEM_COLOR, useSystemColors } from "./tokens/swipe-colors.js";

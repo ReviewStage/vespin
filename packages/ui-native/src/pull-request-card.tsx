@@ -1,6 +1,6 @@
 // pull-request-card.tsx -- a pull request as a transcript or a thread draws it: a compact bordered card of its state's glyph, its title, and its line counts, which opens its page, with its acts as regular bordered buttons under it.
 
-import { Button, HStack, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Spacer, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   background,
@@ -17,6 +17,7 @@ import { Button as Act, BUTTON_LOOK, BUTTON_SIZE } from "./button.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { type LongPressGroup, LongPressMenu } from "./list-row.js";
 import { ToneGlyph } from "./marks.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

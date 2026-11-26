@@ -1,6 +1,6 @@
 // choice-list.tsx -- a decide ask's options as a compact bordered card: one row each, checked at its end in copper once picked, as iOS's Settings checks a choice, the recommended one tagged, a detail line under its label, and the media it carries under it.
 
-import { Button, HStack, RNHostView, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, RNHostView, Spacer, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
@@ -21,6 +21,7 @@ import { useAccessibilitySize } from "./accessibility.js";
 import { CARD_WORDS_INSET, CardDivider } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { PickedCheck } from "./settings-form.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

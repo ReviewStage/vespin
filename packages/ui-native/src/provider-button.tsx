@@ -1,6 +1,6 @@
 // provider-button.tsx -- a way to sign in through a provider: the system's bordered capsule across its column, the provider's mark beside its words, as the web's sign-in buttons carry it.
 
-import { HStack, Image, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
+import { HStack, Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
@@ -13,6 +13,7 @@ import {
   resizable,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
