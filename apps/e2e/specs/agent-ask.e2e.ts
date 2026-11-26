@@ -43,6 +43,8 @@ test("a member answers the agent's ask on its page and the agent's next turn tak
     .getByRole("listitem")
     .filter({ hasText: "I need one decision before I go on." });
 
+  // Note that each wait below covers one hop, never the chain: on CI the Start, the agent's boot, and the poll that delivers its words took longer than one 5s `expect`, so the fold was waited on from the turn's words, which stand in the transcript first.
+  await expect(asking).toBeVisible();
   await expect(asking.getByText(/^Worked for /)).toBeVisible();
   await expect(asking.getByRole("group").filter({ hasText: QUESTION })).toBeVisible();
 
@@ -64,5 +66,6 @@ test("a member answers the agent's ask on its page and the agent's next turn tak
     .getByRole("listitem")
     .filter({ hasText: "Thanks for the answer. I will go on with it." });
 
+  await expect(heard).toBeVisible();
   await expect(heard.getByText(/^Worked for /)).toBeVisible();
 });
