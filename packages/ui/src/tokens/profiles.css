@@ -78,11 +78,11 @@
      section's gaps: how tall a row stands, the size of its words, the room
      between two rows and between the places at its top, and the room over
      each group. */
-  --ui-sidebar-row-height: var(--ui-control-height);
-  --ui-sidebar-text-size: var(--ui-type-body-size);
-  --ui-sidebar-row-gap: var(--ui-list-gap);
-  --ui-sidebar-places-gap: var(--ui-list-gap);
-  --ui-sidebar-group-gap: var(--ui-section-gap);
+  --ui-sidebar-row-height: 32px;
+  --ui-sidebar-text-size: 14px;
+  --ui-sidebar-row-gap: var(--ui-space-6);
+  --ui-sidebar-places-gap: var(--ui-space-4);
+  --ui-sidebar-group-gap: var(--ui-space-24);
   /* A task list's row: the room it keeps over and under a control's height. */
   --ui-task-row-block: var(--ui-space-6);
   /* How many lines an agent's empty box stands, before it grows with its words. */
@@ -657,5 +657,12 @@
 
     /* A compact menu's rows are its controls' height, as the site's are. */
     --ui-menu-row-height: 32px;
+
+    /* The sidebar's rows, as the window's stand them. */
+    --ui-sidebar-row-height: 32px;
+    --ui-sidebar-text-size: 14px;
+    --ui-sidebar-row-gap: var(--ui-space-6);
+    --ui-sidebar-places-gap: var(--ui-space-4);
+    --ui-sidebar-group-gap: var(--ui-space-24);
   }
 }
