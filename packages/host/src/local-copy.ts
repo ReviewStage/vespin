@@ -53,6 +53,7 @@ import type { LocalOutbox, LocalQueueReadFailed, LocalRefused } from "./local-qu
 const LOCAL_DATABASE_REPORT = {
   OPEN_FAILED: "host.localDatabase.openFailed",
   COLLECTIONS_FAILED: "host.localDatabase.collectionsFailed",
+  RETIRE_FAILED: "host.localDatabase.retireFailed",
   OUTBOX_UNREAD: "host.localDatabase.outboxUnread",
   REFUSED_UNREAD: "host.localDatabase.refusedUnread",
   FORGET_FAILED: "host.localDatabase.forgetFailed",
@@ -228,6 +229,16 @@ export const localCopy = Effect.fn("host/localCopy")(function* (backend: LocalSt
       if (Result.isFailure(kept))
         yield* reported(LOCAL_DATABASE_REPORT.COLLECTIONS_FAILED, kept.failure);
       const keep = Result.isSuccess(kept) ? kept.success : undefined;
+
+      // Note that the retired kinds' collections are dropped beside the open rather than before it, so a launch's reads never wait on them.
+      if (keep !== undefined) {
+        yield* Effect.forkIn(
+          keep.retired.pipe(
+            Effect.catch((failure) => reported(LOCAL_DATABASE_REPORT.RETIRE_FAILED, failure)),
+          ),
+          scope,
+        );
+      }
 
       opened = {
         rows,

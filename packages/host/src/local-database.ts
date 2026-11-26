@@ -174,7 +174,36 @@ export interface LocalDatabaseConnection {
 export interface KeptCollectionsDatabase {
   readonly keep: (stored: StoredKind) => KeepCollection;
   readonly close: () => Promise<void>;
+  /** The persistence's cache generations, by which a retired kind's collection is dropped (`retiredCollectionsDropped`); none where it keeps none. */
+  readonly generations?: CacheGenerations | undefined;
 }
+
+/**
+ * What TanStack's SQLite persistence answers of its collections' cache
+ * generations (its `PersistenceAdapter`): a claim on a collection's
+ * current generation, its rotation to a new empty one, which retires the
+ * one claimed, and a claim's release, after which the persistence drops
+ * every retired generation no claim holds, its tables and its registry
+ * rows alike, as it does on any claim.
+ */
+export interface CacheGenerations {
+  readonly claimCacheGeneration?: (collectionId: string) => Promise<{ readonly claimId: string }>;
+  readonly rotateCacheGeneration?: (
+    collectionId: string,
+    claimId: string,
+  ) => Promise<{ readonly claimId: string }>;
+  readonly releaseCacheGenerationClaim?: (claimId: string) => Promise<void>;
+}
+
+/**
+ * The names stored kinds were kept under that no build reads now, whose
+ * collections are dropped as the account's collections open: `inboxItem`,
+ * the Inbox's whole items the iPhone kept until its threads were kept lean
+ * beside their messages (`INBOX_THREAD`, `INBOX_MESSAGE`). Note that a name
+ * is never reused once listed here, since a kind kept under it would be
+ * dropped at each open.
+ */
+const RETIRED_STORED = ["inboxItem"] as const;
 
 /** The platform's SQLite: opens the database at `file`, creating it where it stands not, or throws. */
 export interface LocalDatabaseDriverSeam {
@@ -201,6 +230,8 @@ export type { KeptWordsDatabase } from "./kept-words.js";
 export interface KeptCollections {
   readonly keep: KeptCollectionsDatabase["keep"];
   readonly words: KeptWords;
+  /** Drops the collections of every retired kind (`RETIRED_STORED`); nothing where the persistence keeps no generations. */
+  readonly retired: Effect.Effect<void, LocalDatabaseFailed>;
 }
 
 /** The SQLite driver the platform's launch provides; a host given none keeps no local database. */
@@ -337,6 +368,43 @@ export const openLocalDatabase = Effect.fn("host/openLocalDatabase")(function* (
 });
 
 /**
+ * Drops the collection of each retired kind (`RETIRED_STORED`) from the
+ * account's collections through the persistence's own cache generations:
+ * claimed, rotated to a new empty generation, which retires the one that
+ * held its rows, and released, at which the persistence drops what it
+ * retired. Note that a generation another launch's claim still holds is
+ * dropped once that claim expires, at a later open, and a name with
+ * nothing kept is claimed and rotated all the same, a few small writes,
+ * since the persistence answers no question of what it keeps.
+ */
+function retiredCollectionsDropped(
+  generations: CacheGenerations | undefined,
+  accountId: string,
+): Effect.Effect<void, LocalDatabaseFailed> {
+  // Note that each is called on the persistence itself, whose methods read their own state.
+  if (
+    generations?.claimCacheGeneration === undefined ||
+    generations.rotateCacheGeneration === undefined ||
+    generations.releaseCacheGenerationClaim === undefined
+  )
+    return Effect.void;
+
+  return Effect.tryPromise({
+    try: async () => {
+      for (const name of RETIRED_STORED) {
+        const claim = await generations.claimCacheGeneration?.(name);
+
+        if (claim === undefined) continue;
+        const rotated = await generations.rotateCacheGeneration?.(name, claim.claimId);
+
+        if (rotated !== undefined) await generations.releaseCacheGenerationClaim?.(rotated.claimId);
+      }
+    },
+    catch: (cause) => new LocalDatabaseFailed({ accountId, cause }),
+  });
+}
+
+/**
  * Opens `accountId`'s database of collections kept on disk whole under
  * `stateRoot`, and the words its kept messages say beside it, for as long
  * as the caller's scope stands, closing both as the scope closes, each file
@@ -380,11 +448,13 @@ export const openKeptCollections = Effect.fn("host/openKeptCollections")(functio
     (database) => Effect.promise(() => database.close()),
   );
 
-  if (words === undefined) return { keep: opened.keep, words: keptWordsInMemory() };
+  const retired = retiredCollectionsDropped(opened.generations, accountId);
+
+  if (words === undefined) return { keep: opened.keep, words: keptWordsInMemory(), retired };
   // Note that a words file that cannot be placed costs the launch its search over messages alone, never the collections opened beside it.
   const wordsFile = yield* placedFile(WORDS_FILE).pipe(Effect.option);
 
-  if (Option.isNone(wordsFile)) return { keep: opened.keep, words: keptWordsInMemory() };
+  if (Option.isNone(wordsFile)) return { keep: opened.keep, words: keptWordsInMemory(), retired };
 
   // Note that the words' database opens beside the launch rather than before it, since no first read waits on a search, so the kept Inbox is told as soon as the collections are.
   const wordsDatabase = words(wordsFile.value);
@@ -402,7 +472,7 @@ export const openKeptCollections = Effect.fn("host/openKeptCollections")(functio
 
   const keptWords = wordsDatabase.then(keptWordsIn);
 
-  return { keep: opened.keep, words: keptWordsOnceOpen(keptWords) };
+  return { keep: opened.keep, words: keptWordsOnceOpen(keptWords), retired };
 });
 
 /** Deletes `accountId`'s folder under `stateRoot`, its database and WAL files among it, as a sign-out does; one that stands not is already forgotten. */
