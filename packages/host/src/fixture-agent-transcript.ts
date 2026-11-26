@@ -822,9 +822,10 @@ export function fixtureStreamedManager(
       messages,
       ...(word === undefined ? undefined : { word: { ...word, status: AGENT_STATUS.RUNNING } }),
     },
+    // Note that the rows are laid oldest first and then turned newest first, so a message the turn sends lands at the chat's end, under the exchanges, as a live one does.
     chat: [
-      ...landed.flatMap((call) => call.row),
       ...exchanges.flatMap((exchange) => exchange.rows),
+      ...landed.flatMap((call) => call.row),
     ].toReversed(),
   };
 }
