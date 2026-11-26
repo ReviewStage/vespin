@@ -1,0 +1,32 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane B) - iOS 27.2 - D2E5EAB5-4ACE-4AE7-B7C9-7984D6FD7999
+ > Flow pr-skeleton-stills
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, prProbe=60000,60000,60000})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Open vespin://tasks/pull/workspace-personal/ada/relay/128... COMPLETED
+Tap on (Optional) "Open"... WARNED
+Assert that "Reading pull request" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pr-skeleton-link... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox, prProbe=60000,60000,60000})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Open vespin://tasks/pull/workspace-personal/ada/relay/128?agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5... COMPLETED
+Tap on (Optional) "Open"... COMPLETED
+Assert that "Invite a teammate by email.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pr-skeleton-listed... COMPLETED
+Swipe from (75%, 75%) to (75%, 35%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pr-skeleton-listed-lower... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox, prProbe=60000,60000,0})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Open vespin://tasks/pull/workspace-personal/ada/relay/128?agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5... COMPLETED
+Tap on (Optional) "Open"... COMPLETED
+Assert that "Invite a teammate by email.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pr-skeleton-partial... COMPLETED
+Swipe from (75%, 75%) to (75%, 35%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pr-skeleton-partial-lower... COMPLETED
