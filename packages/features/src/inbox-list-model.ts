@@ -108,7 +108,7 @@ export function knownAsk(ask: InboxReadAsk): ask is InboxKnownAsk {
  * a reply settles it as it reaches the agent.
  */
 export function awaitsNod(row: Pick<InboxRow, "status" | "digest">): boolean {
-  return row.status === INBOX_STATUS.OPEN && row.digest.openAsk === undefined;
+  return row.status === INBOX_STATUS.OPEN && row.digest.openAsks.length === 0;
 }
 
 /** What an option the agent recommends is called: the badge it wears, as a choice's or a form's option or as one of two small buttons, and the word after it on its row. */
@@ -448,7 +448,7 @@ function itemLine(item: InboxRow): ItemLine {
 
   if (held !== undefined) return held;
   const { digest } = item;
-  const asking = digest.openAsk?.ask;
+  const asking = digest.openAsks.at(-1)?.ask;
   const last = digest.tail.at(-1);
 
   // Note that a member's resolve says so in its own word, rather than the agent's last words, which would read as still waiting.

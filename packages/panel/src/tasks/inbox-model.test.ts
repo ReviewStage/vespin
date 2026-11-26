@@ -1593,14 +1593,24 @@ test("a recording an agent posted stands with a comment's pictures, never its ot
 });
 
 // Note that the regression this catches is a row reading only its thread's newest messages (`InboxDigest`'s `tail`) for the ask it says or the ask an answer's stamp counts against.
-test("a row says the open ask and an answer's stamp from an ask asked before its newest messages, as the whole thread says them", () => {
+test("a row keeps every open ask and says the latest, and an answer's stamp counts its ask, each asked before its newest messages, as the whole thread says them", () => {
+  const first = asking(
+    { type: INBOX_ASK.DECIDE, options: [{ label: "Ship" }, { label: "Wait" }] },
+    "b1b2c3d4-0000-4000-8000-000000000000",
+  );
+
   const todo = asking({ type: INBOX_ASK.DO, steps: ["One", "Two", "Three"] });
 
   const notes = [2_000, 3_000, 4_000, 5_000, 5_500, 6_000].map((createdAt) =>
     message({ text: "Still on it", createdAt, author: INBOX_MESSAGE_AUTHOR.AGENT }),
   );
 
-  const asked = item({ id: "long-open", thread: [todo, ...notes] });
+  const asked = item({ id: "long-open", thread: [first, todo, ...notes] });
+  assert.deepEqual(
+    inboxRowOf(asked).digest.openAsks.map(({ id }) => id),
+    [first.id, todo.id],
+    "both asks still open, the oldest first",
+  );
   assert.equal(inboxPreview(inboxRowOf(asked), previewName), "3 steps left · One");
 
   const done = message({

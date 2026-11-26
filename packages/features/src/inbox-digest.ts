@@ -3,8 +3,8 @@
  *
  * The Inbox's list (`inbox-list-model.ts`) never reads an item's thread,
  * up to its latest `MAX_MESSAGES_READ` messages, but a digest of it
- * (`InboxDigest`): its newest few messages, the ask that stands open and
- * the ask its latest message answers wherever in the thread each was
+ * (`InboxDigest`): its newest few messages, every ask that stands open
+ * and the ask its latest message answers wherever in the thread each was
  * asked, whether only members wrote on it, and whether any ask on it was
  * withdrawn. So a client may keep its rows lean and read a thread whole
  * only as it opens. A client holding whole items reads its rows through
@@ -20,7 +20,6 @@ import {
   type InboxMessage,
   type InboxReadAsk,
   inboxWaitsOn,
-  openAskOf,
 } from "./inbox-wire.js";
 
 /** How many of a thread's newest messages its row reads for its line and its preview: more than the preview draws, since a file sent alone says nothing there. */
@@ -30,8 +29,14 @@ export const INBOX_PREVIEW_TAIL = 6;
 export interface InboxDigest {
   /** The thread's newest `INBOX_PREVIEW_TAIL` messages, oldest first. */
   readonly tail: readonly InboxMessage[];
-  /** The latest message whose ask stands open (`openAskOf`), however long before the tail it was asked. */
-  readonly openAsk?: InboxMessage | undefined;
+  /**
+   * Every message whose ask stands open, oldest first, however long before
+   * the tail each was asked: the latest is the thread's open ask
+   * (`openAskOf`). Note that the older ones are kept too, because a client
+   * drawing the reader's answer to the latest before the service takes it
+   * still draws the row asking the one before.
+   */
+  readonly openAsks: readonly InboxMessage[];
   /** The ask the latest message answers, where it answers one the thread carries, however long before the tail it was asked. */
   readonly answeredAsk?: InboxReadAsk | undefined;
   /** Whether the thread holds messages and only members wrote them. */
@@ -73,7 +78,7 @@ export function inboxDigestOf(thread: readonly InboxMessage[]): InboxDigest {
 
   return {
     tail: thread.slice(-INBOX_PREVIEW_TAIL),
-    openAsk: openAskOf(thread)?.message,
+    openAsks: thread.filter((each) => each.ask?.status === INBOX_ASK_STATUS.OPEN),
     answeredAsk:
       answers === undefined ? undefined : thread.find((each) => each.id === answers.ask)?.ask,
     allMember:
@@ -130,7 +135,7 @@ export function inboxReadRows(read: InboxItemReads): ReadonlyMap<string, readonl
 
 /** Whether a thread still asks someone something: open, and holding an ask open, as the service's `ASKING` reads it. */
 function inboxAsksOpen(row: InboxRowAsking): boolean {
-  return row.status === INBOX_STATUS.OPEN && row.digest.openAsk !== undefined;
+  return row.status === INBOX_STATUS.OPEN && row.digest.openAsks.length > 0;
 }
 
 /**
