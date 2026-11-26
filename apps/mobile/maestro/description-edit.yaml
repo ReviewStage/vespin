@@ -1,4 +1,4 @@
-# description-edit.yaml -- a task's description edited in place on its page, as the desktop and Notion edit one: a press on its words putting the caret there, its blocks drawn with no syntax, a table as a card, the bar over the keyboard, a person mentioned from an `@`, a list's item moved in and back out, and Done.
+# description-edit.yaml -- a task's description edited in place on its page in one view, as the desktop and Notion edit one: a press on its words putting the caret there, its blocks drawn with no syntax, the bar over the keyboard, a person mentioned from an `@`, a list's item moved in and back out, and the system's ✓ putting the keyboard away.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -24,43 +24,23 @@ env:
     element: "Teammate invitations"
 - tapOn: "Teammate invitations"
 - assertVisible: "Created by .*"
-# A press on the description's words puts them in its field where the page
-# read them, the caret where the press landed, the sections around it
-# standing as they stood: headings, bold and italic words, the lists' marks
-# and the quote drawn as the page draws them, with no Markdown syntax, and
-# the table as a card the phone does not edit. The press lands in the middle
-# of the Context's paragraph, read as its words before the field stands.
+# The description stands as one field, read-only at rest; a press on its
+# words takes the keyboard with the caret where the press landed, with no
+# swap to other rows: headings, bold and italic words, the lists' marks and
+# the quote drawn with no Markdown syntax, and the table as its grid, which
+# the phone does not edit. The press lands in Context's paragraph, near the
+# field's top (`description-press.yaml`).
 # Note that no step selects words for the edit menu's Format here: the field
-# stands as tall as the description, so a tap at a share of its height can
+# stands as tall as the description, so a press at a share of its height can
 # land off the screen.
-# Note that on an iPhone the words are scrolled to the screen's middle, clear
-# of the floating tab bar, which takes a press on words scrolled only into
-# sight at the screen's foot; an iPad's split view scrolls its detail column
-# beside the list, and one more swipe draws the words up from its foot.
 - runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - scrollUntilVisible:
-          element: "Only an admin can add.*"
-          centerElement: true
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - runFlow:
-          file: subflows/scroll-in.yaml
-          env:
-            ELEMENT: "Only an admin can add.*"
-            BESIDE: "true"
-      - swipe:
-          start: "85%, 65%"
-          end: "85%, 45%"
-          duration: 1200
-- tapOn: "Only an admin can add.*"
+    file: subflows/description-press.yaml
+    env:
+      BESIDE: ${FLOATING_TABS}
+# The words take the keyboard where the press landed, the system's ✓ standing
+# in the bar while it does.
 - extendedWaitUntil:
-    visible:
-      id: "description-words"
+    visible: "Done editing description"
     timeout: 10000
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-inline
@@ -116,62 +96,34 @@ env:
 - inputText: "Ship"
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-nested-out
-# Done, in the page's bar on the iPhone and the detail column's on an iPad,
-# saves what is typed and leaves the field once the service holds it, the
-# page reading the words again. Note that the fixture
-# answers the save without changing the description it serves, so the words
-# read afterwards are the fixture's own.
-- runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - tapOn: "Done editing description"
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - tapOn: "Done"
+# The system's ✓, in the page's bar on the iPhone and the detail column's
+# on an iPad, puts the keyboard away and saves what is typed, the words
+# standing at rest again. Note that the fixture answers the save without
+# changing the description it serves.
+- tapOn: "Done editing description"
 - extendedWaitUntil:
-    notVisible:
-      id: "description-words"
+    notVisible: "Done editing description"
     timeout: 10000
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-done
 # Typed at the foot of a long description, the caret's line stays in sight
 # over the keyboard and over what an `@` offers: docked over the keyboard on
 # an iPhone, and at the detail column's foot on an iPad. A press on the last
-# task list's words puts the caret in it, and Mention's offer comes up under
-# it; the screenshot shows the line being typed above the offer. Note that
-# the list is found by its last item's words, which the quote words apart,
-# and pressed past its last line's end, so the caret stands after a word: an
-# `@` typed inside one takes the rest of that word with it, as the panel's
-# does.
+# task list's words, just over the description's closing picture, puts the
+# caret in it, and Mention's offer comes up under it; the screenshot shows
+# the line being typed above the offer. Note that the list is pressed past
+# its last line's end, so the caret stands after a word: an `@` typed inside
+# one takes the rest of that word with it, as the panel's does.
 - runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - scrollUntilVisible:
-          element: ".*A withdrawn link grants nothing.*"
-          centerElement: true
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - runFlow:
-          file: subflows/scroll-in.yaml
-          env:
-            ELEMENT: ".*A withdrawn link grants nothing.*"
-            BESIDE: "true"
-      - swipe:
-          start: "85%, 65%"
-          end: "85%, 45%"
-          duration: 1200
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "The invite page"
+      BESIDE: ${FLOATING_TABS}
 - tapOn:
-    text: ".*A withdrawn link grants nothing.*"
-    point: "97%,75%"
+    id: "description-words"
+    point: "97%,86%"
 - extendedWaitUntil:
-    visible:
-      id: "description-words"
+    visible: "Done editing description"
     timeout: 10000
 - inputText: " for "
 - tapOn: "Mention"
@@ -186,17 +138,7 @@ env:
     below: "People"
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-foot-mentioned
-- runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - tapOn: "Done editing description"
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - tapOn: "Done"
+- tapOn: "Done editing description"
 - extendedWaitUntil:
-    notVisible:
-      id: "description-words"
+    notVisible: "Done editing description"
     timeout: 10000

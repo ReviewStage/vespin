@@ -289,7 +289,7 @@ env:
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
-      ELEMENT: "Goal"
+      ELEMENT: "Description"
       BESIDE: ${FLOATING_TABS}
 - takeScreenshot: task-description
 # A page in its Pages opens whole on the app's own page screen, its ⋯
@@ -346,7 +346,7 @@ env:
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
-      ELEMENT: "Goal"
+      ELEMENT: "Description"
       BESIDE: ${FLOATING_TABS}
 # Its status chip opens the menu of statuses, the one it stands at checked,
 # and a pick says at once on the chip. Its priority and assignee chips open

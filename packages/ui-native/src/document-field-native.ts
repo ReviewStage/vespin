@@ -202,6 +202,16 @@ interface NativeDocumentFieldProps {
   readonly placeholder?: string | undefined;
   readonly editable?: boolean | undefined;
   readonly formats?: NativeFormats | undefined;
+  /** Whether the field stands read-only until a press on its words, which takes the keyboard there, as a description stands on its page; a press on a link, a mention or a picture opens it. */
+  readonly tapsToEdit?: boolean | undefined;
+  /** A drawn picture pressed while the field stands at rest, by the address its Markdown names and its words. */
+  readonly onOpenPicture?:
+    | ((event: NativeSyntheticEvent<{ readonly address: string; readonly alt: string }>) => void)
+    | undefined;
+  /** A link's or a mention's address pressed while the field stands at rest. */
+  readonly onOpenLink?:
+    | ((event: NativeSyntheticEvent<{ readonly address: string }>) => void)
+    | undefined;
   /** Whether the field grows to its words inside the page that holds it, rather than scrolling them itself, telling the height they ask for. */
   readonly fitsWords?: boolean | undefined;
   /** How far over the keyboard the caret's line keeps clear while something stands over the field's foot; none while nothing does. */

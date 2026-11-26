@@ -45,29 +45,13 @@ env:
 # A press on the words puts the description in its field, as
 # `description-edit.yaml` presses them.
 - runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - scrollUntilVisible:
-          element: "Only an admin can add.*"
-          centerElement: true
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - runFlow:
-          file: subflows/scroll-in.yaml
-          env:
-            ELEMENT: "Only an admin can add.*"
-            BESIDE: "true"
-      - swipe:
-          start: "85%, 65%"
-          end: "85%, 45%"
-          duration: 1200
-- tapOn: "Only an admin can add.*"
+    file: subflows/description-press.yaml
+    env:
+      BESIDE: ${FLOATING_TABS}
+# The words take the keyboard where the press landed, the system's ✓ standing
+# in the bar while it does.
 - extendedWaitUntil:
-    visible:
-      id: "description-words"
+    visible: "Done editing description"
     timeout: 10000
 - waitForAnimationToEnd
 # A line typed in Context, far above the diagram's heading, which holds an

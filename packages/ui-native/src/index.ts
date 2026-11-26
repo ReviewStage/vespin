@@ -121,8 +121,6 @@ export { type DockChip, DockChips, DockPanel } from "./dock-chips.js";
 export {
   DocumentField,
   type DocumentFieldHandle,
-  type DocumentFieldOpening,
-  OPENS_AT_START,
 } from "./document-field.js";
 
 export type { DocumentComments } from "./document-field-comments.js";

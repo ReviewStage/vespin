@@ -92,7 +92,7 @@ public final class PillFieldModule: Module {
     }
 
     View(DocumentFieldView.self) {
-      Events("onLines", "onHeight", "onFocusChange", "onLinkAsk", "onCaret", "onCommentOpen", "onCommentAsk")
+      Events("onLines", "onHeight", "onFocusChange", "onLinkAsk", "onCaret", "onCommentOpen", "onCommentAsk", "onOpenLink", "onOpenPicture")
 
       Prop("value") { (view: DocumentFieldView, value: DocumentValueRecord) in
         view.take(value.lines.map(DocumentLine.init), seen: value.seen)
@@ -124,6 +124,10 @@ public final class PillFieldModule: Module {
 
       Prop("formats") { (view: DocumentFieldView, formats: FormatsRecord?) in
         view.formats = formats
+      }
+
+      Prop("tapsToEdit") { (view: DocumentFieldView, taps: Bool?) in
+        view.tapsToEdit = taps ?? false
       }
 
       Prop("fitsWords") { (view: DocumentFieldView, fits: Bool?) in
@@ -404,6 +408,8 @@ final class PillAttachment: NSTextAttachment {
   let look: Look
   /// What a press on a picture's pill does, which opens the picture; none where the field opens nothing, so a press places the caret.
   let onPress: ((Pill) -> Void)?
+  /// The views a document field at rest reaches as elements beside its words, which the pill's view joins as a link; none in a field whose words are always typed in, where the text view hears the pill among them.
+  weak var standing: NSHashTable<UIView>?
 
   init(pill: Pill, look: Look, onPress: ((Pill) -> Void)? = nil) {
     self.pill = pill
@@ -438,7 +444,14 @@ final class PillAttachment: NSTextAttachment {
 final class PillViewProvider: NSTextAttachmentViewProvider {
   override func loadView() {
     guard let attachment = textAttachment as? PillAttachment else { return }
-    view = PillView(pill: attachment.pill, look: attachment.look, onPress: attachment.onPress)
+    let shown = PillView(pill: attachment.pill, look: attachment.look, onPress: attachment.onPress)
+    if let standing = attachment.standing {
+      shown.isAccessibilityElement = true
+      shown.accessibilityLabel = attachment.pill.heard
+      shown.accessibilityTraits = .link
+      standing.add(shown)
+    }
+    view = shown
   }
 
   override func attachmentBounds(

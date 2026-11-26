@@ -1,0 +1,41 @@
+# description-press.yaml -- presses a task's description, as the page stands it in one view, at `POINT` on its field (`50%,4%` unless named), after scrolling its Description header into sight; with `LONG` true, a long press, which selects the words there and opens the edit menu.
+#
+# Note that the description is one field, whose words are no elements of
+# their own, so a press is placed on the field by a share of its height; the
+# Inbox fixture's Teammate invitations stands its Context paragraph at the
+# default, its first lines. A scroll at the window's middle lands on a
+# landscape iPad's list column beside the page, so the page is drawn along
+# inside its column there (`BESIDE`), as `scroll-in.yaml` draws it.
+appId: dev.vespin.ios
+env:
+  POINT: ${POINT || '50%,4%'}
+  LONG: ${LONG || 'false'}
+  BESIDE: ${BESIDE || 'false'}
+---
+- runFlow:
+    file: scroll-in.yaml
+    env:
+      ELEMENT: "Description"
+      BESIDE: ${BESIDE}
+- swipe:
+    start: "85%, 60%"
+    end: "85%, 40%"
+    duration: 1200
+- waitForAnimationToEnd
+- assertVisible:
+    id: "description-words"
+- runFlow:
+    when:
+      true: ${LONG != 'true'}
+    commands:
+      - tapOn:
+          id: "description-words"
+          point: "${POINT}"
+- runFlow:
+    when:
+      true: ${LONG == 'true'}
+    commands:
+      - longPressOn:
+          id: "description-words"
+          point: "${POINT}"
+- waitForAnimationToEnd
