@@ -262,6 +262,7 @@ export function GlassBar({
   modifiers = [],
   field = false,
   heads = false,
+  lowers = false,
 }: {
   readonly children: ReactNode;
   /** What stands under the row inside the same glass, such as the capsules saying where a start runs; nothing where none is given. */
@@ -276,6 +277,8 @@ export function GlassBar({
   readonly modifiers?: readonly ModifierConfig[];
   /** Whether a head may come and go over a row that must never be drawn anew, such as a field of pills holding the keyboard: the bar then keeps the column a head stands in even while none does. */
   readonly heads?: boolean;
+  /** Whether a drag down over the bar lowers the keyboard, as a list's drag does, where no list stands over the bar to drag instead. */
+  readonly lowers?: boolean;
 }) {
   const ground = useFieldGround(PRESS_SIZE / 2);
   const pill = field ? ground : [];
@@ -303,17 +306,31 @@ export function GlassBar({
       </VStack>
     );
 
+  const content = alone ? (
+    row
+  ) : (
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
+      {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
+      {row}
+      {foot}
+    </VStack>
+  );
+
+  // Note that the bar stands in the system's own scroll view at its content's height, so where it `lowers`, a drag down over it lowers the keyboard as a list's drag does, the system's interactive dismiss rather than a gesture of ours. Elsewhere the scroll stands still, and its content turns scrolling back on for what scrolls inside it, the capsules and a long head, since a scroll's stillness reaches every scroll under it.
   const bar = (
     <Host matchContents={{ vertical: true }} style={[styles.content, styles.bar]}>
-      {alone ? (
-        row
-      ) : (
-        <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
-          {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
-          {row}
-          {foot}
-        </VStack>
-      )}
+      <ScrollView
+        axes="vertical"
+        showsIndicators={false}
+        modifiers={[
+          SwiftModifiers.fixedSize({ horizontal: false, vertical: true }),
+          SwiftModifiers.scrollClipDisabled(),
+          SwiftModifiers.scrollDisabled(!lowers),
+          SwiftModifiers.scrollDismissesKeyboard(lowers ? "interactively" : "never"),
+        ]}
+      >
+        <VStack modifiers={[SwiftModifiers.scrollDisabled(false)]}>{content}</VStack>
+      </ScrollView>
     </Host>
   );
 
