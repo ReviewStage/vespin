@@ -560,17 +560,23 @@ function liveAnswers<Part extends string>(
       let cursor = cursorOf(first);
       /** The sync id the last answer named, past which the next poll reads; kept through a failed poll, and a whole answer that names none. */
       let sync = syncStandingOf(first)?.next;
-      /** When the sync id last moved, or a stall was last asked around, by the host's clock. */
-      let syncMovedAt = yield* Clock.currentTimeMillis;
+      /** When an answer was first heard naming the sync id unmoved since it last moved or a stall was last asked around, by the host's clock; none while it moves. */
+      let unmovedSince: number | undefined;
+      /** When the last answer was heard, by the host's clock. */
+      let heardAt = yield* Clock.currentTimeMillis;
       /** How many polls have failed in a row since the last answer. */
       let failures = 0;
       yield* answered(first);
 
       const pollOnce = Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
-        const stalled = sync !== undefined && now - syncMovedAt > Duration.toMillis(SYNC_STALL);
 
-        if (stalled) syncMovedAt = now;
+        const stalled =
+          sync !== undefined &&
+          unmovedSince !== undefined &&
+          now - unmovedSince > Duration.toMillis(SYNC_STALL);
+
+        if (stalled) unmovedSince = undefined;
         const read = yield* dependencies.poll(seen, cursor, stalled ? undefined : sync);
 
         if ("failure" in read) {
@@ -595,10 +601,17 @@ function liveAnswers<Part extends string>(
         seen = standing(read.queries) ?? seen;
         cursor = cursorOf(read) ?? cursor;
         const next = syncStandingOf(read)?.next;
+        const answeredAt = yield* Clock.currentTimeMillis;
+
+        // Note that a stall is told only by answers heard one after another, so a gap with none, as while the app was in the background or offline, starts the count again rather than standing for an id held still.
+        if (answeredAt - heardAt > Duration.toMillis(SYNC_STALL)) unmovedSince = undefined;
+        heardAt = answeredAt;
 
         if (next !== undefined && next !== sync) {
           sync = next;
-          syncMovedAt = yield* Clock.currentTimeMillis;
+          unmovedSince = undefined;
+        } else if (next !== undefined) {
+          unmovedSince ??= answeredAt;
         }
 
         return yield* answered(read);
@@ -727,7 +740,9 @@ export function followTakingRows<
  * delta back, as a migration during a deploy does, or a database nothing
  * writes to, where a whole answer each 30 s costs nothing. The host cannot
  * see the wakes behind a stalled id, since a delta held over one answers
- * empty and carries no txids.
+ * empty and carries no txids. It is measured over answers heard naming the
+ * id unmoved, never over time with no answer, so an app back from the
+ * background asks past its id rather than whole.
  */
 const SYNC_STALL = Duration.seconds(30);
 

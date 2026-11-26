@@ -4,6 +4,7 @@ import { ServiceReach } from "@repo/features";
 import { LIVE_POLL_URL, LIVE_SIGNED_OUT, type SealedLiveQueryWire } from "@repo/features/live-wire";
 import {
   Clock,
+  Deferred,
   Duration,
   Effect,
   Exit,
@@ -488,6 +489,47 @@ it.effect(
       const earlier = yield* Effect.forkChild(confirmWrite(handed, "997"));
       yield* settled;
       assert.ok(succeeded(earlier), "an answer already showed it");
+      yield* Fiber.interrupt(following);
+    }),
+);
+
+it.effect(
+  "a read back from minutes with no answer, as an app back from the background is, asks past its sync id rather than whole",
+  () =>
+    Effect.gen(function* () {
+      const asked: (string | undefined)[] = [];
+      const resumed = yield* Deferred.make<void>();
+
+      const read = (next: string): SealedRead<Part> => ({
+        url: LIVE_POLL_URL,
+        queries: {
+          left: { ...sealed("left"), rows: [], sync: { next } },
+          right: { ...sealed("right"), rows: [], sync: { next } },
+        },
+      });
+
+      const poll = (_after: string | undefined, _cursor?: string, sync?: string) =>
+        Effect.gen(function* () {
+          asked.push(sync);
+
+          // Note that the first poll is the one the background cut off: it answers only once the app is back, minutes later, nothing having moved.
+          if (asked.length === 1) yield* Deferred.await(resumed);
+
+          return read("10");
+        });
+
+      const following = yield* Effect.forkChild(
+        followTakingRows<Part, unknown>({ poll }, read("10"), Schema.Unknown, () => Effect.void),
+      );
+
+      yield* settled;
+      yield* TestClock.adjust(Duration.minutes(7));
+      yield* Deferred.succeed(resumed, undefined);
+      yield* settled;
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* settled;
+
+      assert.deepEqual(asked.slice(0, 2), ["10", "10"]);
       yield* Fiber.interrupt(following);
     }),
 );
