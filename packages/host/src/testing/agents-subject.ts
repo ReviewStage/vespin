@@ -47,6 +47,7 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import {
+  LIVE_POLL_URL,
   LIVE_READ,
   type LIVE_SIGNED_OUT,
   type LiveRead,
@@ -261,6 +262,12 @@ function fakeService() {
 
   let accountLive: typeof LIVE_ANSWERED | typeof LIVE_SIGNED_OUT | undefined;
   let itemsLive: typeof LIVE_ANSWERED | undefined;
+
+  /** The pages a read of the account's items asked whole is answered, each part's rows by page; none answers one whole answer. */
+  let itemsPages:
+    | readonly Partial<Record<(typeof ITEMS_PARTS)[number], readonly unknown[]>>[]
+    | undefined;
+
   /** What the account's items' read keeps to answer by sync id, so a read past one is answered what moved since. */
   const itemsBySync: ItemsBySync = { rows: new Map(), at: new Map() };
   /** The sync id the account's items stand still at, as behind a long transaction; none while it moves. */
@@ -403,8 +410,35 @@ function fakeService() {
       return poll === true ? live.account.poll(after) : Effect.succeed(live.account.first());
     });
 
-  /** The account's items as their live read answers them, by the sync id the follow asks past. */
-  const accountItemsLive = (userId: string | undefined, sync: string | undefined) =>
+  /** The page `n` of the account's items' whole answer in pages (`itemsPages`), each part naming the page after it, the last the snapshot that shows every write below the sync id they name. */
+  const itemsPage = (pages: NonNullable<typeof itemsPages>, n: number) => {
+    const last = n === pages.length - 1;
+    const sync = { next: ITEMS_PAGED_AT, ...(last ? undefined : { page: String(n + 1) }) };
+
+    return {
+      url: LIVE_POLL_URL,
+      queries: Object.fromEntries(
+        ITEMS_PARTS.map((part) => [
+          part,
+          {
+            capability: LIVE_POLL_URL,
+            queryFingerprint: LIVE_POLL_URL,
+            expiresAt: 0,
+            rows: pages[n]?.[part] ?? [],
+            sync,
+            ...(last ? { snapshot: `${ITEMS_PAGED_AT}:${ITEMS_PAGED_AT}:` } : undefined),
+          },
+        ]),
+      ),
+    };
+  };
+
+  /** The account's items as their live read answers them, by the sync id the follow asks past, or by the page of a whole answer it names. */
+  const accountItemsLive = (
+    userId: string | undefined,
+    sync: string | undefined,
+    page: string | undefined,
+  ) =>
     Effect.suspend((): Effect.Effect<unknown> => {
       if (sync === "") asked.push(`account-items-live:${userId}`);
 
@@ -412,6 +446,15 @@ function fakeService() {
 
       if (itemsLive === undefined) {
         return Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      }
+
+      // Note that a read in pages is asked whole, or past an id the fake never answered, as the service pages one too far behind, and each page after by the page the last named; a read past the pages' id is held, as nothing moved since.
+      if (itemsPages !== undefined) {
+        if (page !== undefined) asked.push(`account-items-page:${page}`);
+
+        if (sync === ITEMS_PAGED_AT && page === undefined) return Effect.never;
+
+        return Effect.succeed(itemsPage(itemsPages, page === undefined ? 0 : Number(page)));
       }
 
       if (sync === undefined) return Effect.succeed(live.items.first());
@@ -461,6 +504,7 @@ function fakeService() {
         readonly call?: string;
         readonly userId?: string;
         readonly sync?: string;
+        readonly page?: string;
         readonly before?: string;
       },
       poll?: { readonly after?: string | undefined },
@@ -509,7 +553,7 @@ function fakeService() {
           case ACCOUNT_INBOX_READ.name:
             return accountInboxLive(params.userId, poll !== undefined, poll?.after);
           case INBOX_ITEMS_READ.name:
-            return accountItemsLive(params.userId, params.sync);
+            return accountItemsLive(params.userId, params.sync, params.page);
           default:
             return assert.fail(`no script answers the live read ${read.name}`);
         }
@@ -1128,6 +1172,14 @@ function fakeService() {
     sealItems: (next: typeof LIVE_ANSWERED | undefined) => {
       itemsLive = next;
     },
+    /** Has every read of the account's items asked whole answered in `pages`, each part's rows by page, as the service pages a whole answer to a build that reads pages; none answers one whole answer again. */
+    pageItems: (
+      pages:
+        | readonly Partial<Record<(typeof ITEMS_PARTS)[number], readonly unknown[]>>[]
+        | undefined,
+    ) => {
+      itemsPages = pages;
+    },
     /** Holds the account items' sync id where it stands, as a long transaction does, so each read past it is answered nothing moved. */
     stallItems: () => {
       itemsStalledAt = live.items.first().queries.stamps.digest;
@@ -1218,6 +1270,9 @@ const TRANSCRIPT_PARTS = [
 const SCOPE_PARTS = ["items", "messages", "files"] as const;
 export const ACCOUNT_PARTS = ["items", "taskless", "tasks", "automations", "failedRuns"] as const;
 export const ITEMS_PARTS = ["stamps", "items", "messages", "files"] as const;
+
+/** The sync id every page of the account items' whole answer in pages names (`pageItems`). */
+const ITEMS_PAGED_AT = "50";
 const MEMORIES_PARTS = ["memories"] as const;
 
 /** The install script's address the hosts' read answers beside them. */
@@ -1519,6 +1574,7 @@ export function subject(
       sealScope: service.sealScope,
       sealAccount: service.sealAccount,
       sealItems: service.sealItems,
+      pageItems: service.pageItems,
       stallItems: service.stallItems,
       commitIn: service.commitIn,
       changeFirst: service.changeFirst,
