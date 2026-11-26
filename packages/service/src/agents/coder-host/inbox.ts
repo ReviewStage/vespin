@@ -75,9 +75,9 @@ import {
   readInboxItemHome,
 } from "../../inbox/inbox-store.js";
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
+import type { BlobStoreFailure } from "../../storage/blob-store.js";
 import { placeholderLinksWords } from "../link-rule.js";
 import { taskIdOfInput } from "../task-ref.js";
-
 import {
   type InboxSandboxDoor,
   readSandboxBodyFile,
@@ -833,7 +833,11 @@ function bodyFile(
   poster: ThreadPoster,
   path: string,
   sandbox: InboxSandboxDoor,
-): Effect.Effect<Result.Result<InboxBodyPicture, string>, StoreFailure, DatabaseServices> {
+): Effect.Effect<
+  Result.Result<InboxBodyPicture, string>,
+  StoreFailure | BlobStoreFailure,
+  DatabaseServices
+> {
   return Effect.flatMap(readKeptPicture(poster, path), (kept) =>
     kept !== undefined
       ? Effect.succeed(kept)
@@ -858,7 +862,11 @@ function bodyFiles(
   poster: ThreadPoster,
   body: string,
   sandbox: InboxSandboxDoor,
-): Effect.Effect<Result.Result<BodyFiles, string>, StoreFailure, DatabaseServices> {
+): Effect.Effect<
+  Result.Result<BodyFiles, string>,
+  StoreFailure | BlobStoreFailure,
+  DatabaseServices
+> {
   const paths = [...inboxSandboxPicturePaths(body), ...keptAddressesIn(body)];
 
   if (paths.length > INBOX_BOUNDS.MAX_MESSAGE_PICTURES) {

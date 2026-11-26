@@ -8,16 +8,16 @@ import {
   DESCRIPTION_ATTACHMENT_KEEP,
   keepDescriptionAttachment,
   readDescriptionAttachment,
+  type StoredDescriptionFile,
 } from "@repo/database/models/description-attachments";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import { getTestDB, inlineBytesOf, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
 import {
   DESCRIPTION_ATTACHMENT_BOUNDS,
   DESCRIPTION_FILE_TYPE,
-  type DescriptionFile,
 } from "@repo/features/description-attachment-wire";
 import { descriptionSections } from "@repo/features/description-sections";
 import { PICTURE_BOUNDS, PICTURE_MEDIA_TYPE, PICTURE_TYPE } from "@repo/features/picture-wire";
@@ -173,7 +173,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
         if (named === undefined) return;
 
         for (const member of [owner, teammate]) {
-          const read: Option.Option<DescriptionFile> = yield* readDescriptionAttachment(
+          const read: Option.Option<StoredDescriptionFile> = yield* readDescriptionAttachment(
             member,
             taskId,
             named.attachmentId,
@@ -184,7 +184,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
             Option.some(PICTURE_TYPE.PNG),
           );
           assert.deepEqual(
-            Option.map(read, ({ bytes }) => [...bytes]),
+            Option.map(read, ({ body }) => [...inlineBytesOf(body)]),
             Option.some([...SCREENSHOT]),
           );
         }
@@ -227,11 +227,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
         const named = descriptionAttachmentOf(address);
         assert.ok(named);
 
-        const read: Option.Option<DescriptionFile> = yield* readDescriptionAttachment(
-          owner,
-          taskId,
-          named.attachmentId,
-        );
+        const read = yield* readDescriptionAttachment(owner, taskId, named.attachmentId);
 
         assert.deepEqual(
           Option.map(read, ({ contentType }) => contentType),
@@ -366,7 +362,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
           Option.some(PICTURE_MEDIA_TYPE.WEBM),
         );
         assert.deepEqual(
-          Option.map(read, ({ bytes }) => bytes.length),
+          Option.map(read, ({ body }) => inlineBytesOf(body).length),
           Option.some(recording.length),
         );
       }),

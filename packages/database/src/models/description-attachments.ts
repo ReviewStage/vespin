@@ -16,6 +16,13 @@ import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { attachment, ownedByTaskAlone, servedColumns } from "../schemas/attachment.js";
 import { task } from "../schemas/task.js";
+import {
+  type AttachmentBody,
+  attachmentBodyFields,
+  attachmentBodyOf,
+  phoneBodyFields,
+  phoneBodyOf,
+} from "./attachment-body.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import { reachableTask, taskReachableBy } from "./workspace-store.js";
 
@@ -137,7 +144,7 @@ function pictureQuery(
 
 const findPicture = SqlSchema.findOneOption({
   Request: PictureAskSchema,
-  Result: Schema.Struct({ contentType: descriptionFileTypeSchema, bytes: Schema.Uint8Array }),
+  Result: Schema.Struct({ contentType: descriptionFileTypeSchema, ...attachmentBodyFields }),
   execute: (ask) => pictureQuery(ask, PLAYABLE_VIDEO_TYPE.WEBM),
 });
 
@@ -145,19 +152,29 @@ const findServedPicture = SqlSchema.findOneOption({
   Request: Schema.Struct({ ...PictureAskSchema.fields, playable: playableVideoTypeSchema }),
   Result: Schema.Struct({
     contentType: Schema.Union([descriptionFileTypeSchema, Schema.Literal(MP4_TYPE)]),
-    bytes: Schema.Uint8Array,
+    ...attachmentBodyFields,
   }),
   execute: ({ playable, ...ask }) => pictureQuery(ask, playable),
 });
 
-/** A description's file as a copy of it is made: its type, its bytes, and a recording's or a clip's copy for a phone where one is kept. */
-export type CopiedDescriptionFile = typeof CopiedDescriptionFileSchema.Type;
+/** A description's file as a copy of it is made: its type, where its bytes stand, and where a recording's or a clip's copy for a phone stands, where one is kept. */
+export interface CopiedDescriptionFile {
+  readonly contentType: DescriptionFile["contentType"];
+  readonly body: AttachmentBody;
+  readonly phone: AttachmentBody | undefined;
+}
 
 const CopiedDescriptionFileSchema = Schema.Struct({
   contentType: descriptionFileTypeSchema,
-  bytes: Schema.Uint8Array,
-  mp4Bytes: Schema.NullOr(Schema.Uint8Array),
+  ...attachmentBodyFields,
+  ...phoneBodyFields,
 });
+
+/** A description's file as a read answers it: its type, and where its bytes stand. */
+export interface StoredDescriptionFile {
+  readonly contentType: DescriptionFile["contentType"];
+  readonly body: AttachmentBody;
+}
 
 const findWorkspacePicture = SqlSchema.findOneOption({
   Request: Schema.Struct({ ...PictureAskSchema.fields, organizationId: Schema.String }),
@@ -168,7 +185,9 @@ const findWorkspacePicture = SqlSchema.findOneOption({
         .select({
           contentType: attachment.contentType,
           bytes: attachment.bytes,
+          blobKey: attachment.blobKey,
           mp4Bytes: attachment.mp4Bytes,
+          phoneBlobKey: attachment.phoneBlobKey,
         })
         .from(attachment)
         .innerJoin(task, eq(task.id, attachment.taskId))
@@ -249,13 +268,16 @@ export function readDescriptionFileTypes(
   );
 }
 
-/** One picture, video, or PDF of the description, its type and bytes; nothing where the account reaches no such plan or the description no such file. */
+/** One picture, video, or PDF of the description, its type and where its bytes stand; nothing where the account reaches no such plan or the description no such file. */
 export function readDescriptionAttachment(
   userId: string,
   taskId: string,
   attachmentId: string,
-): TaskStoreEffect<Option.Option<DescriptionFile>> {
-  return findPicture({ userId, taskId, attachmentId });
+): TaskStoreEffect<Option.Option<StoredDescriptionFile>> {
+  return Effect.map(
+    findPicture({ userId, taskId, attachmentId }),
+    Option.map(({ contentType, ...row }) => ({ contentType, body: attachmentBodyOf(row) })),
+  );
 }
 
 /** One file of the description as `readDescriptionAttachment` reads it, with a recording's or a clip's copy for a phone where one is kept, as a copy of it is made elsewhere: only where the task stands in the workspace given. */
@@ -263,7 +285,14 @@ export function readWorkspaceDescriptionAttachment(
   reader: { readonly userId: string; readonly organizationId: string },
   ref: { readonly taskId: string; readonly attachmentId: string },
 ): TaskStoreEffect<Option.Option<CopiedDescriptionFile>> {
-  return findWorkspacePicture({ ...reader, ...ref });
+  return Effect.map(
+    findWorkspacePicture({ ...reader, ...ref }),
+    Option.map((row) => ({
+      contentType: row.contentType,
+      body: attachmentBodyOf(row),
+      phone: phoneBodyOf(row),
+    })),
+  );
 }
 
 /** One picture or video of the description as `readDescriptionAttachment` reads it, served to a reader that plays the video given: a recording's MP4 copy where it plays MP4 and one is kept, and its WebM otherwise. */
@@ -272,6 +301,9 @@ export function readServedDescriptionAttachment(
   taskId: string,
   attachmentId: string,
   playable: PlayableVideoType,
-): TaskStoreEffect<Option.Option<{ readonly contentType: string; readonly bytes: Uint8Array }>> {
-  return findServedPicture({ userId, taskId, attachmentId, playable });
+): TaskStoreEffect<Option.Option<{ readonly contentType: string; readonly body: AttachmentBody }>> {
+  return Effect.map(
+    findServedPicture({ userId, taskId, attachmentId, playable }),
+    Option.map(({ contentType, ...row }) => ({ contentType, body: attachmentBodyOf(row) })),
+  );
 }

@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
+import type { AttachmentBody } from "@repo/database/models/attachment-body";
 import {
   createAutomation,
   recordAutomationRun,
@@ -20,6 +21,7 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   connectWorkspaceMachine,
   getTestDB,
+  inlineBytesOf,
   joinWorkspace,
   leaveWorkspace,
   openWorkspace,
@@ -81,7 +83,6 @@ import {
   INBOX_MESSAGE_OUTCOME,
   INBOX_POST_REFUSAL,
   type InboxAgent,
-  type InboxFile,
   type InboxItemWritten,
   markInboxItemRead,
   markInboxItemUnread,
@@ -899,10 +900,17 @@ it.layer(getTestDB())("the inbox store", (it) => {
         for (const reader of [agent.userId, teammate]) {
           const read = Option.getOrThrow(yield* readInboxItem(reader, id)).item;
           assert.deepEqual(answeringOf(read)?.files, kept);
-          const found = yield* readInboxAttachment(reader, id, trace.attachmentId);
-          const served: InboxFile = Option.getOrThrow(found);
+
+          const found: Option.Option<{
+            readonly contentType: string;
+            readonly body: AttachmentBody;
+          }> = yield* readInboxAttachment(reader, id, trace.attachmentId);
+
+          const served: { readonly contentType: string; readonly body: AttachmentBody } =
+            Option.getOrThrow(found);
+
           assert.equal(served.contentType, AGENT_ATTACHMENT_TYPE.TEXT);
-          assert.deepEqual(new Uint8Array(served.bytes), TRACE);
+          assert.deepEqual(new Uint8Array(inlineBytesOf(served.body)), TRACE);
         }
 
         assert.ok(Option.isNone(yield* readInboxAttachment(outsider, id, shot.attachmentId)));
@@ -925,7 +933,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
         const [file] = answeringOf(Option.getOrThrow(answered))?.files ?? [];
         assert.ok(file);
         const served = yield* readInboxAttachment(agent.userId, posted.id, file.attachmentId);
-        assert.equal(Option.getOrThrow(served).bytes.byteLength, spec.byteLength);
+        assert.equal(inlineBytesOf(Option.getOrThrow(served).body).byteLength, spec.byteLength);
       }),
   );
 
@@ -1405,7 +1413,7 @@ it.layer(getTestDB())("the inbox store", (it) => {
         const [trace] = message?.files ?? [];
         assert.ok(trace);
         const served = yield* readInboxAttachment(agent.userId, id, trace.attachmentId);
-        assert.deepEqual(new Uint8Array(Option.getOrThrow(served).bytes), TRACE);
+        assert.deepEqual(new Uint8Array(inlineBytesOf(Option.getOrThrow(served).body)), TRACE);
 
         const askedAgain = yield* post(agent, { ...SETTINGS, title: "Require two reviews" });
         // Note that the agent is handed no member's key.

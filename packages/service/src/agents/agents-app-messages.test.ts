@@ -38,6 +38,7 @@ import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
+  inlineBytesOf,
   joinWorkspace,
   openedPullRequest,
   openWorkspace,
@@ -248,7 +249,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         );
 
         assert.equal(picture.contentType, AGENT_ATTACHMENT_TYPE.PNG);
-        assert.deepEqual(new Uint8Array(picture.bytes), SIZED_PNG);
+        assert.deepEqual(new Uint8Array(inlineBytesOf(picture.body)), SIZED_PNG);
 
         // The retired runtime's receipt of the message, its image staged by name with no bytes, takes the line it was sent as.
         const taken = yield* writer.takeAwaitingLine(target, {

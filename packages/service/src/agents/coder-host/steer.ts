@@ -16,7 +16,6 @@ import {
   unarchiveAgentFrom,
 } from "@repo/database/models/agent-store";
 import { type LineFileRead, lineRead } from "@repo/database/models/attached-file-parts";
-import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import {
   MANAGER_CHAT_OUTCOME,
   readManagerChatMessageOfLine,
@@ -71,6 +70,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { agentSpansAnnotated } from "../../observability/sentry.js";
+import { readConversationPictureBytes } from "../../storage/attachment-bytes.js";
 import { followAsMessaged } from "../../tasks/task-following.js";
 import { controlsAgent, writesToAgent } from "../agent-reach.js";
 import { keptHandedImages, senderLabel, turnContent } from "../attached-files.js";
@@ -901,7 +901,7 @@ const handedFileOf = (conversationId: string, file: LineFileRead) =>
     if (file.data !== undefined) return [{ name, mediaType, data: file.data, kept }];
 
     if (kept === undefined || !("id" in kept)) return [];
-    const picture = yield* readConversationPicture(conversationId, kept.id);
+    const picture = yield* readConversationPictureBytes(conversationId, kept.id);
 
     return Option.isNone(picture)
       ? []

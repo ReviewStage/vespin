@@ -13,7 +13,12 @@ import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { fillConversationPictures, getTestDB, openWorkspace } from "@repo/database/testing";
+import {
+  fillConversationPictures,
+  getTestDB,
+  inlineBytesOf,
+  openWorkspace,
+} from "@repo/database/testing";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   CONVERSATION_MEDIA_TYPE,
@@ -151,7 +156,7 @@ it.layer(getTestDB())("show_media", (it) => {
         assert.ok(first);
         const read = yield* readConversationPicture(target.conversationId, first.id);
         assert.deepEqual(
-          Option.map(read, (stored) => [...stored.bytes]),
+          Option.map(read, (stored) => [...inlineBytesOf(stored.body)]),
           Option.some([...pngBytes(1200, 720)]),
         );
       }),
@@ -273,7 +278,7 @@ it.layer(getTestDB())("show_media", (it) => {
         assert.ok(video);
         const read = yield* readConversationPicture(target.conversationId, video.id);
         assert.deepEqual(
-          Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
+          Option.map(read, (stored) => [stored.contentType, [...inlineBytesOf(stored.body)]]),
           Option.some([CONVERSATION_MEDIA_TYPE.WEBM, [...recording]]),
           "it is served back as the WebM it was",
         );
@@ -303,7 +308,7 @@ it.layer(getTestDB())("show_media", (it) => {
         assert.ok(video);
         const read = yield* readConversationPicture(target.conversationId, video.id);
         assert.deepEqual(
-          Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
+          Option.map(read, (stored) => [stored.contentType, [...inlineBytesOf(stored.body)]]),
           Option.some([CONVERSATION_MEDIA_TYPE.MP4, [...recording]]),
         );
       }),
@@ -458,7 +463,7 @@ it.layer(getTestDB())("show_media", (it) => {
         const served = (playable: (typeof PLAYABLE_VIDEO_TYPE)[keyof typeof PLAYABLE_VIDEO_TYPE]) =>
           Effect.map(
             readServedConversationPicture(target.conversationId, ogg.id, playable),
-            Option.map((picture) => [picture.contentType, [...picture.bytes]]),
+            Option.map((picture) => [picture.contentType, [...inlineBytesOf(picture.body)]]),
           );
 
         assert.deepEqual(

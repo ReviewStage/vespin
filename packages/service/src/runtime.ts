@@ -218,7 +218,14 @@ export const webServices = Layer.mergeAll(
   signInRevocationFromEnvironment.pipe(Layer.provide(githubApp)),
   settledTurnListener.pipe(
     Layer.provide(
-      Layer.mergeAll(FetchHttpClient.layer, githubApp, hostedEnvironment, slackBot, apnsSender),
+      Layer.mergeAll(
+        FetchHttpClient.layer,
+        githubApp,
+        hostedEnvironment,
+        slackBot,
+        apnsSender,
+        blobStoreFromEnvironment,
+      ),
     ),
   ),
   sentryAppFromEnvironment,
