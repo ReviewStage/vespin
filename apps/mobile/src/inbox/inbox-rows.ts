@@ -9,6 +9,7 @@
  * key a write stands over from them.
  */
 
+import type { InboxMessage } from "@repo/features/inbox-wire";
 import {
   INBOX_REACH,
   type InboxReach,
@@ -17,6 +18,8 @@ import {
   inboxRowsMerged,
   inboxRowsWhere,
   type PlacedInboxItem,
+  threadMessagesWhere,
+  threadOfRows,
 } from "@repo/host/inbox-rows";
 import {
   type Collection,
@@ -111,4 +114,31 @@ export function useInboxRows(
     () => (keptRows === undefined ? undefined : inboxRowsMerged(keptRows, drawnRows, pending)),
     [keptRows, drawnRows, pending],
   );
+}
+
+/**
+ * The messages of the thread `threadId` names, oldest first, read from the
+ * kind they are kept in on disk as the thread opens, so a launch never reads
+ * a thread it does not show; none where nothing keeps them, as where the
+ * Inbox is held in memory, or before the query has loaded.
+ */
+export function useThreadMessages(
+  threadId: string | undefined,
+): readonly InboxMessage[] | undefined {
+  const source = useInboxRowsSource();
+  // Note that the standing is read only to hear the message kind made, which the follow stands on after the screen first draws.
+  const standing = useStanding(source);
+  const messages = standing === undefined ? undefined : source.messages();
+
+  const kept = useLiveQuery((q) =>
+    threadId === undefined || messages === undefined
+      ? undefined
+      : q
+          .from({ message: messages })
+          .where(({ message }) => threadMessagesWhere(message, threadId)),
+  );
+
+  const rows = kept.isReady ? kept.data : undefined;
+
+  return useMemo(() => (rows === undefined ? undefined : threadOfRows(rows)), [rows]);
 }

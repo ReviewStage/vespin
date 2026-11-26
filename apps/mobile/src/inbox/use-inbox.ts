@@ -101,6 +101,7 @@ import { dismissThreadNotifications } from "../notification-task.js";
 import { usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useInboxGroupsIn } from "./inbox-groups.js";
+import { useThreadMessages } from "./inbox-rows.js";
 import { useInboxRunFolds } from "./inbox-runs.js";
 import { useInboxShown } from "./inbox-shown.js";
 import {
@@ -409,8 +410,27 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   );
 
   const read = useInboxGroupsIn(undefined, reach);
+  const messages = useThreadMessages(id);
 
-  const groups = useSendsDrawn(read);
+  // Note that where the Inbox is kept on disk the thread's messages are read as it opens, from their own kind, and laid on its item before the reader's sends still out are drawn after them.
+  const threaded = useMemo(
+    () =>
+      id === undefined || messages === undefined
+        ? read
+        : read.map((group) =>
+            group.items.some((item) => item.id === id)
+              ? {
+                  ...group,
+                  items: group.items.map((item) =>
+                    item.id === id ? { ...item, thread: messages } : item,
+                  ),
+                }
+              : group,
+          ),
+    [read, messages, id],
+  );
+
+  const groups = useSendsDrawn(threaded);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
   const { data: answered = INBOX_FEED.READING } = useQuery({

@@ -24,12 +24,15 @@
 
 import { inboxInOrder } from "@repo/features/inbox-live";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
-import { ROW_GONE, rowOf, type StandingRows } from "@repo/sync";
+import { ROW_GONE, type RowCollection, type RowKind, rowOf, type StandingRows } from "@repo/sync";
 import { eq, type IR, isUndefined, not, or, type Ref } from "@tanstack/db";
 import type { InboxHoldings } from "./app-state-reads.js";
 import { INBOX_ITEM, itemOf, type PlacedInboxItem } from "./inbox-collections.js";
+import { INBOX_MESSAGE, type ThreadMessage } from "./inbox-messages.js";
 
 export type { PlacedInboxItem } from "./inbox-collections.js";
+
+export { type ThreadMessage, threadOfRows } from "./inbox-messages.js";
 
 /** How much of the Inbox a screen reads: what Open, Questions, and Reminders can list, one agent's threads, or every item kept. */
 export const INBOX_REACH = {
@@ -62,16 +65,32 @@ export const INBOX_WHOLE: InboxReach = { kind: INBOX_REACH.WHOLE };
 export interface InboxRowsSource {
   /** The kind's collection and the rows the writes standing over it draw; none before the follow first stood on it. */
   readonly standing: () => StandingRows<PlacedInboxItem> | undefined;
+  /** The collection each thread's messages are kept in, which a thread reads as it opens; none before the follow first stood on it. */
+  readonly messages: () => RowCollection<ThreadMessage, string> | undefined;
   /** Hears each moving of the kind's collection or of the writes standing over it; answers how to stop hearing. */
   readonly watch: (heard: () => void) => () => void;
 }
 
 /** The Inbox kind's rows over the pool `pool` names. */
 export function inboxRowsSource(pool: {
-  readonly standing: (kind: typeof INBOX_ITEM) => StandingRows<PlacedInboxItem> | undefined;
+  readonly standing: <Row extends object, Change>(
+    kind: RowKind<Row, Change>,
+  ) => StandingRows<Row> | undefined;
   readonly watch: (heard: () => void) => () => void;
 }): InboxRowsSource {
-  return { standing: () => pool.standing(INBOX_ITEM), watch: pool.watch };
+  return {
+    standing: () => pool.standing(INBOX_ITEM),
+    messages: () => pool.standing(INBOX_MESSAGE)?.collection,
+    watch: pool.watch,
+  };
+}
+
+/** The filter a thread's query reads its messages by: those on the thread `threadId` names, run in SQLite. */
+export function threadMessagesWhere(
+  message: Ref<ThreadMessage>,
+  threadId: string,
+): IR.BasicExpression<boolean> {
+  return eq(message.threadId, threadId);
 }
 
 /**
