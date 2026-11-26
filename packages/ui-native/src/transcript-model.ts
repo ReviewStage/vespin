@@ -47,8 +47,10 @@ import {
 import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import type { ManagerChatSending, SendingMessage } from "@repo/features/agent-view";
 import {
+  AGENT_SENDER,
   type AgentOrigin,
   type AgentPullRequest,
+  type AgentSender,
   type AgentTranscriptMessage,
   agentMessageWords,
   PULL_REQUEST_STATE,
@@ -65,7 +67,9 @@ import {
 import { fileName } from "@repo/features/code-ref-words";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { fileMarkers } from "@repo/features/file-marker";
+import { githubAccountPage, isBotLogin } from "@repo/features/github-login";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
 import {
   CHAT_RUN_ALONE,
@@ -284,6 +288,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly files?: readonly SaidFile[] | undefined;
       /** Who sent it, where the reader did not. */
       readonly sender: string | undefined;
+      /** Where a press on the sender's name opens, as the panel's sender line opens it; none where it opens nothing. */
+      readonly senderAddress?: string | undefined;
       /** Whether anyone but the reader sent it (another agent, a teammate, the app, an automation, GitHub), so it stands at the column's leading edge, as the panel stands a received line at its left; the reader's own alone stand trailing. */
       readonly received: boolean;
       /** Whether the Manager whose chat this is said it, or greeted with it, so it stands among the people's lines as their bubbles do. */
@@ -428,8 +434,8 @@ interface TranscriptReading {
   readonly wholePart?: ((cut: AgentPartCut) => WholePartRead | undefined) | undefined;
   /** What the transcript opens on where an automation's run started the agent, drawn on its first line; none for any other agent, or while older pages are still unread. */
   readonly origin?: TranscriptOrigin | undefined;
-  /** The address of an agent whose suggestion a line was sent from, which the line's head opens; none where it can't be named, when the head names the agent alone. */
-  readonly suggestionAddress?: ((agentId: string) => string | undefined) | undefined;
+  /** The address of a place of the agent's workspace, such as the agent a line was suggested by or a line's sender, which the line's head opens; none where the workspace can't be named, when the head names them alone. */
+  readonly placeAddress?: ((place: LinkDestination) => string | undefined) | undefined;
   /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
   readonly waitingCalls?: ReadonlySet<string> | undefined;
 }
@@ -580,12 +586,49 @@ function suggestionFrom(
   const by = {
     lead: SUGGESTION_LEAD,
     words: suggestedBy.name,
-    address: reading.suggestionAddress?.(suggestedBy.agent_id),
+    address: reading.placeAddress?.({
+      kind: LINK_DESTINATION.AGENT,
+      agentId: suggestedBy.agent_id,
+    }),
   };
 
   if (suggestionStartOf(line) === undefined) return [by];
 
   return [{ ...by, after: sender === undefined ? STARTED_BY.YOU : STARTED_BY.MEMBER(sender) }];
+}
+
+/**
+ * Where a press on a line's sender opens, as the panel's sender line opens
+ * it (`lineSender`, `useActorDoor`): another agent its page, an
+ * automation its page, a member their page, and a GitHub account its own
+ * page on GitHub; none for the app, someone no account names, a member who
+ * left that the line names by no id, or a place whose workspace can't be
+ * named.
+ */
+function senderAddressOf(sentBy: AgentSender, reading: TranscriptReading): string | undefined {
+  const address = reading.placeAddress;
+
+  if (sentBy.agent === true) {
+    return sentBy.agentId === undefined
+      ? undefined
+      : address?.({ kind: LINK_DESTINATION.AGENT, agentId: sentBy.agentId });
+  }
+
+  switch (sentBy.kind) {
+    case AGENT_SENDER.AUTOMATION:
+      return sentBy.automationId === undefined
+        ? undefined
+        : address?.({ kind: LINK_DESTINATION.AUTOMATION, automationId: sentBy.automationId });
+    case AGENT_SENDER.GITHUB:
+      return githubAccountPage(sentBy.name, isBotLogin(sentBy.name));
+    case AGENT_SENDER.MEMBER:
+    case undefined:
+      return sentBy.userId === undefined
+        ? undefined
+        : address?.({ kind: LINK_DESTINATION.PERSON, userId: sentBy.userId });
+    default:
+      return undefined;
+  }
 }
 
 /** The media types a sent line's file is drawn as a picture for. */
@@ -732,6 +775,10 @@ function saidItem(
     ...placedPictures(shown, saidPictures(messageFileChips(line))),
     files: saidFiles(messageFileChips(line)),
     sender: started ? undefined : sender,
+    senderAddress:
+      started || own || line.sentBy === undefined
+        ? undefined
+        : senderAddressOf(line.sentBy, reading),
     received: !own,
     from,
     by: sender === undefined ? undefined : line.sentBy?.userId,

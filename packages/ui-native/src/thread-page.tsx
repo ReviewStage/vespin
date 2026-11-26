@@ -1,6 +1,7 @@
 // thread-page.tsx -- an Inbox thread: its path small in the bar, a menu of what it opens, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, videos, sound clips, and files in React Native views.
 
 import {
+  Button,
   HStack,
   Image,
   RNHostView,
@@ -16,8 +17,10 @@ import {
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHidden,
+  accessibilityHint,
   accessibilityLabel,
   animation,
+  buttonStyle,
   defaultScrollAnchorForRole,
   font,
   foregroundStyle,
@@ -60,6 +63,9 @@ import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
+
+/** What a press on a message's writer is heard to do. */
+const WRITER_HINT = "Opens their page";
 
 /** Between a writer's face and their name. */
 const WRITER_GAP = SPACE.TIGHT * 2;
@@ -136,6 +142,8 @@ export type ThreadMessage = {
     readonly harness?: ModelProvider | undefined;
     /** The Manager's face, and whether it works, which stands in the agent's tile; none for any other agent. */
     readonly manager?: { readonly face: ManagerFaceValue; readonly working: boolean } | undefined;
+    /** Opens their page, a member's or the agent's, as a press on the panel's writer does; none where it opens nothing. */
+    readonly onOpen?: (() => void) | undefined;
   };
   /** When it was written, in epoch milliseconds. */
   readonly at: number;
@@ -502,6 +510,41 @@ function MessageView({
     </Text>
   );
 
+  const face = writer.agent ? (
+    <AgentTile
+      harness={writer.harness}
+      face={writer.manager?.face}
+      working={writer.manager?.working}
+      size={MARK_SIZE.WRITER}
+    />
+  ) : (
+    <Avatar name={writer.name} id={writer.id} picture={writer.picture} size={MARK_SIZE.WRITER} />
+  );
+
+  const writerLine = (
+    <>
+      {face}
+      {large ? (
+        <VStack alignment="leading" spacing={2}>
+          {name}
+          {time}
+        </VStack>
+      ) : (
+        <>
+          {name}
+          {time}
+        </>
+      )}
+    </>
+  );
+
+  const writerHeard = [
+    accessibilityElement("ignore"),
+    accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
+    accessibilityAddTraits(["isHeader"]),
+  ];
+
+  // Note that the writer's face and name are one tap that opens their page where they have one, the system's plain button, which a scroll begun on it cancels and a long press leaves to the message's menu, as the panel's name opens theirs.
   // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from run to run, that a message after its run's head is a container labeled who and when, so VoiceOver says it on entering the message as Messages reads the sender on every bubble, while the message's lines, links and files stay elements of their own, and that past the accessibility sizes the time stands under the name rather than beside it, as Mail's and Settings' do, so a long name keeps its width, and that a long press on the message offers Copy message, a picture's, a recording's, or a file's own menu standing over it.
   return (
     <CopyWordsSwiftMenu words={message.words} groups={message.menu}>
@@ -518,40 +561,18 @@ function MessageView({
         }
       >
         {head ? (
-          <HStack
-            spacing={WRITER_GAP}
-            modifiers={[
-              padding({ horizontal: SPACE.EDGE }),
-              accessibilityElement("ignore"),
-              accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
-              accessibilityAddTraits(["isHeader"]),
-            ]}
-          >
-            {writer.agent ? (
-              <AgentTile
-                harness={writer.harness}
-                face={writer.manager?.face}
-                working={writer.manager?.working}
-                size={MARK_SIZE.WRITER}
-              />
+          <HStack modifiers={[padding({ horizontal: SPACE.EDGE })]}>
+            {writer.onOpen === undefined ? (
+              <HStack spacing={WRITER_GAP} modifiers={writerHeard}>
+                {writerLine}
+              </HStack>
             ) : (
-              <Avatar
-                name={writer.name}
-                id={writer.id}
-                picture={writer.picture}
-                size={MARK_SIZE.WRITER}
-              />
-            )}
-            {large ? (
-              <VStack alignment="leading" spacing={2}>
-                {name}
-                {time}
-              </VStack>
-            ) : (
-              <>
-                {name}
-                {time}
-              </>
+              <Button
+                onPress={writer.onOpen}
+                modifiers={[buttonStyle("plain"), ...writerHeard, accessibilityHint(WRITER_HINT)]}
+              >
+                <HStack spacing={WRITER_GAP}>{writerLine}</HStack>
+              </Button>
             )}
             <Spacer />
           </HStack>

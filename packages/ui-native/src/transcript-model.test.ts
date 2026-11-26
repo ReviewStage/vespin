@@ -1,5 +1,11 @@
 import { agentParts, WHOLE_PART } from "@repo/features/agent-parts";
-import { CHECK_SUMMARY, PART_CUT_FIELD, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import {
+  AGENT_SENDER,
+  CHECK_SUMMARY,
+  PART_CUT_FIELD,
+  PULL_REQUEST_STATE,
+} from "@repo/features/agent-wire";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { managerChatView } from "@repo/features/manager-chat-view";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
@@ -358,6 +364,45 @@ describe("transcriptItems", () => {
     ]);
   });
 
+  it.each([
+    {
+      sender: "a member",
+      sentBy: { name: "Grace", userId: "u2" },
+      opens: JSON.stringify({ kind: LINK_DESTINATION.PERSON, userId: "u2" }),
+    },
+    {
+      sender: "another agent",
+      sentBy: { name: "Triage", agent: true, agentId: "0a09f5a6-cff0-4615-aff3-a54d80f101dc" },
+      opens: JSON.stringify({
+        kind: LINK_DESTINATION.AGENT,
+        agentId: "0a09f5a6-cff0-4615-aff3-a54d80f101dc",
+      }),
+    },
+    {
+      sender: "an App's bot on GitHub",
+      sentBy: { name: "coderabbitai[bot]", kind: AGENT_SENDER.GITHUB },
+      opens: "https://github.com/apps/coderabbitai",
+    },
+    { sender: "the app", sentBy: { name: "Vespin", kind: AGENT_SENDER.APP }, opens: undefined },
+  ] as const)(
+    "opens what $sender's name opens on the panel: their page, or nothing",
+    ({ sentBy, opens }) => {
+      const items = transcriptItems(
+        [{ id: "sent", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Hi." }], sentBy }],
+        {
+          writing: false,
+          readerId: "u1",
+          toggles: NO_TOGGLES,
+          now: 1,
+          pullRequests: [],
+          placeAddress: (place) => JSON.stringify(place),
+        },
+      );
+
+      expect(items).toMatchObject([{ kind: TRANSCRIPT_ITEM.SAID, senderAddress: opens }]);
+    },
+  );
+
   it("names an app's line while the reader is not yet known", () => {
     const items = transcriptItems(
       [
@@ -471,7 +516,10 @@ describe("transcriptItems", () => {
     expect(
       transcriptItems(lines, {
         ...reading,
-        suggestionAddress: (agentId) => `https://vespin.dev/acme/agent/${agentId}`,
+        placeAddress: (place) =>
+          place.kind === LINK_DESTINATION.AGENT
+            ? `https://vespin.dev/acme/agent/${place.agentId}`
+            : undefined,
       }),
     ).toMatchObject([
       {

@@ -1,4 +1,4 @@
-# person.yaml -- a person's chip in a thread's message and in an agent's transcript: held, it opens Open link and Copy link over the message's own menu; pressed, it opens the person's page, their name heading it and its ⋯ holding Copy link, Copy email and Manage in workspace settings; and a chip naming no member opens a page that says so; and the account's own chip opens its page, which leads with the Managers it started.
+# person.yaml -- a person's chip in a thread's message and in an agent's transcript: held, it opens Open link and Copy link over the message's own menu; pressed, it opens the person's page, their name heading it and its ⋯ holding Copy link, Copy email and Manage in workspace settings; and a chip naming no member opens a page that says so; and the account's own chip opens its page, which leads with the Managers it started; and a sender's name, a teammate's or another agent's over their line in a transcript and the agent's over its message on a thread, pressed, opens their page, as the panel's sender opens it.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -136,3 +136,62 @@ env:
     timeout: 5000
 - takeScreenshot: person-chip-hold-transcript
 - tapOn: "Cancel"
+- waitForAnimationToEnd
+# The teammate's line names her over it, Grace Hopper: pressed, her page.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "The digest should count pending invites separately from members."
+      BELOW: "Build teammate invitations"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: person-sender-transcript
+- tapOn: "Grace Hopper"
+- extendedWaitUntil:
+    notVisible: "The digest should count pending invites separately from members."
+    timeout: 10000
+- assertVisible: "Grace Hopper"
+- assertNotVisible: "Not in this workspace"
+- waitForAnimationToEnd
+- takeScreenshot: person-sender-page
+- runFlow:
+    when:
+      visible:
+        id: "BackButton"
+    commands:
+      - tapOn:
+          id: "BackButton"
+- extendedWaitUntil:
+    visible: "The digest should count pending invites separately from members."
+    timeout: 10000
+# Another agent's message names it over its line, Weekly digest email: pressed, its page.
+- tapOn: "Weekly digest email"
+- extendedWaitUntil:
+    visible: ".*post it to the team's digest.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: person-sender-agent
+# A thread's message names the agent that wrote it, its face and name heading
+# its run: pressed, the agent's page, pushed over the thread.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn: "Recorded the invite flow"
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Build teammate invitations, .*"
+      DIRECTION: UP
+- waitForAnimationToEnd
+- takeScreenshot: person-writer-thread
+- tapOn: "Build teammate invitations, .*"
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: person-writer-agent
