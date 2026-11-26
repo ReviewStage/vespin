@@ -62,6 +62,12 @@ env:
 - extendedWaitUntil:
     visible: "Done editing description"
     timeout: 10000
+# The page stands where the press left it, the words pressed still in sight,
+# rather than jumping to its top with the field below the fold, as it did
+# when the read rows gave way to the field.
+- assertVisible:
+    id: "description-words"
+    text: "(?s).*Only an admin can add.*"
 - waitForAnimationToEnd
 - takeScreenshot: description-edit-inline
 # The bar over the keyboard holds the marks, Link, Mention, and Turn into,
