@@ -77,7 +77,9 @@ import { RowHint, RowHintOptions, Tooltip } from "../tooltip/hint.js";
  * behind it. A pointer over a row highlights it the same way, so there is
  * one highlight however it was reached, and a submenu opened by the
  * pointer closes only as the highlight moves on, never as the pointer
- * crosses to it. Home and End take the highlight to the first and the
+ * crosses to it. A pointer over anything else of the menu, its field, its
+ * head, its last line, a heading, highlights nothing and closes the
+ * submenu standing, as a system menu's does. Home and End take the highlight to the first and the
  * last row that may be picked. Focus never moves to a row, so the field
  * names the highlighted one to assistive technology by
  * `aria-activedescendant`, each row holding an id of its place. The keys
@@ -498,8 +500,12 @@ function markedLabel(row: MenuRow, query: string): React.ReactNode {
   return parts;
 }
 
-/** Where no row is highlighted: nothing matches and the arrows have not moved on to a pinned row. */
+/** Where no row is highlighted: nothing matches and the arrows have not moved on to a pinned row, or the pointer stands on none. */
 const NOWHERE = -1;
+
+/** A row the pointer lights, listed, pinned, or in a submenu, while it may be picked: anything else of the menu the pointer stands on lights nothing. */
+const LIT_BY_POINTER =
+  '[role="option"]:not([aria-disabled="true"]), [data-steered]:not([aria-disabled="true"])';
 
 /**
  * The highlight over a set of rows: the one moved to while it may still be
@@ -1187,6 +1193,26 @@ export function SearchableMenu(
     else openSubmenu(matches.length + index);
   };
 
+  // The pointer on anything of the menu but a row it lights (the field,
+  // the head, the lead, the last line, a heading, the inset around the
+  // rows) puts the highlight nowhere and closes the submenu standing beside
+  // the row it left, as a system menu does, so every part an owner hands the
+  // menu clears it with no handler of its own. Note that the submenu itself,
+  // and a row's card hung in a layer of its own outside the menu, are passed
+  // over; and that the move waits while the pointer heads for the submenu
+  // standing, as a move onto another row does.
+  const hoverOff = (event: React.MouseEvent<HTMLElement>) => {
+    const target = event.target;
+
+    if (!(target instanceof Element) || !event.currentTarget.contains(target)) return;
+
+    if (panel.current?.contains(target) === true || target.closest(LIT_BY_POINTER) !== null) {
+      return;
+    }
+
+    if (at !== NOWHERE || open !== undefined) aim(() => moveTo(NOWHERE));
+  };
+
   // A submenu's rows and its note, beside its row, or in a sheet's place,
   // where its list holds the focus and reads the keys as the menu's did.
   const submenuBody = (shown: Submenu) => (
@@ -1378,6 +1404,7 @@ export function SearchableMenu(
       {...REPLAY_MASKED}
       leaving={leaving}
       onKeyDown={onKey}
+      onMouseMove={hoverOff}
       onBlur={(event) => props.onLeave(event.relatedTarget)}
     >
       {props.head === undefined ? null : <Head head={props.head} unmasked={unmasked} />}
