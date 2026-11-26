@@ -1,0 +1,11 @@
+pinned to 15c7e9bab2
+== bundle PJjax3pin base 15c7e9bab2
+  built 15c7e9bab2 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app, pin 15c7e9bab2
+iphone-light-accessibility-ax3: fails 0 shots 6 
+iphone-light-accessibility: fails 3 shots 10     Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  iphone-light-accessibility around the failure: Wait for animation to end within 5000 ms... COMPLETED|Take screenshot accessibility-pull-request... COMPLETED|Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox, UIPreferredContentSizeCategoryName=UICTContentSizeCategor|Assert that "Verify the digest's sender domain" is visible... COMPLETED|Run subflows/to-row.yaml...|  Run flow when ${FLOATING_TABS != 'true'} is true...|    Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering|  Run flow when true is true... FAILED|

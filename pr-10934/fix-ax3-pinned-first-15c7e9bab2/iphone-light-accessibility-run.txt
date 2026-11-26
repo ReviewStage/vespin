@@ -1,0 +1,124 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane B) - iOS 27.2 - D2E5EAB5-4ACE-4AE7-B7C9-7984D6FD7999
+ > Flow accessibility
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, UIPreferredContentSizeCategoryName=UICTContentSizeCategoryAccessibilityXXXL})... COMPLETED
+Assert that "Verify the digest's sender domain" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot accessibility-inbox... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Swipe from (50%, 60%) to (50%, 35%) in 800 ms... COMPLETED
+      Run flow when "Recorded the invite flow", Above id: search-tab is not visible and true is true... COMPLETED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Run subflows/scroll-to.yaml...
+  Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE != ''} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+    Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 60000 ms, with centering enabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end within 5000 ms... COMPLETED
+Run subflows/scroll-to.yaml... COMPLETED
+Assert that ".*walked the invite flow.*" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot accessibility-thread... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox, UIPreferredContentSizeCategoryName=UICTContentSizeCategoryAccessibilityXXXL})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot accessibility-tasks... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Swipe from (50%, 60%) to (50%, 35%) in 800 ms... COMPLETED
+      Run flow when "Teammate invitations", Above id: search-tab is not visible and true is true... COMPLETED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot accessibility-task... COMPLETED
+Scrolling DOWN until "Agents" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot accessibility-task-agents... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5, UIPreferredContentSizeCategoryName=UICTContentSizeCategoryAccessibilityXXXL})... COMPLETED
+Assert that "Waiting on you.*" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot accessibility-agent... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5, pullRequest=128, UIPreferredContentSizeCategoryName=UICTContentSizeCategoryAccessibilityXXXL})... COMPLETED
+Assert that "Ready to merge" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot accessibility-pull-request... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox, UIPreferredContentSizeCategoryName=UICTContentSizeCategoryAccessibilityXXXL})... COMPLETED
+Assert that "Verify the digest's sender domain" is visible... COMPLETED
+Run subflows/to-row.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  Run flow when true is true... FAILED
+Run subflows/to-row.yaml... FAILED
+
+No visible element found: "How should a finished turn end\?"
+
+Could not find a visible element matching selector: "How should a finished turn end\?"
+Tip: Try adjusting the following settings to improve detection:
+- `timeout`: current = 20000ms → Increase if you need more time to find the element
+- `speed`: current = 40 (0-100 scale) → Increase for faster scrolling if element is far away
+- `waitToSettleTimeoutMs`: current = Not defined → Set this value (e.g., 500ms) if your UI updates frequently between scrolls
+- `visibilityPercentage`: current = 100% → Lower this value if you want to detect partially visible elements
+- `centerElement`: current = false → Enable if you want the element to be centered after finding it
+
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjax3pin/iphone-light-accessibility/2026-11-26_130512
