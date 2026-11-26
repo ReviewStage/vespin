@@ -1,0 +1,11 @@
+pinned to 0d86a75c22
+== bundle PJjpk10923 base 0d86a75c22
+  built 0d86a75c22 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+EXCEPTION (the Manager 23:16 UTC Nov 25): flow-only PR over Vmain14 (natives from 938bbc656d), missing #10759 AgentsLiveActivity.swift and #10966 ClaudeMark/OpenAIMark assets; base in use: Vmain14.app log inbox-rig.yaml: 2 of 2 screenshot anchors found
+iphone-light-inbox: fails 1 shots 9 Assert that id: QLOverlayDoneButtonAccessibilityIdentifier is not visible... FAILED
+  iphone-light-inbox around the failure: Wait for animation to end... COMPLETED|Take screenshot inbox-pdf... COMPLETED|Tap on id: QLOverlayDoneButtonAccessibilityIdentifier... COMPLETED|Wait for animation to end... COMPLETED|Assert that id: QLOverlayDoneButtonAccessibilityIdentifier is not visible... FAILED||
+ipad27-light-inbox: fails 0 shots 15 
