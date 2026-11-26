@@ -13,6 +13,7 @@ import { getTestDB } from "../../testing/index.js";
 import {
   dropAttachmentBlobTombstones,
   readAttachmentBlobTombstones,
+  tombstoneUnwrittenUploads,
 } from "../attachment-blob-tombstones.js";
 import { deleteConversations } from "../conversation-delete.js";
 
@@ -108,5 +109,39 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
 
       yield* dropAttachmentBlobTombstones([older]);
     }),
+  );
+
+  it.effect(
+    "an upload whose row was never written is tombstoned, and one whose row stands is not",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { userId, conversationId } = yield* openConversation;
+        const written = pictureOf(userId, conversationId);
+        const unwritten = randomUUID();
+        const writtenKey = `attachments/${written.id}`;
+        const unwrittenKey = `attachments/${unwritten}`;
+
+        yield* db.insert(attachment).values({
+          ...written,
+          contentType: CONVERSATION_MEDIA_TYPE.PNG,
+          byteCount: 3,
+          blobKey: writtenKey,
+        });
+
+        yield* tombstoneUnwrittenUploads([
+          { id: written.id, keys: [writtenKey] },
+          { id: unwritten, keys: [unwrittenKey] },
+        ]);
+
+        const tombstoned = yield* readAttachmentBlobTombstones(1_000);
+
+        assert.deepEqual(
+          tombstoned.filter((key) => key === writtenKey || key === unwrittenKey),
+          [unwrittenKey],
+        );
+
+        yield* dropAttachmentBlobTombstones([unwrittenKey]);
+      }),
   );
 });

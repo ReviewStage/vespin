@@ -94,6 +94,8 @@ const DECLARED_TABLES = [
   "integration_install_intent",
   "integration_installation",
   "invitation",
+  "journal_image_move",
+  "journal_image_rewrite",
   "jwks",
   "live_activity",
   "machine_command",

@@ -88,6 +88,8 @@ export * from "./integration.js";
 
 export * from "./integration-installation.js";
 
+export * from "./journal-image-move.js";
+
 export * from "./live-activity.js";
 
 export * from "./machine-command.js";
