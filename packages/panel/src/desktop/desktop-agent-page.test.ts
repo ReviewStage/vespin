@@ -39,12 +39,13 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { Effect } from "effect";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
 import { RoutedExitsProvider } from "../places/routed-exits.js";
+import { type MessageReveal, MessageRevealProvider } from "../tasks/message-links.js";
 import { useSidePanel } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
@@ -58,6 +59,7 @@ import { editorBundleLanded, installEditorLayout, typeInComposer } from "../test
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { ACME, SHOW_KEY, WHOSE_KEY } from "../testing/desktop-inbox.js";
 import { overListedTasks } from "../testing/desktop-sidebar.js";
+import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import {
   agentsControl,
@@ -562,30 +564,31 @@ test("a Manager's page on a phone stands on its chat, a message's thread summed 
   assert.equal(page.querySelector("[role='tablist']"), null, "no row of views stands");
 });
 
+/** Opens the thread of the message under `container` that sums it, from that summary. */
+async function openThread(container: HTMLElement): Promise<void> {
+  const summary =
+    [...container.querySelectorAll<HTMLElement>("button")].find((button) =>
+      /1 reply/u.test(button.textContent ?? ""),
+    ) ?? assert.fail("the message sums its thread");
+
+  act(() => summary.click());
+  await settleQueries();
+}
+
+/** The thread standing in the page under `container`; none while it is shut. */
+function threadShown(container: HTMLElement): Element | null {
+  return container.querySelector(".agent-page section[aria-label='Thread']");
+}
+
 test("a wide Manager's page opens a message's thread inside Messages beside the chat, not in the panel, and its close and Escape shut it", async () => {
   const manager = managerWithThread();
   const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
   const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
   const container = await mountAgentPage(history, tasks);
 
-  /** Opens the thread from the summary under its message. */
-  const openThread = async () => {
-    const summary =
-      [...container.querySelectorAll<HTMLElement>("button")].find((button) =>
-        /1 reply/u.test(button.textContent ?? ""),
-      ) ?? assert.fail("the message sums its thread");
+  await openThread(container);
 
-    act(() => summary.click());
-    await settleQueries();
-  };
-
-  const threadShown = () => container.querySelector(".agent-page section[aria-label='Thread']");
-
-  await openThread();
-
-  const thread =
-    container.querySelector<HTMLElement>(".agent-page section[aria-label='Thread']") ??
-    assert.fail("the thread stands in the page");
+  const thread = threadShown(container) ?? assert.fail("the thread stands in the page");
 
   assert.match(thread.textContent ?? "", /The web app's\./u, "the thread shows its reply");
   assert.match(
@@ -601,15 +604,91 @@ test("a wide Manager's page opens a message's thread inside Messages beside the 
 
   act(() => close.click());
   await settleQueries();
-  assert.equal(threadShown(), null, "the close shuts the thread");
+  assert.equal(threadShown(container), null, "the close shuts the thread");
 
-  await openThread();
-  assert.notEqual(threadShown(), null, "the thread opens again");
+  await openThread(container);
+  assert.notEqual(threadShown(container), null, "the thread opens again");
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.CLOSE_THREAD), "Escape closes the thread");
   });
   await settleQueries();
-  assert.equal(threadShown(), null, "Escape shuts the thread");
+  assert.equal(threadShown(container), null, "Escape shuts the thread");
+});
+
+test("with a thread open beside a Manager's chat, ⌘F finds in whichever of the two the reader was in last", async () => {
+  const manager = managerWithThread();
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
+  const container = await mountAgentPage(history, tasks);
+  await openThread(container);
+
+  const thread = threadShown(container) ?? assert.fail("the thread stands in the page");
+
+  const chat =
+    container.querySelector(".agent-page .desktop-task-column") ??
+    assert.fail("the chat stands beside it");
+
+  /** The reader pressing in `where`, then ⌘F. */
+  const findFrom = (where: Element) => {
+    act(() => {
+      where.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    });
+    act(() => {
+      assert.ok(runAppCommand(APP_COMMAND.FIND), "the page offers find");
+    });
+  };
+
+  /** Whether the find bar stands over the scope holding `inside`. */
+  const barOver = (inside: Element) =>
+    inside.closest(".find-scope")?.querySelector(":scope > .find-bar") != null;
+
+  findFrom(chat);
+  assert.equal(barOver(chat), true, "from the chat, it finds in the chat");
+  assert.equal(barOver(thread), false, "not in the thread");
+
+  findFrom(thread);
+  assert.equal(barOver(thread), true, "from the thread, it finds in the thread");
+});
+
+test("a link to a Manager's message while its thread stands alone over the chat closes the thread, so the chat shows the message", async () => {
+  const manager = managerWithThread();
+  const history = createMemoryHistory({ initialEntries: [`/acme/agent/${MANAGER.id}`] });
+  const tasks = tasksControl({ shown: true, workspace: ACME, listedAgents: [manager] });
+  let ask: (reveal: MessageReveal) => void = () => undefined;
+
+  /** The page under a link's standing ask, which `ask` raises. */
+  function Asked(): React.ReactNode {
+    const [reveal, setReveal] = useState<MessageReveal | undefined>(undefined);
+    ask = setReveal;
+
+    return createElement(
+      MessageRevealProvider,
+      { value: { reveal, onRevealed: () => undefined } },
+      createElement(AgentRoutePage, { tasks }),
+    );
+  }
+
+  const container = await mountAgentPage(history, tasks, Asked);
+  await openThread(container);
+
+  // Messages stands narrower than the chat's least and the thread's together, so the thread stands alone.
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.classList.contains("ui-side-split") ? new DOMRect(0, 0, 600, 800) : new DOMRect();
+  });
+  act(() => relayout());
+
+  const split =
+    container.querySelector<HTMLElement>(".ui-side-split") ?? assert.fail("the split stands");
+
+  assert.equal(split.hasAttribute("data-alone"), true, "the thread stands alone over the chat");
+
+  act(() => ask({ agentId: manager.id, messageId: "first", ask: 1 }));
+  await settleQueries();
+
+  assert.equal(threadShown(container), null, "the thread closes");
+  assert.equal(split.hasAttribute("data-alone"), false, "the chat shows again");
 });
 
 test("a Manager's Inbox tab lists its threads as the window's Inbox's view chooses, offering that view's menu", async () => {

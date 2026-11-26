@@ -98,7 +98,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Predicate } from "effect";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
 import { FindScope } from "../find-in-tab.js";
@@ -581,9 +581,6 @@ function OwnAgentPage({
   // A link to one of the Manager's messages goes back to its chat, where the message is landed on.
   const messageAsked = useMessageAsked(agent.id);
 
-  useEffect(() => {
-    if (messageAsked !== undefined) setView(MANAGER_VIEW.MESSAGES);
-  }, [messageAsked]);
   // The thread the Inbox tab shows beside its list; none while the list stands alone.
   const [chosenThread, setChosenThread] = useState<string | undefined>(undefined);
 
@@ -687,6 +684,19 @@ function OwnAgentPage({
   });
 
   const closeThread = () => setBesideThread(undefined);
+  // Whether the thread stands alone over the chat, as last drawn, which a link's ask reads without waiting on it.
+  const threadAlone = useRef(false);
+  useLayoutEffect(() => {
+    threadAlone.current = split.alone;
+  });
+
+  // Note that a link to one of the Manager's messages goes back to its chat, closing a thread that stands alone over it, so the message is landed on where it can be seen.
+  useEffect(() => {
+    if (messageAsked === undefined) return;
+    setView(MANAGER_VIEW.MESSAGES);
+
+    if (threadAlone.current) setBesideThread(undefined);
+  }, [messageAsked]);
   // Note that Escape closes the thread while it stands, the page shown and its keys not the panel's, as the window's Escape closes the nearest thing open.
   useAppCommand(
     APP_COMMAND.CLOSE_THREAD,
@@ -695,7 +705,12 @@ function OwnAgentPage({
 
   const threadPane =
     summary === undefined || besideThread === undefined ? null : (
-      <div className="manager-thread-pane flex min-h-0 min-w-0 flex-1 flex-col">
+      // Note that the thread finds in its own words, apart from the chat's, while the reader is in it.
+      <FindScope
+        className="manager-thread-pane flex min-h-0 min-w-0 flex-1 flex-col"
+        active={tasks.shown && !sideFocused && split.sideHeld}
+        subject={{ task: "", tab: threadTab(besideThread, agent.id) }}
+      >
         <PaneBar
           start={
             split.alone ? (
@@ -729,7 +744,7 @@ function OwnAgentPage({
           onOpenTarget={openTarget}
           cards={cards.agent(agent.id)}
         />
-      </div>
+      </FindScope>
     );
 
   const thread =
@@ -799,11 +814,8 @@ function OwnAgentPage({
                 />
               </Fill>
             ) : (
-              // Note that the scope stands as the column's own box, as its fill did, and is the panel of the tab shown on a Manager's page.
-              <FindScope
-                className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
-                active={tasks.shown && !sideFocused}
-                subject={findSubject}
+              // Note that the chat and the thread beside it are the panel of the tab shown on a Manager's page, each finding in its own words.
+              <Fill
                 id={tabbed ? panels(view).panel : undefined}
                 role={tabbed ? "tabpanel" : undefined}
                 aria-labelledby={tabbed ? panels(view).tab : undefined}
@@ -812,28 +824,35 @@ function OwnAgentPage({
                   split={split}
                   side={threadPane}
                   main={
-                    <ThreadDoorsProvider value={manager ? threadDoors : undefined}>
-                      <AgentPane
-                        label={label}
-                        tabbed={false}
-                        tab={agentTab(agent.id)}
-                        agents={agents}
-                        shown={tasks.shown && !sidePanel.fullScreen}
-                        views={views}
-                        // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
-                        onOpenDelegation={(_agent, callId, _task, status) =>
-                          views.onWorkerStatus(callId, status)
-                        }
-                        onOpenPullRequest={openPullRequest}
-                        onOpenTarget={openTarget}
-                        cards={cards}
-                        threads={threads}
-                        chat={chat}
-                      />
-                    </ThreadDoorsProvider>
+                    // Note that the scope stands as the column's own box, as its fill did.
+                    <FindScope
+                      className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+                      active={tasks.shown && !sideFocused && !split.sideHeld}
+                      subject={findSubject}
+                    >
+                      <ThreadDoorsProvider value={manager ? threadDoors : undefined}>
+                        <AgentPane
+                          label={label}
+                          tabbed={false}
+                          tab={agentTab(agent.id)}
+                          agents={agents}
+                          shown={tasks.shown && !sidePanel.fullScreen}
+                          views={views}
+                          // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
+                          onOpenDelegation={(_agent, callId, _task, status) =>
+                            views.onWorkerStatus(callId, status)
+                          }
+                          onOpenPullRequest={openPullRequest}
+                          onOpenTarget={openTarget}
+                          cards={cards}
+                          threads={threads}
+                          chat={chat}
+                        />
+                      </ThreadDoorsProvider>
+                    </FindScope>
                   }
                 />
-              </FindScope>
+              </Fill>
             )}
           </Fill>
           {/* Note that the panel stands while its toggle asks for its "+" with nothing to show, drawing the menu alone. */}
