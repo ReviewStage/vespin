@@ -6,6 +6,7 @@ import {
   Image,
   Menu,
   ScrollView,
+  Button as SwiftUIButton,
   Toggle,
   VStack,
   ZStack,
@@ -13,7 +14,6 @@ import {
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
-  accessibilityElement,
   accessibilityHint,
   accessibilityLabel,
   accessibilityValue,
@@ -50,6 +50,7 @@ import type { ReactElement } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { FieldChip, type FieldMenu, LabelChip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
+import { menuActContent } from "./glyph-label.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { useRowInset } from "./layout-margin.js";
 import { LineCounts, lineCountsHeard } from "./line-counts.js";
@@ -296,8 +297,12 @@ function ReviewerFace({
 /**
  * A pull request's reviewers as its heading draws them, as the panel's
  * header does: their first faces, each wearing where they stand at its
- * corner, and a count of the rest. It is heard as one element, every
- * reviewer by name with where they stand.
+ * corner, and a count of the rest. A press opens the system's menu of every
+ * reviewer, by name, where they stand, and its glyph in its tone, as the
+ * panel's faces reveal the rest past their count (`MoreFaces`), so a
+ * reviewer past the third is reachable by sight as well as by VoiceOver.
+ * The faces are heard as one element, every reviewer by name with where
+ * they stand.
  */
 function HeadReviewers({ reviewers }: { readonly reviewers: readonly HeadReviewer[] }) {
   const colors = useColors();
@@ -306,15 +311,8 @@ function HeadReviewers({ reviewers }: { readonly reviewers: readonly HeadReviewe
   const rest = reviewers.length - drawn.length;
   const heard = reviewers.map(({ by, state }) => `${by.name}, ${REVIEW_WORDS[state]}`).join("; ");
 
-  return (
-    <HStack
-      spacing={SPACE.TIGHT + 2}
-      modifiers={[
-        accessibilityElement("ignore"),
-        accessibilityLabel(REVIEWERS_HEARD),
-        accessibilityValue(heard),
-      ]}
-    >
+  const faces = (
+    <HStack spacing={SPACE.TIGHT + 2}>
       {drawn.map((reviewer) => (
         <ReviewerFace key={reviewer.by.name} reviewer={reviewer} size={size} />
       ))}
@@ -330,6 +328,31 @@ function HeadReviewers({ reviewers }: { readonly reviewers: readonly HeadReviewe
         </Text>
       )}
     </HStack>
+  );
+
+  return (
+    <Menu
+      label={faces}
+      modifiers={[
+        buttonStyle("plain"),
+        menuIndicator("hidden"),
+        accessibilityLabel(REVIEWERS_HEARD),
+        accessibilityValue(heard),
+      ]}
+    >
+      {reviewers.map(({ by, state }) => (
+        <SwiftUIButton
+          key={by.name}
+          {...menuActContent(
+            by.name,
+            REVIEW_LOOK[state].symbol,
+            REVIEW_WORDS[state],
+            toneColor(colors, REVIEW_LOOK[state].tone),
+          )}
+          onPress={() => undefined}
+        />
+      ))}
+    </Menu>
   );
 }
 
