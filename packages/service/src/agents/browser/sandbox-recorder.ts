@@ -350,46 +350,43 @@ export function stopRecording(): CommandAsk {
 export const RECORDING_READ_EXIT = { NO_VIDEO: 3 } as const;
 
 /**
- * Reads the video back, up to the bytes given and one past them, as base64
- * on one line after the line naming its absolute path, as the sandbox's
- * default user reads its other files (`workspace-mcp/sandbox-door.ts`); read
- * its run with `recordingBytesOf`. Note
- * that the path is the sandbox user's home's, which the agent's own may not
- * be, as a native runner's is not, so the agent is answered it whole.
+ * Names where the video stays, as its absolute path on one line, then its
+ * size, as the sandbox's default user finds it; read its run with
+ * `recordingFileOf`. The video itself leaves the sandbox by its own upload
+ * to the Blob store (`../machine/sandbox-upload.ts`), never through this
+ * run. Note that the path is the sandbox user's home's, which the agent's
+ * own may not be, as a native runner's is not, so the agent is answered it
+ * whole.
  */
-export function readRecording(maxBytes: number): CommandAsk {
+export function locateRecording(): CommandAsk {
   return {
     command: "bash",
     args: [
       "-c",
-      `f="$HOME/$1"; [ -f "$f" ] || exit ${RECORDING_READ_EXIT.NO_VIDEO}; printf '%s\\n' "$f"; head -c "$2" -- "$f" | base64 | tr -d '\\n'`,
+      `f="$HOME/$1"; [ -f "$f" ] || exit ${RECORDING_READ_EXIT.NO_VIDEO}; printf '%s\\n' "$f"; stat -c %s -- "$f"`,
       RECORDING_SCRIPT_NAME,
       SANDBOX_RECORDING.VIDEO,
-      String(maxBytes + 1),
     ],
   };
 }
 
-/** The video as a read printed it: the absolute path it stays at, and its bytes. */
+/** The video as a locate named it: the absolute path it stays at, and its size. */
 export interface RecordingFile {
   readonly path: string;
-  readonly bytes: Uint8Array;
+  readonly size: number;
 }
 
-/** The video as a read printed it; nothing where there was none, or where it ran past the bytes given. */
-export function recordingBytesOf(run: CommandRun, maxBytes: number): RecordingFile | undefined {
+/** The video as a locate named it; nothing where there was none, it is empty, or it runs past the bytes given. */
+export function recordingFileOf(run: CommandRun, maxBytes: number): RecordingFile | undefined {
   if (run.exitCode !== 0) return undefined;
-  const lineEnd = run.stdout.indexOf("\n");
+  const [path, sized] = run.stdout.trim().split("\n");
+  const size = Number(sized);
 
-  if (lineEnd < 0) return undefined;
-  const path = run.stdout.slice(0, lineEnd);
-  const bytes = new Uint8Array(Buffer.from(run.stdout.slice(lineEnd + 1).trim(), "base64"));
-
-  if (!path.startsWith("/") || bytes.byteLength === 0 || bytes.byteLength > maxBytes) {
+  if (path === undefined || !path.startsWith("/") || !Number.isSafeInteger(size)) {
     return undefined;
   }
 
-  return { path, bytes };
+  return size === 0 || size > maxBytes ? undefined : { path, size };
 }
 
 /** What a start's run says: a recording started, one already running, or which of its exits it ended on. */

@@ -252,6 +252,13 @@ export const attachment = pgTable(
   ],
 );
 
+/** The type a row's copy for a phone is served and stored under: an AAC M4A beside a sound clip, an H.264 MP4 beside a recording. */
+export function phoneCopyContentType() {
+  return sql<
+    typeof AUDIO_TYPE.M4A | typeof MP4_TYPE
+  >`case when ${isAudio(attachment)} then ${literal(AUDIO_TYPE.M4A)} else ${literal(MP4_TYPE)} end`;
+}
+
 /**
  * The columns a read serves a row by, for a reader that plays the video
  * given: a recording's MP4 copy, or a clip's M4A copy, under its own type
@@ -272,7 +279,7 @@ export function servedColumns(playable: PlayableVideoType) {
   }
 
   return {
-    contentType: sql<string>`case when ${attachment.mp4Bytes} is null and ${attachment.phoneBlobKey} is null then ${attachment.contentType} when ${isAudio(attachment)} then ${literal(AUDIO_TYPE.M4A)} else ${literal(MP4_TYPE)} end`,
+    contentType: sql<string>`case when ${attachment.mp4Bytes} is null and ${attachment.phoneBlobKey} is null then ${attachment.contentType} else ${phoneCopyContentType()} end`,
     bytes: sql<Uint8Array | null>`coalesce(${attachment.mp4Bytes}, ${attachment.bytes})`.mapWith(
       attachment.bytes,
     ),

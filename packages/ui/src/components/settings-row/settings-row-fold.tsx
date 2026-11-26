@@ -30,10 +30,8 @@ import { SettingsRowFoldPress } from "./settings-row-press.js";
  * keeping their own presses. The fold
  * stands in the row's own `below`, inside the row's rule and inset to its
  * words, so what it holds reads as part of the row rather than a box of its
- * own in the card. It opens and closes on the disclosure's motion
- * (`useDisclosureFold`): a press unrolls the body and fades it in, a close
- * rolls it up as it fades, and reduced motion holds it still at the tokens; a
- * fold drawn open from the start replays nothing.
+ * own in the card. It opens and closes at once, as every fold does
+ * (`useDisclosureFold`).
  *
  * What it folds open is its caller's, whole: a GitHub account's
  * repositories as `RepositoryLines` lists them, which scrolls its own.
@@ -44,8 +42,7 @@ import { SettingsRowFoldPress } from "./settings-row-press.js";
  * always before its ⋯, and the rows after it in a box of
  * their own, each a row of the card in its own right, ruled as the card's
  * own (settings-section.css). The head row is pressed whole as a fold row
- * is. They open and close on the same motion, the
- * box being the fold's body. Note that a closed fold hides its rows rather
+ * is. They open and close at once too, the box being the fold's body. Note that a closed fold hides its rows rather
  * than letting them go, because a row keeps what it is waiting on, such as
  * a refusal still to be said under a picker, while the fold is closed.
  */
@@ -89,7 +86,7 @@ export function SettingsFoldRow({
   /** What the fold holds. */
   children: ReactNode;
 }): React.JSX.Element {
-  const { state, details } = useDisclosureFold(defaultOpen);
+  const { state } = useDisclosureFold(defaultOpen);
 
   return (
     <DisclosureScope state={state}>
@@ -102,12 +99,9 @@ export function SettingsFoldRow({
           leading={leading}
           indent={indent}
           below={
-            state.drawn
+            state.open
               ? () => (
-                  <div
-                    className="ui-settings-row-fold min-w-0"
-                    data-disclosure={details["data-disclosure"]}
-                  >
+                  <div className="ui-settings-row-fold min-w-0">
                     <DisclosureBody inset={DISCLOSURE_BODY.NONE}>{children}</DisclosureBody>
                   </div>
                 )
@@ -164,7 +158,7 @@ export function SettingsRowsFold({
   opened?: number | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
-  const { state, details } = useDisclosureFold(false, { open, onOpenChange: setOpen });
+  const { state } = useDisclosureFold(false, { open, onOpenChange: setOpen });
   const folds = rows !== undefined && rows !== null && rows !== false;
   useEffect(() => {
     if (opened !== undefined) setOpen(true);
@@ -186,16 +180,10 @@ export function SettingsRowsFold({
           ) : null,
         )}
       </SettingsRowFoldPress>
-      {/* Note that the rows stay drawn while closed, only hidden, so each keeps what it waits on; the body is the root's own child, which disclosure.css unrolls and rolls up. */}
+      {/* Note that the rows stay drawn while closed, only hidden, so each keeps what it waits on. */}
       {folds ? (
-        <div
-          className="ui-settings-rows-fold"
-          hidden={!state.drawn}
-          data-disclosure={details["data-disclosure"]}
-        >
-          <div ref={state.body} className="ui-disclosure-body" inert={state.leaving}>
-            {rows}
-          </div>
+        <div className="ui-settings-rows-fold" hidden={!state.open}>
+          <div className="ui-disclosure-body">{rows}</div>
         </div>
       ) : null}
     </DisclosureScope>

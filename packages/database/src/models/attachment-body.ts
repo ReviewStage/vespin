@@ -1,5 +1,5 @@
 /**
- * attachment-body.ts -- where an attachment's bytes stand as a read answers them: inline in its row, or in the Blob store under a key.
+ * attachment-body.ts -- where an attachment's bytes stand: inline in its row or in the Blob store under a key as a read answers them, and in the store as a new row is written.
  *
  * A row keeps its bytes in `bytes` or names their pathname in the
  * deployment's private Blob store in `blob_key`, exactly one of the two
@@ -62,3 +62,64 @@ export function phoneBodyOf(row: {
 
   return row.mp4Bytes === null ? undefined : { kind: ATTACHMENT_BODY.INLINE, bytes: row.mp4Bytes };
 }
+
+/**
+ * A new row's bytes as its writer hands them in: already in the Blob store,
+ * under the pathname the row's own id names, counted, with a copy for a
+ * phone beside them where one was made. Note that a writer takes the id the
+ * bytes were uploaded under rather than minting one, because the object's
+ * pathname is built from it, and that no writer takes bytes, because every
+ * new row keeps its bytes in the store.
+ */
+export interface StoredAttachment {
+  readonly id: string;
+  readonly blobKey: string;
+  readonly byteCount: number;
+  readonly phone?: StoredPhoneCopy | undefined;
+}
+
+/** A copy for a phone in the Blob store beside a row's own bytes, counted. */
+export interface StoredPhoneCopy {
+  readonly blobKey: string;
+  readonly byteCount: number;
+}
+
+/** A stored attachment as a write's request schema takes it. */
+export const StoredAttachmentSchema = Schema.Struct({
+  id: Schema.String,
+  blobKey: Schema.String,
+  byteCount: Schema.Int,
+  phone: Schema.optional(Schema.Struct({ blobKey: Schema.String, byteCount: Schema.Int })),
+});
+
+/** The columns a new row keeps of its stored bytes: its id, its keys and counts, and no bytes. */
+export function storedAttachmentColumns(stored: StoredAttachment) {
+  return {
+    id: stored.id,
+    byteCount: stored.byteCount,
+    bytes: null,
+    blobKey: stored.blobKey,
+    mp4Bytes: null,
+    phoneBlobKey: stored.phone?.blobKey ?? null,
+    phoneByteCount: stored.phone?.byteCount ?? null,
+  };
+}
+
+/** A named file a message or a comment carries, as its writer hands it in: its name, the type it traveled as, and its bytes as uploaded to the Blob store. */
+export interface StoredNamedFile<Type extends string = string> {
+  readonly name: string;
+  readonly mediaType: Type;
+  readonly stored: StoredAttachment;
+}
+
+/**
+ * A request as a writer of its files takes it: the files it carries handed
+ * in as stored rather than as the base64 they traveled as, every other
+ * field as it came. Note that it distributes over a union of requests, so
+ * each keeps its own fields.
+ */
+export type WithStoredFiles<Request, Type extends string = string> = Request extends {
+  readonly attachments?: unknown;
+}
+  ? Omit<Request, "attachments"> & { readonly attachments?: readonly StoredNamedFile<Type>[] }
+  : Request;

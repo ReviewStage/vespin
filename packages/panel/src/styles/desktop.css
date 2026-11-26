@@ -405,7 +405,7 @@ body,
    list, which its fold folds together, so the first of them stands a tight
    gap under it rather than a section's (sidebar-task-view.tsx). Note that
    the gap is the fold's body's own padding rather than its first group's
-   margin, so the fold unrolls and rolls up the whole of it. */
+   margin, so the fold shows and hides the whole of it. */
 .sidebar-tasks-head > .ui-group-header > .ui-disclosure-body {
   padding-top: var(--ui-tight-gap);
 }
@@ -1547,15 +1547,6 @@ body,
   inset: 0;
   max-width: none;
   border-left: 0;
-}
-
-/* Shutting, it gives the document its room at once and slides out over it. */
-.side-panel[data-leaving="close"] {
-  position: absolute;
-  z-index: 1;
-  top: 0;
-  right: 0;
-  bottom: 0;
 }
 
 /* A drag the edge's snap took away from under the pointer is still the

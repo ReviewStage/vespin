@@ -12,11 +12,7 @@ import {
   RNHostView,
   ScrollView,
   Spacer,
-  TextField,
-  type TextFieldRef,
-  type TextFieldSelection,
   Toggle,
-  useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -29,7 +25,6 @@ import {
   foregroundStyle,
   frame,
   layoutPriority,
-  lineLimit,
   onGeometryChange,
   padding,
   tint,
@@ -48,6 +43,7 @@ import {
 import { useAccessibilitySize, useScaledSize, useTextScale } from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import type { CaretAtWord } from "./caret-at-word.js";
+import { type ComposerSend, pressSend } from "./composer-press.js";
 import {
   BAR_EDGE,
   BAR_GLASS,
@@ -171,6 +167,11 @@ export type ComposerMenu = {
   readonly switches?: BarMenu["choices"] | undefined;
 };
 
+/** Words a send took and later handed back, refused, laid in ahead of anything typed since, on a line of their own, as the field lays back words a send did not take. */
+export function wordsHandedBack(words: string, typed: string): string {
+  return typed.trim() === "" ? words : `${words}\n${typed}`;
+}
+
 /**
  * A field whose words hold pills (`PillField`) in place of the system's
  * plain one: its door, through which its holder puts a picked mention's pill
@@ -198,8 +199,8 @@ type ComposerProps = {
   readonly onWords?: ((words: string) => void) | undefined;
   /** Whether Send stands lit with no words typed, as it does once an ask's answer is picked. */
   readonly sendable?: boolean | undefined;
-  /** Called with the words typed once Send is pressed; where none is given, the system's spinner stands in Send's place under words, as while a start is out, and nothing while the field is empty. */
-  readonly onSend?: ((words: string) => void) | undefined;
+  /** Called with the words Send took out of the field; where none is given, the system's spinner stands in Send's place under words, as while a start is out, and nothing while the field is empty. */
+  readonly onSend?: ComposerSend | undefined;
   /** What Send stands for while the field is empty and `sendable`, where that is an act of its own rather than a message, such as a notice's Got it: its glyph on the same round and its name; Send's own once a word is typed. */
   readonly sendAs?: ComposerSendAs | undefined;
   /** Opens what the + adds, such as a picture; the + is not drawn where neither this nor `addMenu` is given. */
@@ -232,7 +233,7 @@ type ComposerProps = {
   readonly trailing?: ReactNode;
   /** Dictate, just before Send at the row's end, and the strip the row becomes while a dictation records, as the desktop composer's (`dictation-strip.tsx`); none where the composer takes none. */
   readonly dictation?: ComposerDictation | undefined;
-  /** Draws the words with their mentions as pills (`ComposerPills`), as the desktop's box draws its chips; the system's plain field where none is given. */
+  /** Draws the words with their mentions as pills (`ComposerPills`), as the desktop's box draws its chips, and hands the field's door, the `@` word, and the files to its holder; the same field, with none of those, where none is given. */
   readonly pills?: ComposerPills | undefined;
   /** The names a flow finds the field and the + by, where its holder names its own. */
   readonly testIds?: { readonly field: string; readonly add: string } | undefined;
@@ -375,9 +376,9 @@ export interface ComposerSendAs {
 /** What Send does while the field holds a queued message's words being edited. */
 export interface ComposerSaving {
   /** Writes the words back into the message's place in the queue. */
-  readonly onSave: () => void;
+  readonly onSave: ComposerSend;
   /** Sends them now as that message, steering the turn; none where it may not. */
-  readonly onSteer?: (() => void) | undefined;
+  readonly onSteer?: ComposerSend | undefined;
 }
 
 /** The panel's words for an edit's two ways. */
@@ -389,16 +390,22 @@ const SAVING_WORDS = { SAVE: "Save", STEER: "Steer" } as const;
  * where it may steer, the system's menu with a primary act, so a tap saves
  * and a hold offers Steer, as the panel's held Send steers an edit.
  */
-function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
+function SaveButton({
+  onSave,
+  onSteer,
+}: {
+  readonly onSave: () => void;
+  readonly onSteer: (() => void) | undefined;
+}) {
   const colors = useColors();
   const round = useScaledSize(SEND_SIZE);
   const markSize = useScaledSize(MARK_SIZE.GLYPH);
   const mark = <Image {...glyphImage(GLYPH.CHECK)} size={markSize} modifiers={roundMark(round)} />;
 
-  if (saving.onSteer === undefined) {
+  if (onSteer === undefined) {
     return (
       <Button
-        onPress={saving.onSave}
+        onPress={onSave}
         modifiers={[...roundModifiers(colors, round), accessibilityLabel(SAVING_WORDS.SAVE)]}
       >
         {mark}
@@ -409,10 +416,10 @@ function SaveButton({ saving }: { readonly saving: ComposerSaving }) {
   return (
     <Menu
       label={mark}
-      onPrimaryAction={saving.onSave}
+      onPrimaryAction={onSave}
       modifiers={[...roundModifiers(colors, round), accessibilityLabel(SAVING_WORDS.SAVE)]}
     >
-      <Button {...actContent(SAVING_WORDS.STEER, GLYPH.STEER)} onPress={saving.onSteer} />
+      <Button {...actContent(SAVING_WORDS.STEER, GLYPH.STEER)} onPress={onSteer} />
     </Menu>
   );
 }
@@ -632,43 +639,23 @@ function useComposerParts(props: ComposerProps): ComposerParts {
     testIds,
   } = props;
 
-  const text = useNativeState(held ?? "");
-  const field = useRef<TextFieldRef>(null);
   const { focusAsk, pills } = props;
-
-  const {
-    field: pillDoor,
-    files: pillFiles,
-    thumbnails: pillThumbnails,
-    onPicturePress,
-    onAtWord: onPillAtWord,
-    onFocusChange: onPillFocus,
-  } = pills ?? {};
-
-  // Note that a field opening on words handed back, as a refused send's, stands its caret after them, as Messages keeps a draft's, rather than at their start.
-  const [opened] = useState(() => (held ?? "").length);
-  const caret = useNativeState<TextFieldSelection>({ start: opened, end: opened });
+  // Note that a composer whose holder names no field of pills holds a door of its own, since Send takes its words through one.
+  const ownDoor = useRef<PillFieldHandle>(null);
+  const door = pills?.field ?? ownDoor;
   const [typed, setTyped] = useState(held ?? "");
   const words = held ?? typed;
-  // Note that the field is handed the holder's words only where they moved apart from what was typed, as a send empties them or a refusal hands them back.
+  // The words as last typed or handed, which a paste is read against.
   const shown = useRef(words);
   useEffect(() => {
-    if (held === undefined || held === shown.current) return;
-    shown.current = held;
-    text.set(held);
-  }, [held, text]);
+    if (held !== undefined) shown.current = held;
+  }, [held]);
 
-  // Note that the field takes the keyboard once its holder's words have landed in it, after the effect above lays them in, so the caret stands after them.
+  // Note that the field takes the keyboard once its holder's words have landed in it.
   useEffect(() => {
     if (focusAsk === undefined || focusAsk === 0) return;
-
-    if (pillDoor !== undefined) return pillDoor.current?.focus();
-    const end = shown.current.length;
-    void field.current
-      ?.focus()
-      .then(() => field.current?.setSelection(end, end))
-      .catch(() => undefined);
-  }, [focusAsk, pillDoor]);
+    door.current?.focus();
+  }, [focusAsk, door]);
 
   // Note that a long paste its holder took as a file is taken back out of the words at once, since the field hears no paste of its own, only its words as they change.
   const type = (next: string) => {
@@ -676,8 +663,6 @@ function useComposerParts(props: ComposerProps): ComposerParts {
     const taken = pasted !== undefined && onLongPaste?.(pasted.words) === true;
     const typedNow = taken ? pasted.kept : next;
     shown.current = typedNow;
-
-    if (taken) text.set(typedNow);
     setTyped(typedNow);
     onWords?.(typedNow);
   };
@@ -685,20 +670,29 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   const empty = words.trim() === "" && !sendable;
   const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
   const rowed = stacked(props);
-  // Note that the field stands one line until its words wrap, then grows to its most. The limit is a range, because `@expo/ui` draws a range and a bare limit down two branches, and a switch between them made the field anew, dropping the keyboard.
-  const height = lineLimit({ min: 1, max: lines });
 
-  const send =
-    onSend === undefined
-      ? undefined
-      : () => {
-          onSend(words.trim());
+  // Note that a press sends what the field holds, once (`pressSend`), read against the words this render drew Send over; words given back are what the field last held, never a paste, so they are read against themselves and stand as words whatever their length.
+  const takeFor = (act: ComposerSend) => {
+    const field = door.current;
 
-          if (held !== undefined) return;
-          shown.current = "";
-          text.set("");
-          setTyped("");
-        };
+    if (field === null) return;
+
+    const taking = {
+      take: () =>
+        field.take().then((taken) => ({
+          words: taken.words,
+          giveBack: () => {
+            shown.current = taken.words;
+            taken.giveBack();
+          },
+        })),
+    };
+
+    void pressSend(taking, words, act);
+  };
+
+  const send = onSend === undefined ? undefined : () => takeFor(onSend);
+  const { onSave, onSteer } = props.saving ?? {};
 
   const room = padding({
     vertical: FIELD_INSET,
@@ -715,53 +709,35 @@ function useComposerParts(props: ComposerProps): ComposerParts {
     alignment: "leading",
   });
 
-  // Note that a field of pills is UIKit's text view, which stands in the glass through a host of its own, its width the glass's and its height its words'.
-  const pillsField =
-    pillDoor === undefined ? undefined : (
-      <VStack alignment="leading" modifiers={[room, span]}>
-        <RNHostView matchContents={{ vertical: true }}>
-          <PillField
-            ref={pillDoor}
-            value={words}
-            onChange={type}
-            files={pillFiles}
-            thumbnails={pillThumbnails}
-            onPicturePress={onPicturePress}
-            placeholder={placeholder}
-            maxLines={lines}
-            onAtWord={onPillAtWord}
-            onFocusChange={onPillFocus}
-            autoFocus={props.autoFocus === true}
-            testID={testIds?.field ?? "composer-field"}
-          />
-        </RNHostView>
-      </VStack>
-    );
+  // Note that the field is UIKit's text view, which stands in the glass through a host of its own, its width the glass's and its height its words'.
+  const field = (
+    <VStack alignment="leading" modifiers={[room, span]}>
+      <RNHostView matchContents={{ vertical: true }}>
+        <PillField
+          ref={door}
+          value={words}
+          onChange={type}
+          files={pills?.files}
+          thumbnails={pills?.thumbnails}
+          onPicturePress={pills?.onPicturePress}
+          placeholder={placeholder}
+          maxLines={lines}
+          onAtWord={pills?.onAtWord}
+          onFocusChange={pills?.onFocusChange}
+          autoFocus={props.autoFocus === true}
+          testID={testIds?.field ?? "composer-field"}
+        />
+      </RNHostView>
+    </VStack>
+  );
 
   return {
     add: rowed ? null : <AddPress menu={addMenu} onAdd={onAdd} />,
-    field: pillsField ?? (
-      <TextField
-        ref={field}
-        text={text}
-        placeholder={placeholder}
-        axis="vertical"
-        autoFocus={props.autoFocus === true}
-        {...(opened > 0 && { selection: caret })}
-        onTextChange={type}
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-          height,
-          room,
-          span,
-          accessibilityIdentifier(testIds?.field ?? "composer-field"),
-        ]}
-      />
-    ),
+    field,
     call:
       call?.kind === COMPOSER_CALL.ON_CALL ? <ComposerCallPresses presses={call.presses} /> : null,
     send:
-      props.saving === undefined ? (
+      onSave === undefined ? (
         <SendButton
           empty={empty}
           typed={words.trim() !== ""}
@@ -772,7 +748,10 @@ function useComposerParts(props: ComposerProps): ComposerParts {
           onTalk={call?.kind === COMPOSER_CALL.TALK ? call.onTalk : undefined}
         />
       ) : (
-        <SaveButton saving={props.saving} />
+        <SaveButton
+          onSave={() => takeFor(onSave)}
+          onSteer={onSteer === undefined ? undefined : () => takeFor(onSteer)}
+        />
       ),
   };
 }

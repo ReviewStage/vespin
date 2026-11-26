@@ -22,7 +22,6 @@ import {
   readAutomation,
   recordAutomationRun,
 } from "@repo/database/models/automation-store";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import { listRevisions } from "@repo/database/models/description-revisions";
 import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
@@ -166,7 +165,9 @@ import {
 import { REACT_SLACK_TOOL, READ_SLACK_TOOL } from "../../slack/slack-agent-tools.js";
 import { SlackBot, slackBotOver } from "../../slack/slack-bot.js";
 import { SEND_SLACK_MESSAGE_TOOL } from "../../slack/slack-message-tool.js";
+import { keepPictureBytesOne } from "../../storage/attachment-keeps.js";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import {
   connectWorkspaceGitHub,
   githubReaching,
@@ -326,6 +327,9 @@ const DEFAULT_BRANCH = "main";
 const BRANCH_COMMIT = "89abcdef0123456789abcdef0123456789abcdef";
 
 const database = await openHostedStoreTestDatabase();
+
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
 
 afterAll(() => database.close());
 
@@ -624,6 +628,7 @@ const NO_SANDBOX: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox
 
 /** What the catalog's call runs against beside the suite's, none of which an agent tool reaches: an agent browser, its sandbox, and the integrations, whose every ask dies, page links with no page sandbox, and an environment. */
 const UNREACHED = Layer.mergeAll(
+  blobs.layer,
   Layer.mock(AgentBrowser)({}),
   Layer.mock(AgentSandbox)({}),
   Layer.succeed(PageLinks, { sandbox: undefined }),
@@ -1842,10 +1847,10 @@ async function keptPicture(
   contentType: "image/png" | "video/webm" = "image/png",
 ): Promise<string> {
   const kept = await database.run(
-    keepConversationPicture(
+    keepPictureBytesOne(
       { userId: agent.userId, conversationId: agent.conversationId },
       { bytes, contentType, width: 1, height: 1 },
-    ),
+    ).pipe(Effect.provide(blobs.layer)),
   );
 
   return Option.getOrThrow(kept).id;

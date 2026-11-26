@@ -40,7 +40,6 @@ import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
-  inlineBytesOf,
   joinWorkspace,
   openedPullRequest,
   openWorkspace,
@@ -222,9 +221,10 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
 
-        const { owner, agent, ask, target, writer, turnId } = yield* messagedAgent(agentSessions, {
-          running: true,
-        });
+        const { owner, agent, ask, target, writer, turnId, blobs } = yield* messagedAgent(
+          agentSessions,
+          { running: true },
+        );
 
         const shot = {
           name: "flow.png",
@@ -256,7 +256,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         );
 
         assert.equal(picture.contentType, AGENT_ATTACHMENT_TYPE.PNG);
-        assert.deepEqual(new Uint8Array(inlineBytesOf(picture.body)), SIZED_PNG);
+        assert.deepEqual(new Uint8Array(blobs.bytesOf(picture.body)), SIZED_PNG);
 
         // The retired runtime's receipt of the message, its image staged by name with no bytes, takes the line it was sent as.
         const taken = yield* writer.takeAwaitingLine(target, {
@@ -349,7 +349,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.ok(pictureId !== undefined, "the row names the kept picture");
 
         const served = yield* fetch(
-          request(AGENT_PICTURE, owner, { id: agent.id, picture: pictureId }),
+          request(AGENT_PICTURE, owner, { id: agent.id, picture: pictureId, fetchMode: "cors" }),
         );
 
         assert.equal(served.status, HOSTED_HTTP_STATUS.OK);

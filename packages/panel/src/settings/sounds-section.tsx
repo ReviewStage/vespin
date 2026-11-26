@@ -111,7 +111,7 @@ export function SoundsSection({
           onTurned={onTurned}
         />
         {clips.drawn}
-        {/* Note that each line comes with turning notifications on, so each unrolls in with it rather than popping. */}
+        {/* Note that each line comes with turning notifications on, and goes as they turn off. */}
         <Reveal shown={notifying && notifications.status === NOTIFICATIONS_STATUS.OFF}>
           {onMac ? (
             <NotificationsOff

@@ -51,7 +51,6 @@ import {
   pointBrowserTab,
   upsertBrowserTab,
 } from "@repo/database/models/agent-browser-tabs";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
@@ -80,6 +79,12 @@ import { isRecord, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { DateTime, Duration, Effect, Option, Predicate, Result, Schema } from "effect";
 import { logStoreFailure } from "../../http/store-failure.js";
+import { keepPictureBytesOne } from "../../storage/attachment-keeps.js";
+import {
+  reserveAttachmentUpload,
+  withAttachmentUploads,
+} from "../../storage/attachment-uploads.js";
+import type { BlobStoreFailure } from "../../storage/blob-store.js";
 import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "../recording-keep.js";
 import { AgentBrowser, type BrowserUnreachable } from "./agent-browser.js";
 import {
@@ -549,10 +554,17 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
     stop: (caption) =>
       Effect.gen(function* () {
         const browser = yield* AgentBrowser;
+        const reserved = yield* reserveAttachmentUpload;
 
         const read = yield* browser
-          .stopRecording(call.browserSession, CONVERSATION_PICTURE_BOUNDS.MAX_BYTES)
-          .pipe(Effect.mapError(unreachable));
+          .stopRecording(call.browserSession, CONVERSATION_PICTURE_BOUNDS.MAX_BYTES, reserved)
+          .pipe(
+            Effect.catchTags({
+              BrowserUnreachable: (failure) => Effect.fail(unreachable(failure)),
+              BlobStoreFailure: (failure) =>
+                Effect.andThen(logStoreFailure(failure), Effect.fail(RECORDING_REFUSAL.UNKEPT)),
+            }),
+          );
 
         if (!read.ok) return yield* Effect.fail(RECORDING_REFUSAL[read.reason]);
         const dimensions = webmDimensions(read.bytes);
@@ -566,11 +578,11 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
             bytes: read.bytes,
             contentType: CONVERSATION_MEDIA_TYPE.WEBM,
             ...dimensions,
-            mp4Bytes: read.mp4Bytes,
+            stored: read.stored,
           },
           { seconds: read.seconds, caption, path: read.path },
         );
-      }),
+      }).pipe(withAttachmentUploads),
   };
 }
 
@@ -611,7 +623,7 @@ function runOn(cdp: CdpSession, call: BrowserCall, actions: readonly BrowserAgen
 function keepScreenshot(
   transcript: ConversationTarget,
   kept: BrowserKeptScreenshot,
-): Effect.Effect<KeptNote, TaskStoreFailure, DatabaseServices> {
+): Effect.Effect<KeptNote, TaskStoreFailure | BlobStoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const bytes = new Uint8Array(Buffer.from(kept.data, "base64"));
     const contentType = sniffImageType(bytes);
@@ -621,7 +633,7 @@ function keepScreenshot(
       return { omitted: PICTURE_OMISSION.UNSUPPORTED, byteCount: bytes.byteLength };
     }
 
-    const picture = yield* keepConversationPicture(transcript, {
+    const picture = yield* keepPictureBytesOne(transcript, {
       bytes,
       contentType,
       ...dimensions,

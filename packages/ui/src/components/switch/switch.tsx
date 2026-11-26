@@ -1,6 +1,5 @@
 import type { SwitchRootProps } from "@base-ui/react/switch";
 import type { MouseEvent } from "react";
-import { pulsePress } from "../../press-pulse.js";
 import { ShadcnSwitch, SWITCH_THUMB, SWITCH_TRACK } from "../../shadcn/switch.js";
 import { Tooltip } from "../tooltip/hint.js";
 
@@ -87,13 +86,7 @@ export function Switch({
       // Note that the press answers through the click itself rather than
       // Base UI's change callback, because a caller inside a pressable row
       // stops the press from reaching the row (`agent-servers.tsx`).
-      onClick={(event) => {
-        // Note that the thumb is what a press moves, so it is what gives as the press lands.
-        const thumb = event.currentTarget.firstElementChild;
-
-        if (thumb instanceof HTMLElement) pulsePress(thumb);
-        onChange(!checked, event);
-      }}
+      onClick={(event) => onChange(!checked, event)}
     />
   );
 }

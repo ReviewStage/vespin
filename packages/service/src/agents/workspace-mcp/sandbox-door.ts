@@ -20,8 +20,12 @@
 import { SandboxUnavailable } from "@repo/sandbox";
 import { Effect, type Layer } from "effect";
 import type { HttpClient } from "effect/http";
-import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
-import { AgentMachine, type AgentMachineService } from "../machine/agent-machine.js";
+import type { InboxSandboxDoor, SandboxSelfUpload } from "../coder-host/inbox-image.js";
+import {
+  AgentMachine,
+  type AgentMachineService,
+  type SelfUpload,
+} from "../machine/agent-machine.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 
 /** The most of one file a door reads: past every bound a tool holds a file to, a page's HTML and a kept picture among them. */
@@ -47,6 +51,21 @@ function streamOf(bytes: Uint8Array): ReadableStream<Uint8Array> {
   });
 }
 
+/** A place's own uploads as the door reaches them, each call run on the edge's runner; none where the place uploads nothing itself. */
+function selfUploadDoor(
+  selfUpload: SelfUpload | undefined,
+  ask: <A, E>(call: (machine: AgentMachineService) => Effect.Effect<A, E>) => Promise<A>,
+): SandboxSelfUpload | undefined {
+  if (selfUpload === undefined) return undefined;
+  const run = <A, E>(effect: Effect.Effect<A, E>) => ask(() => effect);
+
+  return {
+    probe: async (path, headBytes) => (await run(selfUpload.probe(path, headBytes))) ?? null,
+    upload: (path, upload) => run(selfUpload.upload(path, upload)),
+    uploadPhoneCopy: (path, kind, upload) => run(selfUpload.uploadPhoneCopy(path, kind, upload)),
+  };
+}
+
 /**
  * The doors to the admitted agent's sandbox, their calls made of the agent's
  * machine the layer given provides and run on the runner given; a
@@ -70,6 +89,7 @@ export function agentSandboxDoors<R>(
     return {
       files: async () => ({
         checkout: await ask((each) => each.checkoutPath(sessionId)),
+        selfUpload: selfUploadDoor(await ask((each) => each.selfUpload(sessionId)), ask),
         readFile: async ({ path }: { readonly path: string }) => {
           const bytes = await ask((each) => each.readFile(sessionId, path, SANDBOX_DOOR_MAX_BYTES));
 

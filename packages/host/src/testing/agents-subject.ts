@@ -16,6 +16,7 @@ import {
   type AgentQueueAnswerView,
   type DevicePresenceAnswerView,
   type HostDoneAnswerView,
+  type ManagerChatReactAnswerView,
   type MemoriesAnswerView,
   type MemorySaveAnswerView,
   type SoundStateView,
@@ -327,6 +328,8 @@ function fakeService() {
   // What a message sent to a Manager's chat answers; none answers it taken, under one id.
   let chatAnswer: AgentChatSendAnswerView | undefined;
   let chatSendGate: Effect.Effect<void> = Effect.void;
+  // What a reaction to a message of a Manager's chat answers; taken, changing what stood, from the start.
+  let reactAnswer: ManagerChatReactAnswerView = { changed: true };
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -611,6 +614,12 @@ function fakeService() {
         );
 
         return { messages: SAID.messages, before: "3" };
+      }),
+    chatReact: (agentId, messageId, request) =>
+      Effect.sync(() => {
+        asked.push(`chatReact:${agentId}:${messageId}:${request.kind}:${request.reacted}`);
+
+        return reactAnswer;
       }),
     chatSend: (agentId, request) =>
       Effect.andThen(
@@ -1087,6 +1096,10 @@ function fakeService() {
       chatAnswer = answer;
       chatSendGate = gate;
     },
+    /** What a reaction to a message of a Manager's chat answers from now on. */
+    answerReact: (answer: ManagerChatReactAnswerView) => {
+      reactAnswer = answer;
+    },
     /** What a change of an agent's queue answers from now on, once `gate` lets it. */
     answerQueue: (answer: AgentQueueAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       queueAnswer = answer;
@@ -1499,6 +1512,7 @@ export function subject(
       answerQueue: service.answerQueue,
       answerMessage: service.answerMessage,
       answerChat: service.answerChat,
+      answerReact: service.answerReact,
       sealScope: service.sealScope,
       sealAccount: service.sealAccount,
       sealItems: service.sealItems,

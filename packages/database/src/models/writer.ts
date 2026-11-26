@@ -1023,7 +1023,7 @@ const insertMessageRow = SqlSchema.findOneOption({
  */
 const BUMPED_REVISION = "bumped";
 
-const bumpedRevision = (conversationId: string) =>
+export const bumpedRevision = (conversationId: string) =>
   queryBuilder.$with(BUMPED_REVISION, { journalRevision: conversations.journalRevision }).as(
     sql`update ${conversations}
         set ${sql.identifier(conversations.journalRevision.name)} = ${conversations.journalRevision} + 1
@@ -1032,7 +1032,7 @@ const bumpedRevision = (conversationId: string) =>
   );
 
 /** What the bump landed on, which is the revision the row it stamps takes. */
-const landedRevision = (bumped: ReturnType<typeof bumpedRevision>) =>
+export const landedRevision = (bumped: ReturnType<typeof bumpedRevision>) =>
   sql<number>`(select ${bumped.journalRevision} from ${bumped})`;
 
 const updateMessageParts = SqlSchema.void({

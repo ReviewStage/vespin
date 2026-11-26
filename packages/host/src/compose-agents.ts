@@ -43,6 +43,7 @@ import {
   agentPinParamsSchema,
   agentRenameParamsSchema,
   agentStartParamsSchema,
+  type ManagerChatReactParams,
   type ReplyButtonPressParams,
 } from "@repo/features/agent-view";
 import { AGENT_ARCHIVER, type AgentSummary, CONTEXT_WINDOW } from "@repo/features/agent-wire";
@@ -254,6 +255,7 @@ export type AgentClient = Pick<
   | "messagesNewest"
   | "messagesBefore"
   | "message"
+  | "chatReact"
   | "chatSend"
   | "choose"
   | "rename"
@@ -985,6 +987,11 @@ function composed(
     asked(client.chatSend(agentId, request)),
   );
 
+  /** A member's reaction to a message of a Manager's chat, after every write of the agent's asked before it, so a reaction given and taken back lands in the order it was pressed. */
+  const chatReacted = queues.inTurn(({ agentId, messageId, ...request }: ManagerChatReactParams) =>
+    asked(client.chatReact(agentId, messageId, request)),
+  );
+
   /** A suggestion in an agent's reply sent from its draft, after every write of the agent's asked before it, so the agent takes the lines in the order they were sent. */
   const pressed = queues.inTurn((params: ReplyButtonPressParams) =>
     asked(client.pressReplyButton(params)),
@@ -1331,6 +1338,8 @@ function composed(
     // Note that a message to a Manager's chat stands drawn on the chat on its way, until its row lands there.
     AGENTS_CHAT_SEND: managerChats.sending(declaredWrite(dependencies.pool, chatSent)),
     AGENTS_CHAT_UNSEND: managerChats.unsend,
+    // Note that a reaction the service takes is written into the chat held, so it stands before the chat's next read carries it.
+    AGENTS_CHAT_REACT: managerChats.reacting(declaredWrite(dependencies.pool, chatReacted)),
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),

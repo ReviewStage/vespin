@@ -88,8 +88,8 @@ export function AgentComposerDock({
   keywords: readonly string[] | undefined;
   /** Where the skills a `/` in the box offers are read from; nothing where it offers none. */
   skills: SkillSource | undefined;
-  /** The door the box hands Reply, which lays a quote in at its caret (`useBoxReplyDoor`). */
-  replyDoor: RefObject<((words: string) => void) | undefined>;
+  /** The door the box hands Reply, which lays a quote in at its caret (`useBoxReplyDoor`); none where nothing quotes into the box, as a Manager's chat. */
+  replyDoor?: RefObject<((words: string) => void) | undefined> | undefined;
   /** What mends the box once it closed for good. */
   closedRemedy: ReactNode;
   /** Moves the agent to the cloud, carrying the message its Mac did not take; none where Move to would not. */

@@ -4,7 +4,6 @@ import { useImperativeHandle, useRef } from "react";
 import { cn } from "../../cn.js";
 import { isComposingKey } from "../../composing-key.js";
 import { CloseIcon, SearchIcon } from "../../icons/lucide-glyphs.js";
-import { pulseOnPress } from "../../press-pulse.js";
 import { ShadcnInput } from "../../shadcn/input.js";
 import { useDisclosure } from "../../use-disclosure.js";
 import { ANNOUNCE, useAnnounce } from "../announcer/announcer.js";
@@ -230,10 +229,10 @@ export function SearchField({
           aria-label="Clear search"
           data-leaving={clear.leaving ? "true" : undefined}
           inert={clear.leaving}
-          onClick={pulseOnPress(() => {
+          onClick={() => {
             onClear?.();
             field.current?.focus();
-          })}
+          }}
         >
           <CloseIcon />
         </button>

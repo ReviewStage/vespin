@@ -2088,7 +2088,7 @@ export function TranscriptTodos({
  * VS Code's collapses to the item in progress, so it costs the log one
  * line. It is a card on the task card's look, since it stands outside the
  * log, and it is drawn by the caller only while the list is worked. It
- * opens upward off the composer, as one sheet (tasks.css). How far it has
+ * opens upward off the composer, at once. How far it has
  * got is said as the transcript's row says it (`todosSummary`), its counts
  * rolling as they change, so a step done is seen to tick over.
  */
@@ -2103,7 +2103,7 @@ export function TranscriptTodosDock({
   const { done, total } = todosCount(todos);
 
   return (
-    <Disclosure look={DISCLOSURE_LOOK.DOCK} data-todos-dock="" aria-label="To-dos">
+    <Disclosure look={DISCLOSURE_LOOK.DOCK} aria-label="To-dos">
       <DisclosureSummary look={DISCLOSURE_SUMMARY.HEAD}>
         <DisclosureChevron />
         <GlyphSlot>

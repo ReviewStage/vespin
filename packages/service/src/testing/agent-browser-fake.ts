@@ -16,6 +16,8 @@
  * own `answer` says first, which may be nothing at all.
  */
 
+import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import {
   type CommandAsk,
   type CommandRun,
@@ -61,8 +63,10 @@ import {
   SANDBOX_RECORDING,
 } from "../agents/browser/sandbox-recorder.js";
 import type { AgentImageService } from "../agents/coder-host/agent-image.js";
+import { UPLOAD_URL_VARIABLE } from "../agents/machine/sandbox-upload.js";
 import type { SandboxPtyService } from "../agents/sandbox-pty.js";
 import type { RelayFrame } from "../terminal/relay.js";
+import type { MemoryBlobStore } from "./blob-store-fake.js";
 
 /** Chrome's own refusal of a method it does not know, and of a target it does not hold. */
 const CHROME_ERROR = { NO_METHOD: -32601, INVALID_PARAMS: -32602 } as const;
@@ -316,12 +320,15 @@ export interface FakeSandboxScenario {
   readonly snapshotGone?: true;
   /** How many vCPUs it is listed with. */
   readonly vcpus?: number;
-  /** What the recording's commands answer: the start's output (`started` where none is named), the stop's JSON (none recorded where none is named), and the video the stop leaves behind. */
+  /** What the recording's commands answer: the start's output (`started` where none is named), the stop's JSON (none recorded where none is named), the video the stop leaves behind, and the MP4 copy the sandbox makes of it, none where unsaid. */
   readonly recording?: {
     readonly start?: CommandRun;
     readonly stop?: string;
     readonly video?: Uint8Array;
+    readonly phone?: Uint8Array;
   };
+  /** The store the sandbox's uploads land in, each at the pathname its presigned URL names; none lands where unsaid. */
+  readonly blobs?: MemoryBlobStore;
 }
 
 export const FAKE_SANDBOX = {
@@ -419,6 +426,24 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
         const sandboxSessionId = Predicate.isString(target) ? current : target.running;
         ran.push({ sandboxSessionId, ask });
 
+        // An upload puts the file it names at its presigned URL: the recording, or the copy the sandbox makes of it.
+        const uploadUrl = ask.env?.[UPLOAD_URL_VARIABLE];
+
+        if (uploadUrl !== undefined) {
+          // Note that the copy's upload is the script that encodes it, which the recording's own is not.
+          const copy = ask.args.some((arg) => arg.includes("ffmpeg"));
+          const bytes = copy ? scenario.recording?.phone : scenario.recording?.video;
+
+          if (bytes === undefined) return { exitCode: 1, stdout: "", stderr: "" };
+          scenario.blobs?.acceptUpload(
+            uploadUrl,
+            copy ? MP4_TYPE : CONVERSATION_MEDIA_TYPE.WEBM,
+            bytes,
+          );
+
+          return { exitCode: 0, stdout: copy ? `${bytes.byteLength}` : "", stderr: "" };
+        }
+
         if (ask.args.includes(RECORDER_SOURCE)) {
           return (
             scenario.recording?.start ?? {
@@ -434,11 +459,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
 
           return video === undefined
             ? { exitCode: RECORDING_READ_EXIT.NO_VIDEO, stdout: "", stderr: "" }
-            : {
-                exitCode: 0,
-                stdout: `${FAKE_RECORDING_PATH}\n${Buffer.from(video).toString("base64")}`,
-                stderr: "",
-              };
+            : { exitCode: 0, stdout: `${FAKE_RECORDING_PATH}\n${video.byteLength}\n`, stderr: "" };
         }
 
         // The stop is the recording's other script, named as the start is.

@@ -30,10 +30,7 @@
  * answers as not found.
  */
 
-import {
-  DESCRIPTION_ATTACHMENT_KEEP,
-  keepDescriptionAttachment,
-} from "@repo/database/models/description-attachments";
+import { DESCRIPTION_ATTACHMENT_KEEP } from "@repo/database/models/description-attachments";
 import { listPages, readPageById, readPageVersion } from "@repo/database/models/task-pages";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
 import {
@@ -61,6 +58,7 @@ import {
 } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import { pageFrameAnswer } from "../pages/page-frame.js";
+import { keepDescriptionFileBytes } from "../storage/attachment-keeps.js";
 import { readTaskFile } from "./task-file.js";
 import { readTaskSkills } from "./task-skills.js";
 import { readTaskTree } from "./task-tree.js";
@@ -162,7 +160,7 @@ export function taskFilesProcedures(seams: TaskFilesProcedureSeams) {
       if (picture === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 
       const kept = yield* hostedStoreOrUnavailable(
-        keepDescriptionAttachment(context.userId, taskId, picture),
+        keepDescriptionFileBytes(context.userId, taskId, picture),
       );
 
       switch (kept.status) {

@@ -34,8 +34,7 @@ import {
 } from "@repo/features/description-comment-wire";
 import { sectionAt } from "@repo/features/description-sections";
 import { and, asc, eq, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
-import { DateTime, Effect, Option, Result, Schema } from "effect";
-import { Base64 } from "effect/encoding";
+import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { CURRENT_TXID } from "../core/txid.js";
@@ -44,7 +43,14 @@ import { user } from "../schemas/auth.js";
 import { descriptionComment, descriptionCommentThread } from "../schemas/description-comment.js";
 import { task } from "../schemas/task.js";
 import { taskPageVersion } from "../schemas/task-page.js";
-import { type AttachmentBody, attachmentBodyFields, attachmentBodyOf } from "./attachment-body.js";
+import {
+  type AttachmentBody,
+  attachmentBodyFields,
+  attachmentBodyOf,
+  type StoredNamedFile,
+  storedAttachmentColumns,
+  type WithStoredFiles,
+} from "./attachment-body.js";
 import { InstantColumnSchema } from "./columns.js";
 import type { TaskStoreEffect } from "./task-store.js";
 import { reachableTask, taskReachableBy } from "./workspace-store.js";
@@ -69,8 +75,9 @@ import { reachableTask, taskReachableBy } from "./workspace-store.js";
  * it carried, which is how undo brings an anchor back with its words.
  *
  * A comment's files are rows of the shared attachment table owned by the
- * comment (`schemas/attachment.ts`), written in the same transaction as the
- * comment, so no reader sees one without the other, and deleted with it by
+ * comment (`schemas/attachment.ts`), their bytes uploaded to the Blob store
+ * before the write, which takes them stored, and written in the same
+ * transaction as the comment, so no reader sees one without the other, and deleted with it by
  * the comment's cascade. Each names the plan and its workspace beside the
  * comment, so it moves with the plan, and is read back by any member of
  * that workspace (`readDescriptionCommentFile`).
@@ -572,35 +579,41 @@ interface EntryPlace {
   readonly threadId: string;
 }
 
+/** A comment's file as its writer hands it in, already in the Blob store. */
+export type StoredCommentFile = StoredNamedFile<AgentAttachment["mediaType"]>;
+
+/** A start of a thread as its writer takes it, its first comment's files already stored. */
+export type StoredDescriptionCommentStart = WithStoredFiles<
+  DescriptionCommentStart,
+  AgentAttachment["mediaType"]
+>;
+
+/** An action on a thread as its writer takes it, a reply's or an edit's files already stored. */
+export type StoredDescriptionCommentAction = WithStoredFiles<
+  DescriptionCommentActionRequest | DescriptionCommentAskRequest,
+  AgentAttachment["mediaType"]
+>;
+
 /** A comment's files as the rows it keeps, in the order they were attached, the first at `first` among the comment's files. */
 function fileRowsOf(
   place: EntryPlace,
   entryId: string,
   userId: string,
-  files: readonly AgentAttachment[],
+  files: readonly StoredCommentFile[],
   now: Date,
   first = 0,
-): Effect.Effect<(typeof attachment.$inferInsert)[]> {
-  return Effect.forEach(files, (file, index) => {
-    const bytes = Base64.decode(file.data);
-
-    // Note that the wire schema held the data to padded base64, so a decode that fails is a broken contract, not a refusal.
-    if (Result.isFailure(bytes))
-      return Effect.die(new Error("description comment file is not base64"));
-
-    return Effect.succeed({
-      organizationId: place.organizationId,
-      userId,
-      taskId: place.taskId,
-      descriptionCommentId: entryId,
-      name: file.name,
-      position: first + index,
-      contentType: file.mediaType,
-      byteCount: bytes.success.byteLength,
-      bytes: bytes.success,
-      createdAt: now,
-    });
-  });
+): (typeof attachment.$inferInsert)[] {
+  return files.map((file, index) => ({
+    ...storedAttachmentColumns(file.stored),
+    organizationId: place.organizationId,
+    userId,
+    taskId: place.taskId,
+    descriptionCommentId: entryId,
+    name: file.name,
+    position: first + index,
+    contentType: file.mediaType,
+    createdAt: now,
+  }));
 }
 
 /** One entry written to a thread with the files a comment carries, and the thread moved on, so every reader's cursor moves; answers the transaction it was written in. */
@@ -612,14 +625,14 @@ function writeEntry(
     readonly words?: string;
     readonly clientKey?: string;
     readonly asked?: DescriptionCommentAsked;
-    readonly files?: readonly AgentAttachment[];
+    readonly files?: readonly StoredCommentFile[];
   },
   now: Date,
 ): TaskStoreEffect<string> {
   return Effect.gen(function* () {
     const { taskId, threadId } = place;
     const id = randomUUID();
-    const files = yield* fileRowsOf(place, id, writer.userId, entry.files ?? [], now);
+    const files = fileRowsOf(place, id, writer.userId, entry.files ?? [], now);
     const { revision: seq, txid } = yield* movedOn(threadId, now);
     yield* Database.use((db) =>
       db.insert(descriptionComment).values({
@@ -655,7 +668,10 @@ function filesEdited(
   place: EntryPlace,
   entryId: string,
   userId: string,
-  edit: { readonly keep?: readonly string[]; readonly attachments?: readonly AgentAttachment[] },
+  edit: {
+    readonly keep?: readonly string[];
+    readonly attachments?: readonly StoredCommentFile[];
+  },
   now: Date,
 ): TaskStoreEffect<DescriptionCommentRefusal | undefined> {
   return Effect.gen(function* () {
@@ -669,14 +685,7 @@ function filesEdited(
 
     const named = new Set(kept.map((file) => file.id));
 
-    const added = yield* fileRowsOf(
-      place,
-      entryId,
-      userId,
-      edit.attachments ?? [],
-      now,
-      kept.length,
-    );
+    const added = fileRowsOf(place, entryId, userId, edit.attachments ?? [], now, kept.length);
 
     const bytes = [...kept, ...added].reduce((sum, file) => sum + file.byteCount, 0);
 
@@ -839,7 +848,7 @@ type ThreadPlace = Pick<
 /** A thread placed on the words the request measured in its text, carried over to the description's text as saved; refused where none of them stand there now. */
 function placedOnDescription(
   text: string,
-  request: DescriptionCommentStartRequest,
+  request: Omit<DescriptionCommentStartRequest, "attachments">,
 ): ThreadPlace | DescriptionCommentOutcome {
   const anchor = spanWithin(request.anchor, request.text.length)
     ? textChange(request.text, text)(request.anchor)
@@ -864,7 +873,7 @@ function placedOnDescription(
  */
 function placedOnPage(
   taskId: string,
-  request: DescriptionCommentPageStart,
+  request: Omit<DescriptionCommentPageStart, "attachments">,
 ): TaskStoreEffect<ThreadPlace | DescriptionCommentOutcome> {
   return Effect.map(
     findTaskPageVersion({ taskId, pageId: request.page.id, version: request.page.version }),
@@ -909,7 +918,7 @@ function placedOnPage(
 export function startDescriptionCommentThread(
   writer: DescriptionCommentWriterRef,
   taskId: string,
-  request: DescriptionCommentStart,
+  request: StoredDescriptionCommentStart,
 ): TaskStoreEffect<DescriptionCommentOutcome> {
   return inTransaction(
     Effect.gen(function* () {
@@ -1000,7 +1009,7 @@ function replied(
   reply: {
     readonly words: string;
     readonly clientKey?: string;
-    readonly attachments?: readonly AgentAttachment[];
+    readonly attachments?: readonly StoredCommentFile[];
   },
   now: Date,
 ): TaskStoreEffect<DescriptionCommentOutcome> {
@@ -1138,7 +1147,7 @@ export function actOnDescriptionCommentThread(
   writer: DescriptionCommentWriterRef,
   taskId: string,
   threadId: string,
-  request: DescriptionCommentActionRequest | DescriptionCommentAskRequest,
+  request: StoredDescriptionCommentAction,
 ): TaskStoreEffect<DescriptionCommentOutcome> {
   return inTransaction(
     Effect.gen(function* () {

@@ -18,8 +18,10 @@ import { type CronMonitor, sentryCronCheckIns } from "../observability/sentry.js
 import { releaseHeldPushes } from "../push/inbox-pushes.js";
 import { refreshLiveActivities } from "../push/live-activities.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
+import { moveAttachmentsToBlob } from "../storage/attachment-blob-backfill.js";
 import { purgeAttachmentBlobs } from "../storage/attachment-blob-purge.js";
 import { BlobStore } from "../storage/blob-store.js";
+import { moveJournalImages } from "../storage/journal-image-move.js";
 import { MAINTENANCE_SWEEP, MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
 import { handleMaintenanceSweep } from "./maintenance-sweep.js";
 
@@ -64,6 +66,8 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
     pruneMachineAsks,
     releaseSandboxes: releaseUnusedSandboxes,
     purgeAttachmentBlobs: () => Effect.provideService(purgeAttachmentBlobs(), BlobStore, blobs),
+    moveAttachmentsToBlob: () => Effect.provideService(moveAttachmentsToBlob(), BlobStore, blobs),
+    moveJournalImages: () => Effect.provideService(moveJournalImages(), BlobStore, blobs),
   });
 });
 
