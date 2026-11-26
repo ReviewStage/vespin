@@ -1133,7 +1133,12 @@ function composed(
 
   /** A nod or a close that waits, answered as taken over the item as the reads now draw it, or unanswered where none holds it. */
   const settledAs = ({ itemId }: { readonly itemId: string }): AgentInboxAnsweredView => {
-    const item = dependencies.pool.row(INBOX_ITEM, itemId);
+    // Note that a thread a plan's read alone holds stands apart from the kept feed where the platform keeps it, so it is answered as that read draws it.
+    const item =
+      dependencies.pool.row(INBOX_ITEM, itemId) ??
+      (dependencies.keepsInbox === true
+        ? dependencies.pool.row(INBOX_SCOPED_ITEM, itemId)
+        : undefined);
 
     return item === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : { item, taken: true };
   };
