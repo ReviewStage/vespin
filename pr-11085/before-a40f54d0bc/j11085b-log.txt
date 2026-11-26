@@ -1,0 +1,10 @@
+pinned to a40f54d0bc
+== bundle PJj11085b base a40f54d0bc
+  built a40f54d0bc base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app, pin a40f54d0bc
+iphone-light-sent-picture: fails 0 shots 2 
+iphone-dark-sent-picture: fails 0 shots 2 
