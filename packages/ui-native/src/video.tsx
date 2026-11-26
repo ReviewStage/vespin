@@ -136,6 +136,7 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
   const player = useVideoPlayer(playerSource(source));
   const view = useRef<VideoView>(null);
   const [full, setFull] = useState(false);
+  const floating = useRef(false);
   const { status } = useEvent(player, "statusChange", { status: player.status });
   // Note that a track the player read before this listens is taken as it stands, since its change has already gone by.
   const { videoTrack } = useEvent(player, "videoTrackChange", { videoTrack: player.videoTrack });
@@ -225,6 +226,18 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
   const runs = length === undefined ? undefined : playheadText(length * 1000);
   const open = () => void view.current?.enterFullscreen();
 
+  // Note that the video pauses as full screen closes, so its still stands again under its mark rather than playing on behind it, as Messages leaves one; but not where it closed into Picture in Picture, which closes full screen too and plays on in its window.
+  const closeFullScreen = () => {
+    if (!floating.current) player.pause();
+    setFull(false);
+  };
+
+  // Note that Picture in Picture may start after full screen's close paused it, the two events reaching here in either order, so its start plays the video on in its window.
+  const startFloating = () => {
+    floating.current = true;
+    player.play();
+  };
+
   return (
     <MediaBox frame={frame}>
       <HeldMenu acts={acts}>
@@ -242,10 +255,10 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
               player={player}
               nativeControls={full}
               onFullscreenEnter={() => setFull(true)}
-              onFullscreenExit={() => {
-                // Note that the video pauses as full screen closes, so its still stands again under its mark rather than playing on behind it, as Messages leaves one.
-                player.pause();
-                setFull(false);
+              onFullscreenExit={closeFullScreen}
+              onPictureInPictureStart={startFloating}
+              onPictureInPictureStop={() => {
+                floating.current = false;
               }}
               contentFit="contain"
               fullscreenOptions={{ enable: true }}
