@@ -4,7 +4,10 @@
 # beside the page it opens, and Maestro's scroll swipes at the window's
 # middle, on that page, which never moves the list, so there the column
 # itself is drawn up in slow steps until the row shows. The way is chosen by
-# the device, `FLOATING_TABS` naming an iPad, as `tab.yaml`'s is.
+# the device, `FLOATING_TABS` naming an iPad, as `tab.yaml`'s is. The
+# phone's scroll may take a minute, because at the largest text size each
+# row stands most of a window tall, and Maestro's twenty seconds ran out
+# five rows down, under the Inbox's pinned threads.
 appId: dev.vespin.ios
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
@@ -16,6 +19,7 @@ env:
       - scrollUntilVisible:
           element: "${ROW}"
           direction: DOWN
+          timeout: 60000
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}
