@@ -1,4 +1,12 @@
-import { IconPicker, IconPickerChoice, IconPickerGroup, NOTE_LINE_LOOK, NoteLine } from "@repo/ui";
+import {
+  IconPicker,
+  IconPickerChoice,
+  IconPickerDrawer,
+  IconPickerGroup,
+  type IconPickerGroupDrawer,
+  NOTE_LINE_LOOK,
+  NoteLine,
+} from "@repo/ui";
 import {
   BookmarkIcon,
   BugIcon,
@@ -17,8 +25,15 @@ import { CatalogSection } from "../section";
  * icon-picker.tsx -- the app's one icon picker, its frame alone: a search
  * over named groups of choices in rows of ten, the one chosen pressed, the
  * arrows walking the grid, and Enter in the search picking the first found;
- * a section's icon picker and a Manager's face picker are drawn in it.
+ * Flag opens a drawer under its row, as a section glyph's colors stand; a
+ * section's icon picker and a Manager's face picker are drawn in it.
  */
+
+/** The inks the drawer offers a flag in, as a section glyph's colors are offered. */
+const FLAG_INKS = [
+  { label: "Flag in the text's ink", ink: "text-foreground" },
+  { label: "Flag in the quiet ink", ink: "text-muted-foreground" },
+] as const;
 
 /** The glyphs the example offers, under the group each stands in. */
 const GROUPS: readonly { name: string; glyphs: readonly { label: string; Glyph: LucideIcon }[] }[] =
@@ -42,9 +57,39 @@ const GROUPS: readonly { name: string; glyphs: readonly { label: string; Glyph: 
     },
   ];
 
+/** The drawer under Flag's row while it stands open: the flag in each ink, a press choosing it. */
+function flagDrawer(
+  glyphs: readonly { label: string }[],
+  open: boolean,
+  onChoose: (label: string) => void,
+): IconPickerGroupDrawer | undefined {
+  const after = glyphs.findIndex((glyph) => glyph.label === "Flag");
+
+  if (!open || after === -1) return undefined;
+
+  return {
+    after,
+    content: (
+      <IconPickerDrawer>
+        {FLAG_INKS.map(({ label, ink }) => (
+          <IconPickerChoice
+            key={label}
+            label={label}
+            pressed={false}
+            stop={false}
+            face={<FlagIcon className={ink} />}
+            onPress={() => onChoose("Flag")}
+          />
+        ))}
+      </IconPickerDrawer>
+    ),
+  };
+}
+
 function IconPickers(): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [chosen, setChosen] = useState("Star");
+  const [flagOpen, setFlagOpen] = useState(false);
   const words = query.trim().toLowerCase();
 
   const shown = GROUPS.flatMap((group) => {
@@ -63,7 +108,14 @@ function IconPickers(): React.JSX.Element {
           <NoteLine look={NOTE_LINE_LOOK.LIST}>No icons match.</NoteLine>
         ) : (
           shown.map((group) => (
-            <IconPickerGroup key={group.name} name={group.name}>
+            <IconPickerGroup
+              key={group.name}
+              name={group.name}
+              drawer={flagDrawer(group.glyphs, flagOpen, (label) => {
+                setChosen(label);
+                setFlagOpen(false);
+              })}
+            >
               {group.glyphs.map(({ label, Glyph }) => (
                 <IconPickerChoice
                   key={label}
@@ -71,7 +123,7 @@ function IconPickers(): React.JSX.Element {
                   pressed={label === chosen}
                   stop={label === stop}
                   face={<Glyph />}
-                  onPress={() => setChosen(label)}
+                  onPress={() => (label === "Flag" ? setFlagOpen((was) => !was) : setChosen(label))}
                 />
               ))}
             </IconPickerGroup>

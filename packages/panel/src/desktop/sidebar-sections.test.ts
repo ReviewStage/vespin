@@ -1504,7 +1504,7 @@ test("a pin dragged below the next one reorders the pins", async () => {
   assert.ok((asked.moves[0]?.position ?? "") > second.pinPosition, "it sorts after Pin review");
 });
 
-test("a glyph found by searching asks its color over the grid, the text's own named as the dark window draws it, and the color pressed there makes it the new section's and this Mac's most recent", async () => {
+test("a glyph found by searching asks its color under its row, the text's own named as the dark window draws it, and the color pressed there makes it the new section's and this Mac's most recent", async () => {
   document.documentElement.setAttribute("data-ui-theme", "dark");
   onTestFinished(() => document.documentElement.removeAttribute("data-ui-theme"));
   const writes: TaskSectionWrite[] = [];

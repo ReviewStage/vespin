@@ -1,4 +1,4 @@
-import { type ReactNode, type RefObject, useRef } from "react";
+import { Children, type ReactNode, type RefObject, useRef } from "react";
 import { IconButton } from "../button/button.js";
 import { ScrollArea } from "../scroll-area/scroll-area.js";
 import { SearchField } from "../search-field/search-field.js";
@@ -16,9 +16,12 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * choice that took focus becomes the stop, so Tab out and back lands where
  * the arrows left it. The arrow down from the search enters the grid, and
  * Enter in the search presses the first choice drawn, so a search typed
- * and entered picks what it found first. What an owner hangs over a choice
- * (a section glyph's colors) wears `ICON_PICKER_ASIDE`, so it is no choice
- * of the grid's.
+ * and entered picks what it found first. What a choice opens (a section
+ * glyph's colors) stands in a drawer under that choice's row, the whole
+ * grid's width, pushing the rows below it down rather than hanging over
+ * them, so the scrolling grid can never cut it and it covers no choice; it
+ * wears `ICON_PICKER_ASIDE`, so it is no choice of the grid's, and lays its
+ * own buttons out on the grid's columns (`IconPickerDrawer`).
  */
 
 /** How many choices stand in one row of the grid, which `grid-cols-section-icons` lays out alike; the arrows step a row by it. */
@@ -32,7 +35,7 @@ const GRID_STEPS = new Map([
   ["ArrowDown", GRID_COLUMNS],
 ]);
 
-/** The class of what an owner hangs over a choice, whose buttons are no choices of the grid's. */
+/** The class of what stands in a group's drawer, whose buttons are no choices of the grid's. */
 export const ICON_PICKER_ASIDE = "ui-icon-picker-aside";
 
 /** The grid's choices under `root`, in order, what hangs over them left out. */
@@ -79,49 +82,72 @@ function standTabStop(event: React.FocusEvent<HTMLFieldSetElement>): void {
 }
 
 /**
- * One choice in the grid: a button pressed while it is the one chosen, the
- * grid's tab stop where `stop`, and, where a press hangs something over it
- * rather than choosing (`popup`), saying so. Note that it says it hangs
- * something but not whether that stands open, because flipping
- * `aria-expanded` restyles every box a `:has([aria-expanded])` rule
- * reaches, some two thousand cells among them, for a quarter of a second;
- * what it hangs takes the focus as it opens, which says it instead.
+ * One choice in the grid: a button pressed while it is the one chosen, and
+ * the grid's tab stop where `stop`. Note that a choice opening a drawer
+ * says nothing of it, because flipping `aria-expanded` restyles every box
+ * a `:has([aria-expanded])` rule reaches, some two thousand cells among
+ * them, for a quarter of a second; the drawer takes the focus as it opens,
+ * which says it instead.
  */
 export function IconPickerChoice({
   label,
   pressed,
   stop,
   face,
-  popup = false,
   onPress,
 }: {
   label: string;
   pressed: boolean;
   stop: boolean;
   face: ReactNode;
-  popup?: boolean | undefined;
   onPress: () => void;
 }): React.JSX.Element {
   return (
-    <IconButton
-      icon={face}
-      label={label}
-      pressed={pressed}
-      tabbable={stop}
-      aria-haspopup={popup ? "dialog" : undefined}
-      onClick={onPress}
-    />
+    <IconButton icon={face} label={label} pressed={pressed} tabbable={stop} onClick={onPress} />
   );
 }
 
-/** A group of choices under its name, in the grid's rows of ten. */
+/**
+ * What a group's drawer holds laid out on the grid's own columns, one
+ * button to each, as a glyph's colors are: a row of choices about the
+ * choice above it, lined up with the grid it stands in.
+ */
+export function IconPickerDrawer({ children }: { children: ReactNode }): React.JSX.Element {
+  return (
+    <div className="ui-icon-picker-drawer-row grid grid-cols-section-icons gap-tight-gap">
+      {children}
+    </div>
+  );
+}
+
+/** What a group's choice opened: the choice, counted among the group's, and what stands in the drawer under its row. */
+export interface IconPickerGroupDrawer {
+  readonly after: number;
+  readonly content: ReactNode;
+}
+
+/** Where a drawer stands among `count` choices: after the last of the row that holds choice `after`. */
+function drawerAt(after: number, count: number): number {
+  return Math.min(count, (Math.floor(after / GRID_COLUMNS) + 1) * GRID_COLUMNS);
+}
+
+/**
+ * A group of choices under its name, in the grid's rows of ten, and, where
+ * a choice stands open (`drawer`), what it opened under that choice's row.
+ */
 export function IconPickerGroup({
   name,
+  drawer,
   children,
 }: {
   name: string;
+  /** What the choice at `after`, counted among the group's choices, opened; nothing where none stands open. */
+  drawer?: IconPickerGroupDrawer | undefined;
   children: ReactNode;
 }): React.JSX.Element {
+  const choices = Children.toArray(children);
+  const at = drawer === undefined ? choices.length : drawerAt(drawer.after, choices.length);
+
   return (
     <section
       className="ui-icon-picker-group [.ui-icon-picker-group+&]:mt-control-gap"
@@ -135,7 +161,16 @@ export function IconPickerGroup({
         {name}
       </Text>
       <div className="ui-icon-picker-grid grid grid-cols-section-icons gap-tight-gap">
-        {children}
+        {choices.slice(0, at)}
+        {drawer === undefined ? null : (
+          <div
+            key="ui-icon-picker-drawer"
+            className={`ui-icon-picker-drawer ${ICON_PICKER_ASIDE} col-span-full rounded-control bg-well py-tight-gap`}
+          >
+            {drawer.content}
+          </div>
+        )}
+        {choices.slice(at)}
       </div>
     </section>
   );
