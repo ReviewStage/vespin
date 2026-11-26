@@ -1,0 +1,35 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane B) - iOS 27.2 - D2E5EAB5-4ACE-4AE7-B7C9-7984D6FD7999
+ > Flow .kbd-replay-proof
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot proof-1-inbox... COMPLETED
+Swiping in UP direction in 1500 ms... COMPLETED
+Swiping in DOWN direction in 1500 ms... COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that ".*walked the invite flow.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot proof-2-thread... COMPLETED
+Swiping in UP direction in 2000 ms... COMPLETED
+Swiping in DOWN direction in 2000 ms... COMPLETED
+Tap on "The invite page"... COMPLETED
+Assert that id: picture-viewer-close is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot proof-3-picture... COMPLETED
+Swiping in LEFT direction in 3000 ms... COMPLETED
+Tap on id: picture-viewer-close... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on id: composer-field... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text This typed line must leave masked.... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot proof-4-composer... COMPLETED
+Swiping in DOWN direction in 3000 ms... COMPLETED
+Take screenshot proof-5-composer-held... COMPLETED
+Press Home key... COMPLETED
+Swiping in UP direction in 5000 ms... COMPLETED
