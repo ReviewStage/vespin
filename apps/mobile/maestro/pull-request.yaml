@@ -239,7 +239,9 @@ env:
 - extendedWaitUntil:
     visible: "Expire an invite after seven days.*"
     timeout: 30000
-- assertVisible: "Changes requested"
+# Its head says changes were asked for, in GitHub's sentence, its
+# reviewers standing as faces beside who opened it.
+- assertVisible: "Changes were requested.*"
 # Its head says its one review thread still stands unresolved, beside
 # GitHub's sentence.
 - assertVisible: ".*1 unresolved conversation"
@@ -261,7 +263,7 @@ env:
 - tapOn:
     id: "BackButton"
 - extendedWaitUntil:
-    visible: "Changes requested"
+    visible: "Changes were requested.*"
     timeout: 10000
 # Its conversation stands inline under the rows: the review that asked for
 # changes, its words a short preview, and the thread it started on a file's
