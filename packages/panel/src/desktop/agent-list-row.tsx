@@ -276,6 +276,16 @@ export function AgentListRow({
 
           // Note that a press away from the picker took the focus before it put the picker away, so it ends the edit here.
           if (away) rename?.end(undefined);
+
+          // Note that a pick hands the focus back to the name's field, so Return, Escape, or a press away ends the edit, as a section head's does.
+          if (!next && !away) {
+            const well = document.activeElement;
+
+            setTimeout(() => {
+              const row = (document.activeElement ?? well)?.closest(".ui-list-row");
+              row?.querySelector<HTMLInputElement>("input")?.focus();
+            }, 250);
+          }
         }}
         onChange={faceChange}
         size={BUTTON_SIZE.COMPACT}
