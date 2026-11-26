@@ -85,8 +85,9 @@ import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useCloudTerminalTab } from "../tasks/use-terminal-session.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { AgentPane } from "./main-tabs.js";
+import { CalmOffice, PresenceStrip } from "./office-prototype/calm-office.js";
 import { OfficePage } from "./office-prototype/office-page.js";
-import { OFFICE } from "./office-prototype/office-params.js";
+import { CALM, OFFICE } from "./office-prototype/office-params.js";
 import {
   SIDE_PANEL_HOLDER,
   SidePanel,
@@ -197,8 +198,16 @@ export const DesktopInbox = memo(function DesktopInboxOrOffice(props: {
   room?: ShellRoom;
   phoneStart?: React.ReactNode;
 }): React.JSX.Element {
+  if (OFFICE === "presence" && props.room === SHELL_ROOM.NARROW) {
+    return (
+      <div className="calm-phone-presence">
+        <PresenceStrip />
+        <DesktopInboxReal {...props} />
+      </div>
+    );
+  }
   if (OFFICE !== undefined && props.room === SHELL_ROOM.NARROW)
-    return <OfficePage variant={OFFICE} />;
+    return CALM.has(OFFICE) ? <CalmOffice variant={OFFICE} /> : <OfficePage variant={OFFICE} />;
   return <DesktopInboxReal {...props} />;
 });
 

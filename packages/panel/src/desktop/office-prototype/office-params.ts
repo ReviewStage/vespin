@@ -9,7 +9,15 @@ export const OFFICE_VARIANT = {
   DESKS: "desks",
   FLOOR: "floor",
   ROOMS: "rooms",
+  PHOTO: "photo",
+  TABLE: "table",
+  SENTENCES: "sentences",
+  PRESENCE: "presence",
+  SPOTLIGHT: "spotlight",
 } as const;
+
+/** The round-three ideas, calm: a face and one sentence each. */
+export const CALM = new Set<string>(["photo", "table", "sentences", "spotlight"]);
 
 export type OfficeVariant = (typeof OFFICE_VARIANT)[keyof typeof OFFICE_VARIANT];
 

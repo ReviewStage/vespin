@@ -36,8 +36,9 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems, type WaitingItems } from "../tasks/use-waiting-items.js";
 import { letGoOfFocus, useHomeNewTask, useListsTask, welcomed } from "./desktop-welcome.js";
 import { HomeStarters } from "./home-starters.js";
+import { CalmOffice, PresenceStrip } from "./office-prototype/calm-office.js";
 import { OfficePage } from "./office-prototype/office-page.js";
-import { OFFICE } from "./office-prototype/office-params.js";
+import { CALM, OFFICE } from "./office-prototype/office-params.js";
 import { PERSON_SECTION_FOLD, PersonBody, PersonSectionFrame } from "./person-frame.js";
 import { RecentTasks } from "./recent-tasks.js";
 
@@ -325,13 +326,15 @@ export function DesktopHome({
   const fresh = welcomed(tasks, useListsTask(undefined));
 
   // PROTOTYPE, throwaway: the Office in Home's place while the address asks for it.
-  if (OFFICE !== undefined) return <OfficePage variant={OFFICE} />;
+  if (OFFICE !== undefined && OFFICE !== "presence")
+    return CALM.has(OFFICE) ? <CalmOffice variant={OFFICE} /> : <OfficePage variant={OFFICE} />;
 
   return (
     // Note that the rows' links are written under the listed workspace, so their menus offer Copy link.
     <LinkWorkspaceProvider value={tasks.workspace?.slug ?? tasks.workspace?.id}>
       {/* Note that the greeting welcomes the reader back while the list is read, because an account is new but once. */}
       <DetailPage frame={PAGE_FRAME.PAGE} title={greeting(accountName, fresh)}>
+        {OFFICE === "presence" ? <PresenceStrip /> : null}
         <HomeComposer tasks={tasks} takesFocus={takesFocus} />
         {/* Note that the box lays nothing out: it only hears the arrows its rows walk by. */}
         <div className="home-rows contents" {...roving} ref={rowsRef}>

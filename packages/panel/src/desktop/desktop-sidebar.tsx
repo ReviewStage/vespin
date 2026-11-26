@@ -3048,12 +3048,12 @@ function SidebarColumn({
       <SidebarPlaces>
         <HeldSearchRow onOpen={placeDoors.onSearch} />
         <HeldHomeRow
-          current={atHome && OFFICE === undefined}
+          current={atHome && (OFFICE === undefined || OFFICE === "presence")}
           disabled={!tasks.signedIn}
           onOpen={placeDoors.onHome}
           onOpenInTab={placeDoors.onHomeInTab}
         />
-        {OFFICE === undefined ? null : (
+        {OFFICE === undefined || OFFICE === "presence" ? null : (
           <NavItem
             icon={<GLYPH.PEOPLE />}
             current={atHome ? NAV_CURRENT.PAGE : undefined}

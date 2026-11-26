@@ -143,12 +143,12 @@ export function MobileBar({
         <BarItems>
           {inboxOn ? (
             <BarItem
-              icon={OFFICE === undefined ? <InboxIcon /> : <UsersIcon />}
+              icon={OFFICE === undefined || OFFICE === "presence" ? <InboxIcon /> : <UsersIcon />}
               current={inInbox}
-              count={OFFICE === undefined ? inboxCount : 4}
+              count={OFFICE === undefined || OFFICE === "presence" ? inboxCount : undefined}
               onPress={go(inbox.open)}
             >
-              {OFFICE === undefined ? "Inbox" : "Office"}
+              {OFFICE === undefined || OFFICE === "presence" ? "Inbox" : "Office"}
             </BarItem>
           ) : null}
           <BarItem icon={<ListTodoIcon />} current={inTasks} onPress={go(board.open)}>

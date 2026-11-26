@@ -1267,6 +1267,8 @@
      soft fill its character's body is drawn in, one to each color. */
   --spacing-manager-face-row: var(--spacing-avatar-row);
   --spacing-manager-face-message: var(--spacing-avatar-card);
+  --spacing-manager-face-portrait: var(--spacing-avatar-portrait);
+  --spacing-manager-face-hero: 96px;
   --spacing-manager-face-badge-row: var(--ui-space-12);
   --spacing-manager-face-badge-message: var(--ui-space-16);
   --color-manager-face-yellow: var(--ui-color-manager-face-yellow);
