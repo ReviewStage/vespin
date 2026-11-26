@@ -1284,7 +1284,12 @@ type InboxHeld = {
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
 function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
-  const listing = useInboxListing({ show, search, chosen, pinnedFirst: true });
+  const real = useInboxListing({ show, search, chosen, pinnedFirst: true });
+  // STAGING ONLY: an Inbox with nothing saved whose read failed.
+  const listing =
+    require("react-native").Settings.get("stageNothingSaved") === "true"
+      ? { ...real, listed: [], shown: [], runs: undefined, feed: INBOX_FEED.FAILED }
+      : real;
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();

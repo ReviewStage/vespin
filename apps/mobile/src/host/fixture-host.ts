@@ -273,6 +273,8 @@ function withInboxOff(held: AppStateSnapshot, inboxOff: boolean): AppStateSnapsh
 }
 
 function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateSnapshot["network"] {
+  // STAGING ONLY: stills of the phone offline.
+  if (require("react-native").Settings.get("stageOffline") === "true") return { ...held.network, online: false };
   if (!updateNeeded || held.network.updateNeeded === true) return held.network;
 
   return { ...held.network, updateNeeded: true };
