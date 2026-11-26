@@ -1,4 +1,5 @@
 import {
+  IconButton,
   IconPicker,
   IconPickerChoice,
   IconPickerDrawer,
@@ -62,6 +63,7 @@ function flagDrawer(
   glyphs: readonly { label: string }[],
   open: boolean,
   onChoose: (label: string) => void,
+  onClose: () => void,
 ): IconPickerGroupDrawer | undefined {
   const after = glyphs.findIndex((glyph) => glyph.label === "Flag");
 
@@ -70,15 +72,14 @@ function flagDrawer(
   return {
     after,
     content: (
-      <IconPickerDrawer>
+      <IconPickerDrawer label="Flag ink" onClose={onClose}>
         {FLAG_INKS.map(({ label, ink }) => (
-          <IconPickerChoice
+          <IconButton
             key={label}
+            icon={<FlagIcon className={ink} />}
             label={label}
-            pressed={false}
-            stop={false}
-            face={<FlagIcon className={ink} />}
-            onPress={() => onChoose("Flag")}
+            roving
+            onClick={() => onChoose("Flag")}
           />
         ))}
       </IconPickerDrawer>
@@ -111,10 +112,15 @@ function IconPickers(): React.JSX.Element {
             <IconPickerGroup
               key={group.name}
               name={group.name}
-              drawer={flagDrawer(group.glyphs, flagOpen, (label) => {
-                setChosen(label);
-                setFlagOpen(false);
-              })}
+              drawer={flagDrawer(
+                group.glyphs,
+                flagOpen,
+                (label) => {
+                  setChosen(label);
+                  setFlagOpen(false);
+                },
+                () => setFlagOpen(false),
+              )}
             >
               {group.glyphs.map(({ label, Glyph }) => (
                 <IconPickerChoice

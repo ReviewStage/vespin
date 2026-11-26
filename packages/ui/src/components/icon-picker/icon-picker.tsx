@@ -1,5 +1,6 @@
-import { Children, type ReactNode, type RefObject, useRef } from "react";
+import { Children, type ReactNode, type RefObject, useLayoutEffect, useRef } from "react";
 import { IconButton } from "../button/button.js";
+import { ROVING_ORIENTATION, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { ScrollArea } from "../scroll-area/scroll-area.js";
 import { SearchField } from "../search-field/search-field.js";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
@@ -108,13 +109,56 @@ export function IconPickerChoice({
 }
 
 /**
- * What a group's drawer holds laid out on the grid's own columns, one
- * button to each, as a glyph's colors are: a row of choices about the
- * choice above it, lined up with the grid it stands in.
+ * What a group's drawer holds, a row of choices about the choice above it
+ * (a glyph's colors), each an `IconButton` marked `roving`, laid out on the
+ * grid's own columns. Its pressed choice, or else its first, takes the
+ * focus as it opens; the arrows walk its choices, and Escape puts it away
+ * (`onClose`), handing the focus back to what held it as it opened.
  */
-export function IconPickerDrawer({ children }: { children: ReactNode }): React.JSX.Element {
+export function IconPickerDrawer({
+  label,
+  onClose,
+  children,
+}: {
+  /** What the row is called for a reader. */
+  label: string;
+  onClose: () => void;
+  children: ReactNode;
+}): React.JSX.Element {
+  const box = useRef<HTMLDivElement | null>(null);
+  const opener = useRef<Element | null>(null);
+  const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.BOTH });
+
+  // Note that the focus lands once the row stands, which scrolls the grid to show it where it opened below what is seen.
+  useLayoutEffect(() => {
+    opener.current = document.activeElement;
+    const pressed = box.current?.querySelector<HTMLElement>('button[aria-pressed="true"]');
+
+    (pressed ?? box.current?.querySelector<HTMLElement>("button"))?.focus();
+  }, []);
+
+  const keys = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Escape") return roving.onKeyDown(event);
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (opener.current instanceof HTMLElement) opener.current.focus();
+    onClose();
+  };
+
   return (
-    <div className="ui-icon-picker-drawer-row grid grid-cols-section-icons gap-tight-gap">
+    <div
+      ref={(element) => {
+        box.current = element;
+        roving.ref(element);
+      }}
+      data-roving={roving["data-roving"]}
+      role="toolbar"
+      aria-label={label}
+      className="ui-icon-picker-drawer-row grid grid-cols-section-icons gap-tight-gap"
+      onKeyDown={keys}
+      onFocus={roving.onFocus}
+    >
       {children}
     </div>
   );
@@ -161,16 +205,19 @@ export function IconPickerGroup({
         {name}
       </Text>
       <div className="ui-icon-picker-grid grid grid-cols-section-icons gap-tight-gap">
-        {choices.slice(0, at)}
-        {drawer === undefined ? null : (
-          <div
-            key="ui-icon-picker-drawer"
-            className={`ui-icon-picker-drawer ${ICON_PICKER_ASIDE} col-span-full rounded-control bg-well py-tight-gap`}
-          >
-            {drawer.content}
-          </div>
-        )}
-        {choices.slice(at)}
+        {drawer === undefined
+          ? choices
+          : // Note that the drawer joins the choices' own list, so opening it moves no choice into a list of its own, which would draw it anew.
+            [
+              ...choices.slice(0, at),
+              <div
+                key="ui-icon-picker-drawer"
+                className={`ui-icon-picker-drawer ${ICON_PICKER_ASIDE} col-span-full rounded-control bg-well py-tight-gap`}
+              >
+                {drawer.content}
+              </div>,
+              ...choices.slice(at),
+            ]}
       </div>
     </section>
   );

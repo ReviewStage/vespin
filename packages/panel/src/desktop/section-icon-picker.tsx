@@ -25,8 +25,6 @@ import {
   NOTE_LINE_LOOK,
   NoteLine,
   PopoverIconButton,
-  ROVING_ORIENTATION,
-  useRovingKeys,
 } from "@repo/ui";
 import { drawnDark } from "@repo/ui/appearance";
 import { SmilePlusIcon } from "@repo/ui/icons";
@@ -59,16 +57,7 @@ import {
   StarIcon,
   ZapIcon,
 } from "lucide-react";
-import {
-  memo,
-  type RefObject,
-  useCallback,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, type RefObject, useCallback, useId, useMemo, useRef, useState } from "react";
 import { readKept, writeKept } from "../kept-storage.js";
 import { QUERY_ROOT } from "../query-keys.js";
 
@@ -384,38 +373,14 @@ function GlyphColors({
   label: string;
   starts: TaskSectionIconColor | undefined;
   onColor: (color: TaskSectionIconColor | undefined) => void;
-  onClose: (byKey: boolean) => void;
+  onClose: () => void;
 }): React.JSX.Element {
-  const start = useRef<HTMLButtonElement | null>(null);
-  const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.BOTH });
-
-  // Note that the focus lands on the color it starts on once the row stands, which scrolls the grid to show it where it opened below what is seen.
-  useLayoutEffect(() => {
-    start.current?.focus();
-  }, []);
-
-  const closeByKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "Escape") return roving.onKeyDown(event);
-    event.preventDefault();
-    event.stopPropagation();
-    onClose(true);
-  };
-
   return (
-    <div
-      ref={roving.ref}
-      data-roving={roving["data-roving"]}
-      role="toolbar"
-      aria-label={`${label} color`}
-      className="section-icon-colors"
-      onKeyDown={closeByKey}
-      onFocus={roving.onFocus}
-    >
-      <IconPickerDrawer>
+    <div className="section-icon-colors">
+      <IconPickerDrawer label={`${label} color`} onClose={onClose}>
         {GLYPH_COLORS.map((value) => (
           <IconButton
             key={value ?? "text"}
-            ref={value === starts ? start : undefined}
             icon={
               Glyph === undefined ? null : (
                 <Glyph data-icon-color={value} className={inkOf(value)} />
@@ -452,7 +417,7 @@ interface GridProps {
   readonly onIcon: (icon: TaskSectionIcon) => void;
   readonly onOpen: (opened: OpenedGlyph) => void;
   readonly onColor: (color: TaskSectionIconColor | undefined) => void;
-  readonly onCloseColors: (byKey: boolean) => void;
+  readonly onCloseColors: () => void;
 }
 
 /** The color a glyph's strip starts on: the icon's own where the glyph is the icon chosen, else `kept`, the color it was chosen in last. */
@@ -518,7 +483,7 @@ function colorsDrawer(
   label: string,
   opened: OpenedGlyph,
   onColor: (color: TaskSectionIconColor | undefined) => void,
-  onClose: (byKey: boolean) => void,
+  onClose: () => void,
 ): IconPickerGroupDrawer {
   return {
     after,
@@ -563,7 +528,7 @@ const GlyphGroup = memo(function GlyphGroup({
   stop: string | undefined;
   onOpen: (opened: OpenedGlyph) => void;
   onColor: (color: TaskSectionIconColor | undefined) => void;
-  onClose: (byKey: boolean) => void;
+  onClose: () => void;
 }): React.JSX.Element {
   const at = opened === undefined ? -1 : choices.findIndex((one) => one.glyph === opened.glyph);
   const open = choices[at];
@@ -882,8 +847,6 @@ function SectionIconPicker({
   const [query, setQuery] = useState("");
   const [recent] = useState(readRecent);
   const [opened, setOpened] = useState<OpenedGlyph | undefined>(undefined);
-  const opener = useRef<Element | null>(null);
-  const refocus = useRef(false);
   const panelId = useId();
 
   const tabIds = {
@@ -891,13 +854,6 @@ function SectionIconPicker({
     [ICON_TAB.EMOJI]: useId(),
   } satisfies Record<IconTab, string>;
 
-  // Note that colors Escape put away hand the focus back to the glyph they opened from once they are gone.
-  useLayoutEffect(() => {
-    if (opened !== undefined || !refocus.current) return;
-    refocus.current = false;
-
-    if (opener.current instanceof HTMLElement) opener.current.focus();
-  });
   // Note that the grid's doors read the latest owner and opened glyph through refs, so they stand the same from draw to draw and a press redraws none of the cells it reaches.
   const latest = useRef({ onIcon, opened });
   latest.current = { onIcon, opened };
@@ -909,7 +865,6 @@ function SectionIconPicker({
 
   // A glyph pressed again closes the colors it opened, as a disclosure does.
   const open = useCallback((next: OpenedGlyph) => {
-    opener.current = document.activeElement;
     setOpened((was) => (was?.group === next.group && was.glyph === next.glyph ? undefined : next));
   }, []);
 
@@ -922,10 +877,7 @@ function SectionIconPicker({
     [choose],
   );
 
-  const closeColors = useCallback((byKey: boolean) => {
-    refocus.current = byKey;
-    setOpened(undefined);
-  }, []);
+  const closeColors = useCallback(() => setOpened(undefined), []);
 
   const searching = query.trim() !== "";
 

@@ -40,6 +40,8 @@ test("a drawer stands after the last choice of the opened choice's row and befor
   const drawer = {
     after: 3,
     content: createElement(IconPickerDrawer, {
+      label: "Opened's",
+      onClose: () => {},
       children: createElement(IconPickerChoice, {
         label: "Opened",
         pressed: false,
@@ -59,4 +61,34 @@ test("a drawer stands after the last choice of the opened choice's row and befor
   );
 
   assert.deepEqual(order.slice(9, 12), ["Choice 10", "Opened", "Choice 11"]);
+});
+
+test("a drawer opening in an early row leaves a choice after it standing, the focus still on it", () => {
+  const holder = document.createElement("div");
+  document.body.append(holder);
+  const root = createRoot(holder);
+  roots.push(root);
+
+  const group = (drawer?: { after: number; content: string }) =>
+    createElement(IconPickerGroup, {
+      name: "Glyphs",
+      drawer,
+      children: Array.from({ length: 12 }, (_, at) =>
+        createElement(IconPickerChoice, {
+          key: at,
+          label: `Choice ${at + 1}`,
+          pressed: false,
+          stop: at === 0,
+          face: null,
+          onPress: () => {},
+        }),
+      ),
+    });
+
+  act(() => root.render(group()));
+  const last = holder.querySelector<HTMLElement>('[aria-label="Choice 12"]') ?? assert.fail();
+  act(() => last.focus());
+  act(() => root.render(group({ after: 3, content: "Opened" })));
+
+  assert.equal(document.activeElement?.getAttribute("aria-label"), "Choice 12");
 });
