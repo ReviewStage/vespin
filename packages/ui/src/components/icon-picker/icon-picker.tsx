@@ -111,9 +111,20 @@ function standFlyout(popup: HTMLElement, choice: HTMLElement): () => void {
   };
 }
 
-/** The layer a flyout from `choice` stands in: the one the picker it stands in was hung on, over a dialog's card where that was. */
+/** The layer a dialog's card stands in, which a flyout over it stands above. */
+const DIALOG_LAYER = "dialog";
+
+/**
+ * The layer a flyout from `choice` stands in: the one the picker it stands
+ * in was hung on, or over a dialog's card where the picker stands in one
+ * hung on none, as a phone's menu sheet holding a Manager's faces is.
+ */
 function layerAround(choice: HTMLElement | null): string | undefined {
-  return choice?.closest("[data-layer]")?.getAttribute("data-layer") ?? undefined;
+  const hung = choice?.closest("[data-layer]")?.getAttribute("data-layer");
+
+  if (hung != null) return hung;
+
+  return choice?.closest('[aria-modal="true"]') == null ? undefined : DIALOG_LAYER;
 }
 
 /**
