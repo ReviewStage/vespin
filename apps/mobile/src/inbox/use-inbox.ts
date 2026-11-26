@@ -251,7 +251,7 @@ export function useInboxListing(view: {
   const stored = told?.stored === true;
   const searched = useSearchedWords(stored ? tokens : NO_TOKENS);
 
-  // Note that the search reads every word of each thread: where the phone keeps them on disk, its title and those of its messages the search's query found, and otherwise its whole item's, by the row's id, as the panel's Inbox searches it.
+  // Note that the search reads every word of each thread: where the phone keeps them on disk, its title and the words typed its kept messages say, and otherwise its whole item's, by the row's id, as the panel's Inbox searches it.
   const wordsOf = useMemo(() => {
     if (stored) return (row: InboxRow) => [row.title, ...(searched.get(row.id) ?? NO_WORDS)];
     const byId = new Map(whole.flatMap(({ items }) => items.map((item) => [item.id, item])));
@@ -505,7 +505,7 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 /** No word typed. */
 const NO_TOKENS: readonly string[] = [];
 
-/** No word a thread's kept messages say that a search found. */
+/** No word typed that a thread's kept messages say. */
 const NO_WORDS: readonly string[] = [];
 
 /** No message read yet of a thread kept on disk. */

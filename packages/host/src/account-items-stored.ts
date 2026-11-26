@@ -33,6 +33,7 @@ import {
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
+import { failureKind, reportUnexpected } from "@repo/runtime/effect";
 import type { EntityPool, HeldRows } from "@repo/sync";
 import {
   and,
@@ -53,6 +54,7 @@ import {
   placedRow,
 } from "./inbox-collections.js";
 import { INBOX_MESSAGE, type ThreadMessage, threadMessagesOf } from "./inbox-messages.js";
+import { type KeptWords, messageWordsOf } from "./kept-words.js";
 import {
   followTakingRows,
   type LiveFailure,
@@ -269,6 +271,16 @@ function movedMessages(
   );
 }
 
+/** What Sentry is told of the words a search reads that would not be written. */
+const KEPT_WORDS_REPORT = "host.keptWords.writeFailed";
+
+/** `write` of the words a search reads, waited on; a failure is reported by its kind alone and leaves the follow going, since a search that misses a message's words is all it costs. */
+function wordsWritten(write: Promise<void>): Effect.Effect<void> {
+  return Effect.tryPromise({ try: () => write, catch: (cause) => cause }).pipe(
+    Effect.catch((cause) => reportUnexpected(KEPT_WORDS_REPORT, { cause: failureKind(cause) })),
+  );
+}
+
 /** What the stored follow is handed. */
 export interface StoredItemsFollow {
   /** The account's items read past the sync id named, whole where it is empty; a failure where the service answered none. */
@@ -280,6 +292,8 @@ export interface StoredItemsFollow {
   readonly items: HeldRows<PlacedInboxRow, InboxChange>;
   /** Each message of their threads, kept on disk whole beside them, which a thread reads as it opens. */
   readonly messages: HeldRows<ThreadMessage, never>;
+  /** The words each of those messages says, which a search reads, written as the messages are. */
+  readonly words: KeptWords;
   /** Whether this attempt may read past the sync id kept, as the first of a follow's does. */
   readonly resumes: boolean;
   /** The task list's summaries of the tasks named, of those it holds now. */
@@ -323,7 +337,11 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
       // Note that an item's messages go before it, so a launch never finds an item kept whose thread is gone.
       const left = yield* threadMessageIds(pool, aged);
 
-      if (left.size > 0) yield* follow.messages.answer([], { gone: [...left] });
+      if (left.size > 0) {
+        yield* follow.messages.answer([], { gone: [...left] });
+        yield* wordsWritten(follow.words.moved([], [...left]));
+      }
+
       yield* items.answer([], { gone: aged });
     });
 
@@ -346,10 +364,15 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
         const whole = standing?.past === undefined;
 
         // Note that the messages are written before the items and the sync id beside them, so a launch cut short between the two reads past an older id and writes them again, never past messages it lacks.
-        if (whole) yield* follow.messages.answer(messagesOf(placed));
-        else {
+        const said = placed.flatMap(({ item }) => messageWordsOf(item));
+
+        if (whole) {
+          yield* follow.messages.answer(messagesOf(placed));
+          yield* wordsWritten(follow.words.replaced(said));
+        } else {
           const moved = yield* movedMessages(pool, placed, standing.gone);
           yield* follow.messages.answer(moved.rows, { gone: moved.gone });
+          yield* wordsWritten(follow.words.moved(said, moved.gone));
         }
 
         // Note that a whole answer names every item there is, so it replaces what the database keeps; one past a sync id names only what moved, and what stands no longer.

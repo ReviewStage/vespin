@@ -87,6 +87,7 @@ import { type AgentClient, composeAgents, type PullRequestClient } from "../comp
 import type { FileDownloadSeam } from "../effect/seams.js";
 import type { InboxKeeping } from "../inbox-collections.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
+import type { KeptWords } from "../kept-words.js";
 import { windowFocus } from "../window-focus.js";
 import { type PolledLive, polledLive } from "./polled-live.js";
 import { tellingsOf } from "./told-live.js";
@@ -1386,6 +1387,7 @@ export function subject(
     pool?: EntityPool;
     fileDownload?: FileDownloadSeam;
     inboxKeeping?: InboxKeeping;
+    keptWords?: KeptWords;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1410,6 +1412,7 @@ export function subject(
     const composer = yield* composeAgents({
       kernel,
       ...(options.inboxKeeping === undefined ? undefined : { inboxKeeping: options.inboxKeeping }),
+      ...(options.keptWords === undefined ? undefined : { keptWords: options.keptWords }),
       recordProductEvent: () => undefined,
       account,
       accountId,

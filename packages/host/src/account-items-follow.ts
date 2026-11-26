@@ -26,6 +26,7 @@ import {
 } from "./inbox-collections.js";
 import { INBOX_MESSAGE } from "./inbox-messages.js";
 import { KEPT_LIST } from "./kept-lists.js";
+import { type KeptWords, keptWordsInMemory } from "./kept-words.js";
 import {
   confirmWrite,
   droppedParts,
@@ -141,6 +142,8 @@ export interface AccountItemsDependencies {
   readonly dropped?: (part: AccountItemsPart, count: number) => void;
   /** How the platform keeps the Inbox's items in the pool: lean rows beside their messages, which the screens read through live queries, or whole, told on the document; whole where none is said. */
   readonly inboxKeeping?: InboxKeeping;
+  /** The words the kept messages say, which a search reads, where the Inbox is kept lean; in memory where none is handed. */
+  readonly keptWords?: KeptWords;
 }
 
 /** A part of the account's items read, whose dropped rows are counted by it. */
@@ -470,6 +473,7 @@ export function followAccountItems(
           pool: dependencies.pool,
           items: threads,
           messages,
+          words: dependencies.keptWords ?? keptWordsInMemory(),
           resumes,
           tasksListed: dependencies.tasksListed ?? noneListed,
           onTxWait: (handed) => {

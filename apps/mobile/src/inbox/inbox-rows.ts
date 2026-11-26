@@ -18,7 +18,6 @@ import {
   inboxRowsMerged,
   inboxRowsWhere,
   type PlacedInboxRow,
-  threadMessagesSearched,
   threadMessagesWhere,
   threadOfRows,
 } from "@repo/host/inbox-rows";
@@ -29,7 +28,7 @@ import {
   localOnlyCollectionOptions,
   useLiveQuery,
 } from "@tanstack/react-db";
-import { useEffect, useMemo, useReducer } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import { useInboxRowsSource } from "../host/host-provider.js";
 
 /** No write standing over any row. */
@@ -142,48 +141,42 @@ export function useThreadMessages(
   return useMemo(() => (rows === undefined ? undefined : threadOfRows(rows)), [rows]);
 }
 
-/** No kept message answers a search: what one reads before its query loads, or where nothing is typed. */
+/** No kept message answers a search: what one reads before its query answers, or where nothing is typed. */
 const NONE_SEARCHED: ReadonlyMap<string, readonly string[]> = new Map();
 
 /**
- * Every line of words the kept messages say that may answer a search for
- * `tokens`, by the thread each stands on: those whose words hold any word
- * typed, as a live query whose filter runs in SQLite on expo-sqlite's own
- * thread finds them (`threadMessagesSearched`), so a search reads the
- * messages that may answer it rather than every thread's. A search typed
- * anew is a query anew, the one it replaces let go unread. None where
- * nothing is typed or nothing keeps the messages, and none found before
- * the query has loaded.
+ * Each thread whose kept messages say any of `tokens`, with those they say,
+ * as the kept words find them in SQLite off the JavaScript thread
+ * (`InboxRowsSource.threadsSaying`), so a keystroke waits on no read of the
+ * messages. A search typed anew asks anew, and the answer to one it
+ * replaced is let go unheard, so typing never draws an older search's. None
+ * where nothing is typed, and none found before the first answer.
  */
 export function useSearchedWords(
   tokens: readonly string[],
 ): ReadonlyMap<string, readonly string[]> {
   const source = useInboxRowsSource();
-  const standing = useStanding(source);
-  const messages = standing === undefined ? undefined : source.messages();
-  const [first, ...rest] = tokens;
+  const [searched, setSearched] = useState(NONE_SEARCHED);
 
-  const searched = useLiveQuery((q) =>
-    first === undefined || messages === undefined
-      ? undefined
-      : q
-          .from({ message: messages })
-          .where(({ message }) => threadMessagesSearched(message, [first, ...rest]))
-          .select(({ message }) => ({ threadId: message.threadId, words: message.words })),
-  );
+  useEffect(() => {
+    let current = true;
 
-  const found = searched.isReady ? searched.data : undefined;
+    if (tokens.length === 0) setSearched(NONE_SEARCHED);
+    else
+      source.threadsSaying(tokens).then(
+        (found) => {
+          if (current) setSearched(found);
+        },
+        // Note that a search the database would not answer finds by each row's own words alone.
+        () => {
+          if (current) setSearched(NONE_SEARCHED);
+        },
+      );
 
-  return useMemo(() => {
-    if (found === undefined || found.length === 0) return NONE_SEARCHED;
-    const byThread = new Map<string, string[]>();
+    return () => {
+      current = false;
+    };
+  }, [source, tokens]);
 
-    for (const { threadId, words } of found) {
-      const lines = byThread.get(threadId) ?? [];
-      lines.push(...words.split("\n"));
-      byThread.set(threadId, lines);
-    }
-
-    return byThread;
-  }, [found]);
+  return tokens.length === 0 ? NONE_SEARCHED : searched;
 }

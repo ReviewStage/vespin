@@ -545,6 +545,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         kernel,
         // Note that a platform keeping collections on disk keeps the Inbox lean beside its messages, whether or not the account's database opened, so its screens read one path.
         inboxKeeping: local?.keepsCollections === true ? INBOX_KEEPING.LEAN : INBOX_KEEPING.WHOLE,
+        ...(local === undefined ? undefined : { keptWords: local.words }),
         fileDownload: Option.getOrUndefined(fileDownload),
         account,
         accountId,
@@ -946,7 +947,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       nodes: kernel.nodes,
       concerns: new Set(Object.values(HOST_CONCERN).filter(running)),
       startOrder: HOST_START_ORDER.flatMap((name) => (running(name) ? [concerns[name]] : [])),
-      inboxRows: inboxRowsSource(pool),
+      inboxRows: inboxRowsSource(pool, local?.words),
       /**
        * The launch's own arming: where the account's capabilities already
        * stand open, the launch opens the gate exactly as a sign-in does; and

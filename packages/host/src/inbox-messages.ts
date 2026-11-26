@@ -9,16 +9,14 @@
  * anew, so the kind takes only what the account's read answers.
  */
 
-import { inboxMessageWords } from "@repo/features/inbox-list-model";
 import { type InboxItem, type InboxMessage, inboxMessageSchema } from "@repo/features/inbox-wire";
 import type { RowKind } from "@repo/sync";
 import { Schema } from "effect";
 
-/** A message of a thread as the pool keeps it: the message, the thread it stands on, and every line of words it says as a search reads them (`inboxMessageWords`), each on a line of its own, which a search matches in SQLite. */
+/** A message of a thread as the pool keeps it: the message and the thread it stands on. Note that the words a search reads stand apart from it (`kept-words.ts`). */
 export const threadMessageSchema = Schema.Struct({
   ...inboxMessageSchema.fields,
   threadId: Schema.String,
-  words: Schema.String,
 });
 
 export type ThreadMessage = typeof threadMessageSchema.Type;
@@ -31,11 +29,7 @@ const messagesOf = new WeakMap<ThreadMessage, InboxMessage>();
 
 /** Every message of `item`'s thread as a row of its own, on that thread. */
 export function threadMessagesOf(item: InboxItem): readonly ThreadMessage[] {
-  return (item.thread ?? []).map((message) => ({
-    ...message,
-    threadId: item.id,
-    words: inboxMessageWords(message).join("\n"),
-  }));
+  return (item.thread ?? []).map((message) => ({ ...message, threadId: item.id }));
 }
 
 /** The message a row holds without the thread it stands on, as a thread draws it; a row read again reads out as the very message. */
@@ -43,7 +37,7 @@ export function messageOf(row: ThreadMessage): InboxMessage {
   const read = messagesOf.get(row);
 
   if (read !== undefined) return read;
-  const { threadId: _thread, words: _words, ...message } = row;
+  const { threadId: _thread, ...message } = row;
   messagesOf.set(row, message);
 
   return message;

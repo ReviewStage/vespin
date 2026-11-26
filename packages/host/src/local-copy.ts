@@ -36,6 +36,7 @@ import type {
 } from "@repo/sync";
 import { Effect, Exit, type Path, Result, Scope, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
+import { type KeptWords, keptWordsInMemory } from "./kept-words.js";
 import {
   forgetLocalDatabase,
   LocalDatabaseDriver,
@@ -89,6 +90,8 @@ export interface LocalCopy {
   readonly forget: Effect.Effect<void>;
   /** Whether the platform keeps collections on disk beside the database (`LocalDatabaseDriverSeam.collections`), as the iPhone does, which keeps the Inbox lean. */
   readonly keepsCollections: boolean;
+  /** The words the kept Inbox messages say, in the database open now, or in memory while none keeps them. */
+  readonly words: KeptWords;
 }
 
 /** The stores over one open database, and the scope it closes with. */
@@ -97,6 +100,8 @@ interface Opened {
   readonly outbox: OutboxStore;
   /** The database the stored kinds' collections are kept in beside it, where the platform keeps one and it opened. */
   readonly collections: CollectionsStore | undefined;
+  /** The words its kept messages say, beside the collections where they opened, else in memory. */
+  readonly words: KeptWords;
   readonly scope: Scope.Closeable;
 }
 
@@ -116,6 +121,8 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
   const context = yield* Effect.context<LocalDatabaseDriver | FileSystem.FileSystem | Path.Path>();
   const keepsCollections = (yield* LocalDatabaseDriver).collections !== undefined;
   let opened: Opened | undefined;
+  /** The words kept while no database is open, which a sign-out lets go. */
+  let unopenedWords = keptWordsInMemory();
   /** The account the last open was for, whose folder a sign-out deletes even where it would not open. */
   let account: string | undefined;
 
@@ -138,6 +145,15 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
       loaded: (name) => opened?.rows.loaded(name) ?? Effect.undefined,
     },
     collections: () => opened?.collections,
+  };
+
+  /** Note that each call is handed to the words open as it runs, so a sign-in opens them without the follow or a search being handed them anew. */
+  const wordsNow = () => opened?.words ?? unopenedWords;
+
+  const words: KeptWords = {
+    replaced: (rows) => wordsNow().replaced(rows),
+    moved: (rows, gone) => wordsNow().moved(rows, gone),
+    threadsSaying: (tokens) => wordsNow().threadsSaying(tokens),
   };
 
   const open = (accountId: string, refused: RefusedMessages) =>
@@ -191,7 +207,8 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
       opened = {
         rows: localRows(connection.success),
         outbox,
-        collections: keep === undefined ? undefined : { keep, scope },
+        collections: keep === undefined ? undefined : { keep: keep.keep, scope },
+        words: keep?.words ?? keptWordsInMemory(),
         scope,
       };
 
@@ -209,6 +226,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
 
   const forget = Effect.gen(function* () {
     yield* close;
+    unopenedWords = keptWordsInMemory();
     const forgotten = account;
     account = undefined;
 
@@ -219,5 +237,5 @@ export const localCopy = Effect.fn("host/localCopy")(function* (stateRoot: strin
     );
   }).pipe(Effect.provideContext(context));
 
-  return { store, open, forget, keepsCollections } satisfies LocalCopy;
+  return { store, open, forget, keepsCollections, words } satisfies LocalCopy;
 });

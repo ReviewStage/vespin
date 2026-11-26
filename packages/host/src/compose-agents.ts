@@ -159,6 +159,7 @@ import {
   keptOfAgent,
   RepositoryGitHubImageKey,
 } from "./kept-content.js";
+import type { KeptWords } from "./kept-words.js";
 import {
   type AccountReads,
   accountReads,
@@ -344,6 +345,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
   reader?: () => InboxReader | undefined;
   /** How the platform keeps the Inbox's items in the pool: lean, beside their messages, where it keeps collections on disk, as the iPhone does; whole where none is said. */
   inboxKeeping?: InboxKeeping;
+  /** The words the kept Inbox messages say, which a search reads, where the Inbox is kept lean (`LocalCopy.words`). */
+  keptWords?: KeptWords;
   /**
    * Waits for a write's transaction to arrive on the task list followed
    * live, which holds every agent's row (`TasksComposer.listed`), so a
@@ -659,6 +662,9 @@ export function composeAgents(
           ...(dependencies.inboxKeeping === undefined
             ? undefined
             : { inboxKeeping: dependencies.inboxKeeping }),
+          ...(dependencies.keptWords === undefined
+            ? undefined
+            : { keptWords: dependencies.keptWords }),
           ...(dependencies.tasksListed === undefined
             ? undefined
             : { tasksListed: dependencies.tasksListed }),

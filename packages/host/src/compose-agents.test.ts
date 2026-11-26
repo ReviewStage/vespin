@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { CALL_FAULT, ServiceReach } from "@repo/features";
@@ -60,8 +61,7 @@ import { TestClock } from "effect/testing";
 import type { AppManagerChats, AppTranscript } from "./app-state.js";
 import { INBOX_CHANGE, INBOX_KEEPING, INBOX_THREAD } from "./inbox-collections.js";
 import { INBOX_MESSAGE } from "./inbox-messages.js";
-import { threadMessagesSearched } from "./inbox-rows.js";
-import { localCopy } from "./local-copy.js";
+import { type LocalCopy, localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { taskListCollections } from "./task-list-collections.js";
@@ -2493,6 +2493,25 @@ it.effect(
     }).pipe(Effect.provide(localPlatform)),
 );
 
+/** The database the kept messages' words stand in at `file`, on Node's own SQLite, each statement answered as the iPhone's async API answers it. */
+function nodeWordsDatabase(file: string) {
+  const database = new DatabaseSync(file);
+  // SAFETY: the words bind text and numbers alone, each of which `node:sqlite` takes.
+  const bound = (params: readonly unknown[]) => params as SQLInputValue[];
+
+  return {
+    exec: async (sql: string) => {
+      database.exec(sql);
+    },
+    run: async (sql: string, params: readonly unknown[]) => {
+      database.prepare(sql).run(...bound(params));
+    },
+    all: async (sql: string, params: readonly unknown[]) =>
+      database.prepare(sql).all(...bound(params)),
+    close: async () => database.close(),
+  };
+}
+
 /** The platform a local database stands on with its collections kept on disk whole, as the iPhone's are: Node's SQLite under both. */
 const keptPlatform = Layer.mergeAll(
   NodeFileSystem.layer,
@@ -2502,7 +2521,11 @@ const keptPlatform = Layer.mergeAll(
     Effect.gen(function* () {
       const driver = yield* LocalDatabaseDriver;
 
-      return { ...driver, collections: async (file: string) => nodeKeptCollections(file) };
+      return {
+        ...driver,
+        collections: async (file: string) => nodeKeptCollections(file),
+        words: async (file: string) => nodeWordsDatabase(file),
+      };
     }),
   ).pipe(Layer.provide(nodeSqliteDriverLayer)),
 );
@@ -2537,7 +2560,12 @@ function keptLaunch(root: string, account = "user-dana") {
       store: local.store,
     });
 
-    const launch = yield* subject({ pool, inboxKeeping: INBOX_KEEPING.LEAN });
+    const launch = yield* subject({
+      pool,
+      inboxKeeping: INBOX_KEEPING.LEAN,
+      keptWords: local.words,
+    });
+
     yield* local.open(account, {
       kept: () => [],
       moves: Stream.empty,
@@ -2617,26 +2645,10 @@ function keptThreadOf(pool: EntityPool, id: string) {
   );
 }
 
-/** The threads whose kept messages a search for `tokens` finds, as a screen's search query reads them from the account's database. */
-function searchedThreads(pool: EntityPool, tokens: readonly [string, ...string[]]) {
-  return Effect.flatMap(pool.collection(INBOX_MESSAGE), (collection) =>
-    Effect.promise(async () => {
-      const query = createLiveQueryCollection({
-        query: (q) =>
-          q
-            .from({ message: collection })
-            .where(({ message }) => threadMessagesSearched(message, tokens))
-            .select(({ message }) => ({ threadId: message.threadId })),
-        startSync: true,
-        gcTime: 0,
-      });
-
-      await query.preload();
-      const ids = [...new Set(query.toArray.map((row) => row.threadId))].sort();
-      await query.cleanup();
-
-      return ids;
-    }),
+/** The threads whose kept messages a search for `tokens` finds, as a screen's search asks the account's kept words. */
+function searchedThreads(launch: { readonly local: LocalCopy }, tokens: readonly string[]) {
+  return Effect.promise(async () =>
+    [...(await launch.local.words.threadsSaying(tokens)).keys()].sort(),
   );
 }
 
@@ -2703,11 +2715,11 @@ it.effect(
       assert.deepEqual(yield* keptMessageIds(next.pool), [second, third].sort());
       assert.deepEqual(
         {
-          kept: yield* searchedThreads(next.pool, ["said"]),
-          dropped: yield* searchedThreads(next.pool, ["nowhere"]),
+          kept: yield* searchedThreads(next, ["at 3"]),
+          dropped: yield* searchedThreads(next, ["at 1"]),
         },
         { kept: [HELD_ITEM.id], dropped: [] },
-        "a search finds a thread by the words its kept messages say, in SQLite",
+        "a search finds a thread by the words its kept messages say, in SQLite, and no longer by those of a message the delta took away",
       );
       assert.deepEqual(
         yield* keptThreadOf(next.pool, HELD_ITEM.id),
