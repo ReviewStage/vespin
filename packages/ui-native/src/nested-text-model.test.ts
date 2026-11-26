@@ -5,7 +5,12 @@ import { describe, expect, it } from "vitest";
 import { nestedTextKey } from "./nested-text-model.js";
 
 /** Stands in for a nested Text: the key reads an element's props, never its type. */
-function Nested({ children }: { readonly children?: ReactNode }): ReactNode {
+function Nested({
+  children,
+}: {
+  readonly children?: ReactNode;
+  readonly modifiers?: readonly object[];
+}): ReactNode {
   return children;
 }
 
