@@ -3,6 +3,7 @@
 import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
+import type { EmojiGroup } from "@repo/features/emoji-model";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import {
   MANAGER_CHAT_REACTION,
@@ -21,7 +22,6 @@ import {
   MANAGER_CHAT_REACTION_FACES,
 } from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
-import type { EmojiGroup } from "@repo/features/emoji-model";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { Predicate } from "effect";

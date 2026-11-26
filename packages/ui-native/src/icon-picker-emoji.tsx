@@ -12,9 +12,6 @@ import { SLACK_EMOJI_NAMES } from "@repo/features/slack-emoji-names";
 import { useMemo, useState } from "react";
 import { IconPickerSheet } from "./icon-picker.js";
 
-/** The most emoji the sheet lists at once, since @expo/ui builds a native view for each one it lists: a search reaches the rest. */
-const LISTED_MOST = 300;
-
 /** What the sheet's search asks for and says where it finds nothing, as the panel's picker words them. */
 const EMOJI_WORDS = {
   SEARCH: "Search emoji",
@@ -73,18 +70,6 @@ function listedFor(query: string, lead: EmojiGroup | undefined): readonly EmojiG
   return lead === undefined ? allEmoji() : [lead, ...allEmoji()];
 }
 
-/** `listed` cut to the first `LISTED_MOST` emoji, each group keeping what stands within it and none left empty. */
-function within(listed: readonly EmojiGroup[]): readonly EmojiGroup[] {
-  let room = LISTED_MOST;
-
-  return listed.flatMap((group) => {
-    const emojis = group.emojis.slice(0, room);
-    room -= emojis.length;
-
-    return emojis.length === 0 ? [] : [{ name: group.name, emojis }];
-  });
-}
-
 /**
  * The app's one icon picker over every emoji: each category of the app's
  * one table of emoji (`@repo/features/emoji-model`) under its name, the
@@ -95,8 +80,8 @@ function within(listed: readonly EmojiGroup[]): readonly EmojiGroup[] {
  * heard by its name. A press hands the emoji on, and the owner decides what
  * it sets and whether the sheet goes. Nothing is listed before the sheet
  * first opens, so the page it stands on builds no view of the emoji until a
- * reader asks for them; at most `LISTED_MOST` stand at once, and a search
- * reaches the rest.
+ * reader asks for them, and then every emoji is listed, the sheet building
+ * only the rows near the screen.
  */
 export function IconPickerEmojiSheet({
   title,
@@ -121,10 +106,7 @@ export function IconPickerEmojiSheet({
 
   if (presented && !opened) setOpened(true);
 
-  const listed = useMemo(
-    () => (opened ? within(listedFor(query, lead)) : []),
-    [opened, query, lead],
-  );
+  const listed = useMemo(() => (opened ? listedFor(query, lead) : []), [opened, query, lead]);
 
   // Note that the chosen are matched without their variation selectors, since the reactions a message holds and the table may spell one emoji apart.
   const ringed = useMemo(() => new Set([...chosen].map(bareEmoji)), [chosen]);
