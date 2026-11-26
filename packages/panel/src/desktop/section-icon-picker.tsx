@@ -339,7 +339,10 @@ function glyphColors(
   onColor: (color: TaskSectionIconColor | undefined) => void,
 ): React.JSX.Element {
   const colors: readonly IconPickerColor<TaskSectionIconColor | undefined>[] = GLYPH_COLORS.map(
-    (value) => ({ value, label: value === undefined ? textInkLabel() : SECTION_ICON_COLOR_WORDS[value] }),
+    (value) => ({
+      value,
+      label: value === undefined ? textInkLabel() : SECTION_ICON_COLOR_WORDS[value],
+    }),
   );
 
   return (
