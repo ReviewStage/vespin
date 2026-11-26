@@ -3,7 +3,7 @@
 import { firingMark } from "@repo/features/automation-firing-mark";
 import { automationRunStanding, automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
-import { automationLastRunWords } from "@repo/features/automation-words";
+import { AUTOMATION_PHONE_WORDS, automationLastRunWords } from "@repo/features/automation-words";
 import {
   holderTask,
   type InboxAnyHolder,
@@ -40,7 +40,7 @@ import {
 import { RECENT_WORDS } from "@repo/features/search-recent-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { NO_RESULTS_HINT, noResultsForWords, readingWords } from "@repo/features/words";
-import { MEMBER_WORDS } from "@repo/features/workspace-settings-words";
+import { MEMBER_WORDS, WORKSPACE_READ_FAILED } from "@repo/features/workspace-settings-words";
 import type { WorkspaceMember } from "@repo/features/workspace-wire";
 import {
   AUTOMATION_ROW_LOOK,
@@ -331,6 +331,33 @@ function scopeReading(found: SearchFound, scope: SearchScope): string | undefine
   }
 }
 
+/** What a scope says where a read it searches failed, and its Try again: the members' under People, the automations' under Automations, and either under All; none where none failed. */
+function scopeUnread(
+  found: SearchFound,
+  scope: SearchScope,
+): { readonly title: string; readonly retry: () => void } | undefined {
+  const people =
+    found.peopleUnread === undefined
+      ? undefined
+      : { title: WORKSPACE_READ_FAILED.MEMBERS, retry: found.peopleUnread };
+
+  const automations =
+    found.automationsUnread === undefined
+      ? undefined
+      : { title: AUTOMATION_PHONE_WORDS.FAILED, retry: found.automationsUnread };
+
+  switch (scope) {
+    case SEARCH_SCOPE.PEOPLE:
+      return people;
+    case SEARCH_SCOPE.AUTOMATIONS:
+      return automations;
+    case SEARCH_SCOPE.ALL:
+      return people ?? automations;
+    default:
+      return undefined;
+  }
+}
+
 /**
  * An automation found, as the Automations tab lists it: what fires it and
  * how its newest run went, faded while it is off, a press opening its page.
@@ -456,6 +483,9 @@ function FoundList({
       scopes={scopes}
       onSelect={onOpen}
       onRefresh={async () => {
+        // Note that a pull reads again whatever the search found nothing in because its read failed, as its Try again does.
+        found.peopleUnread?.();
+        found.automationsUnread?.();
         await Promise.all([refresh(), refreshTasks()]);
       }}
       empty={empty}
@@ -693,7 +723,8 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   }));
 
   // Note that a scope that found nothing says so only once the lists it searches have answered and the finding has caught up with what is typed; until then it says what it reads, or keeps the last query's rows, as the panel's ⌘K does.
-  const empty = none && (reading !== undefined || found.current);
+  const unread = scopeUnread(found, scope);
+  const empty = none && (reading !== undefined || unread !== undefined || found.current);
 
   // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away, a miss saying it in Apple's own words under the query. The list stands even where the scope found nothing, its words its one row, so a pull still reads the workspace again.
   const results = (
@@ -721,6 +752,8 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
       empty={
         !empty ? undefined : reading !== undefined ? (
           <EmptyState title={reading} symbol={GLYPH.SEARCH} loading />
+        ) : unread !== undefined ? (
+          <EmptyState title={unread.title} symbol={GLYPH.FAILED} retry={unread.retry} />
         ) : (
           <EmptyState
             title={noResultsForWords(query)}

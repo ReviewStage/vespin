@@ -62,6 +62,8 @@ function useMembers(workspaceId: string | undefined) {
 export interface HeldMembers {
   readonly members: readonly WorkspaceMember[] | undefined;
   readonly failed: boolean;
+  /** Reads the members again, as a failed read's Try again and a pull do. */
+  readonly retry: () => void;
 }
 
 /**
@@ -72,6 +74,8 @@ export interface HeldMembers {
  * hold the chosen workspace's members followed (`useMemberPicturesFollow`).
  */
 export function useHeldMembers(workspaceId: string | undefined): HeldMembers {
+  const acts = useHostActs();
+
   const { data } = useQuery({
     ...appStateQuery,
     select: useCallback(
@@ -85,11 +89,18 @@ export function useHeldMembers(workspaceId: string | undefined): HeldMembers {
     ),
   });
 
-  return data ?? NO_HELD_MEMBERS;
-}
+  const retry = useCallback(() => {
+    if (workspaceId === undefined) return;
+    acts[ACT_KIND.WORKSPACE_MEMBERS_RETRY]({ workspaceId }).catch((cause: unknown) =>
+      console.error("Reading the members again did not go.", cause),
+    );
+  }, [acts, workspaceId]);
 
-/** No members held, as before the document is read. */
-const NO_HELD_MEMBERS: HeldMembers = { members: undefined, failed: false };
+  return useMemo(
+    () => ({ members: data?.members, failed: data?.failed === true, retry }),
+    [data, retry],
+  );
+}
 
 /**
  * Each member's name and picture by their id, of the workspace

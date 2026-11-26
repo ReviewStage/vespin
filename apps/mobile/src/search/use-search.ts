@@ -87,6 +87,10 @@ export interface SearchFound {
   readonly peopleReading: boolean;
   /** Whether the workspace's automations are not yet read, so one it would find may not be held yet. */
   readonly automationsReading: boolean;
+  /** Where the members' read failed, its Try again; none while it stands or is under way. */
+  readonly peopleUnread: (() => void) | undefined;
+  /** Where the automations' read failed, its Try again; none while it stands or is under way. */
+  readonly automationsUnread: (() => void) | undefined;
 }
 
 /**
@@ -161,6 +165,11 @@ export function useSearchFound(typed: string): SearchFound {
   const inboxReading = inboxShown && inbox.feed === INBOX_FEED.READING;
   const peopleReading = members.members === undefined && !members.failed;
   const automationsReading = automations.rows === undefined && !automations.failed;
+  // Note that a read that failed is said as such, never as nothing found, since nothing was read.
+  const peopleUnread = members.members === undefined && members.failed ? members.retry : undefined;
+
+  const automationsUnread =
+    automations.rows === undefined && automations.failed ? automations.retry : undefined;
 
   // Note that a task or agent found past the list held comes only with the service's search, and one on a list not yet read with its first read.
   const tasksReading =
@@ -179,6 +188,8 @@ export function useSearchFound(typed: string): SearchFound {
       tasksReading,
       peopleReading,
       automationsReading,
+      peopleUnread,
+      automationsUnread,
       current: query === typed,
     }),
     [
@@ -189,6 +200,8 @@ export function useSearchFound(typed: string): SearchFound {
       tasksReading,
       peopleReading,
       automationsReading,
+      peopleUnread,
+      automationsUnread,
       query,
       typed,
     ],
