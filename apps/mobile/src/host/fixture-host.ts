@@ -15,6 +15,7 @@
 
 import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, type SendingMessage } from "@repo/features/agent-view";
+import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import {
   DESCRIPTION_COMMENT_ACTOR,
   DESCRIPTION_COMMENT_ENTRY,
@@ -377,7 +378,44 @@ function withDescriptionDiagram(held: AppStateSnapshot, diagram: boolean): AppSt
       held[LIVE_READ.DESCRIPTION_COMMENTS],
       anchoredIn,
     ),
+    [LIVE_READ.LINK_STANDINGS]: withMergedFollowUp(held[LIVE_READ.LINK_STANDINGS]),
   };
+}
+
+/** The follow-up pull request Teammate invitations' description links, which `-descriptionDiagram true` stands merged, so its chip draws and is heard by its state. */
+const MERGED_FOLLOW_UP = {
+  number: 131,
+  title: "Let an owner resend an invite that expired from the members page, with a fresh link",
+  url: "https://github.com/ada/relay/pull/131",
+} as const;
+
+/** Each held standings slice with the follow-up laid on it, merged, one object for each. */
+const MERGED = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.LINK_STANDINGS],
+  AppStateSnapshot[typeof LIVE_READ.LINK_STANDINGS]
+>();
+
+/** The standings the workspace reads its links through, the follow-up's answered merged as GitHub would answer it. */
+function withMergedFollowUp(
+  standings: AppStateSnapshot[typeof LIVE_READ.LINK_STANDINGS],
+): AppStateSnapshot[typeof LIVE_READ.LINK_STANDINGS] {
+  const laid = MERGED.get(standings);
+
+  if (laid !== undefined) return laid;
+  const pullRequest = { ...MERGED_FOLLOW_UP, state: PULL_REQUEST_STATE.MERGED };
+
+  const merged = {
+    ...standings,
+    [FIXTURE_IDS.WORKSPACE]: {
+      ...standings[FIXTURE_IDS.WORKSPACE],
+      [MERGED_FOLLOW_UP.url]: { rows: { pullRequest } },
+    },
+  };
+
+  MERGED.set(standings, merged);
+  MERGED.set(merged, merged);
+
+  return merged;
 }
 
 /** Teammate invitations' threads with the diagram's open thread after them, anchored in `body`. */

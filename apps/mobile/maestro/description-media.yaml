@@ -27,6 +27,21 @@ env:
     element: "Teammate invitations"
 - tapOn: "Teammate invitations"
 - assertVisible: "Created by .*"
+# At rest, the follow-up pull request's chip, which `descriptionDiagram`
+# stands merged, draws and is heard by its state, in its state's color.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: ".*#131.*"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: description-media-chip
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Only an admin can add.*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
 # A press on the words puts the description in its field, as
 # `description-edit.yaml` presses them.
 - runFlow:
