@@ -35,14 +35,10 @@
 
 import diagnostics from "node:diagnostics_channel";
 import { Option, Predicate, Schema } from "effect";
-import {
-  Agent,
-  Dispatcher,
-  errors,
-  interceptors,
-  type RetryHandler,
-  fetch as undiciFetch,
-} from "undici";
+import type { Agent, Dispatcher, RetryHandler } from "undici";
+
+/** Undici, as it is loaded on the first call rather than as the process starts. */
+type Undici = typeof import("undici");
 
 /** The calls asked again where `reconnect` dropped their connection under them: the reads, which change nothing the second time. */
 const RETRIED: RetryHandler.RetryOptions = {
@@ -84,66 +80,94 @@ export interface HostedFetch {
   readonly close: () => Promise<void>;
 }
 
-/** One origin's connections as they are opened: HTTP/2 where the origin speaks it, one connection carrying every call. */
-function connectionOf(connect: Agent.Options["connect"]): Agent {
-  return new Agent({ allowH2: true, ...(connect === undefined ? undefined : { connect }) });
+/** The fetch over undici once it is loaded, and its connection's care. */
+interface Transport {
+  readonly fetch: typeof globalThis.fetch;
+  readonly replace: () => void;
+  readonly close: () => Promise<void>;
 }
 
-/** The dispatcher every call goes out through, which hands each to the connection standing and can replace it. */
-class ReplaceableDispatcher extends Dispatcher {
-  #current: Agent;
-  readonly #open: () => Agent;
+/**
+ * The fetch over `undici`: every call through a dispatcher that hands it to
+ * the connection standing, HTTP/2 where the origin speaks it, and can
+ * replace it, the reads failed by a replacement asked again (`RETRIED`).
+ */
+function transportOver(undici: Undici, connect: Agent.Options["connect"]): Transport {
+  const open = () =>
+    new undici.Agent({ allowH2: true, ...(connect === undefined ? undefined : { connect }) });
 
-  constructor(open: () => Agent) {
-    super();
-    this.#open = open;
-    this.#current = open();
+  /** The dispatcher every call goes out through. */
+  class ReplaceableDispatcher extends undici.Dispatcher {
+    #current = open();
+
+    override dispatch(
+      options: Dispatcher.DispatchOptions,
+      handler: Dispatcher.DispatchHandler,
+    ): boolean {
+      return this.#current.dispatch(options, handler);
+    }
+
+    /** A new connection for every later call, and the old one's calls failed as dropped. */
+    replace(): void {
+      const old = this.#current;
+      this.#current = open();
+      void old
+        .destroy(new undici.errors.SocketError("the connection was replaced"))
+        .catch(() => undefined);
+    }
+
+    override close(): Promise<void> {
+      return this.#current.close();
+    }
+
+    override destroy(): Promise<void> {
+      return this.#current.destroy();
+    }
   }
 
-  override dispatch(
-    options: Dispatcher.DispatchOptions,
-    handler: Dispatcher.DispatchHandler,
-  ): boolean {
-    return this.#current.dispatch(options, handler);
-  }
+  const connections = new ReplaceableDispatcher();
+  const dispatcher = connections.compose(undici.interceptors.retry(RETRIED));
 
-  /** A new connection for every later call, and the old one's calls failed as dropped. */
-  replace(): void {
-    const old = this.#current;
-    this.#current = this.#open();
-    void old.destroy(new errors.SocketError("the connection was replaced")).catch(() => undefined);
-  }
+  // Note that the HTTP client hands a URL and plain options, never a `Request`, whose own options would be lost here.
+  const fetch: typeof globalThis.fetch = async (input, init) => {
+    const url = input instanceof Request ? input.url : input;
+    // SAFETY: undici's fetch takes the WHATWG options Node's own does, which the DOM's types name apart only by their body and header types.
+    const options = { ...(init as Parameters<Undici["fetch"]>[1]), dispatcher };
+    const answered: object = await undici.fetch(url, options);
 
-  override close(): Promise<void> {
-    return this.#current.close();
-  }
+    // SAFETY: undici's fetch answers a WHATWG `Response`, which its own types name apart from the DOM's.
+    return answered as Response;
+  };
 
-  override destroy(): Promise<void> {
-    return this.#current.destroy();
-  }
+  return { fetch, replace: () => connections.replace(), close: () => connections.close() };
 }
 
 /**
  * The fetch a process's calls to the service go out on. `connect` is what
  * a connection's TLS is opened with where it is not the platform's own, as
  * a test's server with a certificate of its own asks.
+ *
+ * Note that undici is loaded on the first call, not as the module is,
+ * because loading it takes about a tenth of a second, which a process that
+ * starts with this would otherwise spend before it draws anything.
  */
 export function hostedFetchOverUndici(connect?: Agent.Options["connect"]): HostedFetch {
-  const connections = new ReplaceableDispatcher(() => connectionOf(connect));
-  const dispatcher = connections.compose(interceptors.retry(RETRIED));
+  let loaded: Promise<Transport> | undefined;
 
-  // Note that the HTTP client hands a URL and plain options, never a `Request`, whose own options would be lost here.
-  const fetch: typeof globalThis.fetch = async (input, init) => {
-    const url = input instanceof Request ? input.url : input;
-    // SAFETY: undici's fetch takes the WHATWG options Node's own does, which the DOM's types name apart only by their body and header types.
-    const options = { ...(init as Parameters<typeof undiciFetch>[1]), dispatcher };
-    const answered: object = await undiciFetch(url, options);
+  const transport = () => {
+    loaded ??= import("undici").then((undici) => transportOver(undici, connect));
 
-    // SAFETY: undici's fetch answers a WHATWG `Response`, which its own types name apart from the DOM's.
-    return answered as Response;
+    return loaded;
   };
 
-  return { fetch, reconnect: () => connections.replace(), close: () => connections.close() };
+  return {
+    fetch: async (input, init) => (await transport()).fetch(input, init),
+    // Note that before the first call there is no connection to replace.
+    reconnect: () => void loaded?.then((standing) => standing.replace()),
+    close: async () => {
+      await (await loaded)?.close();
+    },
+  };
 }
 
 /** What each call's span is told of its connection, by the call undici sent it as. */
