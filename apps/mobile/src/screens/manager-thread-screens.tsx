@@ -13,6 +13,7 @@ import {
   BAR_TITLE,
   BUTTON_LOOK,
   Composer,
+  EditingLine,
   GLYPH,
   GlassDock,
   MentionSuggestions,
@@ -70,7 +71,9 @@ const READ_WORDS = {
  * leaves out what acts on the Manager rather than on a reply, as the panel's
  * thread box does: Stop, the queue, the model chip, the MCP servers, where
  * it runs, and Talk, since a call's lines land in the chat; so its + attaches
- * photos at once.
+ * photos at once. While it holds one of the reader's replies' words to save
+ * in place, it says so with Cancel over the field, as the chat's own box
+ * does, and takes no photo.
  */
 function ThreadComposer({
   composer,
@@ -83,6 +86,7 @@ function ThreadComposer({
   const said = useNewestNote([composer.note, dictated.note, note]);
 
   const head =
+    composer.cancelMessageEdit === undefined &&
     composer.skills === undefined &&
     composer.mentions === undefined &&
     said === undefined ? undefined : (
@@ -101,6 +105,9 @@ function ThreadComposer({
             crumb={composer.mentions.crumb}
             onPick={composer.mentions.pick}
           />
+        )}
+        {composer.cancelMessageEdit === undefined ? null : (
+          <EditingLine onCancel={composer.cancelMessageEdit} />
         )}
         {said === undefined ? null : <AskNote words={said} />}
       </>
@@ -209,6 +216,12 @@ export function ManagerThreadScreen() {
   const media = useAgentMedia(id, mediaIds);
   const sentFiles = useSentFiles(useMemo(() => shownFiles(rows), [rows]));
 
+  // Note that only a message the chat holds is edited in place, never a reply still on its way or refused, which goes by its send's key.
+  const chatMessages = useMemo(
+    () => new Set((chatPage?.messages ?? []).map((message) => message.id)),
+    [chatPage?.messages],
+  );
+
   const messageActs = useMessageActs({
     agentId: id,
     agent: shown,
@@ -216,7 +229,7 @@ export function ManagerThreadScreen() {
     readerId,
     composer,
     calling: false,
-    chat: true,
+    chatMessages,
   });
 
   // A reply of the reader's the service refused, marked Not delivered where it went, with Retry, Edit, and Delete, by the key it went under.

@@ -72,10 +72,10 @@ export function useMessageActs(input: {
   readonly readerId: string | undefined;
   readonly composer: Pick<AgentComposer, "editMessage">;
   readonly calling: boolean;
-  /** Whether the messages are a Manager's chat's, each standing under its row's id, whose Edit saves the reader's own words in place. */
-  readonly chat?: boolean | undefined;
+  /** Where the messages are a Manager's chat's, the ids of those the chat holds, each standing under its row's id, whose Edit saves the reader's own words in place; none for any other agent. A message still on its way or refused stands under its send's key instead, so it offers no such Edit, keeping its own. */
+  readonly chatMessages?: ReadonlySet<string> | undefined;
 }): MessageActs {
-  const { agentId, agent, transcript, readerId, composer, calling, chat = false } = input;
+  const { agentId, agent, transcript, readerId, composer, calling, chatMessages } = input;
   const acts = useHostActs();
   const write = useWrite();
   const router = useRouter();
@@ -119,8 +119,8 @@ export function useMessageActs(input: {
   };
 
   /** A message of a Manager's chat's Edit, on the reader's own with words while the Manager stands unarchived, which lays its words in the field to save in place. */
-  const chatActs = (item: SaidItem): readonly HeldAct[] =>
-    standing && !item.received && item.words.trim() !== ""
+  const chatActs = (item: SaidItem, held: ReadonlySet<string>): readonly HeldAct[] =>
+    standing && !item.received && held.has(item.place.row) && item.words.trim() !== ""
       ? [
           {
             label: REWIND_WORDS.EDIT,
@@ -138,7 +138,7 @@ export function useMessageActs(input: {
 
   /** A line's Edit, where it opened a turn a person wrote, carried words alone, and the agent takes messages. */
   const lineActs = (item: SaidItem): readonly HeldAct[] => {
-    if (chat) return chatActs(item);
+    if (chatMessages !== undefined) return chatActs(item, chatMessages);
     const id = item.place.row;
     const line = byId.get(id);
     const { words } = item;

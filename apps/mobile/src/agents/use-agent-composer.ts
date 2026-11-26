@@ -172,11 +172,12 @@ export interface AgentComposer {
   readonly send: ComposerSend;
   /** Whether Send queues the message behind the turn rather than sending it to the agent now. */
   readonly sendQueues: boolean;
-  readonly attach: () => void;
-  /** Attaches pictures dropped on the composer, on an iPad, by the files the drop kept. */
-  readonly dropPictures: (uris: readonly string[], unreadable: number) => void;
-  /** Takes a long paste as a text file beside the pictures, answering whether it did. */
-  readonly pasteText: (words: string) => boolean;
+  /** Opens Photos to attach pictures; none while the field holds a Manager chat message's words to save, since an edit writes words alone. */
+  readonly attach: (() => void) | undefined;
+  /** Attaches pictures dropped on the composer, on an iPad, by the files the drop kept; none while an edit writes words alone. */
+  readonly dropPictures: ((uris: readonly string[], unreadable: number) => void) | undefined;
+  /** Takes a long paste as a text file beside the pictures, answering whether it did; none while an edit writes words alone, so a long paste stays words. */
+  readonly pasteText: ((words: string) => boolean) | undefined;
   /** Stops the turn under way; none while the agent rests. */
   readonly stop: (() => void) | undefined;
   readonly stopping: boolean;
@@ -935,6 +936,9 @@ export function useAgentComposer(
     editable: (message.files ?? []).length === 0,
   }));
 
+  // Note that an edit of a Manager chat message saves its words alone, so the field takes no file while it holds them.
+  const takesFiles = !(chat && rewriting !== undefined);
+
   return {
     placeholder: thread === undefined ? PLACEHOLDER : CHAT_THREAD_WORDS.BOX,
     sendQueues,
@@ -945,9 +949,9 @@ export function useAgentComposer(
     },
     sendable: pictures.files !== undefined,
     send,
-    attach: pictures.attach,
-    dropPictures: pictures.drop,
-    pasteText: pictures.pasteText,
+    attach: takesFiles ? pictures.attach : undefined,
+    dropPictures: takesFiles ? pictures.drop : undefined,
+    pasteText: takesFiles ? pictures.pasteText : undefined,
     // Note that a thread's reply is no turn of its own, so its box offers no Stop, as the panel's thread box stands none.
     stop: writing && thread === undefined ? stop : undefined,
     stopping,
