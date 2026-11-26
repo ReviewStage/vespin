@@ -40,9 +40,11 @@ function scrubbedSegment(segment: string): string {
 /**
  * A query parameter a presigned Vercel Blob URL carries its grant in, and
  * its value: whoever holds the delegation and the signature reads the
- * object until the URL expires.
+ * object until the URL expires. Note that the name is bounded, because an
+ * unbounded run before the `=` is rescanned from every offset of a long
+ * run of `vercel-blob-`; Blob's longest parameter name is well within it.
  */
-const PRESIGNED_GRANT_PATTERN = /(vercel-blob-[a-z-]+)=[^\s&"'#]*/gi;
+const PRESIGNED_GRANT_PATTERN = /(vercel-blob-[a-z-]{1,32})=[^\s&"'#]*/gi;
 
 /** A query string with every value redacted and its names kept, but for one shaped like a credential, so the shape of a request still reads. */
 function scrubbedQuery(query: string): string {
