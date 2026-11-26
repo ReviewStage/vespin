@@ -168,7 +168,7 @@ export function AgentBootLine({
     case BOOT_LINE.HANDING_OFF:
       return <WorkingLine startedAt={undefined} words={BOOT_WORDS.HANDING_OFF} />;
     case BOOT_LINE.READY:
-      // Note that it neither shimmers nor counts, because nothing runs until the edit ends.
+      // Note that it does not count, because nothing runs until the edit ends.
       return <ReadyLine byReader={line.byReader} />;
     case BOOT_LINE.FAILED:
       return (

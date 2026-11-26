@@ -394,8 +394,6 @@ export * from "./components/settings-row/settings-row-fold.js";
 
 export * from "./components/settings-section/settings-section.js";
 
-export * from "./components/shimmer/shimmer.js";
-
 export * from "./components/shortcut/shortcut.js";
 
 export * from "./components/show-more-row/show-more-row.js";

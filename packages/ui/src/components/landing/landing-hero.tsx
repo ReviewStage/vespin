@@ -66,7 +66,6 @@ import {
   ProgressRing,
 } from "../progress-ring/progress-ring.js";
 import { SearchField } from "../search-field/search-field.js";
-import { Shimmer } from "../shimmer/shimmer.js";
 import { SidebarAccountRow, SidebarFoot, SidebarRule } from "../sidebar/sidebar.js";
 import { SplitButton } from "../split-button/split-button.js";
 import { TABS_GROUND, Tab, Tabs } from "../tabs/tabs.js";
@@ -1044,7 +1043,7 @@ function TranscriptLine({ line }: { line: Line }): React.JSX.Element {
     case LINE.WORKING:
       return (
         <span className="ui-hero-working">
-          <Shimmer>Working…</Shimmer>
+          <span className="text-muted-foreground">Working…</span>
           <Time at={STORY_NOW - 5000} now={STORY_NOW} look={TIME_LOOK.DURATION} />
         </span>
       );
