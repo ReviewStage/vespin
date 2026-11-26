@@ -120,7 +120,16 @@ appId: dev.vespin.ios
 - takeScreenshot: answer-fields
 - tapOn: "None"
 - tapOn: "Every member \\(recommended\\)"
+# Note that the pick is waited on until the menu has closed and the picker
+# names it, and the toggle until it reads on, because a tap landing while the
+# menu still dismissed was swallowed, and the next step failed far from it.
+- waitForAnimationToEnd
+- assertVisible: "Every member \\(recommended\\)"
+- assertNotVisible: "None"
 - tapOn: "Email the sender when an invite is accepted.*"
+- assertVisible:
+    text: "Email the sender when an invite is accepted.*"
+    checked: true
 # The number comes last, since the decimal pad has no key that puts it away:
 # the composer rides above it, so Send is pressed with the pad still up.
 # Words that read as no number hold the answer back, rather than send it
@@ -132,7 +141,10 @@ appId: dev.vespin.ios
     direction: UP
 - tapOn:
     id: "answer-field-Invites a member may send a day"
-- waitForAnimationToEnd
+# The decimal pad stands before anything is typed, its Delete key found.
+- extendedWaitUntil:
+    visible: "space|[Dd]elete"
+    timeout: 15000
 - inputText: "."
 - assertVisible:
     text: "Send"
