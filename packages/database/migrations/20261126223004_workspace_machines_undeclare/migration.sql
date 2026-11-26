@@ -1,18 +1,23 @@
 -- Expand step of dropping the workspace-owned machine columns: the device module no longer declares
 -- "organization_id", "connected_by", or "network", nor its "device_one_owner" and "device_workspace_fields"
 -- checks, their foreign keys, or their indexes, and the host pairing module no longer declares
--- "machine_id"; nothing this deployment runs reads or writes any of them, and "user_id" is declared
--- not null again. The columns, checks, foreign keys, and indexes stay, and "user_id" stays nullable, one
--- deployment longer, because a build migrates while the deployment before it still serves
--- (apps/web/server/README.md, "Dropping a column ... takes two deployments"); a later release's
--- migration drops them. Every column is nullable, so this deployment's inserts, which name them no
--- longer, still succeed while they stand, and every row it writes names its account, as each check holds.
+-- "machine_id"; nothing this deployment runs reads or writes any of them. The columns, checks, foreign
+-- keys, and indexes stay one deployment longer, because a build migrates while the deployment before it
+-- still serves (apps/web/server/README.md, "Dropping a column ... takes two deployments"); a later
+-- release's migration drops them. Every column is nullable, so this deployment's inserts, which name them
+-- no longer, still succeed while they stand, and every row it writes names its account, as each check
+-- holds. "user_id" is not null again, as the module declares it: no workspace owns a device, so every
+-- row names its account, and the deployment before this one writes none that names no account, since an
+-- approve naming a workspace is refused (#11034); the scan the check takes is of a table of some dozens of
+-- rows, under the run's own lock timeout, which fails the build rather than holding the table's writes.
 -- The device table's capture is rendered again without the workspace's own topic and with "arch"
 -- ignored again, since a trigger whose WHEN names a column is what a later DROP COLUMN would refuse
 -- over. No workspace owns a device, so the workspace topic it drops notified no one.
 DROP TRIGGER IF EXISTS "app_sync_update" ON "device";
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS "app_sync_write" ON "device";
+--> statement-breakpoint
+ALTER TABLE "device" ALTER COLUMN "user_id" SET NOT NULL;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_device"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$
 DECLARE
