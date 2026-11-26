@@ -1,0 +1,9 @@
+pinned to f6b52609d8
+== bundle PJjbis10974 base f6b52609d8
+  built f6b52609d8 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app, pin f6b52609d8
+iphone-light-manager-thread: fails 0 shots 5 
