@@ -1,7 +1,12 @@
 // start-screens.tsx -- the two pages that start work, each a new conversation's page over the agent page's composer: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus under the composer's field; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules.
 
 import { type AgentFork, FORK_WORDS, forkChoice } from "@repo/features/agent-fork-model";
-import { AGENT_BOUNDS, type AgentRunsOnRequest, hasWordsOrFiles } from "@repo/features/agent-wire";
+import {
+  AGENT_BOUNDS,
+  type AgentAttachment,
+  type AgentRunsOnRequest,
+  hasWordsOrFiles,
+} from "@repo/features/agent-wire";
 import {
   automationAgentBrief,
   CREATE_WITH_AGENT_WORDS,
@@ -60,6 +65,7 @@ import {
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
+  wordsHandedBack,
 } from "@repo/ui-native";
 import { and, eq, inArray, isUndefined, not, or, useLiveQuery } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
@@ -514,7 +520,7 @@ type UseSheetStartResult = {
     brief?: string | undefined,
     /** Talk's call, opened on the agent the start made once it lands; none for a start on words. */
     called?: ((into: VoiceCallInto) => void) | undefined,
-  ) => void;
+  ) => boolean;
 };
 
 type Started = { answer?: StartAnswer };
@@ -600,14 +606,14 @@ function useSheetStart(
     start: () => Promise<StartAnswer>,
     refusal?: string | undefined,
     brief?: string | undefined,
-  ) => {
-    if (starting) return;
+  ): boolean => {
+    if (starting) return false;
 
     if (refusal !== undefined) {
       setNote(refusal);
       buzz(BUZZ.WARNING);
 
-      return;
+      return false;
     }
 
     setStarting(true);
@@ -648,6 +654,8 @@ function useSheetStart(
         }
       })
       .finally(() => setStarting(false));
+
+    return true;
   };
 
   return { starting, go };
@@ -682,14 +690,14 @@ function useClosingStart(
     refusal?: string | undefined,
     brief?: string | undefined,
     called?: ((into: VoiceCallInto) => void) | undefined,
-  ) => {
-    if (sent) return;
+  ): boolean => {
+    if (sent) return false;
 
     if (refusal !== undefined) {
       setNote(refusal);
       buzz(BUZZ.WARNING);
 
-      return;
+      return false;
     }
 
     setSent(true);
@@ -744,6 +752,8 @@ function useClosingStart(
         },
       },
     );
+
+    return true;
   };
 
   return { starting: sent, go };
@@ -833,14 +843,13 @@ export function NewAgentScreen({
     pillField.mentions,
   );
 
-  // The prompt as it is sent, each mention already its link in the field of pills.
-  const sendablePrompt = () => prompt.trim();
-
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
   const startSuggested = async (
     suggestion: OpenedSuggestion["suggestion"],
+    asked: string,
+    files: readonly AgentAttachment[],
   ): Promise<StartAnswer> => {
-    const sent = sentOf(suggestion, sendablePrompt(), pictures.files ?? [], pick.picked);
+    const sent = sentOf(suggestion, asked, files, pick.picked);
 
     const result = await sendSuggestion(
       { agentId: suggestion.agentId, buttonId: suggestion.buttonId, sent },
@@ -866,37 +875,66 @@ export function NewAgentScreen({
       ),
   );
 
-  // Note that New agent's own start closes the sheet at once, as New task's does, while a suggestion's keeps it up until the service answers, since it goes through the suggestion once, as the panel's draft sends one.
-  const start = () =>
-    fork !== undefined
-      ? closing.go(
-          () =>
-            startFork({
-              prompt: sendablePrompt(),
-              attachments: pictures.files,
-              picked: pick.picked,
-            }),
-          pictures.refusal,
-          sendablePrompt(),
-        )
-      : opened === undefined
-        ? closing.go(
-            () =>
-              startAgent({
-                prompt: sendablePrompt(),
-                attachments: pictures.files,
-                picked: pick.picked,
-                runsOn,
-              }),
-            pictures.refusal,
-            sendablePrompt(),
-          )
-        : sheet.go(
-            () => startSuggested(opened.suggestion),
-            pictures.refusal,
-            // Note that a suggestion's start is named by its own title where it has one, as the service names the agent.
-            opened.suggestion.title ?? prompt.trim(),
-          );
+  /**
+   * Starts on the words Start took out of the field, each mention already
+   * its link in the field of pills. Note that New agent's own start closes
+   * the sheet at once, as New task's does, while a suggestion's keeps it up
+   * until the service answers, since it goes through the suggestion once,
+   * as the panel's draft sends one, taking its words and pictures off the
+   * sheet as it goes and laying them back where it was refused, so the sheet
+   * stands with them.
+   */
+  const start = (typed: string): boolean => {
+    const asked = typed.trim();
+
+    if (fork !== undefined) {
+      return closing.go(
+        () => startFork({ prompt: asked, attachments: pictures.files, picked: pick.picked }),
+        pictures.refusal,
+        asked,
+      );
+    }
+
+    if (opened === undefined) {
+      return closing.go(
+        () =>
+          startAgent({ prompt: asked, attachments: pictures.files, picked: pick.picked, runsOn }),
+        pictures.refusal,
+        asked,
+      );
+    }
+
+    if (sheet.starting) return false;
+
+    // A picture past a bound holds the start back, saying why, before any picture is taken off the sheet.
+    if (pictures.refusal !== undefined) {
+      setNote(pictures.refusal);
+      buzz(BUZZ.WARNING);
+
+      return false;
+    }
+
+    const carried = pictures.take();
+
+    return sheet.go(
+      () =>
+        startSuggested(
+          opened.suggestion,
+          asked,
+          carried.map(({ file }) => file),
+        ).then((answer) => {
+          if ("refused" in answer) {
+            setPrompt((now) => wordsHandedBack(typed, now));
+            pictures.putBack(carried);
+          }
+
+          return answer;
+        }),
+      undefined,
+      // Note that a suggestion's start is named by its own title where it has one, as the service names the agent.
+      opened.suggestion.title ?? asked,
+    );
+  };
 
   return (
     <>
@@ -1297,9 +1335,6 @@ export function NewTaskScreen({
 
   const mentions = useMentionOffer({ workspaceId, taskId: undefined }, pillField.mentions);
 
-  // The prompt as it is sent, each mention already its link in the field of pills.
-  const sendablePrompt = () => prompt.trim();
-
   const unreached =
     tree !== undefined
       ? undefined
@@ -1318,19 +1353,23 @@ export function NewTaskScreen({
     [relation.tasks, relation.relation, relation.pick],
   );
 
-  const start = () => {
-    if (!drafted) return;
-    const asked = forAutomation ? automationAgentBrief(sendablePrompt()) : sendablePrompt();
+  // Starts on the words Start took out of the field, each mention already its link in the field of pills.
+  const start = (typed: string): boolean => {
+    const words = typed.trim();
+
+    if (!hasWordsOrFiles(words, pictures.files) || pictures.opening) return false;
+    const asked = forAutomation ? automationAgentBrief(words) : words;
 
     // Note that a request whose brief would pass an agent's first message's bound is refused here, as the desktop's card refuses it, rather than by the service.
     if (asked.length > AGENT_BOUNDS.MAX_MESSAGE_CHARS) {
       setNote(CREATE_WITH_AGENT_WORDS.TOO_LONG);
 
-      return;
+      return false;
     }
 
     saving.discard();
-    go(
+
+    return go(
       () =>
         startTask({
           prompt: asked,
@@ -1340,7 +1379,7 @@ export function NewTaskScreen({
           ...place,
         }),
       pictures.refusal,
-      sendablePrompt(),
+      words,
     );
   };
 

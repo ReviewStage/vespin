@@ -465,8 +465,8 @@ export interface ThreadAnswer {
   readonly note: string | undefined;
   /** Whether Send stands lit with no words typed: the draft holds an answer to send, or a number whose words a press says read as none. */
   readonly answerReady: boolean;
-  /** Sends what the draft holds, or the draft given, such as one Mark done was just pressed on; or says what it lacks. */
-  readonly send: (pressed?: InboxDraft) => void;
+  /** Sends what the draft holds, or the draft given, such as one Mark done was just pressed on; or says what it lacks. Answers whether it sent. */
+  readonly send: (pressed?: InboxDraft) => boolean;
   /** Resolves the thread without an answer, with Undo once it went. */
   readonly resolve: () => void;
   /** Whether the box's Send reads Got it, as the panel's does: a notice open, asking nothing, that opening did not settle (`acknowledgedOnOpen`), the box empty, and no Got it out, so a press takes it away at once until the host draws the thread settled. */
@@ -476,8 +476,14 @@ export interface ThreadAnswer {
   /** Whether the box's next send starts a new thread with the thread's agent, as the panel's "Send as a new thread to" asks. */
   readonly asNew: boolean;
   readonly setAsNew: (asNew: boolean) => void;
-  /** Starts a new thread with the thread's agent, the box's words its first message, and opens it once the service took it. */
-  readonly start: () => void;
+  /**
+   * The box's Send, on the words it took out of the field: a new thread's
+   * start where the box starts one, Got it where the box holds nothing to
+   * send and the notice waits on a nod, and else a reply of those words
+   * with the rest of the draft as it stands now. Answers whether it took
+   * the words (`ComposerSend`).
+   */
+  readonly sendTyped: (typed: string) => boolean;
   /** Sends a reply that did not go again under the key it went under; none where a relaunch took its pictures, which Edit attaches again. */
   readonly retryUndelivered: (key: string) => void;
   /** Takes a reply that did not go back into the box, ahead of what was typed since, to send again. */
@@ -617,7 +623,7 @@ export function useThreadAnswer(
       hold(itemId, (was) => ({ ...was, note: unreadableWords(unreadable) }));
       buzz(BUZZ.WARNING);
 
-      return;
+      return false;
     }
 
     const message = inboxThreadSend(thread, sending);
@@ -630,7 +636,7 @@ export function useThreadAnswer(
       }));
       buzz(BUZZ.WARNING);
 
-      return;
+      return false;
     }
 
     const sent = { ...message, revision: awaitsNod(item) ? item.revision : undefined };
@@ -640,6 +646,8 @@ export function useThreadAnswer(
     // Note that the box lets go of what it sent at once and never takes it back.
     hold(itemId, ({ edited: _sent, ...was }) => ({ ...was, draft: EMPTY_INBOX_DRAFT }));
     sendReply(sent, key, Date.now());
+
+    return true;
   };
 
   const resolve = () => {
@@ -803,12 +811,12 @@ export function useThreadAnswer(
   };
 
   // Note that the same words and pictures sent again go under the key they went under, so a retry starts one thread, and a start whose pictures changed goes under a new key, which the service would refuse under the old one. The box lets go of its words at once, as a reply does.
-  const start = () => {
-    const text = draft.note.trim();
+  const start = (sending: InboxDraft): boolean => {
+    const text = sending.note.trim();
 
-    if (text === "" || starting.has(itemId)) return;
+    if (text === "" || starting.has(itemId)) return false;
     // The pictures the box holds go as the new thread's first message's, as the panel's start carries its files.
-    const { attachments } = draft;
+    const { attachments } = sending;
     const before = threads.read().get(itemId)?.started;
 
     const key =
@@ -818,6 +826,40 @@ export function useThreadAnswer(
 
     hold(itemId, (was) => ({ ...was, draft: { ...was.draft, note: "", attachments: [] } }));
     startUnder(text, attachments, key);
+
+    return true;
+  };
+
+  // Whether a box holding `held` reads Got it: see `nods`.
+  const nodsOn = (held: InboxDraft) =>
+    !asNew &&
+    nodding === undefined &&
+    awaitsNod(item) &&
+    !settlesOnOpen &&
+    held.note.trim() === "" &&
+    held.attachments.length === 0;
+
+  // Note that the draft is read from the store as it stands at the press, which a send before it already emptied, rather than as the render pressed in held it, so a second press that reaches the box with the first sends nothing again.
+  const sendTyped = (typed: string): boolean => {
+    const now = threads.read().get(itemId);
+    const sending = { ...(now?.draft ?? EMPTY_INBOX_DRAFT), note: typed };
+
+    if (now?.asNew === true) return start(sending);
+
+    if (nodsOn(sending)) {
+      acknowledge();
+
+      return true;
+    }
+
+    // Note that Send stands on an empty field only for an answer ready, so a press that finds none ready and no words, as one after a send that went, does nothing.
+    const ready =
+      unreadableNumber(thread, sending) !== undefined ||
+      inboxThreadSend(thread, sending) !== undefined;
+
+    if (typed.trim() === "" && !ready) return false;
+
+    return send(sending);
   };
 
   // Note that a reply goes again after whatever is on its way, as it was, under the key it went under; one a relaunch took the pictures from never goes without them.
@@ -872,11 +914,11 @@ export function useThreadAnswer(
       unreadableNumber(thread, draft) !== undefined || inboxThreadSend(thread, draft) !== undefined,
     send,
     resolve,
-    nods: !asNew && nodding === undefined && awaitsNod(item) && !settlesOnOpen && empty,
+    nods: nodsOn(draft),
     acknowledge,
     asNew,
     setAsNew,
-    start,
+    sendTyped,
     retryUndelivered,
     editUndelivered,
     deleteUndelivered: dropUndelivered,

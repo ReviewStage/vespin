@@ -25,6 +25,7 @@ import {
   type ThreadMessage,
   ThreadPage,
   useColors,
+  wordsHandedBack,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
@@ -90,19 +91,23 @@ function threadMessagesOf(
   }));
 }
 
-/** A field's words held while it is written, sent once by `send`, and cleared once the send went. */
+/** A field's words held while it is written, sent once by `send` as Send took them out of the field, and laid back, ahead of anything typed since, where the send did not go. */
 function useField(send: (body: string) => Promise<boolean>, busy: boolean) {
   const [words, setWords] = useState("");
-  const body = words.trim();
 
   return {
     words,
     onWords: setWords,
-    sendable: body !== "" && !busy,
-    onSend: () => {
+    sendable: words.trim() !== "" && !busy,
+    onSend: (typed: string) => {
+      const body = typed.trim();
+
+      if (body === "" || busy) return false;
       void send(body).then((went) => {
-        if (went) setWords("");
+        if (!went) setWords((now) => wordsHandedBack(typed, now));
       });
+
+      return true;
     },
   };
 }
@@ -115,8 +120,8 @@ function useField(send: (body: string) => Promise<boolean>, busy: boolean) {
  * Resolved under them where it is, the bar's trailing button resolving it
  * or opening it again, and the reply field docked at its foot. A reply is
  * one change on GitHub on the member's own sign-in (`REPLY_TO_THREAD`), its
- * field cleared once it went, and GitHub's refusal standing in the field's
- * head in its own words. The thread is held live while the screen is in
+ * words taken out of the field as Send is pressed and laid back where GitHub
+ * refused them, its refusal standing in the field's head in its own words. The thread is held live while the screen is in
  * front, so a reply or a resolve made anywhere lands on it.
  */
 export function PullRequestThreadScreen() {
