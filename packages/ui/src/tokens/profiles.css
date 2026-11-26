@@ -24,8 +24,8 @@
   /* The window sets no display face of its own; its largest words are the system's. */
   --ui-font-display: var(--ui-font-sans);
 
-  --ui-control-height: 30px;
-  --ui-control-radius: var(--ui-radius-10);
+  --ui-control-height: 32px;
+  --ui-control-radius: var(--ui-radius-8);
   --ui-control-icon: var(--ui-icon-16);
   /* The least a press is taken across on a coarse pointer, a finger's: a
      control drawn smaller keeps its size and takes the press around it. */
@@ -51,42 +51,42 @@
   --ui-cursor-link: pointer;
   /* The gap between a glyph, mark, face or picture and the words beside it, in the iOS app's three steps (`SPACE.GLYPH_GAP`) by the size of what draws the pair: compact in a chip, a badge or a caption-size line, regular in a capsule, a breadcrumb or a row's line above its words, and row, which is `--ui-icon-gap`, in a row, a menu, a control or an editing line. */
   --ui-icon-gap-compact: var(--ui-space-4);
-  --ui-icon-gap-regular: var(--ui-space-6);
-  --ui-icon-gap: var(--ui-space-8);
+  --ui-icon-gap-regular: var(--ui-space-8);
+  --ui-icon-gap: var(--ui-space-10);
   /* A settings row's pop-up stands in one column whatever value it names. */
   --ui-select-field-width: 200px;
   --ui-field-gap: var(--ui-space-16);
   /* The room between two groups inside a pane or a form. */
-  --ui-section-gap: var(--ui-space-16);
+  --ui-section-gap: var(--ui-space-24);
   /* The room between a page's sections, Settings' and every other page's. */
-  --ui-page-section-gap: var(--ui-space-32);
+  --ui-page-section-gap: var(--ui-space-48);
   /* The room between the parts of one item, by how close they read: a
      label's own parts, the boxes of a list, and the blocks of a thread. */
   --ui-tight-gap: var(--ui-space-4);
-  --ui-item-gap: var(--ui-space-6);
-  --ui-block-gap: var(--ui-space-12);
+  --ui-item-gap: var(--ui-space-8);
+  --ui-block-gap: var(--ui-space-16);
   /* How far a row holds its glyph and its words from its own edge, and how
      far a list holds its rows from its. */
   --ui-row-inset: var(--ui-space-8);
-  --ui-list-inset: var(--ui-space-12);
-  --ui-page-inset: var(--ui-space-48);
+  --ui-list-inset: var(--ui-space-16);
+  --ui-page-inset: var(--ui-space-64);
   --ui-page-inset-narrow: var(--ui-space-24);
   /* Between two items of a list, close enough that they read as one. */
-  --ui-list-gap: var(--ui-space-2);
+  --ui-list-gap: var(--ui-space-4);
   /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
      in place of a control's height, the body's size, and the list's and
      section's gaps: how tall a row stands, the size of its words, the room
      between two rows and between the places at its top, and the room over
      each group. */
-  --ui-sidebar-row-height: var(--ui-control-height);
-  --ui-sidebar-text-size: var(--ui-type-body-size);
+  --ui-sidebar-row-height: 34px;
+  --ui-sidebar-text-size: 14px;
   --ui-sidebar-row-gap: var(--ui-list-gap);
-  --ui-sidebar-places-gap: var(--ui-list-gap);
+  --ui-sidebar-places-gap: var(--ui-space-2);
   --ui-sidebar-group-gap: var(--ui-section-gap);
   /* A task list's row: the room it keeps over and under a control's height. */
-  --ui-task-row-block: var(--ui-space-6);
+  --ui-task-row-block: var(--ui-space-8);
   /* How many lines an agent's empty box stands, before it grows with its words. */
-  --ui-composer-least-lines: 1;
+  --ui-composer-least-lines: 2;
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's
@@ -95,22 +95,22 @@
   --ui-settings-measure: 640px;
   --ui-wide-measure: 1040px;
 
-  --ui-type-body-size: 13px;
-  --ui-type-body-leading: 20px;
-  --ui-type-label-size: 13px;
-  --ui-type-label-leading: 18px;
+  --ui-type-body-size: 15px;
+  --ui-type-body-leading: 24px;
+  --ui-type-label-size: 14px;
+  --ui-type-label-leading: 20px;
   --ui-type-caption-size: 12px;
   --ui-type-caption-leading: 16px;
-  --ui-type-section-size: 13px;
-  --ui-type-section-leading: 18px;
-  --ui-type-dialog-size: 15px;
-  --ui-type-dialog-leading: 20px;
-  --ui-type-title-size: 26px;
-  --ui-type-title-leading: 34px;
+  --ui-type-section-size: 15px;
+  --ui-type-section-leading: 24px;
+  --ui-type-dialog-size: 18px;
+  --ui-type-dialog-leading: 24px;
+  --ui-type-title-size: 32px;
+  --ui-type-title-leading: 40px;
   /* Long-form text read line after line, a document's body, a step larger
      than a control's words and set looser, as code is. */
-  --ui-type-reading-size: 15px;
-  --ui-type-reading-leading: 1.6;
+  --ui-type-reading-size: 16px;
+  --ui-type-reading-leading: 1.65;
 
   /* A group's heading over its rows (a sidebar's, a menu's, a picker's), and a
      badge's, a chip's, a tooltip's, and a compact button's words: the caption's
@@ -136,7 +136,7 @@
   --ui-type-tag-weight: var(--ui-weight-medium);
   --ui-type-section-weight: var(--ui-weight-semibold);
   --ui-type-dialog-weight: var(--ui-weight-semibold);
-  --ui-type-toolbar-title-weight: var(--ui-weight-semibold);
+  --ui-type-toolbar-title-weight: var(--ui-weight-medium);
   --ui-type-title-weight: var(--ui-weight-semibold);
   --ui-type-reading-weight: var(--ui-weight-regular);
   --ui-type-emphasis-weight: var(--ui-weight-semibold);
@@ -147,7 +147,7 @@
   --ui-settings-row-inline: var(--ui-space-16);
   /* Every row stands as tall as a label and its description need, with or
      without the description, so a card of rows reads even rather than cramped. */
-  --ui-settings-row-min-height: 56px;
+  --ui-settings-row-min-height: 64px;
   /* A compact row stands bare in a popover's own inset, a menu row's height. */
   --ui-settings-row-compact-block: var(--ui-space-0);
   --ui-settings-row-compact-inline: var(--ui-space-0);
@@ -155,7 +155,7 @@
   /* A list row stands in a card as a reference list's line does, denser
      than a setting's, because it is read down rather than set. */
   --ui-settings-row-list-block: var(--ui-space-8);
-  --ui-settings-row-list-min-height: 40px;
+  --ui-settings-row-list-min-height: 48px;
 
   --ui-text-area-grow-max: 320px;
 
@@ -163,8 +163,8 @@
      inset a step wider than a field's gap, so what it holds stands clear of
      its edge; the compact and snug insets are the block axis of a figure's
      card and a one-line band's. */
-  --ui-card-radius: var(--ui-radius-14);
-  --ui-card-inset: var(--ui-space-24);
+  --ui-card-radius: var(--ui-radius-12);
+  --ui-card-inset: var(--ui-space-32);
   --ui-card-inset-compact: var(--ui-space-16);
   --ui-card-inset-snug: var(--ui-space-12);
   /* How tall a set of pictures stands (`PictureSet`): a row of a few, aimed
@@ -259,7 +259,7 @@
   /* A hover hint: the pill's own corner and lift, as it was drawn before it
      was shared, the widest it stands (the window, less twice tooltip.tsx's
      TOOLTIP_MARGIN), and the width of a card hung in its place. */
-  --ui-tooltip-radius: 7px;
+  --ui-tooltip-radius: var(--ui-radius-8);
   --ui-tooltip-shadow: 0 4px 14px var(--ui-color-shadow);
   --ui-tooltip-max-width: calc(var(--ui-stage-width) - 12px);
   --ui-tooltip-card-width: 280px;
@@ -275,7 +275,7 @@
     calc(var(--ui-stage-height) * 0.4)
   );
 
-  --ui-menu-row-height: 32px;
+  --ui-menu-row-height: 36px;
   --ui-menu-row-radius: var(--ui-radius-8);
   --ui-menu-inset: var(--ui-space-4);
   /* A row's corner and the inset together, so a highlighted row follows the menu's curve. */
@@ -635,27 +635,51 @@
   --ui-z-tooltip: 32;
 }
 
-/* A compact site surface, a dashboard's (`DENSITY.COMPACT` in `surface.ts`):
-   the site's roles a step down in size, its controls short enough to stand
-   in a dense header and its type a step under a public page's. It sets size
-   roles alone, each one the site's profile sets, so its faces, its spacing
-   between things, and its palette stay the site's. A finger keeps the site's
-   full size whatever the root asks: on a coarse pointer the compact roles
-   never apply, so a control stays a 44px target and a field's 16px words
-   keep iOS from zooming into it. */
+/* A compact site surface, the app's and a dashboard's (`DENSITY.COMPACT` in
+   `surface.ts`): the panel drawn in a browser, so it takes the desktop
+   profile's sizes and spacing, and the panel reads alike in the window and
+   in a tab; its faces and its palette stay the site's. A finger keeps the
+   site's full size whatever the root asks: on a coarse pointer the compact
+   roles never apply, so a control stays a 44px target and a field's 16px
+   words keep iOS from zooming into it. */
 @media not all and (pointer: coarse) {
   [data-ui-profile="web"][data-ui-density="compact"] {
-    --ui-control-height: 32px;
     --ui-control-inset: var(--ui-space-12);
 
-    --ui-type-body-size: 14px;
-    --ui-type-body-leading: 20px;
-    --ui-type-label-size: 13px;
-    --ui-type-label-leading: 18px;
-    --ui-type-title-size: 22px;
-    --ui-type-title-leading: 30px;
-
-    /* A compact menu's rows are its controls' height, as the site's are. */
-    --ui-menu-row-height: 32px;
+    --ui-control-height: 32px;
+    --ui-control-radius: var(--ui-radius-8);
+    --ui-icon-gap-regular: var(--ui-space-8);
+    --ui-icon-gap: var(--ui-space-10);
+    --ui-section-gap: var(--ui-space-24);
+    --ui-page-section-gap: var(--ui-space-48);
+    --ui-item-gap: var(--ui-space-8);
+    --ui-block-gap: var(--ui-space-16);
+    --ui-list-inset: var(--ui-space-16);
+    --ui-page-inset: var(--ui-space-64);
+    --ui-list-gap: var(--ui-space-4);
+    --ui-sidebar-row-height: 34px;
+    --ui-sidebar-text-size: 14px;
+    --ui-sidebar-places-gap: var(--ui-space-2);
+    --ui-task-row-block: var(--ui-space-8);
+    --ui-composer-least-lines: 2;
+    --ui-type-body-size: 15px;
+    --ui-type-body-leading: 24px;
+    --ui-type-label-size: 14px;
+    --ui-type-label-leading: 20px;
+    --ui-type-section-size: 15px;
+    --ui-type-section-leading: 24px;
+    --ui-type-dialog-size: 18px;
+    --ui-type-dialog-leading: 24px;
+    --ui-type-title-size: 32px;
+    --ui-type-title-leading: 40px;
+    --ui-type-reading-size: 16px;
+    --ui-type-reading-leading: 1.65;
+    --ui-type-toolbar-title-weight: var(--ui-weight-medium);
+    --ui-settings-row-min-height: 64px;
+    --ui-settings-row-list-min-height: 48px;
+    --ui-card-radius: var(--ui-radius-12);
+    --ui-card-inset: var(--ui-space-32);
+    --ui-tooltip-radius: var(--ui-radius-8);
+    --ui-menu-row-height: 36px;
   }
 }

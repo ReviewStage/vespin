@@ -716,7 +716,7 @@
   --spacing-avatar-glyph: var(--ui-control-icon);
   --spacing-avatar-stack: 18px; /* off-scale: a facepile's disc */
   --spacing-avatar-row: var(--ui-space-20); /* a list row's disc */
-  --spacing-avatar-account: 26px; /* off-scale: the account's disc */
+  --spacing-avatar-account: 28px; /* off-scale: the account's disc */
   --spacing-avatar-card: var(--ui-space-32); /* a card head's disc */
   /* A chat's sender's picture beside its bubbles (`ChatBubble`'s `avatar`),
      a card head's disc wide, and how far in from it the line under a run

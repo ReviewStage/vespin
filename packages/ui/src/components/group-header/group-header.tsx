@@ -218,10 +218,10 @@ const PART = {
   ACTIONS: "ui-group-header-actions flex flex-none items-center gap-ui-4",
 } as const;
 
-/** A lead's height in each look: a row's, or a step under it for a heading set apart over the rows. */
+/** A lead's height in each look: a row's, or a step under it for a heading set apart over the rows, whose words are the group role's, a step under the rows'. */
 const LEAD_HEIGHT = {
   [GROUP_LOOK.ROW]: "h-control",
-  [GROUP_LOOK.HEADING]: "h-control-compact",
+  [GROUP_LOOK.HEADING]: "h-control-compact text-group font-group",
   [GROUP_LOOK.SECTION]: "h-control",
 } as const satisfies Record<GroupLook, string>;
 
