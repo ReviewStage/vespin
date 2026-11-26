@@ -87,7 +87,8 @@ import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { AgentPane } from "./main-tabs.js";
 import { CalmOffice, PresenceStrip } from "./office-prototype/calm-office.js";
 import { OfficePage } from "./office-prototype/office-page.js";
-import { CALM, OFFICE } from "./office-prototype/office-params.js";
+import { CALM, OFFICE, PROGRESS_IDEAS } from "./office-prototype/office-params.js";
+import { ProgressOffice } from "./office-prototype/progress-office.js";
 import {
   SIDE_PANEL_HOLDER,
   SidePanel,
@@ -207,7 +208,13 @@ export const DesktopInbox = memo(function DesktopInboxOrOffice(props: {
     );
   }
   if (OFFICE !== undefined && props.room === SHELL_ROOM.NARROW)
-    return CALM.has(OFFICE) ? <CalmOffice variant={OFFICE} /> : <OfficePage variant={OFFICE} />;
+    return PROGRESS_IDEAS.has(OFFICE) ? (
+      <ProgressOffice variant={OFFICE} />
+    ) : CALM.has(OFFICE) ? (
+      <CalmOffice variant={OFFICE} />
+    ) : (
+      <OfficePage variant={OFFICE} />
+    );
   return <DesktopInboxReal {...props} />;
 });
 

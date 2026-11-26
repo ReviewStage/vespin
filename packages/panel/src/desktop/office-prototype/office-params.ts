@@ -14,7 +14,13 @@ export const OFFICE_VARIANT = {
   SENTENCES: "sentences",
   PRESENCE: "presence",
   SPOTLIGHT: "spotlight",
+  RAILS: "rails",
+  LETTER: "letter",
+  RIVER: "river",
 } as const;
+
+/** The round-four ideas: goals and what moved toward them. */
+export const PROGRESS_IDEAS = new Set<string>(["rails", "letter", "river"]);
 
 /** The round-three ideas, calm: a face and one sentence each. */
 export const CALM = new Set<string>(["photo", "table", "sentences", "spotlight"]);

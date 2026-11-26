@@ -36,6 +36,8 @@ export type ProgressTone = (typeof PROGRESS_TONE)[keyof typeof PROGRESS_TONE];
 export const PROGRESS_SIZE = {
   REGULAR: "regular",
   THIN: "thin",
+  /** PROTOTYPE: a goal's bar, the one picture on its row. */
+  BOLD: "bold",
 } as const;
 
 export type ProgressSize = (typeof PROGRESS_SIZE)[keyof typeof PROGRESS_SIZE];
@@ -68,6 +70,7 @@ export function Progress({
   tone = PROGRESS_TONE.WORKING,
   size = PROGRESS_SIZE.REGULAR,
   width = PROGRESS_WIDTH.METER,
+  since,
 }: {
   /** How far the work has come, in percent. */
   value: number;
@@ -79,8 +82,11 @@ export function Progress({
   size?: ProgressSize | undefined;
   /** How long it runs; a meter's length where none is named. */
   width?: ProgressWidth | undefined;
+  /** PROTOTYPE: how much of `value` came since the reader last looked, drawn in the ink while what came before is muted. */
+  since?: number | undefined;
 }): React.JSX.Element {
   const percent = percentOf(value);
+  const before = since === undefined ? undefined : percentOf(percent - since);
 
   // Note that each attribute Base UI's root sets is named here, undefined where the bar never said it, because a prop given overrides the root's own.
   const read =
@@ -108,6 +114,7 @@ export function Progress({
       data-tone={tone}
       data-size={size}
       className={WIDTH_CLASS[width]}
+      before={before}
       {...read}
     />
   );

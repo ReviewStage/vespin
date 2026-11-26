@@ -376,3 +376,221 @@
   flex: 1;
   min-height: 0;
 }
+
+/* Round four: progress. */
+.pg-new {
+  color: var(--ui-color-text);
+  font-weight: 600;
+}
+.pg-muted {
+  color: var(--ui-color-text-muted);
+}
+.pg-waiting {
+  color: var(--ui-color-attention);
+  font-weight: 600;
+}
+
+.pg-rails {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 0 32px;
+}
+.pg-rail {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px 12px;
+  border-radius: var(--ui-radius-card, 12px);
+}
+.pg-rail-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pg-rail-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.pg-letter {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px 0 48px;
+  max-width: 620px;
+}
+.pg-letter .ui-text {
+  line-height: 1.6;
+}
+.pg-letter-para {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 4px 0;
+  border-radius: 8px;
+}
+.pg-letter-face {
+  flex: none;
+  padding-top: 2px;
+}
+.pg-letter-ask {
+  padding: 12px 14px;
+  border-radius: var(--ui-radius-card, 12px);
+  background: color-mix(in oklab, var(--ui-color-attention) 9%, transparent);
+}
+
+.pg-river {
+  --pg-lane-label: 340px;
+  padding: 8px 0 32px;
+}
+.pg-river-axis,
+.pg-lane {
+  display: grid;
+  grid-template-columns: var(--pg-lane-label) 1fr;
+  align-items: center;
+}
+.pg-river-track {
+  position: relative;
+  height: 100%;
+  min-height: 24px;
+  margin-right: 16px;
+}
+.pg-river-hour {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--ui-color-text-muted);
+}
+.pg-river-lanes {
+  position: relative;
+}
+.pg-river-since {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in oklab, var(--ui-color-working) 6%, transparent);
+  border-left: 2px solid var(--ui-color-working);
+  margin-right: 16px;
+  pointer-events: none;
+}
+.pg-river-since-label {
+  position: absolute;
+  top: -22px;
+  left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-color-working);
+  white-space: nowrap;
+}
+.pg-lane {
+  position: relative;
+  min-height: 76px;
+  border-top: 1px solid var(--ui-color-border);
+}
+.pg-lane-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px 12px 0;
+}
+.pg-lane-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pg-lane-line {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 2px;
+  background: var(--ui-color-border-strong);
+}
+.pg-step {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.pg-step-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--ui-color-text-muted);
+  opacity: 0.5;
+}
+.pg-step[data-new] .pg-step-dot {
+  width: 14px;
+  height: 14px;
+  opacity: 1;
+  background: var(--ui-color-working);
+  box-shadow: 0 0 0 3px var(--ui-color-ground);
+}
+.pg-step-label {
+  position: absolute;
+  top: 18px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--ui-color-text);
+  font-weight: 500;
+}
+.pg-river-axis {
+  margin-bottom: 28px;
+}
+
+@media (max-width: 700px) {
+  .pg-rail {
+    gap: 12px;
+    padding: 12px 4px;
+  }
+  .pg-rail-head {
+    flex-direction: column;
+    gap: 0;
+  }
+  .pg-river {
+    --pg-lane-label: 0px;
+  }
+  .pg-river-axis {
+    display: none;
+  }
+  .pg-lane {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 36px;
+  }
+  .pg-river-since {
+    top: 0;
+  }
+  .pg-river-since-label {
+    top: 4px;
+  }
+  .pg-step-label {
+    display: none;
+  }
+  .pg-river-track {
+    margin-right: 8px;
+  }
+}
+.pg-lane-since {
+  display: none;
+}
+@media (max-width: 700px) {
+  .pg-river-since {
+    display: none;
+  }
+  .pg-lane-since {
+    display: block;
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    background: color-mix(in oklab, var(--ui-color-working) 8%, transparent);
+    border-left: 2px solid var(--ui-color-working);
+    border-radius: 0 6px 6px 0;
+  }
+}

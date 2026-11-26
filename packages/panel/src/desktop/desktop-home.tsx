@@ -38,7 +38,8 @@ import { letGoOfFocus, useHomeNewTask, useListsTask, welcomed } from "./desktop-
 import { HomeStarters } from "./home-starters.js";
 import { CalmOffice, PresenceStrip } from "./office-prototype/calm-office.js";
 import { OfficePage } from "./office-prototype/office-page.js";
-import { CALM, OFFICE } from "./office-prototype/office-params.js";
+import { CALM, OFFICE, PROGRESS_IDEAS } from "./office-prototype/office-params.js";
+import { ProgressOffice } from "./office-prototype/progress-office.js";
 import { PERSON_SECTION_FOLD, PersonBody, PersonSectionFrame } from "./person-frame.js";
 import { RecentTasks } from "./recent-tasks.js";
 
@@ -327,7 +328,13 @@ export function DesktopHome({
 
   // PROTOTYPE, throwaway: the Office in Home's place while the address asks for it.
   if (OFFICE !== undefined && OFFICE !== "presence")
-    return CALM.has(OFFICE) ? <CalmOffice variant={OFFICE} /> : <OfficePage variant={OFFICE} />;
+    return PROGRESS_IDEAS.has(OFFICE) ? (
+      <ProgressOffice variant={OFFICE} />
+    ) : CALM.has(OFFICE) ? (
+      <CalmOffice variant={OFFICE} />
+    ) : (
+      <OfficePage variant={OFFICE} />
+    );
 
   return (
     // Note that the rows' links are written under the listed workspace, so their menus offer Copy link.

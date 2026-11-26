@@ -25,7 +25,13 @@ import { cn } from "../cn.js";
  * is its inside.
  */
 
-function Progress({ className, children, value, ...props }: ProgressPrimitive.Root.Props) {
+function Progress({
+  className,
+  children,
+  value,
+  before,
+  ...props
+}: ProgressPrimitive.Root.Props & { before?: number | undefined }) {
   return (
     <ProgressPrimitive.Root
       value={value}
@@ -37,6 +43,13 @@ function Progress({ className, children, value, ...props }: ProgressPrimitive.Ro
           {children}
           <ProgressTrack>
             <ProgressIndicator />
+            {before === undefined ? null : (
+              <span
+                data-slot="progress-before"
+                className="absolute inset-y-0 left-0 block bg-[color-mix(in_oklab,var(--ui-color-text-muted)_55%,var(--ui-color-ground))]"
+                style={{ width: `${before}%` }}
+              />
+            )}
           </ProgressTrack>
         </span>
       )}
@@ -49,7 +62,7 @@ function ProgressTrack({ className, ...props }: ProgressPrimitive.Track.Props) {
   return (
     <ProgressPrimitive.Track
       className={cn(
-        "relative flex h-progress-height w-full items-center overflow-hidden rounded-full bg-secondary in-data-[size=thin]:h-progress-thin-height",
+        "relative flex h-progress-height w-full items-center overflow-hidden rounded-full bg-secondary in-data-[size=thin]:h-progress-thin-height in-data-[size=bold]:h-ui-8",
         className,
       )}
       data-slot="progress-track"
