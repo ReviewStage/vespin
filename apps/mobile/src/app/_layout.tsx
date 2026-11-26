@@ -21,6 +21,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useIsFocused } from "expo-router";
 import { type ReactElement, type ReactNode, useMemo } from "react";
 import { useColorScheme } from "react-native";
+import { useComposerDraftsSignOut } from "../agents/composer-drafts.js";
 import { MachineAsks } from "../agents/machine-asks.js";
 import { useAppNotReadyCount } from "../app-ready.js";
 import { useCrashReports } from "../crash-reports.js";
@@ -199,6 +200,7 @@ function GuardedScreens() {
   useInboxWidget(signedIn);
   useSystemActivity(signedIn);
   useRecentOpenedSignOut(signedIn);
+  useComposerDraftsSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
   useCrashReports();
   useOfflineNotice();
