@@ -129,14 +129,17 @@ env:
 # flows' own `dismiss.yaml`, as keep.yaml puts its menus away, because iOS
 # takes everything under an open menu out of the accessibility tree, so no
 # named control exists to tap. The point is the window's trailing margin
-# beside the thread's files, where nothing presses even with no menu
-# standing, and the flow then asserts the menu gone and the thread as it
-# stood, its PDF's chip still there, so a tap that ever lands on something
-# fails here.
+# beside the thread's PDF, three quarters down, where nothing presses even
+# with no menu standing, and below the menu on every window: an iPhone's ⋯
+# drops Remind me's times to two thirds of the way down, where a tap at 60%
+# pressed Pick a date and time…, while a regular window's clock stands its
+# menu under the bar. The flow then asserts the menu gone and the thread as
+# it stood, its PDF's chip still there, so a tap that ever lands on
+# something fails here.
 - runFlow:
     file: subflows/dismiss.yaml
     env:
-      POINT: "94%, 60%"
+      POINT: "94%, 75%"
 - assertNotVisible: "Pick a date and time…"
 - assertVisible: "invite-test-plan.pdf, PDF.*"
 # Back on the list, from the thread.
