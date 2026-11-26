@@ -21,12 +21,13 @@ const RESUME_WINDOW_MS = 60_000;
 /** The build number this build was released as (`CFBundleVersion`), which a return is read beside; none where the build names none. */
 const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
 
-/** A return being counted: when it came back and how long it was away, the deliveries before it, and the long tasks heard since. */
+/** A return being counted: when it came back and how long it was away, the deliveries before it, and the long tasks heard since, with how a batch of them is taken in. */
 interface Returning {
   readonly at: number;
   readonly awayMs: number;
   readonly deliveredBefore: number;
   readonly watch: PerformanceObserver;
+  readonly hold: (entries: readonly PerformanceEntry[]) => void;
   readonly held: { count: number; ms: number; longest: number };
   readonly over: ReturnType<typeof setTimeout>;
 }
@@ -54,6 +55,8 @@ export function useResumeLoadCount(): void {
       if (done === undefined) return;
       returning = undefined;
       clearTimeout(done.over);
+      // Note that a long task the observer still holds is taken before counting, because React Native hands them over at idle priority, after the very event that ends the window.
+      done.hold(done.watch.takeRecords());
       done.watch.disconnect();
 
       count(PRODUCT_SURFACE_EVENT.RESUME_LOAD, {
@@ -72,18 +75,20 @@ export function useResumeLoadCount(): void {
       const at = performance.now();
 
       // Note that only long tasks that began after the return count, so one the app ran before it went away is never this return's.
-      const watch = new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
+      const hold = (entries: readonly PerformanceEntry[]) => {
+        for (const entry of entries) {
           if (entry.startTime < at) continue;
           held.count += 1;
           held.ms += entry.duration;
           held.longest = Math.max(held.longest, entry.duration);
         }
-      });
+      };
+
+      const watch = new PerformanceObserver((list) => hold(list.getEntries()));
 
       watch.observe({ type: "longtask" });
       const over = setTimeout(() => finish(PRODUCT_LOAD_WINDOW.WHOLE), RESUME_WINDOW_MS);
-      returning = { at, awayMs, deliveredBefore: launchDelivered(), watch, held, over };
+      returning = { at, awayMs, deliveredBefore: launchDelivered(), watch, hold, held, over };
     };
 
     const change = AppState.addEventListener("change", (next: AppStateStatus) => {
