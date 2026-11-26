@@ -411,6 +411,15 @@ env:
 - assertVisible: "Copy link"
 - assertVisible: "Permanently delete"
 - takeScreenshot: task-more-menu
+# Note that the menu is scrolled to Permanently delete before it is pressed,
+# because Copy description stands it below the menu's fold on an iPhone 18
+# Pro, where it still stands in the hierarchy, so Maestro found it and then
+# pressed where the menu no longer draws it, which put the menu away
+# (`row-menu.yaml`). A scroll on an act already shown does nothing.
+- scrollUntilVisible:
+    element: "Permanently delete"
+    direction: DOWN
+- waitForAnimationToEnd
 # Note that the tap is never retried, because a retry once the menu has
 # closed lands behind the question and puts it away.
 - tapOn:
