@@ -1,0 +1,8 @@
+pinned to 6b7e30dedd
+== bundle PJjbatcha8 base 6b7e30dedd
+  built 6b7e30dedd base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-answer-field-focus: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
