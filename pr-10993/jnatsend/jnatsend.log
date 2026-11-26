@@ -1,0 +1,102 @@
+built main 05a29cca3c + #sendonce 6cae4d2b64 as 731cae8ffc
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 14:59:49 21196 MB
+curve 15:00:19 21133 MB
+curve 15:00:49 19694 MB
+curve 15:01:19 18954 MB
+curve 15:01:50 18737 MB
+curve 15:02:20 18544 MB
+curve 15:02:50 18534 MB
+curve 15:03:20 18509 MB
+curve 15:03:50 18431 MB
+curve 15:04:20 18445 MB
+curve 15:04:50 18341 MB
+curve 15:05:21 18148 MB
+curve 15:05:51 17812 MB
+curve 15:06:21 17647 MB
+curve 15:06:51 18117 MB
+curve 15:07:21 18024 MB
+curve 15:07:51 17984 MB
+curve 15:08:21 17940 MB
+curve 15:08:51 17798 MB
+curve 15:09:21 17721 MB
+curve 15:09:52 17656 MB
+curve 15:10:22 17621 MB
+curve 15:10:52 17569 MB
+curve 15:11:22 17548 MB
+curve 15:11:52 17531 MB
+curve 15:12:22 17513 MB
+curve 15:12:52 17495 MB
+curve 15:13:22 17475 MB
+curve 15:13:53 17454 MB
+curve 15:14:23 17442 MB
+curve 15:14:53 17430 MB
+curve 15:15:23 17106 MB
+curve 15:15:53 17074 MB
+curve 15:16:23 17056 MB
+curve 15:16:53 17040 MB
+curve 15:17:24 16876 MB
+curve 15:17:54 16858 MB
+curve 15:18:24 16658 MB
+curve 15:18:54 16279 MB
+curve 15:19:24 15998 MB
+curve 15:19:55 15533 MB
+curve 15:20:25 17366 MB
+curve 15:20:57 18583 MB
+curve 15:21:29 19837 MB
+curve 15:22:00 20411 MB
+curve 15:22:31 19526 MB
+curve 15:23:03 18284 MB
+curve 15:23:34 16973 MB
+curve 15:24:07 16469 MB
+curve 15:24:37 15628 MB
+curve 15:25:08 15415 MB
+curve 15:25:39 15994 MB
+curve 15:26:10 15908 MB
+curve 15:26:40 16079 MB
+curve 15:27:10 16010 MB
+curve 15:27:40 15975 MB
+curve 15:28:10 15964 MB
+curve 15:28:40 15896 MB
+curve 15:29:10 15871 MB
+curve 15:29:40 15814 MB
+curve 15:30:11 15328 MB
+curve 15:30:41 15268 MB
+curve 15:31:11 15226 MB
+curve 15:31:41 15586 MB
+curve 15:32:11 15461 MB
+curve 15:32:41 15428 MB
+curve 15:33:11 14969 MB
+curve 15:33:42 14835 MB
+curve 15:34:12 14765 MB
+curve 15:34:42 14602 MB
+curve 15:35:12 14480 MB
+curve 15:35:42 14403 MB
+curve 15:36:12 14303 MB
+curve 15:36:42 14195 MB
+curve 15:37:13 14190 MB
+curve 15:37:43 14102 MB
+curve 15:38:13 14083 MB
+curve 15:38:43 13971 MB
+curve 15:39:13 13923 MB
+curve 15:39:43 13899 MB
+curve 15:40:13 13781 MB
+curve 15:40:43 13730 MB
+curve 15:41:13 13955 MB
+curve 15:41:44 14560 MB
+curve 15:42:14 14849 MB
+curve 15:42:44 14476 MB
+curve 15:43:14 14474 MB
+curve 15:43:44 14077 MB
+BUILD EXIT 0 15:44:14
+sizes: Assets.car 24864680 bytes (main Vmain14.app 24800088), .app 127272 KB (main 126488 KB), zipped .app 47972629 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImage.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageAVIFCoder.framework SDWebImageSVGCoder.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework libavif.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnatsend.app: replacing existing signature
+psendonce-iphone-light-manager-send-once-after: fails 1 shots 1 Assert that "CUT: superseded by vjsend2a" is visible... FAILED
+psendonce-iphone-light-description-comment-after: fails 1 shots 1 Assert that "CUT: superseded by vjsend2a" is visible... FAILED
+psendonce-iphone-light-pull-request-after: fails 1 shots 1 Assert that "CUT: superseded by vjsend2a" is visible... FAILED
