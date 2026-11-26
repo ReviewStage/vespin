@@ -1,0 +1,55 @@
+# pr-skeleton-stills.yaml -- PROBE, not for merge: full-resolution stills of a pull request's page while its parts are read, each part held back a minute by `-prProbe` (`src/pull-requests/pr-probe.ts`) so the skeleton stands still to be shot.
+#
+# - link: #128 by a link with no agent, nothing read, its heading a skeleton.
+# - listed: by its agent, its title and state from the task list, the rest read.
+# - partial: by its agent, its conversation landed, its heading's lines and checks still read.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      prProbe: "60000,60000,60000"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Reading pull request"
+    timeout: 30000
+- takeScreenshot: pr-skeleton-link
+- launchApp:
+    stopApp: true
+    arguments:
+      fixture: inbox
+      prProbe: "60000,60000,60000"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128?agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Reading conversation"
+    timeout: 30000
+- takeScreenshot: pr-skeleton-listed
+- launchApp:
+    stopApp: true
+    arguments:
+      fixture: inbox
+      prProbe: "60000,60000,0"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128?agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Comment"
+    timeout: 30000
+- takeScreenshot: pr-skeleton-partial
