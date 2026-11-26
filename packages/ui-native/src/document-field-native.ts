@@ -13,11 +13,40 @@ export interface NativeCard {
   readonly detail: string;
 }
 
-/** A run of a line as the view takes it: words with their looks and address, a pill, or a card. */
+/** A picture's Markdown standing in a line, drawn as the media it names: the source it is written back as, the address it names, and its words. */
+export interface NativeMediaRun {
+  readonly source: string;
+  readonly address: string;
+  readonly alt: string;
+}
+
+/** What a picture's address holds, as the view draws it: on its way, a picture, a video, a sound clip, a file, or one that could not be read. */
+export const MEDIA_KIND = {
+  READING: "reading",
+  PICTURE: "picture",
+  VIDEO: "video",
+  AUDIO: "audio",
+  FILE: "file",
+  UNREAD: "unread",
+} as const;
+
+export type MediaKind = (typeof MEDIA_KIND)[keyof typeof MEDIA_KIND];
+
+/** What an address holds once read: its kind, the file of the app's caches it is drawn from, and the words its strip or card says. */
+export interface NativeMedia {
+  readonly address: string;
+  readonly kind: MediaKind;
+  readonly file?: string | undefined;
+  readonly label: string;
+  readonly detail?: string | undefined;
+}
+
+/** A run of a line as the view takes it: words with their looks and address, a pill, a card, or a picture drawn as its media. */
 export type NativeDocumentRun =
   | { readonly text: string; readonly marks: readonly string[]; readonly link?: string | undefined }
   | { readonly pill: NativePill }
-  | { readonly card: NativeCard };
+  | { readonly card: NativeCard }
+  | { readonly media: NativeMediaRun };
 
 /** What a line carries of its block (`document-field-model.ts`'s `FieldLine`). */
 interface NativeLineFacts {
@@ -38,11 +67,12 @@ export interface NativeDocumentLine extends NativeLineFacts {
   readonly runs: readonly NativeDocumentRun[];
 }
 
-/** A run of a line as the view tells it: words, a pill by its Markdown, or a card by its source. */
+/** A run of a line as the view tells it: words, a pill by its Markdown, or a card or a picture by its source. */
 export type NativeToldRun =
   | { readonly text: string; readonly marks: readonly string[]; readonly link?: string | undefined }
   | { readonly pill: { readonly markdown: string } }
-  | { readonly card: { readonly source: string } };
+  | { readonly card: { readonly source: string } }
+  | { readonly media: { readonly source: string } };
 
 /** A line as the view tells it. */
 export interface NativeToldLine extends NativeLineFacts {
@@ -125,6 +155,8 @@ interface NativeDocumentFieldProps {
   readonly style?: StyleProp<ViewStyle>;
   readonly value: NativeDocumentValue;
   readonly look: NativeLook;
+  /** What each picture the lines name holds, handed apart from the words, since a picture lands after them. */
+  readonly media?: readonly NativeMedia[] | undefined;
   readonly placeholder?: string | undefined;
   readonly editable?: boolean | undefined;
   readonly formats?: NativeFormats | undefined;

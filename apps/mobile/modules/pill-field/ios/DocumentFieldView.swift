@@ -1,4 +1,4 @@
-// DocumentFieldView.swift -- the app's rich field for a document edited whole, such as a task's description: UIKit's text view on TextKit 2 drawing each block with no syntax, a heading in its text style, a list with the system's own markers, a task's box, a quote, a code block, and a block the phone cannot edit as a card.
+// DocumentFieldView.swift -- the app's rich field for a document edited whole, such as a task's description: UIKit's text view on TextKit 2 drawing each block with no syntax, a heading in its text style, a list with the system's own markers, a task's box, a quote, a code block, a picture, a video, a sound clip or a file as the read rows draw it (`DocumentMedia.swift`), and a block the phone cannot edit as a card.
 //
 // `@repo/ui-native`'s `DocumentField` hands this view the document as lines
 // (`document-field-model.ts`), a paragraph each, every line carrying its
@@ -32,6 +32,7 @@ struct DocumentRunRecord: Record {
   @Field var link: String? = nil
   @Field var pill: PillRecord? = nil
   @Field var card: CardRecord? = nil
+  @Field var media: MediaRunRecord? = nil
 }
 
 /// A line of the document, and the facts of the block it belongs to.
@@ -259,9 +260,12 @@ enum DocumentRun: Equatable {
   case words(String, marks: [String], link: String?)
   case pill(Pill)
   case card(Card)
+  case media(MediaRun)
 
   init?(_ record: DocumentRunRecord) {
-    if let pill = record.pill {
+    if let media = record.media {
+      self = .media(MediaRun(media))
+    } else if let pill = record.pill {
       self = .pill(Pill(pill))
     } else if let card = record.card {
       self = .card(Card(source: card.source, title: card.title, detail: card.detail))
@@ -272,7 +276,7 @@ enum DocumentRun: Equatable {
     }
   }
 
-  /// The run as JavaScript reads it: words with their looks, a pill by its Markdown, a card by its source.
+  /// The run as JavaScript reads it: words with their looks, a pill by its Markdown, a card and a picture by their source.
   var told: [String: Any] {
     switch self {
     case .words(let text, let marks, let link):
@@ -281,6 +285,7 @@ enum DocumentRun: Equatable {
       return run
     case .pill(let pill): return ["pill": ["markdown": pill.markdown]]
     case .card(let card): return ["card": ["source": card.source]]
+    case .media(let media): return ["media": ["source": media.source]]
     }
   }
 }
@@ -628,6 +633,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   let onCaret = EventDispatcher()
 
   private let textView = UITextView(usingTextLayoutManager: true)
+  /// What each picture the lines name holds, which JavaScript hands apart from the words, since a picture lands after them.
+  private let media = MediaShelf()
+  /// The page the field stands in scrolling, which tells each picture whether it stands near the window.
+  private var pageScrolled: NSKeyValueObservation?
   private let placeholderLabel = UILabel()
   /// The mark of an empty last list item, which no layout fragment draws.
   private let endMark = EndMarkView()
@@ -740,6 +749,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     textView.delegate = self
+    media.relay = { [weak self] address in self?.relayMedia(address) }
     // Note that each paragraph is laid out by a fragment that draws its item's mark, since the system's list markers draw in the words' full ink at their own size.
     textView.textLayoutManager?.delegate = self
     textView.addSubview(endMark)
@@ -786,6 +796,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     if textView.frame.width != bounds.width { laidWhole = false }
     textView.frame = bounds
     tellHeight()
+    media.reckonNear()
     let line = ceil(bodyFont().lineHeight)
     placeholderLabel.frame = CGRect(
       x: textView.textContainerInset.left,
@@ -923,6 +934,30 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     redraw(lines)
   }
 
+  /// Takes what each picture the lines name holds, drawing again only the pictures that changed.
+  func takeMedia(_ records: [MediaRecord]) {
+    media.take(records)
+    media.reckonNear()
+  }
+
+  /// Lays out again the lines a picture stands in, once its size is read, and tells the height they now ask for: only those lines, never the words around them.
+  private func relayMedia(_ address: String) {
+    guard let layout = textView.textLayoutManager, let content = layout.textContentManager else { return }
+    let storage = textView.textStorage
+    storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+      guard let shown = value as? MediaAttachment, shown.run.address == address,
+        let start = content.location(content.documentRange.location, offsetBy: range.location),
+        let end = content.location(start, offsetBy: range.length),
+        let laid = NSTextRange(location: start, end: end)
+      else { return }
+      layout.invalidateLayout(for: laid)
+      layout.ensureLayout(for: laid)
+    }
+    layout.textViewportLayoutController.layoutViewport()
+    tellHeight()
+    media.reckonNear()
+  }
+
   func focus() {
     guard window != nil else {
       focusWhenShown = { [weak self] in self?.focus() }
@@ -935,6 +970,10 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   override func didMoveToWindow() {
     super.didMoveToWindow()
+    // Note that a field grown to its words scrolls with its page, so the page's scroll is what moves its pictures past the window.
+    pageScrolled = holdingScrollView().map { page in
+      page.observe(\.contentOffset) { [weak self] _, _ in self?.media.reckonNear() }
+    }
     guard window != nil else { return }
     // Note that a height told before the field stood in a window may not have reached the page, so it is told again.
     toldHeight = nil
@@ -988,6 +1027,11 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   }
 
   // MARK: The text view's delegate
+
+  /// Tells each picture whether it stands near the window as a field that scrolls its own words scrolls them.
+  func scrollViewDidScroll(_ scrollView: UIScrollView) {
+    media.reckonNear()
+  }
 
   func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
     // Note that a Return on a nested item with no words, and a Delete at a nested item's start, move it out a step rather than end the list or join it to the item before, as Notes and Notion do.
@@ -1187,6 +1231,8 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
           piece.append(character)
         case .card(let card):
           piece.append(NSAttributedString(attachment: BlockAttachment(card: card, look: look)))
+        case .media(let run):
+          piece.append(NSAttributedString(attachment: MediaAttachment(run: run, look: look, shelf: media)))
         }
       }
 
@@ -2275,6 +2321,11 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
       if let block = attributes[.attachment] as? BlockAttachment {
         if let card = block.card { runs.append(.card(card)) }
+        return
+      }
+
+      if let shown = attributes[.attachment] as? MediaAttachment {
+        runs.append(.media(shown.run))
         return
       }
 
