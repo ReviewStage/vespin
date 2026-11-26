@@ -331,7 +331,10 @@ page, a video, a PDF, or a browser sheet shown in the app is always covered,
 so a recording is meant to show the app's layout and your touches, never what
 you or anyone else wrote or showed. The masking finds what to cover by how
 iOS draws it, so something drawn in a way it does not recognize could leave
-unmasked; we check the app's screens against it. Each recording also carries the same trail an iOS error report
+unmasked; we check the app's screens against it. Two limits we know of: while
+the keyboard or a scroll moves the screen, a thin band at a picture's edge can
+show for a frame, and the frosted glass of the app's bars can carry a tint of
+the colors under it. Each recording also carries the same trail an iOS error report
 carries (see Error and performance data), and, as with those reports, Sentry
 receives your IP address and keeps the rough location it names. It is sent to
 Sentry, not PostHog, and is filed under no account, so it cannot be tied to
