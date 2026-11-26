@@ -377,6 +377,19 @@ env:
 - scrollUntilVisible:
     element: "Expire an invite after seven days.*"
     direction: UP
+# Note that the page is then dragged to its top and let settle before its
+# state chip is tapped, as the merge's press is, because a scroll up stops
+# once the title peeks in under the bar, and a tap there, or on a list
+# still gliding, scrolls the page or stops it and opens no menu.
+- swipe:
+    start: "75%, 35%"
+    end: "75%, 75%"
+    duration: 400
+- swipe:
+    start: "75%, 35%"
+    end: "75%, 75%"
+    duration: 400
+- waitForAnimationToEnd
 # Its state chip offers what may change where it stands, as the panel's
 # pill does: Convert to draft, and Close pull request in red. Each lands on
 # the chip; Close, which can be taken back, acts at once and says so in the
