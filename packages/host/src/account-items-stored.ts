@@ -269,8 +269,8 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
     const first = yield* follow.seal(follow.resumes ? (kept?.at ?? "") : "");
 
     if ("failure" in first) return false;
-    /** The first page of a whole answer in pages, written ahead so its newest items draw, held until the last replaces what the database keeps with every page; none between whole answers in pages. */
-    let firstPage: readonly PlacedInboxItem[] = [];
+    /** The items of the first page of a whole answer in pages, written ahead so its newest items draw, which the last keeps beside its own as it replaces what the database keeps; none between whole answers in pages. */
+    let firstPage: readonly string[] = [];
 
     const landed = (rows: AccountInboxItemsLiveRows, standing: SyncStanding | undefined) =>
       Effect.gen(function* () {
@@ -278,16 +278,19 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
         holders = holdersAfter(holders, placed, follow.tasksListed);
         const at = syncIdOf(standing);
         const cursor = cursorOf(holders, standing);
-        // Note that the last page of a whole answer in pages comes with every other page but the first (`followTakingRows`), so with the first it names every item there is, as one whole answer does, and replaces what the database keeps, which a store that cannot list its keys lets go no other way.
+        // Note that the last page of a whole answer in pages comes with every other page but the first (`followTakingRows`), so with the first's items it names every item there is, as one whole answer does, and replaces what the database keeps, which a store that cannot list its keys lets go no other way. The first page's items are held by key rather than written again, so each stands as the pool holds it now, a read mark made since among them.
         const lastPage = standing?.paged === true && standing.carried !== undefined;
-        const whole = standing?.past === undefined || lastPage;
-        const written = lastPage ? [...firstPage, ...placed] : placed;
-        firstPage = standing?.paged === true && !lastPage ? placed : [];
+        const held = lastPage ? [...firstPage, ...placed.map(INBOX_ITEM.key)] : undefined;
+        firstPage = standing?.paged === true && !lastPage ? placed.map(INBOX_ITEM.key) : [];
 
         // Note that a whole answer names every item there is, so it replaces what the database keeps; one past a sync id names only what moved, and what stands no longer.
-        yield* whole
-          ? items.answer(written, { ...(at === undefined ? undefined : { at }), cursor })
-          : items.answer(written, {
+        yield* standing?.past === undefined || held !== undefined
+          ? items.answer(placed, {
+              ...(held === undefined ? undefined : { held }),
+              ...(at === undefined ? undefined : { at }),
+              cursor,
+            })
+          : items.answer(placed, {
               gone: standing.gone,
               ...(at === undefined ? undefined : { at }),
               cursor,

@@ -268,6 +268,9 @@ function fakeService() {
     | readonly Partial<Record<(typeof ITEMS_PARTS)[number], readonly unknown[]>>[]
     | undefined;
 
+  /** What the last of those pages waits on before it is answered. */
+  let itemsLastPageGate: Effect.Effect<void> = Effect.void;
+
   /** What the account's items' read keeps to answer by sync id, so a read past one is answered what moved since. */
   const itemsBySync: ItemsBySync = { rows: new Map(), at: new Map() };
   /** The sync id the account's items stand still at, as behind a long transaction; none while it moves. */
@@ -454,7 +457,10 @@ function fakeService() {
 
         if (sync === ITEMS_PAGED_AT && page === undefined) return Effect.never;
 
-        return Effect.succeed(itemsPage(itemsPages, page === undefined ? 0 : Number(page)));
+        const n = page === undefined ? 0 : Number(page);
+        const answered = Effect.succeed(itemsPage(itemsPages, n));
+
+        return n === itemsPages.length - 1 ? Effect.andThen(itemsLastPageGate, answered) : answered;
       }
 
       if (sync === undefined) return Effect.succeed(live.items.first());
@@ -1177,8 +1183,10 @@ function fakeService() {
       pages:
         | readonly Partial<Record<(typeof ITEMS_PARTS)[number], readonly unknown[]>>[]
         | undefined,
+      lastPageGate: Effect.Effect<void> = Effect.void,
     ) => {
       itemsPages = pages;
+      itemsLastPageGate = lastPageGate;
     },
     /** Holds the account items' sync id where it stands, as a long transaction does, so each read past it is answered nothing moved. */
     stallItems: () => {
