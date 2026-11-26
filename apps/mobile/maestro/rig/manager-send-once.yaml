@@ -56,5 +56,7 @@ appId: dev.vespin.ios
 - assertNotVisible:
     text: "What about the release"
     index: 1
-- assertNotVisible: "(?!What about the release$).*(What|abou|release).*"
+# Note that Maestro reads text without regard to case, so the pieces are
+# matched whole, where the Manager's own name and its "what's left" hold none.
+- assertNotVisible: "(?!What about the release$).*(What abo|ut the rel).*"
 - takeScreenshot: manager-send-once
