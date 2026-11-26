@@ -396,10 +396,12 @@ it.layer(getTestDB())("show_media", (it) => {
           target,
           CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION - 40,
         );
+
         const keptRows = db
           .select({ sha256: attachment.sha256 })
           .from(attachment)
           .where(eq(attachment.conversationId, target.conversationId));
+
         const before = yield* keptRows;
 
         const binding = {
