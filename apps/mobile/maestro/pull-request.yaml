@@ -350,16 +350,21 @@ env:
 - takeScreenshot: pull-request-new-comment
 - tapOn:
     id: "BackButton"
-- scrollUntilVisible:
-    element: "Expire an invite after seven days.*"
-    direction: UP
 # Its state chip offers what may change where it stands, as the panel's
 # pill does: Convert to draft, and Close pull request in red. Each lands on
 # the chip; Close, which can be taken back, acts at once and says so in the
 # app's notice, whose Undo reopens it. The bar's ⋯ offers the same changes.
-# Note that the list is let settle after the scroll up, since a tap on a list
-# still gliding only stops it and opens no menu.
-- waitForAnimationToEnd
+# Note that the page is scrolled up to the chip itself by the subflow that
+# centers and settles it, as tasks.yaml reaches a task's Status chip on an
+# iPad, because a tap on a list still gliding only stops it and opens no
+# menu, and a scroll that stops once the chip peeks in leaves it under the
+# bar.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Pull request, Open"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
 - tapOn: "Pull request, Open"
 - assertVisible: "Convert to draft"
 - assertVisible: "Close pull request"
