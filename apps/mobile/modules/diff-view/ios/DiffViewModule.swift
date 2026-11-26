@@ -109,11 +109,17 @@ enum RowKind: UInt8 {
 /// What stands between a thread row's title and its detail (`diff-view-model.ts`'s `THREAD_PARTS`).
 let threadParts: Character = "\u{1F}"
 
-/// The diff's rows: each one's kind, its line numbers (0 for none), its words, and their count of columns.
+/// The diff's rows: each one's kind, its line numbers (0 for none), its words as the patch wrote them and as they are drawn, and their count of columns.
 struct DiffRows {
+  /// How many spaces a tab is drawn as, so every character the view draws stands one column wide in the monospaced face.
+  static let tabSpaces = "    "
+
   let kinds: [RowKind]
   let oldLines: [Int]
   let newLines: [Int]
+  /// Each row's words as the patch wrote them, which Copy line hands over, so a tab stays a tab.
+  let source: [Substring]
+  /// Each row's words as they are drawn, colored, and measured, a tab spelled as spaces.
   let lines: [Substring]
   let columns: [Int]
   /// The longest row, in columns, which an unwrapped diff is as wide as.
@@ -128,13 +134,16 @@ struct DiffRows {
     let kinds = record.kinds.utf8.map { RowKind(rawValue: $0) ?? .context }
     // Note that the columns are taken at their shortest, so a record whose columns disagree never reads past one.
     let count = min(kinds.count, lines.count, record.oldLines.count, record.newLines.count)
-    let columns = lines.prefix(count).map { $0.count }
+    let source = Array(lines.prefix(count))
+    let drawn = source.map { $0.contains("\t") ? Substring($0.replacingOccurrences(of: "\t", with: DiffRows.tabSpaces)) : $0 }
+    let columns = drawn.map { $0.count }
     let highest = max(record.oldLines.prefix(count).max() ?? 0, record.newLines.prefix(count).max() ?? 0)
 
     self.kinds = Array(kinds.prefix(count))
     self.oldLines = Array(record.oldLines.prefix(count))
     self.newLines = Array(record.newLines.prefix(count))
-    self.lines = Array(lines.prefix(count))
+    self.source = source
+    self.lines = drawn
     self.columns = columns
     self.widest = columns.max() ?? 0
     self.digits = max(String(highest).count, 1)
@@ -570,7 +579,7 @@ final class DiffView: ExpoView, UICollectionViewDataSource, UICollectionViewDele
 
     guard kind == .added || kind == .removed || kind == .context else { return nil }
     let line = kind == .removed ? rows.oldLines[row] : rows.newLines[row]
-    let text = String(rows.lines[row])
+    let text = String(rows.source[row])
     let comment = words.comment
     let copy = words.copy
 

@@ -32,15 +32,13 @@ export const THREAD_PARTS = "\u001f";
 /** What a thread row says where it stands on no line the diff shows, before its detail. */
 const UNPLACED_WORDS = "On a line this diff doesn't show";
 
-/** How many columns a tab is drawn as, so a row's width is its length in characters, as the view counts it. */
-const TAB_COLUMNS = 4;
-
 /**
  * A patch's rows as the view takes them, each column one value: the rows'
  * kinds, a letter each (`DRAWN_ROW`); their line numbers on the old side
  * and the new, `NO_LINE` where a row stands on no side of it; and their
- * words, a row to a line, a tab spelled as `TAB_COLUMNS` spaces, so every
- * character stands one column wide in the monospaced face.
+ * words, a row to a line, as the patch wrote them, tabs and all, so a
+ * line copied from the view is the file's own; the view draws a tab as
+ * spaces for its width.
  */
 export interface DiffColumns {
   readonly kinds: string;
@@ -95,7 +93,6 @@ export function drawnDiff(
   const newLines: number[] = [];
   const lines: string[] = [];
   const placedThreads = new Map<number, ReviewThread>();
-  const tab = " ".repeat(TAB_COLUMNS);
   const own = threads.filter((thread) => thread.path === path && thread.comments.length > 0);
 
   // The threads by the line they stand on, on each side, where they stand on one.
@@ -140,7 +137,7 @@ export function drawnDiff(
       kinds.push(ROW_LETTER[row.kind]);
       oldLines.push(row.oldLine ?? NO_LINE);
       newLines.push(row.newLine ?? NO_LINE);
-      lines.push(row.text.replaceAll("\t", tab));
+      lines.push(row.text);
 
       // A removed row stands the old side's threads under it, an added row the new side's, and a row of context both.
       const under = [
