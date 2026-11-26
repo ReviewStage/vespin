@@ -20,7 +20,7 @@ import {
   type SettingsView,
 } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { Announcer, cssCustomProperties, RetryOffered, TimeTicks } from "@repo/ui";
+import { Announcer, cssCustomProperties, TimeTicks } from "@repo/ui";
 import { playCompletionSound } from "@repo/ui/completion-sound";
 import { useLinkOpener } from "@repo/ui/held-link";
 import { LINK_ROUTE, linkRoute } from "@repo/ui/link-route";
@@ -50,7 +50,7 @@ import { useAutomationsRoute } from "./automations-route.js";
 import { useBillingShown, useOpenTaskBilling } from "./billing.js";
 import { StandingCallProvider } from "./call/standing-call.js";
 import { useDraftsOwner } from "./composer-drafts.js";
-import { useConnected } from "./connection.js";
+import { ServiceReachedByWindow } from "./connection.js";
 import { CommandPalette } from "./desktop/command-palette.js";
 import { DesktopShell } from "./desktop/desktop-shell.js";
 import { ListedAutomations } from "./desktop/listed-automations.js";
@@ -971,8 +971,6 @@ function AppWindow(): React.JSX.Element {
     ],
   );
 
-  const connected = useConnected();
-
   // A narrow room's page of Settings is a step after its list, which its way back steps back to (`places/narrow-backs.ts`).
   const settingsBack = useSteadyDoor(() =>
     backs.list(ROUTED_PLACE.SETTINGS, settingsPlace.listAddress, settingsPlace.list),
@@ -1006,8 +1004,8 @@ function AppWindow(): React.JSX.Element {
                         <ListedAutomations tasks={tasks}>
                           {/* A maintainer's sign-in as the member, said above the stage on the web. */}
                           <ViewingAs />
-                          {/* A failure offers no Retry while the app does not reach the service, whose reads start again once it does. */}
-                          <RetryOffered value={connected}>
+                          {/* A failure offers no Retry while the app does not reach the service, and a read that failed for it says nothing beside the Offline mark; its reads start again once it does. */}
+                          <ServiceReachedByWindow>
                             <div
                               ref={stage.ref}
                               className="app-stage"
@@ -1079,7 +1077,7 @@ function AppWindow(): React.JSX.Element {
                                 />
                               </ShellRoomContext>
                             </div>
-                          </RetryOffered>
+                          </ServiceReachedByWindow>
                         </ListedAutomations>
                       </GitHubConnectProvider>
                     </RepositoryRemedyProvider>

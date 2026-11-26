@@ -148,7 +148,6 @@ import {
 } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlaceOf } from "../automations-route.js";
-import { useConnected } from "../connection.js";
 import { LinkWorkspaceProvider, openInTabOf } from "../copy-link-item.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
@@ -2382,7 +2381,6 @@ function SidebarColumn({
   const pins = useSteadyDoors(usePins(control.typedNamesNow));
   const tasks: SidebarTasks = useMemo(() => ({ ...control, ...pins }), [control, pins]);
   const pictures = useRepositoryPictures();
-  const connected = useConnected();
   const onTasks = tab === PANEL_TAB.TASKS;
   // Whether a row of the column is lifted into a drag, while which an empty Pinned stands to take it.
   const [carrying, setCarrying] = useState(false);
@@ -3346,8 +3344,8 @@ function SidebarColumn({
                             )}
                           </NoteLine>
                         ) : null}
-                        {/* Note that rows the list still holds stand with no line over them while the app is offline, since the Offline mark says why; a list with none still says it. */}
-                        {tasks.listFailed && (connected || unlisted) ? (
+                        {/* Note that the line says nothing while the app is offline, since the Offline mark says why (`ServiceReachedByWindow`). */}
+                        {tasks.listFailed ? (
                           <ErrorState
                             failure={unreadShown(FAILURE_SURFACE.TASKS_READ)}
                             onRetry={tasks.onRetryList}

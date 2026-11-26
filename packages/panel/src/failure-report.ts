@@ -93,6 +93,12 @@ export type ShownFailureReporter = (report: ShownFailureReport) => ShownFailureS
 /** The account's state where no document has been read yet. */
 const ACCOUNT_UNREAD = "unread";
 
+/** The conditions only a write fails with: not kept, or another write landed first. */
+const WRITE_CONDITIONS: ReadonlySet<unknown> = new Set([
+  FAILURE_CONDITION.NOT_KEPT,
+  FAILURE_CONDITION.CONFLICT,
+]);
+
 /** The answers an act refuses with: refused, or not supported where it was asked. */
 const REFUSED_ANSWERS: ReadonlySet<unknown> = new Set([
   ACTION_RESULT_STATUS.REJECTED,
@@ -207,6 +213,20 @@ function now(): number {
 }
 
 /**
+ * Whether `failure` is a read the window's connection explains while the app
+ * does not reach the service: answering no act, naming no write's
+ * condition, and named no refusal. Note that a write's failure is still said
+ * in place, since the mark does not say what was not kept.
+ */
+function readOfConnection(failure: ShownFailure): boolean {
+  return (
+    failure.act === undefined &&
+    !WRITE_CONDITIONS.has(failure.cause) &&
+    kindOf(failure) !== FAILURE_KIND.REFUSED
+  );
+}
+
+/**
  * What a component showing `failure` is handed: reported the first time it
  * says it stands, answering the same details every time after while it
  * stands, and reported anew once it stood unshown for `LAPSE_MS`.
@@ -233,6 +253,7 @@ function keptFailure(failure: ShownFailure): ReportedFailure {
       if (standing === 0) hiddenAt = now();
     },
     copy: (text) => appPlatform().copyText(text),
+    saidByConnection: readOfConnection(failure),
   };
 }
 
