@@ -1,0 +1,190 @@
+11036 pinned to 4ed7afbe41 (wanted 4ed7afbe41)
+built main 7dd8835266 + #lamark 4ed7afbe41 as 76ad06f520
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 13:47:19 23738 MB
+curve 13:47:49 23127 MB
+curve 13:48:19 22549 MB
+curve 13:48:50 21199 MB
+curve 13:49:20 20979 MB
+curve 13:49:51 21294 MB
+curve 13:50:21 21011 MB
+curve 13:50:52 20822 MB
+curve 13:51:22 20361 MB
+curve 13:51:52 18224 MB
+curve 13:52:22 18302 MB
+curve 13:52:53 18047 MB
+curve 13:53:23 18059 MB
+curve 13:53:54 17929 MB
+curve 13:54:24 17655 MB
+curve 13:54:54 17591 MB
+curve 13:55:24 17431 MB
+curve 13:55:55 17133 MB
+curve 13:56:25 16750 MB
+curve 13:56:55 16154 MB
+curve 13:57:25 15769 MB
+curve 13:57:55 15640 MB
+curve 13:58:25 15487 MB
+curve 13:58:55 15436 MB
+curve 13:59:26 15298 MB
+curve 13:59:56 15265 MB
+curve 14:00:29 15406 MB
+curve 14:01:00 15969 MB
+curve 14:01:34 15763 MB
+curve 14:02:04 15778 MB
+curve 14:02:35 15273 MB
+curve 14:03:05 15231 MB
+curve 14:03:35 15133 MB
+curve 14:04:05 15107 MB
+curve 14:04:35 16335 MB
+curve 14:05:06 19307 MB
+curve 14:05:36 19026 MB
+curve 14:06:06 19292 MB
+curve 14:06:39 18479 MB
+curve 14:07:10 17643 MB
+curve 14:07:40 17604 MB
+curve 14:08:10 16305 MB
+curve 14:08:41 15665 MB
+curve 14:09:11 15565 MB
+curve 14:09:41 15380 MB
+curve 14:10:11 15285 MB
+curve 14:10:43 15269 MB
+curve 14:11:13 15163 MB
+curve 14:11:45 15070 MB
+curve 14:12:15 14954 MB
+curve 14:12:46 14742 MB
+curve 14:13:16 14936 MB
+curve 14:13:46 14739 MB
+curve 14:14:16 14721 MB
+curve 14:14:46 14803 MB
+curve 14:15:16 14789 MB
+curve 14:15:47 14558 MB
+curve 14:16:17 14685 MB
+curve 14:16:49 14915 MB
+curve 14:17:19 14453 MB
+curve 14:17:50 14415 MB
+curve 14:18:20 15048 MB
+curve 14:18:50 14864 MB
+curve 14:19:20 14753 MB
+curve 14:19:50 14559 MB
+curve 14:20:21 14646 MB
+curve 14:20:53 13994 MB
+curve 14:21:24 13957 MB
+curve 14:21:56 13724 MB
+curve 14:22:26 12687 MB
+curve 14:22:58 12760 MB
+curve 14:23:30 11694 MB
+curve 14:24:00 13474 MB
+curve 14:24:30 14161 MB
+curve 14:25:00 13271 MB
+curve 14:25:30 13427 MB
+curve 14:26:00 13141 MB
+curve 14:26:31 13081 MB
+curve 14:27:01 13312 MB
+curve 14:27:31 13096 MB
+curve 14:28:01 12889 MB
+curve 14:28:31 12701 MB
+curve 14:29:02 11858 MB
+curve 14:29:34 12370 MB
+curve 14:30:04 12166 MB
+curve 14:30:34 11755 MB
+curve 14:31:05 11674 MB
+curve 14:31:35 11593 MB
+curve 14:32:05 11536 MB
+curve 14:32:35 11598 MB
+curve 14:33:05 11624 MB
+curve 14:33:36 13178 MB
+curve 14:34:06 12850 MB
+curve 14:34:36 12601 MB
+curve 14:35:06 12709 MB
+curve 14:35:36 13270 MB
+curve 14:36:07 18960 MB
+curve 14:36:37 18941 MB
+curve 14:37:07 18895 MB
+curve 14:37:37 18898 MB
+curve 14:38:07 18741 MB
+curve 14:38:38 18675 MB
+curve 14:39:08 18629 MB
+curve 14:39:38 18607 MB
+curve 14:40:08 18454 MB
+curve 14:40:38 18299 MB
+curve 14:41:09 18610 MB
+curve 14:41:39 18592 MB
+curve 14:42:09 18519 MB
+curve 14:42:39 18354 MB
+curve 14:43:10 17891 MB
+curve 14:43:41 17265 MB
+curve 14:44:12 16468 MB
+curve 14:44:43 15847 MB
+curve 14:45:13 15338 MB
+curve 14:45:44 14961 MB
+curve 14:46:14 14504 MB
+curve 14:46:45 14686 MB
+curve 14:47:16 14079 MB
+curve 14:47:46 13537 MB
+curve 14:48:17 13903 MB
+curve 14:48:47 14070 MB
+curve 14:49:17 13956 MB
+curve 14:49:47 13479 MB
+curve 14:50:17 13238 MB
+curve 14:50:47 13170 MB
+curve 14:51:18 12995 MB
+curve 14:51:48 12898 MB
+curve 14:52:18 12895 MB
+curve 14:52:49 12813 MB
+curve 14:53:20 12658 MB
+curve 14:53:50 12337 MB
+curve 14:54:20 12215 MB
+curve 14:54:50 12325 MB
+curve 14:55:21 12239 MB
+curve 14:55:51 12154 MB
+curve 14:56:21 11852 MB
+curve 14:56:51 11587 MB
+curve 14:57:21 11905 MB
+curve 14:57:52 11275 MB
+curve 14:58:22 12788 MB
+curve 14:58:52 12186 MB
+curve 14:59:22 12142 MB
+curve 14:59:53 12761 MB
+curve 15:00:23 12589 MB
+curve 15:00:53 12490 MB
+curve 15:01:23 11932 MB
+curve 15:01:53 11975 MB
+curve 15:02:23 11725 MB
+curve 15:02:53 11631 MB
+curve 15:03:23 11536 MB
+curve 15:03:53 11482 MB
+curve 15:04:23 11482 MB
+curve 15:04:54 11577 MB
+curve 15:05:24 11966 MB
+curve 15:05:54 11275 MB
+curve 15:06:24 10259 MB
+curve 15:06:54 11361 MB
+curve 15:07:25 11043 MB
+curve 15:07:55 10894 MB
+curve 15:08:25 11390 MB
+curve 15:08:55 11797 MB
+BUILD EXIT 0 15:09:25
+sizes: Assets.car 25514824 bytes (main Vmain17.app 24864680), .app 128140 KB (main 126760 KB), zipped .app 48598469 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImage.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageAVIFCoder.framework SDWebImageSVGCoder.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework libavif.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnatlamark.app: replacing existing signature
+plamark-light-opt1: fails 0 shots 4 
+plamark-light-opt2m: fails 0 shots 4 
+plamark-light-opt2h: fails 0 shots 4 
+plamark-light-opt3a: fails 0 shots 4 
+plamark-light-opt3b: fails 0 shots 4 
+plamark-light-opt4: fails 0 shots 4 
+plamark-dark-opt1: fails 0 shots 4 
+plamark-dark-opt2m: fails 0 shots 4 
+plamark-dark-opt2h: fails 0 shots 4 
+plamark-dark-opt3a: fails 0 shots 4 
+plamark-dark-opt3b: fails 0 shots 4 
+plamark-dark-opt4: fails 0 shots 4 
+plamark-light-done-before: fails 1 shots 3 Assert that "1 needs you" is visible... FAILED
+plamark-light-done-after: fails 0 shots 3 
+plamark-dark-done-before: fails 0 shots 3 
+plamark-dark-done-after: fails 0 shots 3 
