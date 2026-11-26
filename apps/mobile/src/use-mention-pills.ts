@@ -1,6 +1,6 @@
 // use-mention-pills.ts -- a composer's field of pills handed what its `@` offers as the trees its native list draws, so the list stands on the keystroke itself, and the presses it sends back acted on against what was offered for the same words.
 
-import { type ComposerPills, offerPressed, useOfferTrees } from "@repo/ui-native";
+import { type ComposerPills, type OfferPress, offerPressed, useOfferTrees } from "@repo/ui-native";
 import type { MentionsOffered, MentionsState } from "./use-mention-offer.js";
 
 /**
@@ -18,5 +18,10 @@ export function useMentionPills(
   const offered: MentionsOffered | undefined = offering ? mentions.offered : undefined;
   const trees = useOfferTrees(offered, offering ? mentions.bare : undefined);
 
-  return { ...pills, offer: { trees, onPress: (press) => offerPressed(press, offered) } };
+  // Note that a press acts only where its words are those typed now, never the deferred search's alone, so no pick lands on a row of words already moved past.
+  const onPress = (press: OfferPress) => {
+    if (press.query === mentions.typed) offerPressed(press, offered);
+  };
+
+  return { ...pills, offer: { trees, onPress } };
 }

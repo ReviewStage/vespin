@@ -78,7 +78,16 @@ export function useSuggestionKeys(
       onKey: (key) => {
         const now = latest.current;
 
-        if (key !== LIST_KEY.PICK) return setChosen(movedChoice(now.count, now.at, key));
+        // Note that each arrow moves from the choice the arrows before it queued, so two pressed before a render both count.
+        if (key !== LIST_KEY.PICK) {
+          return setChosen((was) =>
+            movedChoice(
+              now.count,
+              was === undefined || now.count === 0 ? undefined : Math.min(was, now.count - 1),
+              key,
+            ),
+          );
+        }
 
         if (now.at !== undefined) now.pick(now.at);
       },

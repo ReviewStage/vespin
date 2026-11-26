@@ -660,12 +660,13 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
   private var offerLetGo = false
 
   /// A press made while the list's tree was older than the words, held until a tree answering them lands.
-  private enum OfferHeld {
+  private enum OfferAct {
     case pick(String)
     case back
   }
 
-  private var offerHeld: OfferHeld?
+  /// A held press and the words it was pressed under, which it acts on only while they still stand.
+  private var offerHeld: (act: OfferAct, word: String)?
 
   /// Whether the field's own list stands.
   var offerShown: Bool { offerBare != nil && offerList.shown }
@@ -1052,6 +1053,22 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
 
   /// Tells JavaScript the runs, so it writes the Markdown with a marker typed as words escaped, and the caret's line before and after it with each pill as the object character.
   private func tell() {
+    let line = caretLine()
+    let selected = textView.selectedRange
+
+    onWords([
+      "runs": heldRuns().map(\.told),
+      "before": line.before,
+      "after": line.after,
+      "caret": line.caret,
+      "selected": selected.length > 0,
+      "changes": changes,
+    ])
+    followOffer(before: line.before, selected: selected.length > 0)
+  }
+
+  /// The caret's line, its words before the caret and after the selection, each pill the object character.
+  private func caretLine() -> (before: String, after: String, caret: Int) {
     let string = textView.textStorage.string as NSString
     let selected = textView.selectedRange
     let caret = min(selected.location, string.length)
@@ -1062,17 +1079,10 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     let nextBreak = string.range(of: "\n", options: [], range: rest)
     let lineEnd = nextBreak.location == NSNotFound ? string.length : nextBreak.location
 
-    onWords([
-      "runs": heldRuns().map(\.told),
-      "before": string.substring(with: NSRange(location: lineStart, length: caret - lineStart)),
-      "after": string.substring(with: NSRange(location: selectionEnd, length: lineEnd - selectionEnd)),
-      "caret": caret,
-      "selected": selected.length > 0,
-      "changes": changes,
-    ])
-    followOffer(
-      before: string.substring(with: NSRange(location: lineStart, length: caret - lineStart)),
-      selected: selected.length > 0
+    return (
+      string.substring(with: NSRange(location: lineStart, length: caret - lineStart)),
+      string.substring(with: NSRange(location: selectionEnd, length: lineEnd - selectionEnd)),
+      caret
     )
   }
 
@@ -1096,13 +1106,15 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     guard offerBare != nil else { return }
     let word = selected ? nil : atWordQuery(before)
     offerWord = word
+    // Note that a press held under other words is let go, so it never lands on a row the words have moved past.
+    if let held = offerHeld, held.word != word { offerHeld = nil }
     guard word != nil else {
       offerLetGo = false
       offerHeld = nil
       offerList.hide()
       return
     }
-    guard !offerLetGo, !offerList.shown, let tree = offerNewest ?? offerBare else { return }
+    guard textView.isFirstResponder, !offerLetGo, !offerList.shown, let tree = offerNewest ?? offerBare else { return }
     offerList.model.tree = tree
     offerList.model.chosen = nil
     offerList.show(over: self)
@@ -1123,7 +1135,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
       offerList.model.tree = tree
       offerList.model.chosen = nil
     }
-    if !offerList.shown, offerWord != nil, !offerLetGo { offerList.show(over: self) }
+    if textView.isFirstResponder, !offerList.shown, offerWord != nil, !offerLetGo { offerList.show(over: self) }
     releaseHeld()
   }
 
@@ -1136,6 +1148,8 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
       offerList.hide()
     } else if first, textView.isFirstResponder {
       offerList.prepare()
+      // Note that an `@` typed before the field held what one offers stands its list now, rather than at the next key.
+      followOffer(before: caretLine().before, selected: textView.selectedRange.length > 0)
     }
   }
 
@@ -1150,7 +1164,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     guard let shown = offerList.model.tree, group < shown.groups.count, row < shown.groups[group].rows.count else { return }
     let id = shown.groups[group].rows[row].id
     guard let current = offerCurrent, let place = current.find(id) else {
-      offerHeld = .pick(id)
+      offerHeld = offerWord.map { (.pick(id), $0) }
       return
     }
     onOffer(["kind": "pick", "query": current.query, "group": place.group, "id": id])
@@ -1159,7 +1173,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
   /// The way back pressed, sent or held as a row is.
   private func offerPressBack() {
     guard let current = offerCurrent else {
-      offerHeld = .back
+      offerHeld = offerWord.map { (.back, $0) }
       return
     }
     onOffer(["kind": "back", "query": current.query])
@@ -1167,9 +1181,9 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
 
   /// Acts on a press held for a tree answering the words, now that one has landed; a row it no longer holds is let go.
   private func releaseHeld() {
-    guard let held = offerHeld, let current = offerCurrent else { return }
+    guard let held = offerHeld, let current = offerCurrent, current.query == held.word else { return }
     offerHeld = nil
-    switch held {
+    switch held.act {
     case .pick(let id):
       guard let place = current.find(id) else { return }
       onOffer(["kind": "pick", "query": current.query, "group": place.group, "id": id])

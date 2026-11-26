@@ -81,18 +81,16 @@ function ThreadComposer({
   const dictated = useDictation(composer.words, composer.onWords);
   const said = useNewestNote([composer.note, dictated.note, note]);
 
-  const head =
-    composer.skills === undefined && said === undefined ? undefined : (
-      <>
-        {composer.skills === undefined ? null : (
-          <SkillSuggestions
-            skills={composer.skills.skills}
-            empty={composer.skills.empty}
-            onPick={composer.skills.pick}
-          />
-        )}
-        {said === undefined ? null : <AskNote words={said} />}
-      </>
+  const head = said === undefined ? undefined : <AskNote words={said} />;
+
+  // Note that what a `/` offers pops over the composer in the system's popover, as on the agent's own page.
+  const offer =
+    composer.skills === undefined ? undefined : (
+      <SkillSuggestions
+        skills={composer.skills.skills}
+        empty={composer.skills.empty}
+        onPick={composer.skills.pick}
+      />
     );
 
   return (
@@ -107,6 +105,7 @@ function ThreadComposer({
       onDropPictures={composer.dropPictures}
       onLongPaste={composer.pasteText}
       head={head}
+      offer={offer}
       focusAsk={composer.focusAsk}
       pills={composer.pills}
     />

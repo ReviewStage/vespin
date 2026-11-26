@@ -475,7 +475,7 @@ function useMentionState(
     return { sources, named, marks };
   }, [
     catalog,
-    asking,
+    reading,
     step,
     agents,
     tasks,
@@ -596,6 +596,7 @@ function useMentionState(
   return {
     offered: !asking || query === undefined ? undefined : offeredOf(offer, query),
     bare: candidates === undefined ? undefined : offeredOf(bareOffer, ""),
+    typed: word?.query,
   };
 }
 
@@ -605,6 +606,8 @@ export interface MentionsState {
   readonly offered: MentionsOffered | undefined;
   /** What a bare `@` offers, held ready while the field holds the keyboard, which a native list stands the moment an `@` is typed; none before the place is read. */
   readonly bare: MentionsOffered | undefined;
+  /** The words after the `@` the caret stands in as last told, ahead of the deferred search; none while no `@` word stands. */
+  readonly typed: string | undefined;
 }
 
 /**

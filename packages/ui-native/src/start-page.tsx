@@ -389,9 +389,19 @@ export function StartPage(props: StartPageProps) {
   // Note that a field of pills stands each picture attached in its words, so no row over the field repeats them.
   const shown = props.pills === undefined ? pictures : [];
 
+  const offered =
+    skills === undefined ? undefined : (
+      <SkillSuggestions skills={skills.skills} empty={skills.empty} onPick={skills.onPick} />
+    );
+
+  // Note that only a field of pills stands in the popover what a `/` offers, so a plain field keeps it over the field in its head.
+  const popped = props.pills === undefined ? undefined : offered;
+  const inHead = props.pills === undefined ? offered : undefined;
+
   const head =
-    shown.length === 0 && notes.length === 0 ? undefined : (
+    shown.length === 0 && notes.length === 0 && inHead === undefined ? undefined : (
       <>
+        {inHead}
         <AttachedPictures pictures={shown} onDetach={onDetach} />
         {notes.map((note) => (
           <StartNote key={note} words={note} />
@@ -413,15 +423,7 @@ export function StartPage(props: StartPageProps) {
           onAdd={add.onAdd}
           call={onTalk === undefined ? undefined : { kind: COMPOSER_CALL.TALK, onTalk }}
           head={head}
-          offer={
-            skills === undefined ? undefined : (
-              <SkillSuggestions
-                skills={skills.skills}
-                empty={skills.empty}
-                onPick={skills.onPick}
-              />
-            )
-          }
+          offer={popped}
           tools={chips}
           trailing={trailing}
           dictation={props.dictation}
