@@ -236,8 +236,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
 /** ⌘Return: a bare task from a box with nothing in it. */
 const BARE_CHORD: ShortcutChord = { key: SHORTCUT_KEY.ENTER };
 
-/** Each purpose's head row title, before the repository's chip: drawn for an automation's, and named to a reader alone for a task's. */
-const PURPOSE_HEADING = {
+/** Each purpose's head row title, before the repository's chip: drawn for an automation's, and named to a reader alone for a task's; a phone's sheet draws it in its own head (`titledByOwner`). */
+export const PURPOSE_HEADING = {
   [NEW_TASK_PURPOSE.TASK]: "New task",
   [NEW_TASK_PURPOSE.AUTOMATION]: CREATE_WITH_AGENT_WORDS.TITLE,
 } as const satisfies Record<NewTaskPurpose, string>;
@@ -369,6 +369,7 @@ export function NewTaskComposer({
   focusedByOwner = false,
   takesFocus = true,
   titleId,
+  titledByOwner = false,
   listSide,
   purpose = NEW_TASK_PURPOSE.TASK,
   notices = NOTICE_LOOK.INSET,
@@ -388,6 +389,8 @@ export function NewTaskComposer({
   takesFocus?: boolean;
   /** The id the head row's title stands under, which names the dialog's card. */
   titleId?: string | undefined;
+  /** Whether the owner draws the purpose's title in a head of its own, as a phone's sheet does, so the head row draws none. */
+  titledByOwner?: boolean | undefined;
   /** Which side of the caret's line an `@` or `/` list opens: over it in the dialog, under it on Home, whose card stands near the page's top, where a list risen over it is cut off under the page's head. */
   listSide: MentionMenuSide;
   /** What the card starts; a task's agent where none is named. */
@@ -835,7 +838,7 @@ export function NewTaskComposer({
       ) : null}
       <div className="new-task-head flex min-w-0 flex-wrap items-center gap-item-gap">
         <div className="new-task-title flex min-w-0 max-w-full items-center gap-item-gap">
-          {forAutomation ? (
+          {titledByOwner ? null : forAutomation ? (
             <Text
               variant={TEXT_VARIANT.DIALOG}
               as={TEXT_ELEMENT.H2}

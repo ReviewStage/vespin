@@ -339,8 +339,8 @@ export function ThreadComposer({
   /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen. */
   readonly inColumn?: boolean | undefined;
 }) {
-  const { draft, onDraft, note: sendNote, answerReady, send, asNew, setAsNew, start } = answer;
-  const { nods, acknowledge } = answer;
+  const { draft, onDraft, note: sendNote, answerReady, sendTyped, asNew, setAsNew } = answer;
+  const { nods } = answer;
   const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
   // What the composer reads off the thread's agent, read as the agent's page reads it, so the two stand alike.
   const box = useAgentBox(item.agentId, useFollowedAgent(item.agentId), inColumn === true);
@@ -414,7 +414,7 @@ export function ThreadComposer({
     pills: pillField.pills,
     // Note that a new thread starts from words alone, so no picked answer lights Send for one.
     sendable: !asNew && (answerReady || nods),
-    onSend: () => (asNew ? start() : nods ? acknowledge() : send()),
+    onSend: sendTyped,
     sendAs: nods ? GOT_IT_SEND : undefined,
     // Note that what a send that did not go said stands in the box's head with the pictures, beside the words it put back, as a comment's reply says it.
     head,

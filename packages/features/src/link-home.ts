@@ -56,7 +56,7 @@ export const APP_HOME_LINK = `${APP_LINK_PROTOCOL}//${LINK_HOME.HOST}/`;
  */
 export const PANEL_PATH = "/app";
 
-/** Where the web build emits the panel's static files, the harness marks and the voice clips (`apps/web/scripts/panel-build.ts`). */
+/** Where the web build emits the panel's static files, the voice clips (`apps/web/scripts/panel-build.ts`). */
 export const PANEL_ASSET_BASE = `${PANEL_PATH}/`;
 
 const HOSTS: ReadonlySet<string> = new Set([LINK_HOME.HOST, ...LINK_HOST_ALIASES]);

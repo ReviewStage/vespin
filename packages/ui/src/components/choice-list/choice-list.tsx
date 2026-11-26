@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 import { cn } from "../../cn.js";
 import { ICON_STROKE_WIDTH } from "../../icons/icon-size.js";
 import { Check } from "../../icons/icons.js";
-import { pulsePress } from "../../press-pulse.js";
 import { ignoredByReplay, REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import { STATUS_TONE, type StatusTone } from "../../status-tone.js";
 import {
@@ -532,9 +531,6 @@ function ChoiceRow({
       event.preventBaseUIHandler();
 
       if (readOnly) return;
-      // Note that a row's radio or box is what gives, as a checkbox's box does; a pill gives whole.
-      const control = event.currentTarget.querySelector<HTMLElement>(":scope > .ui-choice-control");
-      pulsePress(control ?? event.currentTarget);
       onPress();
     },
     // Note that Enter presses a row as a button's Enter does, which Base UI's radio and checkbox refuse.

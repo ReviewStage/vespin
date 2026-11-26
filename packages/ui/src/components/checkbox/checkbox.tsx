@@ -1,6 +1,5 @@
-import { type ReactNode, useRef } from "react";
+import type { ReactNode } from "react";
 import { cn } from "../../cn.js";
-import { pulsePress } from "../../press-pulse.js";
 import { Checkbox as ShadcnCheckbox } from "../../shadcn/checkbox.js";
 
 /**
@@ -91,7 +90,6 @@ export function Checkbox({
   detail?: ReactNode;
 }): React.JSX.Element {
   const words = label === undefined;
-  const box = useRef<HTMLElement | null>(null);
 
   const checkbox = (
     // biome-ignore lint/a11y/noLabelWithoutControl: the box inside is Base UI's checkbox, whose native input the label's press reaches, which the rule cannot see through a component.
@@ -106,7 +104,6 @@ export function Checkbox({
       data-words={words}
     >
       <ShadcnCheckbox
-        ref={box}
         className={cn("ui-checkbox-box", words && BOX_ON_LINE)}
         id={id}
         name={name}
@@ -122,9 +119,6 @@ export function Checkbox({
         // A read-only box hands nothing on, so it stays as its caller holds it.
         onCheckedChange={(next) => {
           if (readOnly) return;
-
-          // Note that a box ticked springs up by its own tick, which outranks the pulse, so the pulse is an unticking's.
-          if (box.current !== null) pulsePress(box.current);
           onChange(mixed ? true : next);
         }}
       />

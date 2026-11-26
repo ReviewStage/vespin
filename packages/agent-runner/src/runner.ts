@@ -1346,6 +1346,7 @@ const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunc
 
   const posted = yield* openEventSink({
     url: config.eventsUrl,
+    picturesUrl: config.picturesUrl,
     bearer,
     firstSequence: config.firstSequence,
     secrets,

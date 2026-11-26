@@ -126,6 +126,7 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { failureShown } from "../failure-report.js";
 import { type Directory, useMemberDirectory, usePerson } from "../member-directory.js";
 import { useShortcutTarget } from "../shortcut-target.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
@@ -1665,6 +1666,8 @@ export function InboxPane({
   const headingAway = useHeadingAway(board, heading, item.id);
   // A phone heads the item with its own row, the item standing alone in the list's place.
   const phoneHead = phone !== undefined && onBack !== undefined;
+  // Note that a phone docks the box at the screen's foot, under the thread, as an agent's page does, its open ask's controls standing in it as ever.
+  const docked = usePhoneRoom();
   // An open ask waits on its task's assignee, else whoever started its agent, as the list says, though any member may answer it.
   const waitingOn = readersItem(item, readerId) ? undefined : inboxWaitsOn(item);
   // Note that the agent and the pictures are handed to the thread's messages as the same objects while they say the same, so a message is drawn again only where it moved (`ThreadMessage`).
@@ -1703,8 +1706,11 @@ export function InboxPane({
     [thread, events, pending, undelivered],
   );
 
-  // The draft reply stands after the thread's rows as its last, under a key of its own that no row takes.
-  const rowKeys = useMemo(() => [...rows.map((row) => row.key), DRAFT_ROW_KEY], [rows]);
+  // The draft reply stands after the thread's rows as its last, under a key of its own that no row takes; docked, it stands under the thread instead.
+  const rowKeys = useMemo(
+    () => [...rows.map((row) => row.key), ...(docked ? [] : [DRAFT_ROW_KEY])],
+    [rows, docked],
+  );
 
   // The reader's own newest reply, on its way or landed, which takes the thread to its end as it lands, as TanStack's example does on a send.
   const ownLast = rows.findLast(
@@ -1768,29 +1774,33 @@ export function InboxPane({
     };
   };
 
-  const draftReply = (place: VirtualRowPlace) => (
+  const answerBox = (
     <AnswerMentions value={mentions}>
-      <DraftReply readerId={readerId} place={place}>
-        <InboxAnswerBox
-          item={item}
-          readerId={readerId}
-          control={control}
-          agent={by.subject.agent}
-          agents={agents}
-          thread={thread}
-          controls={question}
-          skills={agents.readSkills}
-          keywords={answerKeywords(holder, item)}
-          replyScope={board}
-          onQuoteDoor={onQuoteDoor}
-          onQuoted={onQuoted}
-          onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
-          newThread={
-            newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
-          }
-        />
-      </DraftReply>
+      <InboxAnswerBox
+        item={item}
+        readerId={readerId}
+        control={control}
+        agent={by.subject.agent}
+        agents={agents}
+        thread={thread}
+        controls={question}
+        skills={agents.readSkills}
+        keywords={answerKeywords(holder, item)}
+        replyScope={board}
+        onQuoteDoor={onQuoteDoor}
+        onQuoted={onQuoted}
+        onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
+        newThread={
+          newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
+        }
+      />
     </AnswerMentions>
+  );
+
+  const draftReply = (place: VirtualRowPlace) => (
+    <DraftReply readerId={readerId} place={place}>
+      {answerBox}
+    </DraftReply>
   );
 
   const itemActions = (
@@ -1885,11 +1895,12 @@ export function InboxPane({
         />
       )}
       <Fill className="desktop-inbox">
-        <Conversation list={board}>
-          <ConversationContent
-            className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
-          >
-            <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
+        {/* Note that the item's words stand around the thread and the docked box alike, so an ask's pictures in the box read and open as the thread's do. */}
+        <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
+          <Conversation list={board}>
+            <ConversationContent
+              className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
+            >
               <Subject
                 item={item}
                 heading={setHeading}
@@ -1978,10 +1989,11 @@ export function InboxPane({
                   }}
                 </ConversationRows>
               </ReplyDoorProvider>
-            </ItemWords>
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
+            </ConversationContent>
+            <ConversationScrollButton />
+          </Conversation>
+          {docked ? <div className="inbox-answer-dock flex-none">{answerBox}</div> : null}
+        </ItemWords>
       </Fill>
     </section>
   );

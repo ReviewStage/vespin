@@ -110,7 +110,6 @@ import {
   useId,
   useLayoutEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { createPortal } from "react-dom";
@@ -221,8 +220,8 @@ import { useFileTreeWidth } from "./folded-groups.js";
 import { type KeptPage, keptPagesAfter } from "./kept-pages.js";
 import { AgentMenuTab } from "./main-tabs.js";
 import { PULL_REQUEST_TAB, pullRequestTabLoaded, TURN_CHANGES_TAB } from "./pages-on-demand.js";
-import { paneTiming, pastRightEdge } from "./pane-motion.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneFindGroups } from "./phone-head.js";
+import { SHELL_MARK, useShellMark } from "./shell-marks.js";
 import {
   type AddEntry,
   AddTabButton,
@@ -282,18 +281,16 @@ interface StripActivity {
  * here too, for as long as the panel is drawn, so its card can preview its
  * latest step once another tab is shown.
  *
- * Shutting the panel, or bringing it back from full screen, changes the
- * window's layout at once, and the panel keeps drawing what it held until its
- * exit has played (`useSidePanelDrawing`); its arrivals are pane-motion.tsx's.
- * The window going to another stop plays neither, since navigation does not
- * travel (docs/DESIGN.md): the panel the new stop stands, or none, lands at once.
+ * Shutting the panel, opening it, or bringing it back from full screen
+ * changes the window's layout at once: nothing plays, and the panel the new
+ * state stands, or none, is drawn on that frame.
  */
 
 /**
  * What the panel leaves the document beside it, as desktop.css declares it
  * on the task's area: the panel is dragged no wider than the area less this,
- * and has no greatest width of its own. `.side-panel`'s `max-width` holds the
- * same room while the window narrows.
+ * and has no greatest width of its own. The task's grid holds the same room
+ * while the window narrows, its column no wider than the area less this.
  */
 const DOCUMENT_RESERVE_PROPERTY = "--document-reserve";
 
@@ -309,15 +306,6 @@ function documentReserve(area: HTMLElement): number {
 
   return Number.isFinite(declared) ? declared : SIDE_PANEL_WIDTH.MIN;
 }
-
-/** How the drawn panel is on its way to the one asked for, if it is: shutting, or leaving full screen. */
-const PANEL_LEAVING = {
-  NONE: "none",
-  CLOSE: "close",
-  FULL_SCREEN: "full-screen",
-} as const;
-
-type PanelLeaving = (typeof PANEL_LEAVING)[keyof typeof PANEL_LEAVING];
 
 /** A task with no page, the same array every render. */
 const NO_PAGES: readonly PageLine[] = [];
@@ -2679,20 +2667,17 @@ export function SidePanelChord({
 
 /**
  * Grows the panel over the document, or brings it back beside it. It stands
- * while the panel is open, so it offers the full-screen chord. A panel on its
- * way out offers none: what it draws is no longer what the panel is.
+ * while the panel is open, so it offers the full-screen chord.
  */
 function FullScreenToggle({
   fullScreen,
-  leaving,
   onToggle,
 }: {
   fullScreen: boolean;
-  leaving: boolean;
   onToggle: () => void;
 }): React.JSX.Element {
   const label = fullScreen ? "Exit full screen" : "Expand panel";
-  useAppCommand(APP_COMMAND.TOGGLE_FULL_SCREEN, leaving ? undefined : onToggle);
+  useAppCommand(APP_COMMAND.TOGGLE_FULL_SCREEN, onToggle);
 
   return (
     <Tooltip label={label} command={APP_COMMAND.TOGGLE_FULL_SCREEN}>
@@ -2706,92 +2691,18 @@ function FullScreenToggle({
   );
 }
 
-/** The panel as the window draws it, which an exit holds behind the one asked for until it has played. */
+/** The panel as the window draws it, and the edge it is resized by. */
 export interface SidePanelDrawing {
-  /** The panel to draw, or nothing while it is shut and gone. */
+  /** The panel to draw, or nothing while it is shut. */
   panel: SidePanelControl | undefined;
-  leaving: PanelLeaving;
-  /** The exit has played: draw the panel as asked. */
-  onLeft: () => void;
   edge: ResizeEdgeHandle;
 }
 
-/** An exit under way, and the panel it holds drawn. */
-interface HeldPanel {
-  leaving: PanelLeaving;
-  panel: SidePanelControl;
-}
-
-function sameDrawing(a: SidePanelControl, b: SidePanelControl): boolean {
-  return (
-    a.open === b.open &&
-    a.stop === b.stop &&
-    a.fullScreen === b.fullScreen &&
-    a.width === b.width &&
-    a.tabs === b.tabs &&
-    a.tab === b.tab
-  );
-}
-
-/** What is drawn for `panel` while `held` stands. */
-function drawnPanel(panel: SidePanelControl, held: HeldPanel | undefined): SidePanelControl {
-  if (held?.leaving === PANEL_LEAVING.CLOSE) return held.panel;
-
-  if (held?.leaving === PANEL_LEAVING.FULL_SCREEN) return { ...panel, fullScreen: true };
-
-  return panel;
-}
-
-/**
- * The exit `panel`'s change asks for, given what was drawn before it, or
- * `undefined` where the change ends the exit under way, or the one standing.
- * Note that a change of stop asks for none and ends the one under way,
- * because the panel shut there belongs to the stop the window left, and
- * drawing it out over the one arrived at is the flash navigation must not
- * make.
- */
-function exitFor(
-  drawn: SidePanelControl,
-  last: SidePanelControl,
-  panel: SidePanelControl,
-  held: HeldPanel | undefined,
-): HeldPanel | undefined {
-  if (last.stop !== panel.stop) return undefined;
-
-  if (last.open && !panel.open) return { leaving: PANEL_LEAVING.CLOSE, panel: drawn };
-
-  if (panel.open && last.fullScreen && !panel.fullScreen) {
-    return { leaving: PANEL_LEAVING.FULL_SCREEN, panel: drawn };
-  }
-
-  // Shown again, or full screen again, before the exit has played.
-  if (panel.open && (held?.leaving === PANEL_LEAVING.CLOSE || panel.fullScreen)) return undefined;
-
-  return held;
-}
-
-/**
- * The panel the task's page draws for the one asked for, and the edge it is
- * resized by. A panel shut, or brought back from full screen, keeps drawing
- * what it last held until its exit has played, as docs/DESIGN.md asks of
- * anything leaving. The edge's drag is held here rather than in the panel,
- * because a drag that shuts the panel goes on, and may open it again.
- */
+/** Note that the edge's drag is held here rather than in the panel, because a drag that shuts the panel goes on, and may open it again. */
 export function useSidePanelDrawing(panel: SidePanelControl): SidePanelDrawing {
-  const [last, setLast] = useState(panel);
-  const [held, setHeld] = useState<HeldPanel | undefined>(undefined);
-
-  if (!sameDrawing(last, panel)) {
-    setLast(panel);
-    setHeld(exitFor(drawnPanel(last, held), last, panel, held));
-  }
-
-  const onLeft = useCallback(() => setHeld(undefined), []);
-  const drawn = drawnPanel(panel, held);
-
   const edge = useResizeEdge({
     side: RESIZE_EDGE_SIDE.LEFT,
-    width: drawn.width,
+    width: panel.width,
     bounds: SIDE_PANEL_WIDTH,
     reserve: documentReserve,
     label: "Resize panel",
@@ -2801,66 +2712,17 @@ export function useSidePanelDrawing(panel: SidePanelControl): SidePanelDrawing {
     onToggleExpanded: panel.expands ? panel.onToggleFullScreen : undefined,
   });
 
-  return {
-    panel: drawn.open ? drawn : undefined,
-    leaving: held?.leaving ?? PANEL_LEAVING.NONE,
-    onLeft,
-    edge,
-  };
+  return { panel: panel.open ? panel : undefined, edge };
 }
 
 /**
- * Plays the drawn panel's exit at `aside` and answers `onLeft` once it has:
- * out past the window's right, keeping its gap from the document's edge as
- * that follows it (`pastRightEdge`), or, leaving full screen, covered from its left
- * edge to where it will stand beside the document, which `room` already
- * marks. Each starts from wherever an arrival under way had brought it. With
- * no motion to play it answers at once, before the frame is drawn.
- */
-function playExit(
-  aside: HTMLElement,
-  room: HTMLElement | null,
-  leaving: PanelLeaving,
-  onLeft: () => void,
-): (() => void) | undefined {
-  const timing = paneTiming(aside);
-
-  if (timing === undefined) {
-    onLeft();
-
-    return undefined;
-  }
-
-  const drawn = getComputedStyle(aside);
-
-  const beside =
-    room === null ? 0 : room.getBoundingClientRect().left - aside.getBoundingClientRect().left;
-
-  const keyframes =
-    leaving === PANEL_LEAVING.CLOSE
-      ? [{ transform: drawn.transform }, { transform: pastRightEdge(aside) }]
-      : [
-          { clipPath: drawn.clipPath === "none" ? "inset(0)" : drawn.clipPath },
-          { clipPath: `inset(0 0 0 ${beside}px)` },
-        ];
-
-  for (const running of aside.getAnimations()) running.cancel();
-  const exit = aside.animate(keyframes, { ...timing, fill: "forwards" });
-  exit.onfinish = onLeft;
-
-  return () => exit.cancel();
-}
-
-/**
- * The panel itself, drawn while it is open and through its exit. Full screen,
+ * The panel itself, drawn while it is open. Full screen,
  * it covers the document rather than taking its place, and an empty room
  * holds the panel's own width beside the document beneath, so the document
  * keeps its layout and is there to be uncovered as the panel goes back.
  */
 export function SidePanel({
   panel,
-  leaving,
-  onLeft,
   edge,
   unread,
   holder,
@@ -3186,7 +3048,7 @@ export function SidePanel({
     taskOfTab?.typedNames ?? NO_TYPED_NAMES,
   );
 
-  const keys = shown && leaving === PANEL_LEAVING.NONE;
+  const keys = shown;
   // An agent another place holds, pressed in the tab shown, opens in the middle as the window goes
   // there, and the panel goes along as it stands, so the page read beside it stays.
   const { heldIds } = agents;
@@ -3261,8 +3123,6 @@ export function SidePanel({
   return (
     <PanelFrame
       panel={panel}
-      leaving={leaving}
-      onLeft={onLeft}
       edge={edge}
       label="Panel"
       besideToggle={holder === SIDE_PANEL_HOLDER.TASK}
@@ -3513,7 +3373,7 @@ function PanelPhoneHead({
                     .groups(opener)
                     .map((group) =>
                       group.map((item) =>
-                        "items" in item || "panel" in item
+                        "items" in item || "panel" in item || "groups" in item
                           ? item
                           : { ...item, detail: item.detail ?? shown.label, replayMasked: true },
                       ),
@@ -3551,13 +3411,10 @@ function PanelPhoneHead({
  * beside rather than taking its place, and an empty room holds the panel's
  * own width beside it, so what is beneath keeps its layout and is there to
  * be uncovered as the panel goes back. Where the room holds it only full
- * screen it has neither the button nor the edge, and keeps no room. It plays its own exits (`playExit`);
- * its arrival is played by the pane motion around it (`pane-motion.tsx`).
+ * screen it has neither the button nor the edge, and keeps no room.
  */
 function PanelFrame({
   panel,
-  leaving,
-  onLeft,
   edge,
   label,
   besideToggle = false,
@@ -3588,52 +3445,38 @@ function PanelFrame({
   onLeavingHere?: ((address: Address) => void) | undefined;
   children: React.ReactNode;
 }): React.JSX.Element {
-  const aside = useRef<HTMLElement>(null);
-  const room = useRef<HTMLDivElement>(null);
   const toggleRoom = useSelector(fullScreenRoomStore);
   const beside = besideToggle ? toggleRoom : null;
-  useLayoutEffect(() => {
-    if (leaving === PANEL_LEAVING.NONE || aside.current === null) return;
-
-    return playExit(aside.current, room.current, leaving, onLeft);
-  }, [leaving, onLeft]);
+  useShellMark(SHELL_MARK.SIDE_PANEL);
+  useShellMark(panel.fullScreen ? SHELL_MARK.FULL_SCREEN_PANEL : undefined);
 
   // Escape takes the panel out of filling the window, wherever it fills it: beside its document again, or shut by
   // its way back where the room holds it only full screen (`places/narrow-backs.ts`).
   useAppCommand(
     APP_COMMAND.EXIT_FULL_SCREEN,
-    panel.fullScreen && leaving === PANEL_LEAVING.NONE ? panel.onToggleFullScreen : undefined,
+    panel.fullScreen ? panel.onToggleFullScreen : undefined,
   );
 
   // Note that a tab that never fills the window offers no full screen, its kind's own answer (`stripTabExpands`).
   const fullScreenToggle =
     panel.fullScreenOnly || !panel.expands ? null : (
-      <FullScreenToggle
-        fullScreen={panel.fullScreen}
-        leaving={leaving !== PANEL_LEAVING.NONE}
-        onToggle={panel.onToggleFullScreen}
-      />
+      <FullScreenToggle fullScreen={panel.fullScreen} onToggle={panel.onToggleFullScreen} />
     );
 
   return (
     <>
-      {/* Shut, it gives the document its room back at once, to glide into. A
-          panel only ever full screen is never uncovered beside it, so it keeps none. */}
-      {panel.fullScreen && !panel.fullScreenOnly && leaving !== PANEL_LEAVING.CLOSE ? (
+      {/* A panel only ever full screen is never uncovered beside it, so it keeps no room. */}
+      {panel.fullScreen && !panel.fullScreenOnly ? (
         <div
-          ref={room}
           className="side-panel-room min-w-0 max-w-side-panel flex-none"
           style={{ width: panel.width }}
         />
       ) : null}
       <aside
-        ref={aside}
         className="side-panel relative flex min-w-0 max-w-side-panel flex-none flex-col border-l border-border"
         aria-label={label}
-        inert={leaving !== PANEL_LEAVING.NONE}
         data-full-screen={String(panel.fullScreen)}
         data-pane-switch={switched ? "" : undefined}
-        data-leaving={leaving === PANEL_LEAVING.NONE ? undefined : leaving}
         data-popover-room=""
         style={panel.fullScreen ? undefined : { width: panel.width }}
       >

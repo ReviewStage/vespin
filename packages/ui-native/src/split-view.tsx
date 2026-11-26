@@ -9,7 +9,6 @@ import {
   NavigationSplitView,
   Section,
   Button as SwiftUIButton,
-  Text,
   Toggle,
   Toolbar,
   ToolbarItem,
@@ -49,6 +48,7 @@ import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { MANAGER_FACE_SEAT, ManagerFace, TaskStatusMark } from "./marks.js";
 import type { MenuLead } from "./row-menu-model.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

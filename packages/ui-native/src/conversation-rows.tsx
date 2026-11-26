@@ -1,6 +1,6 @@
 // conversation-rows.tsx -- a pull request's conversation as rows of its page: each comment or review by who wrote it, where a review left them, and when, its words a short plain preview until opened whole in Markdown; and each review thread by its file and lines, opened to its comments.
 
-import { HStack, RNHostView, Text, VStack } from "@expo/ui/swift-ui";
+import { HStack, RNHostView, VStack } from "@expo/ui/swift-ui";
 import {
   font,
   foregroundStyle,
@@ -20,6 +20,7 @@ import { Markdown } from "./markdown.js";
 import { Avatar, type Face, ToneGlyph } from "./marks.js";
 import { BotTag } from "./pull-request-page.js";
 import type { RowAction, RowSubmenu } from "./row-menu-model.js";
+import { Text } from "./text.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

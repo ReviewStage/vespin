@@ -5,7 +5,8 @@
   "type": "module",
   "description": "The client half of our sync engine: the pool of rows every read draws from, the writes drawn over it, and the door a row write's method is served through; it names no entity kind",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./testing": "./src/testing/index.js"
   },
   "types": "./src/index.ts",
   "scripts": {
@@ -18,6 +19,7 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
+    "@tanstack/db-sqlite-persistence-core": "catalog:",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

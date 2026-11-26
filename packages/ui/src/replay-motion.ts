@@ -1,10 +1,10 @@
 /**
  * replay-motion.ts -- plays an element's one-shot answer again from its start: a
- * button's pulse or shake, a dialog's nudge or shake.
+ * button's turn or shake, a dialog's nudge or shake.
  *
  * The answer is an attribute the element's sheet animates while it stands,
- * on the element itself or on a part of it that moves, as a button's face
- * pulses under the button. It is taken off and set again, so a second press
+ * on the element itself or on a part of it that moves, as a button's glyph
+ * turns under the button. It is taken off and set again, so a second press
  * restarts it rather than landing on one still running, and it leaves as
  * the moving part's animation ends. It is the element's own, which React never draws, so no
  * render clears it mid-play.
@@ -27,7 +27,7 @@ export function replayMotion(
   void element.offsetWidth;
   element.setAttribute(attribute, value);
 
-  // Note that every animation inside it ending bubbles here too, as a pulse
+  // Note that every animation inside it ending bubbles here too, as a turn
   // of a button in a card does, so only the mover's takes the answer away.
   const ended = (event: Event) => {
     if (event.target !== mover) return;

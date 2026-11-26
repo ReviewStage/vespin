@@ -482,6 +482,7 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
       linesUrl: `${ORIGIN}/api/agents/runner-lines`,
       mcpUrl: `${ORIGIN}/api/agents/mcp`,
       transcriptsUrl: `${ORIGIN}/api/agents/runner-transcripts`,
+      picturesUrl: `${ORIGIN}/api/agents/runner-pictures`,
       integrations: () => Effect.succeed([]),
       instructions: () => Effect.succeed("You are a Vespin coding agent."),
       nextSequence: () => Effect.sync(() => sequence.next),

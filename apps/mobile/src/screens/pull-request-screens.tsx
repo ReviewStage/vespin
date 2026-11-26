@@ -7,7 +7,7 @@ import {
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { changesLine } from "@repo/features/changed-files";
+import { filesWords } from "@repo/features/changed-files";
 import {
   iosAgentPullRequestOf,
   iosPullRequestChecksRoute,
@@ -360,6 +360,7 @@ function PullRequestToolbar({
   return (
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+        <Stack.Toolbar.Label>{MENU_WORDS.MORE}</Stack.Toolbar.Label>
         {editTitle === undefined ? null : (
           <Stack.Toolbar.Menu inline>
             <Stack.Toolbar.MenuAction
@@ -902,14 +903,11 @@ function PullRequestPage({
           id={PAGE_ROW.FILES}
           mark={{ symbol: GLYPH.CHANGES, tone: STATUS_TONE.NEUTRAL }}
           title={PAGE_ROW_WORDS.FILES_CHANGED}
-          detail={
+          detail={listed === undefined ? undefined : filesWords(listed.changedFiles)}
+          lines={
             listed === undefined
               ? undefined
-              : changesLine({
-                  files: listed.changedFiles,
-                  additions: listed.additions,
-                  deletions: listed.deletions,
-                })
+              : { additions: listed.additions, deletions: listed.deletions }
           }
           pushes
         />

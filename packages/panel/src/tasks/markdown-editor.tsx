@@ -156,6 +156,8 @@ export interface MarkdownEditorProps {
   readonly onComment?: (() => void) | undefined;
   /** Whether a Mermaid block's diagram is previewed under it. */
   readonly diagrams?: boolean | undefined;
+  /** Draws a block the editor keeps as written (block or inline HTML) as the read view draws its source; its source as its words where none is given. */
+  readonly drawRaw?: ((source: string) => ReactNode) | undefined;
   /** The document's own blocks, offered in its `/` menu beside the menu's. */
   readonly ownBlocks?: readonly OwnBlock[] | undefined;
   /** The `/` menu's blocks that do not apply to the document, which it does not offer. */
@@ -266,6 +268,7 @@ export function MarkdownEditor({
   anchors,
   onComment,
   diagrams = false,
+  drawRaw,
   ownBlocks,
   droppedBlocks,
   history,
@@ -280,6 +283,7 @@ export function MarkdownEditor({
   const diagramCards = useEditorDrawings<EditorDiagram>();
   const taskBoxes = useEditorDrawings<EditorTaskBox>();
   const codeHeaders = useEditorDrawings<EditorCodeBlock>();
+  const raws = useEditorDrawings<string>();
   const queryClient = useQueryClient();
   // Note that a finish or a leaving waits for a picture still being kept, since only the open editor can lay in its address; it goes once none is.
   const held = useRef<(() => void) | undefined>(undefined);
@@ -387,6 +391,7 @@ export function MarkdownEditor({
             keyTargets,
           },
     drawDiagram: diagrams ? diagramCards.keep : undefined,
+    drawRaw: drawRaw === undefined ? undefined : raws.draw,
     drawTaskBox: taskBoxes.draw,
     drawCodeHeader: codeHeaders.keep,
     colorCode: (language, code) => heldColoring(queryClient, language, code),
@@ -457,6 +462,9 @@ export function MarkdownEditor({
       {diagramCards.drawn.map((each) =>
         createPortal(<EditorDiagramCard diagram={each.what} />, each.element, each.key),
       )}
+      {drawRaw === undefined
+        ? null
+        : raws.drawn.map((each) => createPortal(drawRaw(each.what), each.element, each.key))}
       {codeHeaders.drawn.map((each) =>
         createPortal(<EditorCodeHeader block={each.what} />, each.element, each.key),
       )}

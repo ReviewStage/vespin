@@ -188,6 +188,7 @@ import {
   usePullRequestsRead,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { rigBusyRender } from "../rig-busy-render.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -532,8 +533,7 @@ const NONE_SHOWN: readonly TranscriptItem[] = [];
  * queue and its edits ask first: the one place the words typed live, so a
  * keystroke draws the composer alone, never the transcript over it. Note
  * that Edit on a sent line in the transcript reaches it through `editMessage`,
- * and Reply on a chat message through `replyTo`, which it keeps pointed at
- * its own.
+ * which it keeps pointed at its own.
  */
 function AgentComposerArea({
   id,
@@ -543,7 +543,6 @@ function AgentComposerArea({
   messageSent,
   suggested,
   editMessage,
-  replyTo,
   undeliveredActs,
   approvals,
   onShowWaiting,
@@ -566,7 +565,6 @@ function AgentComposerArea({
   readonly messageSent: Parameters<typeof useAgentComposer>[4];
   readonly suggested: Parameters<typeof useAgentComposer>[5];
   readonly editMessage: RefObject<AgentComposer["editMessage"] | undefined>;
-  readonly replyTo: RefObject<AgentComposer["reply"] | undefined>;
   readonly undeliveredActs: RefObject<UndeliveredActs | undefined>;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   readonly onShowWaiting: (() => void) | undefined;
@@ -590,21 +588,14 @@ function AgentComposerArea({
 }) {
   const threadsLine = useAgentThreadsLine(id);
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
+  rigBusyRender(composer.words !== "");
   const dictated = useDictation(composer.words, composer.onWords);
   // Note that one pick holds the newest refusal, a send's, a dictation's or the page's, so an older one never hides why the last act did not go.
   const said = useNewestNote([composer.note, dictated.note, note]);
   useEffect(() => {
     editMessage.current = composer.editMessage;
-    replyTo.current = composer.reply;
     undeliveredActs.current = composer.undelivered;
-  }, [
-    editMessage,
-    composer.editMessage,
-    replyTo,
-    composer.reply,
-    undeliveredActs,
-    composer.undelivered,
-  ]);
+  }, [editMessage, composer.editMessage, undeliveredActs, composer.undelivered]);
 
   return (
     <>
@@ -1032,8 +1023,6 @@ const AgentConversation = memo(function AgentConversation({
 
   // Note that Edit on a sent line reaches the composer through this one handle, so the page holds none of the composer's state, whose every keystroke would draw the transcript again.
   const editMessage = useRef<AgentComposer["editMessage"] | undefined>(undefined);
-  // Note that Reply on a chat message reaches it the same way.
-  const replyTo = useRef<AgentComposer["reply"] | undefined>(undefined);
   // Note that a refused line's Retry, Edit, and Delete reach the composer the same way.
   const undeliveredActs = useRef<UndeliveredActs | undefined>(undefined);
 
@@ -1077,7 +1066,6 @@ const AgentConversation = memo(function AgentConversation({
     () => ({
       editMessage: (line: Parameters<AgentComposer["editMessage"]>[0]) =>
         editMessage.current?.(line),
-      reply: (words: string) => replyTo.current?.(words),
     }),
     [],
   );
@@ -1290,7 +1278,6 @@ const AgentConversation = memo(function AgentConversation({
       messageSent={approvals.messageSent}
       suggested={suggested}
       editMessage={editMessage}
-      replyTo={replyTo}
       undeliveredActs={undeliveredActs}
       approvals={approvals}
       onShowWaiting={showWaiting}
@@ -1594,21 +1581,27 @@ const AgentConversation = memo(function AgentConversation({
             icon={glyphSymbol(GLYPH.LIST)}
             accessibilityLabel={MENU_WORDS.OVERVIEW}
             onPress={openOverview}
-          />
+          >
+            {MENU_WORDS.OVERVIEW}
+          </Stack.Toolbar.Button>
         )}
         {barActs ? (
           <Stack.Toolbar.Button
             icon={glyphSymbol(archived ? GLYPH.UNARCHIVE : GLYPH.ARCHIVE)}
             accessibilityLabel={archived ? MENU_WORDS.UNARCHIVE : MENU_WORDS.ARCHIVE}
             onPress={archived ? actions.unarchive : askArchive}
-          />
+          >
+            {archived ? MENU_WORDS.UNARCHIVE : MENU_WORDS.ARCHIVE}
+          </Stack.Toolbar.Button>
         ) : null}
         {barActs ? (
           <Stack.Toolbar.Button
             icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
             accessibilityLabel={actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
             onPress={actions.pin}
-          />
+          >
+            {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+          </Stack.Toolbar.Button>
         ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
@@ -1731,7 +1724,9 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           tintColor={colors.ACCENT}
           accessibilityLabel={PORTS_WORDS.DONE}
           onPress={() => router.back()}
-        />
+        >
+          {PORTS_WORDS.DONE}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen clear={half}>
         <SettingsForm clear={half} spacing={FORM_SPACING.COMPACT}>

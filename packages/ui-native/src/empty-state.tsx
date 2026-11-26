@@ -1,6 +1,6 @@
 // empty-state.tsx -- what a screen or a column says when it has nothing to show, in the system's own ContentUnavailableView, or the system's bare spinner while what it shows is still read.
 
-import { ContentUnavailableView, ProgressView, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
+import { ContentUnavailableView, ProgressView, ScrollView, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
   font,
@@ -14,6 +14,7 @@ import {
 import { useAccessibilitySize } from "./accessibility.js";
 import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 
 /** What a press to read or send again says, as the app says it everywhere: the panel's Retry in the phone's words. */

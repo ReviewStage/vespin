@@ -1,5 +1,4 @@
 import type { HTMLAttributes, ReactNode } from "react";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import type { StatusTone } from "../../status-tone.js";
 import { INLINE_REF_FIT, InlineRefFitScope } from "../inline-ref/inline-ref-fit.js";
 import { GAP, LAYOUT_ELEMENT, Stack } from "../layout/layout.js";
@@ -360,7 +359,7 @@ export function HoverCardRow({
       className={`${ROW} ${ROW_PRESS} ${ROW_FOCUS}`}
       data-look={look}
       ref={linkAddress}
-      onClick={pulseOnPress(onPress, PRESS_PULSE.QUIET)}
+      onClick={onPress}
     >
       {row}
     </button>

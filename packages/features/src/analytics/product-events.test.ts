@@ -14,6 +14,7 @@ import {
   PRODUCT_PICTURE_KIND,
   PRODUCT_REPLY_KIND,
   PRODUCT_SETTING_VALUE,
+  PRODUCT_STANDING_FIELD,
   PRODUCT_SURFACE,
   productDrawnMilliseconds,
   productEventBuildFromWire,
@@ -505,4 +506,37 @@ test("a batch's build is read as strictly as an event's, and is never a reason t
   );
   // Builds 0.7 to 0.17 send no build at all.
   assert.deepEqual(productEventBuildFromWire({ events: [] }), {});
+});
+
+test("a standing chip's wait to draw its change travels on a rung, with which chip it was, never the value it took", () => {
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.STANDING_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 200,
+        [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: PRODUCT_STANDING_FIELD.PRIORITY,
+        priority: "high",
+      },
+    }),
+    {
+      name: PRODUCT_EVENT.STANDING_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 200,
+        [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: PRODUCT_STANDING_FIELD.PRIORITY,
+      },
+    },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.STANDING_DRAWN,
+      at: AT,
+      properties: {
+        [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: 200,
+        [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: "high",
+      },
+    }),
+    undefined,
+  );
 });

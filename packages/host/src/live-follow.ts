@@ -1,4 +1,5 @@
 import { ServiceReach } from "@repo/features";
+import type { FailureFacts } from "@repo/features/failure-facts";
 import {
   LIVE_SIGNED_OUT,
   liveDigestOf,
@@ -135,8 +136,12 @@ const POLL_BACKOFF = untilRegained(
   ),
 );
 
-/** Why a poll answered no read: what failed, and whether the read names nothing the account reaches any more. */
-export type LiveFailure = { readonly failure: string; readonly gone?: boolean };
+/** Why a poll answered no read: what failed, what failed beneath it where the client said, and whether the read names nothing the account reaches any more. */
+export type LiveFailure = {
+  readonly failure: string;
+  readonly cause?: FailureFacts;
+  readonly gone?: boolean;
+};
 
 /**
  * Whether a failed poll ends the read for good: it names nothing the account

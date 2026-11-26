@@ -83,7 +83,6 @@ import {
 import { cn } from "../../cn.js";
 import { ChevronRightIcon } from "../../icons/lucide-glyphs.js";
 import { joinRefs } from "../../join-refs.js";
-import { pulseOnPress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { type CountPart, CountParts } from "../choice/count-part.js";
 import {
@@ -970,7 +969,6 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
             className={optionClass}
             disabled={disabled || item.disabled === true}
             onMouseDown={roving ? undefined : keepFocus}
-            onClick={pulseOnPress()}
           >
             {item.icon === undefined || words ? null : (
               <span className={ICON} aria-hidden="true">

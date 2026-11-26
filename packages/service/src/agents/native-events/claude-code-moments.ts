@@ -24,8 +24,9 @@ import {
   PLAN_STATUS,
 } from "./native-moments.js";
 import {
+  type BlocksAnswer,
+  blocksAnswer,
   FAILURE_CHARS,
-  PICTURE_STAND_IN,
   runnerMoments,
   toolAnswerSettlement,
   usageLimitSettlement,
@@ -466,20 +467,24 @@ function storedClaudeCodeCall(
 
 const CLI_TOOL_NAMES: ReadonlySet<string> = new Set(Object.values(CLAUDE_CODE_TOOL));
 
-/** A tool's answer as the text the model read: its text blocks joined, a picture standing in for its bytes where `pictures` asks, and left out otherwise. */
-function answerText(content: string | readonly WireValue[] | undefined, pictures: boolean): string {
+/** A tool's answer as the words the model read, its pictures left out: its text blocks joined. */
+function answerText(content: string | readonly WireValue[] | undefined): string {
   if (content === undefined) return "";
 
   if (Predicate.isString(content)) return content;
 
   return content
     .flatMap((block) =>
-      Option.match(readTextBlock(block), {
-        onSome: ({ text }) => [text],
-        onNone: () => (pictures ? [PICTURE_STAND_IN] : []),
-      }),
+      Option.match(readTextBlock(block), { onSome: ({ text }) => [text], onNone: () => [] }),
     )
     .join("\n");
+}
+
+/** A CLI tool's answer as the transcript keeps it: its words with a picture standing in for its bytes, and the pictures its runner kept apart (`blocksAnswer`). */
+function cliAnswer(content: string | readonly WireValue[] | undefined): BlocksAnswer {
+  if (content === undefined) return { text: "", pictures: [] };
+
+  return Predicate.isString(content) ? { text: content, pictures: [] } : blocksAnswer(content);
 }
 
 /** A result's `_meta`, which the CLI hands its SDK's consumer on the message's `tool_use_result`, beside the content, and never to the model. */
@@ -504,15 +509,15 @@ function settlementOf(
   const workspaceTool =
     !CLI_TOOL_NAMES.has(storedName) && integrationOfRemoteTool(storedName) === undefined;
 
-  const text = !workspaceTool
-    ? answerText(content, true)
-    : Predicate.isString(content)
-      ? content
-      : workspaceAnswerText(content ?? []);
+  if (!workspaceTool) {
+    const { text, pictures } = cliAnswer(content);
 
-  return workspaceTool
-    ? toolAnswerSettlement({ workspaceTool: true, name: storedName, text, watched }, isError)
-    : toolAnswerSettlement({ workspaceTool: false, text, output: text }, isError);
+    return toolAnswerSettlement({ workspaceTool: false, text, output: text, pictures }, isError);
+  }
+
+  const text = Predicate.isString(content) ? content : workspaceAnswerText(content ?? []);
+
+  return toolAnswerSettlement({ workspaceTool: true, name: storedName, text, watched }, isError);
 }
 
 /**
@@ -669,7 +674,7 @@ function backgrounded(
 
   if (Option.isSome(status)) return status.value === AGENT_ASYNC_LAUNCHED;
 
-  return answerText(content, false).trimStart().startsWith(AGENT_LAUNCHED_WORDS);
+  return answerText(content).trimStart().startsWith(AGENT_LAUNCHED_WORDS);
 }
 
 /**

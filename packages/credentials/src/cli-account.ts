@@ -48,12 +48,10 @@ const USERINFO_PATH = "/oauth2/userinfo";
 /** The landing cards a loopback sign-in leaves the browser on; every string is fixed by the build. */
 const CLI_SIGN_IN_PAGES = {
   granted: {
-    badge: "Signed in",
     title: `Signed in to the ${PRODUCT_NAME} CLI`,
     body: "You can close this tab and return to your terminal.",
   },
   notGranted: {
-    badge: "Not completed",
     title: "Sign-in was not completed",
     body: "Return to your terminal and try again.",
   },

@@ -21,7 +21,9 @@ import { readConversationPicture } from "@repo/database/models/conversation-pict
 import {
   readManagerChatMessage,
   readManagerChatPage,
+  writeManagerChatMessage,
 } from "@repo/database/models/manager-chat-messages";
+import { readManagerChatReactions } from "@repo/database/models/manager-chat-reactions";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import { writePage } from "@repo/database/models/task-pages";
@@ -75,7 +77,11 @@ import { keptPictureIdOf } from "@repo/features/conversation-picture-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { INBOX_ASK, INBOX_CURSOR_START, inboxAnswerSchema } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
+import {
+  MANAGER_CHAT_AUTHOR,
+  MANAGER_CHAT_REACTION,
+  managerChatReactAnswerSchema,
+} from "@repo/features/manager-chat-live";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { READ_MARK } from "@repo/features/read-mark";
@@ -110,6 +116,7 @@ import {
   AGENT_STOP,
   AGENT_WORKSPACE_TOOLS,
   agentStartedOn,
+  chatReactionPath,
   countedWith,
   fakeAgentSessions,
   messageAs,
@@ -214,9 +221,10 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
 
-        const { owner, agent, ask, target, writer, turnId } = yield* messagedAgent(agentSessions, {
-          running: true,
-        });
+        const { owner, agent, ask, target, writer, turnId, blobs } = yield* messagedAgent(
+          agentSessions,
+          { running: true },
+        );
 
         const shot = {
           name: "flow.png",
@@ -248,7 +256,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         );
 
         assert.equal(picture.contentType, AGENT_ATTACHMENT_TYPE.PNG);
-        assert.deepEqual(new Uint8Array(picture.bytes), SIZED_PNG);
+        assert.deepEqual(new Uint8Array(blobs.bytesOf(picture.body)), SIZED_PNG);
 
         // The retired runtime's receipt of the message, its image staged by name with no bytes, takes the line it was sent as.
         const taken = yield* writer.takeAwaitingLine(target, {
@@ -341,7 +349,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.ok(pictureId !== undefined, "the row names the kept picture");
 
         const served = yield* fetch(
-          request(AGENT_PICTURE, owner, { id: agent.id, picture: pictureId }),
+          request(AGENT_PICTURE, owner, { id: agent.id, picture: pictureId, fetchMode: "cors" }),
         );
 
         assert.equal(served.status, HOSTED_HTTP_STATUS.OK);
@@ -2444,6 +2452,70 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.deepEqual(yield* chatSend(owner, coder.agent.id), notFound);
         assert.equal(agentSessions.sent.length, sends);
         assert.deepEqual(yield* readManagerChatPage(owner, agent.id, { limit: 10 }), []);
+      }),
+  );
+
+  it.effect(
+    "a member's reaction on a Manager's chat message stands once however often it is given, comes off as asked, and opens no turn; none lands from outside the workspace or on a message the chat holds none of",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const opened = yield* openTask({ agentSessions });
+        const { owner, other, ask } = opened;
+        const { agent } = yield* agentStartedOn(opened, agentSessions, { running: false });
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        yield* writeManagerChatMessage(owner, {
+          agentId: agent.id,
+          id: "m1",
+          clientKey: randomUUID(),
+          authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+          authorUserId: null,
+          authorName: "Manager",
+          text: "The invites are out.",
+          attachments: [],
+          inReplyTo: null,
+          broadcast: false,
+          turnId: null,
+          lineId: null,
+          now: new Date(yield* Clock.currentTimeMillis),
+        });
+
+        const sends = agentSessions.sent.length;
+
+        const react = (bearer: string, messageId: string, reacted: boolean) =>
+          ask(
+            request(chatReactionPath(messageId), bearer, {
+              method: "POST",
+              id: agent.id,
+              body: { kind: MANAGER_CHAT_REACTION.THUMBS_UP, reacted },
+            }),
+          );
+
+        const changed = (bearer: string, reacted: boolean) =>
+          Effect.map(
+            react(bearer, "m1", reacted),
+            (answered) =>
+              readAnswer(managerChatReactAnswerSchema, HOSTED_HTTP_STATUS.OK, answered).changed,
+          );
+
+        const given = [yield* changed(owner, true), yield* changed(owner, true)];
+        const standing = yield* readManagerChatReactions(owner, agent.id, ["m1"]);
+        const takenOff = yield* changed(owner, false);
+        const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
+
+        assert.deepEqual(given, [true, false]);
+        assert.equal(standing.get("m1")?.length, 1);
+        assert.equal(takenOff, true);
+        assert.deepEqual(yield* react(other, "m1", true), notFound);
+        assert.deepEqual(yield* react(owner, "nope", true), notFound);
+        assert.equal((yield* readManagerChatReactions(owner, agent.id, ["m1"])).size, 0);
+        assert.equal(agentSessions.sent.length, sends);
       }),
   );
 });

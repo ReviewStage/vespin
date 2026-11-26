@@ -350,7 +350,7 @@ function entry(
     : { kind: CONVERSATION_ENTRY.REVIEW, by, state, html: `<p>${body}</p>`, body, at, url };
 }
 
-/** The thread the failing pull request's review started on its expiry check, answered by its author. */
+/** The thread the failing pull request's review started on its expiry check, answered by its author, each comment by GitHub's id, as the service's read names it, so it offers Add reaction (`reactionMenu`). */
 const EXPIRY_THREAD = {
   path: "src/invites/expiry.ts",
   line: 20,
@@ -370,6 +370,7 @@ const EXPIRY_THREAD = {
       body: "This reads `Date.now()` twice.",
       at: LANDED - 15 * MINUTE,
       url: `${REPOSITORY_URL}/pull/127#discussion_r18`,
+      subject: "PRRC_expiry_18",
     },
     {
       by: ADA,
@@ -377,6 +378,7 @@ const EXPIRY_THREAD = {
       body: "Good catch, it takes the request's time now.",
       at: LANDED - 5 * MINUTE,
       url: `${REPOSITORY_URL}/pull/127#discussion_r19`,
+      subject: "PRRC_expiry_19",
     },
   ],
   more: 0,

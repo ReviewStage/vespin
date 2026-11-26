@@ -13,7 +13,10 @@
  *
  * It writes, under `--out`:
  * - `accounts/<account>/local.sqlite`: the local copy, the task list kept at
- *   a sync id and the Inbox to the host's 1 MB cut, as a phone keeps them.
+ *   a sync id and the Inbox to the host's 1 MB cut, as a phone keeps them;
+ * - `accounts/<account>/collections.sqlite`: the Inbox kept on disk whole,
+ *   at its sync id, as a phone whose Inbox kind is stored keeps it, so a
+ *   catch-up launch reads past that id rather than whole.
  * - `busy-account/`: the stub's answers. `inbox-whole.json`, the Inbox read
  *   whole; `inbox-pages/<n>.json`, the same read in pages, as a build that
  *   reads pages is answered it; `tasks-delta.json`, the task list past its kept id;
@@ -57,8 +60,11 @@ import { workspaceSchema } from "@repo/features/workspace-wire";
 import { openLocalDatabase } from "@repo/host/local-database";
 import { localRows } from "@repo/host/local-rows";
 import { nodeSqliteDriverLayer } from "@repo/host/node";
+import { entityPool } from "@repo/sync";
+import { nodeKeptCollections } from "@repo/sync/testing";
 import type { WireRecord } from "@repo/wire";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Exit, Layer, Schema, Scope } from "effect";
+import { INBOX_ITEM, placedItem } from "../../packages/host/src/inbox-collections.js";
 import { KEPT_LIST } from "../../packages/host/src/kept-lists.js";
 import type { AgentRow, PlanRow } from "../../packages/host/src/task-list-rows.js";
 
@@ -841,6 +847,46 @@ function tasksDeltaBody(agents: readonly AgentRow[]): string {
   return JSON.stringify(body);
 }
 
+/**
+ * The account's Inbox kept whole in its database of stored kinds
+ * (`collections.sqlite`), at the sync id the stub answers the Inbox past, as
+ * the host's stored follow keeps it (`account-items-stored.ts`): written
+ * through TanStack DB's own persistence, as the pool keeps a stored kind,
+ * since rows written by hand would not be read back. Note that the pool's
+ * scope closes before the database does, since its collections' release
+ * waits on their writes.
+ */
+const keepInboxWhole = (file: string, inbox: readonly SeededThread[]) =>
+  Effect.gen(function* () {
+    const database = nodeKeptCollections(file);
+    const scope = yield* Scope.make();
+
+    yield* Effect.scoped(
+      Effect.gen(function* () {
+        const pool = yield* entityPool({
+          mintKey: () => "busy-account",
+          replayRefused: Effect.void,
+          store: { collections: () => ({ keep: database.keep, scope }) },
+        });
+
+        const items = yield* pool.stand(INBOX_ITEM, {
+          owns: true,
+          kept: { name: "inbox", kind: INBOX_ITEM.stored?.name ?? "inboxItem" },
+          redraw: () => Effect.void,
+          confirmation: () => undefined,
+        });
+
+        yield* items.answer(
+          inbox.map(({ item, taskId }) => placedItem(item, taskId)),
+          { cursor: { at: String(BUSY_SYNC.INBOX) } },
+        );
+      }),
+    );
+
+    yield* Scope.close(scope, Exit.void);
+    yield* Effect.promise(() => database.close());
+  });
+
 const platform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, nodeSqliteDriverLayer);
 
 /** Writes the account's local copy, through the host's own writer, and the stub's answers beside it. */
@@ -956,6 +1002,8 @@ const seed = Effect.gen(function* () {
       );
     }),
   );
+
+  yield* keepInboxWhole(`${root}/accounts/${ARGS.account}/collections.sqlite`, inbox);
 
   const answers = `${root}/busy-account`;
   mkdirSync(`${answers}/task-rows`, { recursive: true });

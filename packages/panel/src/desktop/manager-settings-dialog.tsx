@@ -12,8 +12,10 @@
  * (`ManagerFaceWell`, saved through `AgentsControl.onFace`), and its name,
  * renamed by pressing it (`RenamableName`), as a workspace's name and a
  * machine's are, through the agent's own rename. Under it every row is what
- * a coding agent shows of the same thing: its repositories, named, since an
- * agent's repositories are fixed once it starts, whatever its kind; and,
+ * a coding agent shows of the same thing: its repositories, on the chip
+ * New Manager picks them with (`RepositoriesChip`), its checkout named and
+ * the rest counted after it, held, since an agent's repositories are fixed
+ * once it starts, whatever its kind, its card listing every one; and,
  * read off its own message box (`useAgentBox`), so they cannot drift from
  * it, where it runs, the box's place chip, moving it where a coder's moves,
  * and its model, the box's model chip with its permission mode and the
@@ -60,7 +62,6 @@ import {
   SettingsDialog,
   type SettingsDialogSection,
   SettingsRow,
-  SettingsRowValue,
   SettingsSection,
   Spinner,
 } from "@repo/ui";
@@ -82,6 +83,8 @@ import { RENAME_FAILED, teammateStarter } from "../tasks/agent-model.js";
 import { AgentModelChip } from "../tasks/agent-model-chip.js";
 import { agentPageQueryOptions } from "../tasks/agent-reads.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
+import { CHIP_PLACE, RepositoriesChip } from "../tasks/repository-chip.js";
+import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
@@ -118,6 +121,7 @@ const UNNAMED = "Manager settings";
 const WORDS = {
   NAME: "Manager name",
   REPOSITORIES: "Repositories",
+  REPOSITORIES_HELD: "Set when this Manager was made.",
   MACHINE: "Machine",
   MODEL: "Model",
   ARCHIVE: "Archive",
@@ -149,10 +153,13 @@ export type ManagerSettingsSubject = AgentSummary & {
 /**
  * The Manager as every section reads it: what the surface handed, and the
  * workspace it stands in, read once by the dialog by the Manager's own read
- * by id; none until that read answers.
+ * by id, none until that read answers; and every repository it works in, its
+ * checkout first, which that read names whole and the surface only by its
+ * checkout until then.
  */
 type SettingsManager = ManagerSettingsSubject & {
   readonly workspaceId: string | undefined;
+  readonly repositories: readonly string[];
 };
 
 /** What a Manager's Settings saves through: the control its agent is listed in, as its box reads it. */
@@ -238,9 +245,10 @@ function IdentityRow({
 
 /**
  * Who pays for the Manager's turns, said under its Model: its starter's
- * subscriptions, named as the reader's own where they started it. With the
- * Manager acting for whoever asks (`MANAGER_ACTS_FOR_ASKER`), what it starts
- * for a reader who is not its starter runs on that reader's, as the experiment's own line says; its starter hears nothing more, since everything already runs on theirs.
+ * subscriptions, named as the reader's own where they started it. What it
+ * starts for a reader who is not its starter runs on that reader's, since a
+ * Manager acts for whoever asked; its starter hears nothing more, since
+ * everything already runs on theirs.
  */
 function PayerLine({
   agent,
@@ -250,20 +258,15 @@ function PayerLine({
   me: string | undefined;
 }): React.JSX.Element {
   const owner = teammateStarter(agent.startedBy, me);
-  const forAsker = useWorkspaceExperiment(agent.workspaceId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER);
+
+  if (owner === undefined) return <>{WORDS.RUNS_ON_YOURS}</>;
 
   return (
     <>
-      {owner === undefined ? (
-        WORDS.RUNS_ON_YOURS
-      ) : (
-        <>
-          {WORDS.RUNS_ON_PREFIX}
-          <ReplayMask>{owner}</ReplayMask>
-          {WORDS.RUNS_ON_SUFFIX}
-        </>
-      )}
-      {forAsker && owner !== undefined ? WORDS.STARTS_ON_YOURS : null}
+      {WORDS.RUNS_ON_PREFIX}
+      <ReplayMask>{owner}</ReplayMask>
+      {WORDS.RUNS_ON_SUFFIX}
+      {WORDS.STARTS_ON_YOURS}
     </>
   );
 }
@@ -306,6 +309,36 @@ function ModelRow({
   );
 }
 
+/** Takes no pick, since the chip is held. */
+function heldPick(): void {}
+
+/**
+ * The Repositories row: the chip New Manager picks them with, its checkout
+ * named and the rest counted after it, held, its card listing every one in
+ * order and saying why it is held; none for a Manager with none.
+ */
+function RepositoriesRow({ agent }: { agent: SettingsManager }): React.JSX.Element | null {
+  const { repositories } = agent;
+  const chooser = useRepositoryChooser(agent.workspaceId);
+
+  if (repositories.length === 0) return null;
+
+  return (
+    <SettingsRow label={WORDS.REPOSITORIES}>
+      {() => (
+        <RepositoriesChip
+          place={CHIP_PLACE.FIELD}
+          width={CHIP_WIDTH.FIELD}
+          values={repositories}
+          chooser={chooser}
+          onToggle={heldPick}
+          held={WORDS.REPOSITORIES_HELD}
+        />
+      )}
+    </SettingsRow>
+  );
+}
+
 /** General: the Manager's own rows, then its Archive and its Permanently delete. */
 function GeneralSection({
   agent,
@@ -326,15 +359,7 @@ function GeneralSection({
     <>
       <SettingsSection>
         <IdentityRow agent={agent} agents={agents} />
-        {agent.repository == null ? null : (
-          <SettingsRow label={WORDS.REPOSITORIES}>
-            {() => (
-              <SettingsRowValue>
-                <ReplayMask>{agent.repository}</ReplayMask>
-              </SettingsRowValue>
-            )}
-          </SettingsRow>
-        )}
+        <RepositoriesRow agent={agent} />
         <SettingsRow label={WORDS.MACHINE}>{() => box.place(false)}</SettingsRow>
         <ModelRow agent={agent} me={agents.me} box={box} />
       </SettingsSection>
@@ -494,12 +519,17 @@ export function useManagerSettingsDialog(
   const read = useQuery({ ...agentPageQueryOptions(agent.id), enabled: open && shown });
   const answer = read.data;
 
-  const workspaceId =
-    answer === undefined || "failure" in answer ? undefined : answer.agent.workspaceId;
+  const page = answer === undefined || "failure" in answer ? undefined : answer.agent;
+  const workspaceId = page?.workspaceId;
+  // Note that a service before the page named them all names its checkout alone, as the surface does until the read answers.
+  const checkout = page === undefined ? agent.repository : page.repository;
+
+  const repositories =
+    page?.repositories ?? (checkout === null || checkout === undefined ? [] : [checkout]);
 
   const unread = read.isError || (answer !== undefined && "failure" in answer);
 
-  const manager: SettingsManager = { ...agent, workspaceId };
+  const manager: SettingsManager = { ...agent, workspaceId, repositories };
   // Memory stands only where the workspace has Memory on, as workspace Settings lists it.
   const memoryOn = useWorkspaceExperiment(workspaceId, EXPERIMENT.MEMORY);
   const sections = memoryOn ? SECTIONS : SECTIONS.filter((each) => each.id !== SECTION.MEMORY);

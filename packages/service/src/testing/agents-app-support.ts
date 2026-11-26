@@ -121,6 +121,7 @@ import {
 import { refusedSession } from "../testing/recording-sessions.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
+import { memoryBlobStore } from "./blob-store-fake.js";
 
 export const ORIGIN = "https://app.test";
 export const TASK_AGENTS = "/api/tasks/agents";
@@ -170,6 +171,9 @@ const AGENT_APPROVAL_PATH = /^\/api\/agents\/[^/]+\/approvals\/[^/]+$/u;
 
 /** A suggestion in an agent's reply, read or sent, at its public path on the hosted oRPC router. */
 const AGENT_BUTTON_PATH = /^\/api\/agents\/[^/]+\/buttons\/[^/]+(?:\/press)?$/u;
+
+/** A member's reaction on a message of a Manager's chat, at its public path on the hosted oRPC router. */
+const CHAT_REACTION_PATH = /^\/api\/agents\/[^/]+\/chat-messages\/[^/]+\/reactions$/u;
 
 export const RELAY = { owner: "Acme", name: "Relay" } as const;
 export const RELAY_FULL_NAME = `${RELAY.owner}/${RELAY.name}`;
@@ -510,9 +514,12 @@ export const standing = (
     const clock = Layer.succeed(Clock.Clock, yield* Clock.Clock);
     // Note that GitHub is built on the test's clock, so the tokens it mints are dated by the clock the test moves.
     const reached = Layer.provide(github.layer, clock);
+    // The store attachments' bytes stand in where a row keeps them there; a test puts an object in it by its pathname.
+    const blobs = memoryBlobStore();
 
     const services = Layer.mergeAll(
       afterResponse,
+      blobs.layer,
       Layer.succeed(SqlClient.SqlClient, client),
       Layer.succeed(Database, yield* Database),
       clock,
@@ -643,7 +650,8 @@ export const standing = (
           pathname === WORKSPACE_AGENTS ||
           TRANSCRIPT_PART_PATH.test(pathname) ||
           AGENT_APPROVAL_PATH.test(pathname) ||
-          AGENT_BUTTON_PATH.test(pathname)
+          AGENT_BUTTON_PATH.test(pathname) ||
+          CHAT_REACTION_PATH.test(pathname)
         ) {
           return routed(request, webServices);
         }
@@ -668,7 +676,7 @@ export const standing = (
     const mcpFetch = (input: string | URL | Request, init?: RequestInit) =>
       memberMcp.handler(new Request(input, init));
 
-    return { ask, fetch, mcpFetch };
+    return { ask, fetch, mcpFetch, blobs };
   });
 
 /** The OAuth client the member MCP server's tokens here name, which nothing else reads. */
@@ -692,6 +700,10 @@ function memberMcpBearers(bearers: ReadonlyMap<string, string>): MemberMcpAuth {
 /** Where a path the hosted oRPC router answers names its id. */
 const ID_SEGMENT = "{id}";
 
+/** The public path of a member's reaction on this message of a Manager's chat, its agent's id named by `request`. */
+export const chatReactionPath = (messageId: string) =>
+  `/api/agents/${ID_SEGMENT}/chat-messages/${encodeURIComponent(messageId)}/reactions`;
+
 export function request(
   path: string,
   bearer: string | undefined,
@@ -714,6 +726,8 @@ export function request(
     cookie?: string;
     /** The media types the caller takes, as the iOS app names the video it plays. */
     accept?: string;
+    /** The mode a browser's Fetch Metadata names its request by (`Sec-Fetch-Mode`), which no native client sends. */
+    fetchMode?: string;
   } = {},
 ): Request {
   // A path the hosted oRPC router answers names its id as a segment; an old group's reads it from the query.
@@ -752,6 +766,8 @@ export function request(
   if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
 
   if (init.accept !== undefined) headers.set("accept", init.accept);
+
+  if (init.fetchMode !== undefined) headers.set("sec-fetch-mode", init.fetchMode);
 
   // Every client of the service names its JSON body so, which the hosted oRPC router reads a body by.
   if (init.body !== undefined) headers.set("content-type", "application/json");
@@ -871,7 +887,7 @@ export const openTask = (
     const github = githubReaching([installation], undefined, undefined, options.github);
     const agentSessions = options.agentSessions ?? fakeAgentSessions();
 
-    const { ask, fetch, mcpFetch } = yield* standing(
+    const { ask, fetch, mcpFetch, blobs } = yield* standing(
       bearers,
       github,
       agentSessions,
@@ -881,7 +897,7 @@ export const openTask = (
       options.afterResponse,
     );
 
-    return { owner, other, task, installation, agentSessions, github, ask, fetch, mcpFetch };
+    return { owner, other, task, installation, agentSessions, github, ask, fetch, mcpFetch, blobs };
   });
 
 /** An account beside the owner: signed in with GitHub on the token given, the standing row's when unsaid, or with no GitHub sign-in at all. */

@@ -15,6 +15,7 @@
 import type { StoreFailure } from "@repo/database/core/query";
 import { failureCode, failureDetail, failureKind } from "@repo/runtime/effect";
 import { Effect, Option } from "effect";
+import { BlobStoreFailure, logBlobStoreFailure } from "../storage/blob-store.js";
 
 /** The SQLSTATE class of a data exception (`22P02`, `22P05`, `22021`, `22003`): a value the statement carried that no column of its type takes. */
 const DATA_EXCEPTION_CLASS = "22";
@@ -27,9 +28,12 @@ const DATA_EXCEPTION_CLASS = "22";
  * issue. Neither's sentence is written, because a Schema issue's message
  * renders the value that would not decode, and a statement's can quote the
  * key a constraint refused. The procedure that asked is the log line's own
- * annotation (`orpc/base.ts`).
+ * annotation (`orpc/base.ts`). A Blob store's failure is written as
+ * `logBlobStoreFailure` writes it.
  */
-export function logStoreFailure(failure: StoreFailure): Effect.Effect<void> {
+export function logStoreFailure(failure: StoreFailure | BlobStoreFailure): Effect.Effect<void> {
+  if (failure instanceof BlobStoreFailure) return logBlobStoreFailure(failure);
+
   return Effect.logWarning(`Hosted store unavailable: ${storeFailureWords(failure)}`);
 }
 

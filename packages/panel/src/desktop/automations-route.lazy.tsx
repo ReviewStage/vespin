@@ -16,12 +16,12 @@ function automationsPlaceKey(place: AutomationsPlace): string {
 
 /** The Automations pages in the task's place beside the sidebar. */
 function AutomationsRoutePlace(): React.JSX.Element {
-  const { tasks, room } = useShellPlaces();
+  const { tasks, room, phoneAccount } = useShellPlaces();
   const { place } = useAutomationsPlace();
 
   return (
     <PageFind page={FIND_PAGE.AUTOMATIONS} at={automationsPlaceKey(place)} active={tasks.shown}>
-      <AutomationsPage tasks={tasks} room={room} />
+      <AutomationsPage tasks={tasks} room={room} phoneStart={phoneAccount} />
     </PageFind>
   );
 }

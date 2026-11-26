@@ -990,26 +990,35 @@ const GITHUB_REHYPE_PLUGINS: MarkdownSteps = [
   MARKDOWN_HTML_STEP.HARDEN,
 ];
 
-/** The one markdown step GitHub's rendering takes: handed over whole, as HTML. */
+/** The one markdown step GitHub's rendering takes: handed over whole, as HTML; markdown GitHub renders takes the library's own, GitHub's dialect. */
 const GITHUB_REMARK_PLUGINS = [wholeRendering];
 
 /**
- * Words GitHub rendered (`body_html`), drawn as a transcript's words are,
- * at the panel's scale, their code and tables the transcript's, their links
- * the transcript's: GitHub's own HTML read through the library's parse and
- * sanitizer, never set as HTML. Mentions, references, emoji, task lists,
- * and folded details stand as GitHub rendered them, an alert as the
- * window's own, and a task item's box as one the reader ticks where the
- * place hands `taskTick`. A picture is the place's to draw (`picture`), in
- * its line where it shares one with words, and stands as its link where
- * the place draws none.
+ * What a GitHub body is drawn from: GitHub's own rendering of it
+ * (`body_html`), or the markdown its author wrote, where a place holds that
+ * alone, a block of it the description's editor keeps as written say.
+ */
+export type GitHubSource = { readonly html: string } | { readonly markdown: string };
+
+/**
+ * Words GitHub rendered (`body_html`), or the markdown GitHub renders, drawn
+ * as a transcript's words are, at the panel's scale, their code and tables
+ * the transcript's, their links the transcript's: the HTML read through the
+ * library's parse and sanitizer, never set as HTML, so an HTML comment is
+ * dropped and a tag off GitHub's allowlist is stripped, as GitHub does.
+ * Mentions, references, emoji, task lists, and folded details stand as
+ * GitHub rendered them, an alert as the window's own, and a task item's box
+ * as one the reader ticks where the place hands `taskTick`. A picture is the
+ * place's to draw (`picture`), in its line where it shares one with words,
+ * a themed one in the window's theme, and stands as its link where the
+ * place draws none.
  */
 export function GitHubWords({
-  html,
+  source,
   picture,
   taskTick,
 }: {
-  html: string;
+  source: GitHubSource;
   picture: GitHubPictureDrawer;
   /** Draws each task item's box the reader can tick, by its place among the words' boxes; every box is read-only without it. */
   taskTick?: MarkdownTaskTick | undefined;
@@ -1043,9 +1052,9 @@ export function GitHubWords({
 
   return (
     <MessageResponse
-      words={html}
+      words={"html" in source ? source.html : source.markdown}
       components={components}
-      remarkPlugins={GITHUB_REMARK_PLUGINS}
+      remarkPlugins={"html" in source ? GITHUB_REMARK_PLUGINS : undefined}
       rehypePlugins={GITHUB_REHYPE_PLUGINS}
       normalizeHtmlIndentation={false}
       taskTick={taskTick}
@@ -1297,6 +1306,7 @@ const CALL_ICON = {
   [CALL_KIND.CHAT_READ]: ScrollTextIcon,
   [CALL_KIND.CHAT_THREAD_READ]: ScrollTextIcon,
   [CALL_KIND.CHAT_SEARCH]: SearchIcon,
+  [CALL_KIND.CHAT_REACT]: SmilePlusIcon,
   [CALL_KIND.LIST_TASKS]: () => <EntityGlyph kind={ENTITY_KIND.PLAN} />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,
@@ -2087,7 +2097,7 @@ export function TranscriptTodos({
  * VS Code's collapses to the item in progress, so it costs the log one
  * line. It is a card on the task card's look, since it stands outside the
  * log, and it is drawn by the caller only while the list is worked. It
- * opens upward off the composer, as one sheet (tasks.css). How far it has
+ * opens upward off the composer, at once. How far it has
  * got is said as the transcript's row says it (`todosSummary`), its counts
  * rolling as they change, so a step done is seen to tick over.
  */
@@ -2102,7 +2112,7 @@ export function TranscriptTodosDock({
   const { done, total } = todosCount(todos);
 
   return (
-    <Disclosure look={DISCLOSURE_LOOK.DOCK} data-todos-dock="" aria-label="To-dos">
+    <Disclosure look={DISCLOSURE_LOOK.DOCK} aria-label="To-dos">
       <DisclosureSummary look={DISCLOSURE_SUMMARY.HEAD}>
         <DisclosureChevron />
         <GlyphSlot>

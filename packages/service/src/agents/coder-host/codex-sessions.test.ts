@@ -119,6 +119,7 @@ const IMAGE = "agent-image:fixture";
 const EVENTS_URL = "https://app.test/api/agents/runner-events";
 const LINES_URL = "https://app.test/api/agents/runner-lines";
 const TRANSCRIPTS_URL = "https://app.test/api/agents/runner-transcripts";
+const PICTURES_URL = "https://app.test/api/agents/runner-pictures";
 const MCP_URL = "https://app.test/api/agents/mcp";
 
 /** The host every address the runner reaches us at names, which the firewall swaps its bearer in on. */
@@ -280,6 +281,7 @@ function sessionsFor(userId: string, sequence: { next: number } = { next: 0 }) {
     linesUrl: LINES_URL,
     mcpUrl: MCP_URL,
     transcriptsUrl: TRANSCRIPTS_URL,
+    picturesUrl: PICTURES_URL,
     integrations: () => Effect.succeed([LINEAR_SERVER]),
     instructions: () => Effect.succeed(INSTRUCTIONS),
     nextSequence: () => Effect.sync(() => sequence.next),
@@ -737,6 +739,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           developerInstructions: INSTRUCTIONS,
           firstSequence: 0,
           eventsUrl: `${EVENTS_URL}${FIRST_LAUNCH}`,
+          picturesUrl: `${PICTURES_URL}${FIRST_LAUNCH}`,
           linesUrl: `${LINES_URL}${FIRST_LAUNCH}`,
           mcpUrl: MCP_URL,
           transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,

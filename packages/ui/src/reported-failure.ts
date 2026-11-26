@@ -39,6 +39,13 @@ export interface ReportedFailure {
   readonly hidden: () => void;
   /** The app's clipboard, which Copy details writes to; a rejection is a refused copy. */
   readonly copy: (text: string) => Promise<void>;
+  /**
+   * Whether the app's connection already says it: a read nothing named a
+   * refusal, which the window's Offline mark says once while the app does
+   * not reach the service, so a component drawing it in place holds it back
+   * then (`ServiceReached`). Unset for a refusal and for a write.
+   */
+  readonly saidByConnection?: boolean;
 }
 
 /** Words drawn as a failure's that are no failure of the app's, so nothing reports them and none offers its details. */

@@ -13,7 +13,6 @@ import {
 import { cn } from "../../cn.js";
 import { ArrowUpIcon, ArrowUpRightIcon, CheckIcon, StopIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
-import { PRESS_FACE, PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { replayMotion } from "../../replay-motion.js";
 import { buttonVariants, Button as ShadcnButton } from "../../shadcn/button.js";
 import { useDisclosure } from "../../use-disclosure.js";
@@ -66,9 +65,7 @@ import { SpinnerRing } from "../spinner/spinner.js";
  * A button unavailable is out of the tab order, unless it is
  * `focusableWhenDisabled`, where it stays in it, so a hint over it can say
  * why, and refuses its press instead, with a shake, telling `onRefused`, so
- * its owner can say why on the press. Every press a button
- * or a link drawn as one takes is answered with a pulse of its face, and a
- * submit's arrow lifts as it sends. A busy button refuses its press and is
+ * its owner can say why on the press. A busy button refuses its press and is
  * named by `busyLabel` ("Saving") from the press on; once its press has been
  * out `--ui-settle-delay` (180ms) it keeps its width, its words standing
  * hidden under the one ring every wait turns (`SpinnerRing`), so an act that
@@ -82,7 +79,7 @@ import { SpinnerRing } from "../spinner/spinner.js";
  * motion keeps, so the check is still seen there without its spring, and then
  * fades out as its words fade back; one that failed just stops, its words back at once.
  * A button that `turns`, a refresh's or a retry's, turns its glyph once as a
- * press lands, beside the pulse of its face. The ring
+ * press lands. The ring
  * holds still on `--ui-loop-motion`, as every endless loop does under reduced
  * motion and a capture run. The keyboard's ring is the app's own, drawn by
  * its reset for every control alike.
@@ -190,6 +187,8 @@ export type ButtonSize = (typeof BUTTON_SIZE)[keyof typeof BUTTON_SIZE];
 export const ICON_BUTTON_SIZE = {
   ...BUTTON_SIZE,
   LARGE: "large",
+  /** An icon picker's cell: a glyph or an emoji drawn larger than a control's, so a choice reads at a glance (`IconPickerChoice`). */
+  PICKER: "picker",
 } as const;
 
 export type IconButtonSize = (typeof ICON_BUTTON_SIZE)[keyof typeof ICON_BUTTON_SIZE];
@@ -307,6 +306,8 @@ function boxSize(
 
   if (iconOnly && size === ICON_BUTTON_SIZE.LARGE) return "icon-large";
 
+  if (iconOnly && size === ICON_BUTTON_SIZE.PICKER) return "icon-picker";
+
   if (iconOnly) return compact ? "icon-compact" : "icon";
 
   if (variant === BUTTON_VARIANT.ROW) return "row";
@@ -408,15 +409,6 @@ function turn(button: HTMLElement): void {
   if (glyph !== null) replayMotion(button, TURN_ATTRIBUTE, glyph);
 }
 
-/**
- * Plays a press's pulse on `pressable`: its face springs back inside its
- * box, but a row's, a menu's row lit rather than pressed, which gives a
- * little whole, as every row does.
- */
-function pulse(pressable: HTMLElement, variant: ButtonVariant | undefined): void {
-  pulsePress(pressable, variant === BUTTON_VARIANT.ROW ? PRESS_PULSE.QUIET : PRESS_PULSE.FACE);
-}
-
 /** The attributes and handler a button carries for its state, shared by both kinds; `done` is a labeled one whose act has landed. */
 function stateProps(props: ButtonBase, name: string | undefined, done = false) {
   const settled = props.busy === true || done;
@@ -462,8 +454,6 @@ function stateProps(props: ButtonBase, name: string | undefined, done = false) {
 
         return;
       }
-
-      pulse(event.currentTarget, props.variant);
 
       if (props.turns === true) turn(event.currentTarget);
       props.onClick?.(event);
@@ -674,10 +664,7 @@ export function Button({
       data-done={shown || undefined}
       aria-pressed={pressed}
     >
-      <span
-        className={faceClasses(boxSize(props.variant, size, false), ringShown, shown)}
-        {...PRESS_FACE}
-      >
+      <span className={faceClasses(boxSize(props.variant, size, false), ringShown, shown)}>
         {icon}
         <span className={WORDS}>{children}</span>
         {badge === undefined ? null : (
@@ -733,11 +720,6 @@ export function ButtonLink({
   label?: string | undefined;
   children: ReactNode;
 }): React.JSX.Element {
-  const press = (event: MouseEvent<HTMLAnchorElement>) => {
-    pulse(event.currentTarget, variant);
-    onClick?.(event);
-  };
-
   return (
     <a
       className={linkClasses(buttonLook({ variant, size, corners, iconOnly: false }))}
@@ -746,10 +728,10 @@ export function ButtonLink({
       {...hint}
       href={href}
       aria-label={label}
-      onClick={press}
-      onAuxClick={onClick === undefined ? undefined : middlePressOf(press)}
+      onClick={onClick}
+      onAuxClick={onClick === undefined ? undefined : middlePressOf(onClick)}
     >
-      <span className={faceClasses(boxSize(variant, size, false), false, false)} {...PRESS_FACE}>
+      <span className={faceClasses(boxSize(variant, size, false), false, false)}>
         {icon}
         <span className={WORDS}>{children}</span>
         {endIcon}
@@ -779,11 +761,6 @@ export function IconButtonLink({
   /** Called as the press leaves, a middle-click's included, before the browser follows the link; a press that is the window's to carry out stops the browser's with `preventDefault`. */
   onClick?: ((event: MouseEvent<HTMLAnchorElement>) => void) | undefined;
 }): React.JSX.Element {
-  const press = (event: MouseEvent<HTMLAnchorElement>) => {
-    pulse(event.currentTarget, variant);
-    onClick?.(event);
-  };
-
   return (
     <a
       className={linkClasses(
@@ -794,14 +771,12 @@ export function IconButtonLink({
       {...hint}
       href={href}
       aria-label={label}
-      onClick={press}
-      onAuxClick={onClick === undefined ? undefined : middlePressOf(press)}
+      onClick={onClick}
+      onAuxClick={onClick === undefined ? undefined : middlePressOf(onClick)}
       target={newTab ? "_blank" : undefined}
       rel={newTab ? "noreferrer" : undefined}
     >
-      <span className={faceClasses("icon", false, false)} {...PRESS_FACE}>
-        {icon}
-      </span>
+      <span className={faceClasses("icon", false, false)}>{icon}</span>
     </a>
   );
 }
@@ -901,7 +876,7 @@ export function IconButton({
       data-done={landed || undefined}
       aria-pressed={pressed}
     >
-      <span className={faceClasses("icon", ringShown, landed)} {...PRESS_FACE}>
+      <span className={faceClasses("icon", ringShown, landed)}>
         {submit === undefined ? icon : submitGlyph(submit)}
       </span>
       {ringShown ? <BusyRing /> : null}

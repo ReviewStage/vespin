@@ -1,11 +1,8 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { MODEL_PROVIDER } from "@repo/features/models-wire";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "vitest";
-import { HarnessMark } from "./harness-marks.js";
+import { assetUrl } from "./app-platform.js";
 import { fakeAppPlatform } from "./testing/app-platform.js";
 
 /**
@@ -16,18 +13,9 @@ import { fakeAppPlatform } from "./testing/app-platform.js";
 
 const BASE = "https://app.example/assets/panel/";
 
-test("the Codex mark resolves from the asset base the shell names", () => {
+test("a voice's clip resolves from the asset base the shell names", () => {
   window.history.replaceState(null, "", "/acme/plan/0b805267");
   fakeAppPlatform({ assetBase: () => BASE });
 
-  const page = document.createElement("div");
-  page.innerHTML = renderToStaticMarkup(
-    createElement(HarnessMark, { provider: MODEL_PROVIDER.OPENAI }),
-  );
-  const mark = page.querySelector("img");
-  assert.equal(mark?.getAttribute("src"), `${BASE}marks/codex-16.png`);
-  assert.equal(
-    mark?.getAttribute("srcset"),
-    `${BASE}marks/codex-16.png 1x, ${BASE}marks/codex-32.png 2x, ${BASE}marks/codex-48.png 3x`,
-  );
+  assert.equal(assetUrl("voices/alloy.m4a"), `${BASE}voices/alloy.m4a`);
 });

@@ -25,7 +25,7 @@ import {
   SidebarIcon,
 } from "../../icons/lucide-glyphs.js";
 import { FiringGlyph } from "../../marks/firing-glyph.js";
-import { type CodexArt, HarnessMark } from "../../marks/harness-mark.js";
+import { HarnessMark } from "../../marks/harness-mark.js";
 import { ProductMark } from "../../marks/product-mark.js";
 import { MARK_PROVIDER, PROVIDER_MARK_SIZE, ProviderMark } from "../../marks/provider-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
@@ -1305,9 +1305,6 @@ function DevicesScene(): React.JSX.Element {
   );
 }
 
-/** What a scene is handed: Codex's picture, where the page has one to draw its mark from. */
-type SceneProps = { readonly codexArt?: CodexArt | undefined };
-
 /** How many tiles the keys scene's grid sets across, and how many rows. */
 const KEY_GRID = { COLUMNS: 7, ROWS: 3 } as const;
 
@@ -1322,27 +1319,22 @@ const KEY_TILES: readonly number[] = Array.from(
 
 /**
  * The keys scene: a grid of tiles fading at its edges, the product's mark
- * lit at its heart between Claude Code's and Codex's, the rest of the tiles
+ * lit at its heart between Claude's and OpenAI's, the rest of the tiles
  * empty. It names no plan or key of its own; the words beside it do, as a
  * logo grid on a devtool's page does. A picture, inert.
  */
-function KeysScene({ codexArt }: SceneProps): React.JSX.Element {
+function KeysScene(): React.JSX.Element {
   const marks = new Map<number, ReactNode>([
     [KEY_HUB - 1, <HarnessMark key="claude" provider={MODEL_PROVIDER.ANTHROPIC} />],
     [KEY_HUB, <ProductMark key="vespin" inherit />],
-    [
-      KEY_HUB + 1,
-      codexArt === undefined ? null : (
-        <HarnessMark key="codex" provider={MODEL_PROVIDER.OPENAI} codexArt={codexArt} />
-      ),
-    ],
+    [KEY_HUB + 1, <HarnessMark key="codex" provider={MODEL_PROVIDER.OPENAI} />],
   ]);
 
   return (
     <div
       className="ui-landing-scene ui-landing-keys"
       role="img"
-      aria-label={`Claude Code's and Codex's marks lit either side of ${PRODUCT_NAME}'s`}
+      aria-label={`Claude's and OpenAI's marks lit either side of ${PRODUCT_NAME}'s`}
       {...DESKTOP_SURFACE}
     >
       <div className="ui-landing-key-grid" inert>
@@ -1514,7 +1506,7 @@ function StartsScene(): React.JSX.Element {
   );
 }
 
-const SCENES: Readonly<Record<LandingScene, (props: SceneProps) => React.JSX.Element>> = {
+const SCENES: Readonly<Record<LandingScene, () => React.JSX.Element>> = {
   [LANDING_SCENE.INBOX]: InboxScene,
   [LANDING_SCENE.AGENTS]: AgentsScene,
   [LANDING_SCENE.AUTOMATIONS]: AutomationsScene,
@@ -1524,14 +1516,8 @@ const SCENES: Readonly<Record<LandingScene, (props: SceneProps) => React.JSX.Ele
 };
 
 /** The scene that shows `scene`'s feature. */
-export function LandingSceneView({
-  scene,
-  codexArt,
-}: {
-  scene: LandingScene;
-  codexArt?: CodexArt | undefined;
-}): React.JSX.Element {
+export function LandingSceneView({ scene }: { scene: LandingScene }): React.JSX.Element {
   const Scene = SCENES[scene];
 
-  return <Scene codexArt={codexArt} />;
+  return <Scene />;
 }

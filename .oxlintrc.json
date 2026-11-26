@@ -73,6 +73,7 @@
     "vespin/archive-through-agent-change": "error",
     "vespin/ask-beside-screen": "error",
     "vespin/async-press-needs-busy": "error",
+    "vespin/bar-item-titled": "error",
     "vespin/enforce-delete-with-where": "error",
     "vespin/enforce-update-with-where": "error",
     "vespin/github-through-module": "error",
@@ -123,6 +124,36 @@
         "react/set-state-in-effect": "off",
         "react/use-memo": "off",
         "react-hooks/exhaustive-deps": "off"
+      }
+    },
+    {
+      "files": ["packages/ui-native/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@expo/ui/swift-ui",
+                "importNames": ["Text"],
+                "message": "Draw words with `./text.js`'s Text: `@expo/ui`'s own never redraws when the words or looks nested in it change."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@repo/ui/icons", "lucide-react", "lucide-react/**"],
+                "importNamePattern": "Sparkle",
+                "message": "Never draw a sparkle, in any of its glyphs: draw the act's own glyph from `GLYPH`, such as `GLYPH.RETRY` for an act that runs again."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/ui-native/src/text.tsx"],
+      "rules": {
+        "no-restricted-imports": "off"
       }
     },
     {
