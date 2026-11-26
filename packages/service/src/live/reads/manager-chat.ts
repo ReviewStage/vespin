@@ -6,9 +6,9 @@
  * (`agentReachableBy`), newest first, before the `seq` the read names where
  * it names one. The account's membership of the Manager's workspace is
  * joined, so a member taken out of the workspace stops hearing the chat at
- * once rather than at the next seal. Each message carries its reactions,
- * a count of each kind given, in `MANAGER_CHAT_REACTION`'s order, and
- * whether the account gave it. It reads no clock, as a live read must
+ * once rather than at the next seal. Each message carries its reactions as
+ * three lists of one length, each kind given in `MANAGER_CHAT_REACTION`'s
+ * order, how many gave it, and whether the account did. It reads no clock, as a live read must
  * (`live-statement.ts`).
  *
  * It is woken by a message written, edited, or deleted, a reaction given
@@ -38,7 +38,7 @@ import {
   MANAGER_CHAT_REACTION,
   MANAGER_CHAT_READ,
   type ManagerChatAttachment,
-  type ManagerChatReactionCount,
+  type ManagerChatReaction,
 } from "@repo/features/manager-chat-live";
 import { and, desc, eq, lt, type SQL, sql } from "drizzle-orm";
 import { Effect, Option } from "effect";
@@ -61,13 +61,26 @@ const REACTION_ORDER = sql`array[${sql.join(
   sql`, `,
 )}]`;
 
-/** The message's reactions: each kind given, how many gave it, and whether the account did, in `REACTION_ORDER`; none given is an empty list. */
-function reactionsOf(userId: string) {
-  return sql<readonly ManagerChatReactionCount[]>`coalesce((
-    select jsonb_agg(
-      jsonb_build_object('kind', given.kind, 'count', given.count, 'reacted', given.reacted)
-      order by array_position(${REACTION_ORDER}, given.kind)
-    )
+/** The lists a message's reactions are delivered in, by the column of its grouped read each takes. */
+const REACTION_LIST = {
+  KINDS: "kind",
+  COUNTS: "count",
+  REACTED: "reacted",
+} as const;
+
+/**
+ * One list of the message's reactions, a kind's `field` at each place:
+ * the kinds given, how many gave each, or whether the account did, each
+ * in `REACTION_ORDER`, so the three lists line up; none given is an empty
+ * list. Note that each is an `array(...)` of a grouped read rather than a
+ * JSON aggregate, which Postgres marks only stable.
+ */
+function reactionListOf<Value>(
+  userId: string,
+  field: (typeof REACTION_LIST)[keyof typeof REACTION_LIST],
+) {
+  return sql<Value[]>`array(
+    select ${sql.identifier(field)}
     from (
       select
         ${managerChatReaction.kind} as kind,
@@ -78,7 +91,8 @@ function reactionsOf(userId: string) {
         and ${managerChatReaction.messageId} = ${managerChatMessage.id}
       group by ${managerChatReaction.kind}
     ) as given
-  ), '[]'::jsonb)`;
+    order by array_position(${REACTION_ORDER}, given.kind)
+  )`;
 }
 
 /** The page's messages, one past the page, as `readManagerChatPage` reads them, each with its reactions. */
@@ -100,7 +114,9 @@ function messagesStatement(userId: string, agentId: string, before: string) {
         broadcast: managerChatMessage.broadcast,
         turnId: sql<string | null>`${managerChatMessage.turnId}`,
         lineId: sql<string | null>`${managerChatMessage.lineId}`,
-        reactions: reactionsOf(userId),
+        reactionKinds: reactionListOf<ManagerChatReaction>(userId, REACTION_LIST.KINDS),
+        reactionCounts: reactionListOf<number>(userId, REACTION_LIST.COUNTS),
+        reactionsReacted: reactionListOf<boolean>(userId, REACTION_LIST.REACTED),
       },
       instants: { createdAt: managerChatMessage.createdAt, editedAt: managerChatMessage.editedAt },
     },

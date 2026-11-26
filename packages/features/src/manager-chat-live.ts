@@ -13,9 +13,14 @@
  * for an agent the account does not reach, or one that is no Manager.
  *
  * Each message carries its reactions, one per kind given, with how many
- * gave it and whether the reader did, the Manager among the givers. The
- * field is optional, so a build from before reactions reads the row as it
- * did, and one after reads none on a row from a service before them.
+ * gave it and whether the reader did, the Manager among the givers. Note
+ * that its row carries them as three lists of one length, a kind, its
+ * count, and the reader's mark at each place, which the reader zips
+ * (`managerChatPageOf`), because the statement builds no JSON: Postgres
+ * marks its builders only stable, and a live statement calls immutable
+ * functions alone. The lists are optional, so a build from before
+ * reactions reads the row as it did, and one after reads none on a row
+ * from a service before them.
  */
 
 import { Schema as EffectSchema } from "effect";
@@ -105,7 +110,7 @@ export const managerChatAttachmentSchema = EffectSchema.Union([
 
 export type ManagerChatAttachment = typeof managerChatAttachmentSchema.Type;
 
-/** One message as its row delivers it: its author, its words and files, the root of the thread it replies in, the turn and line it stands with, its instants in epoch milliseconds, and its reactions, each kind given in `MANAGER_CHAT_REACTION`'s order. */
+/** One message as its row delivers it: its author, its words and files, the root of the thread it replies in, the turn and line it stands with, its instants in epoch milliseconds, and its reactions as three lists of one length, each kind given in `MANAGER_CHAT_REACTION`'s order. */
 const MESSAGES = liveRows({
   row: EffectSchema.Struct({
     id: EffectSchema.String,
@@ -121,7 +126,11 @@ const MESSAGES = liveRows({
     lineId: EffectSchema.NullOr(EffectSchema.String),
     createdAt: countedNumber,
     editedAt: EffectSchema.NullOr(countedNumber),
-    reactions: EffectSchema.optionalKey(EffectSchema.Array(managerChatReactionCountSchema)),
+    reactionKinds: EffectSchema.optionalKey(
+      EffectSchema.Array(EffectSchema.Literals(Object.values(MANAGER_CHAT_REACTION))),
+    ),
+    reactionCounts: EffectSchema.optionalKey(EffectSchema.Array(countedNumber)),
+    reactionsReacted: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.Boolean)),
   }),
   key: "id",
   order: [["seq", ORDER.DESC]],
@@ -146,8 +155,14 @@ export const MANAGER_CHAT_READ = liveRead({
   refuses: refuses(HOSTED_API_ERROR.NOT_FOUND),
 });
 
-/** One message of a Manager's chat, as its row delivers it. */
-export type ManagerChatLiveMessage = LiveRowOf<typeof MESSAGES>;
+/** A message's row as the statement delivers it, its reactions in three lists. */
+type ManagerChatLiveRow = LiveRowOf<typeof MESSAGES>;
+
+/** One message of a Manager's chat, as a reader draws it: its row, its reactions zipped into one list; none from a service before reactions. */
+export type ManagerChatLiveMessage = Omit<
+  ManagerChatLiveRow,
+  "reactionKinds" | "reactionCounts" | "reactionsReacted"
+> & { readonly reactions?: readonly ManagerChatReactionCount[] };
 
 /** One page of a Manager's chat as a reader draws it: its messages, newest first, and the `seq` to ask the next older page before, absent where the page reaches the chat's start. */
 export interface ManagerChatPageView {
@@ -155,10 +170,25 @@ export interface ManagerChatPageView {
   readonly before?: number;
 }
 
+/** A message from its row: its reactions zipped from the row's three lists, a kind with no count or mark beside it read as none given and not the reader's. */
+function messageOf(row: ManagerChatLiveRow): ManagerChatLiveMessage {
+  const { reactionKinds, reactionCounts, reactionsReacted, ...message } = row;
+
+  if (reactionKinds === undefined) return message;
+
+  const reactions = reactionKinds.map((kind, index) => ({
+    kind,
+    count: reactionCounts?.[index] ?? 0,
+    reacted: reactionsReacted?.[index] === true,
+  }));
+
+  return { ...message, reactions };
+}
+
 /** A page of the chat from its rows: at most a page of them, newest first, and where the next older page stands before, where the statement read past the page. */
 export function managerChatPageOf(rows: typeof MANAGER_CHAT_READ.rows.Type): ManagerChatPageView {
   const ordered = orderedLiveRows(MESSAGES, rows.messages);
-  const messages = ordered.slice(0, MANAGER_CHAT_PAGE);
+  const messages = ordered.slice(0, MANAGER_CHAT_PAGE).map(messageOf);
   const oldest = messages.at(-1);
 
   return ordered.length > MANAGER_CHAT_PAGE && oldest !== undefined
