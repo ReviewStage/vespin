@@ -357,6 +357,7 @@ function endOn(
     const running = yield* listRunningAgentTurns(userId);
 
     if (!never && shownOf(running, yield* Clock.currentTimeMillis).length > 0) return;
+
     // An activity ended because its turns ran too long leaves at once, since its "Done" would say they finished.
     const dismissAt =
       running.length > 0 ? now : now + Duration.toMillis(LIVE_ACTIVITY_PUSH.DISMISS_AFTER);
