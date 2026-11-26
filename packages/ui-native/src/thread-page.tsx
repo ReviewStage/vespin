@@ -60,7 +60,7 @@ import {
 import { Text } from "./text.js";
 import { newestRuns, threadRuns } from "./thread-group-model.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
@@ -72,7 +72,7 @@ const WRITER_HINT = "Opens their page";
 const WRITER_ID = "thread-writer";
 
 /** Between a writer's face and their name. */
-const WRITER_GAP = SPACE.TIGHT * 2;
+const WRITER_GAP = GLYPH_GAP.ROW;
 
 /** How many of a thread's newest messages its first frame draws at least, the runs before them a render later: more than most threads hold, so most open whole. */
 const FIRST_DRAWN = 10;
@@ -325,7 +325,7 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
 
   return (
     <HStack
-      spacing={SPACE.TIGHT + 2}
+      spacing={GLYPH_GAP.COMPACT}
       modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
     >
       <Image

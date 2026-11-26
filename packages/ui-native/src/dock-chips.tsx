@@ -21,7 +21,7 @@ import { BAR_GLASS } from "./glass-bar.js";
 import { type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { Text } from "./text.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What a capsule whose subject is at work now is heard to stand as. */
@@ -87,7 +87,7 @@ function Capsule({ chip }: { readonly chip: DockChip }) {
         accessibilityHint(chip.hint),
       ]}
     >
-      <HStack spacing={ROW_GAP}>
+      <HStack spacing={GLYPH_GAP.REGULAR}>
         {/* Note that SwiftUI reads a picture from a file alone, so one held as any other address stands as the glyph. */}
         {chip.icon?.startsWith(FILE_ADDRESS) === true ? (
           <Image

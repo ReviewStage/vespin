@@ -76,7 +76,7 @@ import {
 import { sectionInk } from "./section-ink.js";
 import { Text } from "./text.js";
 import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
@@ -526,7 +526,7 @@ function GroupHeader({
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
   return (
     <HStack
-      spacing={SPACE.TIGHT + 2}
+      spacing={GLYPH_GAP.REGULAR}
       modifiers={[
         SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         accessibilityElement("combine"),

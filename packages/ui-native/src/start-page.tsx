@@ -60,7 +60,7 @@ import { choiceLook } from "./row-menu-model.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { Text } from "./text.js";
 import { toneColor, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /**
@@ -128,7 +128,7 @@ function ChipLabel({ label, symbol, repository }: ChipLead & { readonly label: s
 
   if (repository !== undefined) {
     return (
-      <HStack spacing={SPACE.TIGHT + 2}>
+      <HStack spacing={GLYPH_GAP.REGULAR}>
         <RepositoryPicture repository={repository} size={markSize} />
         {words}
       </HStack>
@@ -138,7 +138,7 @@ function ChipLabel({ label, symbol, repository }: ChipLead & { readonly label: s
   if (symbol === undefined) return words;
 
   return (
-    <HStack spacing={SPACE.TIGHT + 2}>
+    <HStack spacing={GLYPH_GAP.REGULAR}>
       <Image {...glyphImage(symbol)} modifiers={[type]} />
       {words}
     </HStack>

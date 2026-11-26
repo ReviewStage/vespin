@@ -58,7 +58,7 @@ import { ProblemLine } from "./problem-line.js";
 import { CHOICE_MARK, type ChoiceMark, markLook } from "./row-menu-model.js";
 import { Text } from "./text.js";
 import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { SYSTEM_COLOR, useSystemColors } from "./tokens/swipe-colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
@@ -1752,7 +1752,7 @@ export function AutomationRow({
         }
         end={
           !failed && when === undefined ? null : (
-            <HStack spacing={SPACE.TIGHT}>
+            <HStack spacing={GLYPH_GAP.COMPACT}>
               {failed ? <FailedMark /> : null}
               {when === undefined ? null : (
                 <Text modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(VALUE_INK)]}>

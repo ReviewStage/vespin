@@ -37,7 +37,7 @@ import {
 import { Press } from "./press.js";
 import { Text as SwiftUIText } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { ROLE_SIZE, TYPE_ROLE } from "./tokens/type.js";
 
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
@@ -164,7 +164,7 @@ function PlayMark({
             accessibilityHint(PLAYS_IN_PLACE),
           ]}
         >
-          <HStack spacing={SPACE.TIGHT}>
+          <HStack spacing={GLYPH_GAP.REGULAR}>
             <Image {...glyphImage(GLYPH.RUN)} size={MARK_SIZE.GLYPH + 2} />
             {runs === undefined ? null : (
               <SwiftUIText

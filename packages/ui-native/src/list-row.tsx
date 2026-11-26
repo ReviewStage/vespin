@@ -110,7 +110,7 @@ import { searchedTitleMarkdown } from "./searched-title-model.js";
 import { sparedMarksDropped } from "./task-row-fit-model.js";
 import { Text } from "./text.js";
 import { type BrandColors, STATUS_TONE, toneColor, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, ROW_INSET, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, RADIUS, ROW_INSET, SPACE } from "./tokens/space.js";
 import type { StatusTone } from "./tokens/status-tone.js";
 import { SYSTEM_COLOR, type SystemColor, useSystemColors } from "./tokens/swipe-colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -404,7 +404,7 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
   const clock = useScaledSize(MARK_SIZE.GLYPH - 4);
 
   return (
-    <HStack spacing={SPACE.TIGHT}>
+    <HStack spacing={GLYPH_GAP.COMPACT}>
       <Image
         {...glyphImage(GLYPH.TIME)}
         size={clock}
@@ -997,7 +997,7 @@ function ThreadLine(props: ListRowProps & { readonly flush: boolean }) {
   if (flush) {
     return (
       <FlushLine>
-        <HStack spacing={SPACE.TIGHT} alignment="center">
+        <HStack spacing={GLYPH_GAP.COMPACT} alignment="center">
           <LineGlyph line={line} />
           {text}
         </HStack>
@@ -1041,7 +1041,7 @@ export function ListRow(props: ListRowProps) {
   const now = props.now ?? minute;
 
   const end = (
-    <HStack spacing={SPACE.TIGHT + 2}>
+    <HStack spacing={GLYPH_GAP.COMPACT}>
       {face === undefined ? null : (
         <Avatar name={face.name} id={face.id} picture={face.picture} size={MARK_SIZE.FACE} />
       )}

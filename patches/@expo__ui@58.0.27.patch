@@ -113,6 +113,67 @@ index 35e91fc87448e062bc43cec99c3e82a8b2b517b5..9d743fc2bac2e3812a3d59203a38bb5f
      };
  }
  /**
+diff --git a/build/swift-ui/Picker/index.d.ts b/build/swift-ui/Picker/index.d.ts
+index 5a973529c235050062aedcf749c8ff2d25fd7766..5e0e9217b874394f02bf0583bd54e0fc2a65bcd4 100644
+--- a/build/swift-ui/Picker/index.d.ts
++++ b/build/swift-ui/Picker/index.d.ts
+@@ -20,6 +20,12 @@ export type PickerProps<T extends SelectionValueType = any> = {
+      * Gets called with the selected `tag` value.
+      */
+     onSelectionChange?: (selection: T) => void;
++    /**
++     * The picked value as its own view, which a menu picker stands where it
++     * would read the picked option's label, as SwiftUI's `currentValueLabel`.
++     * Read only beside a string `label`.
++     */
++    currentValue?: React.ReactNode;
+     /**
+      * The content of the picker. You can use `Text` components with `tag` modifiers to display the options.
+      */
+diff --git a/build/swift-ui/Picker/index.js b/build/swift-ui/Picker/index.js
+index 30f8fe2705528c59700d40f48a74b2aa8bf18f6d..86224614dbbb1a8ce37ecadd4f767b5bf6217e1b 100644
+--- a/build/swift-ui/Picker/index.js
++++ b/build/swift-ui/Picker/index.js
+@@ -24,15 +24,23 @@ function transformPickerProps(props) {
+  * </Picker>
+  * ```
+  */ export function Picker(props) {
+-    const { label, children, ...restProps } = transformPickerProps(props);
++    const { label, currentValue, children, ...restProps } = transformPickerProps(props);
++    // The picked value's own view, which a menu picker stands in place of the option it reads from its pick.
++    const current = currentValue === undefined ? null : /*#__PURE__*/ _jsx(Slot, {
++        name: "currentValueLabel",
++        children: currentValue
++    });
+     if (typeof label === 'string') {
+-        return /*#__PURE__*/ _jsx(PickerNativeView, {
++        return /*#__PURE__*/ _jsxs(PickerNativeView, {
+             ...restProps,
+             label: label,
+-            children: /*#__PURE__*/ _jsx(Slot, {
+-                name: "content",
+-                children: children
+-            })
++            children: [
++                /*#__PURE__*/ _jsx(Slot, {
++                    name: "content",
++                    children: children
++                }),
++                current
++            ]
+         });
+     } else {
+         return /*#__PURE__*/ _jsxs(PickerNativeView, {
+@@ -45,7 +53,8 @@ function transformPickerProps(props) {
+                 /*#__PURE__*/ _jsx(Slot, {
+                     name: "content",
+                     children: children
+-                })
++                }),
++                current
+             ]
+         });
+     }
 diff --git a/build/swift-ui/Toolbar/index.d.ts b/build/swift-ui/Toolbar/index.d.ts
 index aeb1191459d01444aadc4ccbc78d77592347a02b..a338ed8bcff89448528ff11efd8dfb79187e7865 100644
 --- a/build/swift-ui/Toolbar/index.d.ts
@@ -414,6 +475,28 @@ index bb93701e0b8b3e92d0e57490eedd8e0e5048ff7f..6deb490e1bfb0ec626fa760cdffdee49
    }
  
    private static func getHashableSetFromEither(_ array: [Either<String, Double>]?) -> Set<AnyHashable> {
+diff --git a/ios/Picker/PickerView.swift b/ios/Picker/PickerView.swift
+index c78f278b41730bab9a50ab001f7fbac96837b068..515cebe83aaa454e072f7e3ec472ccd3654582aa 100644
+--- a/ios/Picker/PickerView.swift
++++ b/ios/Picker/PickerView.swift
+@@ -25,7 +25,16 @@ internal struct PickerView: ExpoSwiftUI.View {
+ 
+     let labelContent = props.children?.slot("label")
+ 
+-    if let systemImage = props.systemImage, let label = props.label {
++    // The picked value's own view, so a menu picker stands it where it would read the picked option's label.
++    let currentValue = props.children?.slot("currentValueLabel")
++
++    if let currentValue, let label = props.label, props.systemImage == nil {
++      if #available(iOS 18.0, tvOS 18.0, *) {
++        Picker(selection: $selection) { content } label: { Text(label) } currentValueLabel: { currentValue }
++      } else {
++        Picker(label, selection: $selection, content: { content })
++      }
++    } else if let systemImage = props.systemImage, let label = props.label {
+       Picker(label, systemImage: systemImage, selection: $selection) { content }
+     } else if let labelContent {
+       Picker(selection: $selection) { content } label: { labelContent }
 diff --git a/ios/ToolbarView.swift b/ios/ToolbarView.swift
 index 7d5046d74247691b139f0ef570d3aa2ba409f8a8..c80e790d07f046ac8e39910826b65564e5b943b1 100644
 --- a/ios/ToolbarView.swift

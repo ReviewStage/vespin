@@ -82,7 +82,7 @@ import { useRollingCount } from "./rolling-count.js";
 import type { RowPreview } from "./row-preview-model.js";
 import { Text } from "./text.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
+import { GLYPH_GAP, MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
@@ -320,7 +320,7 @@ function PullRequestMark({
   const look = PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
 
   return (
-    <HStack spacing={SPACE.TIGHT}>
+    <HStack spacing={GLYPH_GAP.COMPACT}>
       <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />
       <Text
         modifiers={[
@@ -362,7 +362,7 @@ function AgentStateWords({
   const colors = useColors();
 
   return (
-    <HStack spacing={SPACE.TIGHT}>
+    <HStack spacing={GLYPH_GAP.COMPACT}>
       {working ? <WorkingMark /> : <FailedMark />}
       <Text
         modifiers={[
@@ -427,7 +427,7 @@ export function AgentRow(props: AgentRowProps) {
         title={name}
         ink={colors.TEXT}
         end={
-          <HStack spacing={SPACE.TIGHT}>
+          <HStack spacing={GLYPH_GAP.COMPACT}>
             {props.runsOnGlyph === undefined ? null : (
               <ToneGlyph glyph={props.runsOnGlyph} tone={STATUS_TONE.NEUTRAL} hidden />
             )}
@@ -567,7 +567,7 @@ export function RelationRow({
       ink={faded ? colors.TEXT_MUTED : colors.TEXT_BODY}
       end={
         relation === undefined ? undefined : (
-          <HStack spacing={SPACE.TIGHT}>
+          <HStack spacing={GLYPH_GAP.COMPACT}>
             {relationMark === undefined ? null : (
               <ToneGlyph
                 glyph={relationMark.glyph}
@@ -999,7 +999,7 @@ function CommentCount({ comments }: { readonly comments: WordsComments }) {
       {/* Note that the count stands in Apple's least target, the shape on that frame rather than on the button, since a borderless button takes a press only where its label is hit. */}
       {/* Note that it stands at its target's top, set down a little, so it reads level with the block's first line, a heading's or a paragraph's, rather than 22 pt down the target's middle. */}
       <HStack
-        spacing={SPACE.TIGHT}
+        spacing={GLYPH_GAP.COMPACT}
         modifiers={[
           padding({ top: SPACE.TIGHT }),
           frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE, alignment: "top" }),
