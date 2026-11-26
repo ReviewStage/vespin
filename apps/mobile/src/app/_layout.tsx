@@ -25,7 +25,7 @@ import { useColorScheme } from "react-native";
 import { useComposerDraftsSignOut } from "../agents/composer-drafts.js";
 import { MachineAsks } from "../agents/machine-asks.js";
 import { useAppNotReadyCount } from "../app-ready.js";
-import { useCrashReports } from "../crash-reports.js";
+import { useCrashReports, withTapTraces } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useHostConnectLink } from "../host-connect-link.js";
@@ -38,6 +38,7 @@ import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useNewTaskDraftsSignOut } from "../new-task-draft.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { useResumeLoadCount } from "../resume-load.js";
 import { notePick } from "../row-picks.js";
 import { useRecentOpenedSignOut } from "../search/recent-opened.js";
 import { useSetupGate } from "../setup/use-setup-gate.js";
@@ -196,6 +197,7 @@ function GuardedScreens() {
 
   useAppNotReadyCount(signedIn && !updateNeeded);
   useLaunchLoadCount();
+  useResumeLoadCount();
   usePushRegistration(signedIn);
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);
@@ -356,9 +358,10 @@ function KeptScreens() {
  * color scheme, because expo-router's stack sets every navigation bar's
  * style from it, and with no theme given it read the light default, so in
  * dark every bar's buttons, its search field and the keyboard it raised
- * drew light beside the dark tab bar.
+ * drew light beside the dark tab bar. Every tap on it is traced
+ * (`withTapTraces`).
  */
-export default function RootLayout() {
+function RootLayout() {
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
@@ -375,3 +378,5 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+
+export default withTapTraces(RootLayout);

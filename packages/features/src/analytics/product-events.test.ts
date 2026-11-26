@@ -320,6 +320,26 @@ test("a launch's load travels its held thread and its one-by-one reads as counts
     }),
     undefined,
   );
+
+  // A return from the background travels its first minute the same way, with how long it held at most, what was delivered, and how long the app was away.
+  const resume = {
+    [PRODUCT_EVENT_PROPERTY.LONG_TASKS]: 10,
+    [PRODUCT_EVENT_PROPERTY.LONG_TASK_MS]: 30_000,
+    [PRODUCT_EVENT_PROPERTY.LONGEST_TASK_MS]: 10_000,
+    [PRODUCT_EVENT_PROPERTY.DELIVERIES]: 5,
+    [PRODUCT_EVENT_PROPERTY.AWAY_SECONDS]: 300,
+    [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: PRODUCT_LOAD_WINDOW.WHOLE,
+    [PRODUCT_EVENT_PROPERTY.APP_BUILD]: "96",
+  };
+
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.RESUME_LOAD,
+      at: AT,
+      properties: { ...resume, agentId: "4b1c6f0e-2f0a-4c1e-9d1a-0c2b9e1f7a3d" },
+    }),
+    { name: PRODUCT_EVENT.RESUME_LOAD, at: AT, properties: resume },
+  );
 });
 
 test("a reply's wait to stand in its thread travels on a rung, with what it carried, never its words or the raw time", () => {

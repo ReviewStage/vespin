@@ -89,6 +89,7 @@ import {
   selectTaskListListed,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
+import { windowRows } from "@repo/host/read-window";
 import {
   BUZZ,
   type Buzz,
@@ -101,16 +102,7 @@ import {
   useFailureNotices,
   useHeldValue,
 } from "@repo/ui-native";
-import {
-  caseWhen,
-  coalesce,
-  eq,
-  gt,
-  inArray,
-  isUndefined,
-  or,
-  useLiveQuery,
-} from "@tanstack/react-db";
+import { caseWhen, coalesce, eq, gt, inArray, isUndefined, or } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
@@ -124,6 +116,7 @@ import {
   useWholeListRead,
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import { useWindow } from "../host/use-window.js";
 import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useMenuPhotos, useMenuRepositoryPictures } from "../menu-photos.js";
@@ -651,12 +644,6 @@ function selectListingParts(state: AppStateSnapshot) {
   };
 }
 
-/** No task: what the listing reads while its tab stands behind, never yet brought forward. */
-const NO_LISTED_TASKS: readonly TaskSummary[] = [];
-
-/** No agent: what the listing reads while its tab stands behind, never yet brought forward. */
-const NO_LISTED_AGENTS: readonly ListedAgent[] = [];
-
 /** The task list's rows as the listing reads them off its collections. */
 interface ListedRows {
   readonly tasks: readonly TaskSummary[];
@@ -674,8 +661,8 @@ interface ListedRows {
 function useListedRows(reading: boolean): ListedRows {
   const collections = useTaskListCollections();
 
-  const tasks =
-    useLiveQuery((q) =>
+  const tasks = windowRows(
+    useWindow((q) =>
       reading
         ? q.from({ task: collections.tasks }).orderBy(({ task }) => {
             const agentsAt = coalesce(task.agents?.activityAt, 0);
@@ -683,14 +670,16 @@ function useListedRows(reading: boolean): ListedRows {
             return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
           }, "desc")
         : undefined,
-    ).data ?? NO_LISTED_TASKS;
+    ),
+  );
 
-  const agents =
-    useLiveQuery((q) =>
+  const agents = windowRows(
+    useWindow((q) =>
       reading
         ? q.from({ agent: collections.agents }).where(({ agent }) => isUndefined(agent.archivedAt))
         : undefined,
-    ).data ?? NO_LISTED_AGENTS;
+    ),
+  );
 
   return { tasks, agents };
 }
@@ -953,15 +942,6 @@ function idNamed(named: string | undefined): string | undefined {
     : undefined;
 }
 
-/** No pull request: what a page reads before its task is named. */
-const NO_PULL_REQUESTS: readonly ListedPullRequest[] = [];
-
-/** No task: what a page reads before its task is named. */
-const NO_PAGE_TASKS: readonly TaskSummary[] = [];
-
-/** No agent: what a page reads while none of its tasks is held. */
-const NO_PAGE_AGENTS: readonly ListedAgent[] = [];
-
 /** The rows a task's page draws (`usePageRows`). */
 interface PageRows {
   readonly tasks: readonly TaskSummary[];
@@ -982,8 +962,8 @@ function usePageRows(
 ): PageRows {
   const collections = useTaskListCollections();
 
-  const tasks =
-    useLiveQuery((q) =>
+  const tasks = windowRows(
+    useWindow((q) =>
       taskId === undefined || !reading
         ? undefined
         : q
@@ -997,12 +977,13 @@ function usePageRows(
             )
             .orderBy(({ task }) => task.createdAt, "desc")
             .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
-    ).data ?? NO_PAGE_TASKS;
+    ),
+  );
 
   const ids = tasks.map(({ id }) => id);
 
-  const agents =
-    useLiveQuery((q) =>
+  const agents = windowRows(
+    useWindow((q) =>
       ids.length === 0
         ? undefined
         : q
@@ -1010,7 +991,8 @@ function usePageRows(
             .where(({ agent }) => inArray(agent.taskId, ids))
             .orderBy(({ agent }) => agent.createdAt)
             .orderBy(({ agent }) => agent.id, { stringSort: "lexical" }),
-    ).data ?? NO_PAGE_AGENTS;
+    ),
+  );
 
   return { tasks, agents };
 }
@@ -1092,14 +1074,15 @@ export function useTaskOverview(
     [reading, heldRow, pageTasks],
   );
 
-  const pullRequests =
-    useLiveQuery((q) =>
+  const pullRequests = windowRows(
+    useWindow((q) =>
       taskId === undefined || !reading
         ? undefined
         : q
             .from({ pullRequest: collections.agentPullRequests })
             .where(({ pullRequest }) => eq(pullRequest.taskId, taskId)),
-    ).data ?? NO_PULL_REQUESTS;
+    ),
+  );
 
   const { held: statuses, setStatus } = useStatusWrites(tasks);
   const listed = useMemo(() => withHeld(tasks, statuses), [tasks, statuses]);

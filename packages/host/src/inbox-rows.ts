@@ -15,7 +15,8 @@
  * A write a member asks stands over the rows in the pool, never in the
  * collection, since a TanStack transaction would hold back every answer its
  * collection is synced. So the same query runs over a second source, the
- * rows the writes standing draw (`StandingRows.pending`), and the two are
+ * rows the writes standing draw, which the pool holds in one collection made
+ * with the kind (`StandingRows.drawn`), and the two are
  * merged (`inboxRowsMerged`): every key a write stands over is taken from
  * the second, where its drawn row still matches, and left out where it no
  * longer does, as a settle leaves Open at once. Note that no library lays a
@@ -25,7 +26,13 @@
 import type { InboxRow } from "@repo/features/inbox-digest";
 import { inboxInOrder } from "@repo/features/inbox-live";
 import { INBOX_STATUS } from "@repo/features/inbox-wire";
-import { ROW_GONE, type RowCollection, type RowKind, rowOf, type StandingRows } from "@repo/sync";
+import {
+  type ROW_GONE,
+  type RowCollection,
+  type RowKind,
+  rowOf,
+  type StandingRows,
+} from "@repo/sync";
 import { eq, type IR, isUndefined, not, or, type Ref } from "@tanstack/db";
 import type { InboxHoldings } from "./app-state-reads.js";
 import { INBOX_THREAD, type PlacedInboxRow, threadRowOf } from "./inbox-collections.js";
@@ -153,13 +160,6 @@ export function inboxRowsMerged(
   if (pending.size === 0) return kept;
 
   return [...kept.filter((row) => !pending.has(row.id)), ...drawn];
-}
-
-/** The rows the writes standing draw, those they take away left out, as the second source a screen's query runs over. */
-export function inboxRowsDrawn(
-  pending: ReadonlyMap<string, PlacedInboxRow | typeof ROW_GONE>,
-): readonly PlacedInboxRow[] {
-  return [...pending.values()].filter((row): row is PlacedInboxRow => row !== ROW_GONE);
 }
 
 /** Each holder's rows among `rows`, in the order a holder's list draws them. */

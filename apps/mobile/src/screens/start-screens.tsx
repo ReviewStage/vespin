@@ -41,6 +41,7 @@ import {
 } from "@repo/features/task-wire";
 import type { VoiceCallInto } from "@repo/features/voice-call-session";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
+import { windowRows } from "@repo/host/read-window";
 import {
   BAR_TITLE,
   type BarMenu,
@@ -67,7 +68,7 @@ import {
   WINDOW_SIZE_CLASS,
   wordsHandedBack,
 } from "@repo/ui-native";
-import { and, eq, inArray, isUndefined, not, or, useLiveQuery } from "@tanstack/react-db";
+import { and, eq, inArray, isUndefined, not, or } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -77,6 +78,7 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useWindow } from "../host/use-window.js";
 import { forgetNewTaskDraft, savedNewTaskDraft, saveNewTaskDraft } from "../new-task-draft.js";
 import { useOnTab } from "../tab-route.js";
 import {
@@ -1068,9 +1070,6 @@ interface RelationPick {
 /** What a menu of tasks to relate to reads of the pick: the tasks it may name, the one named, and how to name one. */
 type RelationChoices = Pick<RelationPick, "tasks" | "relation" | "pick">;
 
-/** No task to relate: what the menu offers before the workspace is known. */
-const NO_RELATION_TASKS: readonly TaskSummary[] = [];
-
 /**
  * The relation New task starts its task in: none until one is picked from
  * the +, its kind and its task together, or Sub-task of `parent` where a
@@ -1090,8 +1089,8 @@ function useRelationPick(
   );
 
   // Note that only the workspace's tasks not yet settled, and the parent, are read, in the list's order, which is all the menu offers, so opening New task sorts none of the account's other tasks, and a change to one of them draws the page nothing again.
-  const tasks =
-    useLiveQuery((q) =>
+  const tasks = windowRows(
+    useWindow((q) =>
       workspaceId === undefined
         ? undefined
         : q
@@ -1109,7 +1108,8 @@ function useRelationPick(
             })
             .orderBy(({ task }) => task.createdAt, "desc")
             .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
-    ).data ?? NO_RELATION_TASKS;
+    ),
+  );
 
   return {
     relation,
