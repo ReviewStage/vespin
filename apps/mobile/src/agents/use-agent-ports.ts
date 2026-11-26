@@ -23,6 +23,7 @@ import {
   PORTS_LOOK_EVERY_MS,
   type PortRow,
   portRows,
+  type SharedPort,
 } from "@repo/features/agent-ports-model";
 import { AGENT_MACHINE, agentMachineOf } from "@repo/features/agent-wire";
 import type { AgentSharedPortAnswerView } from "@repo/features/port-forward-acts";
@@ -47,6 +48,32 @@ export function useAgentHasPorts(agentId: string): boolean {
   const agent = useFollowedAgent(agentId);
 
   return agent !== undefined && agentMachineOf(agent) === AGENT_MACHINE.VERCEL;
+}
+
+/**
+ * The port the agent `agentId` names shares by public link, which lights its
+ * plug, as the panel's plug reads it: read once for an agent with ports, and
+ * kept under the same query its Ports sheet reads every few seconds and lays
+ * its shares over, so a share there lights the plug at once. None where none
+ * is shared or the link is not read.
+ */
+export function useAgentSharedPort(agentId: string): SharedPort | undefined {
+  const acts = useHostActs();
+  const hasPorts = useAgentHasPorts(agentId);
+
+  const { data: accountId } = useQuery({
+    ...appStateQuery,
+    select: (state) => signedInAccountId(state.account),
+  });
+
+  const { data: linked } = useQuery({
+    queryKey: [QUERY_ROOT.SHARED, accountId, agentId],
+    enabled: hasPorts,
+    retry: false,
+    queryFn: () => acts[ACT_KIND.AGENTS_PORT_SHARED]({ agentId }),
+  });
+
+  return hostedPorts(undefined, linked).shared;
 }
 
 /** The agent's ports as its sheet draws them. */

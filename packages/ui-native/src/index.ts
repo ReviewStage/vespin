@@ -455,6 +455,7 @@ export {
   MENU_CHIP_LOOK,
   MenuChip,
   StartPage,
+  ToolChip,
 } from "./start-page.js";
 
 export {

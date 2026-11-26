@@ -1,6 +1,7 @@
 // start-page.tsx -- a page that starts work, as Messages, ChatGPT and Claude start a conversation: an empty page with what the start is about at its head, and the agent page's composer on the keyboard, the + and the capsules saying where and how the work starts in a row under its field.
 
 import {
+  Circle,
   Divider,
   Host,
   HStack,
@@ -11,11 +12,13 @@ import {
   Section,
   Button as SwiftUIButton,
   VStack,
+  ZStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityIdentifier,
+  accessibilityLabel,
   accessibilityRemoveTraits,
   buttonStyle,
   controlSize,
@@ -59,7 +62,7 @@ import { RepositoryPicture } from "./marks.js";
 import { choiceLook } from "./row-menu-model.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { Text } from "./text.js";
-import { toneColor, useColors } from "./tokens/colors.js";
+import { STATUS_TONE, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -235,6 +238,58 @@ export function MenuChip(props: MenuChipProps) {
         <BarMenuButton key={submenu.label} menu={submenu} />
       ))}
     </Menu>
+  );
+}
+
+/**
+ * An act in a composer's row as its glyph alone, heard by its words, as the
+ * panel's box stands a tool beside where its agent runs, such as a cloud
+ * agent's Ports: the same plain capsule on the composer's glass as a
+ * `MenuChip` there, in the ink, opening what it names on a press. While
+ * something of it is on (`on`), such as a port shared, a green dot stands at
+ * the glyph's corner and the words are heard after its name, as the panel's
+ * plug lights.
+ */
+export function ToolChip({
+  label,
+  symbol,
+  on,
+  onPress,
+  testId,
+}: {
+  readonly label: string;
+  readonly symbol: Glyph;
+  /** What of it is on, such as "Sharing 3000"; none while nothing is. */
+  readonly on?: string | undefined;
+  readonly onPress: () => void;
+  /** The name a flow finds the capsule by. */
+  readonly testId?: string | undefined;
+}) {
+  const colors = useColors();
+  const dot = useScaledSize(MARK_SIZE.DOT);
+
+  return (
+    <SwiftUIButton
+      onPress={onPress}
+      modifiers={[
+        ...chipStyle(MENU_CHIP_LOOK.COMPOSER),
+        tint(colors.TEXT),
+        accessibilityLabel(on === undefined ? label : `${label}: ${on}`),
+        ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+      ]}
+    >
+      <ZStack alignment="topTrailing">
+        <Image {...glyphImage(symbol)} modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE })]} />
+        {on === undefined ? null : (
+          <Circle
+            modifiers={[
+              frame({ width: dot, height: dot }),
+              foregroundStyle(toneColor(colors, STATUS_TONE.COMPLETE)),
+            ]}
+          />
+        )}
+      </ZStack>
+    </SwiftUIButton>
   );
 }
 
