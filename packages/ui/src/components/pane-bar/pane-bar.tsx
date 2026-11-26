@@ -53,7 +53,7 @@ const BAR =
 
 /** Words leading the bar start where a tab's glyph does, a row's inset in. */
 const LEAD =
-  "ui-pane-bar-lead flex min-w-0 flex-initial items-center gap-icon-gap pl-row-inset whitespace-nowrap [.ui-pane-bar-start+&]:pl-0";
+  "ui-pane-bar-lead flex min-w-0 flex-initial items-center gap-icon-gap-compact pl-row-inset whitespace-nowrap [.ui-pane-bar-start+&]:pl-0";
 
 /** A pane's toggle at the bar's very start, the lead after it starting at the toggle rather than a row's inset. */
 const START = "ui-pane-bar-start flex flex-none items-center";

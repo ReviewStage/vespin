@@ -474,6 +474,8 @@ const merge = extendTailwindMerge({
         "control-icon",
         "control-gap",
         "icon-gap",
+        "icon-gap-compact",
+        "icon-gap-regular",
         "block-gap",
         "row-inset",
         "list-inset",

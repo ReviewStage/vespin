@@ -27,7 +27,7 @@ export function WorkingCount({
   if (count === 0) return null;
 
   return (
-    <span className="ui-working-count inline-flex flex-none items-center gap-icon-gap text-caption-inline text-muted-foreground tabular-nums [--ui-working-mark-size:var(--spacing-control-icon)]">
+    <span className="ui-working-count inline-flex flex-none items-center gap-icon-gap-compact text-caption-inline text-muted-foreground tabular-nums [--ui-working-mark-size:var(--spacing-control-icon)]">
       <WorkingMark />
       <span aria-hidden="true">{words}</span>
       <VisuallyHidden>{label}</VisuallyHidden>

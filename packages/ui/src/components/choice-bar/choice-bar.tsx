@@ -307,12 +307,12 @@ const OPTION = cn(
  */
 const OPTION_LOOK = {
   fill: {
-    regular: "h-control py-0 px-2 gap-icon-gap text-label",
-    compact: "h-choice-fill-compact py-0 px-1.5 gap-icon-gap text-caption",
+    regular: "h-control py-0 px-2 gap-icon-gap-regular text-label",
+    compact: "h-choice-fill-compact py-0 px-1.5 gap-icon-gap-compact text-caption",
   },
   segmented: {
-    regular: "h-choice-segment py-0 px-3 gap-icon-gap text-label",
-    compact: "h-choice-segment-compact py-0 px-2 gap-icon-gap text-caption",
+    regular: "h-choice-segment py-0 px-3 gap-icon-gap-regular text-label",
+    compact: "h-choice-segment-compact py-0 px-2 gap-icon-gap-compact text-caption",
   },
 } as const satisfies Record<ChoiceBarLook, Record<ChoiceBarSize, string>>;
 

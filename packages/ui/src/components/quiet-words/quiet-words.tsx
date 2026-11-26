@@ -41,7 +41,7 @@ export function QuietWords({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <span className="ui-quiet-words inline-flex min-w-0 items-center gap-icon-gap">
+    <span className="ui-quiet-words inline-flex min-w-0 items-center gap-icon-gap-compact">
       {mark === QUIET_MARK.FAILED ? <FailedGlyph /> : null}
       <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
         {children}

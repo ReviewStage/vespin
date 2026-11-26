@@ -306,7 +306,7 @@ export function RetryRowLabel({ failure }: { failure: string }): React.JSX.Eleme
   return (
     <>
       <span role="alert">{failure}</span>{" "}
-      <span className="ui-retry-row-label ml-ui-4 inline-flex items-baseline gap-icon-gap font-emphasis">
+      <span className="ui-retry-row-label ml-ui-4 inline-flex items-baseline gap-icon-gap-compact font-emphasis">
         <RetryIcon />
         {WORDS.RETRY}
       </span>

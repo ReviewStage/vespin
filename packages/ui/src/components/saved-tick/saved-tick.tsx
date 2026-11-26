@@ -99,7 +99,7 @@ export function SavedTick({ saves }: { saves: number }): React.JSX.Element {
         <span
           key={landed}
           ref={tick}
-          className="ui-saved-tick inline-flex items-center gap-icon-gap font-ui text-caption font-caption whitespace-nowrap text-muted-foreground [&>svg]:size-caption-leading [&>svg]:flex-none [&>svg]:text-complete"
+          className="ui-saved-tick inline-flex items-center gap-icon-gap-compact font-ui text-caption font-caption whitespace-nowrap text-muted-foreground [&>svg]:size-caption-leading [&>svg]:flex-none [&>svg]:text-complete"
         >
           <CheckIcon />
           {SAVED}

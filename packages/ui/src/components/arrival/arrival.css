@@ -8,7 +8,7 @@
   .ui-arrival-wait {
     display: flex;
     align-items: center;
-    gap: var(--ui-icon-gap);
+    gap: var(--ui-icon-gap-compact);
     margin: var(--ui-space-4) var(--ui-row-inset);
     color: var(--ui-color-text-muted);
     font-family: var(--ui-font-sans);

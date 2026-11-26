@@ -121,7 +121,7 @@ const PILL_PLACE =
 
 /** A pill's face, name, and words, fainter by its line's distance from the one in front (`data-far`) on a pill that stays solid, so no pill shows the words behind it, and at full strength under the pointer. Note that the pointer's rule is marked important, since the fade's rules weigh the same and stand after it in the sheet. */
 const PILL_WORDS =
-  "flex max-w-popover-wide items-center gap-icon-gap px-ui-4 text-caption group-data-[far=1]/pill:opacity-80 group-data-[far=2]/pill:opacity-60 group-data-[far=3]/pill:opacity-40 group-hover/pill:opacity-100!";
+  "flex max-w-popover-wide items-center gap-icon-gap-compact px-ui-4 text-caption group-data-[far=1]/pill:opacity-80 group-data-[far=2]/pill:opacity-60 group-data-[far=3]/pill:opacity-40 group-hover/pill:opacity-100!";
 
 const NARROW_PRESS =
   "pointer-events-auto flex max-h-full w-full cursor-press appearance-none flex-col items-start overflow-hidden border-0 bg-transparent p-0 py-ui-8 pl-ui-4";

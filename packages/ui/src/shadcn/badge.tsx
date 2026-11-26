@@ -38,7 +38,7 @@ import { clsx } from "clsx";
  */
 
 const badgeVariants = cva(
-  "group/badge inline-flex min-w-0 max-w-full flex-initial items-center gap-icon-gap rounded-badge px-badge-inline py-badge-block font-body text-tag leading-tag font-tag inset-ring [&_svg]:flex-none [&_svg]:size-badge-glyph [&_svg]:text-tone-ink",
+  "group/badge inline-flex min-w-0 max-w-full flex-initial items-center gap-icon-gap-compact rounded-badge px-badge-inline py-badge-block font-body text-tag leading-tag font-tag inset-ring [&_svg]:flex-none [&_svg]:size-badge-glyph [&_svg]:text-tone-ink",
   {
     variants: {
       // Note that every tone draws its glyph in the tone's ink, which its `data-tone` sets (`tokens/status-tone.css`).

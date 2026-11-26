@@ -48,7 +48,7 @@ export function CallMark({
       data-call-mark={end}
     >
       <hr aria-hidden className={RULE} />
-      <span className="ui-call-mark-words flex min-w-0 flex-initial items-center gap-icon-gap">
+      <span className="ui-call-mark-words flex min-w-0 flex-initial items-center gap-icon-gap-compact">
         <GlyphSlot size={ICON_SIZE.SMALL} ink={GLYPH_INK.MUTED}>
           {end === CALL_MARK_END.START ? <GLYPH.CALL /> : <GLYPH.END_CALL />}
         </GlyphSlot>

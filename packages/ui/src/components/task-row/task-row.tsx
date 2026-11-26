@@ -197,7 +197,7 @@ export const RELATED_TASK_CELLS: readonly TaskRowCell[] = [
 
 /** A row's cell: a line in the caption's type, letting the pointer through to the row's press. */
 const CELL =
-  "ui-task-row-cell flex items-center gap-icon-gap text-caption text-muted-foreground tabular-nums whitespace-nowrap";
+  "ui-task-row-cell flex items-center gap-icon-gap-compact text-caption text-muted-foreground tabular-nums whitespace-nowrap";
 
 /**
  * How narrow a column's cell may stand: as narrow as its column, but the
@@ -211,7 +211,7 @@ const UPDATED_CHARS = 8;
 
 /** A relation's pill past its words: its compact pill's sides, its kind's mark and its chevron, each with the gap beside it (`Chip`), and a character's room more, since the words are set in the chip's own weight; none on a list whose rows say no relation. */
 const RELATION_CHIP_MARKS =
-  "min(var(--ui-task-row-relation-chars, 0), 1) * (2 * var(--ui-space-8) + 2 * (var(--ui-space-12) + var(--ui-icon-gap)) + 1ch)";
+  "min(var(--ui-task-row-relation-chars, 0), 1) * (2 * var(--ui-space-8) + 2 * (var(--ui-space-12) + var(--ui-icon-gap-compact)) + 1ch)";
 
 /**
  * How wide each column whose cell differs from row to row stands at least,
@@ -308,7 +308,7 @@ const COLUMN_ORDER = {
 const AFTER = "ui-task-row-after";
 
 /** One cell of the trailing run, the gap before it taken only where it holds something. */
-const TRAIL_PART = "ui-task-row-part flex min-w-0 items-center gap-icon-gap empty:hidden";
+const TRAIL_PART = "ui-task-row-part flex min-w-0 items-center gap-icon-gap-compact empty:hidden";
 
 /** The widest a repository's name stands in the run, cut short past it. */
 const REPOSITORY_MOST: CSSProperties = { maxWidth: "22ch" };
