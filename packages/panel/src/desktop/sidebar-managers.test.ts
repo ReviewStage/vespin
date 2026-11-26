@@ -344,6 +344,17 @@ test("a Manager's row offers Rename and Change face › beside Settings…, and 
   const gray = colors()?.querySelector<HTMLElement>('[aria-label="Gray"]');
 
   assert.equal(document.activeElement, gray, "the cat's colors take the focus, the menu standing");
+  // The pointer coming back onto the colors from outside leaves the keyboard on them.
+  await act(async () =>
+    gray?.dispatchEvent(
+      new MouseEvent("pointerover", { bubbles: true, relatedTarget: document.body }),
+    ),
+  );
+  assert.equal(
+    document.activeElement,
+    gray,
+    "the pointer coming back leaves the focus on the colors",
+  );
   await act(async () =>
     gray?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
   );

@@ -1519,9 +1519,18 @@ function namedItemOf(
 /** What in a panel may take the keyboard as it opens, after its search field. */
 const PANEL_CONTROL = 'button, [href], [tabindex]:not([tabindex="-1"])';
 
+/** Whether the focus stands in `panel`, or in the colors an icon picker's choice in it floats (`iconPickerChoiceOf`), portaled to the body. */
+function focusIn(panel: HTMLElement): boolean {
+  const focused = document.activeElement;
+
+  if (focused === null) return false;
+
+  return panel.contains(focused) || panel.contains(iconPickerChoiceOf(focused) ?? null);
+}
+
 /** Takes the keyboard into `panel`, where its own drawing has not already: its search field first, then its first control, else the panel. */
 function focusInto(panel: HTMLElement): void {
-  if (panel.contains(document.activeElement)) return;
+  if (focusIn(panel)) return;
 
   const start =
     panel.querySelector<HTMLElement>('input:not([type="hidden"]), textarea') ??
