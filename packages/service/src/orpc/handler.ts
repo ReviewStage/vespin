@@ -16,9 +16,9 @@
  *
  * Every answer, a refusal and an unmatched path's among them, is also marked
  * as this origin's alone (`SAME_ORIGIN_ANSWER`). A matched answer, a
- * refusal's among them, carries the cookies Better Auth answered the
- * request's browser session read with, and is then never kept by a shared
- * cache (`auth/session-cookies.ts`).
+ * refusal's among them, that leaves soon after its request carries the
+ * cookies Better Auth answered the request's browser session read with, and
+ * is then never kept by a shared cache (`auth/session-cookies.ts`).
  *
  * Every body is counted once, as it is read, against the matched
  * procedure's own cap (`bodyCap` in `@repo/features/contract`), or the
@@ -252,15 +252,20 @@ export function hostedFetch(router: HostedRouter): HostedFetch {
     }
 
     // Note that each request has its own place for the cookies its session read answers with (`auth/session-cookies.ts`).
+    const askedAt = Date.now();
     const kept: string[] = [];
-    const cookies = { kept };
-    const asked = Context.add(services, SessionCookies, cookies);
+    const asked = Context.add(services, SessionCookies, { kept });
 
     const { matched, response } = await handler.handle(request, {
       context: { "effect/context": asked, "effect/wrap": hostedRefusalWrap(asked), request },
     });
 
-    if (matched) return sameOriginOnly(answeredWithSessionCookies(settled(response), kept));
+    if (matched) {
+      return sameOriginOnly(
+        answeredWithSessionCookies(settled(response), kept, Date.now() - askedAt),
+      );
+    }
+
     const { pathname } = new URL(request.url);
 
     if (RETIRED_TASK_PATHS.some((retired) => retired.test(pathname))) {
