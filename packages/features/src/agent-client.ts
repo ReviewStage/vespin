@@ -169,7 +169,6 @@ import {
   type HostPairingDenyView,
   type HostPairingView,
 } from "./host-pairing-view.js";
-import type { HostPairingTarget } from "./host-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { spelledFailure } from "./hosted-failure.js";
 import {
@@ -552,16 +551,11 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.hosts.readPairing, { code }, { as: HOST_PAIRING_RENAMES });
   }
 
-  /** A box's pending pairing approved by its code, which makes its host at once, the account's own or, where the target names one, a workspace's; its box collects its secret on its next poll. */
+  /** A box's pending pairing approved by its code, which makes the account's host at once; its box collects its secret on its next poll. */
   approveHostPairing(
     code: string,
-    target?: HostPairingTarget,
   ): Effect.Effect<HostPairingApproveView, never, HttpClient.HttpClient> {
-    return hostedCall(
-      this.#hosted.hosts.approvePairing,
-      { code, ...(target === undefined ? undefined : { target }) },
-      { as: HOST_PAIRING_RENAMES },
-    );
+    return hostedCall(this.#hosted.hosts.approvePairing, { code }, { as: HOST_PAIRING_RENAMES });
   }
 
   /** A box's pending pairing denied by its code, so its box is answered denied. */

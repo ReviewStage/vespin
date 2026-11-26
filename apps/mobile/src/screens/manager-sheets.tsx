@@ -3,8 +3,6 @@
 import { iosAgentRoute } from "@repo/features/ios-app-links";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
-import { IN_THE_CLOUD, placeIdOf, placeOfId } from "@repo/features/runs-on-places";
-import { agentRunsOnWords } from "@repo/features/task-agents-model";
 import { ACT_UNREACHED_WORDS, readingWords } from "@repo/features/words";
 import {
   BAR_TITLE,
@@ -33,12 +31,7 @@ import { useAgentModelPick } from "../agents/use-agent-model.js";
 import { useCreateManager } from "../agents/use-managers.js";
 import { useCloseSheet, useCloseSheetThen } from "../close-sheet.js";
 import { useOnTab } from "../tab-route.js";
-import {
-  runsOnOptions,
-  useModelPick,
-  useRepositoryPick,
-  useRunsOnPlaces,
-} from "../tasks/use-start.js";
+import { CLOUD, runsOnOptions, useModelPick, useRepositoryPick } from "../tasks/use-start.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
 
 /** The sheets' words, as the desktop's Manager card says them (`new-manager-dialog.tsx`). */
@@ -61,6 +54,7 @@ const WORDS = {
   CANCEL: "Cancel",
   FIXED_AFTER_CREATE: "Fixed once the Manager is made.",
   NO_REPOSITORIES: "This workspace reaches no repositories yet.",
+  CLOUD: "Cloud",
 } as const;
 
 /** What a flow finds the name field by. */
@@ -161,13 +155,11 @@ export function NewManagerScreen() {
   const workspace = useTasksWorkspace();
   const repositories = useRepositoryPick(workspace);
   const model = useModelPick();
-  // Note that the machines the workspace owns are offered after the member's devices, as Start's Runs on offers them.
-  const places = useRunsOnPlaces(model, workspace?.id);
   const create = useCreateManager(workspace?.id);
   const making = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const [name, setName] = useState("");
   const [picks, setPicks] = useState<readonly string[] | undefined>(undefined);
-  const [runsOn, setRunsOn] = useState(IN_THE_CLOUD);
+  const [runsOn, setRunsOn] = useState(CLOUD);
   const [face, setFace] = useState<ManagerFace | undefined>(undefined);
   const [facePicking, setFacePicking] = useState(false);
 
@@ -254,13 +246,10 @@ export function NewManagerScreen() {
           <ListSection title={WORDS.MACHINE}>
             <MenuPickRow
               label={WORDS.MACHINE}
-              options={runsOnOptions(places)}
-              picked={placeIdOf(runsOn)}
+              options={runsOnOptions(model.devices)}
+              picked={runsOn}
               onPick={(picked) => {
-                const place = placeOfId(places, picked);
-
-                if (place === undefined) return;
-                setRunsOn(place.runsOn);
+                setRunsOn(picked);
                 changed();
               }}
             />
@@ -377,7 +366,7 @@ export function ManagerSettingsScreen() {
               </ListSection>
               <ListSection footer={WORDS.FIXED_AFTER_CREATE}>
                 <ValueRow label={WORDS.REPOSITORIES} value={agent.repository ?? "—"} />
-                <ValueRow label={WORDS.MACHINE} value={agentRunsOnWords(agent)} />
+                <ValueRow label={WORDS.MACHINE} value={agent.mac?.name ?? WORDS.CLOUD} />
               </ListSection>
             </>
           )}

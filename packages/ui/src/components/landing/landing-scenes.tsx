@@ -68,7 +68,6 @@ import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
 import { SearchField } from "../search-field/search-field.js";
 import { SettingsRow } from "../settings-row/settings-row.js";
 import { SETTINGS_SECTION_FRAME, SettingsSection } from "../settings-section/settings-section.js";
-import { Shimmer } from "../shimmer/shimmer.js";
 import { Switch } from "../switch/switch.js";
 import { TABS_GROUND, Tab, Tabs } from "../tabs/tabs.js";
 import { TEXT_ELEMENT, TEXT_TONE, Text } from "../text/text.js";
@@ -938,7 +937,7 @@ function AgentLog({ step }: { step: number }): React.JSX.Element {
       {step >= 6 ? <TeammateMessage person={teammate} words="Looks good. Merging it now." /> : null}
       <NoteLine look={NOTE_LINE_LOOK.INSET}>
         <span className="ui-landing-working">
-          <Shimmer>Working…</Shimmer>
+          Working…
           <Time at={STORY_NOW - 14 * MINUTE} now={STORY_NOW} look={TIME_LOOK.DURATION} />
         </span>
       </NoteLine>
@@ -1194,7 +1193,7 @@ function AutomationRuns({ step }: { step: number }): React.JSX.Element {
                 />
               }
               title={run.title}
-              description={running ? <Shimmer>Working</Shimmer> : run.line}
+              description={running ? "Working" : run.line}
               meta={<Time at={STORY_NOW - run.ago * MINUTE} now={STORY_NOW} hint={false} />}
               metaAt={LIST_ROW_META.TITLE}
               onPress={still}

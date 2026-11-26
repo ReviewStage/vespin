@@ -9,7 +9,6 @@ import {
 } from "@repo/database/models/agent-store";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import {
-  AGENT_MACHINE,
   AGENT_STATUS,
   type AgentFailure,
   type AgentStatus,
@@ -177,29 +176,18 @@ function summaryOf(read: readonly ReadAgent[]): NonNullable<HeldTaskSummary["age
   };
 }
 
-/**
- * The account's listed tasks, each carrying its agents in brief, whichever
- * member started each, where it has any; the tasks' order and every other
- * field as listed. An agent on a workspace's machine is left out, its work
- * and what it published with it, where the build asking reads none
- * (`readsWorkspace`, `workspace-machine-reads.ts`).
- */
+/** The account's listed tasks, each carrying its agents in brief, whichever member started each, where it has any; the tasks' order and every other field as listed. */
 export function withTaskAgents(
   userId: string,
   tasks: readonly Omit<TaskSummary, "agents">[],
-  readsWorkspace = true,
 ): AgentStoreEffect<readonly HeldTaskSummary[]> {
   return Effect.gen(function* () {
     // Note that the archived agents are read too, because the work one did
     // is still the task's activity, though the row names it no more.
-    const published = yield* listPublishedAgents(
+    const held = yield* listPublishedAgents(
       userId,
       tasks.map((task) => task.id),
       { includeArchived: true },
-    );
-
-    const held = published.filter(
-      ({ agent }) => readsWorkspace || agent.machine !== AGENT_MACHINE.WORKSPACE,
     );
 
     const conversationIds = held.map(({ agent }) => agent.conversationId);

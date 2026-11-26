@@ -11,6 +11,7 @@ import { GITHUB_MODULE_GUARD_RULE, namesGitHubBypass } from "./shared/github-mod
 import { HEADING_GUARD_RULE } from "./shared/heading-guard.ts";
 import { HOST_READ_GUARD_RULE, isWatchedSource } from "./shared/host-read-guard.ts";
 import { KEPT_GUARD_RULE } from "./shared/kept-guard.ts";
+import { LIVE_QUERY_GUARD_RULE, LIVE_QUERY_HOOK } from "./shared/live-query-guard.ts";
 import { LIVE_REGION_GUARD_RULE } from "./shared/live-region-guard.ts";
 import { LUCIDE_GUARD_RULE } from "./shared/lucide-guard.ts";
 import { MESSAGE_BOX_GUARD_RULE, namesBoxPart } from "./shared/message-box-guard.ts";
@@ -51,7 +52,10 @@ import { WRITE_MUTATION_GUARD_RULE } from "./shared/write-mutation-guard.ts";
  * `@repo/ui-native` holding one that would silence
  * `no-raw-press-outside-ui-native`, on any of the iOS app's TypeScript files
  * holding one that would silence `entity-choice-through-helper` or, where it
- * draws JSX, `bar-item-titled`, neither of which has a way past it, on any JSX-capable
+ * draws JSX, `bar-item-titled`, neither of which has a way past it, on any
+ * of the iOS app's or its design system's TypeScript files naming
+ * `useLiveQuery` and holding one that would silence
+ * `live-query-through-window`, which has no way past it, on any JSX-capable
  * file holding one that would silence `skeleton-through-components`,
  * `settings-row-end`, `row-behavior-in-row`, whose list of row components
  * is the only way past it, on a Settings page's file holding one that would
@@ -255,6 +259,17 @@ const GUARDS = [
       existsSync(absolute) &&
       readFileSync(absolute, "utf8").includes("lucide-react"),
     remedy: "Import the icon from @repo/ui/icons instead",
+  },
+  {
+    rule: LIVE_QUERY_GUARD_RULE,
+    sources: TYPESCRIPT_SOURCE,
+    // A file that never names the live query has nothing to silence; the guards' own tests spell fixtures.
+    watches: (absolute: string) =>
+      !path.relative(REPOSITORY_ROOT, absolute).startsWith("tools/oxlint/vespin/") &&
+      existsSync(absolute) &&
+      readFileSync(absolute, "utf8").includes(LIVE_QUERY_HOOK),
+    remedy:
+      "Read the window through useWindow (apps/mobile/src/host/use-window.ts), which answers a read state",
   },
   {
     rule: PLACEHOLDER_GUARD_RULE,
