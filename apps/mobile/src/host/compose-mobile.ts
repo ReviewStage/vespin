@@ -265,9 +265,6 @@ function seamLayers(options: MobileHostOptions) {
       : Layer.succeed(PlatformFileDownload, device.fileDownload),
     // Note that the screens run in this process, so a picture's source may carry the account's header to their image loader (`ACCOUNT_PICTURE_SOURCE`).
     Layer.succeed(PlatformScreensInProcess, true),
-    device.foregroundClock === undefined
-      ? Layer.empty
-      : Layer.succeed(ForegroundClock, device.foregroundClock),
   );
 }
 
@@ -594,9 +591,15 @@ export function composeMobile(
     }),
   );
 
+  // Note that the device's clock stands around the whole host rather than among the assembly's seams, which reach only its construction, since the loops it arms and the acts it answers run in the context the host stands in.
   return launched.pipe(
     Layer.provideMerge(composedMobile(options)),
     Layer.provideMerge(assembly),
     Layer.provide(httpClient),
+    Layer.provideMerge(
+      device.foregroundClock === undefined
+        ? Layer.empty
+        : Layer.succeed(ForegroundClock, device.foregroundClock),
+    ),
   );
 }
