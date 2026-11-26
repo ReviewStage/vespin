@@ -1,5 +1,11 @@
-import { RUNNER_END, RUNNER_EVENT, type RunnerEnd } from "@repo/agent-runner/protocol";
+import {
+  RUNNER_END,
+  RUNNER_EVENT,
+  RUNNER_KEPT_PICTURE_KEY,
+  type RunnerEnd,
+} from "@repo/agent-runner/protocol";
 import { AGENT_TOOL, WORKSPACE_MCP_WATCHED_META } from "@repo/features/agent-tools";
+import { type KeptPicture, keptPictureSchema } from "@repo/features/conversation-picture-wire";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { TurnFilesSummarySchema, type TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import {
@@ -100,6 +106,47 @@ export const PICTURE_STAND_IN = "[image]";
 const readTextBlock = Schema.decodeUnknownOption(
   Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
 );
+
+const readKeptPictureBlock = Schema.decodeUnknownOption(
+  Schema.Struct({ [RUNNER_KEPT_PICTURE_KEY]: keptPictureSchema }),
+);
+
+/** Another tool's answer as the model read it and the transcript keeps it: its words, and the pictures its runner kept apart. */
+export interface BlocksAnswer {
+  readonly text: string;
+  readonly pictures: readonly KeptPicture[];
+}
+
+/**
+ * Another tool's answer blocks as the transcript keeps them: each text
+ * block's words, and a picture's stand-in in every other block's place,
+ * joined by lines, and in order the picture each block names that its
+ * runner kept beside the transcript apart from its events
+ * (`RUNNER_KEPT_PICTURE_KEY`). Note that a kept picture still stands in as
+ * `[image]` in the words, so the answer reads as it did before its runner
+ * kept any, and a block that names a picture any other way, a runner's from
+ * before or one whose keep failed, is the stand-in alone.
+ */
+export function blocksAnswer(blocks: readonly WireValue[]): BlocksAnswer {
+  const words: string[] = [];
+  const pictures: KeptPicture[] = [];
+
+  for (const block of blocks) {
+    const text = readTextBlock(block);
+
+    if (Option.isSome(text)) {
+      words.push(text.value.text);
+      continue;
+    }
+
+    words.push(PICTURE_STAND_IN);
+    const kept = readKeptPictureBlock(block);
+
+    if (Option.isSome(kept)) pictures.push(kept.value[RUNNER_KEPT_PICTURE_KEY]);
+  }
+
+  return { text: words.join("\n"), pictures };
+}
 
 /**
  * Our own tool's answer as the text it answered: its first text block,
@@ -315,6 +362,21 @@ const MACHINE_TOOLS: ReadonlySet<string> = new Set([AGENT_TOOL.RUN_ON_MAC, AGENT
 /** The status a machine tool answers when nothing ran (`MACHINE_COMMAND_STATUS.NOT_RUN`). */
 const MACHINE_NOT_RUN = "not-run";
 
+/** A tool's answer as its reader hands it in: our own tool's JSON text, or any other's text and output with the pictures its runner kept apart. */
+type ToolAnswer =
+  | {
+      readonly workspaceTool: true;
+      readonly name: string;
+      readonly text: string;
+      readonly watched?: WireRecord | undefined;
+    }
+  | {
+      readonly workspaceTool: false;
+      readonly text: string;
+      readonly output: UnparsedWireValue;
+      readonly pictures?: readonly KeptPicture[];
+    };
+
 /**
  * A tool's answer as the transcript settles its call: an error the harness
  * flagged is a refusal carrying the text, and any other answer is available.
@@ -327,17 +389,7 @@ const MACHINE_NOT_RUN = "not-run";
  * carried for the people watching alone (`WORKSPACE_MCP_WATCHED_META`) is
  * kept beside the answer the model read, under keys the answer leaves free.
  */
-export function toolAnswerSettlement(
-  answer:
-    | {
-        readonly workspaceTool: true;
-        readonly name: string;
-        readonly text: string;
-        readonly watched?: WireRecord | undefined;
-      }
-    | { readonly workspaceTool: false; readonly text: string; readonly output: UnparsedWireValue },
-  isError: boolean,
-): ToolCallSettlement {
+function answerSettlement(answer: ToolAnswer, isError: boolean): ToolCallSettlement {
   const read: UnparsedWireValue = answer.workspaceTool
     ? storableValue(valueFromJsonText(answer.text))
     : answer.output;
@@ -365,6 +417,18 @@ export function toolAnswerSettlement(
 
   // Note that the settlement is handed the answer as read, since it reads its JSON again and would make its NUL anew.
   return toolCallSettlementOf(JSON.stringify(output), status);
+}
+
+/**
+ * A tool's answer as the transcript settles its call (`answerSettlement`),
+ * with the pictures its runner kept beside the transcript apart from its
+ * events, where another tool's answer named any (`blocksAnswer`).
+ */
+export function toolAnswerSettlement(answer: ToolAnswer, isError: boolean): ToolCallSettlement {
+  const settled = answerSettlement(answer, isError);
+  const pictures = answer.workspaceTool ? undefined : answer.pictures;
+
+  return pictures === undefined || pictures.length === 0 ? settled : { ...settled, pictures };
 }
 
 /**

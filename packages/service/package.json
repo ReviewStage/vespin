@@ -74,6 +74,7 @@
     "./agents/native-events/runner-lines-app": "./src/agents/native-events/runner-lines-app.js",
     "./agents/native-events/runner-transcripts-app": "./src/agents/native-events/runner-transcripts-app.js",
     "./agents/native-events/runner-token-app": "./src/agents/native-events/runner-token-app.js",
+    "./agents/native-events/runner-pictures-app": "./src/agents/native-events/runner-pictures-app.js",
     "./agents/sandbox-pty": "./src/agents/sandbox-pty.js",
     "./agents/agents-app": "./src/agents/agents-app.js",
     "./agents/command-description": "./src/agents/command-description.js",

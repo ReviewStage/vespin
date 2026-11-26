@@ -4,11 +4,8 @@ import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   CONVERSATION_MEDIA_TYPE,
-  type KeptPicture,
   PICTURE_OMISSION,
-  type PictureOmission,
 } from "@repo/features/conversation-picture-wire";
-import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
 import {
   COMPUTER_ACTION,
   COMPUTER_BOUNDS,
@@ -35,7 +32,7 @@ import { isRecord, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Effect, Option, Predicate, Result, Schema } from "effect";
 import { logStoreFailure } from "../http/store-failure.js";
-import { keepPictureBytesOne } from "../storage/attachment-keeps.js";
+import { type KeptPictureNote, keepPictureNote } from "../storage/attachment-keeps.js";
 import type { InboxSandboxDoor } from "./coder-host/inbox-image.js";
 import { COMMAND_DESCRIPTION } from "./command-description.js";
 import {
@@ -421,38 +418,20 @@ function actionOf(input: ComputerInput): Result.Result<MacComputerAction, string
     : Result.fail(`Not run: ${takes(action)}`);
 }
 
-/** What the transcript keeps of one picture: the picture kept, or why not. */
-type KeptNote =
-  | { readonly picture: { readonly [Key in keyof KeptPicture]: KeptPicture[Key] } }
-  | { readonly omitted: PictureOmission; readonly byteCount: number };
-
 /**
- * One picture's base64 kept beside the transcript, sniffed and measured from
- * its own bytes; why not where its bytes are no picture, the transcript has
- * no room left, or the store failed.
+ * One picture's base64 kept beside the transcript (`keepPictureNote`);
+ * where the store failed, logged and named as not kept for want of room.
  */
 function kept(
   transcript: ConversationTarget,
   base64: string,
-): Effect.Effect<KeptNote, never, DatabaseServices> {
+): Effect.Effect<KeptPictureNote, never, DatabaseServices> {
   const bytes = new Uint8Array(Buffer.from(base64, "base64"));
-  const contentType = sniffImageType(bytes);
-  const dimensions = contentType === undefined ? undefined : imageDimensions(bytes, contentType);
 
-  if (contentType === undefined || dimensions === undefined) {
-    return Effect.succeed({ omitted: PICTURE_OMISSION.UNSUPPORTED, byteCount: bytes.byteLength });
-  }
-
-  return keepPictureBytesOne(transcript, { bytes, contentType, ...dimensions }).pipe(
-    Effect.map(
-      (picture): KeptNote =>
-        Option.isNone(picture)
-          ? { omitted: PICTURE_OMISSION.LIMIT, byteCount: bytes.byteLength }
-          : { picture: { ...picture.value } },
-    ),
+  return keepPictureNote(transcript, bytes).pipe(
     Effect.tapError(logStoreFailure),
     Effect.orElseSucceed(
-      (): KeptNote => ({ omitted: PICTURE_OMISSION.LIMIT, byteCount: bytes.byteLength }),
+      (): KeptPictureNote => ({ omitted: PICTURE_OMISSION.LIMIT, byteCount: bytes.byteLength }),
     ),
   );
 }
