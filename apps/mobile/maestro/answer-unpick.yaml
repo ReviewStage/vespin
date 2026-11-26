@@ -53,6 +53,12 @@ appId: dev.vespin.ios
     file: subflows/open-row.yaml
     env:
       ROW: "How should a finished turn end\\?"
+# Note that the options' tiles load into the box's head and grow it, which
+# moves its rows, so the head is let settle before an option is pressed.
+- extendedWaitUntil:
+    visible: "A done card, Recommended.*"
+    timeout: 5000
+- waitForAnimationToEnd
 - tapOn: "A done card, Recommended.*"
 - assertVisible:
     text: "A done card, Recommended.*"

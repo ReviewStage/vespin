@@ -24,6 +24,7 @@ appId: dev.vespin.ios
     visible:
       id: "answer-field-Invites a member may send a day"
     timeout: 5000
+- waitForAnimationToEnd
 - tapOn:
     id: "answer-field-Invites a member may send a day"
 - extendedWaitUntil:

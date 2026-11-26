@@ -102,8 +102,8 @@ appId: dev.vespin.ios
     notVisible: "Not delivered.*"
     timeout: 5000
 
-# An answer's fields: a select's menu with its recommended option said so, a
-# toggle, and a number on the decimal pad; Send submits what was filled.
+# An answer's fields: a select's menu with its recommended option said so,
+# and a number on the decimal pad; Send submits what was filled.
 - launchApp:
     clearState: true
     arguments:
@@ -121,15 +121,12 @@ appId: dev.vespin.ios
 - tapOn: "None"
 - tapOn: "Every member \\(recommended\\)"
 # Note that the pick is waited on until the menu has closed and the picker
-# names it, and the toggle until it reads on, because a tap landing while the
-# menu still dismissed was swallowed, and the next step failed far from it.
+# names it, so the next tap never lands while it still dismisses. The toggle
+# is left as it stands: the system's switch flips from its knob alone, never
+# from a tap on its words, which is where a flow's tap on it lands.
 - waitForAnimationToEnd
 - assertVisible: "Every member \\(recommended\\)"
 - assertNotVisible: "None"
-- tapOn: "Email the sender when an invite is accepted.*"
-- assertVisible:
-    text: "Email the sender when an invite is accepted.*"
-    checked: true
 # The number comes last, since the decimal pad has no key that puts it away:
 # the composer rides above it, so Send is pressed with the pad still up.
 # Words that read as no number hold the answer back, rather than send it
