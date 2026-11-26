@@ -341,6 +341,11 @@ test("a Manager's row's Change face opens its name's field with the face's picke
 
   assert.ok(field(), "the row's name opens as a field");
 
+  const well = list?.querySelector('button[aria-haspopup="dialog"][aria-expanded="true"]');
+
+  assert.ok(well, "the face stands as a well, its picker open");
+  assert.equal(well.closest('[aria-hidden="true"]'), null, "which a reader reaches");
+
   const cat =
     document.querySelector<HTMLButtonElement>('button[aria-label="Cat"]') ??
     assert.fail("the picker stands open, offering every character");

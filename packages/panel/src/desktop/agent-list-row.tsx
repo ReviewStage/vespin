@@ -384,6 +384,7 @@ export function AgentListRow({
           density={LIST_DENSITY.DENSE}
           ink={LIST_ROW_INK.SIDEBAR}
           leading={glyph}
+          leadingControl={editing && face !== undefined}
           title={
             editor ?? (
               <OneLine words={name}>
