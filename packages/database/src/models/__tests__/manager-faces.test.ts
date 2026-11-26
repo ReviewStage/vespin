@@ -5,6 +5,7 @@ import { AGENT_KIND, type AgentKind } from "@repo/features/agent-wire";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
+  MANAGER_FACE_OFFERED_COLORS,
   type ManagerFace,
 } from "@repo/features/manager-face";
 import { eq } from "drizzle-orm";
@@ -20,16 +21,19 @@ import { archiveAgent, createAgent, updateManagerFaceCommitted } from "../agent-
  * The face a new Manager is given, over a real dialect: none that another
  * standing Manager of its workspace wears while one is free, whatever
  * another workspace's Managers wear, and an archived one's face free again;
- * and a face a member picks, worn as picked. Synthetic accounts.
+ * and a face a member picks, its emoji too, worn as picked. Synthetic
+ * accounts.
  */
 
-/** Every face there is: each character in each color. */
+/** Every face the service gives: each character in each offered color. */
 const EVERY_FACE: readonly ManagerFace[] = Object.values(MANAGER_FACE_CHARACTER).flatMap(
-  (character) => Object.values(MANAGER_FACE_COLOR).map((color) => ({ character, color })),
+  (character) => MANAGER_FACE_OFFERED_COLORS.map((color) => ({ character, color })),
 );
 
 const faceKey = (face: ManagerFace | null | undefined) =>
-  face === null || face === undefined ? "none" : JSON.stringify([face.character, face.color]);
+  face === null || face === undefined
+    ? "none"
+    : JSON.stringify([face.character, face.color, face.emoji]);
 
 const openAccount = Effect.gen(function* () {
   const db = yield* Database;
@@ -99,7 +103,7 @@ it.layer(getTestDB())("a new Manager's face", (it) => {
   );
 
   it.effect(
-    "wears a picked face though another Manager wears it, takes a new pick, and leaves a coder and an outsider unchanged",
+    "wears a picked face though another Manager wears it, takes a new pick with its emoji, and leaves a coder and an outsider unchanged",
     () =>
       Effect.gen(function* () {
         const owner = yield* openAccount;
@@ -111,7 +115,12 @@ it.layer(getTestDB())("a new Manager's face", (it) => {
         const twin = yield* openManager(owner, workspaceId, AGENT_KIND.MANAGER, first.face);
         assert.equal(faceKey(twin.face), faceKey(first.face));
 
-        const picked = { character: MANAGER_FACE_CHARACTER.MUG, color: MANAGER_FACE_COLOR.PINK };
+        const picked = {
+          character: MANAGER_FACE_CHARACTER.MUG,
+          color: MANAGER_FACE_COLOR.TEAL,
+          emoji: "🚀",
+        };
+
         const changed = yield* updateManagerFaceCommitted(owner, twin.id, picked);
         assert.equal(faceKey(Option.getOrThrow(changed).agent.face), faceKey(picked));
 
