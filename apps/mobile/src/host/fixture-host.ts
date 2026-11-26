@@ -83,7 +83,6 @@ import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { SETUP_AUDIENCE, setupPlaceStored } from "@repo/settings";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Predicate } from "effect";
-import { launchStreamTurn } from "./launch-arguments.js";
 
 /** The one workspace a fixture run's account is in. */
 const FIXTURE_WORKSPACE_IDS: readonly string[] = [FIXTURE_IDS.WORKSPACE];
@@ -446,7 +445,7 @@ const STREAMED_CHANGES = new WeakMap<object, number>();
 
 /**
  * Starts the release Manager's turn streaming once its page first follows
- * its transcript, where the launch asks it (`-streamTurn <ms>`): the
+ * its transcript, where the launch asks it (`-streamTurn <ms>`, `every`): the
  * Manager held at work and its turn moved one change every that many
  * milliseconds, each laid over the document as the host lays a delta, for
  * the rest of the run (`scripts/working-manager.sh`); nothing for any other
@@ -456,9 +455,8 @@ function streamTurn(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
   payload: PortActPayload<PortActKind>,
+  every: number | undefined,
 ): void {
-  const every = launchStreamTurn();
-
   if (every === undefined || kind !== ACT_KIND.AGENTS_TRANSCRIPT || STREAMED_CHANGES.has(state))
     return;
   // SAFETY: the payload is the kind's, which the guard above names.
@@ -891,12 +889,15 @@ function memberAt<Member>(
  * flow may move a queued message and Resume.
  * Where `refusesWrites`, the writes `REFUSED_WRITES` names are refused
  * before anything else answers them, so a flow sees the failure notice.
+ * Where `streamEvery` is given, the release Manager's turn streams a change
+ * every that many milliseconds once its page follows it (`streamTurn`).
  */
 export function fixtureActs(
   acts: ActPortClient,
   profile: RunProfile,
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   refusesWrites = false,
+  streamEvery?: number | undefined,
 ): ActPortClient {
   return new Proxy(acts, {
     get(target, kind) {
@@ -928,7 +929,7 @@ export function fixtureActs(
 
         if (startRefused !== undefined) return Promise.resolve(startRefused);
         // SAFETY: the port is keyed by act kind.
-        streamTurn(state, kind as PortActKind, payload);
+        streamTurn(state, kind as PortActKind, payload, streamEvery);
         // SAFETY: the port is keyed by act kind.
         const older = olderRead(state, profile, kind as PortActKind, payload);
 

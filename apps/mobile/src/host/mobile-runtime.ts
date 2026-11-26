@@ -31,6 +31,8 @@ export interface MobileHostStartOptions {
   readonly fixtureInboxOff?: boolean | undefined;
   /** Whether a fixture run refuses the writes a flow presses; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
+  /** How often a fixture run's release Manager moves its turn while its page follows it; never in a live run. */
+  readonly fixtureStreamTurn?: number | undefined;
   /** This build's version, as the app's config names it. */
   readonly appVersion: string;
   /** Where the host keeps its files. */
@@ -83,6 +85,7 @@ export async function startMobileHost(
         fixtureSetupOwed: options.fixtureSetupOwed,
         fixtureInboxOff: options.fixtureInboxOff,
         fixtureRefusesWrites: options.fixtureRefusesWrites,
+        fixtureStreamTurn: options.fixtureStreamTurn,
         appVersion: options.appVersion,
         stateRoot: options.stateRoot,
         device: options.device,
