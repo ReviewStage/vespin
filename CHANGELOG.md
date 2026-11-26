@@ -74,7 +74,7 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
-## 0.43.0 — 2026-11-26
+## 0.43.0 — 2026-11-25
 
 ### Panes, folds, and buttons answer at once
 
