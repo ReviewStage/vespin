@@ -21,10 +21,12 @@ env:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
       mediaOrigin: ${MEDIA_ORIGIN}
+# The page opens at its newest row, so the recording stands above it.
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
       ELEMENT: "Accepting an invite.*"
+      DIRECTION: UP
 - extendedWaitUntil:
     visible:
       id: "video-player"
