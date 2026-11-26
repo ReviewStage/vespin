@@ -1,0 +1,22 @@
+EXCEPTION (the Manager 22:23 UTC Nov 25, as vjsend1b/1c): JS 973322bee4 over Vmain14 (natives from 938bbc656d), missing #10759 AgentsLiveActivity.swift and #10966 app.config.ts/assets, neither on the composer path
+pinned to 973322bee4
+== bundle PJjsend3b base 973322bee4
+  built 973322bee4 base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-manager-send-once-before: fails 1 shots 1 Assert that "What about the release" is visible... FAILED
+  iphone-light-manager-send-once-before around the failure: Input text ut the release... COMPLETED|Tap on "Send"... COMPLETED|Tap on "Send"... COMPLETED|Assert that "Send" is not visible... COMPLETED|Assert that "What about the release" is visible... FAILED||
+  step 3 assertConditionCommand {"condition": {"visible": {"textRegex": "Left before it ships.*", "optional": false}}, "ti COMPLETED at 1795652722129 took 5777 ms
+  step 4 assertConditionCommand {"condition": {"visible": {"idRegex": "composer-field", "optional": false}}, "timeout": "6 COMPLETED at 1795652727907 took 197 ms
+  step 5 tapOnElement {"selector": {"idRegex": "composer-field", "optional": false}, "retryIfNoChange": false, " COMPLETED at 1795652728107 took 1702 ms
+  step 6 runFlowCommand {"commands": [{"tapOnElement": {"selector": {"textRegex": "Continue", "optional": false},  SKIPPED at 1795652729810 took 7219 ms
+  step 7 assertConditionCommand {"condition": {"visible": {"textRegex": "space", "optional": false}}, "label": "RIG: the s COMPLETED at 1795652737030 took 217 ms
+  step 8 inputTextCommand {"text": "What abo", "optional": false} COMPLETED at 1795652737249 took 1385 ms
+  step 9 assertConditionCommand {"condition": {"visible": {"textRegex": "Send", "enabled": true, "optional": false}}, "tim COMPLETED at 1795652738635 took 18940 ms
+  step 10 inputTextCommand {"text": "ut the release", "optional": false} COMPLETED at 1795652757577 took 1607 ms
+  step 11 tapOnElement {"selector": {"textRegex": "Send", "optional": false}, "retryIfNoChange": false, "waitUnti COMPLETED at 1795652759185 took 1897 ms
+  step 12 tapOnElement {"selector": {"textRegex": "Send", "optional": false}, "retryIfNoChange": false, "waitUnti COMPLETED at 1795652761083 took 1972 ms
+  step 13 assertConditionCommand {"condition": {"notVisible": {"textRegex": "Send", "optional": false}}, "timeout": "180000 COMPLETED at 1795652763056 took 15308 ms
+  step 14 assertConditionCommand {"condition": {"visible": {"textRegex": "What about the release", "optional": false}}, "op FAILED at 1795652778365 took 2257 ms
