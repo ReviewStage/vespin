@@ -94,6 +94,22 @@
   padding-bottom: calc(var(--title-bar-middle) - var(--ui-control-height) / 2);
 }
 
+/* The sidebar draws its rows at its own roles (`profiles.css`'s
+   `--ui-sidebar-*`): a row's height stands for a control's, its words' size
+   for the body's, and its gaps for the list's and the section's, so every
+   row, head, and button in it follows them without a class of its own. The
+   places at its top stand a gap of their own apart. */
+.desktop-sidebar {
+  --ui-control-height: var(--ui-sidebar-row-height);
+  --ui-type-body-size: var(--ui-sidebar-text-size);
+  --ui-list-gap: var(--ui-sidebar-row-gap);
+  --ui-section-gap: var(--ui-sidebar-group-gap);
+}
+
+.desktop-sidebar .sidebar-places {
+  --ui-list-gap: var(--ui-sidebar-places-gap);
+}
+
 /* The head stands on the lines of the column under it and the buttons over
    it. Its tile, a face a step wider than a row's glyph, is centered where
    the rows' glyphs are: the row's start and the gap after the tile each give
