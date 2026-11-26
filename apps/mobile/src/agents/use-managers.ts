@@ -92,25 +92,34 @@ export function useWorkspaceManagers(workspaceId: string | undefined): readonly 
 export interface ManagerChatMark {
   /** The instant New stands after: the mark the page found as it opened where the chat then read unread, or the one Mark as unread left; none where nothing stood unread. */
   readonly newAfter: number | undefined;
+  /** Whether New may stand over the reader's own message, as it does where they marked the chat unread from it; else it skips their own. */
+  readonly newOverOwn: boolean;
   /** Moves the reader's mark back to just before the message, by its id and when it was sent, and holds it there while the page stands; none for an agent that is no Manager. */
   readonly markUnread: ((messageId: string, sentAt: number) => void) | undefined;
 }
 
-/** One stay on a Manager's page: the agent, and where New stands. */
+/** One stay on a Manager's page: the agent, where New stands, and whether it may stand over the reader's own message. */
 interface ChatStay {
   readonly agentId: string | undefined;
   readonly newAfter: number | undefined;
+  readonly newOverOwn: boolean;
 }
 
-/** A stay as the page opens on the agent: New after the mark it finds, where the chat said something after it. */
-function openedStay(
-  agentId: string | undefined,
-  saidAt: number | undefined,
-  readThrough: number | undefined,
-): ChatStay {
-  const unread = saidAt !== undefined && readThrough !== undefined && saidAt > readThrough;
+/** The reader's mark of the chat as its row carries it, and when the Manager last said something. */
+type ChatMarkRead = Pick<ListedAgent, "saidAt" | "readThrough" | "markedUnread">;
 
-  return { agentId, newAfter: unread ? readThrough : undefined };
+/** A stay as the page opens on the agent: New after the mark it finds, where the reader marked the chat unread, over their own message too, or where it said something after the mark. */
+function openedStay(agentId: string | undefined, mark: ChatMarkRead | undefined): ChatStay {
+  const said =
+    mark?.saidAt !== undefined && mark.readThrough !== undefined && mark.saidAt > mark.readThrough;
+
+  const marked = mark?.markedUnread === true;
+
+  return {
+    agentId,
+    newAfter: marked || said ? mark?.readThrough : undefined,
+    newOverOwn: marked,
+  };
 }
 
 /**
@@ -118,23 +127,24 @@ function openedStay(
  * the panel's page does (`manager-chat-looks.ts`): read through as it opens,
  * seen as it is left, and seen again whenever the chat says something while
  * it stands open, so the unread dot its row draws is one the phone clears;
- * and offers Mark as unread, which moves the mark back to just before a
- * message and holds it there for the rest of the stay, so the chat stays
- * unread until the reader opens it again. Nothing for an agent that is no
+ * and offers Mark as unread, which moves the mark back to just before any
+ * message of the chat, marks it unread by hand, and holds the mark there
+ * for the rest of the stay, so the chat stays unread, New over that
+ * message, until the reader opens it again. Nothing for an agent that is no
  * Manager. Note that each look goes quietly, whatever comes back, since no
  * person pressed for it.
  */
 export function useManagerChatLooks(
-  agent: Pick<ListedAgent, "id" | "kind" | "saidAt" | "readThrough"> | undefined,
+  agent: Pick<ListedAgent, "id" | "kind" | "saidAt" | "readThrough" | "markedUnread"> | undefined,
 ): ManagerChatMark {
   const acts = useHostActs();
   const write = useWrite();
   const agentId = agent?.kind === AGENT_KIND.MANAGER ? agent.id : undefined;
   const saidAt = agent?.saidAt;
-  const [stay, setStay] = useState(() => openedStay(agentId, saidAt, agent?.readThrough));
+  const [stay, setStay] = useState(() => openedStay(agentId, agent));
 
   // Note that a page opening on another agent is a stay of its own, found before its first look moves the mark.
-  if (stay.agentId !== agentId) setStay(openedStay(agentId, saidAt, agent?.readThrough));
+  if (stay.agentId !== agentId) setStay(openedStay(agentId, agent));
 
   // Note that the closing look reads whether the reader marked the chat unread as it runs, after the stay's last render.
   const markedUnread = useRef(false);
@@ -170,7 +180,7 @@ export function useManagerChatLooks(
     (messageId: string, sentAt: number) => {
       if (agentId === undefined) return;
       markedUnread.current = true;
-      setStay({ agentId, newAfter: unreadThroughOf(sentAt) });
+      setStay({ agentId, newAfter: unreadThroughOf(sentAt), newOverOwn: true });
 
       write(
         () =>
@@ -189,8 +199,11 @@ export function useManagerChatLooks(
     [acts, agentId, write],
   );
 
+  const current = stay.agentId === agentId;
+
   return {
-    newAfter: stay.agentId === agentId ? stay.newAfter : undefined,
+    newAfter: current ? stay.newAfter : undefined,
+    newOverOwn: current && stay.newOverOwn,
     markUnread: agentId === undefined ? undefined : markUnread,
   };
 }

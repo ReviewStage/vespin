@@ -401,23 +401,24 @@ test("a message's menu, a right-click or a long press, leads with Reply in threa
   assert.ok(container.querySelector("[data-thread-tab]"), "the thread opens beside the chat");
 });
 
-test("New stands over the first message after the mark the page opened on, and Mark as unread moves the reader's mark back to just before its message, New with it, and holds it there as the page closes", async () => {
+/** The words of the row New stands over, none where it stands nowhere. */
+function newOver(container: Element): string | null | undefined {
+  return container
+    .querySelector(".ui-new-messages-rule")
+    ?.parentElement?.querySelector(".ui-channel-message-words")?.textContent;
+}
+
+test("New stands over the first message after the mark the page opened on, the reader's own aside, and Mark as unread on their own last line moves the mark back to just before it, New with it, and holds it there as the page closes", async () => {
   const { container, root, marks } = await drawChat(
-    [row("first", 1, "On it."), row("second", 2, "Shipped.")],
+    [row("first", 1, "On it."), row("second", 2, "Shipped."), row("mine", 3, "Thanks.", DEAN)],
     { manager: { ...MANAGER, readThrough: 1_500, saidAt: 2_000 } },
   );
 
-  /** The words of the row New stands over, none where it stands nowhere. */
-  const newOver = () =>
-    container
-      .querySelector(".ui-new-messages-rule")
-      ?.parentElement?.querySelector(".ui-channel-message-words")?.textContent;
-
-  assert.equal(newOver(), "Shipped.");
+  assert.equal(newOver(container), "Shipped.");
 
   const words =
     [...container.querySelectorAll(".ui-channel-message-words")].find(
-      (each) => each.textContent === "On it.",
+      (each) => each.textContent === "Thanks.",
     ) ?? assert.fail("the message stands");
 
   act(() => {
@@ -428,7 +429,7 @@ test("New stands over the first message after the mark the page opened on, and M
   act(() => menuItem("Mark as unread").click());
   await settleQueries();
 
-  assert.equal(newOver(), "On it.");
+  assert.equal(newOver(container), "Thanks.");
   act(() => root.unmount());
   roots.splice(roots.indexOf(root), 1);
 
@@ -437,9 +438,18 @@ test("New stands over the first message after the mark the page opened on, and M
     {
       agentId: MANAGER.id,
       readMark: READ_MARK.UNREAD,
-      unreadFrom: { messageId: "first", sentAt: 1_000 },
+      unreadFrom: { messageId: "mine", sentAt: 3_000 },
     },
   ]);
+});
+
+test("a chat the reader marked unread from their own last line opens with New over it", async () => {
+  const { container } = await drawChat(
+    [row("first", 1, "On it."), row("mine", 2, "Thanks.", DEAN)],
+    { manager: { ...MANAGER, readThrough: 1_999, saidAt: 1_000, markedUnread: true } },
+  );
+
+  assert.equal(newOver(container), "Thanks.");
 });
 
 test("a person's picture stands as its chip where their words name it, not as a marker over a copy of it, and each line they typed stays its own", async () => {

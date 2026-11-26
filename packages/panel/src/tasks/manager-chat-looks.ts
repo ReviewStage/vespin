@@ -8,14 +8,18 @@
  * says something while it stands open, since the reader sees it land. Each
  * look goes quietly, since no person pressed for it.
  *
- * Mark unread, as Slack's, moves the mark back to just before a message,
- * and the page then moves it no more for the rest of the stay, so the chat
- * stays unread until the reader opens it again, and its sidebar row reads
- * unread at once, though its page stands open (`useChatMarkedUnread`). The page draws New over
- * the first message after the mark it found as it opened, where the chat
- * then read unread, or after the one Mark unread left.
+ * Mark unread, as Slack's, from any message of the chat, moves the mark
+ * back to just before it and marks the chat unread by hand, so it reads
+ * unread whoever wrote what follows, until the reader opens it again. The
+ * page then moves the mark no more for the rest of the stay, so New stands
+ * over that message when the reader comes back, and its sidebar row reads
+ * unread at once, though its page stands open (`useChatMarkedUnread`). The
+ * page draws New over the first message after the mark it found as it
+ * opened, where the chat then read unread, skipping the reader's own unless
+ * they marked it unread, or over the message Mark unread was pressed on.
  */
 
+import type { AgentSummary } from "@repo/features/agent-wire";
 import type { ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { READ_MARK, type ReadMark, unreadThroughOf } from "@repo/features/read-mark";
 import { ACT_KIND } from "@repo/host/acts";
@@ -28,14 +32,20 @@ import { actMutation, pressMutation } from "../act-mutations.js";
 export interface ManagerChatMark {
   /** The instant New stands after: the mark the page found as it opened where the chat then read unread, or the one Mark unread left; none where nothing stood unread. */
   readonly newAfter: number | undefined;
+  /** Whether New may stand over the reader's own message, as it does where they marked the chat unread from it; else it skips their own. */
+  readonly newOverOwn: boolean;
   /** Moves the reader's mark back to just before the message, and holds it there for the rest of the stay; none for an agent that is no Manager. */
   readonly markUnread: ((message: ManagerChatLiveMessage) => void) | undefined;
 }
 
-/** One stay on a Manager's page: the agent, and where New stands. */
+/** The reader's mark of the chat as its row carries it, and when the Manager last said something. */
+type ChatMarkRead = Pick<AgentSummary, "saidAt" | "readThrough" | "markedUnread">;
+
+/** One stay on a Manager's page: the agent, where New stands, and whether it may stand over the reader's own message. */
 interface ChatStay {
   readonly agentId: string | undefined;
   readonly newAfter: number | undefined;
+  readonly newOverOwn: boolean;
 }
 
 /** The Manager whose chat the reader marked unread while its page stands open, none otherwise. */
@@ -46,29 +56,27 @@ export function useChatMarkedUnread(agentId: string): boolean {
   return useSelector(markedUnreadStore, (marked) => marked === agentId);
 }
 
-/** A stay as the page opens on the agent: New after the mark it finds, where the chat said something after it. */
-function openedStay(
-  agentId: string | undefined,
-  saidAt: number | undefined,
-  readThrough: number | undefined,
-): ChatStay {
-  const unread = saidAt !== undefined && readThrough !== undefined && saidAt > readThrough;
+/** A stay as the page opens on the agent: New after the mark it finds, where the reader marked the chat unread, over their own message too, or where it said something after the mark. */
+function openedStay(agentId: string | undefined, mark: ChatMarkRead): ChatStay {
+  const { saidAt, readThrough, markedUnread } = mark;
+  const said = saidAt !== undefined && readThrough !== undefined && saidAt > readThrough;
+  const unread = markedUnread === true || said;
 
-  return { agentId, newAfter: unread ? readThrough : undefined };
+  return { agentId, newAfter: unread ? readThrough : undefined, newOverOwn: markedUnread === true };
 }
 
 /** Moves the reader's mark of the Manager's chat while its page stands open, and offers Mark unread; nothing for an agent that is no Manager (`agentId` none). */
 export function useManagerChatLooks(
   agentId: string | undefined,
-  saidAt: number | undefined,
-  readThrough: number | undefined,
+  mark: ChatMarkRead,
 ): ManagerChatMark {
+  const { saidAt } = mark;
   const { mutate: markAgentRead } = useMutation(actMutation(ACT_KIND.AGENTS_MARK_READ));
   const { mutate: markAgentUnread } = useMutation(pressMutation(ACT_KIND.AGENTS_MARK_READ));
-  const [stay, setStay] = useState(() => openedStay(agentId, saidAt, readThrough));
+  const [stay, setStay] = useState(() => openedStay(agentId, mark));
 
   // Note that a page opening on another agent is a stay of its own, found before its first look moves the mark.
-  if (stay.agentId !== agentId) setStay(openedStay(agentId, saidAt, readThrough));
+  if (stay.agentId !== agentId) setStay(openedStay(agentId, mark));
 
   // Note that the closing look reads whether the reader marked the chat unread as it runs, after the stay's last render.
   const markedUnread = useRef(false);
@@ -107,7 +115,7 @@ export function useManagerChatLooks(
       if (agentId === undefined) return;
       markedUnread.current = true;
       markedUnreadStore.setState(() => agentId);
-      setStay({ agentId, newAfter: unreadThroughOf(message.createdAt) });
+      setStay({ agentId, newAfter: unreadThroughOf(message.createdAt), newOverOwn: true });
 
       markAgentUnread({
         agentId,
@@ -118,8 +126,11 @@ export function useManagerChatLooks(
     [agentId, markAgentUnread],
   );
 
+  const current = stay.agentId === agentId;
+
   return {
-    newAfter: stay.agentId === agentId ? stay.newAfter : undefined,
+    newAfter: current ? stay.newAfter : undefined,
+    newOverOwn: current && stay.newOverOwn,
     markUnread: agentId === undefined ? undefined : markUnread,
   };
 }

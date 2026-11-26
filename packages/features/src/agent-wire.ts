@@ -1374,6 +1374,8 @@ export const agentSummarySchema = EffectSchema.Struct({
   face: EffectSchema.optionalKey(managerFaceSchema),
   /** How far the reader read a Manager's chat (`read-mark.ts`), the service's instant; absent for a coder, and from a service older than it. */
   readThrough: EffectSchema.optionalKey(countedNumber),
+  /** That the reader marked a Manager's chat unread (Mark as unread) and has not opened it since, which reads it unread whoever wrote after `readThrough`; absent otherwise, and from a service older than it. */
+  markedUnread: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   /** When a Manager last sent its chat a message (`send_to_user`), which reads unread past `readThrough`; absent before its first, for a coder, and from a service older than it. */
   saidAt: EffectSchema.optionalKey(countedNumber),
   /** Where its runner runs, said only of an agent on its starter's device or on a machine its workspace owns; absent for one in a sandbox, and from a service older than it. */

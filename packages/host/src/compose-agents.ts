@@ -1051,7 +1051,7 @@ function composed(
       (row) =>
         unreadFrom === undefined
           ? markedAs(readMark, row, kernel.now())
-          : { readThrough: unreadThroughOf(unreadFrom.sentAt) },
+          : { readThrough: unreadThroughOf(unreadFrom.sentAt), markedUnread: true },
     ({ agentId, readMark, unreadFrom }, key) =>
       asked(client.markRead(agentId, readMark, key, unreadFrom?.messageId)),
   );

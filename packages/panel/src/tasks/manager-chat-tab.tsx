@@ -26,8 +26,8 @@
  * the reader's 👍 or 👎 from its actions, and wears the reactions it was
  * given under its words (`manager-chat-reactions.tsx`). The first message
  * after the reader's mark, where the chat stood unread as the page opened
- * or where the reader marked one of the Manager's messages unread, stands
- * under New (`manager-chat-looks.ts`).
+ * or where the reader marked one of its messages unread, stands under New
+ * (`manager-chat-looks.ts`).
  */
 
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
@@ -177,7 +177,7 @@ interface ChatDoors {
   readonly thread?: ChatThreadDoors | undefined;
   /** Gives a message the reader's 👍 or 👎, or takes it off. */
   readonly react: ChatReact;
-  /** Moves the reader's mark of the chat back to just before one of the Manager's messages, which its menu's Mark as unread presses; none in a thread's tab. */
+  /** Moves the reader's mark of the chat back to just before one of its messages, which its menu's Mark as unread presses; none in a thread's tab. */
   readonly markUnread?: ((message: ManagerChatLiveMessage) => void) | undefined;
 }
 
@@ -400,7 +400,8 @@ function ManagerMessage({
  * and anyone else's at its left, under their name where it opens their run
  * and beside their picture, each of which opens their page as their name
  * does wherever the window names them (`ActorRef`), its files over the words, Reply in thread and
- * Copy beside it and in its menu, as every message of the chat offers them, and when it
+ * Copy beside it and in its menu, as every message of the chat offers them, Mark as unread in
+ * its menu where the chat offers it, and when it
  * was sent under the run's last.
  */
 function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoors }): ReactNode {
@@ -418,7 +419,9 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   const ownLine = lineId === undefined ? undefined : doors.lines.get(lineId);
   const editor = useMessageEdit(lineId ?? "");
   const thread = threadOf(message, doors);
-  const menu = useChatMessageMenu(message.text, thread.onOpen, undefined);
+  const { markUnread } = doors;
+  const onMarkUnread = markUnread === undefined ? undefined : () => markUnread(message);
+  const menu = useChatMessageMenu(message.text, thread.onOpen, undefined, onMarkUnread);
   const reactions = <ReactMessageActions message={message} react={doors.react} />;
 
   if (ownLine !== undefined && editor !== undefined) {
@@ -715,7 +718,7 @@ function ownLastOf(rows: readonly ChatRow[], readerId: string | undefined): stri
   )?.key;
 }
 
-/** The key of the row New stands over: the first message after `newAfter` that is not the reader's own; none where New stands nowhere. */
+/** The key of the row New stands over: the first message after `newAfter`, skipping the reader's own where `readerId` names them; none where New stands nowhere. */
 function newKeyOf(
   rows: readonly ChatRow[],
   newAfter: number | undefined,
@@ -1038,7 +1041,7 @@ export function ManagerChatTab({
   const queueEditing = useQueueEditing(composer, queue, pictures);
   const list = useRef<HTMLDivElement>(null);
   const rowsHandle = useRef<VirtualRowsHandle>(null);
-  const { newAfter, markUnread } = useManagerChatLooks(agent.id, agent.saidAt, agent.readThrough);
+  const { newAfter, newOverOwn, markUnread } = useManagerChatLooks(agent.id, agent);
 
   const { endPress, endTrail, continuable } = ends;
 
@@ -1120,7 +1123,7 @@ export function ManagerChatTab({
 
   const keys = useMemo(() => rows.map((row) => row.key), [rows]);
   const ownLast = ownLastOf(rows, control.me);
-  const newKey = newKeyOf(rows, newAfter, control.me);
+  const newKey = newKeyOf(rows, newAfter, newOverOwn ? undefined : control.me);
   const finding = useFindOpen();
   const findRows = useMemo(() => (finding ? rows.map(findRowOf) : NO_FIND_ROWS), [finding, rows]);
   useVirtualFind({ root: list, rows: findRows, handle: rowsHandle, findable: keys.length > 0 });

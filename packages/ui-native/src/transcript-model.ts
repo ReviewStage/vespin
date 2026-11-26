@@ -457,6 +457,8 @@ interface ChatReading extends Omit<TranscriptReading, "origin"> {
   readonly readerName?: string | undefined;
   /** The instant New stands after, over the first message after it the reader did not send (`useManagerChatLooks`); none where New stands nowhere. */
   readonly newAfter?: number | undefined;
+  /** Whether New may stand over the reader's own message too, as where they marked the chat unread from it. */
+  readonly newOverOwn?: boolean | undefined;
 }
 
 /** What the items are read with: the page's reading, and the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`). */
@@ -1615,7 +1617,7 @@ function sendingTo(
   return (sending ?? []).filter((line) => line.threadRoot === root);
 }
 
-/** The first message of the chat's top after `newAfter` that the reader did not send, which New stands over; none where New stands nowhere. */
+/** The first message of the chat's top after `newAfter`, skipping the reader's own where `readerId` names them, which New stands over; none where New stands nowhere. */
 function newLineOf(
   top: readonly ManagerChatLine[],
   newAfter: number | undefined,
@@ -1662,7 +1664,12 @@ export function managerChatItems(
   const read: ItemsReading = { ...reading, computerApps: computerAppsOf(transcript) };
   // Note that a turn's journal message stands under the turn's id, which a message's work names.
   const turns = new Map(transcript.map((message) => [message.id, message]));
-  const fresh = newLineOf(view.top, reading.newAfter, reading.readerId);
+
+  const fresh = newLineOf(
+    view.top,
+    reading.newAfter,
+    reading.newOverOwn === true ? undefined : reading.readerId,
+  );
 
   const items = view.top.flatMap((line) => [
     ...(line === fresh ? [newRuleItem(line.message.id)] : []),

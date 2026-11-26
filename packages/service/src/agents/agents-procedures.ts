@@ -37,7 +37,11 @@
 import { randomUUID } from "node:crypto";
 import type { ContractedRouter } from "@orpc/server";
 import type { DatabaseServices } from "@repo/database/core/query";
-import { markAgentRead, markAgentUnread } from "@repo/database/models/agent-chat-reads";
+import {
+  markAgentRead,
+  markAgentSeen,
+  markAgentUnread,
+} from "@repo/database/models/agent-chat-reads";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
   type Agent,
@@ -225,10 +229,12 @@ const committedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * The asking member's own mark of a Manager's chat moved as `readMark` asks,
- * and the write's transaction id. A look reads it through now, never back;
- * Mark unread (`unreadFrom`) moves it back to just before the message it
- * names, as the member reaches the chat, refused as not found where they
- * reach no such message; a mark by hand naming none moves nothing.
+ * and the write's transaction id. A look reads it through now, never back,
+ * opening the chat taking a mark by hand back and leaving it leaving one
+ * standing; Mark unread (`unreadFrom`) moves it back to just before the
+ * message it names, as the member reaches the chat, and marks it unread by
+ * hand, refused as not found where they reach no such message; a mark by
+ * hand naming none moves nothing.
  */
 const movedChatMark = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -237,8 +243,9 @@ const movedChatMark = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<string | undefined, HostedRefusal, DatabaseServices> {
   if (request.readMark !== READ_MARK.UNREAD) {
     const now = new Date(yield* Clock.currentTimeMillis);
+    const look = request.readMark === READ_MARK.READ ? markAgentRead : markAgentSeen;
 
-    return yield* hostedStoreOrUnavailable(markAgentRead(userId, agentId, now));
+    return yield* hostedStoreOrUnavailable(look(userId, agentId, now));
   }
 
   if (request.unreadFrom === undefined) return undefined;

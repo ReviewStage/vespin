@@ -71,7 +71,7 @@ export function useMessageActs(input: {
   readonly calling: boolean;
   /** Each message of a Manager's chat by its row's id, to the transcript line it went as (`lineId`), which its Edit takes the Manager back to, or null for one that went as none, such as the Manager's own; none for any other agent. */
   readonly chatLines?: ReadonlyMap<string, string | null> | undefined;
-  /** Moves the reader's mark of a Manager's chat back to just before one of the Manager's messages, by its id and when it was sent, as its Mark as unread presses; none for any other agent. */
+  /** Moves the reader's mark of a Manager's chat back to just before one of its messages, by its id and when it was sent, as its Mark as unread presses; none for any other agent. */
   readonly markUnread?: ((messageId: string, sentAt: number) => void) | undefined;
 }): MessageActs {
   const { agentId, agent, transcript, readerId, composer, calling, chatLines, markUnread } = input;
@@ -181,11 +181,12 @@ export function useMessageActs(input: {
   // Note that a question whose line is no longer where it was, dropped or rewound elsewhere, asks nothing.
   const stands = asked !== undefined && points.revertsAt.get(asked.reply) === asked.line;
 
-  /** Mark as unread on one of the Manager's messages of its chat, where the page offers it. */
+  /** Mark as unread on a message of a Manager's chat, anyone's, where the page offers it; never on the greeting or a line still on its way, which the chat holds no row of. */
   const readActs = (item: SaidItem): readonly HeldAct[] => {
     const sentAt = item.at;
+    const kept = chatLines?.has(item.place.row) === true;
 
-    if (markUnread === undefined || item.manager !== true || sentAt === undefined) return [];
+    if (markUnread === undefined || !kept || sentAt === undefined) return [];
 
     return [
       {

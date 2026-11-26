@@ -916,6 +916,7 @@ const AgentConversation = memo(function AgentConversation({
               managerName: chatFaces?.managerName,
               readerName: chatFaces?.readerName,
               newAfter: chatMark.newAfter,
+              newOverOwn: chatMark.newOverOwn,
               // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
               greeting:
                 shown !== undefined && chatPage.before === undefined
@@ -939,6 +940,7 @@ const AgentConversation = memo(function AgentConversation({
       shown,
       chatFaces,
       chatMark.newAfter,
+      chatMark.newOverOwn,
     ],
   );
 
