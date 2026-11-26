@@ -31,7 +31,7 @@ const UNANSWERED: PullRequestChaptersAnswerView = { failure: AGENT_CALL_FAILURE.
 export interface PullRequestChapters {
   /** What the read answers now, or the member's Generate's answer until the read moves; none while it has never answered. */
   readonly answer: PullRequestChaptersAnswerView | undefined;
-  /** Reads them again at once. */
+  /** Reads them again at once, letting the member's last Generate's answer go. */
   readonly retry: () => Promise<void>;
   /** Generates them for the pull request's head now; the screen stands them as being made until it answers. */
   readonly generate: () => void;
@@ -108,13 +108,14 @@ export function usePullRequestChapters(key: PullRequestKey): PullRequestChapters
       });
   }, [acts, workspaceId, repository, number]);
 
-  const retry = useCallback(
-    () =>
-      acts[ACT_KIND.CHAPTERS_REPOSITORY_RETRY]({ workspaceId, repository, number }).catch(
-        refused("A read of the chapters"),
-      ),
-    [acts, workspaceId, repository, number],
-  );
+  // Note that Try again lets a Generate's answer go, because a read that answers as before keeps its identity and would leave a failed Generate drawn over it.
+  const retry = useCallback(() => {
+    setGenerated(undefined);
+
+    return acts[ACT_KIND.CHAPTERS_REPOSITORY_RETRY]({ workspaceId, repository, number }).catch(
+      refused("A read of the chapters"),
+    );
+  }, [acts, workspaceId, repository, number]);
 
   const answer =
     generated !== undefined && generated.of === readAnswer ? generated.answer : readAnswer;
