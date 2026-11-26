@@ -1,0 +1,19 @@
+pinned to 6b7e30dedd
+== bundle PJjbatcha2 base 6b7e30dedd
+  built 6b7e30dedd base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-inbox: fails 0 shots 17 
+iphone-light-new-task: fails 1 shots 6 Assert that "Show who sent each pending invite." is visible... FAILED
+  iphone-light-new-task around the failure: Input text Show who sent each pending invite.... COMPLETED|Swipe from (50%, 12%) to (50%, 85%) in 600 ms... COMPLETED|Assert that "Show who sent each pending invite." is not visible... COMPLETED|Tap on "New task"... COMPLETED|Assert that "Show who sent each pending invite." is visible... FAILED||
+iphone-light-agent-ports: fails 0 shots 4 
+iphone-light-manager-thread: fails 1 shots 4 Tap on "Reply in thread"... FAILED
+  iphone-light-manager-thread around the failure: Tap on "Back"... COMPLETED|Assert that "3 replies" is visible... COMPLETED|Assert that "Thanks, reviewing it now." is not visible... COMPLETED|Long press on "Left before it ships.*"... COMPLETED|Tap on "Reply in thread"... FAILED||
+iphone-light-new-agent: fails 0 shots 4 
+iphone-light-managers: fails 0 shots 10 
+iphone-light-agent: fails 0 shots 33 
+iphone-light-workspace: fails 0 shots 5 
+iphone-light-automations: fails 0 shots 12 
+iphone-light-search: fails 0 shots 8 
