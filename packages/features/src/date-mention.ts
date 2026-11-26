@@ -445,7 +445,9 @@ function timedOf(moment: string): Timed | undefined {
       : (sign === "-" ? -1 : 1) * (Number(offsetHours) * 60 + Number(offsetMinutes)) * 60_000;
 
   const wall = Date.UTC(real.year, real.month - 1, real.day, Number(hour), Number(minute));
-  const seconds = Math.floor(Number(`${second ?? "0"}.${fraction ?? "0"}`) * 1000);
+  // Note that the fraction is read as whole milliseconds, because `32.3 * 1000` is 32299.999… and would lose one.
+  const milliseconds = Number((fraction ?? "").padEnd(3, "0").slice(0, 3));
+  const seconds = Number(second ?? "0") * 1000 + milliseconds;
 
   return {
     instant: wall + seconds - offset,

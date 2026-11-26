@@ -187,8 +187,8 @@ test("a chip says a time in the reader's own zone, and a range's end on its star
     "Tomorrow 3:00:06 PM",
   );
   assert.equal(
-    dateChipText({ start: "2026-10-20T22:00:06.25Z" }, NOW, LOS_ANGELES),
-    "Tomorrow 3:00:06.25 PM",
+    dateChipText({ start: "2026-10-20T22:00:32.3Z" }, NOW, LOS_ANGELES),
+    "Tomorrow 3:00:32.3 PM",
   );
   assert.equal(dateLabel({ start: "2026-10-20T22:00:06Z" }), "Oct 20, 2026, 10:00:06 PM UTC");
   assert.equal(
