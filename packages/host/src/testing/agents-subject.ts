@@ -466,8 +466,9 @@ function fakeService() {
       poll?: { readonly after?: string | undefined },
     ) =>
       Effect.suspend((): Effect.Effect<unknown> => {
-        const answered = <Part extends string>(script: PolledLive<Part>) =>
-          poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after);
+        const answered = (
+          script: Pick<PolledLive<string, { readonly failure: string }>, "first" | "poll">,
+        ) => (poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after));
 
         switch (read.name) {
           case HOSTS_READ.name:
