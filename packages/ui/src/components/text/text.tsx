@@ -101,10 +101,12 @@ function roleClass(variant: TextVariant): string {
   return `${TEXT_ROLE_CLASS[variant]} font-ui ${ink}`;
 }
 
-/** One line cut with an ellipsis at the box's edge, a flex item giving up its content's width so the cut can happen at all, by a clip rather than a scroller's hidden overflow, so a name's wash inside keeps the room its ring bleeds into (`inline-ref.css`); from the start, the line is laid right to left so its end stays and read left to right, its words kept in their own direction by a `<bdi>`. */
+/** One line cut with an ellipsis at the box's edge, a flex item giving up its content's width so the cut can happen at all, by a clip rather than a scroller's hidden overflow, which keeps the room a name's wash inside bleeds its ring into (`--ui-inline-ref-bleed`, `inline-ref.tsx`), so its corners are not cut square; from the start, the line is laid right to left so its end stays and read left to right, its words kept in their own direction by a `<bdi>`. */
 function truncateClass(truncate: boolean | TextTruncate): string | undefined {
   if (truncate === false) return undefined;
-  const cut = "min-w-0 overflow-clip text-ellipsis whitespace-nowrap";
+
+  const cut =
+    "min-w-0 overflow-clip [overflow-clip-margin:var(--ui-inline-ref-bleed)] text-ellipsis whitespace-nowrap";
 
   return truncate === TEXT_TRUNCATE.START ? `${cut} [direction:rtl] text-left` : cut;
 }
