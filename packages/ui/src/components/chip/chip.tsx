@@ -86,6 +86,7 @@ export const CHIP_LOOK = {
   PILL: "pill",
   FIELD: "field",
   FILTER: "filter",
+  REACTION: "reaction",
   OUTLINE: "outline",
 } as const;
 
@@ -211,6 +212,8 @@ const LOOK_FACE = {
     "border-chip-edge bg-chip text-foreground hover:not-disabled:not-aria-disabled:bg-chip-hover aria-expanded:bg-chip-hover",
   [CHIP_LOOK.FILTER]:
     "border-chip-edge bg-chip text-muted-foreground hover:not-disabled:not-aria-disabled:not-aria-pressed:bg-chip-hover hover:not-disabled:not-aria-disabled:not-aria-pressed:text-foreground aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-ink-foreground",
+  [CHIP_LOOK.REACTION]:
+    "border-chip-edge bg-chip text-muted-foreground hover:not-disabled:not-aria-disabled:not-aria-pressed:bg-chip-hover hover:not-disabled:not-aria-disabled:not-aria-pressed:text-foreground aria-pressed:border-accent-fill aria-pressed:bg-accent-fill/10 aria-pressed:text-accent-ink",
   [CHIP_LOOK.OUTLINE]:
     "border-border-strong bg-transparent text-foreground hover:not-disabled:not-aria-disabled:bg-fill-selected aria-expanded:bg-fill-selected active:not-disabled:not-aria-disabled:bg-fill-pressed",
 } as const satisfies Record<ChipLook, string>;
@@ -238,6 +241,7 @@ const LOOK_CORNER = {
   [CHIP_LOOK.FIELD]: "rounded-control",
   [CHIP_LOOK.PILL]: "rounded-full",
   [CHIP_LOOK.FILTER]: "rounded-full",
+  [CHIP_LOOK.REACTION]: "rounded-full",
   [CHIP_LOOK.OUTLINE]: "rounded-control",
 } as const satisfies Record<ChipLook, string>;
 
@@ -247,6 +251,7 @@ const LOOK_INSET = {
   [CHIP_LOOK.FIELD]: "ps-control-inset pe-chip-inset",
   [CHIP_LOOK.PILL]: "ps-chip-inset pe-chip-inset-wide",
   [CHIP_LOOK.FILTER]: "px-chip-inset-wide",
+  [CHIP_LOOK.REACTION]: "px-chip-inset-wide",
   [CHIP_LOOK.OUTLINE]: "ps-control-inset pe-chip-inset",
 } as const satisfies Record<ChipLook, string>;
 
@@ -256,6 +261,7 @@ const REMOVABLE_INSET = {
   [CHIP_LOOK.FIELD]: "ps-chip-inset-wide pe-chip-tight",
   [CHIP_LOOK.PILL]: "ps-chip-inset pe-chip-tight",
   [CHIP_LOOK.FILTER]: "ps-chip-inset-wide pe-chip-tight",
+  [CHIP_LOOK.REACTION]: "ps-chip-inset-wide pe-chip-tight",
   [CHIP_LOOK.OUTLINE]: "ps-chip-inset-wide pe-chip-tight",
 } as const satisfies Record<ChipLook, string>;
 
