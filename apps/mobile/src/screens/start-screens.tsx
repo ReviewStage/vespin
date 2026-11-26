@@ -1289,6 +1289,16 @@ export function NewTaskScreen({
   );
 
   const pictures = useAttachedPictures(setNote, draft?.pictures, undefined, keeping.pictures);
+  // Note that a draft's pictures held before the workspace was known, as a sub-task's parent read after the sheet opened, are laid back once it is, ahead of any attached meanwhile, since the holder takes its keeper's pictures only as it opens.
+  const keptAtOpen = useRef(keeping.pictures !== undefined);
+  const restore = keeping.pictures;
+
+  useEffect(() => {
+    if (keptAtOpen.current || restore === undefined) return;
+    keptAtOpen.current = true;
+
+    if (restore.held.length > 0) pictures.putBack(restore.held);
+  }, [restore, pictures]);
   // Note that a share draft's pictures are read as the sheet opens, and nothing starts until they are in, so its words never go without them.
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
   // Note that a draft kept closes the sheet at once, as the panel's New task closes with no question; one kept nowhere asks first.
@@ -1347,7 +1357,8 @@ export function NewTaskScreen({
       return false;
     }
 
-    keeping.forget();
+    // Note that a start a picture past its bound refuses keeps the draft, since the sheet stays with it.
+    if (pictures.refusal === undefined) keeping.forget();
 
     return go(
       () =>
