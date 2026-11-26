@@ -531,10 +531,11 @@ export function LongPressMenu({
   });
 
   return (
+    // Note that the tap stands inside the menu, `.onTapGesture` then `.contextMenu` as Photos' grid holds them, because a tap gesture over the menu took the long press from it, so a held picture opened its message's menu instead of its own.
     <HStack
       modifiers={[
-        rowMenu(tree, false, (path) => menuPressAt(groups, path)?.()),
         ...(onTap === undefined ? [] : [SwiftModifiers.onTapGesture(onTap)]),
+        rowMenu(tree, false, (path) => menuPressAt(groups, path)?.()),
       ]}
     >
       {children}
