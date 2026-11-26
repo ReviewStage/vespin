@@ -49,14 +49,29 @@ import { BlobStore, type BlobStoreFailure, type PresignedUpload } from "./blob-s
  */
 export const SANDBOX_UPLOAD_SECONDS = 120;
 
+/**
+ * How long after an upload settles its tombstones wait before the sweep may
+ * purge them: past the last moment a presigned URL it handed out may still
+ * land an upload, with margin for the clocks of the service, the database,
+ * and the store.
+ */
+const UPLOAD_LANDING_SECONDS = 2 * SANDBOX_UPLOAD_SECONDS;
+
 /** How many times a failed tombstone write is tried again before the uploads are left to stand, logged. */
 const SETTLE_RETRIES = 2;
 
-/** An upload's id and the pathnames it reserved, recorded before any of them is written. */
+/** An upload's id and the pathnames it reserved, its own recorded before it is written. */
 export interface ReservedUpload {
   readonly id: string;
   readonly blobKey: string;
   readonly phoneBlobKey: string;
+  /**
+   * Records the copy for a phone's pathname with the write's uploads, run
+   * just before a copy may be written there. Note that it is recorded only
+   * then, because a pathname only reserved holds no object, and its
+   * tombstone would stand beside a row that names no copy until the row goes.
+   */
+  readonly recordPhone: Effect.Effect<void>;
 }
 
 /** The uploads one write made, which it settles as it ends. */
@@ -84,24 +99,21 @@ export function phoneCopyType(contentType: string): string | undefined {
 }
 
 /**
- * A fresh id and the pathnames its objects stand at, recorded with the write
- * standing around the call, so whatever lands there is tombstoned unless a
- * row comes to take the id.
+ * A fresh id and the pathnames its objects stand at, its own recorded with
+ * the write standing around the call, so whatever lands there is tombstoned
+ * unless a row comes to take the id; the copy for a phone's is recorded by
+ * `recordPhone` only where one may be written.
  */
 export const reserveAttachmentUpload: Effect.Effect<ReservedUpload, never, AttachmentUploads> =
   Effect.gen(function* () {
     const id = crypto.randomUUID();
 
-    const reserved = {
-      id,
-      blobKey: attachmentBlobPath(id),
-      phoneBlobKey: attachmentBlobPath(id, ATTACHMENT_BLOB_VARIANT.PHONE),
-    };
-
+    const blobKey = attachmentBlobPath(id);
+    const phoneBlobKey = attachmentBlobPath(id, ATTACHMENT_BLOB_VARIANT.PHONE);
     const uploads = yield* AttachmentUploads;
-    yield* uploads.record({ id, keys: [reserved.blobKey, reserved.phoneBlobKey] });
+    yield* uploads.record({ id, keys: [blobKey] });
 
-    return reserved;
+    return { id, blobKey, phoneBlobKey, recordPhone: uploads.record({ id, keys: [phoneBlobKey] }) };
   });
 
 /**
@@ -123,6 +135,7 @@ export function putAttachment(
       return { id: reserved.id, blobKey: reserved.blobKey, byteCount: bytes.byteLength };
     }
 
+    yield* reserved.recordPhone;
     yield* store.put(reserved.phoneBlobKey, phone.bytes, phone.contentType);
 
     return {
@@ -178,11 +191,14 @@ function isPhoneCopy(copyType: string, bytes: Uint8Array): boolean {
  */
 export function storeSandboxPhoneCopy(
   copyType: string,
-  pathname: string,
+  reserved: ReservedUpload,
   made: (upload: PresignedUpload) => Effect.Effect<boolean, unknown>,
 ): Effect.Effect<StoredPhoneCopy | undefined, BlobStoreFailure> {
   return Effect.gen(function* () {
     const store = yield* BlobStore;
+    const pathname = reserved.phoneBlobKey;
+    // Note that the pathname is recorded before the URL is handed out, so a copy that lands after the call failed is tombstoned too.
+    yield* reserved.recordPhone;
 
     const presigned = yield* store.presignPut(pathname, {
       contentType: copyType,
@@ -213,7 +229,7 @@ export function storeSandboxPhoneCopy(
 function settle(
   uploads: readonly AttachmentUpload[],
 ): Effect.Effect<void, never, DatabaseServices> {
-  return tombstoneUnwrittenUploads(uploads).pipe(
+  return tombstoneUnwrittenUploads(uploads, UPLOAD_LANDING_SECONDS).pipe(
     Effect.retry(Schedule.recurs(SETTLE_RETRIES)),
     Effect.catch((failure) =>
       Effect.logError(`Attachment uploads left unsettled: ${failure._tag}`),

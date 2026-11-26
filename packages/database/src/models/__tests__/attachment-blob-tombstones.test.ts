@@ -142,10 +142,13 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
           blobKey: writtenKey,
         });
 
-        yield* tombstoneUnwrittenUploads([
-          { id: written.id, keys: [writtenKey] },
-          { id: unwritten, keys: [unwrittenKey] },
-        ]);
+        yield* tombstoneUnwrittenUploads(
+          [
+            { id: written.id, keys: [writtenKey] },
+            { id: unwritten, keys: [unwrittenKey] },
+          ],
+          0,
+        );
 
         const tombstoned = (yield* readAttachmentBlobTombstones(1_000)).filter(
           (tombstone) => tombstone.key === writtenKey || tombstone.key === unwrittenKey,
@@ -161,7 +164,7 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
   );
 
   it.effect(
-    "a phone copy an upload reserved and its standing row does not name is tombstoned, and the row's own key is not",
+    "a phone copy a stored row does not name is tombstoned and purged within the minute, and a key the row names is never purged",
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
@@ -178,9 +181,8 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
           blobKey,
         });
 
-        yield* tombstoneUnwrittenUploads([{ id: kept.id, keys: [blobKey, phoneKey] }]);
+        yield* tombstoneUnwrittenUploads([{ id: kept.id, keys: [blobKey, phoneKey] }], 0);
 
-        // Note that the table is read whole, because the sweep reads no tombstone of a row that stands until the row goes.
         const tombstoned = yield* db
           .select({ key: attachmentBlobTombstone.key })
           .from(attachmentBlobTombstone)
@@ -190,6 +192,33 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
           tombstoned.map((row) => row.key),
           [phoneKey],
         );
+
+        // A tombstone that stood on the row's own key anyway, as no writer leaves one, is still never read.
+        yield* db.insert(attachmentBlobTombstone).values({ key: blobKey });
+
+        const purgeable = (yield* readAttachmentBlobTombstones(100_000))
+          .map((tombstone) => tombstone.key)
+          .filter((key) => key === blobKey || key === phoneKey);
+
+        assert.deepEqual(purgeable, [phoneKey]);
+      }),
+  );
+
+  it.effect(
+    "an unwritten upload's tombstone is not read while a URL handed out for it may still land an upload",
+    () =>
+      Effect.gen(function* () {
+        const pending = `attachments/${randomUUID()}`;
+        const due = `attachments/${randomUUID()}`;
+
+        yield* tombstoneUnwrittenUploads([{ id: randomUUID(), keys: [pending] }], 3_600);
+        yield* tombstoneUnwrittenUploads([{ id: randomUUID(), keys: [due] }], 0);
+
+        const read = (yield* readAttachmentBlobTombstones(100_000))
+          .map((tombstone) => tombstone.key)
+          .filter((key) => key === pending || key === due);
+
+        assert.deepEqual(read, [due]);
       }),
   );
 });

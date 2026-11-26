@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
-import { readAttachmentBlobTombstones } from "@repo/database/models/attachment-blob-tombstones";
 import {
   readConversationPicture,
   readServedConversationPicture,
@@ -11,6 +10,7 @@ import {
 import { readManagerChatMessage } from "@repo/database/models/manager-chat-messages";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { attachment } from "@repo/database/schemas/attachment";
+import { attachmentBlobTombstone } from "@repo/database/schemas/attachment-blob-tombstone";
 import { user } from "@repo/database/schemas/auth";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
@@ -274,7 +274,16 @@ it.layer(Layer.merge(getTestDB(), blobs.layer))("show_media", (it) => {
         );
         const swapped = blobs.presigned.at(-1)?.pathname;
         assert.ok(swapped !== undefined);
-        assert.ok((yield* readAttachmentBlobTombstones(10_000)).some((one) => one.key === swapped));
+        // Note that the table is read whole, because the sweep reads the tombstone only once the URL handed out for the upload can no longer land one.
+
+        const tombstoned = yield* Database.use((db) =>
+          db
+            .select({ key: attachmentBlobTombstone.key })
+            .from(attachmentBlobTombstone)
+            .where(eq(attachmentBlobTombstone.key, swapped)),
+        );
+
+        assert.equal(tombstoned.length, 1);
       }),
   );
 

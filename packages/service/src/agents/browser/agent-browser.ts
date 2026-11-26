@@ -632,7 +632,7 @@ export function agentBrowserOver(
       }
 
       // Note that a copy the sandbox could not make leaves the recording its WebM alone, never refused.
-      const phone = yield* storeSandboxPhoneCopy(MP4_TYPE, reserved.phoneBlobKey, (upload) =>
+      const phone = yield* storeSandboxPhoneCopy(MP4_TYPE, reserved, (upload) =>
         Effect.map(api.run(running, phoneVideoUploadAsk(file.path, upload)), copyUploaded),
       );
 
