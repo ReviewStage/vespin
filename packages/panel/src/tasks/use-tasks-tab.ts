@@ -3282,10 +3282,10 @@ export function useTasksTab(input: {
       ? mainTabs.tabs.some((each) => sameTab(each, closed.tab))
       : inboxView === undefined && sidePanel.strip.some((each) => sameTab(each, closed.tab));
 
-  // Whether the open task's strips draw a closed tab of it again: an agent's
-  // while the agent is the task's, archived or not, a Changes tab while its
-  // agent is the task's, archived or not, and a subagent's or a page's on the
-  // strip's own terms. Note that what the task has not read yet counts as
+  // Whether the open task's strips draw a closed tab of it again: an agent's or
+  // a turn's changes while the agent is the task's, archived or not, a
+  // subagent's or a page's on the strip's own terms, and any other kind always
+  // (`strip-tab-kinds.ts`). Note that what the task has not read yet counts as
   // drawn, as the strips stand a tab until the read says otherwise.
   const drawsAgain = (closed: ClosedTab): boolean =>
     !standsOpen(closed) &&
