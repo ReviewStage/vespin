@@ -295,17 +295,28 @@ function heldMedia(address: string, alt: string, media: DocumentMedia): NativeMe
   return { address, kind: MEDIA_KIND.PICTURE, file: source, label: "" };
 }
 
-/** What each picture the lines draw as media holds, each address once, in the order first drawn. */
-function linesMedia(
-  lines: readonly NativeDocumentLine[],
+/**
+ * What each picture the document's blocks draw as media holds, each address
+ * once, in the order first drawn. Note that it is read from the blocks the
+ * field's lines stand on, which change only with the Markdown they were
+ * read from, never on a key, so typing hands the view none of it; a
+ * picture a key took out stands on, unread by any line.
+ */
+function blocksMedia(
+  blocks: readonly DocumentBlock[],
   media: DocumentMedia,
 ): readonly NativeMedia[] {
   const held = new Map<string, NativeMedia>();
 
-  for (const line of lines) {
-    for (const run of line.runs) {
-      if (!("media" in run) || held.has(run.media.address)) continue;
-      held.set(run.media.address, heldMedia(run.media.address, run.media.alt, media));
+  for (const block of blocks) {
+    for (const line of block.lines) {
+      for (const run of line.runs) {
+        if (run.kind !== INLINE_RUN.RAW || !run.source.startsWith("![")) continue;
+        const address = drawnPictureAddresses(run.source)[0];
+
+        if (address === undefined || held.has(address)) continue;
+        held.set(address, heldMedia(address, pictureWords(run.source), media));
+      }
     }
   }
 
@@ -459,10 +470,10 @@ export function DocumentField({
     return { markdown: base, value: { lines, seen } };
   }, [own, told, read, base, repository, seen, markOf, media]);
 
-  // What each picture the lines draw holds, handed apart from the words, so a picture landing draws only that picture again.
+  // What each picture the document draws holds, handed apart from the words, so a picture landing draws only that picture again.
   const held = useMemo(
-    () => (media === undefined ? undefined : linesMedia(handed.value.lines, media)),
-    [handed, media],
+    () => (media === undefined ? undefined : blocksMedia(read, media)),
+    [media, read],
   );
 
   const look = {
