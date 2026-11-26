@@ -31,9 +31,18 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-sheet
 - inputText: "Add a Resend button beside each pending invite."
-# The keyboard is lowered by a drag on the page over the composer (`StartPage`).
-- runFlow:
-    file: subflows/lower-keyboard.yaml
+# The keyboard is lowered by a drag on the page over the composer
+# (`StartPage`). Note that the drag is made a quarter of the way down the
+# window rather than at its middle, where `lower-keyboard.yaml` drags,
+# because the composer, docked on the keyboard with its row of capsules
+# under its field, now reaches the window's middle on the iPhone, and a drag
+# on it left the keyboard up; the model sheet then opened over the keyboard
+# and stood outside the tree Maestro reads, so nothing in it was found.
+- swipe:
+    start: "50%, 25%"
+    end: "50%, 15%"
+    duration: 400
+- waitForAnimationToEnd
 # The model's capsule says the model alone, "Opus 5.5", the fixture's first
 # model, its effort left to the sheet, and opens the model sheet: Effort and Fast lead it,
 # then the catalog, each model once under its harness, by the panel's name
