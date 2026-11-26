@@ -23,24 +23,18 @@ import type { ReactElement } from "react";
  * (vjsplit4).
  */
 function stackAct(act: BarAction, tint: string): ReactElement {
-  return act.symbol === undefined ? (
+  // Note that the act's words are the button's title even where it stands its glyph, since the bar's overflow names a folded item by its title alone, never its accessibility label (#11042); the bar still draws the glyph.
+  return (
     <Stack.Toolbar.Button
       key={act.label}
+      {...(act.symbol === undefined ? {} : { icon: glyphSymbol(act.symbol) })}
       tintColor={tint}
+      accessibilityLabel={act.label}
       disabled={act.disabled === true}
       onPress={act.onPress}
     >
       {act.label}
     </Stack.Toolbar.Button>
-  ) : (
-    <Stack.Toolbar.Button
-      key={act.label}
-      icon={glyphSymbol(act.symbol)}
-      tintColor={tint}
-      accessibilityLabel={act.label}
-      disabled={act.disabled === true}
-      onPress={act.onPress}
-    />
   );
 }
 
