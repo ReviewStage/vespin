@@ -67,7 +67,7 @@ export function ChannelMessage({
       data-continues={continues ? "" : undefined}
       data-message-id={messageId}
     >
-      <span className="ui-channel-message-avatar inline-flex w-channel-avatar flex-none justify-center">
+      <span className="ui-channel-message-avatar inline-flex w-channel-avatar flex-none items-start justify-center">
         {continues ? null : avatar}
       </span>
       <div

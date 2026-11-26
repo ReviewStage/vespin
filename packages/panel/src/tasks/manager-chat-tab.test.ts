@@ -29,6 +29,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { FindScope } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
+import { OpenPersonProvider } from "../person-door.js";
 import { FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
 import { handMembers, handState } from "../testing/app-state.js";
 import {
@@ -185,6 +186,8 @@ async function drawChat(
   const older: number[] = [];
   // Each reaction pressed, as the window asked it.
   const reacted: ManagerChatReactParams[] = [];
+  // Each person's page a press opened, by their account.
+  const people: string[] = [];
 
   fakeActs({
     act: (request) => {
@@ -249,21 +252,25 @@ async function drawChat(
   await act(async () =>
     root.render(
       withQueryClient(
-        createElement(MemberDirectory, {
-          workspace: { id: "workspace-acme", memberCount: 2 },
-          readerId: DEAN.userId,
-          children: createElement(
-            FindScope,
-            { active: held.findable === true, subject: { agent: manager.id } },
-            createElement(ChatBesideThread, {
-              agent: manager,
-              control,
-              opened: held.opened,
-              alone: held.alone === true,
-            }),
-            createElement(ToastHost),
-          ),
-        }),
+        createElement(
+          OpenPersonProvider,
+          { value: (userId: string) => people.push(userId) },
+          createElement(MemberDirectory, {
+            workspace: { id: "workspace-acme", memberCount: 2 },
+            readerId: DEAN.userId,
+            children: createElement(
+              FindScope,
+              { active: held.findable === true, subject: { agent: manager.id } },
+              createElement(ChatBesideThread, {
+                agent: manager,
+                control,
+                opened: held.opened,
+                alone: held.alone === true,
+              }),
+              createElement(ToastHost),
+            ),
+          }),
+        ),
       ),
     ),
   );
@@ -272,7 +279,7 @@ async function drawChat(
   });
   await settleQueries();
 
-  return { container, sent, carried, answered, threads, keys, older, reacted };
+  return { container, sent, carried, answered, threads, keys, older, reacted, people };
 }
 
 /** Each row a scope draws, the greeting aside: its sender's name where its run opens, and its words. */
@@ -289,8 +296,8 @@ function rowsIn(scope: Element) {
   );
 }
 
-test("each message is a row under its sender's name where their run opens, a thread's replies stand under its message as a count that opens the thread beside the chat, and the thread's box replies in it", async () => {
-  const { container, sent, threads } = await drawChat([
+test("each message is a row under its sender's name where their run opens, a teammate's name opens their page, a thread's replies stand under its message as a count that opens the thread beside the chat, and the thread's box replies in it", async () => {
+  const { container, sent, threads, people } = await drawChat([
     row("dean", 1, "Ship the invite flow.", DEAN),
     row("charles", 2, "Seven days.", CHARLES),
     row("charles-more", 3, "Not five.", CHARLES),
@@ -305,6 +312,13 @@ test("each message is a row under its sender's name where their run opens, a thr
     [null, "Not five."],
     ["Iris", "On it."],
   ]);
+
+  const teammate = [
+    ...container.querySelectorAll<HTMLButtonElement>(".ui-channel-message-head button"),
+  ].find((button) => button.textContent === CHARLES.name);
+
+  act(() => teammate?.click());
+  assert.deepEqual(people, [CHARLES.userId]);
 
   const count = [...container.querySelectorAll("button")].find(
     (button) => button.textContent?.endsWith("2 replies") === true,

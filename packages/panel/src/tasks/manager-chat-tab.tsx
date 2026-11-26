@@ -68,7 +68,7 @@ import { Option, Schema } from "effect";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
+import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
 import {
   Conversation,
   ConversationContent,
@@ -382,7 +382,8 @@ function ManagerMessage({
 /**
  * A person's message: the reader's own in a bubble at the column's right,
  * and anyone else's at its left, under their name where it opens their run
- * and beside their picture, its files over the words, Reply in thread and
+ * and beside their picture, each of which opens their page as their name
+ * does wherever the window names them (`ActorRef`), its files over the words, Reply in thread and
  * Copy beside it and in its menu, as every message of the chat offers them, and when it
  * was sent under the run's last.
  */
@@ -414,8 +415,8 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
         {(body) => (
           <ChannelMessage
             messageId={message.id}
-            avatar={<ActorMark actor={sender} size={ACTOR_SIZE.CARD} />}
-            name={message.authorName}
+            avatar={<ActorRef actor={sender} size={ACTOR_SIZE.CARD} faceOnly />}
+            name={<ActorRef actor={sender} nameOnly byName />}
             at={sentTime(message.createdAt)}
             continues={!place.opens}
             contextMenu={menu.contextMenu}
