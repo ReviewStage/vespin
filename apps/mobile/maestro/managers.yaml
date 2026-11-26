@@ -93,7 +93,9 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: managers-repositories
-- tapOn: "Back"
+# Note that the back button is named for the page under it, Manager settings, so it is found by its id.
+- tapOn:
+    id: "BackButton"
 - tapOn: "Cancel"
 # The bar's Overview opens what the Manager is doing: its counts, the two
 # agents it started, and the pull request the invitations agent opened.
