@@ -1488,9 +1488,6 @@ importers:
       remark-breaks:
         specifier: 4.0.0
         version: 4.0.0
-      unicode-emoji-json:
-        specifier: 0.9.0
-        version: 0.9.0
     devDependencies:
       '@effect/vitest':
         specifier: 'catalog:'
@@ -1525,6 +1522,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
+      unicode-emoji-json:
+        specifier: 0.9.0
+        version: 0.9.0
       vitest:
         specifier: 'catalog:'
         version: 5.1.1(@opentelemetry/api@1.9.1)(@types/node@26.6.9)(jsdom@30.0.1)(msw@3.0.7)(vite@7.3.8)
@@ -1851,6 +1851,9 @@ importers:
       tailwind-merge:
         specifier: 3.7.1
         version: 3.7.1
+      unicode-emoji-json:
+        specifier: 0.9.0
+        version: 0.9.0
     devDependencies:
       '@effect/vitest':
         specifier: 'catalog:'

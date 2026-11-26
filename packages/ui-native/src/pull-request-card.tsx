@@ -9,13 +9,13 @@ import {
   font,
   foregroundStyle,
   lineLimit,
-  monospacedDigit,
   padding,
   strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestMarkState } from "@repo/features/pull-request-model";
 import { Button as Act, BUTTON_LOOK, BUTTON_SIZE } from "./button.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { LineCounts } from "./line-counts.js";
 import { type LongPressGroup, LongPressMenu } from "./list-row.js";
 import { ToneGlyph } from "./marks.js";
 import { Text } from "./text.js";
@@ -52,13 +52,6 @@ type PullRequestCardProps = {
   readonly menu?: readonly LongPressGroup[] | undefined;
 };
 
-/** A line count as the card ends with it: "+1.9k", "−312". */
-export function lineCount(sign: string, count: number): string {
-  const short = count >= 1000 ? `${(count / 1000).toFixed(1).replace(/\.0$/, "")}k` : String(count);
-
-  return `${sign}${short}`;
-}
-
 /**
  * A pull request on a page: its state's glyph in GitHub's color, the one
  * status tone the card carries, its number and title in the row title's style, and its added
@@ -81,7 +74,6 @@ export function PullRequestCard({
 }: PullRequestCardProps) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[state];
-  const count = [font({ textStyle: TYPE_ROLE.TIME }), monospacedDigit()];
 
   const card = (
     <HStack
@@ -113,15 +105,8 @@ export function PullRequestCard({
         {number === undefined ? title : `#${number} ${title}`}
       </Text>
       <Spacer />
-      {additions === undefined ? null : (
-        <Text modifiers={[...count, foregroundStyle(colors.COMPLETE)]}>
-          {lineCount("+", additions)}
-        </Text>
-      )}
-      {deletions === undefined ? null : (
-        <Text modifiers={[...count, foregroundStyle(colors.DANGER_TEXT)]}>
-          {lineCount("−", deletions)}
-        </Text>
+      {additions === undefined || deletions === undefined ? null : (
+        <LineCounts additions={additions} deletions={deletions} />
       )}
     </HStack>
   );

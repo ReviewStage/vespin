@@ -14,6 +14,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useIsFocused } from "expo-router";
 import type { ReactElement, ReactNode } from "react";
+import { useComposerDraftsSignOut } from "../../agents/composer-drafts.js";
 import { MachineAsks } from "../../agents/machine-asks.js";
 import { useAppNotReadyCount } from "../../app-ready.js";
 import { useCrashReports } from "../../crash-reports.js";
@@ -155,6 +156,7 @@ export default function GuardedScreens() {
   useInboxWidget(signedIn);
   useSystemActivity(signedIn);
   useRecentOpenedSignOut(signedIn);
+  useComposerDraftsSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
   useCrashReports();
   useOfflineNotice();

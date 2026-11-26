@@ -89,7 +89,7 @@ export const QUERY_ROOT = {
   TASK_REVISION: "task-revision",
   /** A picture the window reads (`picture-query.ts`'s `pictureQuery`), by what it belongs to and its id there. */
   PICTURE: "picture",
-  /** The section icon picker's wholes loaded on demand (`desktop/section-icon-picker.tsx`), Lucide's and the emoji, by which. */
+  /** The section icon picker's wholes loaded on demand (`desktop/section-icon-picker.tsx`), Lucide's, by which; the emoji are `@repo/ui`'s (`useEmojiGroups`). */
   SECTION_ICONS: "section-icons",
   /** A person's page: how many of their tasks and agents the service counts, their newest read into the task list (`desktop/person-page.tsx`). */
   PERSON_PAGE: "person-page",

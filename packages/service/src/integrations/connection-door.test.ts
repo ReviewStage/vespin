@@ -9,7 +9,6 @@ import {
   recordAgentRunnerToken,
   updateAgentServers,
 } from "@repo/database/models/agent-store";
-import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { user } from "@repo/database/schemas/auth";
 import { messages } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
@@ -23,7 +22,6 @@ import {
 import { AGENT_KIND, AGENT_PAYER } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { EXPERIMENT } from "@repo/settings";
 import { isRecord, MESSAGE_ROLE, type UnparsedWireValue, type WireRecord } from "@repo/wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import {
@@ -119,8 +117,7 @@ const memberWithLinear = Effect.gen(function* () {
 });
 
 /**
- * A Manager of an owner who connected Linear, on a workspace with Managers
- * act for whoever asked on, admitted on its runner's bearer, and its turn
+ * A Manager of an owner who connected Linear, admitted on its runner's bearer, and its turn
  * under way opened by Dean, a member of the workspace who connected nothing.
  */
 const managerAskedByDean = Effect.gen(function* () {
@@ -135,13 +132,6 @@ const managerAskedByDean = Effect.gen(function* () {
 
   const workspace = yield* openWorkspace(owner);
   yield* joinWorkspace(workspace, dean);
-
-  yield* setWorkspaceExperiment({
-    organizationId: workspace,
-    experiment: EXPERIMENT.MANAGER_ACTS_FOR_ASKER,
-    on: true,
-    by: owner,
-  });
 
   const started = yield* createAgent(owner, {
     taskId: null,

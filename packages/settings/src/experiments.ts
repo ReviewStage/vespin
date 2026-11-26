@@ -34,8 +34,6 @@ export const EXPERIMENT = {
   CURSOR: "cursor",
   /** Managers: long-lived agents on no task that delegate work across the workspace, starting and following the agents that do it. */
   MANAGERS: "managers",
-  /** Manager acts for whoever asked: an agent a Manager starts is the account's of the member whose line opened the Manager's turn, so their payer, machines, skills, and GitHub identity carry its work. */
-  MANAGER_ACTS_FOR_ASKER: "manager-acts-for-asker",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -106,16 +104,6 @@ export interface ExperimentEntry {
  * Settings sets it, and every other read treats it as any experiment.
  */
 export const EXPERIMENTS = [
-  {
-    key: EXPERIMENT.MANAGER_ACTS_FOR_ASKER,
-    scope: EXPERIMENT_SCOPE.WORKSPACE,
-    listed: false,
-    name: "Managers act for whoever asked",
-    detail:
-      "An agent a Manager starts belongs to the member who asked for it, and runs on their subscriptions, keys, and GitHub account.",
-    owner: "Dean",
-    since: "2026-11-24",
-  },
   {
     key: EXPERIMENT.MANAGERS,
     scope: EXPERIMENT_SCOPE.WORKSPACE,

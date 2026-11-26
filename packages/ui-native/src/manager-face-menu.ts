@@ -3,7 +3,7 @@
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_CHARACTER_NAME,
-  MANAGER_FACE_OFFERED_COLORS,
+  MANAGER_FACE_PICK_COLORS,
   type ManagerFace,
   managerFaceName,
 } from "@repo/features/manager-face";
@@ -32,7 +32,7 @@ export function managerFaceMenu(
       label: MANAGER_FACE_CHARACTER_NAME[character],
       symbol: GLYPH.CHANGE_FACE,
       picture: managerFaceAsset({ character, color: face.color }, false),
-      choices: MANAGER_FACE_OFFERED_COLORS.map((color) => {
+      choices: MANAGER_FACE_PICK_COLORS.map((color) => {
         const each = { character, color };
 
         return {

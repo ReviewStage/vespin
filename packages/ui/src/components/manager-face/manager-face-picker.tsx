@@ -1,7 +1,7 @@
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_CHARACTER_NAME,
-  MANAGER_FACE_OFFERED_COLORS,
+  MANAGER_FACE_PICK_COLORS,
   MANAGER_FACES,
   type ManagerFace as ManagerFaceValue,
   managerFaceName,
@@ -38,7 +38,7 @@ import { MANAGER_FACE_SIZE, ManagerFace } from "./manager-face.js";
  */
 
 const CHARACTERS = Object.values(MANAGER_FACE_CHARACTER);
-const COLORS = MANAGER_FACE_OFFERED_COLORS;
+const COLORS = MANAGER_FACE_PICK_COLORS;
 
 /** What the search asks for. */
 const SEARCH_FACES = "Search faces";
