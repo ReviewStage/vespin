@@ -18,7 +18,13 @@
  * message names the caller's lines it is, and starts its turn on them. And a
  * member's reaction given a message of a Manager's chat, or taken off it
  * (`POST /api/agents/{id}/chat-messages/{message}/reactions`), under the
- * reach a message to the chat takes, which opens no turn either.
+ * reach a message to the chat takes, which opens no turn either. And a
+ * member's edit of their own message of a Manager's chat
+ * (`PATCH /api/agents/{id}/chat-messages/{message}`), its words changed in
+ * place, which tells the Manager in a line of its own naming the words
+ * before and after, steering its turn or opening one as a message does, and
+ * takes it back to no earlier point: nothing of its chat or transcript is
+ * dropped.
  *
  * Every row a read touches is one of a workspace the caller is a member of:
  * an agent or a task of any other workspace answers exactly as one that
@@ -47,7 +53,11 @@ import { type Agent, readAgent, readVisibleAgent } from "@repo/database/models/a
 import { childTitlesOf } from "@repo/database/models/child-titles";
 import { readRewoundRevision } from "@repo/database/models/conversation-rewind";
 import { childConversationId } from "@repo/database/models/ids";
-import { readManagerChatMessageByKey } from "@repo/database/models/manager-chat-messages";
+import {
+  editManagerChatMessage,
+  readManagerChatMessage,
+  readManagerChatMessageByKey,
+} from "@repo/database/models/manager-chat-messages";
 import {
   MANAGER_CHAT_REACTION_OUTCOME,
   reactManagerChat,
@@ -92,7 +102,7 @@ import {
 import { accountMiddleware, type HostedContext, heldReadMiddleware, hosted } from "../orpc/base.js";
 import { admitsPlanWriter, controlsAgent } from "./agent-reach.js";
 import { queueOnPage } from "./coder-host/agent-queue.js";
-import { chatOfLine } from "./coder-host/manager-chat-line.js";
+import { chatEditLine, chatOfLine } from "./coder-host/manager-chat-line.js";
 import { cutMessage, wholePartOf } from "./coder-host/part-cut.js";
 import { changeAgentQueue } from "./coder-host/queue-change.js";
 import { spokenLineMetadata } from "./coder-host/spoken-line.js";
@@ -548,6 +558,54 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
         }
 
         return { changed: outcome.changed };
+      }),
+
+    chatEdit: hosted.messages
+      .use(accountMiddleware(seams.resolveUserId))
+      .use(tooLongMiddleware)
+      .chatEdit.effect(function* ({ input, context }) {
+        const { userId } = context;
+        const { agent } = yield* reachedAgent(userId, input.params.id);
+
+        if (agent.kind !== AGENT_KIND.MANAGER) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+        if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+
+        const standing = Option.getOrUndefined(
+          yield* hostedStoreOrUnavailable(
+            readManagerChatMessage(userId, agent.id, input.params.message),
+          ),
+        );
+
+        if (standing === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+        // Note that a message is its author's alone to edit, never a teammate's nor the Manager's own.
+        if (
+          standing.authorKind !== MANAGER_CHAT_AUTHOR.PERSON ||
+          standing.authorUserId !== userId
+        ) {
+          return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+        }
+
+        const { text, clientKey } = input.body;
+
+        if (standing.text === text) return { changed: false };
+
+        // Note that the Manager is told before the words change, under the edit's key, so an edit sent again after the words landed answers unchanged, and one whose words did not land tells it once and lands.
+        yield* steerMemberWords(writer, userId, agent, chatEditLine(standing, text, clientKey));
+
+        const edited = yield* hostedStoreOrUnavailable(
+          editManagerChatMessage(userId, {
+            agentId: agent.id,
+            messageId: standing.id,
+            text,
+            now: yield* DateTime.nowAsDate,
+          }),
+        );
+
+        if (Option.isNone(edited)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+        return { changed: true };
       }),
 
     recordVoiceLine: hosted.messages

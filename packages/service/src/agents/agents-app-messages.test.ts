@@ -80,6 +80,8 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import {
   MANAGER_CHAT_AUTHOR,
   MANAGER_CHAT_REACTION,
+  type ManagerChatAuthor,
+  managerChatEditAnswerSchema,
   managerChatReactAnswerSchema,
 } from "@repo/features/manager-chat-live";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
@@ -116,6 +118,7 @@ import {
   AGENT_STOP,
   AGENT_WORKSPACE_TOOLS,
   agentStartedOn,
+  chatMessagePath,
   chatReactionPath,
   countedWith,
   fakeAgentSessions,
@@ -2516,6 +2519,94 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.deepEqual(yield* react(owner, "nope", true), notFound);
         assert.equal((yield* readManagerChatReactions(owner, agent.id, ["m1"])).size, 0);
         assert.equal(agentSessions.sent.length, sends);
+      }),
+  );
+
+  it.effect(
+    "a member's edit of their own Manager chat message changes it in place and tells the Manager its words before and after in a turn of their own, dropping nothing; none edits another's message",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const opened = yield* openTask({ agentSessions });
+        const { owner, other, ask } = opened;
+        const { agent } = yield* agentStartedOn(opened, agentSessions, { running: false });
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const now = new Date(yield* Clock.currentTimeMillis);
+
+        const write = (id: string, author: ManagerChatAuthor, text: string) =>
+          writeManagerChatMessage(owner, {
+            agentId: agent.id,
+            id,
+            clientKey: randomUUID(),
+            authorKind: author,
+            authorUserId: author === MANAGER_CHAT_AUTHOR.PERSON ? owner : null,
+            authorName: author === MANAGER_CHAT_AUTHOR.PERSON ? "Ada" : "Manager",
+            text,
+            attachments: [],
+            inReplyTo: null,
+            broadcast: false,
+            turnId: null,
+            lineId: null,
+            now,
+          });
+
+        yield* write("m1", MANAGER_CHAT_AUTHOR.PERSON, "Send the invites Friday.");
+        yield* write("m2", MANAGER_CHAT_AUTHOR.AGENT, "Will do.");
+        const handed = () => agentSessions.sent.length;
+        const before = handed();
+
+        const edit = (bearer: string, messageId: string, text: string, clientKey = randomUUID()) =>
+          ask(
+            request(chatMessagePath(messageId), bearer, {
+              method: "PATCH",
+              id: agent.id,
+              body: { text, clientKey },
+            }),
+          );
+
+        const changed = (text: string) =>
+          Effect.map(
+            edit(owner, "m1", text),
+            (answered) =>
+              readAnswer(managerChatEditAnswerSchema, HOSTED_HTTP_STATUS.OK, answered).changed,
+          );
+
+        const edited = yield* changed("Send the invites Monday.");
+        const told = handed();
+        const again = yield* changed("Send the invites Monday.");
+
+        assert.deepEqual([edited, again], [true, false]);
+        assert.equal(told, before + 1, "the edit opens the Manager a turn");
+        assert.equal(handed(), told, "words as they stand tell the Manager nothing");
+
+        const words = JSON.stringify(agentSessions.sent.at(-1)?.message);
+        assert.ok(words.includes("edited message m1"), words);
+        assert.ok(words.includes("Before:\\nSend the invites Friday."), words);
+        assert.ok(words.includes("After:\\nSend the invites Monday."), words);
+
+        const chat = yield* readManagerChatPage(owner, agent.id, { limit: 10 });
+
+        assert.deepEqual(
+          chat.map((message) => [message.id, message.text, message.editedAt !== null]),
+          [
+            ["m2", "Will do.", false],
+            ["m1", "Send the invites Monday.", true],
+          ],
+        );
+        assert.deepEqual(
+          yield* edit(owner, "m2", "Won't do."),
+          refusal(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
+        );
+        assert.deepEqual(
+          yield* edit(other, "m1", "Never mind."),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+        );
       }),
   );
 });

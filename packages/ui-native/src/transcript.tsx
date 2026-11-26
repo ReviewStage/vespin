@@ -4,7 +4,11 @@ import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
-import { CHAT_THREAD_WORDS, chatWorkWords } from "@repo/features/manager-chat-view";
+import {
+  CHAT_EDIT_WORDS,
+  CHAT_THREAD_WORDS,
+  chatWorkWords,
+} from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
@@ -281,9 +285,10 @@ function bubbleWordsWidth(column: number, room = 0): number {
  * A message of a Manager's chat as a channel's row (`ChannelMessage`): its
  * sender's face, name, and time where it opens their run, then what it
  * carried, its pictures and files, then its words, held for its menu,
- * which leads with Reply in thread where the channel opens threads, and
- * under them the summary of its thread's replies, which opens it, as the
- * panel's channel stands each message whoever sent it.
+ * which leads with Reply in thread where the channel opens threads, the
+ * mark of words edited since it was sent after them, and under them the
+ * summary of its thread's replies, which opens it, as the panel's channel
+ * stands each message whoever sent it.
  */
 function ChannelSaid({
   item,
@@ -296,6 +301,7 @@ function ChannelSaid({
   readonly faces: ChannelFaces;
   readonly drawing: RowDrawing;
 }) {
+  const colors = useColors();
   const width = rowWidth(drawing.column) - CHANNEL_SEAT;
   const open = drawing.onOpenChatThread;
   const thread = open === undefined ? undefined : item.thread;
@@ -367,6 +373,11 @@ function ChannelSaid({
           </View>
         </MessageMenu>
       )}
+      {item.edited === true ? (
+        <Text style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>
+          {CHAT_EDIT_WORDS.EDITED}
+        </Text>
+      ) : null}
       {thread === undefined || open === undefined ? null : (
         <ThreadReplies thread={thread} faces={faces} onOpen={open} />
       )}

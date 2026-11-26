@@ -172,8 +172,8 @@ const AGENT_APPROVAL_PATH = /^\/api\/agents\/[^/]+\/approvals\/[^/]+$/u;
 /** A suggestion in an agent's reply, read or sent, at its public path on the hosted oRPC router. */
 const AGENT_BUTTON_PATH = /^\/api\/agents\/[^/]+\/buttons\/[^/]+(?:\/press)?$/u;
 
-/** A member's reaction on a message of a Manager's chat, at its public path on the hosted oRPC router. */
-const CHAT_REACTION_PATH = /^\/api\/agents\/[^/]+\/chat-messages\/[^/]+\/reactions$/u;
+/** A member's reaction on a message of a Manager's chat, or their edit of one, at its public path on the hosted oRPC router. */
+const CHAT_MESSAGE_PATH = /^\/api\/agents\/[^/]+\/chat-messages\/[^/]+(?:\/reactions)?$/u;
 
 export const RELAY = { owner: "Acme", name: "Relay" } as const;
 export const RELAY_FULL_NAME = `${RELAY.owner}/${RELAY.name}`;
@@ -651,7 +651,7 @@ export const standing = (
           TRANSCRIPT_PART_PATH.test(pathname) ||
           AGENT_APPROVAL_PATH.test(pathname) ||
           AGENT_BUTTON_PATH.test(pathname) ||
-          CHAT_REACTION_PATH.test(pathname)
+          CHAT_MESSAGE_PATH.test(pathname)
         ) {
           return routed(request, webServices);
         }
@@ -703,6 +703,10 @@ const ID_SEGMENT = "{id}";
 /** The public path of a member's reaction on this message of a Manager's chat, its agent's id named by `request`. */
 export const chatReactionPath = (messageId: string) =>
   `/api/agents/${ID_SEGMENT}/chat-messages/${encodeURIComponent(messageId)}/reactions`;
+
+/** The public path of a member's edit of this message of a Manager's chat, its agent's id named by `request`. */
+export const chatMessagePath = (messageId: string) =>
+  `/api/agents/${ID_SEGMENT}/chat-messages/${encodeURIComponent(messageId)}`;
 
 export function request(
   path: string,

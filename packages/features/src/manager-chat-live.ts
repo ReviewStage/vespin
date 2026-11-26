@@ -24,6 +24,7 @@
  */
 
 import { Schema as EffectSchema } from "effect";
+import { AGENT_BOUNDS } from "./agent-wire.js";
 import { refuses } from "./contract/base.js";
 import {
   LIVE_MODE,
@@ -37,6 +38,7 @@ import {
 import { LIVE_USER_QUERY } from "./live-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
+import { trimmedText } from "./text-schema.js";
 
 /** Who wrote a message of a Manager's chat: a person, or the Manager itself. */
 export const MANAGER_CHAT_AUTHOR = {
@@ -78,6 +80,24 @@ export const managerChatReactAnswerSchema = EffectSchema.Struct({
 });
 
 export type ManagerChatReactAnswer = typeof managerChatReactAnswerSchema.Type;
+
+/**
+ * A member's edit of their own message of a Manager's chat
+ * (`PATCH /api/agents/{id}/chat-messages/{message}`): its words as they now
+ * stand, never empty, and the key the line telling the Manager of it goes
+ * under, so an edit sent again tells it once. Its files stand as they were.
+ */
+export const managerChatEditRequestSchema = EffectSchema.Struct({
+  text: trimmedText(AGENT_BOUNDS.MAX_MESSAGE_CHARS),
+  clientKey: trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS),
+});
+
+export type ManagerChatEditRequest = typeof managerChatEditRequestSchema.Type;
+
+/** A member's edit taken: whether it changed the words, which words as they already stand do not, and the Manager told of it where it did. */
+export const managerChatEditAnswerSchema = EffectSchema.Struct({
+  changed: EffectSchema.Boolean,
+});
 
 /** The order a message's reactions stand in, as the statement reads them: 👍, then 👎. */
 const REACTION_ORDER: readonly ManagerChatReaction[] = Object.values(MANAGER_CHAT_REACTION);
@@ -244,6 +264,26 @@ export function withReactionPress<Message extends ManagerChatLiveMessage>(
   const reactions = withReaction(held, kind, reacted);
 
   return reactions === held ? messages : messages.with(at, { ...message, reactions });
+}
+
+/** The reader's edit of their own message of the chat, as a reader draws it before the chat's read carries it: the message, its words as they now stand, and when. */
+export interface ManagerChatEditPress {
+  readonly messageId: string;
+  readonly text: string;
+  readonly editedAt: number;
+}
+
+/** `messages` with `press` drawn on the message it names, its words those given and marked edited: the very list where none is that message or its words stand so already. */
+export function withEditPress<Message extends ManagerChatLiveMessage>(
+  messages: readonly Message[],
+  { messageId, text, editedAt }: ManagerChatEditPress,
+): readonly Message[] {
+  const at = messages.findIndex((message) => message.id === messageId);
+  const message = messages[at];
+
+  if (message === undefined || message.text === text) return messages;
+
+  return messages.with(at, { ...message, text, editedAt });
 }
 
 /** A page of the chat from its rows: at most a page of them, newest first, and where the next older page stands before, where the statement read past the page. */

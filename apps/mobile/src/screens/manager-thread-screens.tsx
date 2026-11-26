@@ -209,12 +209,6 @@ export function ManagerThreadScreen() {
   const media = useAgentMedia(id, mediaIds);
   const sentFiles = useSentFiles(useMemo(() => shownFiles(rows), [rows]));
 
-  // Note that each message of the thread offers Reply, which quotes it into the thread's box, and never Edit, since a line is written again only where it stands in the chat itself, as the panel's thread box takes the Manager back nowhere.
-  const chatLines = useMemo(
-    () => new Map((chatPage?.messages ?? []).map((message) => [message.id, null])),
-    [chatPage?.messages],
-  );
-
   const messageActs = useMessageActs({
     agentId: id,
     agent: shown,
@@ -222,7 +216,7 @@ export function ManagerThreadScreen() {
     readerId,
     composer,
     calling: false,
-    chatLines,
+    chat: true,
   });
 
   // A reply of the reader's the service refused, marked Not delivered where it went, with Retry, Edit, and Delete, by the key it went under.

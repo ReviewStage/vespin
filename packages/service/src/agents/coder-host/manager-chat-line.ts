@@ -11,11 +11,20 @@
  * The writer writes the message beside the line in the line's transaction
  * (`writer.ts`'s `chatMessageOfLine`). A delegation of a call's lines is none, since the
  * chat holds those lines as they were recorded (`growManagerChatLine`).
+ *
+ * A person's edit of their own message is no message of the chat: its words
+ * change in place, and the Manager is told in a line of the person's that
+ * is the service's words in their name (`app_words`), which no chat holds
+ * as theirs, naming the message and its words before and after
+ * (`chatEditLine`), so the Manager answers it in the chat as any message.
  */
 
 import { randomBytes } from "node:crypto";
 import type { Agent } from "@repo/database/models/agent-store";
-import { readManagerChatMessage } from "@repo/database/models/manager-chat-messages";
+import {
+  type ManagerChatMessage,
+  readManagerChatMessage,
+} from "@repo/database/models/manager-chat-messages";
 import type { AwaitingLineMetadata } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { AGENT_KIND } from "@repo/features/agent-wire";
@@ -55,6 +64,30 @@ const threadRootOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   return parent.value.threadRoot ?? parent.value.id;
 });
+
+/** The line that tells a Manager a person edited their message: who, which message and the thread it stands in, and its words before and after. */
+function chatEditWords(message: ManagerChatMessage, after: string): string {
+  const thread = message.threadRoot === null ? "" : ` in thread ${message.threadRoot}`;
+
+  return `${message.authorName} edited message ${message.id}${thread}.\n\nBefore:\n${message.text}\n\nAfter:\n${after}`;
+}
+
+/**
+ * The line telling a Manager its chat's message was edited to `after`, as
+ * the steer takes it: the service's words in the editor's name, under the
+ * edit's key, so an edit sent again tells it once.
+ */
+export function chatEditLine(
+  message: ManagerChatMessage,
+  after: string,
+  clientKey: string,
+): Omit<SteerLine, "sender"> {
+  return {
+    text: chatEditWords(message, after),
+    clientKey,
+    metadata: { channel: MESSAGE_CHANNEL.TYPED, app_words: true },
+  };
+}
 
 /** Whether a line is a person's own words: the member's, carried as a person's chat message is, and adopting no call's lines. */
 function isPersonsOwn(line: Pick<SteerLine, "sender" | "metadata" | "adopts">): boolean {
