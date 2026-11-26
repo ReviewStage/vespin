@@ -1,0 +1,11 @@
+pinned to 55e51f7825
+== bundle PJjprstills base 55e51f7825
+  built 55e51f7825 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app
+iphone-light-pr-skeleton-stills: fails 0 shots 5 
+iphone-dark-pr-skeleton-stills: fails 0 shots 6 
+ipad27-light-pr-skeleton-stills: fails 0 shots 5 
