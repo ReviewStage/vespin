@@ -1,0 +1,39 @@
+EXCEPTION (as vjsend1b/1c): JS 418fbc771f over Vmain14 (natives from 938bbc656d)
+pinned to 418fbc771f
+== bundle PJjprobett base 418fbc771f
+  built 418fbc771f base app Vmain14.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+t1 pre: fails 0 shots 4 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the  | accessibilityText=Edit title | text=Invite a teammate by email | accessibilityText=Save
+t1 a: fails 0 shots 1 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the  | accessibilityText=Edit title | accessibilityText=Save
+t1 b: fails 0 shots 1 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the  | accessibilityText=Edit title | text=Invite teammates by email | accessibilityText=Save
+t1 c: fails 0 shots 1 
+    tree: text=Invite flow test plan
+1. Send an invite from Teammate invita | accessibilityText=Invite flow test plan
+t1 d: fails 0 shots 2 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the 
+t2 pre: fails 0 shots 4 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the  | accessibilityText=Edit title | text=Invite a teammate by email | accessibilityText=Save
+t2 b: fails 0 shots 1 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the  | accessibilityText=Edit title | text=Invite a teammate by email now | accessibilityText=Save
+t2 c: fails 0 shots 1 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the 
+t2 d: fails 0 shots 2 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the 
+t3 pre: fails 0 shots 4 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the  | accessibilityText=Edit title | text=Invite a teammate by email | accessibilityText=Save
+t3 a: fails 0 shots 1 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the  | accessibilityText=Edit title | accessibilityText=Save
+t3 b: fails 0 shots 1 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the  | accessibilityText=Edit title | text=Invite teammates by email | accessibilityText=Save
+t3 c: fails 0 shots 1 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the 
+t3 d: fails 0 shots 2 
+    tree: accessibilityText=Invite a teammate by email #128 | accessibilityText=Adds Invite by email to Settings › Members, which sends the 
+control rename: fails 0 shots 1 
+    tree: accessibilityText=Invite by email
