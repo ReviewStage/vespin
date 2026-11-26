@@ -2589,6 +2589,7 @@ it.effect(
       yield* settled;
       launch.live.scope.set({ messages: [], files: [], items: [ITEM_ROW] });
       yield* toldTimes(launch.told, 1);
+      assert.deepEqual(heldOf(launch.told, PLAN_SCOPE), { rows: [LIVE_ITEM] });
 
       // Note that the kept rows are read through the database, which answers on its own time, so the case reads them a few times before it judges.
       const kept = yield* Effect.repeat(keptItemIds(launch.pool), {
@@ -2597,6 +2598,33 @@ it.effect(
       });
 
       assert.deepEqual(kept, []);
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "where the account's database keeps the Inbox kind, a close on a thread a plan's read alone holds, sent while the service answers nothing, is answered as taken over the thread as that read draws it",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-scope-close-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      launch.sealScope(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+      yield* holding(launch.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE));
+      yield* settled;
+      launch.live.scope.set({ messages: [], files: [], items: [ITEM_ROW] });
+      yield* toldTimes(launch.told, 1);
+      launch.leaveClosesUnanswered(true);
+
+      const answer = yield* launch.acts.AGENTS_INBOX_CLOSE({
+        itemId: ITEM.id,
+        revision: ITEM.revision,
+        clientKey: "close-1",
+      });
+
+      assert.ok("item" in answer, "a close that waits is answered as taken, not unanswered");
+      assert.deepEqual({ id: answer.item.id, taken: answer.taken }, { id: ITEM.id, taken: true });
     }).pipe(Effect.provide(keptPlatform)),
 );
 
