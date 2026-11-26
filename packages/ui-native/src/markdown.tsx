@@ -811,7 +811,8 @@ function Line({
 
   return (
     <Text
-      accessibilityLabel={after === undefined ? heard : `${heard} ${after}`}
+      // Note that a line of words alone is heard from its words and the mark after them as they stand, so only a line heard by a label of its own takes the mark into it.
+      accessibilityLabel={heard === undefined || after === undefined ? heard : `${heard} ${after}`}
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       {...actions}
       {...(onFirstLine === undefined ? {} : { onTextLayout: firstLineOf(onFirstLine) })}
