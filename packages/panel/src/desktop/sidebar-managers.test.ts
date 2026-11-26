@@ -339,13 +339,23 @@ test("a Manager's row offers Rename and Change face › beside Settings…, and 
     document.querySelector<HTMLButtonElement>('button[aria-label="Cat"]') ??
     assert.fail("the picker offers every character");
 
-  act(() => cat.click());
+  await act(async () => cat.click());
+  const colors = () => document.querySelector(".ui-icon-picker-flyout");
+  const gray = colors()?.querySelector<HTMLElement>('[aria-label="Gray"]');
+
+  assert.equal(document.activeElement, gray, "the cat's colors take the focus, the menu standing");
+  await act(async () =>
+    gray?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+  );
+  assert.equal(colors(), null, "Escape puts the colors away");
+  assert.equal(document.activeElement, cat, "and the menu stands, the focus back on the cat");
+  await act(async () => cat.click());
 
   const purple =
-    document.querySelector<HTMLButtonElement>('.ui-icon-picker-colors [aria-label="Purple"]') ??
+    document.querySelector<HTMLButtonElement>('.ui-icon-picker-flyout [aria-label="Purple"]') ??
     assert.fail("the cat asks its colors");
 
-  act(() => purple.click());
+  await act(async () => purple.click());
   await vi.waitFor(() =>
     assert.deepEqual(faced, [{ agentId: FRONTEND, face: { character: "cat", color: "purple" } }]),
   );

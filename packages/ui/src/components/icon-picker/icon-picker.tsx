@@ -85,6 +85,32 @@ export interface IconPickerFlyout {
   readonly onClose: () => void;
 }
 
+/** The flyouts standing in the window, each its popup and the choice it floats from, the newest last. */
+const standingFlyouts: { readonly popup: HTMLElement; readonly choice: HTMLElement }[] = [];
+
+/**
+ * The choice the flyout `node` stands in floats from, the newest where
+ * flyouts stand over one another; none where `node` stands in no flyout. A
+ * surface that closes when a press or the focus leaves it, as a menu's
+ * panel holding a picker does, traces a flyout back through it, since the
+ * flyout stands apart from the picker, portaled to the body.
+ */
+export function iconPickerChoiceOf(node: Node): HTMLElement | undefined {
+  return standingFlyouts.findLast((each) => each.popup.contains(node))?.choice;
+}
+
+/** Counts `popup` among the flyouts standing, floating from `choice`, until the returned call takes it out. */
+function standFlyout(popup: HTMLElement, choice: HTMLElement): () => void {
+  const entry = { popup, choice };
+  standingFlyouts.push(entry);
+
+  return () => {
+    const at = standingFlyouts.indexOf(entry);
+
+    if (at !== -1) standingFlyouts.splice(at, 1);
+  };
+}
+
 /** The layer a flyout from `choice` stands in: the one the picker it stands in was hung on, over a dialog's card where that was. */
 function layerAround(choice: HTMLElement | null): string | undefined {
   return choice?.closest("[data-layer]")?.getAttribute("data-layer") ?? undefined;
@@ -145,6 +171,20 @@ function ChoiceFlyout({
   }, []);
   const close = useRef(flyout.onClose);
   close.current = flyout.onClose;
+  // Whether it is counted among the flyouts standing, which it is from the moment its row stands, before it takes the focus, so a surface hearing the focus leave for it can trace it back.
+  const counted = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => {
+    const popup = row.current?.parentElement;
+
+    if (counted.current === undefined && popup != null && choice.current !== null) {
+      counted.current = standFlyout(popup, choice.current);
+    }
+
+    return () => {
+      counted.current?.();
+      counted.current = undefined;
+    };
+  }, [choice]);
 
   // Note that Escape with the focus back on its choice closes it alone, heard on the choice before it reaches the window, where the picker's popover would close as well.
   useEffect(() => {
@@ -167,6 +207,13 @@ function ChoiceFlyout({
   const stand = (element: HTMLDivElement | null) => {
     row.current = element;
     roving.ref(element);
+
+    // Note that the popup the row stands in is what is counted, so a press on its edge around the row is the flyout's too.
+    const popup = element?.parentElement;
+
+    if (counted.current === undefined && popup != null && choice.current !== null) {
+      counted.current = standFlyout(popup, choice.current);
+    }
 
     if (element === null || landed.current) return;
     landed.current = true;
