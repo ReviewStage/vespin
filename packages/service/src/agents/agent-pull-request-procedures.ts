@@ -241,7 +241,7 @@ export const overviewPullRequestRead = (
 
     const stacked = stackable(pullRequest);
 
-    // Note that an open pull request's merge box rides in its stack's listing, one GraphQL request for both; one no longer open lists no stack, so its merge box is asked on its own.
+    // Note that an open pull request's merge box rides in its stack's listing, one GraphQL request for both; one no longer open lists no stack, so its merge box is asked on its own beside it, and one whose listing GitHub refused asks it on its own after, so a failed stack never costs the page its merge.
     const [read, apart, rights] = yield* Effect.all(
       [
         pullRequestOverview(bearer, repository, pullRequest.number, stacked),
@@ -252,7 +252,11 @@ export const overviewPullRequestRead = (
     );
 
     if (Option.isNone(read)) return null;
-    const { overview, merging = apart ?? Option.none() } = read.value;
+    const { overview } = read.value;
+
+    const merging =
+      read.value.merging ?? apart ?? (yield* mergingOrNone(bearer, repository, pullRequest.number));
+
     const named = { ...(yield* namedOverviewPullRequest(subject, overview)), ...rights };
 
     return Option.isNone(merging) ? named : { ...named, merging: merging.value };

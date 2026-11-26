@@ -21,6 +21,7 @@ import {
 import { REACTION } from "@repo/features/pull-request-write-wire";
 import { Duration, Effect, Fiber, Option, Redacted } from "effect";
 import { TestClock } from "effect/testing";
+import { overviewPullRequestRead } from "../agents/agent-pull-request-procedures.js";
 import {
   fixtureBearer,
   GITHUB_FIXTURE_BOT,
@@ -356,6 +357,17 @@ const pullRequestPartOf = (organizationId: string, stacked = true) =>
             ),
             (named) => ({ ...named, mergeBox: read.value.merging }),
           ),
+  );
+
+/** The pull request's header as its procedure answers it, open as last read, to the member given, its merge box among it; none where GitHub holds no such pull request. */
+const headerOf = (organizationId: string, userId: string) =>
+  Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+    overviewPullRequestRead(
+      bearer,
+      { organizationId, repository: REPOSITORY, author: AGENT_AUTHOR.DEVELOPER },
+      { number: NUMBER, state: PULL_REQUEST_STATE.OPEN, url: PAGE },
+      userId,
+    ),
   );
 
 /** The conversation read off the repository given and named for an agent of the workspace given. */
@@ -1768,10 +1780,11 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
   );
 
   it.effect(
-    "no stack for a pull request no longer open, or where GitHub will not list the open ones, nor the merge box beside it, the rest standing",
+    "no stack for a pull request no longer open, or where GitHub will not list the open ones, the rest standing, the merge box then read on its own",
     () =>
       Effect.gen(function* () {
-        const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+        const charles = yield* linkedAccount(CHARLES.id);
+        const workspace = yield* openWorkspace(charles);
         const open = [openPull(9, "luke/invite-copy", "luke/invite-once")];
 
         const merged = yield* pullRequestPartOf(workspace).pipe(
@@ -1783,11 +1796,13 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           ),
         );
 
-        const refused = yield* pullRequestPartOf(workspace).pipe(
+        // Note that the merge box rides in the listing, so where GitHub refuses it the header asks the merge box on its own.
+        const refused = yield* headerOf(workspace, charles).pipe(
           answering(
             repository({
               pull: pull(),
               open: Response.json({ message: "Resource not accessible" }, { status: 403 }),
+              graphql: { data: { repository: MERGE_FIELDS } },
             }),
           ),
         );
@@ -1800,8 +1815,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
         assert.deepEqual(merged?.stack, []);
         assert.equal(refused?.title, "Send the invite once");
         assert.deepEqual(refused?.stack, []);
-        // Note that the merge box rides in the listing, so a listing GitHub refused reads none, and one never asked leaves it to its own read.
-        assert.deepEqual(refused?.mergeBox, Option.none());
+        assert.deepEqual(refused?.merging?.methods, ["squash", "rebase"]);
         assert.deepEqual(unasked?.stack, []);
         assert.equal(unasked?.mergeBox, undefined);
       }),

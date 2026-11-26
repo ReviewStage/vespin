@@ -1261,7 +1261,7 @@ export interface GitHubOverviewPullRequest {
 /** The pull request itself as its overview reads it, and the merge box the stack's listing read beside it. */
 export interface GitHubOverviewRead {
   readonly overview: GitHubOverviewPullRequest;
-  /** None where GitHub would not say; undefined where no listing was asked, as of a pull request no longer open. */
+  /** None where GitHub would not say; undefined where the listing never read it, one not asked as of a pull request no longer open or one whose first page GitHub refused, which leaves the merge box to its own read. */
   readonly merging: Option.Option<PullRequestMerging> | undefined;
 }
 
@@ -2108,10 +2108,10 @@ function candidatesOf(nodes: OpenPullRequestNodes): readonly StackCandidate[] {
   );
 }
 
-/** What the stack's listing read: the repository's open pull requests, none where they could not all be read, and the merge box its first page asked beside them, none where GitHub would not say. */
+/** What the stack's listing read: the repository's open pull requests, none where they could not all be read, and the merge box its first page asked beside them, none where GitHub would not say and undefined where it refused that page. */
 interface OpenListing {
   readonly open: readonly StackCandidate[] | undefined;
-  readonly merging: Option.Option<PullRequestMerging>;
+  readonly merging: Option.Option<PullRequestMerging> | undefined;
 }
 
 /**
@@ -2122,8 +2122,9 @@ interface OpenListing {
  * left out could be the second on a branch, which unmakes an edge the rest
  * would make, while the merge box its first page read still stands; and
  * that a read that fails, or that GitHub answers only with errors, is none
- * too, said once in the log, because the header stands without its stack
- * and its merge box.
+ * too, said once in the log, because the header stands without its stack,
+ * with no merge box read where its first page failed, which the caller
+ * then asks on its own.
  */
 function openPullRequestsOf(
   bearer: GitHubBearer,
@@ -2178,9 +2179,9 @@ function openPullRequestsOf(
         ),
       ),
       Effect.catch((failure) =>
-        Effect.as(unread(failure, "the repository's open pull requests and the merge box"), {
+        Effect.as(unread(failure, "the repository's open pull requests"), {
           open: undefined,
-          merging: Option.none(),
+          merging: undefined,
         }),
       ),
     );
