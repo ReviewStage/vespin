@@ -1,0 +1,225 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane B) - iOS 27.2 - D2E5EAB5-4ACE-4AE7-B7C9-7984D6FD7999
+ > Flow .kbd-pull-request
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Repeat while "The dialog takes an address and a role.*" is not visible (up to 10 times)...
+  Swipe from (75%, 35%) to (75%, 75%) in 400 ms... COMPLETED
+Repeat while "The dialog takes an address and a role.*" is not visible (up to 10 times)... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when "Merge", Below "Approval" is visible...
+  Swipe from (75%, 60%) to (75%, 35%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run flow when "Merge", Below "Approval" is visible... COMPLETED
+Take screenshot pull-request-card... COMPLETED
+Tap on "Merge", Below "The dialog takes an address and a role.*"... COMPLETED
+Assert that "Merge this pull request?" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-card-merge... COMPLETED
+Run subflows/dismiss-ask.yaml...
+  Run flow when "Cancel" is not visible...
+  Run flow when "Cancel" is not visible... SKIPPED
+  Run flow when "Cancel" is visible...
+    Tap on "Cancel"... COMPLETED
+  Run flow when "Cancel" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "${QUESTION}" is not visible... COMPLETED
+Run subflows/dismiss-ask.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "#128 Invite a teammate by email.*"... COMPLETED
+Assert that "Ready to merge" is visible... COMPLETED
+Assert that "Adds Invite by email.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-ready... COMPLETED
+Tap on "Invite a teammate by email #128"... COMPLETED
+Assert that "Edit title" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-title-edit... COMPLETED
+Erase text... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text Invite teammates by email... COMPLETED
+Tap on "Save"... COMPLETED
+Assert that "Invite teammates by email #128" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-title-edited... COMPLETED
+Repeat while "relay-review" is not visible (up to 10 times)...
+Repeat while "relay-review" is not visible (up to 10 times)... SKIPPED
+Assert that "grace" is visible... COMPLETED
+Assert that "relay-review" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-reviewers... COMPLETED
+Swipe from (75%, 35%) to (75%, 75%) in 400 ms... COMPLETED
+Swipe from (75%, 35%) to (75%, 75%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Squash and merge" is visible... COMPLETED
+Tap on "Squash and merge"... COMPLETED
+Assert that "Merge this pull request?" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-merge-ask... COMPLETED
+Tap on "Squash and merge", Below "Merge this pull request?"... COMPLETED
+Assert that "Merged" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-merged... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... SKIPPED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Assert that "Agents" is visible... COMPLETED
+Tap on "Build teammate invitations"... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Assert that "Ready to merge" is not visible... COMPLETED
+Tap on (Optional) "Back"... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Assert that "Agents" is visible... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Build teammate invitations", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Tap on "Open pull request(, .*)?"... COMPLETED
+Assert that "Ready to merge" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-from-agent-row... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... SKIPPED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Tap on "Teammate invitations"... COMPLETED
+Repeat while "Pull request: pull request #128.*" is not visible (up to 8 times)...
+  Swipe from (85%, 70%) to (85%, 35%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Repeat while "Pull request: pull request #128.*" is not visible (up to 8 times)... COMPLETED
+Tap on "Pull request: pull request #128.*" at 130, 12... COMPLETED
+Assert that "Ready to merge" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-from-chip... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5, pullRequest=127})... COMPLETED
+Assert that "Expire an invite after seven days.*" is visible... COMPLETED
+Assert that "Changes requested" is visible... COMPLETED
+Assert that ".*1 unresolved conversation" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-failing... COMPLETED
+Assert that "Checks.*" is visible... COMPLETED
+Run subflows/open-row.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Swipe from (50%, 60%) to (50%, 35%) in 800 ms... COMPLETED
+      Run flow when "Checks.*", Above id: search-tab is not visible and true is true... COMPLETED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Tap on "${ROW}"... COMPLETED
+Run subflows/open-row.yaml... COMPLETED
+Assert that "e2e.*" is visible... COMPLETED
+Assert that "test.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-checks... COMPLETED
+Tap on id: BackButton... COMPLETED
+Assert that "Changes requested" is visible... COMPLETED
+Scrolling DOWN until "src/invites/expiry.ts.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-conversation... COMPLETED
+Tap on "grace", Below "Conversation.*"... COMPLETED
+Assert that ".*Treat the seventh day as still open.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-conversation-open... COMPLETED
+Long press on "grace", Below "Conversation.*"... COMPLETED
+Tap on "Add reaction"... COMPLETED
+Assert that "Heart" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-reactions... COMPLETED
+Tap on "Heart"... COMPLETED
+Tap on "src/invites/expiry.ts.*"... COMPLETED
+Assert that ".*Good catch, it takes the request's time now.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-thread... COMPLETED
+Long press on ".*Good catch, it takes the request's time now.*"... COMPLETED
+Tap on "Add reaction"... COMPLETED
+Assert that "Rocket" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-thread-reactions... COMPLETED
+Tap on "Rocket"... COMPLETED
+Tap on "Reply"... COMPLETED
+Input text Thanks, that reads right now.... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Thanks, that reads right now." is not visible... COMPLETED
+Tap on id: BackButton... COMPLETED
+Scrolling DOWN until "src/invites/expiry.ts.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Long press on "src/invites/expiry.ts.*"... COMPLETED
+Tap on "Resolve"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-thread-resolved... COMPLETED
+Scrolling UP until "Expire an invite after seven days.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Assert that ".*unresolved conversation.*" is not visible... COMPLETED
+Scrolling DOWN until "src/invites/expiry.ts.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Long press on "src/invites/expiry.ts.*"... COMPLETED
+Tap on "Reopen"... COMPLETED
+Scrolling UP until "Expire an invite after seven days.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Assert that ".*1 unresolved conversation" is visible... COMPLETED
+Scrolling DOWN until "Comment" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Comment"... COMPLETED
+Assert that "Comment" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot pull-request-new-comment... COMPLETED
+Tap on id: BackButton... COMPLETED
+Scrolling UP until "Expire an invite after seven days.*" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Tap on "Pull request, Open"... COMPLETED
+Assert that "Convert to draft" is visible... FAILED
+
+Assertion is false: "Convert to draft" is visible
+
+Assertion '"Convert to draft" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state
+- This could be a real regression that needs to be addressed
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjbatchb/iphone-light-pull-request/2026-11-26_033110

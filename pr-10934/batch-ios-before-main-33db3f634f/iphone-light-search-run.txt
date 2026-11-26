@@ -1,0 +1,48 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane B) - iOS 27.2 - D2E5EAB5-4ACE-4AE7-B7C9-7984D6FD7999
+ > Flow .kbd-search
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Run flow when id: search-tab is visible...
+  Tap on id: search-tab... COMPLETED
+Run flow when id: search-tab is visible... COMPLETED
+Run flow when "Search Vespin" is not visible...
+Run flow when "Search Vespin" is not visible... SKIPPED
+Assert that "Search Vespin" is visible... COMPLETED
+Take screenshot search-empty... COMPLETED
+Tap on "Search Vespin"... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text zzqx... COMPLETED
+Assert that "No results for “zzqx”" is visible... COMPLETED
+Take screenshot search-no-results... COMPLETED
+Erase text... COMPLETED
+Input text settings... COMPLETED
+Assert that "Go to" is visible... COMPLETED
+Take screenshot search-go-to... COMPLETED
+Erase text... COMPLETED
+Input text rounding... COMPLETED
+Assert that "Ledger rounding" is visible... COMPLETED
+Assert that "Weekly digest email" is not visible... COMPLETED
+Scrolling DOWN until "Fix ledger rounding" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Take screenshot search-results... COMPLETED
+Scrolling UP until "Ledger rounding", Above "Fix ledger rounding" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Ledger rounding", Above "Fix ledger rounding"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Take screenshot search-opened... COMPLETED
+Run flow when id: search-tab is visible...
+  Tap on id: search-tab... COMPLETED
+Run flow when id: search-tab is visible... COMPLETED
+Run flow when "rounding" is not visible...
+Run flow when "rounding" is not visible... SKIPPED
+Run flow when "rounding" is visible...
+  Tap on "rounding"... COMPLETED
+  Erase text... COMPLETED
+Run flow when "rounding" is visible... COMPLETED
+Assert that "Recent" is visible... COMPLETED
+Assert that "Ledger rounding" is visible... COMPLETED
+Take screenshot search-recent... COMPLETED

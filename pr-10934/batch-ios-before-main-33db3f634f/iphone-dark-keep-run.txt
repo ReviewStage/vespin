@@ -1,0 +1,68 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane B) - iOS 27.2 - D2E5EAB5-4ACE-4AE7-B7C9-7984D6FD7999
+ > Flow keep
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that ".*walked the invite flow.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Long press on "The invite page"... COMPLETED
+Assert that "Save to Photos" is visible... COMPLETED
+Assert that "Share…" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot keep-picture-menu... COMPLETED
+Run subflows/dismiss.yaml...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+  Tap on point (${POINT})... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/dismiss.yaml... COMPLETED
+Assert that "Save to Photos" is not visible... COMPLETED
+Assert that "The invite page" is visible... COMPLETED
+Run subflows/scroll-to.yaml...
+  Run flow when ${BELOW != '' && BESIDE != 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BELOW != '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE != ''} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'} is true...
+    Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 60000 ms, with centering enabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end within 5000 ms... COMPLETED
+Run subflows/scroll-to.yaml... COMPLETED
+Long press on "The recording is under this.*"... COMPLETED
+Assert that "Copy message" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot keep-message-menu... COMPLETED
+Run subflows/dismiss.yaml...
+  Tap on point (${POINT})... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/dismiss.yaml... COMPLETED
+Assert that "Copy message" is not visible... COMPLETED
+Assert that "The recording is under this.*" is visible... COMPLETED
+Tap on "The invite page"... COMPLETED
+Assert that id: picture-viewer-close is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on id: picture-viewer-share... COMPLETED
+Assert that "Save Image" is visible... COMPLETED
+Assert that "Copy" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot keep-viewer-share... COMPLETED
+Swipe from (50%, 63%) to (50%, 98%) in 400 ms... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Save Image" is not visible... COMPLETED
+Assert that id: picture-viewer-close is visible... COMPLETED
+Tap on id: picture-viewer-close... COMPLETED
