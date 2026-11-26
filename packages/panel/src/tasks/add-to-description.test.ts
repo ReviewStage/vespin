@@ -14,6 +14,7 @@ import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { type AnyAct, fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
+import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { readExperiments } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
@@ -74,6 +75,7 @@ beforeEach(() => {
   keeping = [];
   keepAnswer = { id: KEPT_ID };
   fakeAppBridge({});
+  fakeAppPlatform(QUIET_PANEL);
   fakeActPort({
     [ACT_KIND.TASKS_PICTURE_KEEP]: ({ picture }) => {
       sent.push(ACT_KIND.TASKS_PICTURE_KEEP);
