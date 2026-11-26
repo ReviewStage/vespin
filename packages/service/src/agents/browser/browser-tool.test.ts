@@ -27,6 +27,7 @@ import {
   fakeSandboxApi,
   noSandboxBrowserLayer,
 } from "../../testing/agent-browser-fake.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import { AgentBrowser, agentBrowserOver } from "./agent-browser.js";
 import type { PageTarget } from "./browser-cdp.js";
 import {
@@ -71,7 +72,7 @@ function recordingBrowser(
   peer: FakeCdpPeer,
   recording: NonNullable<Parameters<typeof fakeSandboxApi>[0]["recording"]>,
 ) {
-  const sandbox = fakeSandboxApi({ status: "running", sessionId: SESSION, recording });
+  const sandbox = fakeSandboxApi({ status: "running", sessionId: SESSION, recording, blobs });
 
   return {
     layer: Layer.succeed(
@@ -322,7 +323,10 @@ const keptTabs = (conversationId: string) =>
 
 type Refusing = { unopenable: string | undefined };
 
-it.layer(getTestDB())("the browser tool", (it) => {
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+it.layer(Layer.merge(getTestDB(), blobs.layer))("the browser tool", (it) => {
   it.effect(
     "a tab the agent opens and navigates is kept with its page as it now stands, and goes once closed",
     () =>
@@ -865,7 +869,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
         assert.deepEqual(
           Option.map(kept, (picture) => [
             picture.contentType,
-            Buffer.from(picture.bytes).toString("base64"),
+            Buffer.from(blobs.bytesOf(picture.body)).toString("base64"),
           ]),
           Option.some(["image/jpeg", KEPT_JPEG]),
         );
@@ -1015,7 +1019,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
         );
         const kept = yield* readConversationPicture(conversationId, step.picture.id);
         assert.deepEqual(
-          Option.map(kept, (picture) => [picture.contentType, [...picture.bytes]]),
+          Option.map(kept, (picture) => [picture.contentType, [...blobs.bytesOf(picture.body)]]),
           Option.some(["video/webm", [...RECORDED_WEBM]]),
         );
         assert.doesNotMatch(JSON.stringify(storedBrowserOutput(unparsedWire(stopped))), /GkXfo/u);

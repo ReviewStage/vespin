@@ -15,7 +15,7 @@
  * a coding agent shows of the same thing: its repositories, on the chip
  * New Manager picks them with (`RepositoriesChip`), its checkout named and
  * the rest counted after it, held, since an agent's repositories are fixed
- * once it starts, whatever its kind, its hint naming every one; and,
+ * once it starts, whatever its kind, its card listing every one; and,
  * read off its own message box (`useAgentBox`), so they cannot drift from
  * it, where it runs, the box's place chip, moving it where a coder's moves,
  * and its model, the box's model chip with its permission mode and the
@@ -121,7 +121,7 @@ const UNNAMED = "Manager settings";
 const WORDS = {
   NAME: "Manager name",
   REPOSITORIES: "Repositories",
-  REPOSITORIES_HELD: "Set when this Manager was made: ",
+  REPOSITORIES_HELD: "Set when this Manager was made.",
   MACHINE: "Machine",
   MODEL: "Model",
   ARCHIVE: "Archive",
@@ -318,8 +318,8 @@ function heldPick(): void {}
 
 /**
  * The Repositories row: the chip New Manager picks them with, its checkout
- * named and the rest counted after it, held, its hint saying so and naming
- * every one in order; none for a Manager with none.
+ * named and the rest counted after it, held, its card listing every one in
+ * order and saying why it is held; none for a Manager with none.
  */
 function RepositoriesRow({ agent }: { agent: SettingsManager }): React.JSX.Element | null {
   const { repositories } = agent;
@@ -336,7 +336,7 @@ function RepositoriesRow({ agent }: { agent: SettingsManager }): React.JSX.Eleme
           values={repositories}
           chooser={chooser}
           onToggle={heldPick}
-          held={`${WORDS.REPOSITORIES_HELD}${repositories.join(", ")}`}
+          held={WORDS.REPOSITORIES_HELD}
         />
       )}
     </SettingsRow>

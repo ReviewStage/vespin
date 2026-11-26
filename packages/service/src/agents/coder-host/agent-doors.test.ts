@@ -8,10 +8,7 @@ import {
   createAgent,
   type NewAgent,
 } from "@repo/database/models/agent-store";
-import {
-  DESCRIPTION_ATTACHMENT_KEEP,
-  keepDescriptionAttachment,
-} from "@repo/database/models/description-attachments";
+import { DESCRIPTION_ATTACHMENT_KEEP } from "@repo/database/models/description-attachments";
 import {
   readDescriptionCommentThreads,
   startDescriptionCommentThread,
@@ -40,15 +37,17 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { EXPERIMENT } from "@repo/settings";
-import { Clock, Effect, Option } from "effect";
+import { Clock, Effect, Layer, Option } from "effect";
 import { ACTION_RESULT_STATUS, unparsedWire } from "../../core.js";
 import { postInboxMessage, readInboxItem, taskInboxItems } from "../../inbox/inbox-store.js";
+import { keepDescriptionFileBytes } from "../../storage/attachment-keeps.js";
 import { COMMENT_TOOL_REFUSAL } from "../../tasks/comment-tools.js";
 import {
   PICTURE_LOOK_REFUSAL,
   PICTURE_LOOK_STATUS,
   pictureNotLooked,
 } from "../../tasks/picture-look.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import { openGithubUser } from "../../testing/github-app-fake.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import { runAgentComment, runAgentEditDescription, runAgentLookAtPicture } from "./agent-doors.js";
@@ -164,7 +163,10 @@ const openThread = (userId: string, taskId: string) =>
     return started.answer.thread.id;
   });
 
-it.layer(getTestDB())("a coding agent's tool doors", (it) => {
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+it.layer(Layer.merge(getTestDB(), blobs.layer))("a coding agent's tool doors", (it) => {
   it.effect(
     "an agent handed a prompt on a task takes notes on its description, as New task starts every agent",
     () =>
@@ -353,7 +355,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
 
         const look = (taskId: string, descriptionsOn = true) =>
           Effect.gen(function* () {
-            const kept = yield* keepDescriptionAttachment(userId, taskId, picture);
+            const kept = yield* keepDescriptionFileBytes(userId, taskId, picture);
             assert.equal(kept.status, DESCRIPTION_ATTACHMENT_KEEP.KEPT);
 
             if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT) return assert.fail("no picture");
@@ -404,7 +406,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
 
         const look = (taskId: string) =>
           Effect.gen(function* () {
-            const kept = yield* keepDescriptionAttachment(userId, taskId, pdf);
+            const kept = yield* keepDescriptionFileBytes(userId, taskId, pdf);
 
             if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT) return assert.fail("no PDF");
             const address = descriptionAttachmentAddress({ taskId, attachmentId: kept.id }, "acme");

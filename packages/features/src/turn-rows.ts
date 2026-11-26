@@ -146,6 +146,8 @@ export const CALL_KIND = {
   CHAT_READ: "chat-read",
   CHAT_THREAD_READ: "chat-thread-read",
   CHAT_SEARCH: "chat-search",
+  /** A Manager's reaction added to a message of its chat, or taken off it (`chat_react`), its row naming the reaction. */
+  CHAT_REACT: "chat-react",
   /** The workspace's tasks listed (`list_tasks`). */
   LIST_TASKS: "list-tasks",
   /** A fact kept in the workspace's shared memory (`save_memory`, or `remember` in an older transcript), its row saying it. */
@@ -248,6 +250,7 @@ export const CALL_WORDS = {
   [CALL_KIND.CHAT_READ]: { verb: "Read the chat", code: false },
   [CALL_KIND.CHAT_THREAD_READ]: { verb: "Read a thread of the chat", code: false },
   [CALL_KIND.CHAT_SEARCH]: { verb: "Searched the chat:", code: false },
+  [CALL_KIND.CHAT_REACT]: { verb: "Reacted in the chat:", code: false },
   [CALL_KIND.LIST_TASKS]: { verb: "Listed the tasks", code: false },
   [CALL_KIND.REMEMBER]: { verb: "Saved to memory:", code: false },
   [CALL_KIND.RECALL]: { verb: "Recalled", code: false },

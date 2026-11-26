@@ -22,7 +22,6 @@ import { cn } from "../../cn.js";
 import { cssCustomProperties } from "../../css.js";
 import { CloseIcon } from "../../icons/lucide-glyphs.js";
 import { joinRefs } from "../../join-refs.js";
-import { PRESS_PULSE, pulseOnPress, pulsePress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
@@ -559,11 +558,7 @@ export function Tab({
       aria-controls={controls}
       aria-description={unread ? UNREAD_TAB_NOTE : undefined}
       {...rovingItem()}
-      onClick={(event) => {
-        // Note that the tab around the button is the pill a press is seen on.
-        pulsePress(event.currentTarget.closest<HTMLElement>(".ui-tab") ?? event.currentTarget);
-        onSelect();
-      }}
+      onClick={onSelect}
       {...contextMenu}
       onKeyDown={(event) => {
         if (onMenu !== undefined && opensMenu(event)) {
@@ -723,12 +718,11 @@ export function TabCard({
           ? (event) => {
               if (event.button !== 0) return;
               event.preventDefault();
-              pulsePress(event.currentTarget, PRESS_PULSE.QUIET);
               onPick();
             }
           : undefined
       }
-      onClick={pickOnPress ? undefined : pulseOnPress(onPick, PRESS_PULSE.QUIET)}
+      onClick={pickOnPress ? undefined : onPick}
       // Note that a card handed the focus is picked by Return or Space, as a press on it picks it.
       onKeyDown={(event) => {
         if (event.key !== "Enter" && event.key !== " ") return;

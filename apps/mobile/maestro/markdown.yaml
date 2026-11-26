@@ -56,11 +56,16 @@ appId: dev.vespin.ios
       - waitForAnimationToEnd
 - assertVisible: "The invite page"
 - takeScreenshot: markdown-end
-# The picture opens in the app's own viewer, grown out of its link, whose close button puts it away.
+# The picture opens full screen in the app's viewer, grown out of its
+# thumbnail, as `inbox.yaml`'s does, whose close button closes it. Note that
+# the button is found by its identifier, since it is the system's own close
+# item, which names itself in the device's language.
 - tapOn: "The invite page"
 - assertVisible:
     id: "picture-viewer-close"
 - waitForAnimationToEnd
 - takeScreenshot: markdown-picture
 - tapOn:
+    id: "picture-viewer-close"
+- assertNotVisible:
     id: "picture-viewer-close"

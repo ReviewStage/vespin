@@ -248,6 +248,7 @@ const RUNNER_FILES = [
 const EVENTS_URL = "https://app.test/api/agents/runner/events";
 const LINES_URL = "https://app.test/api/agents/runner-lines";
 const TRANSCRIPTS_URL = "https://app.test/api/agents/runner-transcripts";
+const PICTURES_URL = "https://app.test/api/agents/runner-pictures";
 
 /** The query every URL a runner is handed names its launch by, here the agent's first. */
 const FIRST_LAUNCH = "?runnerLaunch=1";
@@ -390,6 +391,7 @@ function sessionsFor(userId: string, sequence: { next: number }) {
     linesUrl: LINES_URL,
     mcpUrl: MCP_URL,
     transcriptsUrl: TRANSCRIPTS_URL,
+    picturesUrl: PICTURES_URL,
     integrations: () => Effect.succeed([LINEAR_SERVER]),
     instructions: () => Effect.succeed(INSTRUCTIONS),
     nextSequence: () => Effect.sync(() => sequence.next),
@@ -1028,6 +1030,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           append: INSTRUCTIONS,
           firstSequence: 0,
           eventsUrl: `${EVENTS_URL}${FIRST_LAUNCH}`,
+          picturesUrl: `${PICTURES_URL}${FIRST_LAUNCH}`,
           linesUrl: `${LINES_URL}${FIRST_LAUNCH}`,
           mcpUrl: MCP_URL,
           transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
@@ -4274,6 +4277,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           linesUrl: LINES_URL,
           mcpUrl: MCP_URL,
           transcriptsUrl: TRANSCRIPTS_URL,
+          picturesUrl: PICTURES_URL,
           integrations: () => Effect.sync(() => handed.servers),
           instructions: () => Effect.succeed(INSTRUCTIONS),
           nextSequence: () => Effect.sync(() => sequence.next),

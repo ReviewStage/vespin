@@ -74,6 +74,14 @@ public final class PillFieldModule: Module {
         view.rewriteWord(text, over: word.map(Word.init))
       }
 
+      AsyncFunction("take") { (view: PillFieldView) -> [String: Any] in
+        view.takeWords()
+      }
+
+      AsyncFunction("putBack") { (view: PillFieldView, runs: [RunRecord]) in
+        view.putBack(StyledRuns(runs).runs)
+      }
+
       AsyncFunction("focus") { (view: PillFieldView) in
         view.focus()
       }
@@ -719,6 +727,53 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     quiet = false
     textView.selectedRange = NSRange(location: range.location + (text as NSString).length, length: 0)
     textView.typingAttributes = baseAttributes()
+    changed()
+  }
+
+  /**
+   * Takes the words out of the field for a send, in one step on the main
+   * thread, where every key lands: answers its runs as it tells them, words
+   * as typed and pills by their Markdown, from which JavaScript writes the
+   * Markdown as it does for a telling, and the count of changes the emptying
+   * stands at. Note that a second
+   * send finds the field empty, so one press, or two that reach JavaScript
+   * together, sends the words once, and a handing made before the take,
+   * which has not heard it, is refused rather than laying the words back.
+   * The emptying is told to JavaScript only through the answer, never as the
+   * field's own telling, so JavaScript hears it once the send has taken the
+   * words, and never where they go back (`putBack`), which would let go of
+   * the files their markers hold.
+   */
+  func takeWords() -> [String: Any] {
+    quiet = true
+
+    // Note that words being composed, as dictation or a keyboard of marks holds them, are committed first, so they go with the rest.
+    if textView.markedTextRange != nil { textView.unmarkText() }
+
+    let held = heldRuns()
+
+    if !held.isEmpty {
+      redraw([], force: false)
+      changes += 1
+    }
+
+    quiet = false
+    return ["runs": held.map(\.told), "changes": changes]
+  }
+
+  /// Lays words a send did not take back in the field, ahead of anything typed since, with the caret after everything.
+  func putBack(_ runs: [Run]) {
+    guard editable, !runs.isEmpty else { return }
+
+    if textView.markedTextRange != nil {
+      quiet = true
+      textView.unmarkText()
+      quiet = false
+    }
+
+    let held = heldRuns()
+    redraw(held.isEmpty ? runs : runs + [.words("\n")] + held, force: false)
+    textView.selectedRange = NSRange(location: textView.textStorage.length, length: 0)
     changed()
   }
 

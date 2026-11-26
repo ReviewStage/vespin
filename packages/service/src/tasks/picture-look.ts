@@ -1,10 +1,11 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import type { AttachmentBody } from "@repo/database/models/attachment-body";
 import { readDescriptionAttachment } from "@repo/database/models/description-attachments";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { isAudioType } from "@repo/features/conversation-picture-wire";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
-import { type DescriptionFile, isPdfFile } from "@repo/features/description-attachment-wire";
+import { isPdfFile } from "@repo/features/description-attachment-wire";
 import { type InboxAttachmentRef, inboxAttachmentOf } from "@repo/features/inbox-attachment-link";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import {
@@ -18,6 +19,8 @@ import { Effect, Option, Result, Schema } from "effect";
 import { Base64 } from "effect/encoding";
 import { logStoreFailure } from "../http/store-failure.js";
 import { readInboxAttachment } from "../inbox/inbox-store.js";
+import { attachmentBytes } from "../storage/attachment-bytes.js";
+import type { BlobStoreFailure } from "../storage/blob-store.js";
 import type { DescriptionBinding } from "./description-notes.js";
 
 /**
@@ -192,38 +195,75 @@ const isImageType = Schema.is(pictureTypeSchema);
 /** Whether a kept file is a picture, an image, a video, or a sound clip, rather than any other file a message carried. */
 const isPictureMediaType = Schema.is(pictureMediaTypeSchema);
 
-/** A picture as a look answers it: an image's type and its bytes in base64, or the refusal of a sound clip or a video, whose bytes go nowhere. */
-function looked(picture: {
+/** A kept file as a look reads it: its type, and where its bytes stand. */
+interface StoredFile {
   readonly contentType: string;
-  readonly bytes: Uint8Array;
-}): PictureLookResult {
-  if (isAudioType(picture.contentType)) return pictureNotLooked(PICTURE_LOOK_REFUSAL.CLIP);
+  readonly body: AttachmentBody;
+}
 
-  if (!isImageType(picture.contentType)) {
-    return pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO);
+/**
+ * The file's bytes, handed to `use`; `missing` where the store no longer
+ * holds them, as a file that is gone answers. Note that only a file a look
+ * answers is loaded, so a video's or a clip's bytes are never read.
+ */
+function withBytes(
+  file: StoredFile,
+  missing: PictureLookResult,
+  use: (bytes: Uint8Array) => Effect.Effect<PictureLookResult>,
+): Effect.Effect<PictureLookResult, BlobStoreFailure> {
+  return Effect.flatMap(attachmentBytes(file.body), (bytes) =>
+    Option.isNone(bytes) ? Effect.succeed(missing) : use(bytes.value),
+  );
+}
+
+/** A picture as a look answers it: an image's type and its bytes in base64, or the refusal of a sound clip or a video, whose bytes go nowhere. */
+function looked(
+  picture: StoredFile,
+  missing: PictureLookResult,
+): Effect.Effect<PictureLookResult, BlobStoreFailure> {
+  const { contentType } = picture;
+
+  if (isAudioType(contentType)) return Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.CLIP));
+
+  if (!isImageType(contentType)) {
+    return Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO));
   }
 
-  return {
-    status: PICTURE_LOOK_STATUS.LOOKED,
-    mediaType: picture.contentType,
-    image: Base64.encode(picture.bytes),
-  };
+  return withBytes(picture, missing, (bytes) =>
+    Effect.succeed({
+      status: PICTURE_LOOK_STATUS.LOOKED,
+      mediaType: contentType,
+      image: Base64.encode(bytes),
+    }),
+  );
 }
 
 /** A description's file as a look answers it: a PDF handed to the writer given, within a PDF's bound, and a picture as `looked` answers it. */
 function lookedFile(
-  file: DescriptionFile,
+  file: StoredFile,
   attachmentId: string,
   writePdf: PdfWrite,
-): Effect.Effect<PictureLookResult> {
-  if (!isPdfFile(file)) return Effect.succeed(looked(file));
+): Effect.Effect<PictureLookResult, BlobStoreFailure> {
+  const missing = pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_PICTURE);
 
-  // Note that a PDF is bounded as it is kept, so this holds only one kept before the bound narrowed.
-  if (file.bytes.byteLength > AGENT_BOUNDS.MAX_PDF_BYTES) {
-    return Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.PDF_TOO_LARGE));
-  }
+  if (!isPdfFile(file)) return looked(file, missing);
 
-  return writePdf({ attachmentId, bytes: file.bytes });
+  return withBytes(file, missing, (bytes) =>
+    // Note that a PDF is bounded as it is kept, so this holds only one kept before the bound narrowed.
+    bytes.byteLength > AGENT_BOUNDS.MAX_PDF_BYTES
+      ? Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.PDF_TOO_LARGE))
+      : writePdf({ attachmentId, bytes }),
+  );
+}
+
+/** A look's failure to read its store, the database's or the Blob store's, written down and answered as unavailable. */
+function unavailableOnFailure<R>(
+  effect: Effect.Effect<PictureLookResult, StoreFailure | BlobStoreFailure, R>,
+): Effect.Effect<PictureLookResult, never, R> {
+  return effect.pipe(
+    Effect.tapError(logStoreFailure),
+    Effect.catch(() => Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.UNAVAILABLE))),
+  );
 }
 
 /**
@@ -247,14 +287,15 @@ export function runLookAtPicture(
     return Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE));
   }
 
-  return readDescriptionAttachment(description.userId, description.taskId, named.attachmentId).pipe(
-    Effect.flatMap((file) =>
-      Option.isNone(file)
-        ? Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_PICTURE))
-        : lookedFile(file.value, named.attachmentId, writePdf),
+  return unavailableOnFailure(
+    readDescriptionAttachment(description.userId, description.taskId, named.attachmentId).pipe(
+      Effect.flatMap(
+        (file): Effect.Effect<PictureLookResult, BlobStoreFailure> =>
+          Option.isNone(file)
+            ? Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_PICTURE))
+            : lookedFile(file.value, named.attachmentId, writePdf),
+      ),
     ),
-    Effect.tapError(logStoreFailure),
-    Effect.catch(() => Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.UNAVAILABLE))),
   );
 }
 
@@ -268,17 +309,17 @@ export function runLookAtThreadPicture(
   userId: string,
   named: InboxAttachmentRef,
 ): Effect.Effect<PictureLookResult, never, DatabaseServices> {
-  return readInboxAttachment(userId, named.itemId, named.attachmentId).pipe(
-    Effect.map((file) => {
-      if (Option.isNone(file)) return pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_THREAD_PICTURE);
-      const { contentType, bytes } = file.value;
+  const none = pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_THREAD_PICTURE);
 
-      if (isPictureMediaType(contentType)) return looked({ contentType, bytes });
-
-      return pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_THREAD_PICTURE);
-    }),
-    Effect.tapError(logStoreFailure),
-    Effect.catch(() => Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.UNAVAILABLE))),
+  return unavailableOnFailure(
+    readInboxAttachment(userId, named.itemId, named.attachmentId).pipe(
+      Effect.flatMap(
+        (file): Effect.Effect<PictureLookResult, BlobStoreFailure> =>
+          Option.isSome(file) && isPictureMediaType(file.value.contentType)
+            ? looked(file.value, none)
+            : Effect.succeed(none),
+      ),
+    ),
   );
 }
 

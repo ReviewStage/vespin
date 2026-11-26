@@ -14,7 +14,7 @@ import { RowHint, RowHintOptions, Tooltip } from "./hint.js";
  * the row's end, not its control's, so a control that gives its end up to
  * the row's acts on hover never puts the card over the row. And a finger,
  * which has no hover, opens a hint by hand: a tap on words that are no
- * control opens their card, and a tap elsewhere or Escape closes it, the
+ * control, or on a control held from its press, opens their card, and a tap elsewhere or Escape closes it, the
  * Escape marked taken so it acts on nothing else, while a
  * mouse's click opens nothing; a link's tap still goes where it leads, and
  * a long press opens its card instead, its release pressing nothing; and a
@@ -243,6 +243,25 @@ test("under a finger, a tap on words that are no control opens their card at onc
 
   tap(line);
   assert.equal(cardStands(), false, "it goes");
+});
+
+test("under a finger, a tap on a control held from its press opens its card at once, since the tap works nothing", () => {
+  const chip =
+    mount(
+      createElement(Tooltip, {
+        label: "Set when it was made. acme/relay, acme/docs",
+        card: createElement("p", null, "2 repositories"),
+        children: createElement(
+          "button",
+          { type: "button", "aria-disabled": true, "aria-describedby": undefined },
+          "acme/relay +1",
+        ),
+      }),
+    ).querySelector("button") ?? assert.fail("the chip");
+
+  tap(chip);
+
+  assert.equal(card()?.textContent, "2 repositories");
 });
 
 test("a card a tap opened goes on a tap elsewhere, or on Escape, which it marks taken, and stays for a tap on itself", () => {

@@ -31,7 +31,13 @@
 import { AGENT_PART, type AgentPart, agentParts, isShownSet } from "./agent-parts.js";
 import { isChatSendTool } from "./agent-tools.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
-import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "./manager-chat-live.js";
+import {
+  MANAGER_CHAT_AUTHOR,
+  MANAGER_CHAT_REACTION,
+  type ManagerChatLiveMessage,
+  type ManagerChatReaction,
+  type ManagerChatReactionCount,
+} from "./manager-chat-live.js";
 import { isAgentTurn } from "./voice-call-lines.js";
 import { countWords } from "./words.js";
 
@@ -178,6 +184,38 @@ function turnWork(
 /** How a thread's replies are counted: "1 reply", "3 replies". */
 export function repliesWords(count: number): string {
   return countWords(count, REPLY_NOUN);
+}
+
+/** Each reaction a message of the chat is given: its emoji, its name as a reaction's words say it, and the name of the press that gives it. */
+export const MANAGER_CHAT_REACTION_FACES = {
+  [MANAGER_CHAT_REACTION.THUMBS_UP]: { emoji: "👍", name: "thumbs up", press: "Thumbs up" },
+  [MANAGER_CHAT_REACTION.THUMBS_DOWN]: { emoji: "👎", name: "thumbs down", press: "Thumbs down" },
+} as const satisfies Record<
+  ManagerChatReaction,
+  { readonly emoji: string; readonly name: string; readonly press: string }
+>;
+
+/** What a reaction the service would not take says, as it is taken back off. */
+export const CHAT_REACTION_REFUSED_WORDS = "Could not react to the message.";
+
+/** Who else gave a reaction beside the reader. */
+const OTHER_NOUN = { one: "other", many: "others" } as const;
+
+/**
+ * Who gave a reaction, as its chip says it to a reader: the reader as
+ * "You" where they gave it, the rest counted, since the chat's read counts
+ * who gave it without naming them. "You reacted with thumbs up", "You and 1
+ * other reacted with thumbs up", "2 reacted with thumbs down".
+ */
+export function chatReactionWords({ kind, count, reacted }: ManagerChatReactionCount): string {
+  const { name } = MANAGER_CHAT_REACTION_FACES[kind];
+
+  if (!reacted) return `${count} reacted with ${name}`;
+  const others = count - 1;
+
+  return others > 0
+    ? `You and ${countWords(others, OTHER_NOUN)} reacted with ${name}`
+    : `You reacted with ${name}`;
 }
 
 /** What the press that opens a message's work under it, or folds it away, says, by whether it stands open. */

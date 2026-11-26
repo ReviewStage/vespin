@@ -85,6 +85,12 @@ catalogs:
     '@tanstack/db':
       specifier: 1.0.0-rc.1.5
       version: 1.0.0-rc.1.5
+    '@tanstack/db-sqlite-persistence-core':
+      specifier: 1.0.0-rc.1.5
+      version: 1.0.0-rc.1.5
+    '@tanstack/expo-db-sqlite-persistence':
+      specifier: 1.0.0-rc.1.5
+      version: 1.0.0-rc.1.5
     '@tanstack/react-db':
       specifier: 1.0.0-rc.1.5
       version: 1.0.0-rc.1.5
@@ -702,6 +708,9 @@ importers:
       '@sentry/react-native':
         specifier: 8.28.0
         version: 8.28.0(@babel/core@7.29.7)(@expo/config-types@58.0.3)(@expo/config@58.0.11)(@expo/env@2.5.4)(dotenv@17.4.2)(expo-router@58.0.30)(expo@58.0.23)(metro-config@0.87.3)(metro-resolver@0.87.3)(metro@0.87.3)(open@8.4.2)(promise@8.3.0)(react-native@0.88.1)(react@19.3.0)(rollup@4.62.4)
+      '@tanstack/expo-db-sqlite-persistence':
+        specifier: 'catalog:'
+        version: 1.0.0-rc.1.5(expo-sqlite@58.0.17)(typescript@7.0.2)
       '@tanstack/react-db':
         specifier: 'catalog:'
         version: 1.0.0-rc.1.5(react@19.3.0)(typescript@7.0.2)
@@ -996,8 +1005,8 @@ importers:
   packages/agent-runner:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':
-        specifier: 0.3.331
-        version: 0.3.331(@anthropic-ai/sdk@0.136.0)(@modelcontextprotocol/sdk@1.32.2)(zod@4.6.7)
+        specifier: 0.3.332
+        version: 0.3.332(@anthropic-ai/sdk@0.136.0)(@modelcontextprotocol/sdk@1.32.2)(zod@4.6.7)
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(redis@6.2.1)
@@ -1015,8 +1024,8 @@ importers:
         version: 4.0.4
     devDependencies:
       '@cursor/sdk':
-        specifier: 1.4.2
-        version: 1.4.2(zod@4.6.7)
+        specifier: 1.5.0
+        version: 1.5.0(zod@4.6.7)
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(vitest@5.1.1)
@@ -1758,6 +1767,9 @@ importers:
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(vitest@5.1.1)
+      '@tanstack/db-sqlite-persistence-core':
+        specifier: 'catalog:'
+        version: 1.0.0-rc.1.5(typescript@7.0.2)
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.9
@@ -1979,6 +1991,9 @@ importers:
       '@repo/host':
         specifier: workspace:*
         version: link:../../packages/host
+      '@repo/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@repo/wire':
         specifier: workspace:*
         version: link:../../packages/wire
@@ -2136,8 +2151,8 @@ packages:
   '@antfu/install-pkg@2.1.0':
     resolution: {integrity: sha512-sdg9NxU3zR4Mnawfbc/x6GB5Wf17WYud5qOuEuxXjaKpYpMkISSJEjItGebXJ2bQ4DIcly4NYH23mtkGJjvKUw==}
 
-  '@anthropic-ai/claude-agent-sdk@0.3.331':
-    resolution: {integrity: sha512-ml/MPqgO95tG5zcApBFxEyoDk57d9htP09R8AtPbKPUCHpsobf84IjkN4zhGvQgk8zsA9dXoeMGrQcCc8gQE/w==}
+  '@anthropic-ai/claude-agent-sdk@0.3.332':
+    resolution: {integrity: sha512-N0ejnrTLMNJYXkvhdmLEy8QSfjym2ljJCkUBCrLKesYNGgqooi8zHDHawNsi+An6zav/ImPnpi27sbRsRjfcOw==}
     engines: {node: '>=18.14.0'}
     peerDependencies:
       '@anthropic-ai/sdk': '>=0.93.0'
@@ -2835,8 +2850,8 @@ packages:
     os: [darwin]
     hasBin: true
 
-  '@cursor/sdk-darwin-arm64@1.4.2':
-    resolution: {integrity: sha512-avM3SHrUOesNn6+8BCqcK1RbqmynWpjQt2mAajzBhjDK6k8HD6akpKjiZ1ufrL/dD09g9NVVtUSmYJmOYP5pXQ==}
+  '@cursor/sdk-darwin-arm64@1.5.0':
+    resolution: {integrity: sha512-BbNXAZNDnfSr2CVCxXO2MuKQx05tY8YqtMgy7wgfNEN4bl3K9q0ug3FvfWeeml8oj5namyNu+oHenYuzviT7sg==}
     cpu: [arm64]
     os: [darwin]
     hasBin: true
@@ -2847,8 +2862,8 @@ packages:
     os: [darwin]
     hasBin: true
 
-  '@cursor/sdk-darwin-x64@1.4.2':
-    resolution: {integrity: sha512-o2H4MtiLLRxSRuxJJoDzosRYE6gvMyEyrGfg8xN+0DQ3x1rgcZ+8q7wX/+ZRE6UYyW/eh6ryNTaY+sVFcQkY0A==}
+  '@cursor/sdk-darwin-x64@1.5.0':
+    resolution: {integrity: sha512-20ZOpKYaCFUxggUEmZsXmnsPDc3Qc7dSiBCKd94xvZ/dVhy1zpX8D7TyB2pQG5kLcQhOI72eKttoOzXiVpNr8Q==}
     cpu: [x64]
     os: [darwin]
     hasBin: true
@@ -2859,8 +2874,8 @@ packages:
     os: [linux]
     hasBin: true
 
-  '@cursor/sdk-linux-arm64@1.4.2':
-    resolution: {integrity: sha512-NQxAPiaUabDuM0UwgiFHYX2L8MW8bnX07eEMHpCbJrdBsWBHClTUhMfK0p+BXwzxZjDuA92MzN0bxvjToGPH7Q==}
+  '@cursor/sdk-linux-arm64@1.5.0':
+    resolution: {integrity: sha512-96BZjj6S4zn4UeV9BCSz8ZvcH6jIGx+oon5+avhQeaTin8s1GI8vzk+/+XcQXCIUiO5CMaOvMB27/kCmN8Xcyg==}
     cpu: [arm64]
     os: [linux]
     hasBin: true
@@ -2871,8 +2886,8 @@ packages:
     os: [linux]
     hasBin: true
 
-  '@cursor/sdk-linux-x64@1.4.2':
-    resolution: {integrity: sha512-9R9iG0sndf63Z9YlLWm1c7ve6McriP2OW71O2wkWleWn1BfYCxAXMY5Qi+OWLBLVNtwmClGUzaOiY873SxG41A==}
+  '@cursor/sdk-linux-x64@1.5.0':
+    resolution: {integrity: sha512-nerO1mIGRqmF9N+u+YAwtjtFL5+5B/KS4bDLr2Npj8kOzMaB1G4t9EeZpZmM40Rs7kwb2IHmdpPZ/z9DyWJK6Q==}
     cpu: [x64]
     os: [linux]
     hasBin: true
@@ -2883,8 +2898,8 @@ packages:
     os: [win32]
     hasBin: true
 
-  '@cursor/sdk-win32-x64@1.4.2':
-    resolution: {integrity: sha512-JBLJWDAAJOJFJrYZlYWnWWoyS7Eh9AZWXSOm/A7LX5wrGgeRJipIT2Y7yHbYJ2HgZQEletaywEkPpxPRJPdW5w==}
+  '@cursor/sdk-win32-x64@1.5.0':
+    resolution: {integrity: sha512-veeYScNOnpC7oEFkZCT96Dk3rLt/mGDeFQL/iqvvPPwYlEz3Kl0EbBd3Rjf2Q9THoUIWV5GlXsn9ZBwXwCcKww==}
     cpu: [x64]
     os: [win32]
     hasBin: true
@@ -2895,8 +2910,8 @@ packages:
     peerDependencies:
       zod: 4.6.7
 
-  '@cursor/sdk@1.4.2':
-    resolution: {integrity: sha512-IMeIZtLvVX5w6rOS34bfBQt2b/WsMm+6lLU6vdlia0E6RuuXup+aVXyJrzvVAfnI7pK8bPPc7Gx1dvxy7ci+1Q==}
+  '@cursor/sdk@1.5.0':
+    resolution: {integrity: sha512-BebvKzDhzxblSDH4pslOjJQIgqBO/Z2bhaVMWAfbkfWEDy8Oz32BZhAEppFnGMcT/5PZRayReqAGteYB4XQSkw==}
     engines: {node: '>=22.13'}
     peerDependencies:
       zod: 4.6.7
@@ -5761,9 +5776,20 @@ packages:
     peerDependencies:
       typescript: '>=4.7'
 
+  '@tanstack/db-sqlite-persistence-core@1.0.0-rc.1.5':
+    resolution: {integrity: sha512-R8X53vv6/qhZMtGIGQubpQAKtH/kED9s0L6MaVTu2Hk7LNWFaWyfhcTRDclR6dMdKYitwBEn6kVu2VCM7hOxng==}
+    peerDependencies:
+      typescript: '>=4.7'
+
   '@tanstack/db@1.0.0-rc.1.5':
     resolution: {integrity: sha512-Cpbrc7e1ZcM5j+l/hltVB4IuA6P2i1Py7WRqUsbb0Whof/eylpEfJzx0wgw/2PiOF+s3wJlIXArmghe/zjZR/g==}
     peerDependencies:
+      typescript: '>=4.7'
+
+  '@tanstack/expo-db-sqlite-persistence@1.0.0-rc.1.5':
+    resolution: {integrity: sha512-0t9uZeRcFPefpEoRLTV/5idiNnka9iwsFZmcuN+ur7M099+flqyY7VFt9Q5vNQN57B8f3D5Cy2pl8V951a+3zg==}
+    peerDependencies:
+      expo-sqlite: ^55.0.10 || ^57.0.0
       typescript: '>=4.7'
 
   '@tanstack/history@1.162.5':
@@ -11271,7 +11297,7 @@ snapshots:
       package-manager-detector: 1.8.0
       tinyexec: 1.3.1
 
-  '@anthropic-ai/claude-agent-sdk@0.3.331(@anthropic-ai/sdk@0.136.0)(@modelcontextprotocol/sdk@1.32.2)(zod@4.6.7)':
+  '@anthropic-ai/claude-agent-sdk@0.3.332(@anthropic-ai/sdk@0.136.0)(@modelcontextprotocol/sdk@1.32.2)(zod@4.6.7)':
     dependencies:
       '@anthropic-ai/sdk': 0.136.0(zod@4.6.7)
       '@modelcontextprotocol/sdk': 1.32.2(zod@4.6.7)
@@ -12010,31 +12036,31 @@ snapshots:
   '@cursor/sdk-darwin-arm64@1.4.0':
     optional: true
 
-  '@cursor/sdk-darwin-arm64@1.4.2':
+  '@cursor/sdk-darwin-arm64@1.5.0':
     optional: true
 
   '@cursor/sdk-darwin-x64@1.4.0':
     optional: true
 
-  '@cursor/sdk-darwin-x64@1.4.2':
+  '@cursor/sdk-darwin-x64@1.5.0':
     optional: true
 
   '@cursor/sdk-linux-arm64@1.4.0':
     optional: true
 
-  '@cursor/sdk-linux-arm64@1.4.2':
+  '@cursor/sdk-linux-arm64@1.5.0':
     optional: true
 
   '@cursor/sdk-linux-x64@1.4.0':
     optional: true
 
-  '@cursor/sdk-linux-x64@1.4.2':
+  '@cursor/sdk-linux-x64@1.5.0':
     optional: true
 
   '@cursor/sdk-win32-x64@1.4.0':
     optional: true
 
-  '@cursor/sdk-win32-x64@1.4.2':
+  '@cursor/sdk-win32-x64@1.5.0':
     optional: true
 
   '@cursor/sdk@1.4.0(zod@4.6.7)':
@@ -12051,7 +12077,7 @@ snapshots:
       '@cursor/sdk-linux-x64': 1.4.0
       '@cursor/sdk-win32-x64': 1.4.0
 
-  '@cursor/sdk@1.4.2(zod@4.6.7)':
+  '@cursor/sdk@1.5.0(zod@4.6.7)':
     dependencies:
       '@bufbuild/protobuf': 1.10.0
       '@connectrpc/connect': 1.7.0(@bufbuild/protobuf@1.10.0)
@@ -12059,11 +12085,11 @@ snapshots:
       '@statsig/js-client': 3.31.0
       zod: 4.6.7
     optionalDependencies:
-      '@cursor/sdk-darwin-arm64': 1.4.2
-      '@cursor/sdk-darwin-x64': 1.4.2
-      '@cursor/sdk-linux-arm64': 1.4.2
-      '@cursor/sdk-linux-x64': 1.4.2
-      '@cursor/sdk-win32-x64': 1.4.2
+      '@cursor/sdk-darwin-arm64': 1.5.0
+      '@cursor/sdk-darwin-x64': 1.5.0
+      '@cursor/sdk-linux-arm64': 1.5.0
+      '@cursor/sdk-linux-x64': 1.5.0
+      '@cursor/sdk-win32-x64': 1.5.0
 
   '@drizzle-team/brocli@0.12.1': {}
 
@@ -14755,11 +14781,23 @@ snapshots:
       fractional-indexing: 3.4.0
       typescript: 7.0.2
 
+  '@tanstack/db-sqlite-persistence-core@1.0.0-rc.1.5(typescript@7.0.2)':
+    dependencies:
+      '@standard-schema/spec': 1.1.0
+      '@tanstack/db': 1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)
+      typescript: 7.0.2
+
   '@tanstack/db@1.0.0-rc.1.5(patch_hash=aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f)(typescript@7.0.2)':
     dependencies:
       '@standard-schema/spec': 1.1.0
       '@tanstack/db-ivm': 1.0.0-rc.1.3(typescript@7.0.2)
       '@tanstack/pacer-lite': 0.3.0
+      typescript: 7.0.2
+
+  '@tanstack/expo-db-sqlite-persistence@1.0.0-rc.1.5(expo-sqlite@58.0.17)(typescript@7.0.2)':
+    dependencies:
+      '@tanstack/db-sqlite-persistence-core': 1.0.0-rc.1.5(typescript@7.0.2)
+      expo-sqlite: 58.0.17(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       typescript: 7.0.2
 
   '@tanstack/history@1.162.5': {}

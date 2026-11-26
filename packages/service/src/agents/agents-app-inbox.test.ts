@@ -18,7 +18,7 @@ import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { conversations } from "@repo/database/schemas/storage";
-import { getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, startTask, storeAttachmentInBlob } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
 import {
   ACCOUNT_INBOX_ARCHIVED,
@@ -82,6 +82,7 @@ import { SERVER_EVENT } from "../events/server-events.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import type { InboxTitleModelOf } from "../inbox/inbox-procedures.js";
 import { answerInboxAsk, closeInboxItem, postInboxThread } from "../inbox/inbox-store.js";
+import { ATTACHMENT_BLOB_VARIANT, attachmentBlobPath } from "../storage/attachment-blob-paths.js";
 import {
   ACCOUNT_INBOX,
   AGENT_MESSAGES,
@@ -132,7 +133,7 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
 
       /** A thread posted for the agent, as its tool posts one, with the pictures its words name read. */
       const post = (value: ThreadPost, pictures?: Parameters<typeof postInboxThread>[2]) =>
-        postInboxThread(owned, value, pictures);
+        postInboxThread(owned, value, pictures).pipe(Effect.provide(opened.blobs.layer));
 
       /** The task's inbox as the owner reads it past the cursor. */
       const read = (after?: string) =>
@@ -1959,8 +1960,9 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
         const file = item?.thread?.[0]?.files?.[0];
         assert.ok(item && file);
 
+        // Note that each read is a browser's, which is piped the bytes, since a native reader is sent to the store.
         const at = (bearer: string | undefined, id = item.id, attachment = file.attachmentId) =>
-          request(INBOX_ATTACHMENT, bearer, { id, attachment });
+          request(INBOX_ATTACHMENT, bearer, { id, attachment, fetchMode: "cors" });
 
         const served = yield* fetch(at(owner));
         assert.equal(served.status, HOSTED_HTTP_STATUS.OK);
@@ -2000,6 +2002,53 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
   );
 
   it.effect(
+    "an attachment whose bytes stand in the Blob store sends a native reader to them, pipes them to a browser, and is none to another account",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, fetch, ask, post, read, blobs } = yield* openInbox();
+        yield* post(
+          { key: "landing", title: "The landing page", body: "![It](shots/landing.png)" },
+          [
+            {
+              path: "shots/landing.png",
+              name: "landing.png",
+              contentType: INBOX_IMAGE_TYPE.PNG,
+              bytes: PNG,
+            },
+          ],
+        );
+        const item = (yield* read()).items.find((each) => each.key === "landing");
+        const file = item?.thread?.[0]?.files?.[0];
+        assert.ok(item && file);
+        const blobKey = attachmentBlobPath(file.attachmentId);
+        yield* storeAttachmentInBlob(file.attachmentId, { blobKey });
+        blobs.objects.set(blobKey, { bytes: PNG, contentType: INBOX_IMAGE_TYPE.PNG, etag: '"1"' });
+
+        const at = (bearer: string, fetchMode?: string) =>
+          request(INBOX_ATTACHMENT, bearer, {
+            id: item.id,
+            attachment: file.attachmentId,
+            ...(fetchMode !== undefined && { fetchMode }),
+          });
+
+        const native = yield* fetch(at(owner));
+        assert.equal(native.status, HOSTED_HTTP_STATUS.FOUND);
+        assert.equal(new URL(native.headers.get("location") ?? "").pathname, `/${blobKey}`);
+
+        const browser = yield* fetch(at(owner, "cors"));
+        assert.equal(browser.status, HOSTED_HTTP_STATUS.OK);
+        assert.equal(browser.headers.get("content-type"), INBOX_IMAGE_TYPE.PNG);
+        assert.deepEqual(openedPagePolicy(browser.headers), SANDBOXED_PAGE);
+        assert.deepEqual(new Uint8Array(yield* Effect.promise(() => browser.arrayBuffer())), PNG);
+
+        assert.deepEqual(
+          yield* ask(at(other)),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+        );
+      }),
+  );
+
+  it.effect(
     "a recording is served as the MP4 its sandbox made of it to a caller that plays MP4, as the iOS app asks, as its WebM to one that asks nothing, and to no other account",
     () =>
       Effect.gen(function* () {
@@ -2019,11 +2068,12 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
         const file = item?.thread?.[0]?.files?.[0];
         assert.ok(item && file);
 
-        const at = (bearer: string, accept?: string) =>
+        const at = (bearer: string, accept?: string, fetchMode?: string) =>
           request(INBOX_ATTACHMENT, bearer, {
             id: item.id,
             attachment: file.attachmentId,
             ...(accept !== undefined && { accept }),
+            ...(fetchMode !== undefined && { fetchMode }),
           });
 
         const body = (served: Response) =>
@@ -2031,10 +2081,14 @@ it.layer(getTestDB())("the developer's inbox", (it) => {
             Effect.map((bytes) => new Uint8Array(bytes)),
           );
 
+        // Note that the phone, a native reader, is sent to the copy in the store, and a browser is piped the WebM.
         const phone = yield* fetch(at(owner, `${MP4_TYPE}, ${WEBM_TYPE};q=0.5`));
-        assert.equal(phone.headers.get("content-type"), MP4_TYPE);
-        assert.deepEqual(yield* body(phone), mp4);
-        const desk = yield* fetch(at(owner));
+        assert.equal(phone.status, HOSTED_HTTP_STATUS.FOUND);
+        assert.equal(
+          new URL(phone.headers.get("location") ?? "").pathname,
+          `/${attachmentBlobPath(file.attachmentId, ATTACHMENT_BLOB_VARIANT.PHONE)}`,
+        );
+        const desk = yield* fetch(at(owner, undefined, "cors"));
         assert.equal(desk.headers.get("content-type"), WEBM_TYPE);
         assert.deepEqual(yield* body(desk), webm);
         assert.deepEqual(

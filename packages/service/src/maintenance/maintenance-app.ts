@@ -18,8 +18,10 @@ import { type CronMonitor, sentryCronCheckIns } from "../observability/sentry.js
 import { releaseHeldPushes } from "../push/inbox-pushes.js";
 import { refreshLiveActivities } from "../push/live-activities.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
+import { moveAttachmentsToBlob } from "../storage/attachment-blob-backfill.js";
 import { purgeAttachmentBlobs } from "../storage/attachment-blob-purge.js";
 import { BlobStore } from "../storage/blob-store.js";
+import { moveJournalImages } from "../storage/journal-image-move.js";
 import { MAINTENANCE_SWEEP, MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
 import { handleMaintenanceSweep } from "./maintenance-sweep.js";
 
@@ -39,7 +41,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
 ): Effect.fn.Return<
   Response,
   unknown,
-  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox | BlobStore
+  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
   const environment = yield* HostedEnvironment;
   // The reap asks the agents' machines where their runners stand, over the deployment's own client.
@@ -64,6 +66,8 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
     pruneMachineAsks,
     releaseSandboxes: releaseUnusedSandboxes,
     purgeAttachmentBlobs: () => Effect.provideService(purgeAttachmentBlobs(), BlobStore, blobs),
+    moveAttachmentsToBlob: () => Effect.provideService(moveAttachmentsToBlob(), BlobStore, blobs),
+    moveJournalImages: () => Effect.provideService(moveJournalImages(), BlobStore, blobs),
   });
 });
 
@@ -73,7 +77,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
  * since `vercel.json` sends the function only its own path.
  */
 export function maintenanceApp(): WebRoutes<
-  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox | BlobStore
+  DatabaseServices | HostedEnvironment | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
   return Layer.mergeAll(
     // `ANY_METHOD`, not `GET`: the handler decides its own method refusal, so a

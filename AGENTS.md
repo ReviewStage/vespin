@@ -209,7 +209,18 @@ component, or add the component or variant there.
   may be posted to a thread or added to its task's plan on the terms above.
   The model is never handed it, session replay masks its address so its
   player records empty (`packages/panel/src/session-replay.ts`), and none of
-  it goes into a trace, a counted event, or a fixture. And Sentry's SDKs run
+  it goes into a trace, a counted event, or a fixture. And a picture a coding
+  agent's own tool answered on its machine (an image or a PDF's page a CLI or
+  MCP tool read or made), which its runner posts to the service apart from its
+  events (`POST /api/agents/runner-pictures`,
+  `packages/service/src/agents/native-events/runner-pictures-app.ts`), is kept
+  beside the transcript the call is written to, as `show_media`'s pictures
+  are, up to 4 MB each and 200 MB a conversation, shown to the members who can
+  open the task, and on a delete of the conversation, its task or agent, or
+  the account, unreachable at once and purged from storage within about a
+  minute. The model sees it only as its harness handed it, never from the
+  store; session replay masks the transcript's pictures; and none of it goes
+  into a trace, a counted event, or a fixture. And Sentry's SDKs run
   with their default data collection, but that the service's
   leaves out model inputs and outputs and request bodies
   (`packages/service/src/observability/sentry.ts`, the desktop's

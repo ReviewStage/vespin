@@ -349,11 +349,12 @@ it.effect(
       const { plugin, ada, adaCookie, userInfo } = yield* openAccounts;
       // The deployment's auth service keeps its sessions in a database this suite never reaches, so it reads a cookie as the plugin over PGlite does.
       vi.spyOn(auth.api, "getSession").mockImplementation(
-        // SAFETY: the resolvers read the session's user id alone, which both instances answer from the same row.
+        // SAFETY: the resolvers read the session's user id alone, with the headers they ask for, which both instances answer from the same row.
         async (context) =>
-          (await plugin.api.getSession({ headers: context?.headers ?? new Headers() })) as Awaited<
-            ReturnType<typeof auth.api.getSession>
-          >,
+          (await plugin.api.getSession({
+            headers: context?.headers ?? new Headers(),
+            returnHeaders: true,
+          })) as never,
       );
       const cookieOnly = read({ cookie: adaCookie });
 

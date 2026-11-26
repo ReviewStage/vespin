@@ -1,6 +1,6 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { NO_ITEMS, taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
+import { taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   LINK_DESTINATION,
@@ -160,6 +160,7 @@ import {
   phoneFindGroups,
   type TaskHeadBack,
 } from "./phone-head.js";
+import { SHELL_MARK, useShellMark } from "./shell-marks.js";
 import {
   listedAgentOf,
   SIDE_PANEL_HOLDER,
@@ -237,6 +238,9 @@ import { useStandingDoor } from "./task-row-parts.js";
  * which, with the press that moves it there (`stranded-task-banner.tsx`).
  */
 
+/** No thread of an agent's waiting on the developer, one array so an agent with none hands down the same one. */
+const NO_WAITING: readonly InboxItem[] = [];
+
 /** No task open: what a task's relation menus offer while none is. */
 const NO_TASKS: readonly TaskSummary[] = [];
 
@@ -272,6 +276,8 @@ function TaskPage({
   column: React.ReactNode;
   children?: React.ReactNode;
 }): React.JSX.Element {
+  useShellMark(SHELL_MARK.TASK_PAGE);
+
   return (
     <div
       ref={areaRef}
@@ -306,6 +312,8 @@ function TaskTabsRow({
   hidden: boolean;
   children: React.ReactNode;
 }): React.JSX.Element {
+  useShellMark(hidden ? undefined : SHELL_MARK.AGENTS_ROW);
+
   return (
     <div className={hidden ? undefined : "task-tabs contents"} hidden={hidden}>
       {children}
@@ -1027,7 +1035,7 @@ function DescriptionDocument({
       .filter((item) => item.agentId === tabAgent)
       .toSorted((a, b) => b.updatedAt - a.updatedAt);
 
-    const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
+    const waiting = waitingOf.get(tabAgent) ?? NO_WAITING;
 
     return posted.length === 0 ? undefined : { waiting, posted, onOpen: openWaitingThread };
   }, [tabAgent, boardOpen, boardSettled, waitingOf, openWaitingThread]);

@@ -252,23 +252,37 @@ export const attachment = pgTable(
   ],
 );
 
+/** The type a row's copy for a phone is served and stored under: an AAC M4A beside a sound clip, an H.264 MP4 beside a recording. */
+export function phoneCopyContentType() {
+  return sql<
+    typeof AUDIO_TYPE.M4A | typeof MP4_TYPE
+  >`case when ${isAudio(attachment)} then ${literal(AUDIO_TYPE.M4A)} else ${literal(MP4_TYPE)} end`;
+}
+
 /**
  * The columns a read serves a row by, for a reader that plays the video
  * given: a recording's MP4 copy, or a clip's M4A copy, under its own type
  * where the reader plays MP4 and the row keeps one, and the row's own bytes
- * and type otherwise.
+ * and type otherwise. The copy is wherever the row keeps it, inline
+ * (`bytes`) or stored (`blobKey`), exactly one of the two standing, as
+ * `attachment_storage` holds them.
  * Note that the choice is made in the statement, so a read loads one copy
- * of the recording's bytes, never both.
+ * of the recording's bytes, never both, and a stored one's key alone.
  */
 export function servedColumns(playable: PlayableVideoType) {
   if (playable === PLAYABLE_VIDEO_TYPE.WEBM) {
-    return { contentType: attachment.contentType, bytes: attachment.bytes };
+    return {
+      contentType: attachment.contentType,
+      bytes: attachment.bytes,
+      blobKey: attachment.blobKey,
+    };
   }
 
   return {
-    contentType: sql<string>`case when ${attachment.mp4Bytes} is null then ${attachment.contentType} when ${isAudio(attachment)} then ${literal(AUDIO_TYPE.M4A)} else ${literal(MP4_TYPE)} end`,
-    bytes: sql<Uint8Array>`coalesce(${attachment.mp4Bytes}, ${attachment.bytes})`.mapWith(
+    contentType: sql<string>`case when ${attachment.mp4Bytes} is null and ${attachment.phoneBlobKey} is null then ${attachment.contentType} else ${phoneCopyContentType()} end`,
+    bytes: sql<Uint8Array | null>`coalesce(${attachment.mp4Bytes}, ${attachment.bytes})`.mapWith(
       attachment.bytes,
     ),
+    blobKey: sql<string | null>`coalesce(${attachment.phoneBlobKey}, ${attachment.blobKey})`,
   };
 }

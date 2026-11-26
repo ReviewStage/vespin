@@ -25,8 +25,7 @@ import {
  * group-header.test.ts -- pressing a group's head folds and unfolds its
  * rows and says so in `aria-expanded`, open or folded from the start or as
  * its holder keeps it; an action beside the fold presses without folding;
- * a head that folds nothing draws its rows always and no fold control; a
- * folded group's rows fade out though its holder drops them at once; the count is
+ * a head that folds nothing draws its rows always and no fold control; the count is
  * drawn as its caller gives it; a folded group draws what it leaves
  * standing; and a head named in place keeps its rows and ends its edit on
  * Return, Escape, or the focus leaving it, though not for a layer its glyph's
@@ -130,35 +129,6 @@ test("a group its holder keeps folds as the holder says, told of each press", ()
   assert.ok(!container.textContent?.includes(ROWS));
 });
 
-test("a group whose holder hands it no rows once folded still draws them, out of reach, through their fade", () => {
-  const fade = new EventTarget();
-  Object.defineProperty(HTMLElement.prototype, "getAnimations", {
-    configurable: true,
-    value(this: HTMLElement) {
-      return this.parentElement?.dataset.disclosure === "closing" ? [fade] : [];
-    },
-  });
-
-  function Held(): React.JSX.Element {
-    const [open, setOpen] = useState(true);
-
-    return createElement(GroupHeader, {
-      label: "Pinned",
-      fold: { open, onOpenChange: setOpen },
-      children: open ? ROWS : null,
-    });
-  }
-
-  const container = render(createElement(Held));
-  act(() => headOf(container).click());
-  const rows = container.querySelector<HTMLElement>(".ui-disclosure-body");
-  assert.equal(rows?.textContent, ROWS);
-  assert.ok(rows?.hasAttribute("inert"));
-
-  act(() => fade.dispatchEvent(new Event("finish")));
-  assert.ok(!container.textContent?.includes(ROWS));
-});
-
 test("an action beside the fold is pressed without folding the group", () => {
   let presses = 0;
 
@@ -206,7 +176,7 @@ test("the count is drawn as its caller gives it, none included, and read with it
   assert.equal(headOf(uncounted).textContent, "acme/web");
 });
 
-test("what a folded group leaves standing is drawn once the rows fade, and not while they stand", () => {
+test("what a folded group leaves standing is drawn once the rows go, and not while they stand", () => {
   const container = render(group({ defaultOpen: true }, { standing: "Retry the audit" }));
   assert.ok(container.textContent?.includes(ROWS));
   assert.ok(!container.textContent?.includes("Retry the audit"));

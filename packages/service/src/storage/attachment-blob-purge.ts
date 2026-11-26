@@ -28,11 +28,15 @@ const isUnconfigured = (failure: BlobStoreFailure) =>
 export const purgeAttachmentBlobs = /* @__PURE__ */ Effect.fn("storage/purgeAttachmentBlobs")(
   function* () {
     const store = yield* BlobStore;
-    const keys = yield* readAttachmentBlobTombstones(ATTACHMENT_BLOB_PURGE.TOMBSTONES_PER_SWEEP);
+
+    const tombstones = yield* readAttachmentBlobTombstones(
+      ATTACHMENT_BLOB_PURGE.TOMBSTONES_PER_SWEEP,
+    );
+
     let purged = 0;
 
-    for (const batch of Arr.chunksOf(keys, ATTACHMENT_BLOB_PURGE.PATHNAMES_PER_DELETE)) {
-      const deleted = yield* store.delete(batch).pipe(
+    for (const batch of Arr.chunksOf(tombstones, ATTACHMENT_BLOB_PURGE.PATHNAMES_PER_DELETE)) {
+      const deleted = yield* store.delete(batch.map((tombstone) => tombstone.key)).pipe(
         Effect.as(true),
         Effect.catchIf(isUnconfigured, () => Effect.succeed(false)),
       );

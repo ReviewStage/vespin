@@ -27,6 +27,7 @@ import {
   HoverCardNote,
   HoverCardRow,
   HoverCardRule,
+  INLINE_REF_FIT,
   INLINE_REF_LOOK,
   InlineRef,
   ProductMark,
@@ -1028,7 +1029,10 @@ export function actorCard(actor: Actor): ReactNode {
  * their own (`useActorDoor`); otherwise its press is the line's own. With
  * `faceOnly` the mark stands alone, its name said to a screen reader and in
  * its card, for a line too short to hold the name; with `nameOnly` the name
- * stands alone, where the actor's face already stands beside the line.
+ * stands alone, where the actor's face already stands beside the line;
+ * `size` draws the mark larger than a line's, such as a channel row's face;
+ * `byName` names the reader by their own name rather than "You", as a
+ * channel heads every sender's run.
  */
 export function ActorRef({
   actor,
@@ -1038,6 +1042,8 @@ export function ActorRef({
   possessive = false,
   faceOnly = false,
   nameOnly = false,
+  size = ACTOR_SIZE.INLINE,
+  byName = false,
 }: {
   actor: Actor;
   card?: ReactNode;
@@ -1050,6 +1056,10 @@ export function ActorRef({
   faceOnly?: boolean;
   /** Whether the name stands without its mark, whose face the line already draws. */
   nameOnly?: boolean;
+  /** How large its mark is drawn: a line's, or a channel row's face. */
+  size?: ActorSize;
+  /** Whether the reader is named by their own name rather than "You". */
+  byName?: boolean;
 }): React.JSX.Element {
   // A person's own door, their page or GitHub's, where the place hands none.
   const door = useActorDoor(actor);
@@ -1058,8 +1068,14 @@ export function ActorRef({
   return (
     <InlineRef
       look={INLINE_REF_LOOK.WASH}
-      glyph={nameOnly ? undefined : <ActorMark actor={actor} />}
-      label={actorName(actor, { sentence, possessive })}
+      glyph={nameOnly ? undefined : <ActorMark actor={actor} size={size} />}
+      // Note that a mark larger than a line's keeps one row, so it stands at its own height rather than the line's.
+      fit={size === ACTOR_SIZE.INLINE ? undefined : INLINE_REF_FIT.LINE}
+      label={
+        byName && actor.kind === ACTOR_KIND.PERSON
+          ? actor.name
+          : actorName(actor, { sentence, possessive })
+      }
       labelHidden={faceOnly}
       state={githubBot(actor) ? <BotBadge actor={actor} /> : undefined}
       heard={leftWithFace(actor) ? LEFT_WORDS : undefined}

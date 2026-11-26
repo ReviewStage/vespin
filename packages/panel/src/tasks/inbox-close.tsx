@@ -5,8 +5,9 @@ import {
   type AgentInboxAnsweredView,
 } from "@repo/features/agent-view";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
+import type { InboxFields } from "@repo/features/inbox-digest";
 import { RETRY } from "@repo/features/inbox-list-model";
-import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import { INBOX_STATUS } from "@repo/features/inbox-wire";
 import {
   closedNote,
   NOT_RESOLVED,
@@ -64,7 +65,7 @@ function refusalWords(
 }
 
 /** Resolves the open items given without an answer, at once, with Undo; one already on its way, or no longer open, is passed over. */
-export type InboxResolver = (items: readonly InboxItem[]) => void;
+export type InboxResolver = (items: readonly InboxFields[]) => void;
 
 /** How an act of `Kind` is sent: the `mutateAsync` of its kind's mutation (`act-mutations.ts`). */
 export type Send<Kind extends PortActKind> = (
@@ -82,7 +83,7 @@ interface ResolveDoors {
 
 /** One press's settles, a resolve or a nod: the open items it settles, and the key each settle goes under, by the item's place. */
 export interface Settles {
-  readonly items: readonly InboxItem[];
+  readonly items: readonly InboxFields[];
   readonly keys: readonly string[];
 }
 
@@ -194,7 +195,7 @@ export function useInboxResolver(): InboxResolver {
   const out = useRef(new Set<string>());
 
   return useCallback(
-    (items: readonly InboxItem[]) => {
+    (items: readonly InboxFields[]) => {
       const open = items.filter(
         (item) => item.status === INBOX_STATUS.OPEN && !out.current.has(item.id),
       );
@@ -218,7 +219,7 @@ export function useInboxResolver(): InboxResolver {
  * chosen item; none where no key reaches what it resolves.
  */
 export function resolveAction(
-  items: readonly InboxItem[],
+  items: readonly InboxFields[],
   onResolve: InboxResolver | undefined,
   subject?: ShortcutSubject | undefined,
 ): MenuAction | undefined {

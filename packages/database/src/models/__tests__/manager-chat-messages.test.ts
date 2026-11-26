@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { AGENT_KIND, VOICE_SPEAKER } from "@repo/features/agent-wire";
+import { VOICE_SPEAKER } from "@repo/features/agent-wire";
 import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
-import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "../../storage-vocabulary.js";
-import { getTestDB, openWorkspace } from "../../testing/index.js";
-import { createAgent } from "../agent-store.js";
+import { MESSAGE_SENDER } from "../../storage-vocabulary.js";
+import { getTestDB, openManagerAgent } from "../../testing/index.js";
 import {
   deleteDroppedManagerChat,
   MANAGER_CHAT_OUTCOME,
@@ -40,26 +39,6 @@ const openAccount = Effect.gen(function* () {
 
   return id;
 });
-
-const openManagerAgent = (userId: string) =>
-  Effect.gen(function* () {
-    const workspaceId = yield* openWorkspace(userId);
-
-    const started = yield* createAgent(userId, {
-      taskId: null,
-      workspaceId,
-      idempotencyKey: randomUUID(),
-      model: "anthropic/claude-opus-5.5",
-      effort: "high",
-      repository: null,
-      descriptionSnapshot: null,
-      prompt: null,
-      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-      kind: AGENT_KIND.MANAGER,
-    });
-
-    return Option.getOrThrow(started).agent;
-  });
 
 const openManager = (userId: string) => Effect.map(openManagerAgent(userId), (agent) => agent.id);
 

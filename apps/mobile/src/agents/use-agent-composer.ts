@@ -61,7 +61,6 @@ import {
   type SendingMessage,
 } from "@repo/features/agent-view";
 import {
-  AGENT_BOUNDS,
   AGENT_KIND,
   type AgentAttachment,
   type AgentQueueChange,
@@ -75,7 +74,6 @@ import {
   queueEditChange,
   queueEditLeft,
 } from "@repo/features/queue-edit-model";
-import { cutReply, QUOTE_GAP, quoteOf, replyOf } from "@repo/features/reply-quote";
 import { type SuggestionSendResult, suggestedWords } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
@@ -92,7 +90,9 @@ import {
   buzz,
   type ComposerPills,
   type ComposerSaving,
+  type ComposerSend,
   type QueuedLine,
+  wordsHandedBack,
 } from "@repo/ui-native";
 import { sentLineId } from "@repo/wire/host-ids";
 import { useQuery } from "@tanstack/react-query";
@@ -208,7 +208,8 @@ export interface AgentComposer {
   readonly onWords: (words: string) => void;
   /** Whether Send stands lit with no words typed: a picture or a pasted file is attached. */
   readonly sendable: boolean;
-  readonly send: () => void;
+  /** Sends the words Send took out of the field (`ComposerSend`). */
+  readonly send: ComposerSend;
   /** Whether Send queues the message behind the turn rather than sending it to the agent now. */
   readonly sendQueues: boolean;
   readonly attach: () => void;
@@ -249,8 +250,6 @@ export interface AgentComposer {
   readonly pills: ComposerPills;
   /** Lays one of the member's sent lines' words in the field to send again in its place, the field's own kept aside, and has it take the keyboard. */
   readonly editMessage: (line: MessageEdit) => void;
-  /** Quotes a message's Markdown whole into the field, after what it holds, a blank line under the quote for the member's own words, and has it take the keyboard, as the panel's Reply does. */
-  readonly reply: (words: string) => void;
   /** Gives up the edit of a sent line, the field given back what it held; none while the field holds no sent line's words. */
   readonly cancelMessageEdit: (() => void) | undefined;
   /** The question the send of a line written again asks first where anything follows it, as the panel's asks it. */
@@ -436,46 +435,57 @@ export function useAgentComposer(
           ? stash
           : {
               ...stash,
-              words: stash.words.trim() === "" ? sent.words : `${sent.words}\n${stash.words}`,
+              words: wordsHandedBack(sent.words, stash.words),
               pictures: [...sent.pictures, ...stash.pictures],
             },
       );
     }
 
-    setWords((typed) => (typed.trim() === "" ? sent.words : `${sent.words}\n${typed}`));
+    setWords((typed) => wordsHandedBack(sent.words, typed));
     pictures.putBack(sent.pictures);
   };
 
-  const send = () => {
+  /**
+   * Sends the words Send took out of the field, answering whether it took
+   * them. Note that the words and pictures it sends are those it took, never
+   * a copy held by the render it was pressed in, so a press that reaches it
+   * with a second one, before any render, sends once.
+   */
+  const send = (typed: string): boolean => {
     // Note that a send while the field holds a queued message's words saves them back in its place, as Save does.
-    if (editing !== undefined) return sendEdit(QUEUE_EDIT_SEND.SAVE);
+    if (editing !== undefined) return sendEdit(QUEUE_EDIT_SEND.SAVE, typed);
 
-    // Note that a line written again asks first where anything follows it, since its send drops that for good.
+    // Note that a line written again asks first where anything follows it, since its send drops that for good, its words and pictures left in the field while it asks, and taken out of it again once it is answered.
     if (rewriting !== undefined) {
-      if (words.trim() === "") return;
+      if (rewriting.line.cuts && typed.trim() !== "") {
+        setAskingEdit(true);
 
-      return rewriting.line.cuts ? setAskingEdit(true) : sendRewritten(rewriting);
+        return false;
+      }
+
+      return sendRewritten(rewriting, typed);
     }
 
     // Note that the field holds each picked mention as its link already, so its words go as they stand.
-    const text = words.trim();
+    const text = typed.trim();
 
-    if (text === "" && pictures.files === undefined) return;
-
-    if (suggested !== undefined && suggestionOut) return;
+    if (suggested !== undefined && suggestionOut) return false;
 
     if (pictures.refusal !== undefined) {
       setNote(pictures.refusal);
       buzz(BUZZ.WARNING);
 
-      return;
+      return false;
     }
 
-    const attachments =
-      pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
+    const held = pictures.take();
 
-    const sent: Sent = { id: randomUUID(), words: text, pictures: pictures.take() };
-    setWords("");
+    if (text === "" && held.length === 0) return false;
+
+    const attachments =
+      held.length === 0 ? undefined : { attachments: held.map(({ file }) => file) };
+
+    const sent: Sent = { id: randomUUID(), words: text, pictures: held };
     setNote(undefined);
 
     // A send refused says why in the composer, where its words go back, rather than in the notice.
@@ -494,11 +504,15 @@ export function useAgentComposer(
         setSuggestionOut(false);
       });
 
-      return;
+      return true;
     }
 
     // Note that a Manager's chat takes every message as a row of its own, the Manager taking it in as a turn's line or a steer as it stands, so it neither queues nor steers here; the host draws it on its way on the chat, and keeps one refused there marked Not delivered.
-    if (chat) return sendChat(sent, attachments?.attachments);
+    if (chat) {
+      sendChat(sent, attachments?.attachments);
+
+      return true;
+    }
 
     if (sendQueues) {
       const change = { change: QUEUE_CHANGE.ADD, id: sent.id, text, ...attachments } as const;
@@ -509,7 +523,7 @@ export function useAgentComposer(
         unanswered: queueRefusalWords(change.change, AGENT_CALL_FAILURE.UNANSWERED),
       });
 
-      return;
+      return true;
     }
 
     const message = acts[ACT_KIND.AGENTS_MESSAGE]({
@@ -538,6 +552,8 @@ export function useAgentComposer(
       refused: (answer) => ("failure" in answer ? messageFailureWords(answer.failure) : undefined),
       unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
     });
+
+    return true;
   };
 
   /** A message to a Manager's chat, which the host draws on its way and keeps marked Not delivered where the service refused it, with the pictures it went with held for its Retry and Edit. */
@@ -579,16 +595,18 @@ export function useAgentComposer(
    * given back what it held, and the words handed back where it was refused.
    * Note that it stops the turn under way rather than steering it.
    */
-  const sendRewritten = (stash: Rewriting) => {
-    const text = words.trim();
+  const sendRewritten = (stash: Rewriting, typed: string): boolean => {
+    const text = typed.trim();
 
-    if (text === "") return;
+    if (text === "") return false;
 
     // Note that pictures attached while the line was written again go with it, as the panel's Edit takes files.
-    const attachments =
-      pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
+    const held = pictures.take();
 
-    const sent: Sent = { id: randomUUID(), words: text, pictures: pictures.take() };
+    const attachments =
+      held.length === 0 ? undefined : { attachments: held.map(({ file }) => file) };
+
+    const sent: Sent = { id: randomUUID(), words: text, pictures: held };
     setNote(undefined);
     giveBackRewritten(stash);
 
@@ -604,7 +622,7 @@ export function useAgentComposer(
         done: () => sendChat(sent, attachments?.attachments),
       });
 
-      return;
+      return true;
     }
 
     heldSends.set(sentLineId(sent.id), sent);
@@ -631,6 +649,8 @@ export function useAgentComposer(
         unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
       },
     );
+
+    return true;
   };
 
   /** The line of the member's under `lineId` the service refused; none for any other. */
@@ -777,24 +797,6 @@ export function useAgentComposer(
     setFocusAsk((count) => count + 1);
   };
 
-  // Note that the quote goes after what the field holds, cut only where the message's bound leaves it no room, and the member writes under it.
-  const reply = (quoted: string) => {
-    const picked = replyOf(quoted);
-
-    if (picked === "") return;
-
-    setWords((typed) => {
-      const kept = typed.trimEnd();
-      const lead = kept === "" ? "" : `${kept}${QUOTE_GAP}`;
-      const room = AGENT_BOUNDS.MAX_MESSAGE_CHARS - lead.length - QUOTE_GAP.length;
-      const cut = cutReply(picked, room);
-
-      return cut === "" ? typed : `${lead}${quoteOf(cut)}${QUOTE_GAP}`;
-    });
-    setNote(undefined);
-    setFocusAsk((count) => count + 1);
-  };
-
   const editAsk = editSendAsk(rewriting?.line.takes, false, rewriting?.line.cuts ?? true);
 
   const stop = () => {
@@ -912,13 +914,18 @@ export function useAgentComposer(
     });
   };
 
-  /** The edit saved or steered with the field's words and pictures, closed once the queue took it; given up where the field was emptied. */
-  const sendEdit = (way: QueueEditSend) => {
-    if (editing === undefined) return;
+  /** The edit saved or steered with the words Save or Steer took out of the field and its pictures, closed once the queue took it; given up where the field was emptied. */
+  const sendEdit = (way: QueueEditSend, typed: string): boolean => {
+    if (editing === undefined) return false;
     const stash = editing;
-    const next = queueEditChange(way, stash.id, { text: words, attachments: pictures.files ?? [] });
+    const next = queueEditChange(way, stash.id, { text: typed, attachments: pictures.files ?? [] });
 
-    if (next === undefined) return cancelEditOf(stash);
+    if (next === undefined) {
+      cancelEditOf(stash);
+
+      return true;
+    }
+
     setSettling(stash.id);
     void change(next).then((went) => {
       setSettling((was) => (was === stash.id ? undefined : was));
@@ -926,8 +933,14 @@ export function useAgentComposer(
       // Note that only the edit that sent it closes, so a Save landing after its edit was given up and the message opened again leaves the new edit standing.
       const now = editingNow.current;
 
-      if (went && now?.session === stash.session) giveBack(now);
+      if (now?.session !== stash.session) return;
+
+      // Note that words a Save or Steer refused took out of the field go back in it, ahead of anything typed since, as the edit still stands.
+      if (went) giveBack(now);
+      else setWords((typedSince) => wordsHandedBack(typed, typedSince));
     });
+
+    return true;
   };
 
   const queued: readonly QueuedLine[] = held.map((message) => ({
@@ -991,25 +1004,30 @@ export function useAgentComposer(
       editing === undefined
         ? undefined
         : {
-            onSave: () => sendEdit(QUEUE_EDIT_SEND.SAVE),
-            onSteer: writing ? () => sendEdit(QUEUE_EDIT_SEND.STEER) : undefined,
+            onSave: (typed) => sendEdit(QUEUE_EDIT_SEND.SAVE, typed),
+            onSteer: writing ? (typed) => sendEdit(QUEUE_EDIT_SEND.STEER, typed) : undefined,
           },
     note,
     skills,
     mentions: skills === undefined ? mentions : undefined,
     pills: pillField.pills,
     editMessage,
-    reply,
     cancelMessageEdit: rewriting === undefined ? undefined : () => giveBackRewritten(rewriting),
     sendingEdit: {
       title: editAsk.title,
       message: editAsk.body,
       act: editAsk.verb,
       presented: askingEdit && rewriting !== undefined,
+      // Note that the words go as the field holds them once the question is answered, taken out of it as Send takes them.
       onAct: () => {
         setAskingEdit(false);
+        const field = pillField.pills.field.current;
 
-        if (rewriting !== undefined) sendRewritten(rewriting);
+        if (rewriting === undefined || field === null) return;
+        const stash = rewriting;
+        void field.take().then((taken) => {
+          if (!sendRewritten(stash, taken.words)) taken.giveBack();
+        });
       },
       onDismiss: () => setAskingEdit(false),
     },

@@ -23,6 +23,7 @@ import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
+  MANAGER_FACE_OFFERED_COLORS,
   type ManagerFace,
   managerFaceSchema,
 } from "@repo/features/manager-face";
@@ -33,7 +34,9 @@ import { Database, type DatabaseServices, type StoreFailure } from "../core/quer
 import { agentTable } from "../schemas/agent.js";
 
 const CHARACTERS = Object.values(MANAGER_FACE_CHARACTER);
-const COLORS = Object.values(MANAGER_FACE_COLOR);
+
+// Note that the walk keeps to the colors the pickers offer, because a color added for the faces to come is one a released client draws as yellow.
+const COLORS = MANAGER_FACE_OFFERED_COLORS;
 
 /** Every face in walk order: the pairs' diagonals, each a run of faces whose characters and colors all differ. */
 const FACES: readonly ManagerFace[] = COLORS.flatMap((_, diagonal) =>

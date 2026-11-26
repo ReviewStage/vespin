@@ -63,7 +63,7 @@ import { DEVICE_LAUNCH_STEPS, type DeviceLaunchUnstarted } from "@repo/features/
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { turnRecordOf } from "@repo/features/turn-record";
 import type { ToolSet } from "ai";
-import { Clock, Duration, Effect, Option } from "effect";
+import { Clock, Duration, Effect, Option, Semaphore } from "effect";
 import {
   isSettledToolPartState,
   isStoredToolPart,
@@ -204,6 +204,12 @@ type NewestTurn = LatestTurn | undefined;
 
 /** The agent whose own transcript a page is, as its context and its launch are read: its row. */
 type OwnAgent = Pick<Agent, "id" | "machine">;
+
+/** What a read's statements run under: a permit of the round they stand in, so one round never holds more connections than it is given. */
+export type ReadGate = <A, E, R>(read: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
+
+/** A read outside any round's budget, bounded only by the concurrency it is run at. */
+const UNGATED: ReadGate = (read) => read;
 
 /** The payers that run on one of the starter's plans, which a page names by its subscription. */
 const PLAN_PAYERS_NAMED: ReadonlySet<AgentPayer> = new Set([
@@ -583,6 +589,7 @@ const withUsage = (
   page: TranscriptPage,
   turn: NewestTurn,
   own: OwnAgent | undefined,
+  gate: ReadGate = UNGATED,
 ): TranscriptEffect<TranscriptPage, ModelCatalog> =>
   Effect.gen(function* () {
     const catalog = yield* ModelCatalog;
@@ -590,25 +597,26 @@ const withUsage = (
     const { rows, offered, routing, held, delegations, subagentTitles, subagents, queue, launch } =
       yield* Effect.all(
         {
-          rows: turnUsagesOf(target.userId, target.conversationId),
+          rows: gate(turnUsagesOf(target.userId, target.conversationId)),
+          // Note that the catalog takes no permit, because it reads no connection of the pool.
           offered: catalog.read.pipe(Effect.orElseSucceed((): readonly OfferedModel[] => [])),
-          routing: routingOf(target, own),
-          held: heldContextOf(target, own),
+          routing: gate(routingOf(target, own)),
+          held: gate(heldContextOf(target, own)),
           delegations:
             own !== undefined && WAITING_STATUSES.has(page.status)
-              ? delegationsUnderWay(target, tools, turn)
+              ? gate(delegationsUnderWay(target, tools, turn))
               : Effect.succeed<readonly AgentDelegationStart[]>([]),
           subagentTitles:
             own === undefined
               ? Effect.succeed<readonly AgentSubagentTitle[]>([])
-              : delegationTitlesOf(target),
+              : gate(delegationTitlesOf(target)),
           subagents:
             own === undefined
               ? Effect.succeed<readonly AgentSubagentStanding[]>([])
-              : subagentStandingsOf(target),
+              : gate(subagentStandingsOf(target)),
           // Note that the queue is read after the page's messages, so a message the page lists as sent has left it.
-          queue: own === undefined ? Effect.succeed(undefined) : queueOnPage(own.id),
-          launch: launchOf(target, own, turn, page.status),
+          queue: own === undefined ? Effect.succeed(undefined) : gate(queueOnPage(own.id)),
+          launch: gate(launchOf(target, own, turn, page.status)),
         },
         { concurrency: CODER.READ_CONCURRENCY },
       );
@@ -654,15 +662,16 @@ const withUsage = (
 export const transcriptMessagesOf = (
   target: ConversationTarget,
   records: readonly StoredMessageRecord[],
+  gate: ReadGate = UNGATED,
 ): TranscriptEffect<readonly TranscriptMessage[]> =>
   Effect.gen(function* () {
     const lines = lineIdsAmong(records);
 
     const { journalTurns, ...linesRead } = yield* Effect.all(
       {
-        journalTurns: journalTurnsOf(target.userId, records),
-        senders: lineSendersOf(target, lines),
-        places: linePlacesOf(target, lines),
+        journalTurns: gate(journalTurnsOf(target.userId, records)),
+        senders: gate(lineSendersOf(target, lines)),
+        places: gate(linePlacesOf(target, lines)),
       },
       { concurrency: CODER.READ_CONCURRENCY },
     );
@@ -1027,11 +1036,12 @@ export interface TranscriptNewest {
 const olderPageOf = (
   target: ConversationTarget,
   read: MessageListRead,
+  gate: ReadGate = UNGATED,
 ): TranscriptEffect<TranscriptOlder> =>
   Effect.gen(function* () {
     if (!read.ok) return { messages: [], before: read.seq };
     const records = read.value;
-    const messages = yield* transcriptMessagesOf(target, records);
+    const messages = yield* transcriptMessagesOf(target, records, gate);
     const [oldest] = records;
 
     return records.length < AGENT_BOUNDS.MESSAGES_PAGE || oldest === undefined
@@ -1061,7 +1071,7 @@ export function transcriptNewest<A, E, R>(
   target: ConversationTarget,
   tools: ToolSet,
   agent: AgentStart,
-  afterRows: Effect.Effect<A, E, R>,
+  afterRows: (gate: ReadGate) => Effect.Effect<A, E, R>,
   own?: OwnAgent,
 ): Effect.Effect<
   TranscriptNewest & { readonly afterRows: A },
@@ -1099,13 +1109,17 @@ export function transcriptNewest<A, E, R>(
       ...(boot === undefined ? undefined : { boot }),
     };
 
+    // Note that the round's reads share one budget of permits, because its three parts each run several at once, and together would hold more connections than the pool has.
+    const permits = yield* Semaphore.make(CODER.READ_CONCURRENCY);
+    const gate = Semaphore.withPermit(permits);
+
     const { older, page, after } = yield* Effect.all(
       {
-        older: olderPageOf(target, read),
-        page: withUsage(target, tools, unlisted, turn, own),
-        after: afterRows,
+        older: olderPageOf(target, read, gate),
+        page: withUsage(target, tools, unlisted, turn, own, gate),
+        after: afterRows(gate),
       },
-      { concurrency: CODER.READ_CONCURRENCY },
+      { concurrency: "unbounded" },
     );
 
     return {

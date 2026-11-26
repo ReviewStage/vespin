@@ -164,8 +164,10 @@ import { INBOX_TOOLS, postThreadToolOf } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import {
+  REACT_CHAT_TOOL,
   READ_CHAT_MESSAGES_TOOL,
   READ_CHAT_THREAD_TOOL,
+  runReactChat,
   runReadChatMessages,
   runReadChatThread,
   runSearchChat,
@@ -734,6 +736,8 @@ const CATALOG = [
   }),
   agentTool(READ_CHAT_THREAD_TOOL, runReadChatThread, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
   agentTool(SEARCH_CHAT_TOOL, runSearchChat, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
+  // A Manager's reaction on a message of its chat, as Slack's reactions are added and removed.
+  agentTool(REACT_CHAT_TOOL, runReactChat, { ...LOADED, gates: [TOOL_GATE.MANAGER] }),
 ] as const;
 
 /** The name of a tool the catalog serves. */

@@ -1,6 +1,7 @@
 // menu-commands.tsx -- the iPad menu bar's commands, routed: what stands in front told to the native menu, so each command is enabled and worded for it, and each press acted on as the screen's own press would.
 
 import type { ListedAgent } from "@repo/features/agent-wire";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import { holderTask, holderWorkspaceId, isUnread } from "@repo/features/inbox-list-model";
 import { REMIND_TIMES } from "@repo/features/inbox-remind-times";
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
@@ -492,7 +493,8 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
         return;
       case MENU_COMMAND.TOGGLE_READ:
-        if (subject.thread !== undefined) inbox.mark(subject.thread, !subject.threadUnread);
+        if (subject.thread !== undefined)
+          inbox.mark(inboxRowOf(subject.thread), !subject.threadUnread);
         else if (task !== undefined) {
           const unread = subject.toggled.includes(MENU_COMMAND.TOGGLE_READ);
           const readMark = unread ? READ_MARK.READ : READ_MARK.UNREAD;

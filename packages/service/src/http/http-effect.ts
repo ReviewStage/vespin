@@ -15,6 +15,7 @@ import { type Cause, Effect, type Layer, Option, Result, type Scope, Stream } fr
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { type UnparsedWireValue, unparsedWire, wireUuidSchema } from "../core.js";
 import { ANY_METHOD, ANY_PATH } from "../route.js";
+import type { BlobStoreFailure } from "../storage/blob-store.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "./http.js";
 import { logStoreFailure } from "./store-failure.js";
 
@@ -381,14 +382,14 @@ export function playableVideoOf(request: Request): PlayableVideoType {
 }
 
 /**
- * A store read or write the handler cannot answer without: its failure is
- * logged and the request is refused as unavailable, since a database the
- * service cannot reach is an outage the caller may retry and not a defect of
- * the route. `mapError` touches the typed channel alone, so an interruption
+ * A store read or write the handler cannot answer without, the database's
+ * or the Blob store's: its failure is logged and the request is refused as
+ * unavailable, since a store the service cannot reach is an outage the
+ * caller may retry and not a defect of the route. `mapError` touches the typed channel alone, so an interruption
  * of the request's fiber passes through untouched.
  */
 export function hostedStoreOrUnavailable<A, R>(
-  effect: Effect.Effect<A, StoreFailure, R>,
+  effect: Effect.Effect<A, StoreFailure | BlobStoreFailure, R>,
 ): Effect.Effect<A, HostedRefusal, R> {
   return effect.pipe(
     Effect.tapError(logStoreFailure),

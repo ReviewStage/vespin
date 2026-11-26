@@ -106,7 +106,7 @@ function sameScope(was: InboxFilter | undefined, now: InboxFilter): boolean {
     was.show === now.show &&
     was.readerId === now.readerId &&
     sameWhose(was.whose, now.whose) &&
-    sameSearch(was.search, now.search)
+    sameSearch(was.search?.tokens, now.search?.tokens)
   );
 }
 

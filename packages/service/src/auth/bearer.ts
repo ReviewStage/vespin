@@ -32,13 +32,16 @@ const RELAY_PAGE_BASE = "http://localhost/";
  * began (`db/index.ts`'s `poolConnections`): a pool with no idle connection,
  * or none built yet, which it counts as empty, opens one to the database
  * before its first statement. Note that it names counts alone, never the
- * bearer or the account.
+ * bearer or the account, under keys that hold no `auth`, as `CALLER_SPAN`'s.
  */
 const USER_INFO_SPAN = {
   NAME: "auth.userInfo",
-  POOL_TOTAL: "auth.pool.total",
-  POOL_IDLE: "auth.pool.idle",
+  POOL_TOTAL: "caller.pool.total",
+  POOL_IDLE: "caller.pool.idle",
 } as const;
+
+/** What `CALLER_SPAN.CREDENTIAL` says a request named its caller by. */
+const CALLER_CREDENTIAL = { BEARER: "bearer", COOKIE: "cookie", NONE: "none" } as const;
 
 /** What every `jose` error's code begins with, and the one of them that is a key set not reached rather than a token refused. */
 const JOSE_CODE = { PREFIX: "ERR_J", KEY_SET_TIMEOUT: "ERR_JWKS_TIMEOUT" } as const;
@@ -134,12 +137,26 @@ export function requestUserId(
   userInfo: UserInfoEndpoint,
   session: SessionEndpoint,
 ): Effect.Effect<Option.Option<string>, Cause.UnknownError> {
-  if (request.headers.has(CREDENTIAL_HEADER.AUTHORIZATION)) return hostedUserId(request, userInfo);
+  if (request.headers.has(CREDENTIAL_HEADER.AUTHORIZATION)) {
+    return Effect.andThen(
+      Effect.annotateCurrentSpan(CALLER_SPAN.CREDENTIAL, CALLER_CREDENTIAL.BEARER),
+      hostedUserId(request, userInfo),
+    );
+  }
+
   const cookie = sessionCredential(request.headers);
 
-  if (cookie === undefined) return Effect.succeedNone;
+  if (cookie === undefined) {
+    return Effect.as(
+      Effect.annotateCurrentSpan(CALLER_SPAN.CREDENTIAL, CALLER_CREDENTIAL.NONE),
+      Option.none(),
+    );
+  }
 
-  return session({ headers: cookie });
+  return Effect.andThen(
+    Effect.annotateCurrentSpan(CALLER_SPAN.CREDENTIAL, CALLER_CREDENTIAL.COOKIE),
+    session({ headers: cookie }),
+  );
 }
 
 /**

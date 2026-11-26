@@ -15,11 +15,9 @@ One spring drives everything that needs to travel: `--ui-spring`, and
 `--ui-spring-fast` (the same damping ratio at a higher frequency) for what is
 small or arrives over the window: a switch's thumb, and a menu, tooltip,
 dialog, palette, or toast rising into place. Settings pages change at once;
-task navigation does not travel. The window's panes are the one exception to
-the spring: the sidebar and the side panel open, close, and fill the window on
-`--ui-motion-pane` over `--ui-duration-pane`, a plain ease-out, because a pane
-stands on the window's own edge and a spring's overshoot would part the two
-for a frame. Durations and delays come only from the tokens in
+task navigation does not travel, and neither do the window's panes: the
+sidebar, the side panel, and the panes docked in a tab open, close, and fill the
+window at once. Durations and delays come only from the tokens in
 `packages/ui/src/tokens/motion-tokens.css` (`--ui-duration-shape`,
 `--ui-duration-exit`, `--ui-duration-quick`, `--ui-duration-fast`, `--ui-duration-hover`,
 `--ui-duration-pane`, `--ui-motion-exit`, `--ui-motion-pane`,
@@ -27,8 +25,8 @@ for a frame. Durations and delays come only from the tokens in
 autosave's Saved stands). Never write a literal millisecond into a
 rule: reduced motion and capture runs zero the tokens, and a literal is a
 motion those runs cannot stop. Easings are tokens too, never `ease` or `ease-out`: a fade, a
-hover settle and a press ride `--ui-motion-exit`, a pane `--ui-motion-pane`,
-and a travel the spring, a fold's body among them, since what stands under it travels with it. A script that plays motion reads the same tokens through `tokenTiming`
+hover settle and a press ride `--ui-motion-exit`, a sheet `--ui-motion-pane`,
+and a travel the spring. A script that plays motion reads the same tokens through `tokenTiming`
 (`@repo/ui`), and asks `motionHeld` rather than `matchMedia` whether to move at all. The one sanctioned exception is an endless loop
 (a spinner, a breathing idle) whose
 `animation-play-state` answers `--ui-loop-motion`: those runs
@@ -50,12 +48,10 @@ width to its floating pill by transitioning its own width, height, and padding
 `clip-path` (#7162) read worse than the glide it replaced. Nothing else gets a
 size-animation exception.
 
-The window's panes keep the same rule. A pane opening, closing, or filling the
-window lands in the layout at once, and what it displaced replays the journey
-on `transform` and `clip-path` (`pane-motion.tsx`); a drag between a pane's
-bounds changes its width alone and plays nothing, so the edge stays under the
-pointer. Whatever else a change of room displaces replays its journey the same
-way, FLIP-style, from where it was to where it now is.
+The window's panes keep the same rule, and play nothing besides. A pane
+opening, closing, or filling the window lands in the layout at once, and what it
+displaced lands with it; a drag between a pane's bounds changes its width alone,
+so the edge stays under the pointer.
 
 No motion is the browser's rather than a transition of ours: nothing borrows a
 native motion in place of the spring, so no renderer style sets
@@ -83,14 +79,11 @@ a component tells the stylesheet a measured distance.
 A gesture that moves several elements gives each the same duration and
 spring and staggers only the delay, so the whole reads as one object.
 
-Something that opens or closes in place, a fold (`disclosure.css`), is one
-gesture whatever its size: opening, its body unrolls from its top edge on the
-spring; closing, it fades on `--ui-duration-exit` and the layout lands once it
-has. What stands under it, and a list's rows as they arrive, leave, or change
-places, a setting's revealed rows (`reveal.tsx`) among them, move at once:
-nothing measures rows to replay where they were.
-A tall section and a one-row group then move alike, and no surface times its
-own fold (`style-guard/fold-motion`).
+Something that opens or closes in place, a fold (`disclosure.css`) or a
+setting's revealed rows (`reveal.tsx`), has no motion: its body stands or goes
+on the commit that opens or closes it, its chevron stands turned while open
+with no turn between, and what stands under it jumps to its new place. No
+surface gives a fold a motion of its own (`style-guard/fold-motion`).
 
 ## Proving it
 

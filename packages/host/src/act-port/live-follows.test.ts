@@ -96,6 +96,9 @@ const FOLLOWS = [
     path: HOSTED_SERVICE_PATH.LIVE_MANAGER_CHAT,
     slice: LIVE_READ.MANAGER_CHAT,
     at: [AGENT_ID],
+    // Note that the chat is told failed with what failed beneath it, whose trace differs each run, so its flag alone is read.
+    failedAt: ["failed"],
+    failed: true,
   },
   {
     follow: CHAPTERS_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW,

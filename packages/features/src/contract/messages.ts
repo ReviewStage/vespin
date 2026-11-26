@@ -40,6 +40,10 @@ import {
   VOICE_LINE_BOUNDS,
 } from "../agent-wire.js";
 import { transcriptNowAnswerSchema } from "../live-wire.js";
+import {
+  managerChatReactAnswerSchema,
+  managerChatReactRequestSchema,
+} from "../manager-chat-live.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
 import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
 
@@ -96,11 +100,19 @@ const voiceLineProcedure = declaredProcedure.errors(
   refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED),
 );
 
+/** A member's reaction on a Manager's chat refuses an agent not found or not the caller's to write to, or a message the chat holds none of. */
+const reactionProcedure = declaredProcedure.errors(
+  refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED),
+);
+
 /** A query value as the handler reads it, checked there rather than here. */
 const queryValue = EffectSchema.optionalKey(EffectSchema.String);
 
 /** One agent, by the id its path names. */
 const byId = { id: EffectSchema.String };
+
+/** One message of a Manager's chat, by the Manager's id and the message's. */
+const byChatMessage = { id: EffectSchema.String, message: EffectSchema.String };
 
 /** One worker, by its parent's id and the delegation call that started it. */
 const byCall = { id: EffectSchema.String, call: EffectSchema.String };
@@ -159,6 +171,17 @@ export const messagesContract = {
     )
     .input(exactBodyInput(EffectSchema.Struct(byId), agentChatSendRequestSchema))
     .output(EffectSchema.flip(agentChatSendAnswerSchema)),
+  /** One member's reaction given a message of a Manager's chat, or taken off it, as they ask; it opens no turn. */
+  chatReact: reactionProcedure
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: "/api/agents/{id}/chat-messages/{message}/reactions",
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(EffectSchema.Struct(byChatMessage), managerChatReactRequestSchema))
+    .output(EffectSchema.flip(managerChatReactAnswerSchema)),
   /** One change of an agent's queue of messages waiting behind its turn, answering the queue as it then stands. */
   queue: messageProcedure
     .meta(bodyCap(MESSAGE_BODY_BYTES))

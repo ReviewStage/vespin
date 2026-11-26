@@ -1,5 +1,6 @@
 import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
 import { INBOX_BOX_WORDS, type InboxMissing, missingWords } from "@repo/features/inbox-ask-words";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import { type InboxDraft, inboxMissing, inboxThreadSend } from "@repo/features/inbox-draft";
 import { acknowledgedOnOpen, awaitsNod } from "@repo/features/inbox-list-model";
 import { INBOX_BOUNDS, type InboxItem, type InboxMessage } from "@repo/features/inbox-wire";
@@ -261,11 +262,12 @@ function AnswerCard({
   const sending = control.sending.has(item.id) || starting;
   const acknowledgeHeld = useInboxAcknowledger();
   // Note that a failed held read still offers Got it, since opening then acknowledges nothing.
-  const nodded = acknowledgedOnOpen(item, readerId) && !control.failed;
+  const row = inboxRowOf(item);
+  const nodded = acknowledgedOnOpen(row, readerId) && !control.failed;
 
   const { nod, sendable, missing } = useWordsOf(
     typed,
-    (note) => sendFacts({ ...beside, note }, thread, awaitsNod(item) && !nodded, starts),
+    (note) => sendFacts({ ...beside, note }, thread, awaitsNod(row) && !nodded, starts),
     sameSendFacts,
   );
 

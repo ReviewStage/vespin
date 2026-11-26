@@ -55,7 +55,7 @@ import {
   PART_CUT_FIELD,
   type PartCut,
 } from "./agent-wire.js";
-import type { KeptPicture } from "./conversation-picture-wire.js";
+import { type KeptPicture, keptPicturesOf } from "./conversation-picture-wire.js";
 import { drawnCall } from "./native-tool-calls.js";
 import { formatBytes } from "./number-format.js";
 import { type OutOfMemory, outOfMemoryOf } from "./out-of-memory-wire.js";
@@ -156,6 +156,8 @@ export type AgentPart =
       readonly errorText: string | undefined;
       /** Where the kernel killed the call's command for want of memory, the sandbox's memory as it ran (`out-of-memory-wire.ts`). */
       readonly outOfMemory?: OutOfMemory;
+      /** The pictures its answer carried that its runner kept beside the transcript, where it kept any (`conversation-picture-wire.ts`'s `keptPicturesOf`). */
+      readonly pictures?: readonly KeptPicture[];
       readonly cut?: AgentPartCut;
     }
   | { readonly kind: typeof AGENT_PART.STEP_START }
@@ -234,6 +236,7 @@ export function agentPart(part: WireValue): AgentPart {
     });
 
     const outOfMemory = outOfMemoryOf(part.resultProviderMetadata);
+    const pictures = keptPicturesOf(part.resultProviderMetadata);
 
     return {
       kind: AGENT_PART.TOOL,
@@ -242,6 +245,7 @@ export function agentPart(part: WireValue): AgentPart {
       state: toolState(part.state),
       errorText: isWireString(part.errorText) ? part.errorText : undefined,
       ...(outOfMemory === undefined ? undefined : { outOfMemory }),
+      ...(pictures === undefined ? undefined : { pictures }),
     };
   }
 

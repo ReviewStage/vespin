@@ -85,7 +85,6 @@ import { useCopyToast } from "../copy-feedback.js";
 import { useLinkWorkspace } from "../copy-link-item.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { PAGE_COMMENTS_WIDTH, usePageCommentsWidth } from "../desktop/folded-groups.js";
-import { usePaneSlide } from "../desktop/pane-motion.js";
 import { useTabActions } from "../desktop/strip-tabs.js";
 import { unreadShown } from "../failure-report.js";
 import {
@@ -989,8 +988,6 @@ export function PagePane({
     onToggleCollapsed: commenting.toggleColumn,
   });
 
-  const commentsSlide = usePaneSlide(comments !== undefined && commenting.column);
-
   // Note that Comment asks the page itself for an element, so it shows the page where its source stood.
   const comment = () => {
     if (commenting.picking) return commenting.stopPick();
@@ -1239,17 +1236,12 @@ export function PagePane({
               )}
             </PageFrame>
           )}
-          {comments === undefined || !commentsSlide.drawn ? null : (
+          {comments === undefined || !commenting.column ? null : (
             <aside
-              ref={(node) => {
-                commentsSlide.pane.current = node;
-              }}
               className="page-comments-column"
               aria-label="Comments"
               // Note that a pane standing over a narrow page steps aside while the page is picked in.
               data-aside={commenting.picking ? "" : undefined}
-              data-leaving={commentsSlide.leaving ? "" : undefined}
-              inert={commentsSlide.leaving}
               style={cssCustomProperties({ "--page-comments-width": `${commentsWidth.width}px` })}
             >
               <ResizeEdge edge={commentsEdge} />

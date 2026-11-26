@@ -835,9 +835,7 @@ test("the description, a comment, a review, and a thread comment wear their reac
   const [reviewed, commented] = [...tab.querySelectorAll(".pull-request-entry")];
   assert.deepEqual(
     pills(
-      reviewed?.querySelector(
-        ":scope > .ui-comment > .ui-comment-body > .pull-request-reactions",
-      ) ?? null,
+      reviewed?.querySelector(":scope > .ui-comment > .ui-comment-body > .ui-reactions") ?? null,
     ),
     [["🎉1", "Charles Pan reacted with hooray", "false"]],
   );

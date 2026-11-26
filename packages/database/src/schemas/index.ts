@@ -88,6 +88,8 @@ export * from "./integration.js";
 
 export * from "./integration-installation.js";
 
+export * from "./journal-image-move.js";
+
 export * from "./live-activity.js";
 
 export * from "./machine-command.js";
@@ -95,6 +97,8 @@ export * from "./machine-command.js";
 export * from "./machine-command-ask.js";
 
 export * from "./manager-chat-message.js";
+
+export * from "./manager-chat-reaction.js";
 
 export * from "./memory.js";
 

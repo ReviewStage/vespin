@@ -11,7 +11,6 @@ import {
   Section,
   Spacer,
   Button as SwiftUIButton,
-  Text,
   Toolbar,
   ToolbarItem,
   useNativeState,
@@ -37,6 +36,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useScaledSize } from "./accessibility.js";
+import { Text } from "./text.js";
 import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 

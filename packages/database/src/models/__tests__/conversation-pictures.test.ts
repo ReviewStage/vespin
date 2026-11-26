@@ -11,6 +11,7 @@ import { user } from "../../schemas/auth.js";
 import { conversations } from "../../schemas/storage.js";
 import { CONVERSATION_KIND } from "../../storage-vocabulary.js";
 import { fillConversationPictures, getTestDB } from "../../testing/index.js";
+import { ATTACHMENT_BODY } from "../attachment-body.js";
 import { deleteConversations } from "../conversation-delete.js";
 import {
   keepConversationPicture,
@@ -30,10 +31,13 @@ import type { ConversationTarget } from "../writer.js";
  * Synthetic accounts and bytes throughout: no picture is a real one.
  */
 
-/** A synthetic picture, its bytes told apart by `mark`; the store keeps what it is handed and sniffs nothing. */
+/** A synthetic picture, its bytes told apart by `mark` and uploaded afresh under a new id each time it is handed in; the store keeps what it is handed and sniffs nothing. */
 function picture(mark: number): PictureToKeep {
+  const id = randomUUID();
+
   return {
-    bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47, mark % 256, Math.floor(mark / 256)]),
+    stored: { id, blobKey: `attachments/${id}`, byteCount: 6 },
+    sha256: mark.toString(16).padStart(64, "0"),
     contentType: INBOX_IMAGE_TYPE.PNG,
     width: 1200,
     height: 720,
@@ -75,8 +79,11 @@ it.layer(getTestDB())("a conversation's pictures", (it) => {
       );
       const read = yield* readConversationPicture(owner.conversationId, first.value.id);
       assert.deepEqual(
-        Option.map(read, (stored) => [stored.contentType, [...stored.bytes]]),
-        Option.some([INBOX_IMAGE_TYPE.PNG, [...picture(1).bytes]]),
+        read,
+        Option.some({
+          contentType: INBOX_IMAGE_TYPE.PNG,
+          body: { kind: ATTACHMENT_BODY.STORED, blobKey: `attachments/${first.value.id}` },
+        }),
       );
       assert.deepEqual(
         yield* readConversationPicture(other.conversationId, first.value.id),

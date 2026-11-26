@@ -93,4 +93,8 @@ export const MANAGER_FACE_FILL = {
   pink: { LIGHT: "#f78fcb", DARK: "#fda7dc" },
   purple: { LIGHT: "#b08cff", DARK: "#c5a6ff" },
   peach: { LIGHT: "#ff9a6c", DARK: "#ffb08a" },
+  red: { LIGHT: "#f08f89", DARK: "#ffaba3" },
+  orange: { LIGHT: "#eab08a", DARK: "#ffcba3" },
+  teal: { LIGHT: "#8ecbd0", DARK: "#ace5ea" },
+  gray: { LIGHT: "#b6b6ba", DARK: "#cfcfd1" },
 } as const;

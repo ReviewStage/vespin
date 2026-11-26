@@ -104,6 +104,21 @@ simulator_is_ipad() {
         ' "$1"
 }
 
+# Prints `false` where the simulator of udid `$1` has no Dynamic Island, by
+# its device type as `simulator_is_ipad` reads it: an iPad, an iPhone SE, or
+# an iPhone of the "e" line, which keep a notch; else `true`. Note that the
+# iPhones before the 14 Pro have none either, but no lane runs one.
+simulator_has_island() {
+    xcrun simctl list devices --json |
+        node -e '
+          const udid = process.argv[1];
+          const { devices } = JSON.parse(require("fs").readFileSync(0, "utf8"));
+          const found = Object.values(devices).flat().find((device) => device.udid === udid);
+          const type = found?.deviceTypeIdentifier ?? "";
+          process.stdout.write(String(!/\.iPad|\.iPhone-SE|\.iPhone-\d+e$/.test(type)));
+        ' "$1"
+}
+
 # The simulator under test is shut down however the run ends, a failed boot
 # or install included, so no simulator is left running on a shared Mac.
 udid=""
@@ -161,6 +176,7 @@ allow_notifications() {
 run_maestro() {
     maestro --udid "$1" test \
         --env "FLOATING_TABS=$floating_tabs" \
+        --env "DYNAMIC_ISLAND=$dynamic_island" \
         --test-output-dir "$2" \
         --debug-output "$2/debug" \
         --flatten-debug-output \
@@ -187,6 +203,7 @@ run_suite() {
     maestro --udid "$1" test \
         ${config[@]+"${config[@]}"} \
         --env "FLOATING_TABS=$floating_tabs" \
+        --env "DYNAMIC_ISLAND=$dynamic_island" \
         --test-output-dir "$2" \
         --debug-output "$2/debug" \
         --flatten-debug-output \
@@ -262,6 +279,9 @@ for name in "$@"; do
     # An iPad's tab bar floats at the window's top and carries no ids, so
     # its flows open a tab by name (`maestro/subflows/tab.yaml`).
     floating_tabs=$(simulator_is_ipad "$udid")
+    # A Live Activity's island presentations draw only on an iPhone with a
+    # Dynamic Island (`maestro/live-activity.yaml`).
+    dynamic_island=$(simulator_has_island "$udid")
     device_output="$output/$slug"
     mkdir -p "$device_output"
     echo "==> $name ($udid)"

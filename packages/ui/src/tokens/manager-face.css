@@ -11,4 +11,8 @@
   --ui-color-manager-face-pink: light-dark(#f78fcb, #fda7dc);
   --ui-color-manager-face-purple: light-dark(#b08cff, #c5a6ff);
   --ui-color-manager-face-peach: light-dark(#ff9a6c, #ffb08a);
+  --ui-color-manager-face-red: light-dark(#f08f89, #ffaba3);
+  --ui-color-manager-face-orange: light-dark(#eab08a, #ffcba3);
+  --ui-color-manager-face-teal: light-dark(#8ecbd0, #ace5ea);
+  --ui-color-manager-face-gray: light-dark(#b6b6ba, #cfcfd1);
 }

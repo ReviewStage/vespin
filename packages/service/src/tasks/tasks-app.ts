@@ -1,10 +1,11 @@
 import type { DatabaseServices } from "@repo/database/core/query";
+import type { AttachmentBody } from "@repo/database/models/attachment-body";
 import { readServedDescriptionAttachment } from "@repo/database/models/description-attachments";
 import { readDescriptionCommentFile } from "@repo/database/models/description-comments";
 import { HTTP_METHOD } from "@repo/wire";
 import { Effect, Layer, Option, type Scope } from "effect";
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { HOSTED_HTTP_STATUS } from "../http/http.js";
+import { HttpRouter, HttpServerRequest, type HttpServerResponse } from "effect/http";
+import { servedAttachment } from "../http/attachment-response.js";
 import {
   HOSTED_REFUSAL,
   type HostedRefusal,
@@ -13,7 +14,6 @@ import {
   hostedStoreOrUnavailable,
   playableVideoOf,
   resolvedUserId,
-  servedBytesHeaders,
   type UserIdResolver,
   uuidOf,
 } from "../http/http-effect.js";
@@ -54,7 +54,9 @@ type TasksServices = TasksAppServices | HttpServerRequest.HttpServerRequest | Sc
  * GET serves one attachment of the description as its bytes, to the members of the
  * plan's workspace alone: a picture or a video its text names, under the
  * media type the service sniffed it to be as it was kept, or else a file one
- * of its comments carries, under the type it traveled as. An attachment of a plan the
+ * of its comments carries, under the type it traveled as; where the bytes stand
+ * in the Blob store, a redirect to them or the bytes piped through
+ * (`servedAttachment`). An attachment of a plan the
  * account does not reach, or of another plan, is not found, as a plan is.
  */
 const attachmentEndpoint = /* @__PURE__ */ Effect.fn("web/descriptionAttachmentEndpoint")(
@@ -76,18 +78,14 @@ const attachmentEndpoint = /* @__PURE__ */ Effect.fn("web/descriptionAttachmentE
       readServedDescriptionAttachment(userId, taskId, attachmentId, playableVideoOf(request)),
     );
 
-    const found: Option.Option<{ readonly contentType: string; readonly bytes: Uint8Array }> =
+    const found: Option.Option<{ readonly contentType: string; readonly body: AttachmentBody }> =
       Option.isSome(picture)
         ? picture
         : yield* hostedStoreOrUnavailable(readDescriptionCommentFile(userId, taskId, attachmentId));
 
     if (Option.isNone(found)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
-    return HttpServerResponse.uint8Array(found.value.bytes, {
-      status: HOSTED_HTTP_STATUS.OK,
-      contentType: found.value.contentType,
-      headers: servedBytesHeaders(found.value.contentType),
-    });
+    return yield* servedAttachment(request, found.value);
   },
 );
 

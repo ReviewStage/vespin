@@ -13,6 +13,7 @@ import { unparsedWire } from "../core.js";
 import type { HostedEnvironment } from "../environment.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { githubImage } from "../github/github-images.js";
+import { servedAttachment } from "../http/attachment-response.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import {
   HOSTED_BYTES_HEADERS,
@@ -143,7 +144,9 @@ const githubImageEndpoint = /* @__PURE__ */ Effect.fn("web/agentGitHubImageEndpo
  * GET serves one attachment of an inbox item, an image block's picture or a
  * file the developer's answer carried, as its bytes under the media type
  * the service sniffed a picture to be or a file traveled as, a recording
- * as its MP4 copy to a caller that plays MP4 (`playableVideoOf`), to the
+ * as its MP4 copy to a caller that plays MP4 (`playableVideoOf`), or as a
+ * redirect to them or their bytes piped through where they stand in the
+ * Blob store (`servedAttachment`), to the
  * members of the item's workspace alone: an attachment of another
  * workspace's, or of another item's, is not found, as an item is.
  */
@@ -167,11 +170,7 @@ const inboxAttachmentEndpoint = /* @__PURE__ */ Effect.fn("web/inboxAttachmentEn
 
   if (Option.isNone(found)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
-  return HttpServerResponse.uint8Array(found.value.bytes, {
-    status: HOSTED_HTTP_STATUS.OK,
-    contentType: found.value.contentType,
-    headers: servedBytesHeaders(found.value.contentType),
-  });
+  return yield* servedAttachment(request, found.value);
 });
 
 /**
@@ -225,11 +224,7 @@ const pictureEndpoint = /* @__PURE__ */ Effect.fn("web/agentPictureEndpoint")(fu
     });
   }
 
-  return HttpServerResponse.uint8Array(found.value.bytes, {
-    status: HOSTED_HTTP_STATUS.OK,
-    contentType: found.value.contentType,
-    headers: servedBytesHeaders(found.value.contentType),
-  });
+  return yield* servedAttachment(request, found.value);
 });
 
 /** The group: its paths, and the hosted vocabulary's own refusal for any other. */

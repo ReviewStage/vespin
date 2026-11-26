@@ -346,7 +346,7 @@ function ChannelSaid({
         <MessageMenu
           words={item.words}
           at={item.at}
-          // Note that the Manager's message offers no link or rewind, as the panel's offers none; every message leads with Reply in thread, then what the page offers every chat message, such as Reply and Edit.
+          // Note that the Manager's message offers no link or rewind, as the panel's offers none; every message leads with Reply in thread, then what the page offers every chat message, such as Edit.
           link={sender.manager ? undefined : drawing.messageLink?.(item.place.row)}
           more={[...threadAct, ...(drawing.messageMore?.(item) ?? [])]}
           width={width}

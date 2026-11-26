@@ -12,6 +12,14 @@
  * than kept prepared: the shared code prepares a statement where it runs
  * it, and one kept would hold native memory until the connection closed.
  *
+ * Beside it the account's collections kept on disk whole stand in a
+ * database of their own (`KeptCollectionsDatabase`), opened through
+ * `expo-sqlite`'s async API, whose statements run off the JavaScript thread,
+ * and kept by TanStack DB's own persistence for Expo
+ * (`@tanstack/expo-db-sqlite-persistence`), each stored kind's collection
+ * loaded on demand: a live query reads from SQLite only the rows its filter
+ * finds there.
+ *
  * The file needs no protection of its own: iOS keeps every file the app
  * creates, the database and its WAL files among them, under the Data
  * Protection class `completeUntilFirstUserAuthentication` by default, so
@@ -19,10 +27,16 @@
  */
 
 import type {
+  KeptCollectionsDatabase,
   LocalDatabaseConnection,
   LocalDatabaseDriverSeam,
   LocalDatabaseValue,
 } from "@repo/host/local-database";
+import {
+  createExpoSQLitePersistence,
+  type ExpoSQLiteDatabaseLike,
+  persistedCollectionOptions,
+} from "@tanstack/expo-db-sqlite-persistence";
 import type { SQLiteBindValue } from "expo-sqlite";
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 
@@ -49,13 +63,35 @@ interface ExpoDatabase {
 /** `expo-sqlite`'s `openDatabaseSync`, as the driver calls it: a file name in a folder. */
 type OpenDatabase = (databaseName: string, options: undefined, directory: string) => ExpoDatabase;
 
-/** Opens `file`, a plain absolute path, as the folder and file name `expo-sqlite` takes. */
-function openAt(openDatabase: OpenDatabase, file: string): LocalDatabaseConnection {
+/** An open database as the async API answers it: what TanStack's persistence drives, and its close. */
+type ExpoAsyncDatabase = ExpoSQLiteDatabaseLike & { readonly closeAsync: () => Promise<void> };
+
+/** `expo-sqlite`'s `openDatabaseAsync`, as the driver calls it: a file name in a folder. */
+type OpenDatabaseAsync = (
+  databaseName: string,
+  options: undefined,
+  directory: string,
+) => Promise<ExpoAsyncDatabase>;
+
+/** A database's file as `expo-sqlite` names it: its name in its folder. */
+interface PlacedFile {
+  readonly name: string;
+  readonly folder: string;
+}
+
+/** `file`, a plain absolute path, as the file name and folder `expo-sqlite` takes. */
+function placed(file: string): PlacedFile {
   const slash = file.lastIndexOf("/");
 
   if (slash <= 0 || slash === file.length - 1) throw new Error(`not a file in a folder: ${file}`);
 
-  const database = openDatabase(file.slice(slash + 1), undefined, file.slice(0, slash));
+  return { name: file.slice(slash + 1), folder: file.slice(0, slash) };
+}
+
+/** Opens `file`, a plain absolute path, as the folder and file name `expo-sqlite` takes. */
+function openAt(openDatabase: OpenDatabase, file: string): LocalDatabaseConnection {
+  const { name, folder } = placed(file);
+  const database = openDatabase(name, undefined, folder);
   // Note that the launch's first open is noted as its local phase, which `app:ready` counts.
   noteLaunchPhase(LAUNCH_PHASE.LOCAL);
 
@@ -71,7 +107,39 @@ function openAt(openDatabase: OpenDatabase, file: string): LocalDatabaseConnecti
   };
 }
 
-/** The local database's driver on the device, over `openDatabase`: `expo-sqlite`'s own `openDatabaseSync` in the app. */
-export function expoSqliteDriver(openDatabase: OpenDatabase): LocalDatabaseDriverSeam {
-  return { open: (file) => openAt(openDatabase, file) };
+/** Opens the database of collections kept on disk whole at `file`, each stored kind's kept by TanStack's persistence and loaded on demand. */
+async function collectionsAt(
+  openDatabaseAsync: OpenDatabaseAsync,
+  file: string,
+): Promise<KeptCollectionsDatabase> {
+  const { name, folder } = placed(file);
+  const database = await openDatabaseAsync(name, undefined, folder);
+  const persistence = createExpoSQLitePersistence({ database });
+
+  return {
+    keep: (stored) => (config) =>
+      persistedCollectionOptions({
+        ...config,
+        id: stored.name,
+        schemaVersion: stored.version,
+        persistence,
+        syncMode: "on-demand",
+      }),
+    close: () => database.closeAsync(),
+  };
+}
+
+/**
+ * The local database's driver on the device, over `openDatabase`, and its
+ * kept collections' over `openDatabaseAsync`: `expo-sqlite`'s own
+ * `openDatabaseSync` and `openDatabaseAsync` in the app.
+ */
+export function expoSqliteDriver(
+  openDatabase: OpenDatabase,
+  openDatabaseAsync: OpenDatabaseAsync,
+): LocalDatabaseDriverSeam {
+  return {
+    open: (file) => openAt(openDatabase, file),
+    collections: (file) => collectionsAt(openDatabaseAsync, file),
+  };
 }
