@@ -252,7 +252,7 @@ function startCrashReports(): void {
  * native half with it, where it reads off, or started again where it reads
  * on after a close. Note that a close records nothing more and drops this
  * launch's trace, but the native half flushes as it closes, so a replay
- * segment or report already queued may still go out (`PRIVACY.md` says so).
+ * segment or report already queued may still go out.
  */
 function shareCrashReports(shares: boolean): void {
   crashReportsModule.keepSharesUsageData(shares);
