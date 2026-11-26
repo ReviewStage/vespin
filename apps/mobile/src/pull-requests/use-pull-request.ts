@@ -43,6 +43,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useHostFollow } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
+import { useProbeParts } from "./pr-probe.js";
 
 /** The parts a pull request screen holds: the pull request, its checks, and its conversation. */
 const SHOWN_PARTS: readonly PullRequestPart[] = [
@@ -138,9 +139,15 @@ export function usePullRequestParts(
     ),
   }).data;
 
+  const probed = useProbeParts({ pullRequest, checks, conversation });
+
   return useMemo(
-    () => ({ pullRequest, checks, conversation }),
-    [pullRequest, checks, conversation],
+    () => ({
+      pullRequest: probed.pullRequest,
+      checks: probed.checks,
+      conversation: probed.conversation,
+    }),
+    [probed.pullRequest, probed.checks, probed.conversation],
   );
 }
 

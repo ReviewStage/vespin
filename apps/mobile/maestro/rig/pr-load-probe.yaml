@@ -1,0 +1,93 @@
+# pr-load-probe.yaml -- PROBE, not for merge: how a pull request's page draws as its three parts land, timed by `[prprobe]` lines in the device log (`src/pull-requests/pr-probe.ts`).
+#
+# Each scenario opens #128 five times from a fresh launch, its parts held
+# back as long as the service's answers took at their median over the last
+# seven days (Sentry: overviewPullRequest 4531 ms, overviewChecks 3602 ms,
+# overviewConversation 2687 ms), then once more under a recording.
+# - link: by a link with no agent, so nothing names it before its read.
+# - listed: by its agent (Overview's row), whose list row names its title.
+# - card: from its agent's card, which already holds its own read.
+# - none: every part at once, the client's own cost alone.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          file: pr-load-probe/open.yaml
+          env:
+            DELAYS: "4531,3602,2687"
+            LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128"
+            WAIT: "Ready to merge"
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          file: pr-load-probe/open.yaml
+          env:
+            DELAYS: "4531,3602,2687"
+            LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128?agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5"
+            WAIT: "Ready to merge"
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          file: pr-load-probe/open.yaml
+          env:
+            DELAYS: "0,3602,2687"
+            LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128?agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5"
+            WAIT: ".*passed.*"
+- repeat:
+    times: 5
+    commands:
+      - runFlow:
+          file: pr-load-probe/open.yaml
+          env:
+            DELAYS: "0,0,0"
+            LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128"
+            WAIT: ".*passed.*"
+# One recorded open of the link scenario, the page as a reader sees it.
+- launchApp:
+    stopApp: true
+    arguments:
+      fixture: inbox
+      prProbe: "4531,3602,2687"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- startRecording: pr-load-before-link
+- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Ready to merge"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ".*passed.*"
+    timeout: 30000
+- stopRecording
+- launchApp:
+    stopApp: true
+    arguments:
+      fixture: inbox
+      prProbe: "4531,3602,2687"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- startRecording: pr-load-before-listed
+- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128?agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Ready to merge"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ".*passed.*"
+    timeout: 30000
+- stopRecording
