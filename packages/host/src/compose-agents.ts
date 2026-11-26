@@ -1156,9 +1156,13 @@ function composed(
     const settledAs = ({ itemId }: { readonly itemId: string }): AgentInboxAnsweredView => {
       const row = dependencies.pool.row(kind, itemId);
 
-      return row === undefined
+      if (row !== undefined) return { item: itemOfRow(row), taken: true };
+      // Note that a plan's read holds its threads whole, apart from a lean feed, so a thread it alone holds is answered as that read draws it.
+      const whole = dependencies.pool.row(INBOX_ITEM, itemId);
+
+      return whole === undefined
         ? { failure: AGENT_CALL_FAILURE.UNANSWERED }
-        : { item: itemOfRow(row), taken: true };
+        : { item: itemOf(whole), taken: true };
     };
 
     // Note that who and when are read once a write is asked, since its change is drawn again over each answer a read takes while it stands.
