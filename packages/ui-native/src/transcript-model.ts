@@ -70,7 +70,6 @@ import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/
 import {
   CHAT_RUN_ALONE,
   type ChatRunPlace,
-  chatWorkWords,
   type ManagerChatLine,
   type ManagerChatView,
   repliesWords,
@@ -79,13 +78,7 @@ import { type MessageFileChip, messageFileChips } from "@repo/features/message-f
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SUGGESTION_LEAD, suggestionWords } from "@repo/features/reply-button-wire";
-import {
-  callHeading,
-  WORKED_WORDS,
-  WORKING_LINE,
-  workedForText,
-  workingTime,
-} from "@repo/features/time-format";
+import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
 import {
   BLOCK_TITLE,
   COMMAND_PROMPT,
@@ -294,6 +287,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly channel?: ChatSender | undefined;
       /** In a Manager's chat's channel, the thread it stands in, which Reply in thread opens, its replies summed under it; none in a thread's own page, or outside a chat. */
       readonly thread?: ChatThreadMark | undefined;
+      /** Whether the finished turn's work it opens stands open under it, which its long press's Show work turns; none for a message that opens no turn's work. */
+      readonly workShown?: boolean | undefined;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
@@ -345,7 +340,12 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       /** When that message was sent, beside the sender's name. */
       readonly stamp?: string | undefined;
     }
-  | { readonly kind: typeof TRANSCRIPT_ITEM.MEDIA; readonly media: readonly ShownMedia[] }
+  | {
+      readonly kind: typeof TRANSCRIPT_ITEM.MEDIA;
+      readonly media: readonly ShownMedia[];
+      /** Whether the finished turn's work its message opens stands open, which each picture's long press offers as Show work too, since a message of pictures alone may draw no row of its own to hold; none for a message that opens no turn's work. */
+      readonly workShown?: boolean | undefined;
+    }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.FOOT;
       readonly words: string;
@@ -1412,41 +1412,30 @@ function chatSaidFiles(
   return { ...placedPictures(words, saidPictures(chips)), files: saidFiles(chips) };
 }
 
+/** A finished turn's work as its first message holds it: whether it stands open, none where the message opens no work, and its rows while it does. */
+interface ChatWork {
+  readonly shown: boolean | undefined;
+  readonly items: readonly TranscriptItem[];
+}
+
 /**
- * A finished turn's work folded over the Manager's first message of it, as
- * the panel folds it: its line says how long the turn worked, or Show work
- * where its journal kept no times, and the reader opens it on the turn's work
- * set a step in under it; none for a message that opens no turn's work.
+ * A finished turn's work under the Manager's first message of it, as the
+ * panel's message menu opens it: whether it stands open, which the message's
+ * long press offers as Show work or Hide work, and its rows set a step in
+ * while it does; none for a message that opens no turn's work. Note that the
+ * work is turned by the message's own place, since no line stands over it.
  */
-function chatWorkFold(
-  line: ManagerChatLine,
-  view: ManagerChatView,
-  turns: ReadonlyMap<string, AgentTranscriptMessage>,
-  reading: ItemsReading,
-): readonly TranscriptItem[] {
+function chatWork(line: ManagerChatLine, view: ManagerChatView, reading: ItemsReading): ChatWork {
   const { message } = line;
-
-  // Note that the fold over a message that opens its sender's run stands under that sender's head, as the panel's fold stands under the name, so it never reads as the line above's.
-  const head = line.place.opens
-    ? { channel: chatSenderOf(message), stamp: callHeading(message.createdAt, reading.now) }
-    : undefined;
-
   const work = line.work === undefined ? [] : (view.work.get(line.work) ?? []);
 
-  if (line.work === undefined || work.length === 0) return [];
-  const place = { ...linePlace(message.id, message.id), work: CHAT_WORK_PLACE.MESSAGE };
-  const open = foldTurned(reading.toggles, place);
-  const turn = turns.get(line.work);
+  if (work.length === 0) return { shown: undefined, items: [] };
+  const shown = foldTurned(reading.toggles, linePlace(message.id, message.id));
 
-  const summary =
-    turn?.startedAt === undefined || turn.finishedAt === undefined
-      ? chatWorkWords(false)
-      : `${WORKED_WORDS}${workingTime(turn.finishedAt - turn.startedAt)}`;
-
-  return [
-    { place, depth: 0, kind: TRANSCRIPT_ITEM.FOLD, summary, open, running: false, ...head },
-    ...(open ? workItems(work, message.id, CHAT_WORK_PLACE.MESSAGE, false, reading) : []),
-  ];
+  return {
+    shown,
+    items: shown ? workItems(work, message.id, CHAT_WORK_PLACE.MESSAGE, false, reading) : [],
+  };
 }
 
 /** Who sent a message of the chat, as its row heads it. */
@@ -1494,14 +1483,13 @@ function threadMarkOf(line: ManagerChatLine, view: ManagerChatView): ChatThreadM
  * One message of a Manager's chat as its items, each headed by who sent it
  * as a channel's row is: a person's as their line; the Manager's words as
  * its line and what it showed as the set's pictures under them; and, over
- * the Manager's first message of a finished turn, the turn's work folded,
- * as the panel folds it. In the channel (`threads`), its line offers the
+ * the Manager's first message of a finished turn, the turn's work under it
+ * while its long press's Show work holds it open. In the channel (`threads`), its line offers the
  * thread it stands in.
  */
 function chatLineItems(
   line: ManagerChatLine,
   view: ManagerChatView,
-  turns: ReadonlyMap<string, AgentTranscriptMessage>,
   reading: ItemsReading,
   threads: boolean,
 ): readonly TranscriptItem[] {
@@ -1534,14 +1522,13 @@ function chatLineItems(
     ];
   }
 
-  const fold = chatWorkFold(line, view, turns, reading);
+  const work = chatWork(line, view, reading);
   // Note that what the Manager showed and kept stands as the set's pictures under its words, and any file it carried as its bytes stands on its bubble, as a person's would.
   const media = chatShownMedia(message.attachments.filter(keptChatFile));
   const carried = message.attachments.filter((file) => !keptChatFile(file));
 
   // Note that a message of what it showed alone still stands as a line of no words, since its line carries who sent it and the thread it stands in, so its thread opens as any message's does.
   return [
-    ...fold,
     {
       ...said,
       ...chatSaidFiles(message.text, carried),
@@ -1549,6 +1536,7 @@ function chatLineItems(
       received: true,
       manager: true,
       by: undefined,
+      workShown: work.shown,
     },
     ...(media.length === 0
       ? []
@@ -1558,8 +1546,10 @@ function chatLineItems(
             place: pieceOf(base.place, TRANSCRIPT_PIECE.MEDIA),
             kind: TRANSCRIPT_ITEM.MEDIA,
             media,
+            workShown: work.shown,
           },
         ]),
+    ...work.items,
   ];
 }
 
@@ -1620,9 +1610,7 @@ export function managerChatItems(
   reading: ChatReading,
 ): readonly TranscriptItem[] {
   const read: ItemsReading = { ...reading, computerApps: computerAppsOf(transcript) };
-  // Note that a turn's journal message stands under the turn's id, which a message's work names.
-  const turns = new Map(transcript.map((message) => [message.id, message]));
-  const items = view.top.flatMap((line) => chatLineItems(line, view, turns, read, true));
+  const items = view.top.flatMap((line) => chatLineItems(line, view, read, true));
   const newest = view.top.at(-1)?.message;
   const going = sendingTo(reading.sending, undefined);
   const sending = chatSendingItems(going, view.sending.channel, reading);
@@ -1683,11 +1671,10 @@ export function managerThreadItems(
 
   if (rootLine === undefined) return undefined;
   const read: ItemsReading = { ...reading, computerApps: computerAppsOf(transcript) };
-  const turns = new Map(transcript.map((message) => [message.id, message]));
   const replies = view.threads.get(root) ?? [];
   const sending = chatSendingItems(sendingTo(reading.sending, root), view.sending.channel, reading);
-  const head = chatLineItems({ ...rootLine, place: CHAT_RUN_ALONE }, view, turns, read, false);
-  const lines = replies.flatMap((line) => chatLineItems(line, view, turns, read, false));
+  const head = chatLineItems({ ...rootLine, place: CHAT_RUN_ALONE }, view, read, false);
+  const lines = replies.flatMap((line) => chatLineItems(line, view, read, false));
 
   const runs = new Map<string, ChatRunPlace>([
     [root, CHAT_RUN_ALONE],

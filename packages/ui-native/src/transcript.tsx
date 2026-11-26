@@ -301,7 +301,7 @@ function ChannelSaid({
   const thread = open === undefined ? undefined : item.thread;
   const wordless = item.words.trim() === "";
 
-  const threadAct: readonly HeldAct[] =
+  const replyAct: readonly HeldAct[] =
     thread === undefined || open === undefined
       ? []
       : [
@@ -311,6 +311,8 @@ function ChannelSaid({
             onPress: () => open(thread.root),
           },
         ];
+
+  const threadAct = [...replyAct, ...turnWorkActs(item, drawing)];
 
   const message = (
     <ChannelMessage sender={sender} faces={faces} opens={!item.joinsAbove} stamp={item.stamp}>
@@ -987,9 +989,33 @@ function ShownMediaView({
   }
 }
 
-/** Show work, or Hide work while it stands open, where a Manager's working line's turn has done work (`workShown`); none where it has done none. A finished turn's work stands in its fold over its first message instead. */
+/** Show work, or Hide work while it stands open, where a Manager's working line's turn has done work (`workShown`); none where it has done none. A finished turn's work is offered in its first message's long press instead (`ChannelSaid`). */
 function workActs(
   item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.WORKING }>,
+  drawing: RowDrawing,
+): readonly HeldAct[] {
+  if (item.workShown === undefined) return [];
+
+  return [
+    {
+      label: chatWorkWords(item.workShown),
+      symbol: GLYPH.SHOW_WORK,
+      onPress: () => drawing.onToggle(item),
+    },
+  ];
+}
+
+/**
+ * Show work, or Hide work while it stands open under the message, where the
+ * Manager's message, or the pictures it showed, opens a finished turn's work
+ * (`workShown`), as the panel's message menu offers it rather than a fold
+ * over the message; none where it opens none.
+ */
+function turnWorkActs(
+  item: Extract<
+    TranscriptItem,
+    { kind: typeof TRANSCRIPT_ITEM.SAID | typeof TRANSCRIPT_ITEM.MEDIA }
+  >,
   drawing: RowDrawing,
 ): readonly HeldAct[] {
   if (item.workShown === undefined) return [];
@@ -1241,6 +1267,9 @@ function TranscriptRow({
           ? inset(item.depth)
           : { paddingLeft: SPACE.EDGE + CHANNEL_SEAT };
 
+      // Note that each picture's long press leads with Show work where its message opens a turn's work, since a message of pictures alone joined to the run above draws no row of its own to hold.
+      const workActs = turnWorkActs(item, drawing);
+
       // Note that several pictures with no captions stand as one set side by side, as Messages groups photos; a recording, a sound clip, or a picture with its own caption, stands alone so its caption stays under it.
       if (
         item.media.length > 1 &&
@@ -1248,35 +1277,39 @@ function TranscriptRow({
       ) {
         return (
           <View style={[styles.row, mediaInset, styles.media]}>
-            <PictureSet
-              pictures={item.media.map((shown) => ({
-                key: shown.id,
-                source: drawing.mediaSource(shown.id),
-                alt: shown.label,
-                onRetry: retryOf(drawing, shown.id),
-              }))}
-            />
+            <HeldLeadProvider acts={workActs}>
+              <PictureSet
+                pictures={item.media.map((shown) => ({
+                  key: shown.id,
+                  source: drawing.mediaSource(shown.id),
+                  alt: shown.label,
+                  onRetry: retryOf(drawing, shown.id),
+                }))}
+              />
+            </HeldLeadProvider>
           </View>
         );
       }
 
       return (
         <View style={[styles.row, mediaInset, styles.media]}>
-          {item.media.map((shown) => (
-            <View key={shown.id} style={styles.shown}>
-              <ShownMediaView
-                shown={shown}
-                source={drawing.mediaSource(shown.id)}
-                onOpenElsewhere={drawing.onOpenElsewhere}
-                onRetry={retryOf(drawing, shown.id)}
-              />
-              {shown.caption === "" ? null : (
-                <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
-                  {shown.caption}
-                </Text>
-              )}
-            </View>
-          ))}
+          <HeldLeadProvider acts={workActs}>
+            {item.media.map((shown) => (
+              <View key={shown.id} style={styles.shown}>
+                <ShownMediaView
+                  shown={shown}
+                  source={drawing.mediaSource(shown.id)}
+                  onOpenElsewhere={drawing.onOpenElsewhere}
+                  onRetry={retryOf(drawing, shown.id)}
+                />
+                {shown.caption === "" ? null : (
+                  <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+                    {shown.caption}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </HeldLeadProvider>
         </View>
       );
     }
