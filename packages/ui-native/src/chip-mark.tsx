@@ -12,7 +12,11 @@ import {
   INTEGRATION_MARK_TEMPLATE,
   LINK_SITE_MARK_ASSET,
 } from "./integration-marks.js";
-import { managerFaceAsset } from "./manager-face-look.js";
+import {
+  MANAGER_FACE_EMOJI_SCALE,
+  managerFaceAsset,
+  managerFaceFill,
+} from "./manager-face-look.js";
 import { HARNESS_MARK_ASSET, TILE_ROUNDING } from "./mark-look.js";
 import { type BrandColors, toneColor } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
@@ -179,7 +183,20 @@ export function ChipMarkView({
         />
       );
     case CHIP_MARK.MANAGER:
-      // Note that among words a face is too small to hold the working disc, so its mood alone says it works, as the panel's face among words does.
+      // Note that among words a face is too small to hold the typing bubble, so its mood alone says it works, as the panel's face among words does.
+      if (mark.face.emoji !== undefined)
+        return (
+          <PictureOverLetters
+            address={undefined}
+            size={size}
+            corner={size / 2}
+            ground={managerFaceFill(mark.face, dark)}
+            ink={colors.TEXT}
+            letters={mark.face.emoji}
+            letterScale={MANAGER_FACE_EMOJI_SCALE}
+          />
+        );
+
       return (
         <Photo
           source={{ uri: managerFaceAsset(mark.face, mark.working) }}

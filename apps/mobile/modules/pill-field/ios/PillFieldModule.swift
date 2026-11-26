@@ -178,6 +178,10 @@ struct PillRecord: Record {
   @Field var heard: String = ""
   /// The file a picture's pill draws its thumbnail from in its glyph's place; none for every other pill.
   @Field var thumbnail: String? = nil
+  /// A Manager's emoji, drawn on its disc in the glyph's place, the disc in its fill's light and dark shades; none for every other pill.
+  @Field var emoji: String? = nil
+  @Field var emojiFill: UIColor? = nil
+  @Field var emojiFillDark: UIColor? = nil
 }
 
 struct RunRecord: Record {
@@ -236,13 +240,22 @@ struct Pill: Equatable {
   let heard: String
   /// The file a picture's pill draws its thumbnail from, where JavaScript has written one.
   let thumbnail: String?
+  /// A Manager's emoji face, its emoji and its disc's fill in the light and the dark, which stands in the glyph's place; none for every other pill.
+  let emoji: EmojiFace?
 
-  init(markdown: String, words: String, glyph: String, heard: String, thumbnail: String? = nil) {
+  struct EmojiFace: Equatable {
+    let emoji: String
+    let fill: UIColor
+    let fillDark: UIColor
+  }
+
+  init(markdown: String, words: String, glyph: String, heard: String, thumbnail: String? = nil, emoji: EmojiFace? = nil) {
     self.markdown = markdown
     self.words = words
     self.glyph = glyph
     self.heard = heard
     self.thumbnail = thumbnail
+    self.emoji = emoji
   }
 
   init(_ record: PillRecord) {
@@ -251,6 +264,11 @@ struct Pill: Equatable {
     glyph = record.glyph
     heard = record.heard
     thumbnail = record.thumbnail
+    if let emoji = record.emoji, !emoji.isEmpty, let fill = record.emojiFill {
+      self.emoji = EmojiFace(emoji: emoji, fill: fill, fillDark: record.emojiFillDark ?? fill)
+    } else {
+      self.emoji = nil
+    }
   }
 }
 
@@ -441,9 +459,14 @@ final class PillViewProvider: NSTextAttachmentViewProvider {
 /// How round a picture pill's thumbnail is cut, as the sent message's chip cuts its own (`markdown.tsx`'s `THUMBNAIL_CORNER`).
 private let thumbnailCorner: CGFloat = 4
 
+/// How much of a Manager's emoji face's disc its emoji fills, as every face sets it (`manager-face-look.ts`'s `MANAGER_FACE_EMOJI_SCALE`).
+private let emojiFaceScale: CGFloat = 0.62
+
 /// The panel's chip: its kind's glyph and its words on a rounded fill, cut short where the line is narrower; a picture's wears its thumbnail in the glyph's place.
 final class PillView: UIView {
   private let glyph = UIImageView()
+  /// A Manager's emoji on its disc, standing in the glyph's place where the pill names one.
+  private let face = UILabel()
   private let label = UILabel()
   private let pill: Pill
   private let onPress: ((Pill) -> Void)?
@@ -469,6 +492,7 @@ final class PillView: UIView {
     addSubview(glyph)
     addSubview(label)
     showThumbnail()
+    showEmojiFace()
 
     if isUserInteractionEnabled {
       addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(pressed)))
@@ -501,6 +525,19 @@ final class PillView: UIView {
     }
   }
 
+  /// Stands a Manager's emoji on its disc in the glyph's place, as its face draws it in a row, the disc taking the fill of the screen's appearance as light and dark trade places.
+  private func showEmojiFace() {
+    guard let emoji = pill.emoji else { return }
+    glyph.isHidden = true
+    face.text = emoji.emoji
+    face.textAlignment = .center
+    face.backgroundColor = UIColor { traits in
+      traits.userInterfaceStyle == .dark ? emoji.fillDark : emoji.fill
+    }
+    face.clipsToBounds = true
+    addSubview(face)
+  }
+
   @objc private func pressed() {
     onPress?(pill)
   }
@@ -530,6 +567,12 @@ final class PillView: UIView {
       pill.thumbnail == nil
       ? CGRect(x: PillSpace.leading, y: 0, width: glyphSide, height: bounds.height)
       : CGRect(x: PillSpace.leading, y: (bounds.height - glyphSide) / 2, width: glyphSide, height: glyphSide)
+    // Note that an emoji's disc stands as a square centered on the pill, as a thumbnail does, its emoji a little under the disc's side, as a row's face sets it.
+    if pill.emoji != nil {
+      face.frame = CGRect(x: PillSpace.leading, y: (bounds.height - glyphSide) / 2, width: glyphSide, height: glyphSide)
+      face.layer.cornerRadius = glyphSide / 2
+      face.font = UIFont.systemFont(ofSize: glyphSide * emojiFaceScale)
+    }
     let wordsStart = glyph.frame.maxX + PillSpace.gap
     label.frame = CGRect(
       x: wordsStart,

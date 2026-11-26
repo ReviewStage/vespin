@@ -43,4 +43,20 @@ describe("pillLook", () => {
       glyph: "ManagerFaces/cat-rest-pink",
     });
   });
+
+  it("draws a Manager's pill that wears an emoji with its emoji, never its character alone", () => {
+    const pill = mentionPill("Release manager", "https://vespin.dev/stage/agent/a-manager");
+
+    const markOf: ChipMarkOf = () => ({
+      kind: CHIP_MARK.MANAGER,
+      face: {
+        character: MANAGER_FACE_CHARACTER.CAT,
+        color: MANAGER_FACE_COLOR.PINK,
+        emoji: "\u{1F680}",
+      },
+      working: false,
+    });
+
+    expect(pillLook(pill, READING, markOf)).toMatchObject({ emoji: "\u{1F680}" });
+  });
 });

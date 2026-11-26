@@ -45,7 +45,11 @@ import { Image as Photo, PixelRatio, useColorScheme, View } from "react-native";
 import { useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
-import { managerFaceAsset } from "./manager-face-look.js";
+import {
+  MANAGER_FACE_EMOJI_SCALE,
+  managerFaceAsset,
+  managerFaceFill,
+} from "./manager-face-look.js";
 import {
   HARNESS_MARK_ASSET,
   LETTER_SCALE,
@@ -70,7 +74,6 @@ import {
 import { Text } from "./text.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
-import { MANAGER_FACE_FILL } from "./tokens/manager-face-fills.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { readWorkingBeat, subscribeWorkingBeat } from "./working-beat.js";
@@ -453,9 +456,6 @@ export const MANAGER_FACE_SEAT = {
 
 export type ManagerFaceSeat = (typeof MANAGER_FACE_SEAT)[keyof typeof MANAGER_FACE_SEAT];
 
-/** How much of an emoji face's disc its emoji fills. */
-const FACE_EMOJI_SCALE = 0.62;
-
 /** The least side a working Manager's typing bubble stands at, in points, and how much of the face's side it takes past that, as the panel's seats size its bubble. */
 const FACE_BUBBLE_LEAST = 12;
 const FACE_BUBBLE_SCALE = 0.5;
@@ -470,7 +470,7 @@ const FACE_BUBBLE_OUT = 3;
  * (`managerFaceAsset`), drawn and cached by the system, so a long list of
  * them costs no more than its glyphs; an emoji is SwiftUI's own text,
  * centered on a disc of the face's fill in the theme's shade
- * (`MANAGER_FACE_FILL`). At rest a character smiles and turns excited while
+ * (`managerFaceFill`). At rest a character smiles and turns excited while
  * the Manager works; as a mark of its own, a working face also wears the
  * system's typing bubble (`ellipsis.bubble.fill`) at its top end corner,
  * its dots lit in turn by the symbol's own variable color effect, held
@@ -496,7 +496,6 @@ export const ManagerFace = memo(function ManagerFace({
   const dark = useColorScheme() === "dark";
   const reduceMotion = useReduceMotion();
   const bubble = Math.max(FACE_BUBBLE_LEAST, size * FACE_BUBBLE_SCALE);
-  const fill = MANAGER_FACE_FILL[face.color];
 
   return (
     <ZStack
@@ -510,8 +509,10 @@ export const ManagerFace = memo(function ManagerFace({
         />
       ) : (
         <ZStack modifiers={[frame({ width: size, height: size })]}>
-          <Circle modifiers={[foregroundStyle(dark ? fill.DARK : fill.LIGHT)]} />
-          <Text modifiers={[font({ size: size * FACE_EMOJI_SCALE }), lineLimit(1), fixedSize()]}>
+          <Circle modifiers={[foregroundStyle(managerFaceFill(face, dark))]} />
+          <Text
+            modifiers={[font({ size: size * MANAGER_FACE_EMOJI_SCALE }), lineLimit(1), fixedSize()]}
+          >
             {face.emoji}
           </Text>
         </ZStack>
