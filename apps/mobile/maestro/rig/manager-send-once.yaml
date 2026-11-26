@@ -37,23 +37,24 @@ appId: dev.vespin.ios
       text: "Send"
       enabled: true
     timeout: 120000
-# The rest is typed and Send pressed twice while the page draws the first of
-# those keys, so the keys and both presses reach JavaScript together.
+# The rest is typed and Send pressed twice while the page draws the first
+# word, held, so the keys and both presses reach JavaScript together once
+# it lets go.
 - inputText: "ut the release"
 - tapOn: "Send"
 - tapOn: "Send"
-# The chat shows the whole message once, nothing cut off, and the field
-# stands empty.
+# Note that the field shows every key at once, natively, so its words match
+# the message's before anything is sent; the flow waits for JavaScript to
+# take the presses, which empties the composer and takes Send away, before
+# it reads the chat.
 - extendedWaitUntil:
-    visible: "What about the release"
-    timeout: 120000
-# Note that the field's own label is its placeholder, so any of the typed
-# words standing in it, whole or a part left behind, is found by its value.
-- assertNotVisible:
-    id: "composer-field"
-    text: ".*(What|abou?|release).*"
-- assertNotVisible: "What abou?"
+    notVisible: "Send"
+    timeout: 180000
+# The chat shows the whole message once, and nothing on the screen holds a
+# piece of it: no row cut off, and no word left in the field.
+- assertVisible: "What about the release"
 - assertNotVisible:
     text: "What about the release"
     index: 1
+- assertNotVisible: "(?!What about the release$).*(What|abou|release).*"
 - takeScreenshot: manager-send-once
