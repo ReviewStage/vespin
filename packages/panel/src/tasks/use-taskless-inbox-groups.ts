@@ -22,6 +22,7 @@ import {
   inboxGroup,
 } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
+import { sameManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { inArray, useLiveQuery } from "@tanstack/react-db";
@@ -61,8 +62,7 @@ function sameAgent(a: InboxHolderAgent, b: InboxHolderAgent): boolean {
     a.model === b.model &&
     a.workspaceId === b.workspaceId &&
     a.repository === b.repository &&
-    a.face?.character === b.face?.character &&
-    a.face?.color === b.face?.color
+    sameManagerFace(a.face, b.face)
   );
 }
 

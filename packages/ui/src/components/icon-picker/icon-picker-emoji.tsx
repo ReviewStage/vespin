@@ -21,7 +21,9 @@ import { IconPickerChoice, IconPickerGroup } from "./icon-picker.js";
  * beside the emoji (`beside`, as a section's glyphs), then the emoji whose
  * name it matches; the first drawn is the tab stop. Where nothing is
  * found, the grid says why: the owner's set still loading or failed, the
- * emoji's, or that nothing matched.
+ * emoji's, or that nothing matched. An owner whose emoji is picked in a
+ * color, as a Manager's face is, hands `colors`, and a press then floats the
+ * emoji's colors from it (`IconPickerChoice`'s flyout) rather than choosing it.
  */
 
 /** The emoji's query, a key no other read of the window's takes. */
@@ -74,9 +76,29 @@ export interface IconPickerEmojiBeside {
   readonly noMatch: string;
 }
 
+/**
+ * How an owner whose emoji is picked in a color draws each and floats its
+ * colors, as a Manager's face does, rather than an emoji pressed being
+ * chosen at once. Note that it is held across presses (`useMemo`), since
+ * every cell is drawn again where it changes.
+ */
+export interface IconPickerEmojiColors {
+  /** The emoji drawn in its cell, in the color it was chosen in where `pressed`. */
+  readonly face: (emoji: string, pressed: boolean) => ReactNode;
+  /** The emoji's colors (`IconPickerColors`), floated from its cell while they stand open. */
+  readonly colors: (emoji: string) => ReactNode;
+  /** Hears the colors put away, by Escape or a press away. */
+  readonly onClose: () => void;
+}
+
 /** Every emoji by category, as TanStack Query keeps them, read the first time a picker asks. */
 export function useEmojiGroups(): UseQueryResult<EmojiGroup[]> {
   return useQuery(emojiQuery);
+}
+
+/** An emoji as a cell of the grid draws it, bare, in the text's own ink. */
+export function IconPickerEmojiFace({ emoji }: { emoji: string }): React.JSX.Element {
+  return <span className="ui-icon-picker-emoji text-foreground">{emoji}</span>;
 }
 
 /** One emoji's choice in the grid, pressed while it is the one chosen. */
@@ -99,11 +121,70 @@ export function IconPickerEmojiChoice({
       label={label}
       pressed={pressed}
       stop={stop}
-      face={<span className="ui-icon-picker-emoji text-foreground">{emoji}</span>}
+      face={<IconPickerEmojiFace emoji={emoji} />}
       onPress={onPress}
     />
   );
 }
+
+/** How the grid's emoji cells are pressed: chosen at once, or floating their colors, and which emoji's stand open. */
+interface EmojiPress {
+  readonly onEmoji: (emoji: string) => void;
+  readonly colors: IconPickerEmojiColors | undefined;
+  readonly opened: string | undefined;
+}
+
+/**
+ * One emoji's cell: chosen at once, or, where its owner picks it in a color,
+ * floating its colors while they stand open. Note that it is drawn again only
+ * where what it shows changed, so opening one emoji's colors draws that
+ * cell and not some two thousand around it.
+ */
+const EmojiCell = memo(function EmojiCell({
+  emoji,
+  label,
+  pressed,
+  stop,
+  open,
+  onEmoji,
+  colors,
+}: {
+  emoji: string;
+  label: string;
+  pressed: boolean;
+  stop: boolean;
+  open: boolean;
+  onEmoji: (emoji: string) => void;
+  colors: IconPickerEmojiColors | undefined;
+}): React.JSX.Element {
+  if (colors === undefined) {
+    return (
+      <IconPickerEmojiChoice
+        emoji={emoji}
+        label={label}
+        pressed={pressed}
+        stop={stop}
+        onPress={() => onEmoji(emoji)}
+      />
+    );
+  }
+
+  return (
+    <IconPickerChoice
+      label={label}
+      pressed={pressed}
+      stop={stop}
+      face={colors.face(emoji, pressed)}
+      popup
+      flyout={
+        open
+          ? { label: `${label} color`, content: colors.colors(emoji), onClose: colors.onClose }
+          : undefined
+      }
+      onPress={() => onEmoji(emoji)}
+    />
+  );
+});
 
 /** The emoji as an owner hands them: every one by category once loaded, none until then, and whether the load failed. */
 interface EmojiLoaded {
@@ -122,11 +203,11 @@ function emojiNote({ groups, failed }: EmojiLoaded): string {
 function EmojiGroups({
   loaded,
   chosen,
-  onEmoji,
+  press,
 }: {
   loaded: EmojiLoaded;
   chosen: string | undefined;
-  onEmoji: (emoji: string) => void;
+  press: EmojiPress;
 }): React.JSX.Element {
   const groups = loaded.groups;
 
@@ -142,13 +223,15 @@ function EmojiGroups({
       {groups.map((group) => (
         <IconPickerGroup key={group.name} name={group.name}>
           {group.emojis.map((one) => (
-            <IconPickerEmojiChoice
+            <EmojiCell
               key={one.emoji}
               emoji={one.emoji}
               label={one.name}
               pressed={one.emoji === chosen}
               stop={one === stop}
-              onPress={() => onEmoji(one.emoji)}
+              open={one.emoji === press.opened}
+              onEmoji={press.onEmoji}
+              colors={press.colors}
             />
           ))}
         </IconPickerGroup>
@@ -166,13 +249,13 @@ function FoundEmoji({
   loaded,
   query,
   chosen,
-  onEmoji,
+  press,
   beside,
 }: {
   loaded: EmojiLoaded;
   query: string;
   chosen: string | undefined;
-  onEmoji: (emoji: string) => void;
+  press: EmojiPress;
   beside: IconPickerEmojiBeside | undefined;
 }): React.JSX.Element {
   const typed = query.trim();
@@ -193,13 +276,15 @@ function FoundEmoji({
   const firstEmoji = typedOne.length > 0;
 
   const choice = (one: EmojiOne, stop: boolean) => (
-    <IconPickerEmojiChoice
+    <EmojiCell
       key={one.emoji}
       emoji={one.emoji}
       label={one.name}
       pressed={one.emoji === chosen}
       stop={stop}
-      onPress={() => onEmoji(one.emoji)}
+      open={one.emoji === press.opened}
+      onEmoji={press.onEmoji}
+      colors={press.colors}
     />
   );
 
@@ -226,7 +311,8 @@ function FoundEmoji({
  * The picker's emoji; see the module's head. With nothing searched it
  * draws every emoji, and with a search what it found, beside what the
  * owner's own set found where it hands one. The emoji are its owner's to
- * read (`useEmojiGroups`), and one pressed is handed to `onEmoji`. Note
+ * read (`useEmojiGroups`), and one pressed is handed to `onEmoji`, which
+ * opens its colors (`opened`) where the owner hands `colors`. Note
  * that it is drawn again only where what it shows changed, so a press
  * elsewhere in the picker walks none of its some two thousand cells.
  */
@@ -237,6 +323,8 @@ export const IconPickerEmoji = memo(function IconPickerEmoji({
   chosen,
   onEmoji,
   beside,
+  colors,
+  opened,
 }: {
   /** Every emoji by category; none while they load or where they failed to. */
   groups: readonly EmojiGroup[] | undefined;
@@ -249,12 +337,15 @@ export const IconPickerEmoji = memo(function IconPickerEmoji({
   onEmoji: (emoji: string) => void;
   /** What the owner's own set found beside the emoji, which a search alone draws. */
   beside?: IconPickerEmojiBeside | undefined;
+  /** How an emoji picked in a color is drawn and asks its colors; none where a press chooses it at once. */
+  colors?: IconPickerEmojiColors | undefined;
+  /** The emoji whose colors stand open, where `colors` is handed; none where none do. */
+  opened?: string | undefined;
 }): React.JSX.Element {
   const loaded = { groups, failed };
+  const press = { onEmoji, colors, opened };
 
-  if (query.trim() === "") return <EmojiGroups loaded={loaded} chosen={chosen} onEmoji={onEmoji} />;
+  if (query.trim() === "") return <EmojiGroups loaded={loaded} chosen={chosen} press={press} />;
 
-  return (
-    <FoundEmoji loaded={loaded} query={query} chosen={chosen} onEmoji={onEmoji} beside={beside} />
-  );
+  return <FoundEmoji loaded={loaded} query={query} chosen={chosen} press={press} beside={beside} />;
 });

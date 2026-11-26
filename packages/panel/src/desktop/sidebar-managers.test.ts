@@ -335,11 +335,17 @@ test("a Manager's row offers Rename and Change face › beside Settings…, and 
   assert.ok(change, "Change face stands");
   act(() => change.click());
 
-  const purpleCat =
-    document.querySelector<HTMLButtonElement>('button[aria-label="Purple cat"]') ??
-    assert.fail("the picker offers every face");
+  const cat =
+    document.querySelector<HTMLButtonElement>('button[aria-label="Cat"]') ??
+    assert.fail("the picker offers every character");
 
-  act(() => purpleCat.click());
+  act(() => cat.click());
+
+  const purple =
+    document.querySelector<HTMLButtonElement>('.ui-icon-picker-colors [aria-label="Purple"]') ??
+    assert.fail("the cat asks its colors");
+
+  act(() => purple.click());
   await vi.waitFor(() =>
     assert.deepEqual(faced, [{ agentId: FRONTEND, face: { character: "cat", color: "purple" } }]),
   );
