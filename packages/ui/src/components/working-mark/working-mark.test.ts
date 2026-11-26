@@ -8,13 +8,12 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { onTestFinished, test } from "vitest";
 import { serveEffectsOn } from "../../testing/effect-services.js";
-import { Shimmer } from "../shimmer/shimmer.js";
 import { WorkingMark } from "./working-mark.js";
 
 /**
  * working-mark.test.ts -- the loading marks are decorative, hidden from a
- * reader, the working mark's still frame lights several cells and steps on
- * the beat, and the shimmer says its words alone.
+ * reader, and the working mark's still frame lights several cells and steps on
+ * the beat.
  */
 
 declare global {
@@ -102,10 +101,3 @@ it.effect("a mark committed under a capture stage holds its resting frame on the
     );
   }),
 );
-
-test("the shimmer says its words and passes props on", () => {
-  const line = render(createElement(Shimmer, { children: "Working", "aria-live": "polite" }));
-  const span = line.querySelector(".ui-shimmer");
-  assert.equal(span?.textContent, "Working");
-  assert.equal(span?.getAttribute("aria-live"), "polite");
-});

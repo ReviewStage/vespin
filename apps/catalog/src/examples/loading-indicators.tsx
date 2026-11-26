@@ -5,7 +5,6 @@ import {
   Button,
   GAP,
   Inline,
-  Shimmer,
   Stack,
   TEXT_TONE,
   Text,
@@ -16,8 +15,7 @@ import { CatalogSection } from "../section";
 
 /**
  * loading-indicators.tsx -- the marks that say work is under way beside a ring:
- * an agent's working mark, a line of words
- * with a light passing along it, and a spinner that waits a moment to show.
+ * an agent's working mark and a spinner that waits a moment to show.
  */
 
 function LoadingIndicators(): React.JSX.Element {
@@ -33,9 +31,6 @@ function LoadingIndicators(): React.JSX.Element {
             <Text tone={TEXT_TONE.MUTED}>Sweeping flaky tests</Text>
           </Inline>
         </Stack>
-      </CatalogSection>
-      <CatalogSection id="shimmer" title="Shimmer">
-        <Shimmer>Working…</Shimmer>
       </CatalogSection>
       <CatalogSection id="delayed-busy" title="A busy control that waits a moment to show its ring">
         <Stack gap={GAP.CONTROL} align={ALIGN.START}>
