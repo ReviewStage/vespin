@@ -1220,7 +1220,6 @@ body {
   height: 200px;
   border: 1px dashed var(--ui-color-border-strong);
   border-radius: var(--ui-radius-8);
-  overflow: clip;
 }
 
 .catalog-side-split-narrow {
