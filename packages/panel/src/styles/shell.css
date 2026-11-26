@@ -158,8 +158,7 @@
 /* Sidebar ----------------------------------------------------------------- */
 
 /* Folding the sidebar away moves it off the left edge and the work column
-   takes the window, both at once. The transition below is the floating
-   sidebar's alone. Only the plans' shell folds, so Settings always keeps its
+   takes the window, both at once. Only a sidebar floating open slides, below. Only the plans' shell folds, so Settings always keeps its
    page list. The shell clips what lies past its edges with `clip` rather than
    `hidden`, because `hidden` makes it a scroll container: room that focus or
    scrollIntoView would scroll the whole window sideways into and leave it
@@ -597,9 +596,6 @@
   position: relative;
   z-index: 1;
   width: var(--sidebar-width);
-  transition:
-    transform var(--ui-duration-pane) var(--ui-motion-pane),
-    opacity var(--ui-duration-pane) var(--ui-motion-pane);
 }
 
 /* Open beside a wide room's work, the sidebar stands beneath the work rather
@@ -619,9 +615,10 @@
   transform: translateX(-100%);
 }
 
-/* A folded sidebar floats open over the work rather than beside it, on the
-   same slide that folds it, so the work under it neither moves nor re-wraps
-   (`sidebar-collapse.ts`). It stands over the work's own layers, the panel
+/* A folded sidebar floats open over the work rather than beside it, sliding in,
+   so the work under it neither moves nor re-wraps (`sidebar-collapse.ts`). The
+   slide is the floating state's alone: folding and unfolding the pinned
+   sidebar, and putting a float away, land at once. It stands over the work's own layers, the panel
    filling the window among them, and under the title bar's buttons that
    follow it; its shadow parts it from the work as a popover's does. */
 .desktop-shell[data-sidebar-overlay="peek"] .desktop-sidebar,
@@ -630,6 +627,9 @@
   box-shadow: var(--ui-menu-shadow);
   opacity: 1;
   transform: none;
+  transition:
+    transform var(--ui-duration-pane) var(--ui-motion-pane),
+    opacity var(--ui-duration-pane) var(--ui-motion-pane);
 }
 
 /* Beside a wide room's work, the folded sidebar floats as a pane of glass
