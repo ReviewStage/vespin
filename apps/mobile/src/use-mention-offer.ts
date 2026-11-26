@@ -112,6 +112,11 @@ const KIND_GLYPH = {
   [MENTION_OFFER_KIND.PULL_REQUEST]: GLYPH.PULL_REQUEST,
   [MENTION_OFFER_KIND.DATE]: GLYPH.DATE,
   [MENTION_OFFER_KIND.MACHINE]: GLYPH.MAC,
+  [MENTION_OFFER_KIND.SKILL]: GLYPH.SKILL,
+  [MENTION_OFFER_KIND.APP]: GLYPH.COMPUTER_USE,
+  [MENTION_OFFER_KIND.COMPUTER]: GLYPH.COMPUTER_USE,
+  [MENTION_OFFER_KIND.SERVER]: GLYPH.PLUG,
+  [MENTION_OFFER_KIND.TOOL]: GLYPH.PLUG,
 } as const satisfies Record<MentionOfferKind, Glyph>;
 
 /** The glyph each kind's row under Browse, and its crumb, lead with, as the panel's kind rows lead with theirs. */
@@ -127,6 +132,9 @@ const FROM_GLYPH = {
   [MENTION_FROM.PULL_REQUESTS]: GLYPH.PULL_REQUEST,
   [MENTION_FROM.DATES]: GLYPH.DATE,
   [MENTION_FROM.MACHINES]: GLYPH.MAC,
+  [MENTION_FROM.SKILLS]: GLYPH.SKILL,
+  [MENTION_FROM.APPS]: GLYPH.COMPUTER_USE,
+  [MENTION_FROM.SERVERS]: GLYPH.PLUG,
 } as const satisfies Record<MentionOfferFrom, Glyph>;
 
 /** The repository's paths a task's `@` offers, read once per task and repository, as the panel holds them for the window's life. */
