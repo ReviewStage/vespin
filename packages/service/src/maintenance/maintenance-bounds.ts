@@ -56,6 +56,25 @@ export const ATTACHMENT_BLOB_PURGE = {
 } as const;
 
 /**
+ * The move of attachments kept inline into the Blob store
+ * (`attachment-blob-backfill.ts`). Note that a sweep takes at most this
+ * many rows or this many bytes, whichever it reaches first, and always one
+ * row, moving a few rows at once, so it holds at most a few rows' bytes and
+ * leaves the rest of the sweep its minute: a hundred puts, four at a time,
+ * keep a batch to seconds and well inside the store's 75 advanced
+ * operations a second on Pro. Production's 3.2 GB in about 15,000 rows is
+ * about 152 sweeps, each bound by its rows.
+ */
+export const ATTACHMENT_BLOB_BACKFILL = {
+  /** How many rows one sweep moves at most. */
+  ROWS_PER_SWEEP: 100,
+  /** How many bytes, a row's own and its copy for a phone's, one sweep moves at most. */
+  BYTES_PER_SWEEP: 50_000_000,
+  /** How many rows move at once, each holding its bytes until its write is done. */
+  ROWS_AT_ONCE: 4,
+} as const;
+
+/**
  * The one-off move of the journal's images kept as `data:` URLs into Blob
  * (`storage/journal-image-move.ts`). Note that a row is read whole, up to a
  * few MB of base64, and each new picture is written and read back, so a few

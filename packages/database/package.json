@@ -27,6 +27,7 @@
     "./models/agent-browser-tabs": "./src/models/agent-browser-tabs.js",
     "./models/automation-store": "./src/models/automation-store.js",
     "./models/attached-file-parts": "./src/models/attached-file-parts.js",
+    "./models/attachment-blob-backfill": "./src/models/attachment-blob-backfill.js",
     "./models/attachment-blob-tombstones": "./src/models/attachment-blob-tombstones.js",
     "./models/attachment-body": "./src/models/attachment-body.js",
     "./models/chatgpt-device-login-store": "./src/models/chatgpt-device-login-store.js",

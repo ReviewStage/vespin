@@ -2,16 +2,21 @@
  * attachment-blob-tombstones.ts -- the Blob store's objects whose attachments are gone: read a batch of them, and drop those whose objects were deleted.
  *
  * A tombstone is written by the trigger on `attachment` as a row that named
- * a stored object goes (`../schemas/attachment-blob-tombstone.ts`), never by
- * a call here, but for an upload whose row was never written
- * (`tombstoneUnwrittenUploads`). The sweep reads a batch, deletes their objects, and only then
+ * a stored object goes (`../schemas/attachment-blob-tombstone.ts`), or by the
+ * backfill before it writes a row's objects (`./attachment-blob-backfill.ts`),
+ * or for an upload whose row was never written (`tombstoneUnwrittenUploads`). The sweep reads only the tombstones whose attachment
+ * row is gone: an attachment's pathname is its row's id, which no row takes
+ * again, so once the row is gone no claim can come to name the object, and
+ * its delete can never take an object a row names. A tombstone whose row
+ * still stands waits, harmless, until the row goes. The sweep reads a batch,
+ * each at the version it stands at, deletes their objects, and only then
  * drops their tombstones, so an object whose delete failed keeps its
  * tombstone for the next sweep. Two sweeps that read the same batch delete
  * the same objects twice, which the store answers as done, and drop the same
  * tombstones twice, which drops nothing the second time.
  */
 
-import { asc, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, notExists, or, sql } from "drizzle-orm";
 import { Effect } from "effect";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { attachment } from "../schemas/attachment.js";
@@ -19,27 +24,75 @@ import { attachmentBlobTombstone } from "../schemas/attachment-blob-tombstone.js
 
 type TombstoneEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
-/** Up to `limit` tombstoned pathnames, the oldest first. */
-export function readAttachmentBlobTombstones(limit: number): TombstoneEffect<readonly string[]> {
+/**
+ * The attachment id a pathname names, as `attachmentBlobPath` spells it
+ * (`attachments/<id>` or `attachments/<id>/phone`), or null for any other
+ * pathname, which no row names.
+ */
+const attachmentIdOfKey = sql`substring(${attachmentBlobTombstone.key} from '^attachments/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:/phone)?$')::uuid`;
+
+/** One tombstone as the purge read it: its pathname, and the version it stood at then. */
+export interface AttachmentBlobTombstone {
+  readonly key: string;
+  readonly version: string;
+}
+
+/**
+ * A tombstone's version: when it was last written, to the microsecond, as
+ * text. Note that we compare it in SQL rather than as a `Date`, because a
+ * `Date` keeps milliseconds and would match a tombstone written again since.
+ */
+const tombstoneVersion = sql<string>`((extract(epoch from ${attachmentBlobTombstone.createdAt}) * 1000000)::bigint)::text`;
+
+/** Up to `limit` tombstones whose attachment row is gone, the oldest first. */
+export function readAttachmentBlobTombstones(
+  limit: number,
+): TombstoneEffect<readonly AttachmentBlobTombstone[]> {
   return Effect.map(
     Database.use((db) =>
       db
-        .select({ key: attachmentBlobTombstone.key })
+        .select({ key: attachmentBlobTombstone.key, version: tombstoneVersion })
         .from(attachmentBlobTombstone)
+        .where(
+          notExists(
+            db
+              .select({ id: attachment.id })
+              .from(attachment)
+              .where(eq(attachment.id, attachmentIdOfKey)),
+          ),
+        )
         .orderBy(asc(attachmentBlobTombstone.createdAt), asc(attachmentBlobTombstone.key))
         .limit(limit),
     ),
-    (rows) => rows.map((row) => row.key),
+    (rows) => rows.map((row) => ({ key: row.key, version: String(row.version) })),
   );
 }
 
-/** The tombstones of `keys` dropped, once their objects are gone from the store. */
-export function dropAttachmentBlobTombstones(keys: readonly string[]): TombstoneEffect<void> {
-  if (keys.length === 0) return Effect.void;
+/**
+ * The tombstones dropped, once their objects are gone from the store, each
+ * only where it still stands at the version the purge read. Note that one
+ * written again since, by a write that landed after the purge's delete
+ * (`tombstoneAttachmentBlobsOfGoneRow`), stands for the next sweep.
+ */
+export function dropAttachmentBlobTombstones(
+  tombstones: readonly AttachmentBlobTombstone[],
+): TombstoneEffect<void> {
+  if (tombstones.length === 0) return Effect.void;
 
   return Effect.asVoid(
     Database.use((db) =>
-      db.delete(attachmentBlobTombstone).where(inArray(attachmentBlobTombstone.key, [...keys])),
+      db
+        .delete(attachmentBlobTombstone)
+        .where(
+          or(
+            ...tombstones.map((tombstone) =>
+              and(
+                eq(attachmentBlobTombstone.key, tombstone.key),
+                sql`${tombstoneVersion} = ${tombstone.version}`,
+              ),
+            ),
+          ),
+        ),
     ),
   );
 }

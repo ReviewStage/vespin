@@ -80,7 +80,9 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
 
         yield* deleteConversations([conversationId]);
 
-        const tombstoned = yield* readAttachmentBlobTombstones(1_000);
+        const tombstoned = (yield* readAttachmentBlobTombstones(1_000)).map(
+          (tombstone) => tombstone.key,
+        );
 
         assert.deepEqual(
           tombstoned.filter((key) => key.includes(stored.id) || key.includes(inline.id)),
@@ -101,13 +103,23 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
         { key: oldest, createdAt: new Date("2000-01-01T00:00:00Z") },
       ]);
 
-      assert.deepEqual(yield* readAttachmentBlobTombstones(2), [oldest, older]);
+      const batch = yield* readAttachmentBlobTombstones(2);
 
-      yield* dropAttachmentBlobTombstones([oldest]);
+      assert.deepEqual(
+        batch.map((tombstone) => tombstone.key),
+        [oldest, older],
+      );
 
-      assert.deepEqual(yield* readAttachmentBlobTombstones(1), [older]);
+      yield* dropAttachmentBlobTombstones(batch.slice(0, 1));
 
-      yield* dropAttachmentBlobTombstones([older]);
+      const rest = yield* readAttachmentBlobTombstones(1);
+
+      assert.deepEqual(
+        rest.map((tombstone) => tombstone.key),
+        [older],
+      );
+
+      yield* dropAttachmentBlobTombstones(rest);
     }),
   );
 
@@ -134,14 +146,16 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
           { id: unwritten, keys: [unwrittenKey] },
         ]);
 
-        const tombstoned = yield* readAttachmentBlobTombstones(1_000);
+        const tombstoned = (yield* readAttachmentBlobTombstones(1_000)).filter(
+          (tombstone) => tombstone.key === writtenKey || tombstone.key === unwrittenKey,
+        );
 
         assert.deepEqual(
-          tombstoned.filter((key) => key === writtenKey || key === unwrittenKey),
+          tombstoned.map((tombstone) => tombstone.key),
           [unwrittenKey],
         );
 
-        yield* dropAttachmentBlobTombstones([unwrittenKey]);
+        yield* dropAttachmentBlobTombstones(tombstoned);
       }),
   );
 });
