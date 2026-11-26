@@ -113,8 +113,8 @@ export const RUNNER_UNIT = {
  * sandbox's architecture.
  */
 export const CLAUDE_CODE_PIN = {
-  SDK_VERSION: "0.3.331",
-  VERSION: "2.1.331",
+  SDK_VERSION: "0.3.332",
+  VERSION: "2.1.332",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/claude-agent-sdk`,
   /** The binary, under `DIRECTORY`. */
   BINARY: "node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude",
@@ -147,7 +147,7 @@ export const CODEX_PIN = {
  * as it looks for it (`CURSOR_SDK_ENTRY`). It needs Node 22.13 or later.
  */
 export const CURSOR_SDK_PIN = {
-  VERSION: "1.4.2",
+  VERSION: "1.5.0",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/cursor-sdk`,
   /** The SDK's ES module entry, under `DIRECTORY`. */
   ENTRY: "node_modules/@cursor/sdk/dist/esm/index.js",
@@ -286,9 +286,9 @@ export const NODE_MAC_PIN: AgentToolPin = {
  * pin's address, size, and digests are read off the new release too.
  */
 const HOST_CLI_VERSION = {
-  CLAUDE_CODE: "0.3.331",
+  CLAUDE_CODE: "0.3.332",
   CODEX: "0.172.0",
-  CURSOR_SDK: "1.4.2",
+  CURSOR_SDK: "1.5.0",
   GH: "2.103.3",
 } as const;
 
@@ -301,13 +301,13 @@ export const CLAUDE_CODE_MAC_PIN: AgentToolPin = {
   NAME: "claude",
   VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
   ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-darwin-arm64/-/claude-agent-sdk-darwin-arm64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-  SHA256: "58e63df8c76a5c6e6766b6eec19f08e007e22c2dd0fe3831a9a4dd1118b5a0c4",
-  BYTES: 173_585_623,
+  SHA256: "27db5fdcf7e8e121d3604262f067d3e181d07e6d623d6c380e1dbb2bc1d5d801",
+  BYTES: 174_555_311,
   ROOT: "package",
   MEMBERS: ["claude"],
   BINARY: "claude",
   TEAM: "Q6L2SF6YDW",
-  FILES: { claude: "4874591dc39bff1188921b82cbeb8a44e3a33b0f92c888b3d43639b9344101f7" },
+  FILES: { claude: "5b8214f8f082f3187420b27b4063b9b4f4d9412cd66ea436d6d1966ad582700f" },
 };
 
 /**
@@ -352,8 +352,8 @@ export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
   NAME: "cursor-sdk",
   VERSION: HOST_CLI_VERSION.CURSOR_SDK,
   ARCHIVE: npmArchive("@cursor/sdk", `sdk-${HOST_CLI_VERSION.CURSOR_SDK}.tgz`),
-  SHA256: "38baf2ec3d11c5567b4b885f02146e89b697a4656d462b1c8731e6caba2a12a5",
-  BYTES: 4_943_696,
+  SHA256: "c4e57d8a830de36bcffc3c7c91b1041e9a4053d4768b9bbc1ee6f57989e95151",
+  BYTES: 5_163_367,
   ROOT: "package",
   MEMBERS: ["package.json", "dist"],
   BINARY: "dist/esm/index.js",
@@ -363,15 +363,15 @@ export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
     "node_modules/@cursor/sdk-darwin-arm64/bin/cursorsandbox",
   ],
   FILES: {
-    "dist/esm/index.js": "bbaa5f9f0856701126a285b7cc5b418cf4a8eefa01164513e431b0a2d1b7d1d1",
+    "dist/esm/index.js": "9458e32dbb377437551599e62dd78d95f9993b8bdc0dd4499486f4d4c450a83a",
     "node_modules/@cursor/sdk-darwin-arm64/bin/rg":
-      "26390c7cf1a18eb518260918d9d9ba4b2d41ee2cf7453f57e874187748d6ffc3",
+      "23148b6e93ef13b5ce4838820aca3b7864c4360a1b9ce28a1ec55c1027d06e94",
     "node_modules/@cursor/sdk-darwin-arm64/bin/cursorsandbox":
-      "587154e9a49f3239510d4e29f228c6757a0dc0747565f38bf0344a25bb035c28",
+      "dae99a088745d0c403061aa5bbfe4e4c2be6ea52ea8c05632e0be361b219e5cc",
     "node_modules/@cursor/sdk-darwin-arm64/vendor/tree-sitter/binding.node":
-      "2661b7238d7641a779520152f1b22671d77b1b4c3f2aa25f8e8122642ab11e1c",
+      "f479bf9c7353485b4ebbb5cc06e83b7674fa9826917a54bd18a24c67f2cd77d9",
     "node_modules/@cursor/sdk-darwin-arm64/vendor/tree-sitter-bash/binding.node":
-      "d9dc3d5d94e7c56e400d79928dd286bd0cdccc70db92df35683c455db41387b0",
+      "629b778a0de277a949405b3a3aefbc0290b78e54cc7c49b54a4f628c291be07b",
   },
   PARTS: [
     {
@@ -379,8 +379,8 @@ export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
         "@cursor/sdk-darwin-arm64",
         `sdk-darwin-arm64-${HOST_CLI_VERSION.CURSOR_SDK}.tgz`,
       ),
-      SHA256: "38a0ddab8fe6792825094a8e23ed080161e8a19b015dca37b098adc0ea45a917",
-      BYTES: 3_510_671,
+      SHA256: "3677c47e3ab8e4dad9b450222efd2317d2f14717a2ef2e1ed9d463ea150978ab",
+      BYTES: 3_515_265,
       ROOT: "package",
       INTO: "node_modules/@cursor/sdk-darwin-arm64",
     },
@@ -449,23 +449,23 @@ export const CLAUDE_CODE_LINUX_PINS: LinuxToolPins = {
     NAME: "claude",
     VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
     ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-x64/-/claude-agent-sdk-linux-x64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-    SHA256: "ecd05439239379c56867b885e4748639b8613da21dd0de0a51a0a1a5a960cebd",
-    BYTES: 184_581_466,
+    SHA256: "e56d25934eb652425f593f784b949c9d6ae0817b9b0cb1b495acbfa934fb99ee",
+    BYTES: 186_117_264,
     ROOT: "package",
     MEMBERS: ["claude"],
     BINARY: "claude",
-    FILES: { claude: "4c00839cf46beb2b38ec310105f2d538f7f9321fe46c636299b74bcab94626b1" },
+    FILES: { claude: "a2df1f41bb00250992926420d0063f89b127cb81abdd284dbefb80c50ff1d026" },
   },
   arm64: {
     NAME: "claude",
     VERSION: HOST_CLI_VERSION.CLAUDE_CODE,
     ARCHIVE: `https://registry.npmjs.org/@anthropic-ai/claude-agent-sdk-linux-arm64/-/claude-agent-sdk-linux-arm64-${HOST_CLI_VERSION.CLAUDE_CODE}.tgz`,
-    SHA256: "6c014b5b1f41fcc3e20fcc1084554eb60056c7edb04ec4c860d0a4fe65bead58",
-    BYTES: 185_592_445,
+    SHA256: "782142beeb81833d6d9af3c1b7914c2efa02d77fb84a01e4ec953e76d0724984",
+    BYTES: 183_973_223,
     ROOT: "package",
     MEMBERS: ["claude"],
     BINARY: "claude",
-    FILES: { claude: "3e5afea76cf6ed53f42076d8b175c4ee3d9ab34cd9b90452da115d21ad0d5d31" },
+    FILES: { claude: "50c305fcb8912851ce774429131d94ed6f84edbe3d8d0ed7a59dade5d893acc0" },
   },
 };
 

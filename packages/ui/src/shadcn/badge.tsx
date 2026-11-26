@@ -23,7 +23,7 @@ import { clsx } from "clsx";
  *   said in the badge's glyph's ink, and a neutral badge's words are muted.
  * - `face` is added: the chip's own opaque face inside its hairline
  *   (`plain`), a provider's color (`filled`, from the custom properties the
- *   badge sets inline), or the ink (`lit`).
+ *   badge sets inline), or the accent (`lit`).
  * - `dot` is added: a dot of the tone's ink before the words, for a badge in
  *   a tone with no glyph or swatch to say it.
  * - None of shadcn's focus, `aria-invalid`, ring, transition, or `[a]:hover`
@@ -38,7 +38,7 @@ import { clsx } from "clsx";
  */
 
 const badgeVariants = cva(
-  "group/badge inline-flex min-w-0 max-w-full flex-initial items-center gap-badge-gap rounded-badge px-badge-inline py-badge-block font-body text-tag leading-tag font-tag inset-ring [&_svg]:flex-none [&_svg]:size-badge-glyph [&_svg]:text-tone-ink",
+  "group/badge inline-flex min-w-0 max-w-full flex-initial items-center gap-icon-gap-compact rounded-badge px-badge-inline py-badge-block font-body text-tag leading-tag font-tag inset-ring [&_svg]:flex-none [&_svg]:size-badge-glyph [&_svg]:text-tone-ink",
   {
     variants: {
       // Note that every tone draws its glyph in the tone's ink, which its `data-tone` sets (`tokens/status-tone.css`).
@@ -54,7 +54,7 @@ const badgeVariants = cva(
       face: {
         plain: "bg-chip inset-ring-border-strong",
         filled: "bg-badge-fill inset-ring-badge-fill-edge text-badge-fill-words whitespace-nowrap",
-        lit: "bg-ink inset-ring-ink text-ink-foreground",
+        lit: "bg-accent-fill/10 inset-ring-accent-fill text-accent-ink",
       },
       dot: {
         true: "before:flex-none before:size-status-dot before:rounded-full",

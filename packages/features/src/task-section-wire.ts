@@ -1,4 +1,5 @@
 import { Schema as EffectSchema, SchemaTransformation } from "effect";
+import { emojiSchema } from "./emoji-wire.js";
 import { pinPositionSchema } from "./pin-order.js";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
 import { workspaceIdSchema } from "./task-wire.js";
@@ -32,8 +33,6 @@ export const TASK_SECTION_BOUNDS = {
   MAX_TITLE_CHARS: 60,
   /** The most sections one account may keep across its workspaces; a section past it is refused, and nothing is written. */
   MAX_SECTIONS: 100,
-  /** The most UTF-16 units one emoji may spell, a family or a flag with its joiners included. */
-  MAX_EMOJI_UNITS: 32,
   /** The most characters a glyph's name may spell; Lucide's longest is about half of it. */
   MAX_GLYPH_CHARS: 64,
 } as const;
@@ -92,23 +91,6 @@ export const TASK_SECTION_WRITE = {
   PLACE_AGENT: "place-agent",
 } as const;
 
-/** What reads as an emoji: a pictograph, a flag's letters, or a keycap. */
-const EMOJI_PART = /\p{Extended_Pictographic}|\p{Regional_Indicator}|\u20E3/u;
-
-/** Whether a text is one grapheme, an emoji's, as a person sees one character. */
-function isOneEmoji(text: string): boolean {
-  if (!EMOJI_PART.test(text)) return false;
-  const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text);
-
-  return [...graphemes].length === 1;
-}
-
-/** One emoji, its ends trimmed. */
-export const taskSectionEmojiSchema = EffectSchema.Trim.check(
-  EffectSchema.isMaxLength(TASK_SECTION_BOUNDS.MAX_EMOJI_UNITS),
-  EffectSchema.makeFilter(isOneEmoji),
-);
-
 /** A glyph's name, as Lucide spells it: lower-case words and numbers joined by hyphens, bounded. */
 const glyphSchema = EffectSchema.String.check(
   EffectSchema.isMaxLength(TASK_SECTION_BOUNDS.MAX_GLYPH_CHARS),
@@ -122,7 +104,7 @@ const isIconColor = EffectSchema.is(iconColorSchema);
 
 const emojiIconSchema = EffectSchema.Struct({
   kind: EffectSchema.Literal(TASK_SECTION_ICON_KIND.EMOJI),
-  emoji: taskSectionEmojiSchema,
+  emoji: emojiSchema,
 });
 
 const glyphIconSchema = EffectSchema.Struct({

@@ -1,12 +1,13 @@
 // agent-end.tsx -- where an agent's page offers it a way on once it takes no message: the bar that stands in the composer's place while it is archived, with Unarchive, and the line over the composer where only a new agent goes on, with Continue in new agent.
 
-import { HStack, Text, VStack } from "@expo/ui/swift-ui";
+import { HStack, VStack } from "@expo/ui/swift-ui";
 import { font, foregroundStyle, frame } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize } from "./accessibility.js";
 import { AskNote } from "./ask-card.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GlassBar } from "./glass-bar.js";
 import { GLYPH, type Glyph } from "./glyph.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

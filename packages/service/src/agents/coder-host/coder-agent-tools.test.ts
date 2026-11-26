@@ -22,7 +22,6 @@ import {
   readAutomation,
   recordAutomationRun,
 } from "@repo/database/models/automation-store";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import { listRevisions } from "@repo/database/models/description-revisions";
 import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
@@ -166,7 +165,9 @@ import {
 import { REACT_SLACK_TOOL, READ_SLACK_TOOL } from "../../slack/slack-agent-tools.js";
 import { SlackBot, slackBotOver } from "../../slack/slack-bot.js";
 import { SEND_SLACK_MESSAGE_TOOL } from "../../slack/slack-message-tool.js";
+import { keepPictureBytesOne } from "../../storage/attachment-keeps.js";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import {
   connectWorkspaceGitHub,
   githubReaching,
@@ -326,6 +327,9 @@ const DEFAULT_BRANCH = "main";
 const BRANCH_COMMIT = "89abcdef0123456789abcdef0123456789abcdef";
 
 const database = await openHostedStoreTestDatabase();
+
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
 
 afterAll(() => database.close());
 
@@ -624,6 +628,7 @@ const NO_SANDBOX: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox
 
 /** What the catalog's call runs against beside the suite's, none of which an agent tool reaches: an agent browser, its sandbox, and the integrations, whose every ask dies, page links with no page sandbox, and an environment. */
 const UNREACHED = Layer.mergeAll(
+  blobs.layer,
   Layer.mock(AgentBrowser)({}),
   Layer.mock(AgentSandbox)({}),
   Layer.succeed(PageLinks, { sandbox: undefined }),
@@ -1431,7 +1436,7 @@ async function managerOn(userId: string, workspaceId: string): Promise<CallingAg
   return { ...target, sessionId: session };
 }
 
-test("start_agent from a Manager, with Managers act for whoever asked on, starts the agent as the member whose line opened its turn, refuses one whose asker pays for none of the model rather than paying as the owner, and with it off starts the owner's", async () => {
+test("start_agent from a Manager starts the agent as the member whose line opened its turn, and refuses one whose asker pays for none of the model rather than paying as the owner", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const owner = agents.caller.userId;
   const asker = agents.teammates.userId;
@@ -1442,7 +1447,6 @@ test("start_agent from a Manager, with Managers act for whoever asked on, starts
   const manager = await managerOn(owner, workspaceId);
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), manager, agentSessions.services);
-  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, true);
 
   const start = (callId: string) =>
     call(
@@ -1468,10 +1472,6 @@ test("start_agent from a Manager, with Managers act for whoever asked on, starts
     reason:
       "Not started: an agent you start is Test User's, who asked for this turn, and no subscription or API key of theirs pays for that model, and Vespin's key pays for no agent. Start it on a model whose provider they connected, or tell them to connect one in Settings › Agents.",
   });
-
-  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, false);
-  const owners = await storedStart(owner, await start("call-off"));
-  assert.equal(owners.userId, owner);
 });
 
 test("start_agent leaves an unassigned backlog task's assignee and status as they stood", async () => {
@@ -1842,10 +1842,10 @@ async function keptPicture(
   contentType: "image/png" | "video/webm" = "image/png",
 ): Promise<string> {
   const kept = await database.run(
-    keepConversationPicture(
+    keepPictureBytesOne(
       { userId: agent.userId, conversationId: agent.conversationId },
       { bytes, contentType, width: 1, height: 1 },
-    ),
+    ).pipe(Effect.provide(blobs.layer)),
   );
 
   return Option.getOrThrow(kept).id;

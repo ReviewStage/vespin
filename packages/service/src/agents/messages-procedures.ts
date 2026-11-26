@@ -76,7 +76,7 @@ import {
   TRANSCRIPT_PARTS_QUERY,
 } from "@repo/features/agent-wire";
 import { TRANSCRIPT_NOW_QUERY } from "@repo/features/live-wire";
-import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
+import { isOfferedReaction, MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import { PROVIDER_KEY_KIND } from "@repo/features/provider-key-wire";
 import { isRecord } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
@@ -89,7 +89,7 @@ import {
   pathUuid,
   type UserIdResolver,
 } from "../http/http-effect.js";
-import { accountMiddleware, type HostedContext, hosted } from "../orpc/base.js";
+import { accountMiddleware, type HostedContext, heldReadMiddleware, hosted } from "../orpc/base.js";
 import { admitsPlanWriter, controlsAgent } from "./agent-reach.js";
 import { queueOnPage } from "./coder-host/agent-queue.js";
 import { chatOfLine } from "./coder-host/manager-chat-line.js";
@@ -385,10 +385,12 @@ const tooLongMiddleware = middlewareGen<HostedContext>(function* ({ next }, inpu
 /** The messages resource: its five held reads, the two transcripts read back from their end, the two writes on their paths, and the two part reads, each to a signed-in caller. */
 export function messagesProcedures(seams: MessagesProcedureSeams) {
   const signedIn = hosted.messages.use(accountMiddleware(seams.resolveUserId));
+  // The two transcript reads that hold on `wait` read the session as a held read (`heldReadMiddleware`).
+  const held = hosted.messages.use(heldReadMiddleware).use(accountMiddleware(seams.resolveUserId));
   const writer = storeWriter({ tools: CODER_TOOL_SET });
 
   return {
-    agent: signedIn.agent.effect(function* ({ input, context }) {
+    agent: held.agent.effect(function* ({ input, context }) {
       const after = (yield* cursorNamed(input.after)) ?? AGENT_CURSOR_START;
       const { agent, target } = yield* reachedAgent(context.userId, input.id);
       const titleAwaited = titleAwaitedOf(target);
@@ -529,13 +531,17 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
         }
 
         yield* admitsPlanWriter(context.userId, agent);
+        const { kind } = input.body;
+
+        // Note that the service takes 👍 and 👎 alone until every client it serves reads any kind.
+        if (!isOfferedReaction(kind)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 
         const outcome = yield* hostedStoreOrUnavailable(
           reactManagerChat(context.userId, {
             agentId: agent.id,
             messageId: input.params.message,
             by: MANAGER_CHAT_AUTHOR.PERSON,
-            kind: input.body.kind,
+            kind,
             reacted: input.body.reacted,
             now: yield* DateTime.nowAsDate,
           }),
@@ -596,7 +602,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       return { queue: yield* changeAgentQueue(context.userId, agent, input.body) };
     }),
 
-    agentWorker: signedIn.agentWorker.effect(function* ({ input, context }) {
+    agentWorker: held.agentWorker.effect(function* ({ input, context }) {
       const after = (yield* cursorNamed(input.after)) ?? AGENT_CURSOR_START;
       const callId = yield* callNamed(input.call);
       const now = readsNow(input.wait);

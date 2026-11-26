@@ -332,6 +332,8 @@ export interface RunnerSessionsOptions {
   readonly mcpUrl: string;
   /** Where a runner on a machine that keeps it keeps the CLI's transcript (`RUNNER_TRANSCRIPTS`), which the composing edge names. */
   readonly transcriptsUrl: string;
+  /** Where a runner keeps a picture its harness's tool answered apart from its events (`RUNNER_KEPT_PICTURE_KEY`), which the composing edge names. */
+  readonly picturesUrl: string;
   /** The integrations the agent is handed as its launch starts, each an MCP server of its own beside ours. */
   readonly integrations: (agent: Agent) => Effect.Effect<readonly IntegrationServer[]>;
   /** Our coder instructions for the agent, naming its checkout and the files the service reads back where its machine keeps them, which the harness's config carries. */
@@ -1228,6 +1230,7 @@ export const runnerSessions = <
               config: {
                 ...config,
                 eventsUrl: named(config.eventsUrl),
+                picturesUrl: named(options.picturesUrl),
                 ...("tokenUrl" in config ? { tokenUrl: named(config.tokenUrl) } : undefined),
                 ...(layout.linesRead ? { linesUrl: named(options.linesUrl) } : undefined),
                 ...(resumed.fromDisk !== true

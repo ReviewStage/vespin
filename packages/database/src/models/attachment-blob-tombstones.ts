@@ -4,11 +4,22 @@
  * A tombstone is written by the trigger on `attachment` as a row that named
  * a stored object goes (`../schemas/attachment-blob-tombstone.ts`), or by the
  * backfill before it writes a row's objects (`./attachment-blob-backfill.ts`),
- * or for an upload whose row was never written (`tombstoneUnwrittenUploads`). The sweep reads only the tombstones whose attachment
- * row is gone: an attachment's pathname is its row's id, which no row takes
- * again, so once the row is gone no claim can come to name the object, and
- * its delete can never take an object a row names. A tombstone whose row
- * still stands waits, harmless, until the row goes. The sweep reads a batch,
+ * or for an upload its row never came to name (`tombstoneUnwrittenUploads`).
+ *
+ * The sweep reads only the tombstones of keys no row names or may yet come
+ * to name. An attachment's pathname is its row's id (`attachmentBlobPath`),
+ * so only that one row could ever name it, and a key is purged once that
+ * row is gone, or once it keeps its bytes in the store and names the key as
+ * neither `blob_key` nor `phone_blob_key`. Note that the second is safe
+ * because a stored row's keys are written once, as the row is inserted
+ * under the id they are built from, and never changed: no writer updates a
+ * row's keys but the backfill (`./attachment-blob-backfill.ts`), and it
+ * claims only a row that still keeps its bytes inline. So no claim can come
+ * to name such a key, and its delete can never take an object a row names.
+ * A tombstone whose row is still inline, where the backfill may yet claim
+ * the key, or whose row names the key, waits, harmless, until that changes.
+ *
+ * The sweep reads a batch,
  * each at the version it stands at, deletes their objects, and only then
  * drops their tombstones, so an object whose delete failed keeps its
  * tombstone for the next sweep. Two sweeps that read the same batch delete
@@ -16,7 +27,7 @@
  * tombstones twice, which drops nothing the second time.
  */
 
-import { and, asc, eq, inArray, notExists, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, notExists, or, sql } from "drizzle-orm";
 import { Effect } from "effect";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { attachment } from "../schemas/attachment.js";
@@ -44,7 +55,7 @@ export interface AttachmentBlobTombstone {
  */
 const tombstoneVersion = sql<string>`((extract(epoch from ${attachmentBlobTombstone.createdAt}) * 1000000)::bigint)::text`;
 
-/** Up to `limit` tombstones whose attachment row is gone, the oldest first. */
+/** Up to `limit` tombstones of keys no row names or may yet name, the oldest first. */
 export function readAttachmentBlobTombstones(
   limit: number,
 ): TombstoneEffect<readonly AttachmentBlobTombstone[]> {
@@ -54,11 +65,24 @@ export function readAttachmentBlobTombstones(
         .select({ key: attachmentBlobTombstone.key, version: tombstoneVersion })
         .from(attachmentBlobTombstone)
         .where(
-          notExists(
-            db
-              .select({ id: attachment.id })
-              .from(attachment)
-              .where(eq(attachment.id, attachmentIdOfKey)),
+          and(
+            // A tombstone dated ahead stands for an upload that may still land (`tombstoneUnwrittenUploads`).
+            lte(attachmentBlobTombstone.createdAt, sql`clock_timestamp()`),
+            notExists(
+              db
+                .select({ id: attachment.id })
+                .from(attachment)
+                .where(
+                  and(
+                    eq(attachment.id, attachmentIdOfKey),
+                    or(
+                      isNull(attachment.blobKey),
+                      eq(attachment.blobKey, attachmentBlobTombstone.key),
+                      eq(attachment.phoneBlobKey, attachmentBlobTombstone.key),
+                    ),
+                  ),
+                ),
+            ),
           ),
         )
         .orderBy(asc(attachmentBlobTombstone.createdAt), asc(attachmentBlobTombstone.key))
@@ -104,14 +128,23 @@ export interface AttachmentUpload {
 }
 
 /**
- * Tombstones the pathnames of every upload whose attachment row does not
- * stand, so the sweep deletes objects a writer stored and then never named.
- * It runs once the write's transaction has ended, so an upload whose row
- * landed after all, a commit answered by a failure among them, keeps its
- * objects.
+ * Tombstones every object an upload put in the store that its row does not
+ * name: all of an upload's objects where its row was never written, and,
+ * where it was, any it recorded and the row kept no key of, such as a copy
+ * for a phone that landed but was not kept, which the sweep deletes within
+ * the minute, since the row keeps its bytes in the store. An upload records
+ * only a key it may write (`attachment-uploads.ts`), never one it only
+ * reserved, which holds no object. An object the row names stays. Note
+ * that each tombstone is dated `landingSeconds` ahead, past the last moment
+ * an upload by a presigned URL may still land, and the sweep reads none
+ * before its date, because a sandbox handed the URL may upload after the
+ * call that handed it failed. It runs once the write's transaction has ended, so
+ * an upload whose row landed after all, a commit answered by a failure
+ * among them, keeps its objects.
  */
 export function tombstoneUnwrittenUploads(
   uploads: readonly AttachmentUpload[],
+  landingSeconds: number,
 ): TombstoneEffect<void> {
   if (uploads.length === 0) return Effect.void;
 
@@ -119,19 +152,31 @@ export function tombstoneUnwrittenUploads(
     const ids = uploads.map((upload) => upload.id);
 
     const written = yield* Database.use((db) =>
-      db.select({ id: attachment.id }).from(attachment).where(inArray(attachment.id, ids)),
+      db
+        .select({ blobKey: attachment.blobKey, phoneBlobKey: attachment.phoneBlobKey })
+        .from(attachment)
+        .where(inArray(attachment.id, ids)),
     );
 
-    const standing = new Set(written.map((row) => row.id));
-    const keys = uploads.flatMap((upload) => (standing.has(upload.id) ? [] : upload.keys));
+    const named = new Set(
+      written.flatMap((row) => [row.blobKey, row.phoneBlobKey].filter((key) => key !== null)),
+    );
+
+    const keys = uploads.flatMap((upload) => upload.keys.filter((key) => !named.has(key)));
 
     if (keys.length === 0) return;
+    const due = sql`clock_timestamp() + make_interval(secs => ${landingSeconds})`;
 
     yield* Database.use((db) =>
       db
         .insert(attachmentBlobTombstone)
-        .values(keys.map((key) => ({ key })))
-        .onConflictDoNothing(),
+        .values(keys.map((key) => ({ key, createdAt: due })))
+        .onConflictDoUpdate({
+          target: attachmentBlobTombstone.key,
+          set: {
+            createdAt: sql`greatest(${attachmentBlobTombstone.createdAt}, excluded.created_at)`,
+          },
+        }),
     );
   });
 }

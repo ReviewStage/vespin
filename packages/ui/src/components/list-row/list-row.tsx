@@ -20,7 +20,6 @@ import {
 import { cssCustomProperties } from "../../css.js";
 import { ChevronRightIcon, FoldChevronIcon } from "../../icons/lucide-glyphs.js";
 import { middleOpensTab } from "../../middle-press.js";
-import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { said } from "../../said.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { Checkbox as ShadcnCheckbox } from "../../shadcn/checkbox.js";
@@ -28,6 +27,7 @@ import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { CARD_CORNER, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
+import { GLYPH_PLACE_CONTROL } from "../glyph-slot/glyph-slot.js";
 import { withContextMenu } from "../menu/context-menu.js";
 import { useLinkAddress } from "../menu/link-address.js";
 import { rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
@@ -72,7 +72,9 @@ export type { ListSelection } from "../selection/list-selection.js";
  * inside it, because a button holds no button: each is a control of its own,
  * reached by Tab after the row and pressed without pressing the row. A row
  * that opens nothing is no control at all. The leading mark is decoration,
- * hidden from a reader, since the title says what the row is. The row owns
+ * hidden from a reader, since the title says what the row is, unless it is
+ * a control of its own (`leadingControl`), as a Manager's face well is while
+ * a row that opens nothing is renamed. The row owns
  * every length in it and takes no class or style.
  *
  * A keyboard-driven list (arrows or j/k between rows, a key to act on the
@@ -417,14 +419,14 @@ const MAIN_BUTTON_CLASS = `${MAIN_CLASS} cursor-press disabled:cursor-default`;
 /**
  * The leading mark, muted, a glyph at a control's glyph size and an avatar
  * at its own; a provider's mark keeps the text's color, a brand mark being
- * the provider's identity, not a muted glyph.
+ * the provider's identity, not a muted glyph. A control that takes the
+ * glyph's place while the row is edited stands in the glyph's own footprint
+ * (`GLYPH_PLACE_CONTROL`), so the row's words stay where they stood.
  */
-const LEADING_CLASS =
-  "ui-list-row-leading col-[leading] me-icon-gap inline-flex text-muted-foreground [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon";
+const LEADING_CLASS = `ui-list-row-leading col-[leading] me-icon-gap inline-flex text-muted-foreground [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon ${GLYPH_PLACE_CONTROL}`;
 
 /** The leading mark of a row in a tone (`tone`), in the tone's ink rather than muted. */
-const LEADING_TONED_CLASS =
-  "ui-list-row-leading col-[leading] me-icon-gap inline-flex text-tone-ink [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon";
+const LEADING_TONED_CLASS = `ui-list-row-leading col-[leading] me-icon-gap inline-flex text-tone-ink [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon ${GLYPH_PLACE_CONTROL}`;
 
 /** The row's end, its metadata and its chevron, at the end of its track, so it lines up with the acts that share it. */
 const END_CLASS =
@@ -442,10 +444,10 @@ const CHEVRON_CLASS =
  */
 const LEAD_CLASS = {
   [LIST_ROW_LEAD.DESCRIPTION]:
-    "ui-list-row-lead me-ui-4 inline-flex max-w-list-row-lead items-center gap-ui-2 rounded-ui-6 bg-fill-strong px-ui-4 py-0 align-bottom text-muted-foreground",
+    "ui-list-row-lead me-ui-4 inline-flex max-w-list-row-lead items-center gap-icon-gap-compact rounded-ui-6 bg-fill-strong px-ui-4 py-0 align-bottom text-muted-foreground",
   [LIST_ROW_LEAD.INLINE]:
-    "ui-list-row-lead inline-flex max-w-full items-center gap-ui-4 align-bottom text-muted-foreground",
-  [LIST_ROW_LEAD.ABOVE]: "ui-list-row-lead flex min-w-0 items-center gap-ui-6",
+    "ui-list-row-lead inline-flex max-w-full items-center gap-icon-gap-compact align-bottom text-muted-foreground",
+  [LIST_ROW_LEAD.ABOVE]: "ui-list-row-lead flex min-w-0 items-center gap-icon-gap-regular",
 } as const satisfies Record<ListRowLeadAt, string>;
 
 /** What stands between a lead's plain words and the description they lead. */
@@ -473,13 +475,6 @@ function plainWords(words: ReactNode): string | undefined {
  * rather than by reading where it stands once drawn.
  */
 const ListDensityContext = createContext<ListDensity>(LIST_DENSITY.REGULAR);
-
-/**
- * How the `List` a row stands in stands, so a row in a card, edge to edge
- * on the card's ground, answers a press inside its fill rather than pulling
- * that fill back from the card's edges.
- */
-const ListVariantContext = createContext<ListVariant>(LIST_VARIANT.PLAIN);
 
 /** The custom properties a row's sheet reads: how deep it stands. */
 function rowProperties(depth: number): CSSProperties | undefined {
@@ -591,11 +586,9 @@ export function List({
   };
 
   const contexts = (rows: ReactNode) => (
-    <ListVariantContext value={variant}>
-      <ListDensityContext value={density}>
-        <ListSelectionContext value={chooser.selecting}>{rows}</ListSelectionContext>
-      </ListDensityContext>
-    </ListVariantContext>
+    <ListDensityContext value={density}>
+      <ListSelectionContext value={chooser.selecting}>{rows}</ListSelectionContext>
+    </ListDensityContext>
   );
 
   if (run !== undefined) {
@@ -656,6 +649,7 @@ export function List({
 /** One row of a `List`: `title` over `description`, `meta` at its end, `actions` beside it. */
 export function ListRow({
   leading,
+  leadingControl = false,
   title,
   titleReplayMasked = false,
   description,
@@ -706,6 +700,8 @@ export function ListRow({
 }: {
   /** A mark before the title (an avatar, a status's glyph), drawn as decoration. */
   leading?: ReactNode;
+  /** Whether `leading` is a control of its own, which a reader reaches, rather than decoration: a face well in a row being renamed, which opens nothing meanwhile. */
+  leadingControl?: boolean | undefined;
   /** What the row is, which its name opens with. */
   title: ReactNode;
   /** Whether the title names a person's thing, a task's or a repository's name, kept masked in a screen recording even where the row stands under `ReplayUnmask`; a title in words stays measured as words. */
@@ -883,9 +879,6 @@ export function ListRow({
   const [descriptionMeasured, descriptionClipped] = useClipped(plainWords(description));
   const listDensity = useContext(ListDensityContext);
 
-  const pressPulse =
-    useContext(ListVariantContext) === LIST_VARIANT.CARD ? PRESS_PULSE.FLUSH : PRESS_PULSE.QUIET;
-
   const selecting = useContext(ListSelectionContext);
   const choosable = selecting !== undefined && selectKey !== undefined;
   const chosen = choosable && selecting.selected.has(selectKey);
@@ -991,7 +984,7 @@ export function ListRow({
       {said(mark) ? (
         <span
           className={tone === undefined ? LEADING_CLASS : LEADING_TONED_CLASS}
-          aria-hidden="true"
+          aria-hidden={leadingControl && checked === undefined ? undefined : "true"}
         >
           {mark}
         </span>
@@ -1058,10 +1051,6 @@ export function ListRow({
         keepFocus ? preventFocusMove : choosable ? holdRun : undefined,
       )}
       onClick={(event) => {
-        // Note that the row around the press is what is pressed, its fill and its actions with it.
-        const row = event.currentTarget.closest<HTMLElement>(".ui-list-row");
-        pulsePress(row ?? event.currentTarget, pressPulse);
-
         // Note that a right-click's menu holds the press as its opener, which its outside press leaves alone, so the press closes it.
         if (rowMenu.open) rowMenu.close(false);
 

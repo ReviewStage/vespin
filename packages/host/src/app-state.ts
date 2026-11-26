@@ -28,6 +28,7 @@ import type {
   AutomationWorkspaceRun,
 } from "@repo/features/automation-wire";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
+import type { FailureFacts } from "@repo/features/failure-facts";
 import type {
   GitHubRepositoriesAnswer,
   GitHubRepositoryIssueAnswer,
@@ -285,13 +286,18 @@ export interface AppInboxSlice {
 /**
  * One read the host holds for the panel (`live-collection.ts`), as every
  * window draws it: its rows as it last answered, absent until it first
- * does, and whether it said it could not answer before it ever had. A read
- * that stops answering once it has keeps its rows, since its next answer
- * brings them up to date. What the panel reads through a live read's query.
+ * does, and whether it said it could not answer before it ever had, with
+ * what failed beneath it where the read said, so the window that shows it
+ * reports a read that got no answer as the network's failure rather than the
+ * app's (`@repo/features/shown-failure`). A read that stops answering once it
+ * has keeps its rows, since its next answer brings them up to date. What the
+ * panel reads through a live read's query.
  */
 export interface AppHostRead<Rows> {
   rows?: Rows;
   failed?: true;
+  /** What failed beneath a read that never answered, where it said; only beside `failed`. */
+  cause?: FailureFacts;
   /** Whether the rows are the ones the phone kept on disk, drawn before the service's first answer took their place; only the account's Inbox sets it (`account-items-follow.ts`). */
   kept?: true;
 }
@@ -423,6 +429,8 @@ export type AppInboxItems = {
  */
 export interface AppInboxRead extends AppHostRead<AppInboxItems> {
   keptHolders?: readonly TaskSummary[];
+  /** That the items stand in the pool's Inbox kind kept on disk, which a screen reads through live queries, so the rows told here are none (`inbox-rows.ts`). */
+  stored?: true;
 }
 
 /** One plan's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */

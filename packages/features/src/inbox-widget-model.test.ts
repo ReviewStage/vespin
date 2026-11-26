@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { inboxRowOf } from "./inbox-digest.js";
 import { type InboxGroup, taskHolder } from "./inbox-list-model.js";
 import {
   INBOX_WIDGET_ASK,
@@ -71,7 +72,7 @@ function thread(id: string, title: string, updatedAt: number, rest: Partial<Inbo
     ...rest,
   };
 
-  return item;
+  return inboxRowOf(item);
 }
 
 const DECIDE = {

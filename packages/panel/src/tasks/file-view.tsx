@@ -39,7 +39,6 @@ import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { FILE_TREE_WIDTH, type FileTreeWidth } from "../desktop/folded-groups.js";
 import { KEY_LAYERS, PANE_FLOAT, type PaneFloat } from "../desktop/hover-pane.js";
-import { type PaneSlide, usePaneSlide } from "../desktop/pane-motion.js";
 import { useTabActions } from "../desktop/strip-tabs.js";
 import type { ReadFolder } from "../file-tree/contract.js";
 import { usePhoneRoom } from "../stage-room.js";
@@ -81,7 +80,7 @@ import { useViewSettingsSheet, VIEW_SETTINGS_SCOPE, ViewSettingsButton } from ".
  * as breadcrumbs, then at its end the file opened on GitHub, the ⋯ of what
  * is done with it (`file-menu.tsx`), and the tree's toggle, the side
  * panel's own glyph, since the tree is docked on the right as the panel
- * is, and slides in and out as the panel does (`usePaneSlide`). The tab
+ * is. The tab
  * under it reads the file and tells the bar how the read stands, which is
  * what the GitHub button and the menu offer by. The breadcrumbs are words
  * in the window's own type, as a tab's name is; only the file is code.
@@ -226,9 +225,9 @@ export function TreeToggle({
 
 /** A pane beside a tab, a File tab's tree or a Terminal tab's shells, wherever the panel's width lets it stand. */
 export interface PaneRoom {
-  /** The pane beside the tab, open or shut as the panel holds it for every tab of its kind. */
-  readonly beside: PaneSlide;
-  /** Whether the pane stands beside the tab: the panel holds it open, or it is sliding out, and the panel has room for it there. */
+  /** The pane beside the tab, open or shut as the panel holds it for every tab of its kind: whether it is drawn, and its box. */
+  readonly beside: { readonly drawn: boolean; readonly pane: RefObject<HTMLElement | null> };
+  /** Whether the pane stands beside the tab: the panel holds it open, and the panel has room for it there. */
   readonly docked: boolean;
   /** Whether the pane is drawn at all now, beside the tab or over it. */
   readonly drawn: boolean;
@@ -294,8 +293,8 @@ function floats(view: Element | null, toggles: Element | null): boolean {
 }
 
 /**
- * The pane's room. Beside the tab it is open or shut as the panel holds it
- * (`usePaneSlide`); where the panel is too narrow for the tab and the pane
+ * The pane's room. Beside the tab it is open or shut as the panel holds it;
+ * where the panel is too narrow for the tab and the pane
  * side by side (`@container side-panel`), the stylesheet floats it over the
  * tab's right edge instead, as the main sidebar floats over the work in a
  * narrow window (`hover-pane.ts`), and only for this tab. The pointer
@@ -305,7 +304,7 @@ function floats(view: Element | null, toggles: Element | null): boolean {
  * away. It is never kept open past those, and never floats where it has
  * room beside the tab. Which of the two places stands is the stylesheet's
  * to say, read off the toggle it draws (`useFloatsOver`); the pane over the tab
- * is an `OverPane`, which slides out as it slides in.
+ * is an `OverPane`.
  */
 export function usePaneRoom(
   shown: {
@@ -315,7 +314,7 @@ export function usePaneRoom(
   /** The box the pane's toggles are read in where a host's bar draws them rather than the view's own, as a chapter's header does: the host's view, which holds that bar and resizes with the panel; none reads them in the view. */
   host?: Element | null,
 ): PaneRoom {
-  const beside = usePaneSlide(shown.open);
+  const beside = { drawn: shown.open, pane: useRef<HTMLElement>(null) };
   const [over, setOver] = useState<PaneFloat>(PANE_FLOAT.CLOSED);
   const [view, setView] = useState<HTMLElement | null>(null);
   const toggled = host === undefined ? view : host;
@@ -886,7 +885,6 @@ export function FileView({
             over={tree.docked ? undefined : tree.over}
             narrow={tree.narrow}
             pane={tree.beside.pane}
-            leaving={tree.beside.leaving}
             width={treeWidth?.width}
             edge={edge}
           />

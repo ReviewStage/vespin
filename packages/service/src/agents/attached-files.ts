@@ -11,7 +11,6 @@ import {
   keptImageOfLine,
   textOf,
 } from "@repo/database/models/attached-file-parts";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import { COALESCED_LINE_SEPARATOR } from "@repo/database/models/message-reads";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
@@ -20,15 +19,12 @@ import {
   type AgentAttachment,
   isInlinedText,
 } from "@repo/features/agent-wire";
-import {
-  CONVERSATION_PICTURE_BOUNDS,
-  PICTURE_OMISSION,
-} from "@repo/features/conversation-picture-wire";
 import { placedFiles } from "@repo/features/file-marker";
-import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
 import { MENTION_KIND, memberMentionOf } from "@repo/features/mention-link";
 import type { FileUIPart, UserContent } from "ai";
-import { Effect, Option } from "effect";
+import { Effect } from "effect";
+import { keepPictureNote } from "../storage/attachment-keeps.js";
+import type { BlobStoreFailure } from "../storage/blob-store.js";
 
 /**
  * attached-files.ts -- the files a developer attached to a coding agent's message: as its session is handed them, and as a receipt of them reads back. How the journal keeps them is `@repo/database/models/attached-file-parts`.
@@ -101,29 +97,15 @@ const KEPT_IMAGE_TYPES: ReadonlySet<string> = new Set([
  */
 const IMAGE_TYPES: ReadonlySet<string> = new Set([...KEPT_IMAGE_TYPES, AGENT_ATTACHMENT_TYPE.GIF]);
 
-/** One image kept beside the conversation, as its bytes are sniffed and measured, or why it was not kept. */
+/** One image kept beside the conversation, as its bytes are sniffed and measured (`keepPictureNote`), or why it was not kept. */
 function keptImage(
   target: ConversationTarget,
   file: AgentAttachment,
-): Effect.Effect<KeptImage, TaskStoreFailure, DatabaseServices> {
-  return Effect.gen(function* () {
-    const bytes = new Uint8Array(Buffer.from(file.data, "base64"));
-
-    if (bytes.byteLength > CONVERSATION_PICTURE_BOUNDS.MAX_BYTES) {
-      return { omitted: PICTURE_OMISSION.TOO_LARGE };
-    }
-
-    const contentType = sniffImageType(bytes);
-    const dimensions = contentType === undefined ? undefined : imageDimensions(bytes, contentType);
-
-    if (contentType === undefined || dimensions === undefined) {
-      return { omitted: PICTURE_OMISSION.UNSUPPORTED };
-    }
-
-    const kept = yield* keepConversationPicture(target, { bytes, contentType, ...dimensions });
-
-    return Option.isSome(kept) ? { id: kept.value.id } : { omitted: PICTURE_OMISSION.LIMIT };
-  });
+): Effect.Effect<KeptImage, TaskStoreFailure | BlobStoreFailure, DatabaseServices> {
+  return Effect.map(
+    keepPictureNote(target, new Uint8Array(Buffer.from(file.data, "base64"))),
+    (note): KeptImage => ("picture" in note ? { id: note.picture.id } : { omitted: note.omitted }),
+  );
 }
 
 /**
@@ -137,7 +119,7 @@ function keptImage(
 export function keptHandedImages(
   target: ConversationTarget,
   files: readonly AgentAttachment[],
-): Effect.Effect<readonly HandedFile[], TaskStoreFailure, DatabaseServices> {
+): Effect.Effect<readonly HandedFile[], TaskStoreFailure | BlobStoreFailure, DatabaseServices> {
   return Effect.forEach(files, (file) =>
     KEPT_IMAGE_TYPES.has(file.mediaType)
       ? Effect.map(keptImage(target, file), (kept): HandedFile => ({ ...file, kept }))

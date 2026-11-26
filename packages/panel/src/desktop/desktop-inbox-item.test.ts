@@ -552,6 +552,35 @@ test("a page a Manager's thread names opens in the panel beside the Inbox, read 
   assert.deepEqual([windowPath(), asked.openedAgents], [at, []], "the Inbox still stands");
 });
 
+test("an @ in the box on a Manager's thread offers what its own page's box offers, its repository's files among them, as a task's thread offers its task's", async () => {
+  const manager = { ...AGENT, id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b", taskId: null };
+  world.listedAgents = [AGENT, manager];
+  world.tasklessInboxes.set(manager.id, [
+    {
+      ...saying(EXPIRY, "Which store holds the rollout?"),
+      id: "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e",
+      agentId: manager.id,
+      title: "Who takes the rollout?",
+    },
+  ]);
+  const { page } = mount({ room: SHELL_ROOM.WIDE });
+  await settle();
+  act(() => rowNamed(page, "Who takes the rollout?").click());
+  await settle();
+  typeInComposer(itemPane(page), "See @roll");
+  await settle();
+
+  // Note that the repository's paths land through a query, so the list is read once it holds them.
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      [...page.querySelectorAll(".mention-menu .ui-combobox-option-label")].map(
+        (name) => name.textContent,
+      ),
+      ["rollout-store.ts"],
+    ),
+  );
+});
+
 test("a picture of an item opens a viewer the arrow keys walk across every picture of the item, its Markdown's pair and a picture it carried alike, in the order they are drawn", async () => {
   const before = "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c74";
   const after = "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c75";

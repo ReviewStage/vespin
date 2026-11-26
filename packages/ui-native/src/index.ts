@@ -64,7 +64,7 @@ export {
 
 export type { CaretAtWord } from "./caret-at-word.js";
 
-export { ChangedFileRow, changesSubtitle } from "./changed-file-row.js";
+export { ChangedFileRow } from "./changed-file-row.js";
 
 export type { ChannelFaces } from "./channel-row.js";
 
@@ -92,6 +92,7 @@ export {
   type ComposerSendAs,
   DICTATION_PHASE,
   type DictationPhase,
+  wordsHandedBack,
 } from "./composer.js";
 
 export {
@@ -105,6 +106,8 @@ export {
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
+
+export type { ComposerSend } from "./composer-press.js";
 
 export {
   ConversationEntryRow,
@@ -217,6 +220,8 @@ export {
   writeSent,
   writeSettled,
 } from "./latest-writes-model.js";
+
+export { changesSubtitle } from "./line-counts.js";
 
 export {
   ListRow,
@@ -405,6 +410,7 @@ export {
   type FormSpacing,
   LOADING_ROW_LOOK,
   LoadingRow,
+  MEMBER_ROW_LOOK,
   MemberRow,
   type MemberRowAct,
   MenuRow,

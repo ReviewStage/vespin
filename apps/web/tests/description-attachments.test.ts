@@ -2,23 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import {
-  DESCRIPTION_ATTACHMENT_KEEP,
-  keepDescriptionAttachment,
-} from "@repo/database/models/description-attachments";
-import {
-  DESCRIPTION_COMMENT_OUTCOME,
-  startDescriptionCommentThread,
-} from "@repo/database/models/description-comments";
+import { DESCRIPTION_ATTACHMENT_KEEP } from "@repo/database/models/description-attachments";
+import { DESCRIPTION_COMMENT_OUTCOME } from "@repo/database/models/description-comments";
 import { createTask, saveDescriptionText } from "@repo/database/models/task-store";
 import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
-import {
-  getTestDB,
-  joinWorkspace,
-  openWorkspace,
-  storeAttachmentInBlob,
-} from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
 import {
   DESCRIPTION_ATTACHMENT_BOUNDS,
@@ -38,6 +27,8 @@ import { hostedFetch } from "@repo/service/orpc/handler";
 import { modelCatalogOf } from "@repo/service/providers/model-catalog";
 import type { WebServices } from "@repo/service/runtime";
 import { attachmentBlobPath } from "@repo/service/storage/attachment-blob-paths";
+import { keepDescriptionFileBytes } from "@repo/service/storage/attachment-keeps";
+import { startDescriptionCommentThread } from "@repo/service/tasks/description-comment-writes";
 import { taskFilesProcedures } from "@repo/service/tasks/task-files-procedures";
 import { tasksApp } from "@repo/service/tasks/tasks-app";
 import { type MemoryBlobStore, memoryBlobStore } from "@repo/service/testing/blob-store-fake";
@@ -100,8 +91,11 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
+/** The Blob store the suite's requests keep files in and read them from, where a test names none of its own. */
+const SUITE_BLOBS = memoryBlobStore();
+
 /** The plan routes over the test's own database and the Blob store given, every bearer `Bearer <account>`, answering one request. */
-const ask = (request: Request, blobs: MemoryBlobStore = memoryBlobStore()) =>
+const ask = (request: Request, blobs: MemoryBlobStore = SUITE_BLOBS) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
       blobs.layer,
@@ -236,7 +230,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
               },
             ],
           },
-        );
+        ).pipe(Effect.provide(SUITE_BLOBS.layer));
 
         assert.ok(
           started.status === DESCRIPTION_COMMENT_OUTCOME.DONE && "thread" in started.answer,
@@ -268,7 +262,8 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
         assert.equal(kept.status, HOSTED_HTTP_STATUS.CREATED);
         const answer = uploaded(kept);
         assert.ok("id" in answer);
-        const served = yield* ask(read(taskId, answer.id, owner));
+        // Note that the read is a browser tab's, which is piped the bytes, since a native reader is sent to the store.
+        const served = yield* ask(read(taskId, answer.id, owner, "navigate"));
         assert.equal(served.status, HOSTED_HTTP_STATUS.OK);
         assert.equal(served.contentType, PICTURE_TYPE.PNG);
         assert.equal(served.cache, "private, no-store");
@@ -296,11 +291,12 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
 
         const stored = (file: DescriptionFile) =>
           Effect.gen(function* () {
-            const kept = yield* keepDescriptionAttachment(owner, taskId, file);
+            const kept = yield* keepDescriptionFileBytes(owner, taskId, file).pipe(
+              Effect.provide(blobs.layer),
+            );
+
             assert.ok(kept.status === DESCRIPTION_ATTACHMENT_KEEP.KEPT);
             const blobKey = attachmentBlobPath(kept.id);
-            yield* storeAttachmentInBlob(kept.id, { blobKey });
-            blobs.objects.set(blobKey, { ...file, etag: `"${kept.id}"` });
 
             return { id: kept.id, blobKey };
           });
@@ -436,7 +432,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
 
         const kept = uploaded(yield* ask(upload(taskId, owner, pictureBody(videoUrl(recording)))));
         assert.ok("id" in kept);
-        const served = yield* ask(read(taskId, kept.id, teammate));
+        const served = yield* ask(read(taskId, kept.id, teammate, "navigate"));
         const long = paddedTo(recording, PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES + 1);
         const tooLong = yield* ask(upload(taskId, owner, pictureBody(videoUrl(long))));
 
@@ -462,7 +458,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
         );
 
         assert.ok("id" in kept);
-        const served = yield* ask(read(taskId, kept.id, teammate));
+        const served = yield* ask(read(taskId, kept.id, teammate, "navigate"));
 
         const mislabeled = yield* ask(
           upload(taskId, owner, pictureBody(`data:${PICTURE_MEDIA_TYPE.MP4};base64,${base64}`)),

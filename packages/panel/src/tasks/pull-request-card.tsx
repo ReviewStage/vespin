@@ -1,7 +1,9 @@
 import {
   type AgentChangesPeople,
   type AgentPullRequest,
+  CHECK_STATE,
   CHECK_SUMMARY,
+  type CheckState,
   type CheckSummary,
   type GitHubPerson,
   PULL_REQUEST_STATE,
@@ -16,37 +18,37 @@ import {
 } from "@repo/features/link-standing-model";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { CHECK_SUMMARY_WORDS, REVIEW_WORDS } from "@repo/features/pull-request-model";
-import { countWords, TERM } from "@repo/features/words";
 import {
-  ALIGN,
-  Badge,
+  CheckGlyph,
   GAP,
   HOVER_CARD_ROW_LOOK,
   HoverCard,
   HoverCardHead,
   HoverCardList,
-  HoverCardNote,
   HoverCardRow,
   HoverCardRule,
   Inline,
-  LAYOUT_ELEMENT,
+  STATUS_TONE,
+  type StatusTone,
   TIME_LOOK,
   Time,
   useMinute,
 } from "@repo/ui";
-import { type ReactNode, useEffect } from "react";
+import { useEffect } from "react";
 import { ACTOR_SIZE, ActorMark, ActorRef, PROVENANCE_VERB, ProvenanceRow } from "../actor-ref.js";
 import { prefetchPullRequestTab } from "../desktop/pages-on-demand.js";
 import { pullRequestNumberLabel, pullRequestStateLabel } from "./agent-model.js";
 import { LinesChanged } from "./agent-published.js";
 import { AgentActorRef, type AgentSubject } from "./agent-ref.js";
-import { PullRequestMark } from "./pull-request-mark.js";
+import { PullRequestBranches } from "./pull-request-branches.js";
+import { PullRequestLabels } from "./pull-request-labels.js";
+import { PULL_REQUEST_TONE, PullRequestMark } from "./pull-request-mark.js";
 import { useNamer } from "./pull-request-people.js";
 import type { HeldPeople } from "./use-agents.js";
 import { usePlaceStanding } from "./use-link-standing.js";
 
 /**
- * pull-request-card.tsx -- the one card a pull request hangs wherever the window names one: its mark and title, its key and where it stands, its size and checks, its branches and labels, who opened it, the agent whose it is, and its reviewers.
+ * pull-request-card.tsx -- the one card a pull request hangs wherever the window names one: its mark and title, its key, age, and where it stands, its checks, its branches and size, its labels, its reviewers, and who opened it.
  *
  * A pull request is named in several kinds of place: the chip beside its
  * agent in the plan's list of agents and a task row's chip, which know
@@ -59,20 +61,26 @@ import { usePlaceStanding } from "./use-link-standing.js";
  * answered for the pull request's page (`use-link-standing.ts`), read
  * through that place's workspace, so every card of one pull request says
  * the same. It draws only what it knows, so a card read from an older
- * service, which answers little, still draws its head. The head is the mark for where it stands, the title, and under it
- * one key everywhere, `acme/relay#42 · Merged`, with the age of its latest
- * moment, opened, merged, or closed, at the corner where the service said
- * one. One note says its size and checks, `+120 −14 in 3 files · Checks
- * passing · 7 comments · 1 commit`, each piece where known; its branches
- * stand as inline code, `main ← fix`, and every label as a badge wearing
- * a dot of its own color, since GitHub lets a label be any color, a
- * dark one among them, which the card's words could not be read in. Who
- * opened it is the provenance row every card draws, their face as its glyph,
- * "Opened by octo-dev · 3d ago", and where one of the window's agents
- * opened it a second row, "By Invite flow", names the agent by its tile,
- * which hangs the agent's card and opens its tab. Its reviewers, where
- * known, are listed under a rule, each row a face and a name with where
- * they stand at its end, every one of them, scrolling past a few rows.
+ * service, which answers little, still draws its head.
+ *
+ * The head is the mark for where it stands, the title, under it its key and
+ * the age of its latest moment, `acme/relay#42 · 3h ago`, and in its corner
+ * where it stands in that standing's tone, as the Pull request tab's pill
+ * says it (`pull-request-writes.tsx`): Open, Draft, Merged, Closed, or
+ * Queued. While it may still merge, its checks stand on a row of their own,
+ * the glyph its Checks tab leads each check with (`CheckGlyph`), so a failing
+ * one reads red at a glance. Its branches and size are drawn as the tab's
+ * header draws them: the branches as its copying chips, `main ← topic`, as
+ * GitHub writes them (`PullRequestBranches`), the lines it changes at their
+ * end, and its labels as the tab's (`PullRequestLabels`). Its reviewers, where
+ * known, are listed under a rule, each row a face and a name with where they
+ * stand at its end, every one of them, scrolling past a few rows. At its foot,
+ * under a rule as a task card's creator stands, one row says who opened it:
+ * "Opened by octo-dev", or where one of the window's agents opened it for
+ * them, the agent's tile wearing their face at its corner, "Opened by Invite
+ * flow for octo-dev". Every face the card draws is one size, the tab's line's
+ * (`ACTOR_SIZE.INLINE`), and every name in it hangs its card and opens what it
+ * names: a person their page, an agent its tab.
  */
 
 /** The moment a pull request's state names: merged once merged, closed once closed, and opened while open or a draft. */
@@ -83,14 +91,19 @@ const MOMENT_OF_STATE = {
   [PULL_REQUEST_STATE.CLOSED]: PULL_REQUEST_MOMENT.CLOSED,
 } as const satisfies Record<PullRequestState, PullRequestMoment>;
 
+/** The glyph a pull request's checks wear on its card, as its Checks tab leads a check of that standing: none where it has no checks. */
+const CHECKS_GLYPH = {
+  [CHECK_SUMMARY.PASSING]: CHECK_STATE.PASSED,
+  [CHECK_SUMMARY.FAILING]: CHECK_STATE.FAILED,
+  [CHECK_SUMMARY.PENDING]: CHECK_STATE.PENDING,
+  [CHECK_SUMMARY.NONE]: undefined,
+} as const satisfies Record<CheckSummary, CheckState | undefined>;
+
 /** What parts the pieces of a card's line. */
 const SEPARATOR = " · ";
 
 /** What the reviewers' list is named for a reader moving between lists. */
 const REVIEWERS_LABEL = "Reviewers";
-
-/** What the labels' list is named for a reader moving between lists. */
-const LABELS_LABEL = "Labels";
 
 /** A pull request as every place that hangs its card holds one: its number and title, where it stands, its page, and its checks where the place reads them. */
 export interface CardedPullRequest {
@@ -122,20 +135,24 @@ export function peopleOf(
 }
 
 /**
- * The age the head's corner says: the pull request's latest moment, where
- * that moment is the one its state names. Note that a service answering no
- * time for a merge or a close falls back to when it was opened, and an
- * opening age beside "Merged" or "Closed" would read as the age of the
- * merge, so the corner says nothing then, and only the row naming who
- * opened it says the opening age.
+ * The age the head's line says after the key: the pull request's latest
+ * moment, where that moment is the one its state names. Note that a service
+ * answering no time for a merge or a close falls back to when it was opened,
+ * and an opening age beside "Merged" or "Closed" would read as the age of the
+ * merge, so the line says no age then.
  */
-function cornerAge(
+function headAge(
   pullRequest: CardedPullRequest,
   when: StandingPullRequest["when"],
-): React.JSX.Element | undefined {
-  if (when === undefined || when.moment !== MOMENT_OF_STATE[pullRequest.state]) return undefined;
+): React.JSX.Element | null {
+  if (when === undefined || when.moment !== MOMENT_OF_STATE[pullRequest.state]) return null;
 
-  return <Time at={when.at} look={TIME_LOOK.SINCE} hint={false} />;
+  return (
+    <>
+      {SEPARATOR}
+      <Time at={when.at} look={TIME_LOOK.AGO} hint={false} />
+    </>
+  );
 }
 
 /** A pull request's key as its card's head says it: `owner/name#42` where its page names its repository, else `#42`. */
@@ -146,53 +163,47 @@ function pullRequestKey(pullRequest: CardedPullRequest): string {
   return `${repository ?? ""}${pullRequestNumberLabel(pullRequest)}`;
 }
 
-/** The one note of its size and checks: the lines it adds and removes across the files it changes, how its checks went, and how many comments and commits it holds, each where known; nothing where none is. */
-function SizeNote({
-  lines,
-  files,
-  checks,
-  comments,
-  commits,
-}: {
-  lines: StandingPullRequest["lines"];
-  files: number | undefined;
-  checks: CheckSummary | undefined;
-  comments: number | undefined;
-  commits: number | undefined;
-}): React.JSX.Element | null {
-  const filesWords = files === undefined ? undefined : countWords(files, TERM.FILE);
+/** The tone the head's corner says where it stands in, as the Pull request tab's pill does: the queue's attention while GitHub's merge queue holds it, else GitHub's color for its state. */
+function standingTone(pullRequest: CardedPullRequest): StatusTone {
+  return pullRequest.queued === true ? STATUS_TONE.ATTENTION : PULL_REQUEST_TONE[pullRequest.state];
+}
 
-  const size =
-    lines === undefined ? (
-      filesWords
-    ) : (
-      <>
-        <LinesChanged additions={lines.additions} deletions={lines.deletions} />
-        {filesWords === undefined ? null : ` in ${filesWords}`}
-      </>
-    );
+/** Its checks on a row of their own, their glyph as the Checks tab draws it and their words, while it may still merge; nothing once it merged or closed, or where it has none. */
+function ChecksRow({ pullRequest }: { pullRequest: CardedPullRequest }): React.JSX.Element | null {
+  const { state, checks } = pullRequest;
+  const open = state === PULL_REQUEST_STATE.OPEN || state === PULL_REQUEST_STATE.DRAFT;
+  const glyph = checks === undefined ? undefined : CHECKS_GLYPH[checks];
 
-  const pieces: ReactNode[] = [
-    size,
-    checks === undefined || checks === CHECK_SUMMARY.NONE
-      ? undefined
-      : `Checks ${CHECK_SUMMARY_WORDS[checks]}`,
-    comments === undefined ? undefined : countWords(comments, TERM.COMMENT),
-    commits === undefined ? undefined : countWords(commits, TERM.COMMIT),
-  ].filter((piece) => piece !== undefined);
-
-  if (pieces.length === 0) return null;
+  if (!open || checks === undefined || glyph === undefined) return null;
 
   return (
-    <HoverCardNote>
-      {pieces.map((piece, index) => (
-        // Note that the pieces stand in one order, so each is keyed by its place.
-        <span key={index}>
-          {index === 0 ? null : SEPARATOR}
-          {piece}
-        </span>
-      ))}
-    </HoverCardNote>
+    <HoverCardRow
+      look={HOVER_CARD_ROW_LOOK.DETAIL}
+      glyph={<CheckGlyph state={glyph} />}
+      label={`Checks ${CHECK_SUMMARY_WORDS[checks]}`}
+    />
+  );
+}
+
+/** Its branches and the lines it changes, as the Pull request tab's header draws them on its branch row: each branch a chip that copies its name, `main ← topic`, then the lines; nothing where neither is known. */
+function BranchRow({
+  branches,
+  lines,
+}: {
+  branches: StandingPullRequest["branches"];
+  lines: StandingPullRequest["lines"];
+}): React.JSX.Element | null {
+  if (branches === undefined && lines === undefined) return null;
+
+  return (
+    <Inline gap={GAP.CONTROL} className="pull-request-card-branches min-w-0">
+      {branches === undefined ? null : (
+        <PullRequestBranches base={branches.base} head={branches.head} />
+      )}
+      {lines === undefined ? null : (
+        <LinesChanged additions={lines.additions} deletions={lines.deletions} />
+      )}
+    </Inline>
   );
 }
 
@@ -203,8 +214,8 @@ function SizeNote({
  * else their avatar), which hangs their card, and how long ago it was
  * opened where the service said so, "Opened by octo-dev · 3d ago". Note
  * that the time is the opening alone: once it merged or closed, the age the
- * service answers is the merge's or the close's, which the head's corner
- * says beside the state, so the row names the opener and no time.
+ * service answers is the merge's or the close's, so the row names the
+ * opener and no time.
  */
 export function OpenedByRow({
   opener,
@@ -226,35 +237,77 @@ export function OpenedByRow({
   );
 }
 
-/** The agent whose pull request it is, as a quieter row in the provenance row's shape: its tile as the glyph, "By" and its name, which hang the agent's card and open its tab. Note that it is no `ProvenanceRow`, since no verb of that row's reads as a bare "By". */
-function ByAgentRow({ agent }: { agent: PullRequestAgent }): React.JSX.Element {
+/**
+ * The card's foot: who opened the pull request, as a task card says who
+ * created a task (`task-card.tsx`'s `CreatorDetail`). Where one of the
+ * window's agents opened it, the agent's tile wears the person's face at its
+ * corner and the row says "Opened by Invite flow for octo-dev"; else the
+ * person's face and "Opened by octo-dev". Each name hangs its card and opens
+ * what it names, the agent its tab and the person their page. No time
+ * stands here, since the head's line already says the age.
+ */
+function OpenedFoot({
+  opener,
+  agent,
+}: {
+  opener: GitHubPerson | undefined;
+  agent: PullRequestAgent | undefined;
+}): React.JSX.Element | null {
+  const name = useNamer();
+  const person = opener === undefined ? undefined : name(opener);
+
+  if (person === undefined && agent === undefined) return null;
+
+  const personRef = person === undefined ? null : <ActorRef actor={person} sentence nameOnly />;
+
   return (
     <HoverCardRow
+      data-pull-request-opener=""
       look={HOVER_CARD_ROW_LOOK.DETAIL}
-      glyph={<ActorMark actor={agent.subject.tile} size={ACTOR_SIZE.MARK} />}
+      glyph={
+        agent === undefined ? (
+          person === undefined ? null : (
+            <ActorMark actor={person} size={ACTOR_SIZE.INLINE} />
+          )
+        ) : (
+          <ActorMark actor={agent.subject.tile} size={ACTOR_SIZE.INLINE} forWhom={person} />
+        )
+      }
       label={
         <>
-          {"By "}
-          <AgentActorRef
-            subject={agent.subject}
-            models={agent.models}
-            onOpen={agent.onOpen}
-            nameOnly
-          />
+          {"Opened by "}
+          {agent === undefined ? (
+            personRef
+          ) : (
+            <>
+              <AgentActorRef
+                subject={agent.subject}
+                models={agent.models}
+                onOpen={agent.onOpen}
+                nameOnly
+              />
+              {person === undefined ? null : (
+                <>
+                  {" for "}
+                  {personRef}
+                </>
+              )}
+            </>
+          )}
         </>
       }
     />
   );
 }
 
-/** One reviewer's row: their face, their name, which hangs their card, and where they stand at the row's end. */
+/** One reviewer's row: their face, their name, which hangs their card and opens their page, and where they stand at the row's end. */
 function ReviewerRow({ reviewer }: { reviewer: PullRequestReviewer }): React.JSX.Element {
   const actor = useNamer()(reviewer.by);
 
   return (
     <li>
       <HoverCardRow
-        glyph={<ActorMark actor={actor} size={ACTOR_SIZE.ROW} />}
+        glyph={<ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />}
         label={<ActorRef actor={actor} nameOnly />}
         end={REVIEW_WORDS[reviewer.state]}
       />
@@ -278,14 +331,10 @@ export function PullRequestCard({
   place: { readonly taskId: string | null; readonly workspaceId?: string | undefined };
   /** The lines it adds and removes. */
   lines?: StandingPullRequest["lines"];
-  /** How many files it changes. */
-  files?: number | undefined;
   /** When it was last opened, merged, or closed, as its state says. */
   when?: StandingPullRequest["when"];
   branches?: StandingPullRequest["branches"];
   labels?: StandingPullRequest["labels"] | undefined;
-  comments?: number | undefined;
-  commits?: number | undefined;
   /** Who opened it, where GitHub named them. */
   opener?: GitHubPerson | undefined;
   /** The agent whose pull request it is, where one of the window's opened it. */
@@ -302,13 +351,11 @@ export function PullRequestCard({
   const standing = usePlaceStanding(place, pullRequest.url);
   const read = standing?.pullRequest;
   const lines = given.lines ?? read?.lines;
-  const files = given.files ?? read?.files;
   const when = given.when ?? read?.when;
   const branches = given.branches ?? read?.branches;
-  const labels = given.labels ?? read?.labels;
-  const comments = given.comments ?? read?.comments;
-  const commits = given.commits ?? read?.commits;
+  const labels = given.labels ?? read?.labels ?? [];
   const opener = given.opener ?? standing?.opener;
+  const listed = reviewers ?? [];
   const marked = { ...pullRequest, checks: pullRequest.checks ?? CHECK_SUMMARY.NONE };
 
   return (
@@ -316,48 +363,32 @@ export function PullRequestCard({
       <HoverCardHead
         glyph={<PullRequestMark pullRequest={marked} />}
         name={pullRequest.title}
-        sub={`${pullRequestKey(pullRequest)}${SEPARATOR}${pullRequestStateLabel(pullRequest)}`}
-        corner={cornerAge(pullRequest, when)}
+        sub={
+          <span>
+            {pullRequestKey(pullRequest)}
+            {headAge(pullRequest, when)}
+          </span>
+        }
+        corner={pullRequestStateLabel(pullRequest)}
+        cornerTone={standingTone(pullRequest)}
       />
-      <SizeNote
-        lines={lines}
-        files={files}
-        checks={pullRequest.checks}
-        comments={comments}
-        commits={commits}
-      />
-      {branches === undefined ? null : (
-        <HoverCardNote oneLine>
-          <code className="card-code">{branches.base}</code>
-          {" ← "}
-          <code className="card-code">{branches.head}</code>
-        </HoverCardNote>
-      )}
-      {labels === undefined || labels.length === 0 ? null : (
-        <Inline
-          as={LAYOUT_ELEMENT.UL}
-          gap={GAP.TIGHT}
-          align={ALIGN.STRETCH}
-          className="card-labels"
-          aria-label={LABELS_LABEL}
-        >
-          {labels.map((label) => (
-            <li key={label.name}>
-              <Badge swatch={label.color}>{label.name}</Badge>
-            </li>
-          ))}
-        </Inline>
-      )}
-      {opener === undefined ? null : <OpenedByRow opener={opener} when={when} />}
-      {agent === undefined ? null : <ByAgentRow agent={agent} />}
-      {reviewers === undefined || reviewers.length === 0 ? null : (
+      <ChecksRow pullRequest={pullRequest} />
+      <BranchRow branches={branches} lines={lines} />
+      <PullRequestLabels labels={labels} />
+      {listed.length === 0 ? null : (
         <>
           <HoverCardRule />
           <HoverCardList label={REVIEWERS_LABEL}>
-            {reviewers.map((reviewer) => (
+            {listed.map((reviewer) => (
               <ReviewerRow key={reviewer.by.login} reviewer={reviewer} />
             ))}
           </HoverCardList>
+        </>
+      )}
+      {opener === undefined && agent === undefined ? null : (
+        <>
+          <HoverCardRule />
+          <OpenedFoot opener={opener} agent={agent} />
         </>
       )}
     </HoverCard>

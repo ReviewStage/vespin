@@ -54,6 +54,13 @@
     fill: currentcolor;
   }
 
+  /* An icon picker's cell draws its glyph, and an emoji, a step larger
+     than a control's, so a choice reads at a glance. */
+  .ui-button[data-size="picker"] svg {
+    width: var(--ui-icon-20);
+    height: var(--ui-icon-20);
+  }
+
   /* A finger's target: on a coarse pointer a button takes a press
      `--ui-touch-target` across at least, centered on it, while it draws at
      its own size, so a row's 24px mark keeps its glyph and its place. */
@@ -318,44 +325,9 @@
     opacity: 0.7;
   }
 
-  /* A press sinks the button's face a little under the finger and lets it
-     spring back as the press leaves, by transform alone, so nothing beside
-     it moves. Note that the face moves, never the button, because a button
-     that shrank would pull its edge out from under a press made near it,
-     and the release would land on its container and be no click. A row is
-     a menu's row, lit rather than pressed, so it holds still; an
-     unavailable or busy one takes no press, so it gives none. */
+  /* The face fades under a done check and back as it goes (`button.tsx`). */
   .ui-button-face {
-    transition:
-      transform var(--ui-duration-fast) var(--ui-spring-fast),
-      opacity var(--ui-duration-quick) var(--ui-motion-exit);
-  }
-
-  /* Note that the face goes down on the quick exit beat and comes back on
-     the spring, because a click holds the press for a tenth of a second,
-     which the spring's beat would spend before the face had moved. */
-  .ui-button:active:not(:disabled, [aria-disabled="true"], [data-variant="row"]) .ui-button-face {
-    transform: scale(0.9);
-    transition: transform var(--ui-duration-exit) var(--ui-motion-exit);
-  }
-
-  /* Every press a button takes is answered once it lands, so even a click
-     too quick to hold the press down is seen: its face springs back from
-     pressed, and a row, a menu's row, gives a little whole (`press-pulse.css`).
-     A submit's arrow lifts away as the message goes and drops back in. */
-  .ui-button[data-submit="ready"][data-pulse="face"] svg {
-    animation: ui-button-send var(--ui-duration-fast) var(--ui-spring-fast);
-  }
-
-  @keyframes ui-button-send {
-    30% {
-      transform: translateY(-6px);
-      opacity: 0;
-    }
-    31% {
-      transform: translateY(6px);
-      opacity: 0;
-    }
+    transition: opacity var(--ui-duration-quick) var(--ui-motion-exit);
   }
 
   /* A press an unavailable button refuses shakes it, once per press, so the

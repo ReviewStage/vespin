@@ -59,6 +59,11 @@ export const STATUS_WORDS = {
   [CHANGED_FILE_STATUS.RENAMED]: "Renamed",
 } as const satisfies Record<ChangedFileStatus, string>;
 
+/** How many files a pull request changes, in words: "1 file", "6 files". */
+export function filesWords(files: number): string {
+  return `${files} ${files === 1 ? "file" : "files"}`;
+}
+
 /** The minus sign a count of removed lines wears, as GitHub writes it. */
 const MINUS = "−";
 
@@ -79,10 +84,8 @@ export type ChangesTally = {
 
 /** The line `changesLine` writes, in runs, each count marked as the lines added or removed, so a client may ink them as each file's row inks its own. */
 export function changesRuns(changed: ChangesTally): readonly ChangesRun[] {
-  const noun = changed.files === 1 ? "file" : "files";
-
   return [
-    { words: `${changed.files} ${noun} · ` },
+    { words: `${filesWords(changed.files)} · ` },
     { words: `+${changed.additions}`, count: CHANGES_COUNT.ADDED },
     { words: " " },
     { words: `${MINUS}${changed.deletions}`, count: CHANGES_COUNT.REMOVED },

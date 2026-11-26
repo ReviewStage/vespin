@@ -9,7 +9,10 @@
 # activity's words; on an iPhone each presentation's words are required, each
 # where that presentation draws them: the rows on the Lock Screen, the Inbox
 # glyph and a timer on the compact island, and "3 working" with the rows
-# once expanded.
+# once expanded. An iPhone with a notch rather than a Dynamic Island
+# (`DYNAMIC_ISLAND` false, from `scripts/simulator-screenshots.sh`) has no
+# island to expand, so only its Lock Screen's words are required; where the
+# variable is unset, as in a run by hand, the island is taken to be there.
 appId: dev.vespin.ios
 ---
 - launchApp:
@@ -58,7 +61,7 @@ appId: dev.vespin.ios
     point: "50%,4%"
 - runFlow:
     when:
-      true: ${FLOATING_TABS != 'true'}
+      true: ${FLOATING_TABS != 'true' && DYNAMIC_ISLAND != 'false'}
     commands:
       - extendedWaitUntil:
           visible: "Fix the token refresh"

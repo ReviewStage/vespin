@@ -15,7 +15,7 @@
  * a coding agent shows of the same thing: its repositories, on the chip
  * New Manager picks them with (`RepositoriesChip`), its checkout named and
  * the rest counted after it, held, since an agent's repositories are fixed
- * once it starts, whatever its kind, its hint naming every one; and,
+ * once it starts, whatever its kind, its card listing every one; and,
  * read off its own message box (`useAgentBox`), so they cannot drift from
  * it, where it runs, the box's place chip, moving it where a coder's moves,
  * and its model, the box's model chip with its permission mode and the
@@ -90,6 +90,7 @@ import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuAction } from "./action-menu.js";
 import { AutomationRows } from "./automations-page.js";
+import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
 import { ManagerPeopleSection } from "./manager-people-section.js";
 import { useAutomations } from "./use-automations.js";
 
@@ -121,7 +122,7 @@ const UNNAMED = "Manager settings";
 const WORDS = {
   NAME: "Manager name",
   REPOSITORIES: "Repositories",
-  REPOSITORIES_HELD: "Set when this Manager was made: ",
+  REPOSITORIES_HELD: "Set when this Manager was made.",
   MACHINE: "Machine",
   MODEL: "Model",
   ARCHIVE: "Archive",
@@ -219,6 +220,7 @@ function IdentityRow({
       leading={
         <ManagerFaceWell
           face={agent.face}
+          recent={RECENT_MANAGER_FACES}
           open={picking}
           onOpenChange={setPicking}
           onChange={pick}
@@ -245,9 +247,10 @@ function IdentityRow({
 
 /**
  * Who pays for the Manager's turns, said under its Model: its starter's
- * subscriptions, named as the reader's own where they started it. With the
- * Manager acting for whoever asks (`MANAGER_ACTS_FOR_ASKER`), what it starts
- * for a reader who is not its starter runs on that reader's, as the experiment's own line says; its starter hears nothing more, since everything already runs on theirs.
+ * subscriptions, named as the reader's own where they started it. What it
+ * starts for a reader who is not its starter runs on that reader's, since a
+ * Manager acts for whoever asked; its starter hears nothing more, since
+ * everything already runs on theirs.
  */
 function PayerLine({
   agent,
@@ -257,20 +260,15 @@ function PayerLine({
   me: string | undefined;
 }): React.JSX.Element {
   const owner = teammateStarter(agent.startedBy, me);
-  const forAsker = useWorkspaceExperiment(agent.workspaceId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER);
+
+  if (owner === undefined) return <>{WORDS.RUNS_ON_YOURS}</>;
 
   return (
     <>
-      {owner === undefined ? (
-        WORDS.RUNS_ON_YOURS
-      ) : (
-        <>
-          {WORDS.RUNS_ON_PREFIX}
-          <ReplayMask>{owner}</ReplayMask>
-          {WORDS.RUNS_ON_SUFFIX}
-        </>
-      )}
-      {forAsker && owner !== undefined ? WORDS.STARTS_ON_YOURS : null}
+      {WORDS.RUNS_ON_PREFIX}
+      <ReplayMask>{owner}</ReplayMask>
+      {WORDS.RUNS_ON_SUFFIX}
+      {WORDS.STARTS_ON_YOURS}
     </>
   );
 }
@@ -318,8 +316,8 @@ function heldPick(): void {}
 
 /**
  * The Repositories row: the chip New Manager picks them with, its checkout
- * named and the rest counted after it, held, its hint saying so and naming
- * every one in order; none for a Manager with none.
+ * named and the rest counted after it, held, its card listing every one in
+ * order and saying why it is held; none for a Manager with none.
  */
 function RepositoriesRow({ agent }: { agent: SettingsManager }): React.JSX.Element | null {
   const { repositories } = agent;
@@ -336,7 +334,7 @@ function RepositoriesRow({ agent }: { agent: SettingsManager }): React.JSX.Eleme
           values={repositories}
           chooser={chooser}
           onToggle={heldPick}
-          held={`${WORDS.REPOSITORIES_HELD}${repositories.join(", ")}`}
+          held={WORDS.REPOSITORIES_HELD}
         />
       )}
     </SettingsRow>

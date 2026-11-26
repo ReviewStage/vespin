@@ -83,7 +83,6 @@ import {
 import { cn } from "../../cn.js";
 import { ChevronRightIcon } from "../../icons/lucide-glyphs.js";
 import { joinRefs } from "../../join-refs.js";
-import { pulseOnPress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { type CountPart, CountParts } from "../choice/count-part.js";
 import {
@@ -308,12 +307,12 @@ const OPTION = cn(
  */
 const OPTION_LOOK = {
   fill: {
-    regular: "h-control py-0 px-2 gap-1.5 text-label",
-    compact: "h-choice-fill-compact py-0 px-1.5 gap-1 text-caption",
+    regular: "h-control py-0 px-2 gap-icon-gap-regular text-label",
+    compact: "h-choice-fill-compact py-0 px-1.5 gap-icon-gap-compact text-caption",
   },
   segmented: {
-    regular: "h-choice-segment py-0 px-3 gap-1.5 text-label",
-    compact: "h-choice-segment-compact py-0 px-2 gap-1 text-caption",
+    regular: "h-choice-segment py-0 px-3 gap-icon-gap-regular text-label",
+    compact: "h-choice-segment-compact py-0 px-2 gap-icon-gap-compact text-caption",
   },
 } as const satisfies Record<ChoiceBarLook, Record<ChoiceBarSize, string>>;
 
@@ -970,7 +969,6 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
             className={optionClass}
             disabled={disabled || item.disabled === true}
             onMouseDown={roving ? undefined : keepFocus}
-            onClick={pulseOnPress()}
           >
             {item.icon === undefined || words ? null : (
               <span className={ICON} aria-hidden="true">

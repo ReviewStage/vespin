@@ -128,11 +128,17 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
-import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
+import {
+  MANAGER_CHAT_AUTHOR,
+  MANAGER_CHAT_REACTION,
+  type ManagerChatReactionPress,
+  withReactionPress,
+} from "@repo/features/manager-chat-live";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
   type ManagerFace,
+  sameManagerFace,
 } from "@repo/features/manager-face";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
@@ -2119,25 +2125,41 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
   },
 ];
 
-/** The threads a fixture run started on the invites task's description, by id, so a reply or a resolve on one finds it as it does a staged thread. */
-const STARTED_THREADS = new Map<string, DescriptionCommentThread>();
+/**
+ * The threads a fixture run wrote on the invites task's description, by id,
+ * each as the run last left it: one it started, or a staged one it replied
+ * to, resolved, or reopened. Note that the run's answers are given before
+ * the act reaches the host, so no declared write draws them; the comments
+ * slice lays them over the staged threads instead (`stagedComments`).
+ */
+const RUN_THREADS = new Map<string, DescriptionCommentThread>();
+
+/** How many times the run has written a thread, so a comments slice laid before the latest write is laid again rather than read from the cache. */
+let runThreadWrites = 0;
 
 /** The number the next entry the run writes is given its id by, a kept reply or a resolve's or reopen's line, past every id the fixture stages, so each is keyed apart. */
 let nextReplyId = 1000;
 
-/** Keeps a started thread as it now stands, moved on a revision, and answers it. */
-function keepStarted(thread: DescriptionCommentThread): DescriptionCommentThread {
-  const kept = { ...thread, revision: thread.revision + 1, updatedAt: Date.now() };
+/** Keeps a thread the run wrote as it now stands, and answers it. */
+function keepRunThread(thread: DescriptionCommentThread): DescriptionCommentThread {
+  RUN_THREADS.set(thread.id, thread);
+  runThreadWrites += 1;
 
-  STARTED_THREADS.set(kept.id, kept);
-
-  return kept;
+  return thread;
 }
 
-/** Each held comments slice with the reference journey's description threads laid over it, one object for each. */
+/** Keeps a thread the run changed, moved on a revision, and answers it. */
+function keepChanged(thread: DescriptionCommentThread): DescriptionCommentThread {
+  return keepRunThread({ ...thread, revision: thread.revision + 1, updatedAt: Date.now() });
+}
+
+/** Each held comments slice with the reference journey's description threads laid over it, and how many thread writes of the run it holds, so a write since lays it again. */
 const STAGED_COMMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS],
-  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS]
+  {
+    readonly writes: number;
+    readonly laid: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_COMMENTS];
+  }
 >();
 
 function stagedComments(
@@ -2146,23 +2168,31 @@ function stagedComments(
   const held = state[LIVE_READ.DESCRIPTION_COMMENTS];
   const staged = STAGED_COMMENTS.get(held);
 
-  if (staged !== undefined) return staged;
+  if (staged?.writes === runThreadWrites) return staged.laid;
 
-  // Note that a thread a fixture run started stands after the staged ones, as the host drew it, so the new comment's thread opens on its page.
-  const started = (held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows ?? []).filter(
+  // Note that each staged thread stands as the run last left it, then each thread the run started, in the order it started them, then any other the host drew.
+  const standing = INVITES_THREADS.map((thread) => RUN_THREADS.get(thread.id) ?? thread);
+
+  const started = [...RUN_THREADS.values()].filter(
     (thread) => !INVITES_THREADS.some((each) => each.id === thread.id),
+  );
+
+  const drawn = (held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows ?? []).filter(
+    (thread) =>
+      !RUN_THREADS.has(thread.id) && !INVITES_THREADS.some((each) => each.id === thread.id),
   );
 
   const laid = {
     ...held,
     [COMMENT_SUBJECT.DESCRIPTION]: {
       ...held[COMMENT_SUBJECT.DESCRIPTION],
-      [TASK.INVITES]: { rows: [...INVITES_THREADS, ...started] },
+      [TASK.INVITES]: { rows: [...standing, ...started, ...drawn] },
     },
   };
 
-  STAGED_COMMENTS.set(held, laid);
-  STAGED_COMMENTS.set(laid, laid);
+  const entry = { writes: runThreadWrites, laid };
+  STAGED_COMMENTS.set(held, entry);
+  STAGED_COMMENTS.set(laid, entry);
 
   return laid;
 }
@@ -2223,7 +2253,9 @@ const MANAGER_THREAD_ROOT = "7b2d40e8";
  * the thread of the first of them, the account's question and the
  * Manager's answer, which the chat sums as "2 replies" under it. First
  * of all stands a picture the account sent with no words with its ask,
- * whose own long press opens its thread.
+ * whose own long press opens its thread. The Manager gave the account's
+ * ask its 👍, the account and Grace gave its first answer theirs, and the
+ * account gave its 👍 to the answer in the thread.
  */
 const MANAGER_CHAT: AppManagerChat = {
   messages: [
@@ -2242,6 +2274,7 @@ const MANAGER_CHAT: AppManagerChat = {
       lineId: null,
       createdAt: MANAGER_STARTED + 5 * MINUTE,
       editedAt: null,
+      reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 1, reacted: true }],
     },
     {
       id: "5d9e2a70",
@@ -2290,6 +2323,7 @@ const MANAGER_CHAT: AppManagerChat = {
       lineId: null,
       createdAt: MANAGER_STARTED + 2 * MINUTE,
       editedAt: null,
+      reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 2, reacted: true }],
     },
     {
       id: "e0f5a612",
@@ -2306,6 +2340,7 @@ const MANAGER_CHAT: AppManagerChat = {
       lineId: "fixture-manager-ask",
       createdAt: MANAGER_STARTED,
       editedAt: null,
+      reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 1, reacted: false }],
     },
     {
       id: "9a41c6d2",
@@ -2331,6 +2366,14 @@ const MANAGER_CHAT: AppManagerChat = {
     },
   ],
 };
+
+/** The account's reactions given the release Manager's chat or taken off it in this run, oldest pressed first, which the chat stands with, as the service would. */
+let managerChatPresses: readonly ManagerChatReactionPress[] = [];
+
+/** The release Manager's chat with the account's reactions in this run drawn on it. */
+function reactedManagerChat(): AppManagerChat {
+  return { messages: managerChatPresses.reduce(withReactionPress, MANAGER_CHAT.messages) };
+}
 
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
 function withQueued(transcript: AppTranscript): AppTranscript {
@@ -2851,7 +2894,7 @@ export function inboxAppState(
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MANAGER_CHAT]: {
       ...state[LIVE_READ.MANAGER_CHAT],
-      [AGENT.MANAGER]: { rows: MANAGER_CHAT },
+      [AGENT.MANAGER]: { rows: reactedManagerChat() },
     },
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
@@ -3248,18 +3291,13 @@ const CHANGED_FIELDS = [
   "title",
 ] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face" | "archived">[];
 
-/** Whether every field of the change already stands on the agent, a face by its character and color. */
+/** Whether every field of the change already stands on the agent, a face by its character, color, and emoji. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
   const { face, archived } = change;
 
   if (archived !== undefined && archived !== (agent.archivedAt !== undefined)) return false;
 
-  if (
-    face !== undefined &&
-    (face.character !== agent.face?.character || face.color !== agent.face?.color)
-  ) {
-    return false;
-  }
+  if (face !== undefined && !sameManagerFace(face, agent.face)) return false;
 
   return CHANGED_FIELDS.every((key) => {
     const value = change[key];
@@ -3882,6 +3920,20 @@ const ANSWERS: StagedAnswers = {
 
     return { agent: held, messageId: clientKey };
   },
+  // Note that a reaction to a message of the release Manager's chat is kept for the run, so the chat stands with it as it would once its read carries it; the panel's run stages its document again on it (`tasks-fixture-loader.ts`).
+  [ACT_KIND.AGENTS_CHAT_REACT]: ({ agentId, messageId, kind, reacted }) => {
+    if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const message = reactedManagerChat().messages.find((each) => each.id === messageId);
+    const mine = message?.reactions?.find((each) => each.kind === kind)?.reacted ?? false;
+
+    const others = managerChatPresses.filter(
+      (each) => each.messageId !== messageId || each.kind !== kind,
+    );
+
+    managerChatPresses = [...others, { messageId, kind, reacted }];
+
+    return { changed: message !== undefined && mine !== reacted };
+  },
   [ACT_KIND.AGENTS_QUEUE]: ({ agentId }) => {
     if (stagedAgent(agentId) === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
@@ -3995,14 +4047,33 @@ const ANSWERS: StagedAnswers = {
   },
   // The invitations task's repository's skills, as the service finds them.
   [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
-  // The invitations task's repository's tree, read whole as an `@` reads its files and folders; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
+  // The invitations task's repository's tree, read whole as an `@` reads its files and folders, through the task or, as the Manager's box reads it, through the workspace; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
   [ACT_KIND.TASKS_TREE]: (asked) =>
-    "taskId" in asked &&
-    asked.taskId === TASK.INVITES &&
     asked.recursive === true &&
-    asked.path === ""
+    asked.path === "" &&
+    ("taskId" in asked
+      ? asked.taskId === TASK.INVITES
+      : asked.repository === INVITES_TREE.repository)
       ? { folder: INVITES_TREE }
       : { failure: TASK_CALL_FAILURE.UNANSWERED },
+  // The machines of the workspace's members an `@` offers: Ada's own, the one away offline.
+  [ACT_KIND.WORKSPACE_MACHINES_READ]: () => ({
+    machines: HOSTS.flatMap((host) =>
+      host.platform === undefined
+        ? []
+        : [
+            {
+              id: host.id,
+              name: host.name,
+              platform: host.platform,
+              userId: ADA.userId,
+              online: host.away !== true,
+            },
+          ],
+    ),
+  }),
+  // Ada's machines always allow no app, so an `@` offers none of theirs.
+  [ACT_KIND.HOSTS_ALLOWED_APPS]: () => ({ machines: [] }),
   [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
     const held = stagedAgent(agentId);
 
@@ -4055,7 +4126,7 @@ const ANSWERS: StagedAnswers = {
   // Note that a description's edit is taken as the service takes one, though nothing here moves, so the page draws the description it held.
   [ACT_KIND.TASKS_EDIT]: () => ({ saved: true }),
   [ACT_KIND.TASKS_DELETE]: () => true,
-  // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose, so a flow sees the thread open with the words as its first comment.
+  // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose and kept on the comments slice, so a flow sees the thread open with the words as its first comment.
   [ACT_KIND.TASKS_COMMENT_START]: ({ taskId, start }) => {
     if (taskId !== TASK.INVITES || !("scope" in start)) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
@@ -4084,22 +4155,18 @@ const ANSWERS: StagedAnswers = {
       revision: 1,
     };
 
-    STARTED_THREADS.set(thread.id, thread);
-
-    return { thread };
+    return { thread: keepRunThread(thread) };
   },
-  // Note that a reply is taken as the service takes one, on a staged thread or one the run started, answered with its thread as it then stands, though nothing here moves.
+  // Note that a reply, a resolve, or a reopen is taken as the service takes one, on a staged thread or one the run started, answered with its thread as it then stands and kept on the comments slice, so the thread's page and its task's Comments draw it moved.
   [ACT_KIND.TASKS_COMMENT_ACT]: ({ taskId, threadId, action }) => {
     const thread =
-      INVITES_THREADS.find((each) => each.id === threadId) ?? STARTED_THREADS.get(threadId);
+      RUN_THREADS.get(threadId) ?? INVITES_THREADS.find((each) => each.id === threadId);
 
     if (taskId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
     }
 
-    const started = STARTED_THREADS.has(thread.id);
-
-    // Note that a resolve or a reopen answers the thread at the status asked, with its line by Ada at the end, as the service answers one, so the host never draws it back as it stood; a thread the run started keeps it, with its replies, so a later answer carries them.
+    // Note that a resolve or a reopen answers the thread at the status asked, with its line by Ada at the end, as the service answers one, so the host never draws it back as it stood.
     if (
       action.action === DESCRIPTION_COMMENT_ACTION.RESOLVE ||
       action.action === DESCRIPTION_COMMENT_ACTION.REOPEN
@@ -4120,14 +4187,14 @@ const ANSWERS: StagedAnswers = {
         entries: [...thread.entries, line],
       };
 
-      return { thread: started ? keepStarted(settled) : settled };
+      return { thread: keepChanged(settled) };
     }
 
     if (action.action !== DESCRIPTION_COMMENT_ACTION.REPLY) return { thread };
 
-    // Note that a reply kept on a started thread takes an id of its own, since the thread's rows are keyed by their entries' ids; a staged thread's one reply, never kept, keeps its fixed id.
+    // Note that each kept reply takes an id of its own, since the thread's rows are keyed by their entries' ids.
     const reply = {
-      id: started ? fixtureId(nextReplyId++) : fixtureId(306),
+      id: fixtureId(nextReplyId++),
       kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
       writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
       words: action.words,
@@ -4136,7 +4203,7 @@ const ANSWERS: StagedAnswers = {
 
     const replied = { ...thread, entries: [...thread.entries, reply] };
 
-    return { thread: started ? keepStarted(replied) : replied };
+    return { thread: keepChanged(replied) };
   },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,

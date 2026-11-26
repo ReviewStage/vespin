@@ -5,12 +5,10 @@ import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
 import {
-  actOnDescriptionCommentThread,
   DESCRIPTION_COMMENT_OUTCOME,
   type DescriptionCommentOutcome,
   type DescriptionCommentWriterRef,
   readDescriptionCommentThreads,
-  startDescriptionCommentThread,
 } from "@repo/database/models/description-comments";
 import { writePage } from "@repo/database/models/task-pages";
 import { createTask, saveDescriptionText } from "@repo/database/models/task-store";
@@ -26,9 +24,14 @@ import {
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
-import { Duration, Effect, Option, Schema } from "effect";
+import { Duration, Effect, Layer, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
+import {
+  actOnDescriptionCommentThread,
+  startDescriptionCommentThread,
+} from "../../tasks/description-comment-writes.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import { taskCommentsRead } from "./task-comments.js";
 
 /** Which of the task's threads a read follows: the description's own where it names no page, or the page's it names. */
@@ -102,7 +105,10 @@ const liveThreadsOf = (reader: string, subject: TaskCommentsSubject) =>
     return threadsOfLiveRows(rows);
   });
 
-it.layer(getTestDB())("a task's comments followed live", (it) => {
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+it.layer(Layer.merge(getTestDB(), blobs.layer))("a task's comments followed live", (it) => {
   it.effect(
     "answers what readDescriptionCommentThreads answers for a description and for a page as threads are started, replied to, resolved, edited and deleted, files among them, and nothing to a stranger",
     () =>

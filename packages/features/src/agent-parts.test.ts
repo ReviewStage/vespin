@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { test } from "vitest";
 import { AGENT_PART, agentPart, computerAppNamed, computerAppsOf } from "./agent-parts.js";
+import { calledPicturesOf } from "./agent-pictures-model.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 import { settledToolPart, TOOL_CALL_SETTLEMENT } from "./turn-run/index.js";
 
@@ -183,4 +184,39 @@ test("a command the service settled as killed out of memory reads the sandbox's 
     memoryGb: 4,
   });
   assert.equal(read(settledToolPart(started, failed)), undefined);
+});
+
+test("a CLI tool's answer the service settled with its runner's kept pictures draws them as the call's set, and one settled without draws none", () => {
+  const started = {
+    type: "tool-Read",
+    toolCallId: "call_read_shot",
+    state: "input-available",
+    input: { file_path: "/tmp/shot.png" },
+  } as const;
+
+  const answered = {
+    state: TOOL_CALL_SETTLEMENT.OUTPUT_AVAILABLE,
+    output: "[image]",
+  } as const;
+
+  const shot = {
+    id: "pic_1",
+    mediaType: "image/png",
+    width: 800,
+    height: 600,
+    byteCount: 2048,
+  } as const;
+
+  const drawnSet = (part: ReturnType<typeof settledToolPart>) => {
+    const drawn = agentPart(JSON.parse(JSON.stringify(part)));
+
+    return drawn.kind === AGENT_PART.TOOL
+      ? calledPicturesOf(drawn.tool, drawn.input, drawn.output, drawn.pictures)
+      : "not a call";
+  };
+
+  assert.deepEqual(drawnSet(settledToolPart(started, { ...answered, pictures: [shot] })), [
+    { kept: true, picture: shot, name: "read_file-1" },
+  ]);
+  assert.deepEqual(drawnSet(settledToolPart(started, answered)), []);
 });

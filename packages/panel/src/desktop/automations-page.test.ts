@@ -53,7 +53,6 @@ import {
 import { layContainersAt } from "../testing/container-width.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
-import { playMotions } from "../testing/pane-motion.js";
 import { relayout } from "../testing/resize-observer.js";
 import { newTaskControl, tasksControl } from "../testing/tasks-control.js";
 
@@ -953,35 +952,6 @@ test("the Runs panel hides and shows by its toggle and by the side panel's chord
   act(() => runAppCommand(APP_COMMAND.TOGGLE_SIDE_PANEL));
   assert.ok(again.querySelector("aside[aria-label='Runs']"), "⌥⌘B brings it back");
   window.localStorage.clear();
-});
-
-test("the Runs panel slides out past the page's right edge as it is hidden, held drawn and out of reach until it has, and slides back in as it is shown", async () => {
-  window.localStorage.clear();
-  const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
-  await settle();
-  const pane = () => page.querySelector<HTMLElement>(".automation-runs-pane");
-  const motions = playMotions();
-
-  try {
-    act(() => button("Hide runs").click());
-    const leaving = pane() ?? assert.fail("the panel is held drawn through its slide out");
-    assert.ok(leaving.hasAttribute("data-leaving"), "it has left the layout");
-    assert.ok(leaving.hasAttribute("inert"), "nothing in it is reached on its way out");
-    const exit = motions.played.find((each) => each.element === leaving);
-    assert.deepEqual(exit?.keyframes.at(-1), { transform: "translateX(100%)" });
-
-    act(() => exit?.finish());
-    assert.equal(pane() === null, true, "it is let go once its slide has played");
-
-    act(() => button("Show runs").click());
-    const arriving = pane() ?? assert.fail("it stands again");
-    assert.equal(arriving.hasAttribute("data-leaving"), false);
-    const entry = motions.played.find((each) => each.element === arriving);
-    assert.deepEqual(entry?.keyframes, [{ transform: "translateX(100%)" }, { transform: "none" }]);
-  } finally {
-    motions.remove();
-    window.localStorage.clear();
-  }
 });
 
 test("the Runs panel's edge resizes it within its bounds, and the width stands on the next page", async () => {

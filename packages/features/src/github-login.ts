@@ -1,4 +1,6 @@
-// github-login.ts -- what a GitHub account is called, an App's bot's login without the suffix GitHub gives it, and the word its tag says, for every client that names one.
+// github-login.ts -- what a GitHub account is called, an App's bot's login without the suffix GitHub gives it, the word its tag says, and its own page on GitHub, for every client that names one.
+
+import { GITHUB_ORIGIN } from "./link-grammar.js";
 
 /** The suffix GitHub gives an App's bot's login (`coderabbitai[bot]`), which its name drops since its tag says it is one. */
 export const BOT_LOGIN_SUFFIX = "[bot]";
@@ -19,4 +21,12 @@ export function githubLoginName(account: {
   return account.bot && isBotLogin(account.login)
     ? account.login.slice(0, -BOT_LOGIN_SUFFIX.length)
     : account.login;
+}
+
+/** A GitHub account's own page, which a press on its name opens: a person's profile, or the App's page for an App's bot. */
+export function githubAccountPage(login: string, bot: boolean): string {
+  const app = bot && isBotLogin(login);
+  const path = app ? `apps/${login.slice(0, -BOT_LOGIN_SUFFIX.length)}` : login;
+
+  return new URL(path, `${GITHUB_ORIGIN}/`).href;
 }

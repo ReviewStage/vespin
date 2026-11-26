@@ -6,14 +6,13 @@ import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
 import {
   DESCRIPTION_ATTACHMENT_KEEP,
-  keepDescriptionAttachment,
   readDescriptionAttachment,
   type StoredDescriptionFile,
 } from "@repo/database/models/description-attachments";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, inlineBytesOf, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
 import {
   DESCRIPTION_ATTACHMENT_BOUNDS,
@@ -23,9 +22,11 @@ import { descriptionSections } from "@repo/features/description-sections";
 import { PICTURE_BOUNDS, PICTURE_MEDIA_TYPE, PICTURE_TYPE } from "@repo/features/picture-wire";
 import { unparsedWire } from "@repo/wire";
 import { paddedTo, webmBytes } from "@repo/wire/testing";
-import { Effect, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { Base64 } from "effect/encoding";
 import { ACTION_RESULT_STATUS } from "../../core.js";
+import { keepDescriptionFileBytes } from "../../storage/attachment-keeps.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import { CODER } from "./bounds.js";
 import {
   DESCRIPTION_EDIT_REFUSAL,
@@ -129,7 +130,10 @@ function pictureCall(path: string) {
   };
 }
 
-it.layer(getTestDB())("edit_description's pictures", (it) => {
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+it.layer(Layer.merge(getTestDB(), blobs.layer))("edit_description's pictures", (it) => {
   it.effect(
     "a screenshot lands as its line under its section, kept as a picture every member reads and nobody else does, in a save that is the agent's, and the answer carries none of its bytes",
     () =>
@@ -184,7 +188,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
             Option.some(PICTURE_TYPE.PNG),
           );
           assert.deepEqual(
-            Option.map(read, ({ body }) => [...inlineBytesOf(body)]),
+            Option.map(read, ({ body }) => [...blobs.bytesOf(body)]),
             Option.some([...SCREENSHOT]),
           );
         }
@@ -254,7 +258,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
         // One place left, which a call adding two takes with its first before its second is refused.
         for (let kept = 1; kept < DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION; kept += 1) {
           const picture = { contentType: PICTURE_TYPE.PNG, bytes: SCREENSHOT };
-          const answer = yield* keepDescriptionAttachment(full.owner, full.taskId, picture);
+          const answer = yield* keepDescriptionFileBytes(full.owner, full.taskId, picture);
           assert.equal(answer.status, DESCRIPTION_ATTACHMENT_KEEP.KEPT);
         }
 
@@ -362,7 +366,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
           Option.some(PICTURE_MEDIA_TYPE.WEBM),
         );
         assert.deepEqual(
-          Option.map(read, ({ body }) => inlineBytesOf(body).length),
+          Option.map(read, ({ body }) => blobs.bytesOf(body).length),
           Option.some(recording.length),
         );
       }),

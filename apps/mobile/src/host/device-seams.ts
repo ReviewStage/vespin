@@ -12,7 +12,7 @@ import { PRODUCT_LAUNCHED_IN } from "@repo/features/analytics";
 import { randomUUID } from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
 import { openURL } from "expo-linking";
-import { openDatabaseSync } from "expo-sqlite";
+import { openDatabaseAsync, openDatabaseSync } from "expo-sqlite";
 import { AppState } from "react-native";
 import { keepHostLine } from "../crash-reports.js";
 import { launchBeganAway } from "../launch-state.js";
@@ -97,7 +97,7 @@ export function deviceSeams(): DeviceSeams {
     tokenVault: keychainTokens,
     authSession: webAuthSession,
     keepShareToken,
-    localDatabaseDriver: expoSqliteDriver(openDatabaseSync),
+    localDatabaseDriver: expoSqliteDriver(openDatabaseSync, openDatabaseAsync),
     keepLine: keepHostLine,
     renewalWindow,
     fileDownload: nativeFileDownload,

@@ -15,7 +15,6 @@ import { cn } from "../../cn.js";
 import { isComposingKey } from "../../composing-key.js";
 import { cssCustomProperties } from "../../css.js";
 import { CheckIcon, ChevronRightIcon } from "../../icons/lucide-glyphs.js";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import {
   DROPDOWN_MENU_ITEM,
@@ -37,6 +36,7 @@ import {
   POPOVER_WIDTH,
   type PopoverWidth,
 } from "../anchored-popover/anchored-popover.js";
+import { iconPickerChoiceOf } from "../icon-picker/icon-picker.js";
 import { OneLine } from "../one-line/one-line.js";
 import { ROVING_STOP, rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { SCROLL_FADE, SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
@@ -742,9 +742,11 @@ function keyedEntryOf(
 /**
  * Whether a press landed on the card an item of one of `menus` hangs, or on
  * a card hung from a control on that card, as a person named on an agent's
- * card hangs their own. Each card stands apart from the menu, portaled to
- * the body, so it is traced back through the control it hangs from
- * (`hintedControlOf`), card by card, until one stands in a menu.
+ * card hangs their own, or on the colors an icon picker's choice floats in
+ * a panel, as a Manager's face's do. Each stands apart from the menu,
+ * portaled to the body, so it is traced back through the control it hangs
+ * from (`hintedControlOf`, `iconPickerChoiceOf`), one by one, until one
+ * stands in a menu.
  */
 function onItemCard(target: Node | null, menus: readonly (HTMLElement | null)[]): boolean {
   const seen = new Set<Node>();
@@ -752,7 +754,7 @@ function onItemCard(target: Node | null, menus: readonly (HTMLElement | null)[])
 
   while (on !== null && !seen.has(on)) {
     seen.add(on);
-    const control = hintedControlOf(on);
+    const control = hintedControlOf(on) ?? iconPickerChoiceOf(on);
 
     if (control === undefined) return false;
 
@@ -1072,8 +1074,6 @@ export function MenuItem({
     );
   }
 
-  const pressed = pulseOnPress(onChoose, PRESS_PULSE.QUIET);
-
   const shared = {
     nativeButton: true,
     // Note that a dimmed item is a disabled button outright, as it was,
@@ -1093,7 +1093,7 @@ export function MenuItem({
     closeOnClick: false,
     onClick: (event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
       event.preventBaseUIHandler();
-      pressed(event);
+      onChoose();
     },
   } as const;
 
@@ -1172,7 +1172,7 @@ function SteeredItem({
     "data-detail": secondLine(action) ? "true" : undefined,
     onMouseDown: (event: React.MouseEvent) => event.preventDefault(),
     onMouseMove: off ? undefined : steered.onHover,
-    onClick: off ? undefined : pulseOnPress(onChoose, PRESS_PULSE.QUIET),
+    onClick: off ? undefined : onChoose,
   } as const;
 
   // A setting is a switch for the keyboard and the reader, whatever its end draws.
@@ -1431,11 +1431,11 @@ function Submenu({
         data-open={open ? "true" : undefined}
         {...{ [SUBMENU_ITEM_ATTRIBUTE]: entry.label }}
         endClassName={endSlot(entry.hint !== undefined, false)}
-        onClick={pulseOnPress((event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
+        onClick={(event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
           // Note that Base UI's own press would take focus back to the item after it went into the submenu.
           event.preventBaseUIHandler();
           enter();
-        }, PRESS_PULSE.QUIET)}
+        }}
         onKeyDown={(event: BaseUIEvent<React.KeyboardEvent<HTMLElement>>) => {
           if (event.key !== "ArrowRight") return;
           event.preventDefault();
@@ -1519,9 +1519,18 @@ function namedItemOf(
 /** What in a panel may take the keyboard as it opens, after its search field. */
 const PANEL_CONTROL = 'button, [href], [tabindex]:not([tabindex="-1"])';
 
+/** Whether the focus stands in `panel`, or in the colors an icon picker's choice in it floats (`iconPickerChoiceOf`), portaled to the body. */
+function focusIn(panel: HTMLElement): boolean {
+  const focused = document.activeElement;
+
+  if (focused === null) return false;
+
+  return panel.contains(focused) || panel.contains(iconPickerChoiceOf(focused) ?? null);
+}
+
 /** Takes the keyboard into `panel`, where its own drawing has not already: its search field first, then its first control, else the panel. */
 function focusInto(panel: HTMLElement): void {
-  if (panel.contains(document.activeElement)) return;
+  if (focusIn(panel)) return;
 
   const start =
     panel.querySelector<HTMLElement>('input:not([type="hidden"]), textarea') ??
@@ -1608,10 +1617,10 @@ function PanelItem({
       data-popup-open={open ? "" : undefined}
       {...{ [PANEL_ATTRIBUTE]: entry.label }}
       closeOnClick={false}
-      onClick={pulseOnPress((event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
+      onClick={(event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
         event.preventBaseUIHandler();
         onEnter();
-      }, PRESS_PULSE.QUIET)}
+      }}
       onKeyDown={(event: BaseUIEvent<React.KeyboardEvent<HTMLElement>>) => {
         if (event.key !== "ArrowRight") return;
         event.preventDefault();
@@ -2234,7 +2243,7 @@ function SheetItem({
     "data-detail": secondLine(action) ? "true" : undefined,
     [SUBMENU_ATTRIBUTE]: submenu,
     ...rovingItem(),
-    onClick: pulseOnPress(onChoose, PRESS_PULSE.QUIET),
+    onClick: onChoose,
     onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
       if (submenu === undefined || event.key !== "ArrowRight") return;
       event.preventDefault();

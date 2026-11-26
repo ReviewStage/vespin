@@ -6,7 +6,7 @@ import { writePage } from "@repo/database/models/task-pages";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openTaskAgent, startTask } from "@repo/database/testing";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
-import { type Context, Effect, Option } from "effect";
+import { type Context, Effect, Layer, Option } from "effect";
 import {
   recordingProductAnalytics,
   SERVER_AGENT_TOOL,
@@ -15,6 +15,7 @@ import {
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
+import { memoryBlobStore } from "../testing/blob-store-fake.js";
 import { taskFilesProcedures } from "./task-files-procedures.js";
 
 /**
@@ -95,7 +96,7 @@ const readNewestAs = (userId: string, taskId: string, pageId: string) =>
     return { status: response.status, version: body.page.version, html: body.page.html };
   });
 
-it.layer(getTestDB())("the plan files route", (it) => {
+it.layer(Layer.merge(getTestDB(), memoryBlobStore().layer))("the plan files route", (it) => {
   it.effect(
     "a picture added to a description is counted under the member in the plan's workspace, and one refused is not",
     () =>

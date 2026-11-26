@@ -31,7 +31,14 @@
 import { AGENT_PART, type AgentPart, agentParts, isShownSet } from "./agent-parts.js";
 import { isChatSendTool } from "./agent-tools.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
-import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "./manager-chat-live.js";
+import {
+  isOfferedReaction,
+  MANAGER_CHAT_AUTHOR,
+  MANAGER_CHAT_REACTION,
+  type ManagerChatLiveMessage,
+  type ManagerChatReaction,
+  type ManagerChatReactionCount,
+} from "./manager-chat-live.js";
 import { isAgentTurn } from "./voice-call-lines.js";
 import { countWords } from "./words.js";
 
@@ -119,6 +126,36 @@ function isWork(part: AgentPart): boolean {
 /** The place of a message that stands in a run of its own. */
 export const CHAT_RUN_ALONE: ChatRunPlace = { opens: true, closes: true };
 
+/** Where a link to one of the chat's messages lands among the messages read (`chatMessageLanding`). */
+export const CHAT_LANDING = {
+  /** On its row at the chat's top. */
+  CHAT: "chat",
+  /** In its thread, where it is a reply standing there alone. */
+  THREAD: "thread",
+  /** Nowhere yet: it is not among the messages read, so it stands on an older page, or is gone. */
+  UNREAD: "unread",
+} as const;
+
+export type ChatLanding =
+  | { readonly kind: typeof CHAT_LANDING.CHAT }
+  | { readonly kind: typeof CHAT_LANDING.THREAD; readonly root: string }
+  | { readonly kind: typeof CHAT_LANDING.UNREAD };
+
+/**
+ * Where a link to one of the chat's messages, by its id, lands among the
+ * messages read: on its row at the chat's top, a reply also posted to the
+ * chat among them, as Slack lands one; in its thread, by the thread's root,
+ * where it is a reply standing there alone; or nowhere yet.
+ */
+export function chatMessageLanding(view: ManagerChatView, messageId: string): ChatLanding {
+  if (view.top.some((line) => line.message.id === messageId)) return { kind: CHAT_LANDING.CHAT };
+  const root = view.messages.find((line) => line.message.id === messageId)?.message.threadRoot;
+
+  return root === undefined || root === null
+    ? { kind: CHAT_LANDING.UNREAD }
+    : { kind: CHAT_LANDING.THREAD, root };
+}
+
 /** What a message's place in its sender's run is read from: who wrote it, and when. */
 type RunMark = Pick<ManagerChatLiveMessage, "authorKind" | "authorUserId" | "createdAt">;
 
@@ -178,6 +215,58 @@ function turnWork(
 /** How a thread's replies are counted: "1 reply", "3 replies". */
 export function repliesWords(count: number): string {
   return countWords(count, REPLY_NOUN);
+}
+
+/** Each reaction offered first: its emoji, its name as a reaction's words say it, and the name of the press that gives it. */
+export const MANAGER_CHAT_REACTION_FACES = {
+  [MANAGER_CHAT_REACTION.THUMBS_UP]: { emoji: "👍", name: "thumbs up", press: "Thumbs up" },
+  [MANAGER_CHAT_REACTION.THUMBS_DOWN]: { emoji: "👎", name: "thumbs down", press: "Thumbs down" },
+} as const satisfies Record<
+  ManagerChatReaction,
+  { readonly emoji: string; readonly name: string; readonly press: string }
+>;
+
+/** What a reaction the service would not take says, as it is taken back off. */
+export const CHAT_REACTION_REFUSED_WORDS = "Could not react to the message.";
+
+/** Who else gave a reaction beside the reader. */
+const OTHER_NOUN = { one: "other", many: "others" } as const;
+
+/** A kind as Slack writes it in words, which a kind with no emoji to draw is drawn as too: `:tada:`. */
+function slackName(kind: string): string {
+  return `:${kind}:`;
+}
+
+/**
+ * What a reaction's chip draws: an offered one's own emoji, any other's as
+ * the service sent it, and a kind sent with none by its name as Slack
+ * writes it, so a kind a later service gives always draws.
+ */
+export function chatReactionEmoji({
+  kind,
+  emoji,
+}: Pick<ManagerChatReactionCount, "kind" | "emoji">): string {
+  if (isOfferedReaction(kind)) return MANAGER_CHAT_REACTION_FACES[kind].emoji;
+
+  return emoji ?? slackName(kind);
+}
+
+/**
+ * Who gave a reaction, as its chip says it to a reader: the reader as
+ * "You" where they gave it, the rest counted, since the chat's read counts
+ * who gave it without naming them, and an offered kind by its name, any
+ * other as Slack writes it. "You reacted with thumbs up", "You and 1 other
+ * reacted with thumbs up", "2 reacted with :tada:".
+ */
+export function chatReactionWords({ kind, count, reacted }: ManagerChatReactionCount): string {
+  const name = isOfferedReaction(kind) ? MANAGER_CHAT_REACTION_FACES[kind].name : slackName(kind);
+
+  if (!reacted) return `${count} reacted with ${name}`;
+  const others = count - 1;
+
+  return others > 0
+    ? `You and ${countWords(others, OTHER_NOUN)} reacted with ${name}`
+    : `You reacted with ${name}`;
 }
 
 /** What the press that opens a message's work under it, or folds it away, says, by whether it stands open. */

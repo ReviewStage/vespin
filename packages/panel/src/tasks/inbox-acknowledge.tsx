@@ -25,7 +25,8 @@ import {
   type AgentCallFailure,
   type AgentInboxAnsweredView,
 } from "@repo/features/agent-view";
-import { INBOX_REPLY, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import type { InboxFields } from "@repo/features/inbox-digest";
+import { INBOX_REPLY, INBOX_STATUS } from "@repo/features/inbox-wire";
 import {
   ACKNOWLEDGE_UNTAKEN,
   ACKNOWLEDGED_ONE,
@@ -54,7 +55,7 @@ import {
 const unreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);
 
 /** Acknowledges the notices given, at once, with Undo; one already on its way is passed over. */
-export type InboxAcknowledger = (items: readonly InboxItem[]) => void;
+export type InboxAcknowledger = (items: readonly InboxFields[]) => void;
 
 /** The mutations a Got it is sent on: the nod, and the take-back its Undo asks. */
 interface AcknowledgeDoors {
@@ -131,7 +132,7 @@ export function useInboxAcknowledger(): InboxAcknowledger {
   const out = useRef(new Set<string>());
 
   return useCallback(
-    (items: readonly InboxItem[]) => {
+    (items: readonly InboxFields[]) => {
       const nodding = items.filter((item) => !out.current.has(item.id));
 
       if (nodding.length === 0) return;

@@ -50,6 +50,8 @@ interface MaintenanceSweeps {
   moveAttachmentsToBlob: (now: number) => SweepRead<number>;
   /** Moves the images the journal's rows still keep as `data:` URLs into Blob-backed pictures, a sweep's worth of the rows its migration queued, answering how many parts it rewrote (`storage/journal-image-move.ts`). */
   moveJournalImages: (now: number) => SweepRead<number>;
+  /** Marks the agents' stored CLI transcripts from before the resume marks, a sweep's worth of rows, answering how many it read (`@repo/database`'s `markSessionsForResume`). */
+  markTranscriptsForResume: (now: number) => SweepRead<number>;
 }
 
 /**
@@ -98,6 +100,8 @@ interface MaintenanceSweepAnswer {
   attachmentsMoved: Swept<number>;
   /** Journal parts rewritten from a `data:` URL to the Blob-backed picture they were kept as. */
   journalImages: Swept<number>;
+  /** Stored CLI transcript rows from before the resume marks, read and marked. */
+  transcriptMarks: Swept<number>;
 }
 
 /** What a sweep that failed answers in its place: the failure is logged, and the other sweeps run on. */
@@ -147,6 +151,10 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     attachmentBlobs: yield* isolated("purgeAttachmentBlobs", sweeps.purgeAttachmentBlobs(now)),
     attachmentsMoved: yield* isolated("moveAttachmentsToBlob", sweeps.moveAttachmentsToBlob(now)),
     journalImages: yield* isolated("moveJournalImages", sweeps.moveJournalImages(now)),
+    transcriptMarks: yield* isolated(
+      "markTranscriptsForResume",
+      sweeps.markTranscriptsForResume(now),
+    ),
   };
 });
 

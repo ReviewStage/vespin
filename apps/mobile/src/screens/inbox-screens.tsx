@@ -6,6 +6,11 @@ import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
+  type InboxFields,
+  inboxRowOf,
+  type InboxRow as ListedRow,
+} from "@repo/features/inbox-digest";
+import {
   ANSWER_TONE,
   holderName,
   holderRepository,
@@ -43,7 +48,7 @@ import {
   UNDELIVERED_FILES_LOST,
   type UndeliveredReply,
 } from "@repo/features/inbox-undelivered";
-import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, inboxWaitsOn } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
@@ -119,6 +124,7 @@ import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import { useInboxRunFolds } from "../inbox/inbox-runs.js";
 import {
+  type InboxThreadHeld,
   useInboxActs,
   useInboxListing,
   useInboxScope,
@@ -215,9 +221,6 @@ const handedOrders = new Map<string, readonly string[]>();
 /** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
 
-/** How many of a thread's newest messages its row reads for its preview: more than the preview draws, since a file sent alone says nothing there. */
-const PREVIEW_TAIL = 6;
-
 /** How an open ask's option file is read beside the thread's own: a recording, a sound clip, or a picture. */
 function askFileKind(mediaType: string) {
   if (isVideoType(mediaType)) return INBOX_MEDIA.VIDEO;
@@ -235,9 +238,9 @@ type InboxRowsProps = {
   readonly selected?: string | undefined;
   readonly onSelect: (id: string) => void;
   readonly onRefresh: () => Promise<void>;
-  readonly onMark: (item: InboxItem, unread: boolean) => void;
-  readonly remindMenu: (item: InboxItem) => RowSubmenu;
-  readonly onResolve: (item: InboxItem) => void;
+  readonly onMark: (item: ListedRow, unread: boolean) => void;
+  readonly remindMenu: (item: InboxFields) => RowSubmenu;
+  readonly onResolve: (item: InboxFields) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
   /** The Inbox's scopes, standing as the list's first row. */
@@ -347,7 +350,7 @@ function InboxRunSections({
  * words that stood as they were.
  */
 type InboxRowThread = {
-  readonly item: InboxItem;
+  readonly item: ListedRow;
   /** Its task, which its link names; none for a thread on no task, a Manager's, whose link names the thread alone. */
   readonly taskId: string | undefined;
   readonly workspaceId: TaskSummary["workspaceId"];
@@ -363,11 +366,11 @@ type InboxRowActs = {
   readonly readerId: string | undefined;
   /** Each member's picture by their id, read once by the list the row stands in. */
   readonly pictureOf: PictureOf;
-  readonly onMark: (item: InboxItem, unread: boolean) => void;
+  readonly onMark: (item: ListedRow, unread: boolean) => void;
   /** Remind me's times on the thread, a menu a swipe from the trailing edge opens. */
-  readonly remindMenu: (item: InboxItem) => RowSubmenu;
+  readonly remindMenu: (item: InboxFields) => RowSubmenu;
   /** Resolves the open thread, which a full swipe from the trailing edge runs. */
-  readonly onResolve: (item: InboxItem) => void;
+  readonly onResolve: (item: InboxFields) => void;
 };
 
 /**
@@ -447,11 +450,7 @@ function InboxRowView({
   const messages = useMemo(
     () =>
       previewMessages(
-        inboxThreadMessages(
-          item.thread === undefined ? item : { ...item, thread: item.thread.slice(-PREVIEW_TAIL) },
-          agentName,
-          readerId,
-        ),
+        inboxThreadMessages({ ...item, thread: item.digest.tail }, agentName, readerId),
         pictureOf,
         harness,
       ),
@@ -619,7 +618,7 @@ function scopeChoices(scopes: readonly Scope[]): BarMenu["choices"] {
 function moreMenu(
   scopes: readonly Scope[],
   listed: readonly InboxListed<InboxAnyHolder>[],
-  markAll: (items: readonly InboxItem[]) => void,
+  markAll: (items: readonly ListedRow[]) => void,
   select: { readonly listed: boolean; readonly onSelect: () => void },
 ): BarMenu {
   return {
@@ -658,7 +657,7 @@ function dimmedWhile(dim: boolean, menu: BarMenu): BarMenu {
  * tick nor shifts as Resolve comes and goes.
  */
 function chosenActs(
-  chosen: readonly InboxItem[],
+  chosen: readonly ListedRow[],
   acts: ReturnType<typeof useInboxActs>,
   remind: ReturnType<typeof useRemind>,
   stop: () => void,
@@ -765,7 +764,7 @@ type ThreadPlace =
   | {
       readonly inStack: false;
       /** Remind me's times on a thread, from its screen, which draws the picker sheet outside the split view. */
-      readonly remindMenu: (item: InboxItem) => BarMenu;
+      readonly remindMenu: (item: InboxFields) => BarMenu;
       /** Selects another thread in the split view, such as one the box just started. */
       readonly onOpen: (id: string) => void;
     };
@@ -788,7 +787,7 @@ function ThreadDetail({
   readerId,
   place,
 }: {
-  readonly listed: InboxListed<InboxAnyHolder>;
+  readonly listed: InboxThreadHeld;
   readonly readerId: string | undefined;
   readonly place: ThreadPlace;
 }) {
@@ -941,7 +940,7 @@ function ThreadDetail({
   const remindMenu = place.inStack ? remind.itemMenu : place.remindMenu;
 
   const doors = {
-    onMark: (unread: boolean) => inboxActs.mark(item, unread),
+    onMark: (unread: boolean) => inboxActs.mark(inboxRowOf(item), unread),
     remind: remindMenu(item),
     onCopyLink: () =>
       keeping.copyWords(
@@ -992,6 +991,17 @@ function ThreadDetail({
     ],
   };
 
+  // Note that a press on a message's writer opens their page, the agent's or a member's, as the panel's writer opens theirs; a member no account names opens nothing.
+  const writerOpen = (writer: (typeof messages)[number]["writer"]) => {
+    const { userId } = writer;
+
+    if (writer.agent) return openAgent.onPress;
+
+    if (userId === undefined) return undefined;
+
+    return () => router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.PERSON, userId })));
+  };
+
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
   const undeliveredLines = new Map(undelivered.lines.map((line) => [line.key, line]));
@@ -1006,6 +1016,7 @@ function ThreadDetail({
       picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
       harness: message.writer.agent ? harness : undefined,
       manager: message.writer.agent ? writerManager : undefined,
+      onOpen: writerOpen(message.writer),
     },
     stamp:
       message.stamp === undefined
@@ -1110,7 +1121,9 @@ function ThreadDetail({
       onRetryPicture={retryPicture}
       videoAt={videoAt}
       linkStanding={linkStanding}
-      standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
+      standing={
+        item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(inboxRowOf(item))
+      }
       ask={
         <OpenAskCard
           item={item}
@@ -1172,13 +1185,17 @@ function ThreadDetail({
           disabled={place.steps.previous === undefined}
           icon={glyphSymbol(GLYPH.PREVIOUS_ITEM)}
           onPress={() => stepTo(place.steps.previous)}
-        />
+        >
+          {STEP_WORDS.PREVIOUS}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Button
           accessibilityLabel={STEP_WORDS.NEXT}
           disabled={place.steps.next === undefined}
           icon={glyphSymbol(GLYPH.NEXT_ITEM)}
           onPress={() => stepTo(place.steps.next)}
-        />
+        >
+          {STEP_WORDS.NEXT}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.View>
           <StackBarMenu menu={compactMenu} />
         </Stack.Toolbar.View>
@@ -1253,7 +1270,7 @@ function ThreadColumn({
   onOpen,
 }: {
   readonly id: string;
-  readonly remindMenu: (item: InboxItem) => BarMenu;
+  readonly remindMenu: (item: InboxFields) => BarMenu;
   readonly onOpen: (id: string) => void;
 }) {
   const { listed, readerId, feed, retry } = useInboxThread(id);
@@ -1387,6 +1404,7 @@ function InboxStackList(held: InboxHeld) {
           </Stack.Toolbar.Button>
         ) : (
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
+            <Stack.Toolbar.Label>{menu.label}</Stack.Toolbar.Label>
             {toolbarMenuActions(menu)}
           </Stack.Toolbar.Menu>
         )}
@@ -1396,7 +1414,9 @@ function InboxStackList(held: InboxHeld) {
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
             accessibilityLabel={compose.label}
             onPress={compose.onPress}
-          />
+          >
+            {compose.label}
+          </Stack.Toolbar.Button>
         )}
       </Stack.Toolbar>
       {choosing === undefined ? null : (
@@ -1407,6 +1427,7 @@ function InboxStackList(held: InboxHeld) {
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass. A menu that would act on nothing, such as Remind me with no thread chosen, stands as a dimmed button, because the bar's menu draws its `disabled` live on iOS.
             isBarMenu(act) && act.disabled !== true ? (
               <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
+                <Stack.Toolbar.Label>{act.label}</Stack.Toolbar.Label>
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 {toolbarMenuActions(act)}
               </Stack.Toolbar.Menu>
@@ -1417,6 +1438,7 @@ function InboxStackList(held: InboxHeld) {
                 disabled={act.disabled === true}
                 onPress={isBarMenu(act) ? doNothing : act.onPress}
               >
+                <Stack.Toolbar.Label>{act.label}</Stack.Toolbar.Label>
                 {act.symbol === undefined ? null : (
                   <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 )}

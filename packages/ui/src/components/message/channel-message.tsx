@@ -67,7 +67,7 @@ export function ChannelMessage({
       data-continues={continues ? "" : undefined}
       data-message-id={messageId}
     >
-      <span className="ui-channel-message-avatar inline-flex w-channel-avatar flex-none justify-center">
+      <span className="ui-channel-message-avatar inline-flex w-channel-avatar flex-none items-start justify-center">
         {continues ? null : avatar}
       </span>
       <div
@@ -117,7 +117,7 @@ export function ThreadReplies({
   return (
     <ButtonPrimitive
       type="button"
-      className="ui-thread-replies -ms-ui-4 flex [border:0] bg-transparent font-ui w-max max-w-full items-center gap-ui-6 rounded-ui-6 px-ui-4 py-ui-2 text-caption font-ui-semibold text-accent-ink cursor-press hover:bg-fill-strong data-[open]:bg-fill-strong"
+      className="ui-thread-replies -ms-ui-4 flex [border:0] bg-transparent font-ui w-max max-w-full items-center gap-icon-gap-compact rounded-ui-6 px-ui-4 py-ui-2 text-caption font-ui-semibold text-accent-ink cursor-press hover:bg-fill-strong data-[open]:bg-fill-strong"
       data-open={open ? "" : undefined}
       aria-expanded={open}
       onClick={onOpen}

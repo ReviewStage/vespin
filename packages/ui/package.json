@@ -60,7 +60,6 @@
     "./testing/frames": "./src/testing/frames.js",
     "./testing/held-exits": "./src/testing/held-exits.js",
     "./testing/point-at-turns": "./src/testing/point-at-turns.js",
-    "./testing/leaving-place": "./src/testing/leaving-place.js",
     "./testing/reported-failure": "./src/testing/reported-failure.js",
     "./testing/selectable-list": "./src/testing/selectable-list.js",
     "./use-clipped": "./src/use-clipped.js",
@@ -101,7 +100,8 @@
     "recharts": "catalog:",
     "remark-gfm": "4.0.1",
     "streamdown": "2.7.1",
-    "tailwind-merge": "3.7.1"
+    "tailwind-merge": "3.7.1",
+    "unicode-emoji-json": "0.9.0"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",

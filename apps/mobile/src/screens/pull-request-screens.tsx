@@ -1,4 +1,4 @@
-// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks, reviews and conversation held live, a row each pushing its checks and the files it changes, its conversation inline under them, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and on its state chip and in the bar's ⋯ the changes to where it stands (Ready for review, Convert to draft, Close, Reopen), and Open on GitHub.
+// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks, reviews and conversation held live, a row each pushing its checks and the files it changes, its conversation inline under them, its merge or Remove from queue under its heading in every window, as the panel's head stands it, its title edited from a tap on it, on its state chip the changes to where it stands (Ready for review, Convert to draft, Close, Reopen), and in the bar's ⋯ Copy GitHub link and Open on GitHub, as the panel's are.
 
 import {
   type AgentOverviewPullRequest,
@@ -7,7 +7,7 @@ import {
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { changesLine } from "@repo/features/changed-files";
+import { filesWords } from "@repo/features/changed-files";
 import {
   iosAgentPullRequestOf,
   iosPullRequestChecksRoute,
@@ -119,7 +119,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
 
-/** What the bar's ⋯ menu offers beside the merge, in the panel's words. */
+/** What the bar's ⋯ menu and the state chip are named, in the panel's words. */
 const MENU_WORDS = {
   MORE: "More",
   /** What the state chip's menu is heard as before where it stands, as the panel's pill is named "Pull request Open". */
@@ -326,7 +326,7 @@ const STATE_ACTION_GLYPHS = {
   [PULL_REQUEST_ACTION.REOPEN]: GLYPH.PULL_REQUEST,
 } as const satisfies Record<PullRequestStateAction, Glyph>;
 
-/** One change to where the pull request stands, as the bar's ⋯ offers it. */
+/** One change to where the pull request stands, as its state chip offers it. */
 interface StateChange {
   readonly action: PullRequestStateAction;
   readonly disabled: boolean;
@@ -337,55 +337,21 @@ interface StateChange {
 const DESCRIPTION_WORDS = "Description";
 
 /**
- * The bar's one act, the ⋯ menu, grouped as the panel's and Mail's are:
- * Edit title, as a task's ⋯ offers Rename, then the changes to where the
- * pull request stands, as the panel's state pill
- * offers them, Close in red, then Copy GitHub link and Open on GitHub.
- * It offers no Refresh, since a pull down on the page reads it again in
- * every window, as Mail's menu offers none, and a read that failed says so
- * in the page's place with Try again. The merge stands in the page under
- * the heading, where the panel's head stands it, so the bar's title keeps
- * its place.
+ * The bar's one act, the ⋯ menu, as the panel's toolbar ⋯ offers it on the
+ * pull request: Copy GitHub link and Open on GitHub. Its title is edited
+ * from a tap on it, and where it stands is changed from its state chip, as
+ * the panel's title and pill change them, so the menu repeats neither. It
+ * offers no Refresh, since a pull down on the page reads it again in every
+ * window, as Mail's menu offers none, and a read that failed says so in the
+ * page's place with Try again. The merge stands in the page under the
+ * heading, where the panel's head stands it, so the bar's title keeps its
+ * place.
  */
-function PullRequestToolbar({
-  url,
-  editTitle,
-  changes,
-}: {
-  readonly url: string | undefined;
-  /** Opens the title's edit; none until the pull request is read, and dimmed while a change is out. */
-  readonly editTitle: { readonly disabled: boolean; readonly onPress: () => void } | undefined;
-  readonly changes: readonly StateChange[];
-}) {
+function PullRequestToolbar({ url }: { readonly url: string | undefined }) {
   return (
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
-        {editTitle === undefined ? null : (
-          <Stack.Toolbar.Menu inline>
-            <Stack.Toolbar.MenuAction
-              icon={glyphSymbol(GLYPH.RENAME)}
-              disabled={editTitle.disabled}
-              onPress={editTitle.onPress}
-            >
-              {PULL_REQUEST_TITLE_WORDS.EDIT}
-            </Stack.Toolbar.MenuAction>
-          </Stack.Toolbar.Menu>
-        )}
-        {changes.length === 0 ? null : (
-          <Stack.Toolbar.Menu inline>
-            {changes.map((change) => (
-              <Stack.Toolbar.MenuAction
-                key={change.action}
-                icon={glyphSymbol(STATE_ACTION_GLYPHS[change.action])}
-                destructive={change.action === PULL_REQUEST_ACTION.CLOSE}
-                disabled={change.disabled}
-                onPress={change.onPress}
-              >
-                {PULL_REQUEST_STATE_ACTION_WORDS[change.action]}
-              </Stack.Toolbar.MenuAction>
-            ))}
-          </Stack.Toolbar.Menu>
-        )}
+        <Stack.Toolbar.Label>{MENU_WORDS.MORE}</Stack.Toolbar.Label>
         {url === undefined ? null : (
           <Stack.Toolbar.Menu inline>
             <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LINK)} onPress={() => copyLink(url)}>
@@ -419,7 +385,9 @@ function PullRequestToolbar({
  * plain preview of its words that a press opens whole in Markdown, and each
  * review thread under the review that started it, by its file and lines,
  * opened to its comments; the earlier entries a read left on GitHub
- * counted first, opening there. Its
+ * counted first, opening there. The Description and the Conversation each
+ * fold under their headings, as the panel's do, and open again on a second
+ * tap. Its
  * parts are held live while the screen is in focus, and a pull down reads
  * them again. The merge's one press merges, or arms auto-merge where the
  * repository merges through a queue, once its question is answered, as a
@@ -633,7 +601,7 @@ function PullRequestPage({
             }),
         };
 
-  // Note that the state chip offers the same changes as the bar's ⋯, as the panel's pill opens them where it says where the pull request stands; none once merged, where nothing changes.
+  // Note that the state chip offers the changes, as the panel's pill opens them where it says where the pull request stands; none once merged, where nothing changes.
   // A queued pull request's chip offers View merge queue first, while the account has the page on, as the panel's pill does, opening it on this pull request's row.
   const viewQueue: readonly FieldAct[] =
     inQueue && mergeQueueOn
@@ -699,7 +667,7 @@ function PullRequestPage({
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      <PullRequestToolbar url={url} editTitle={editTitle} changes={changes} />
+      <PullRequestToolbar url={url} />
     </>
   );
 
@@ -854,7 +822,7 @@ function PullRequestPage({
         )}
       </ListSection>
       {described ? (
-        <ListSection title={DESCRIPTION_WORDS}>
+        <ListSection title={DESCRIPTION_WORDS} foldable>
           <WordsRow
             words={description}
             repository={agent?.repository}
@@ -902,14 +870,11 @@ function PullRequestPage({
           id={PAGE_ROW.FILES}
           mark={{ symbol: GLYPH.CHANGES, tone: STATUS_TONE.NEUTRAL }}
           title={PAGE_ROW_WORDS.FILES_CHANGED}
-          detail={
+          detail={listed === undefined ? undefined : filesWords(listed.changedFiles)}
+          lines={
             listed === undefined
               ? undefined
-              : changesLine({
-                  files: listed.changedFiles,
-                  additions: listed.additions,
-                  deletions: listed.deletions,
-                })
+              : { additions: listed.additions, deletions: listed.deletions }
           }
           pushes
         />
@@ -933,6 +898,7 @@ function PullRequestPage({
       <ListSection
         title={CONVERSATION_WORDS}
         count={conversation === undefined ? undefined : conversationCount(conversation)}
+        foldable
       >
         {conversation === undefined ? (
           answerFailed(parts.conversation) ? (

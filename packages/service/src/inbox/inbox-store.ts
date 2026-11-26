@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { LIVE_COUNT, liveKeysIn } from "@repo/database/core/live-statement";
 import {
   Database,
@@ -11,6 +10,9 @@ import {
   type AttachmentBody,
   attachmentBodyFields,
   attachmentBodyOf,
+  type StoredAttachment,
+  StoredAttachmentSchema,
+  storedAttachmentColumns,
 } from "@repo/database/models/attachment-body";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import {
@@ -108,6 +110,13 @@ import { type AnyPgColumn, type AnyPgTable, alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { columnAs, liveRowsStatement, outerJoined } from "../live/live-read-binding.js";
+import {
+  type AttachmentUploads,
+  phoneCopyType,
+  putAttachment,
+  withAttachmentUploads,
+} from "../storage/attachment-uploads.js";
+import type { BlobStoreFailure } from "../storage/blob-store.js";
 import type { SyncMoved } from "../sync/live-query.js";
 
 /**
@@ -185,6 +194,13 @@ import type { SyncMoved } from "../sync/live-query.js";
 /** What an inbox store operation answers: an effect over the ambient client, composed into whatever called it. */
 export type InboxStoreEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
+/** A write of the store that keeps files: its bytes are put in the Blob store first, which may fail too. */
+export type InboxFileWriteEffect<A> = Effect.Effect<
+  A,
+  StoreFailure | BlobStoreFailure,
+  DatabaseServices
+>;
+
 /** The agent an item belongs to, as every write of the agent's names it: the task it works on, none for an agent on no task. */
 export interface InboxAgent {
   readonly userId: string;
@@ -230,6 +246,13 @@ export interface InboxImage {
   readonly bytes: Uint8Array;
   /** A recording's MP4 copy, made in the agent's sandbox beside it for a phone; none for a still, or where the sandbox made none. */
   readonly mp4Bytes?: Uint8Array | undefined;
+  /** Where its bytes already stand in the Blob store, its copy for a phone with them, where its sandbox uploaded them; none where the store is to put them. */
+  readonly stored?: StoredAttachment | undefined;
+}
+
+/** A picture its sandbox already uploaded to the Blob store. */
+export interface StoredInboxImage extends InboxImage {
+  readonly stored: StoredAttachment;
 }
 
 /** A picture as the agent's message on a thread carries it: its file's own name, the type its bytes were sniffed to be, and the bytes. */
@@ -237,13 +260,22 @@ export interface InboxNamedImage extends InboxImage {
   readonly name: string;
 }
 
-/** One file of a message's as the store writes it: its own name, its type, and its bytes. */
+/** One file of a message's as the store writes it: its own name, its type, where its bytes stand in the Blob store, whose id it is kept under, and a picture's size as its header states it. */
 interface MessageFile {
-  /** The id it is kept under, where the message's words name it by its address; minted by the database where none is given. */
-  readonly id?: string;
+  readonly name: string;
+  readonly contentType: InboxFileType;
+  readonly stored: StoredAttachment;
+  readonly width: number | null;
+  readonly height: number | null;
+}
+
+/** A file a message carries as a writer hands it in: its own name, its type, its bytes, and where they stand where they are in the store already. */
+interface MessageFileToKeep {
   readonly name: string;
   readonly contentType: InboxFileType;
   readonly bytes: Uint8Array;
+  readonly mp4Bytes?: Uint8Array | undefined;
+  readonly stored?: StoredAttachment | undefined;
 }
 
 /** A file an item's answer carried as a read answers it: the type it traveled as, and the bytes; a picture of a block's reads the same way. */
@@ -776,12 +808,12 @@ const MessageFileWriteSchema = Schema.Struct({
   name: Schema.String,
   position: Schema.Number,
   contentType: inboxFileTypeSchema,
-  bytes: Schema.Uint8Array,
-  mp4Bytes: Schema.optional(Schema.Uint8Array),
+  /** Where its bytes stand in the Blob store, under the id the file is kept under, which the message's words may name it by. */
+  stored: StoredAttachmentSchema,
+  width: Schema.NullOr(Schema.Int),
+  height: Schema.NullOr(Schema.Int),
   now: Schema.Date,
   messageId: Schema.String,
-  /** The id the file is kept under, where the message's words name it; minted by the database where none is given. */
-  id: Schema.optionalKey(Schema.String),
 });
 
 /**
@@ -802,20 +834,60 @@ const insertMessageFiles = SqlSchema.void({
   execute: (files) =>
     Database.use((db) =>
       db.insert(attachment).values(
-        files.map(({ now, itemId, messageId, mp4Bytes, ...file }) => ({
+        files.map(({ now, itemId, messageId, stored, ...file }) => ({
           ...file,
-          ...pictureSizeOf(file.bytes),
-          mp4Bytes: mp4Bytes ?? null,
-          phoneByteCount: mp4Bytes?.byteLength ?? null,
+          ...storedAttachmentColumns(stored),
           inboxItemId: itemId,
           inboxMessageId: messageId,
           kind: INBOX_ATTACHMENT_KIND.MESSAGE,
-          byteCount: file.bytes.byteLength,
           createdAt: now,
         })),
       ),
     ),
 });
+
+/**
+ * Where a file's bytes are to stand: in the Blob store already, where its
+ * sandbox uploaded them, or put there now, a recording's or a clip's copy
+ * for a phone beside them, under a fresh id.
+ */
+function storedOf(file: {
+  readonly contentType: string;
+  readonly bytes: Uint8Array;
+  readonly mp4Bytes?: Uint8Array | undefined;
+  readonly stored?: StoredAttachment | undefined;
+}): Effect.Effect<StoredAttachment, BlobStoreFailure, AttachmentUploads> {
+  if (file.stored !== undefined) return Effect.succeed(file.stored);
+  const copyType = phoneCopyType(file.contentType);
+
+  const phone =
+    file.mp4Bytes === undefined || copyType === undefined
+      ? undefined
+      : { bytes: file.mp4Bytes, contentType: copyType };
+
+  return putAttachment(file.bytes, file.contentType, phone);
+}
+
+/** A message's file as the store writes it, its bytes put in the Blob store where they are not there already. */
+function messageFileOf(
+  file: MessageFileToKeep,
+): Effect.Effect<MessageFile, BlobStoreFailure, AttachmentUploads> {
+  return Effect.map(storedOf(file), (stored) => ({
+    name: file.name,
+    contentType: file.contentType,
+    stored,
+    ...pictureSizeOf(file.bytes),
+  }));
+}
+
+/** A member's files, as they traveled, as the store writes them, each put in the Blob store. */
+function memberFilesOf(
+  files: readonly AgentAttachment[],
+): Effect.Effect<readonly MessageFile[], BlobStoreFailure, AttachmentUploads> {
+  return Effect.forEach(files, (file) =>
+    messageFileOf({ name: file.name, contentType: file.mediaType, bytes: bytesOf(file) }),
+  );
+}
 
 /** A message's files written as rows of the item's in one statement, each naming the message, at its place among the message's files. */
 function writeMessageFiles(
@@ -2462,28 +2534,21 @@ interface PostView {
   readonly needsReply: boolean;
 }
 
-/** One picture a post keeps as a file of its message: the id its words or its ask's options name it by, its file's own name, its type, and its bytes. */
-export interface PostPicture extends InboxNamedImage {
-  readonly id: string;
-}
-
-/** One file a post keeps as a file of its message, a picture or a PDF: the id it is kept under, its file's own name, its type, its bytes, and a recording's MP4 copy. */
-interface PostFile {
-  readonly id: string;
+/** One picture a post keeps as a file of its message, already in the Blob store under the id its ask's options name it by: its file's own name, its type, and its bytes. */
+export interface PostPicture extends StoredInboxImage {
   readonly name: string;
-  readonly contentType: InboxFileType;
-  readonly bytes: Uint8Array;
-  readonly mp4Bytes?: Uint8Array | undefined;
 }
 
 /**
  * One file the agent's words name by its path in the agent's sandbox, as
  * the caller read it there: the path as written, its file's own name, its
- * type, and its bytes. A picture is drawn where the words name it; a PDF
- * the caller has cut out of the words, so its path names nothing there,
- * and it is kept as a file of the message alone.
+ * type, and its bytes, in the store already where its sandbox uploaded
+ * them, or a picture already kept, copied, whose bytes the store puts. A
+ * picture is drawn where the words name it; a PDF the caller has cut out of
+ * the words, so its path names nothing there, and it is kept as a file of
+ * the message alone.
  */
-export interface InboxBodyPicture extends Omit<PostFile, "id"> {
+export interface InboxBodyPicture extends MessageFileToKeep {
   readonly path: string;
 }
 
@@ -2495,7 +2560,7 @@ interface PostWrite {
   readonly body: (addressOf: PictureAddress) => string;
   readonly ask: InboxAsk | undefined;
   /** The message's files: the files its words name, then those its ask's options carry. */
-  readonly pictures: readonly PostFile[];
+  readonly pictures: readonly MessageFile[];
   readonly addresseeId: string | null;
 }
 
@@ -2521,23 +2586,36 @@ function pictureAddressOf(
   return (pictureId) => inboxAttachmentAddress(place, pictureId, workspace.workspaceStep);
 }
 
-/** Pictures handed in by the paths the agent's words name them by, as a post keeps them: each under an id minted for it, and the id of the first each path names. */
+/** A picture a post's words name by its path, as the store writes it: in the Blob store, under the id it was stored under. */
+interface PathFile extends MessageFile {
+  readonly path: string;
+}
+
+/** Pictures handed in by the paths the agent's words name them by, as a post keeps them: each under the id it was stored under, and the id of the first each path names. */
 interface PicturesByPath {
-  readonly kept: readonly PostFile[];
+  readonly kept: readonly MessageFile[];
   readonly idOf: (path: string) => string | undefined;
 }
 
-/** The pictures handed in, each under an id minted for it, found by the path the agent's words name it by. */
-function picturesByPath(pictures: readonly InboxBodyPicture[]): PicturesByPath {
-  const kept = pictures.map(({ path: _path, ...picture }) => ({ ...picture, id: randomUUID() }));
+/** The pictures handed in, each under the id it was stored under, found by the path the agent's words name it by. */
+function picturesByPath(pictures: readonly PathFile[]): PicturesByPath {
+  const kept = pictures.map(({ path: _path, ...picture }) => picture);
   const ids = new Map<string, string>();
-  pictures.forEach((picture, at) => {
-    const id = kept[at]?.id;
 
-    if (id !== undefined && !ids.has(picture.path)) ids.set(picture.path, id);
-  });
+  for (const picture of pictures) {
+    if (!ids.has(picture.path)) ids.set(picture.path, picture.stored.id);
+  }
 
   return { kept, idOf: (path) => ids.get(path) };
+}
+
+/** The pictures a post's words name, each put in the Blob store where it is not there already. */
+function pathFilesOf(
+  pictures: readonly InboxBodyPicture[],
+): Effect.Effect<readonly PathFile[], BlobStoreFailure, AttachmentUploads> {
+  return Effect.forEach(pictures, (picture) =>
+    Effect.map(messageFileOf(picture), (file) => ({ ...file, path: picture.path })),
+  );
 }
 
 /**
@@ -2602,17 +2680,13 @@ function keepPost(
     if (ask !== null) yield* holdAsk({ itemId, messageId: message.id });
     yield* writeMessageFiles(
       post.pictures.map((picture, position) => ({
-        id: picture.id,
+        ...picture,
         userId: agent.userId,
         taskId: agent.taskId,
         organizationId,
         itemId,
         messageId: message.id,
-        name: picture.name,
         position,
-        contentType: picture.contentType,
-        bytes: picture.bytes,
-        mp4Bytes: picture.mp4Bytes,
         now,
       })),
     );
@@ -2694,7 +2768,7 @@ function followUp(
   workspace: LockedWorkspace,
   itemId: string,
   post: InboxThreadPost,
-  pictures: readonly InboxBodyPicture[],
+  pictures: readonly PathFile[],
 ): InboxStoreEffect<InboxItem> {
   return Effect.suspend(() => {
     const { kept, idOf } = picturesByPath(pictures);
@@ -2740,8 +2814,25 @@ function followUp(
 export function postInboxThread(
   agent: InboxAgent,
   post: InboxThreadPost,
-  pictures: readonly InboxBodyPicture[] = [],
-  optionFiles: readonly PostPicture[] = [],
+  bodyPictures: readonly InboxBodyPicture[] = [],
+  optionPictures: readonly PostPicture[] = [],
+): InboxFileWriteEffect<Result.Result<InboxItem, InboxPostRefusal>> {
+  return withAttachmentUploads(
+    Effect.gen(function* () {
+      const pictures = yield* pathFilesOf(bodyPictures);
+      const optionFiles = yield* Effect.forEach(optionPictures, messageFileOf);
+
+      return yield* postThreadWrite(agent, post, pictures, optionFiles);
+    }),
+  );
+}
+
+/** A post written, as `postInboxThread` writes one, its files already in the Blob store. */
+function postThreadWrite(
+  agent: InboxAgent,
+  post: InboxThreadPost,
+  pictures: readonly PathFile[],
+  optionFiles: readonly MessageFile[],
 ): InboxStoreEffect<Result.Result<InboxItem, InboxPostRefusal>> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -3282,6 +3373,21 @@ export function closeInboxItemAsMember(
     text: "",
     files: [],
   },
+): InboxFileWriteEffect<Option.Option<InboxItemWritten>> {
+  return withAttachmentUploads(
+    Effect.flatMap(memberFilesOf(note.files), (files) =>
+      closeAsMember(userId, itemId, revision, closeKey, { text: note.text, files }),
+    ),
+  );
+}
+
+/** A member's close written, as `closeInboxItemAsMember` writes one, its note's files already in the Blob store. */
+function closeAsMember(
+  userId: string,
+  itemId: string,
+  revision: number,
+  closeKey: string,
+  note: { readonly text: string; readonly files: readonly MessageFile[] },
 ): InboxStoreEffect<Option.Option<InboxItemWritten>> {
   const noted = note.text !== "" || note.files.length > 0;
 
@@ -3439,7 +3545,7 @@ interface AnswerWrite {
   readonly itemId: string;
   readonly answerKey: string;
   readonly words: string;
-  readonly files: readonly AgentAttachment[];
+  readonly files: readonly MessageFile[];
   /** The message whose ask the answer settles. */
   readonly askId: string;
   /** The answer to the ask as a member's message carries it. */
@@ -3475,7 +3581,7 @@ function keepMemberMessage(write: {
   readonly itemId: string;
   readonly clientKey: string;
   readonly words: string;
-  readonly files: readonly AgentAttachment[];
+  readonly files: readonly MessageFile[];
   readonly answers: InboxAnswers | null;
   readonly now: Date;
 }): InboxStoreEffect<void> {
@@ -3498,13 +3604,11 @@ function keepMemberMessage(write: {
     const scope = yield* itemScope({ itemId });
     yield* writeMessageFiles(
       write.files.map((file, position) => ({
+        ...file,
         ...scope,
         itemId,
         messageId: written.value.id,
-        name: file.name,
         position,
-        contentType: file.mediaType,
-        bytes: bytesOf(file),
         now,
       })),
     );
@@ -3619,9 +3723,26 @@ export function answerInboxAsk(
     readonly clientKey: string;
     readonly files?: readonly AgentAttachment[] | undefined;
   },
-): InboxStoreEffect<Option.Option<InboxAskAnswered>> {
-  const files = sent.files ?? [];
+): InboxFileWriteEffect<Option.Option<InboxAskAnswered>> {
+  return withAttachmentUploads(
+    Effect.flatMap(memberFilesOf(sent.files ?? []), (files) =>
+      answerAsk(userId, itemId, sent, files),
+    ),
+  );
+}
 
+/** A member's answer written, as `answerInboxAsk` writes one, its files already in the Blob store. */
+function answerAsk(
+  userId: string,
+  itemId: string,
+  sent: {
+    readonly answers: InboxAnswers;
+    readonly text: string;
+    readonly clientKey: string;
+    readonly files?: readonly AgentAttachment[] | undefined;
+  },
+  files: readonly MessageFile[],
+): InboxStoreEffect<Option.Option<InboxAskAnswered>> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
@@ -3646,7 +3767,7 @@ export function answerInboxAsk(
             sameMessage(keyed.value, {
               userId,
               text: sent.text,
-              files: files.map((file) => ({ name: file.name, contentType: file.mediaType })),
+              files,
             });
 
           return resent
@@ -3669,7 +3790,7 @@ export function answerInboxAsk(
         const refusal =
           ask === undefined
             ? "The ask is one this version does not know."
-            : inboxAnswersRefusal(ask, sent.answers, sent.text, files);
+            : inboxAnswersRefusal(ask, sent.answers, sent.text, sent.files ?? []);
 
         if (refusal !== undefined) return standing(INBOX_ASK_ANSWER.REFUSED, refusal);
         const now = yield* DateTime.nowAsDate;
@@ -3935,23 +4056,24 @@ export function postInboxMessage(
     /** The revision of the notice the member was shown, which the message settles where it still stands there. */
     readonly revision?: number | undefined;
   },
-): InboxStoreEffect<Option.Option<InboxMessageWritten>> {
+): InboxFileWriteEffect<Option.Option<InboxMessageWritten>> {
   const { clientKey, revision } = message;
 
-  return Effect.flatMap(findItem({ userId, itemId }), (found) =>
-    Option.isNone(found)
-      ? Effect.succeed(Option.none())
-      : writeInboxMessage(
-          userId,
-          itemId,
-          { author: INBOX_MESSAGE_AUTHOR.MEMBER, userId, clientKey, revision },
-          message.text,
-          (message.files ?? []).map((file) => ({
-            name: file.name,
-            contentType: file.mediaType,
-            bytes: bytesOf(file),
-          })),
-        ),
+  return withAttachmentUploads(
+    Effect.gen(function* () {
+      const found = yield* findItem({ userId, itemId });
+
+      if (Option.isNone(found)) return Option.none();
+      const files = yield* memberFilesOf(message.files ?? []);
+
+      return yield* writeInboxMessage(
+        userId,
+        itemId,
+        { author: INBOX_MESSAGE_AUTHOR.MEMBER, userId, clientKey, revision },
+        message.text,
+        files,
+      );
+    }),
   );
 }
 
@@ -4129,6 +4251,20 @@ export function startInboxThread(
     readonly clientKey: string;
     readonly files?: readonly AgentAttachment[] | undefined;
   },
+): InboxFileWriteEffect<Option.Option<InboxMessageWritten>> {
+  return withAttachmentUploads(
+    Effect.flatMap(memberFilesOf(thread.files ?? []), (files) =>
+      startThread(userId, agent, thread, files),
+    ),
+  );
+}
+
+/** A member's thread started, as `startInboxThread` starts one, its files already in the Blob store. */
+function startThread(
+  userId: string,
+  agent: InboxAgent,
+  thread: { readonly title: string; readonly text: string; readonly clientKey: string },
+  files: readonly MessageFile[],
 ): InboxStoreEffect<Option.Option<InboxMessageWritten>> {
   const { title, text, clientKey } = thread;
 
@@ -4141,12 +4277,6 @@ export function startInboxThread(
         const locked = yield* lockAgent(agent);
 
         if (Option.isNone(locked)) return Option.none();
-
-        const files = (thread.files ?? []).map((file) => ({
-          name: file.name,
-          contentType: file.mediaType,
-          bytes: bytesOf(file),
-        }));
 
         const started = yield* findStartedThread({ userId, agentId: agent.agentId, clientKey });
 
@@ -4284,20 +4414,24 @@ export function replyInboxItem(
   key: string,
   text: string,
   pictures: readonly InboxNamedImage[] = [],
-): InboxStoreEffect<Option.Option<InboxItem>> {
-  return Effect.flatMap(findAgentItem({ ...agent, key }), (found) =>
-    Option.isNone(found)
-      ? Effect.succeed(Option.none())
-      : Effect.map(
-          writeInboxMessage(
-            agent.userId,
-            found.value.id,
-            { author: INBOX_MESSAGE_AUTHOR.AGENT, addresseeId: null },
-            text,
-            pictures,
-          ),
-          Option.map((written) => written.item),
-        ),
+): InboxFileWriteEffect<Option.Option<InboxItem>> {
+  return withAttachmentUploads(
+    Effect.gen(function* () {
+      const found = yield* findAgentItem({ ...agent, key });
+
+      if (Option.isNone(found)) return Option.none();
+      const files = yield* Effect.forEach(pictures, messageFileOf);
+
+      const written = yield* writeInboxMessage(
+        agent.userId,
+        found.value.id,
+        { author: INBOX_MESSAGE_AUTHOR.AGENT, addresseeId: null },
+        text,
+        files,
+      );
+
+      return Option.map(written, (each) => each.item);
+    }),
   );
 }
 

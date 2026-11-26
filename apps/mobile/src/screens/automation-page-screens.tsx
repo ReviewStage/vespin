@@ -296,7 +296,9 @@ function AutomationDetail({
           tintColor={colors.TEXT}
           accessibilityLabel={AUTOMATION_PHONE_WORDS.EDIT}
           onPress={edit}
-        />
+        >
+          {AUTOMATION_PHONE_WORDS.EDIT}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen ground={SCREEN_GROUND.GROUPED}>
         <SettingsForm>

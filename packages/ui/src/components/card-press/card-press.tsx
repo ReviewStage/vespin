@@ -11,7 +11,6 @@ import {
   useRef,
 } from "react";
 import { middleOpensTab } from "../../middle-press.js";
-import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { rovingItem } from "../roving-keys/roving-keys.js";
 import { holdRun, ListSelectionContext, selectableRow } from "../selection/list-selection.js";
@@ -144,18 +143,6 @@ type CardPressHintProps = Pick<
   | "aria-keyshortcuts"
 >;
 
-/**
- * Plays a press's pulse on the card `press` reaches, the box its reach
- * covers, a little, as a wide shape gives; on the press itself where no box
- * stands around it but the page's.
- */
-function pulseCard(press: HTMLElement): void {
-  const reach = press.querySelector(":scope > .ui-card-press-reach");
-  const card = reach instanceof HTMLElement ? reach.offsetParent : null;
-  const moved = card instanceof HTMLElement && card !== press.ownerDocument.body ? card : press;
-  pulsePress(moved, PRESS_PULSE.QUIET);
-}
-
 /** What is a control of its own inside a card, whose press is its own rather than the card's. */
 const CONTROL =
   "a, button, input, select, textarea, summary, [role='button'], [role='menuitem'], [role='checkbox']";
@@ -246,7 +233,6 @@ export function CardPress({
 
       if (!pressesCard && control !== null && card.contains(control)) return;
 
-      if (own.current !== null) pulseCard(own.current);
       press(event);
     };
 
@@ -273,8 +259,6 @@ export function CardPress({
         disabled={disabled}
         {...middleOpensTab(onOpenInTab, choosable ? holdRun : undefined)}
         onClick={(event: ReactMouseEvent<HTMLButtonElement>) => {
-          pulseCard(event.currentTarget);
-
           // Note that a ⌘- or ⇧-click that chose rows is no press of the card.
           if (!choosable) selecting?.passOver(event);
 

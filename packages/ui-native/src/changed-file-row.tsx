@@ -1,6 +1,6 @@
-// changed-file-row.tsx -- one file a pull request changes, as its Files list draws it: the letter of what became of it in its tone, its name, the lines it adds and removes at the line's end, and the folder it stands in muted under its name; and the Files bar's subtitle, its counts inked as the rows ink theirs.
+// changed-file-row.tsx -- one file a pull request changes, as its Files list draws it: the letter of what became of it in its tone, its name, the lines it adds and removes at the line's end, and the folder it stands in muted under its name.
 
-import { HStack, Text, VStack } from "@expo/ui/swift-ui";
+import { HStack, VStack } from "@expo/ui/swift-ui";
 import {
   font,
   foregroundStyle,
@@ -13,26 +13,17 @@ import type { AgentChangedFile, ChangedFileStatus } from "@repo/features/agent-w
 import { CHANGED_FILE_STATUS } from "@repo/features/agent-wire";
 import {
   CHANGES_COUNT,
-  type ChangesCount,
-  type ChangesTally,
-  changesRuns,
   folderAndName,
   STATUS_LETTER,
   STATUS_WORDS,
 } from "@repo/features/changed-files";
 import type { ReactElement } from "react";
 import { useScaledSize } from "./accessibility.js";
-import type { InkedWords } from "./interactions.js";
+import { lineCount, lineCountInk } from "./line-counts.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { UnreadDot } from "./marks.js";
-import { lineCount } from "./pull-request-card.js";
-import {
-  type BrandColors,
-  STATUS_TONE,
-  type StatusTone,
-  toneColor,
-  useColors,
-} from "./tokens/colors.js";
+import { Text } from "./text.js";
+import { STATUS_TONE, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -43,11 +34,6 @@ const STATUS_TONE_OF = {
   [CHANGED_FILE_STATUS.DELETED]: STATUS_TONE.DANGER,
   [CHANGED_FILE_STATUS.RENAMED]: STATUS_TONE.MERGED,
 } as const satisfies Record<ChangedFileStatus, StatusTone>;
-
-/** The ink a count of lines takes: green for those added, and danger's words ink for those removed, so they hold their contrast, as the pull request card inks its own. */
-function countInk(colors: BrandColors, count: ChangesCount): string {
-  return count === CHANGES_COUNT.ADDED ? colors.COMPLETE : colors.DANGER_TEXT;
-}
 
 /** What a file's counts are heard as. */
 function countsHeard(file: AgentChangedFile): string {
@@ -109,8 +95,8 @@ export function ChangedFileRow({
       ink={viewed ? colors.TEXT_MUTED : colors.TEXT_BODY}
       end={
         <HStack spacing={SPACE.TIGHT}>
-          {count(file.additions, "+", countInk(colors, CHANGES_COUNT.ADDED))}
-          {count(file.deletions, "−", countInk(colors, CHANGES_COUNT.REMOVED))}
+          {count(file.additions, "+", lineCountInk(colors, CHANGES_COUNT.ADDED))}
+          {count(file.deletions, "−", lineCountInk(colors, CHANGES_COUNT.REMOVED))}
         </HStack>
       }
     />
@@ -151,18 +137,5 @@ export function ChangedFileRow({
         value: [folder, STATUS_WORDS[file.status], countsHeard(file), viewed && "Viewed"],
       }}
     />
-  );
-}
-
-/**
- * A pull request's Files changed subtitle, "43 files · +235 −58", as runs
- * for `StackSubtitle`: the count of files in the bar's own gray, and the
- * lines added and removed in the inks each file's row gives its own.
- */
-export function changesSubtitle(colors: BrandColors, changed: ChangesTally): readonly InkedWords[] {
-  return changesRuns(changed).map((run) =>
-    run.count === undefined
-      ? { words: run.words }
-      : { words: run.words, ink: countInk(colors, run.count) },
   );
 }

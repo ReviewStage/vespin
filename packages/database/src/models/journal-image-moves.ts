@@ -287,7 +287,8 @@ export function tombstoneJournalImageUploads(messageId: string): MoveEffect<void
     const uploads = yield* decodeUploads(row.uploads);
 
     if (uploads.length === 0) return;
-    yield* tombstoneUnwrittenUploads(uploads);
+    // Note that the move writes its pictures itself, handing out no URL, so nothing lands after it and its tombstones are due at once.
+    yield* tombstoneUnwrittenUploads(uploads, 0);
 
     yield* db
       .update(journalImageMove)

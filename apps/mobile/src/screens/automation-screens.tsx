@@ -210,18 +210,24 @@ export function AutomationsScreen() {
           icon={glyphSymbol(GLYPH.HISTORY)}
           accessibilityLabel={RUNS}
           onPress={() => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE))}
-        />
+        >
+          {RUNS}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.ADD)}
           accessibilityLabel={NEW_AUTOMATION}
           onPress={() => router.push(newAutomationRoute())}
-        />
+        >
+          {NEW_AUTOMATION}
+        </Stack.Toolbar.Button>
         {/* Note that New task's compose ends the bar, as every tab root's does. */}
         <Stack.Toolbar.Button
           icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
           accessibilityLabel={compose.label}
           onPress={compose.onPress}
-        />
+        >
+          {compose.label}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         {chosen === undefined ? null : (
