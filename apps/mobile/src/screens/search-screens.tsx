@@ -719,7 +719,8 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   const open = useOpenPicked(foundRoutes(found), leave);
   const goTo = useGoTo(leave);
   // Note that the places found stand under All alone, as Commands, since a kind's own scope lists that kind.
-  const places = scope === SEARCH_SCOPE.ALL ? goToShown(goTo.reached, query) : [];
+  // Note that the places are matched to the words the rows were found for, so the empty state and Commands never disagree while the finding catches up with a key typed.
+  const places = scope === SEARCH_SCOPE.ALL ? goToShown(goTo.reached, found.answered) : [];
 
   const shown = scopedFound(found, scope);
   const reading = scopeReading(found, scope);
