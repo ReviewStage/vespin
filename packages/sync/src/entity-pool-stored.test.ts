@@ -103,16 +103,13 @@ function launch<A>(file: string, step: (pool: EntityPool) => Effect.Effect<A>) {
   return Effect.gen(function* () {
     const database = yield* opened(file);
 
-    const answer = yield* Effect.scoped(
+    // Note that the database closes after the pool's scope however the step ends, so a failing case leaves no file open.
+    return yield* Effect.scoped(
       Effect.flatMap(
         poolOver(() => database.collections),
         step,
       ),
-    );
-
-    yield* database.close;
-
-    return answer;
+    ).pipe(Effect.ensuring(database.close));
   });
 }
 

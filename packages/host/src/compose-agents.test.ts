@@ -58,7 +58,7 @@ import {
 } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppManagerChats, AppTranscript } from "./app-state.js";
-import { INBOX_ITEM } from "./inbox-collections.js";
+import { INBOX_CHANGE, INBOX_ITEM } from "./inbox-collections.js";
 import { localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
@@ -2510,6 +2510,56 @@ it.effect(
       yield* settled;
 
       assert.deepEqual(yield* keptItemIds(next.pool), [OTHER_ITEM.id]);
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "an aged item kept on disk that a write still stands over stays there, so the write goes on drawing over it",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-aged-written-");
+
+      const settledItem = {
+        ...HELD_ITEM,
+        status: INBOX_STATUS.ANSWERED,
+        settledAt: HELD_ITEM.updatedAt,
+      };
+
+      yield* TestClock.adjust(Duration.millis(HELD_ITEM.updatedAt));
+      const quit = yield* Scope.make();
+      const first = yield* Scope.provide(quit)(keptLaunch(root));
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+      deliverItems(first.live, [stampOf(settledItem, TASK_ID)], [settledItem]);
+      yield* toldTimes(first.accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      yield* TestClock.adjust(Duration.millis(ACCOUNT_INBOX_ITEMS.SETTLED_WINDOW_MILLIS + 1));
+      const next = yield* keptLaunch(root);
+
+      // Note that the reopen is sent to a service that never answers, so it stands over the item as a write waiting offline does.
+      yield* Effect.forkChild(
+        next.pool.write(
+          {
+            kind: INBOX_ITEM,
+            keys: () => [settledItem.id],
+            change: () => ({
+              kind: INBOX_CHANGE.REOPENED,
+              itemId: settledItem.id,
+              item: (item) => ({ ...item, status: INBOX_STATUS.OPEN }),
+            }),
+            send: () => Effect.never,
+          },
+          undefined,
+        ),
+      );
+
+      yield* settled;
+      yield* next.open;
+      yield* settled;
+
+      assert.deepEqual(yield* keptItemIds(next.pool), [settledItem.id]);
     }).pipe(Effect.provide(keptPlatform)),
 );
 

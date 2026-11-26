@@ -235,9 +235,11 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
           : { keptHolders: [...holders.summaries.values()] }),
       });
 
-    /** Deletes every item kept that settled before the read's window now. */
+    /** Deletes every item kept that settled before the read's window now, but one a write stands over, which draws over it until it lands. */
     const agedOut = Effect.gen(function* () {
-      const aged = yield* agedIds(pool, yield* Clock.currentTimeMillis);
+      const found = yield* agedIds(pool, yield* Clock.currentTimeMillis);
+      const pending = pool.standing(INBOX_ITEM)?.pending;
+      const aged = found.filter((id) => pending?.has(id) !== true);
 
       if (aged.length > 0) yield* items.answer([], { gone: aged });
     });

@@ -50,7 +50,14 @@ function rowsQuery(
 /** The kind's collection and the rows its writes draw as they stand, read again each time they move. */
 function useStanding(source: InboxRowsSource) {
   const [moves, moved] = useReducer((count: number) => count + 1, 0);
-  useEffect(() => source.watch(moved), [source]);
+
+  // Note that the rows are read again once the watch stands, since a move between the render's read and the watch is told nobody.
+  useEffect(() => {
+    const stop = source.watch(moved);
+    moved();
+
+    return stop;
+  }, [source]);
 
   // Note that `moves` is read only to read the rows again each time they move.
   return useMemo(() => (moves >= 0 ? source.standing() : undefined), [source, moves]);

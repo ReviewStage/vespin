@@ -1703,6 +1703,9 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
       for (const watcher of watchers) watcher();
     };
 
+    /** Each kind's rows still being made, by the kinds they will stand among and then the kind's own declaration. */
+    const making = new WeakMap<Map<object, unknown>, Map<object, Effect.Effect<unknown>>>();
+
     /** Each kind's rows held in memory alone, by the kind's own declaration. */
     const memoryKinds = new Map<object, unknown>();
     /** Each stored kind's rows kept in an account's database, by the database and then the kind's own declaration, so a database closed takes its kinds with it. */
@@ -1730,8 +1733,17 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
         const standing = made();
 
         if (standing !== undefined) return Effect.succeed(standing);
+        // Note that a kept collection is handed its sync only once its database answers, so reads asking for a kind at once share the one being made rather than each starting a collection of the same name.
+        const inFlight = making.get(kinds) ?? new Map<object, Effect.Effect<unknown>>();
+        making.set(kinds, inFlight);
+        // SAFETY: the map is keyed by the kind itself, so what is being made for `kind` is of `kind`'s row and change.
+        const pending = inFlight.get(kind) as Effect.Effect<KindRows<Row, Change>> | undefined;
 
-        return Effect.flatMap(
+        if (pending !== undefined) return pending;
+        const handed = Deferred.makeUnsafe<KindRows<Row, Change>>();
+        inFlight.set(kind, Deferred.await(handed));
+
+        const makingRows = Effect.flatMap(
           Scope.provide(place.scope)(syncedCollection(kind.key, place.keep)),
           (synced) => {
             // Note that a kind made meanwhile by another fiber is the one kept, so a kind has one collection.
@@ -1756,6 +1768,14 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
               ? Effect.as(loadsHeard(fresh, place.scope), fresh)
               : Effect.succeed(fresh);
           },
+        );
+
+        // Note that a failed making is let go, so a later read starts anew.
+        return Effect.onExit(makingRows, (exit) =>
+          Effect.sync(() => {
+            inFlight.delete(kind);
+            Deferred.doneUnsafe(handed, exit);
+          }),
         );
       });
 
