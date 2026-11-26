@@ -231,6 +231,7 @@ import {
 import { CODER_REFUSAL } from "./bounds.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
 import {
+  REACT_CHAT_TOOL,
   READ_CHAT_MESSAGES_TOOL,
   READ_CHAT_THREAD_TOOL,
   SEARCH_CHAT_TOOL,
@@ -1978,6 +1979,10 @@ test("a Manager's chat reads show the model the recorded inputs", async () => {
     READ_CHAT_THREAD_TOOL.inputSchema,
   );
   await settleJsonSchemaGolden(GOLDEN_ROOT, "search-chat-input", SEARCH_CHAT_TOOL.inputSchema);
+});
+
+test("chat_react shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "react-chat-input", REACT_CHAT_TOOL.inputSchema);
 });
 
 test("send_slack_message shows the model the recorded input", async () => {

@@ -15,7 +15,10 @@
  * a person's message to a Manager's chat (`POST /api/agents/{id}/chat-messages`),
  * written to the chat beside the line the same steer hands the Manager,
  * under the same reach a message takes, which opens no turn: a delegation's
- * message names the caller's lines it is, and starts its turn on them.
+ * message names the caller's lines it is, and starts its turn on them. And a
+ * member's reaction given a message of a Manager's chat, or taken off it
+ * (`POST /api/agents/{id}/chat-messages/{message}/reactions`), under the
+ * reach a message to the chat takes, which opens no turn either.
  *
  * Every row a read touches is one of a workspace the caller is a member of:
  * an agent or a task of any other workspace answers exactly as one that
@@ -45,6 +48,10 @@ import { childTitlesOf } from "@repo/database/models/child-titles";
 import { readRewoundRevision } from "@repo/database/models/conversation-rewind";
 import { childConversationId } from "@repo/database/models/ids";
 import { readManagerChatMessageByKey } from "@repo/database/models/manager-chat-messages";
+import {
+  MANAGER_CHAT_REACTION_OUTCOME,
+  reactManagerChat,
+} from "@repo/database/models/manager-chat-reactions";
 import { listProviderKeyRows } from "@repo/database/models/provider-key-store";
 import { listStandingVoiceCalls } from "@repo/database/models/voice-calls";
 import {
@@ -56,6 +63,7 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import {
   AGENT_BOUNDS,
   AGENT_CURSOR_START,
+  AGENT_KIND,
   AGENT_STATUS,
   type AgentMessagesAnswer,
   type AgentNewestAnswer,
@@ -68,10 +76,11 @@ import {
   TRANSCRIPT_PARTS_QUERY,
 } from "@repo/features/agent-wire";
 import { TRANSCRIPT_NOW_QUERY } from "@repo/features/live-wire";
+import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
 import { PROVIDER_KEY_KIND } from "@repo/features/provider-key-wire";
 import { isRecord } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Effect, Option, Result, Schema } from "effect";
+import { DateTime, Effect, Option, Result, Schema } from "effect";
 import { unparsedWire } from "../core.js";
 import {
   HOSTED_REFUSAL,
@@ -504,6 +513,38 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
         return txid === undefined
           ? { agent: summary, messageId }
           : { agent: summary, txid, messageId };
+      }),
+
+    chatReact: hosted.messages
+      .use(accountMiddleware(seams.resolveUserId))
+      .chatReact.effect(function* ({ input, context }) {
+        const { agent } = yield* reachedAgent(context.userId, input.params.id);
+
+        // Note that a reaction takes the reach a message to the chat takes, though it opens no turn: the member writes to the agent its payer funds.
+        if (agent.kind !== AGENT_KIND.MANAGER) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+        if (!controlsAgent(context.userId, agent)) {
+          return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+        }
+
+        yield* admitsPlanWriter(context.userId, agent);
+
+        const outcome = yield* hostedStoreOrUnavailable(
+          reactManagerChat(context.userId, {
+            agentId: agent.id,
+            messageId: input.params.message,
+            by: MANAGER_CHAT_AUTHOR.PERSON,
+            kind: input.body.kind,
+            reacted: input.body.reacted,
+            now: yield* DateTime.nowAsDate,
+          }),
+        );
+
+        if (outcome.status === MANAGER_CHAT_REACTION_OUTCOME.NO_MESSAGE) {
+          return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+        }
+
+        return { changed: outcome.changed };
       }),
 
     recordVoiceLine: hosted.messages

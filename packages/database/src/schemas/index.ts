@@ -96,6 +96,8 @@ export * from "./machine-command-ask.js";
 
 export * from "./manager-chat-message.js";
 
+export * from "./manager-chat-reaction.js";
+
 export * from "./memory.js";
 
 export * from "./native-call-key.js";
