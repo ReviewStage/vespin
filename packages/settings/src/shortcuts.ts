@@ -95,6 +95,7 @@ export const APP_COMMAND = {
   PREVIOUS_INBOX_ITEM: "previous-inbox-item",
   NEXT_INBOX_ITEM: "next-inbox-item",
   EXIT_AGENT_THREADS: "exit-agent-threads",
+  CLOSE_THREAD: "close-thread",
   REPLY_TO_SELECTION: "reply-to-selection",
   SET_STATUS: "set-status",
   AUTOMATIONS: "automations",
@@ -672,6 +673,10 @@ export const APP_SHORTCUTS = {
     label: "Back to transcript",
     chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
   },
+  [APP_COMMAND.CLOSE_THREAD]: {
+    label: "Close thread",
+    chord: { key: SHORTCUT_KEY.ESCAPE, bare: true },
+  },
   [APP_COMMAND.PREVIOUS_INBOX_ITEM]: {
     label: "Previous inbox item",
     chord: { key: SHORTCUT_KEY.K, plain: true },
@@ -969,6 +974,7 @@ export const APP_SHORTCUT_GROUPS = [
       APP_COMMAND.INBOX,
       APP_COMMAND.TASKS,
       APP_COMMAND.EXIT_AGENT_THREADS,
+      APP_COMMAND.CLOSE_THREAD,
       APP_COMMAND.PREVIOUS_INBOX_ITEM,
       APP_COMMAND.NEXT_INBOX_ITEM,
       APP_COMMAND.REPLY_TO_SELECTION,
