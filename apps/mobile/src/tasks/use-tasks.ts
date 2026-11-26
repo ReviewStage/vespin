@@ -10,7 +10,7 @@
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
-import { holderTask, waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import type { InboxWaiting } from "@repo/features/inbox-list-model";
 import { LINK_DESTINATION, taskNumberOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
@@ -117,7 +117,7 @@ import {
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useWindow } from "../host/use-window.js";
-import { useInboxRowGroupsIn } from "../inbox/inbox-groups.js";
+import { useInboxWaiting } from "../inbox/inbox-groups.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useMenuPhotos, useMenuRepositoryPictures } from "../menu-photos.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
@@ -139,33 +139,9 @@ export function useTasksWorkspace(): Workspace | undefined {
   return useChosenWorkspace(workspaces).chosen;
 }
 
-/** How many of the reader's threads wait on them, by the task holding them and by the agent that posted them, in the chosen workspace. */
-export function useWaiting(workspaceId: string | undefined): {
-  readonly byTask: ReadonlyMap<string, number>;
-  readonly byAgent: ReadonlyMap<string, number>;
-} {
-  const groups = useInboxRowGroupsIn(workspaceId);
-
-  const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-
-  return useMemo(() => {
-    const now = Date.now();
-    const byTask = new Map<string, number>();
-    const byAgent = new Map<string, number>();
-
-    for (const { holder, items } of groups) {
-      const waiting = items.filter((item) => waitsOnReaderNow(item, readerId, now));
-
-      for (const item of waiting) byAgent.set(item.agentId, (byAgent.get(item.agentId) ?? 0) + 1);
-
-      const task = holderTask(holder);
-
-      // Note that a Manager's threads, on no task, count toward their agent alone.
-      if (waiting.length > 0 && task !== undefined) byTask.set(task.id, waiting.length);
-    }
-
-    return { byTask, byAgent };
-  }, [groups, readerId]);
+/** How many of the reader's threads wait on them, by the task holding them and by the agent that posted them, in the workspace `workspaceId` names, read from the app's one read of the Inbox (`useInboxWaiting`). */
+export function useWaiting(workspaceId: string | undefined): InboxWaiting {
+  return useInboxWaiting(workspaceId);
 }
 
 /** Sets a task's status, stopping its working agents with it where the reader confirmed that. */

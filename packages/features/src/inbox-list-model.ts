@@ -1063,6 +1063,88 @@ export function waitsOnReaderNow(
   return needsReader(item, readerId) && !remindsLater(item, now);
 }
 
+/** How many of the reader's threads wait on them in one workspace, by the task holding them, by the agent that posted them, and in all. */
+export interface InboxWaiting {
+  readonly byTask: ReadonlyMap<string, number>;
+  readonly byAgent: ReadonlyMap<string, number>;
+  readonly total: number;
+}
+
+/** No thread waits. */
+export const NO_INBOX_WAITING: InboxWaiting = { byTask: new Map(), byAgent: new Map(), total: 0 };
+
+/**
+ * How many of the reader's threads wait on them at `now` (`waitsOnReaderNow`)
+ * in each workspace their holders stand in, by task, by agent, and in all;
+ * and, under no workspace (`undefined`), across every workspace. A
+ * Manager's thread, on no task, counts toward its agent and the total alone.
+ */
+export function inboxWaitingIn(
+  groups: readonly InboxGroup<InboxAnyHolder>[],
+  readerId: string | undefined,
+  now: number,
+): ReadonlyMap<string | undefined, InboxWaiting> {
+  const counts = new Map<
+    string | undefined,
+    { byTask: Map<string, number>; byAgent: Map<string, number>; total: number }
+  >();
+
+  const countIn = (workspaceId: string | undefined) => {
+    const held = counts.get(workspaceId) ?? { byTask: new Map(), byAgent: new Map(), total: 0 };
+    counts.set(workspaceId, held);
+
+    return held;
+  };
+
+  for (const { holder, items } of groups) {
+    const waiting = items.filter((item) => waitsOnReaderNow(item, readerId, now));
+
+    if (waiting.length === 0) continue;
+    const task = holderTask(holder);
+
+    for (const held of [countIn(holderWorkspaceId(holder)), countIn(undefined)]) {
+      held.total += waiting.length;
+
+      if (task !== undefined) held.byTask.set(task.id, waiting.length);
+
+      for (const item of waiting)
+        held.byAgent.set(item.agentId, (held.byAgent.get(item.agentId) ?? 0) + 1);
+    }
+  }
+
+  return counts;
+}
+
+/** Whether two counts of what waits say the same. */
+function sameWaiting(one: InboxWaiting, other: InboxWaiting): boolean {
+  const sameCounts = (a: ReadonlyMap<string, number>, b: ReadonlyMap<string, number>) =>
+    a.size === b.size && [...a].every(([key, count]) => b.get(key) === count);
+
+  return (
+    one.total === other.total &&
+    sameCounts(one.byTask, other.byTask) &&
+    sameCounts(one.byAgent, other.byAgent)
+  );
+}
+
+/**
+ * `next`'s counts of what waits in each workspace, each the very object
+ * `previous` held where it says the same, so a reader of one workspace's
+ * counts draws again only where they moved.
+ */
+export function inboxWaitingKept(
+  previous: ReadonlyMap<string | undefined, InboxWaiting>,
+  next: ReadonlyMap<string | undefined, InboxWaiting>,
+): ReadonlyMap<string | undefined, InboxWaiting> {
+  return new Map(
+    [...next].map(([workspaceId, counts]) => {
+      const held = previous.get(workspaceId);
+
+      return [workspaceId, held !== undefined && sameWaiting(held, counts) ? held : counts];
+    }),
+  );
+}
+
 /** What a line of threads none of which waits on the developer says: "1 thread", "4 threads". */
 export function threadsWords(count: number): string {
   return count === 1 ? "1 thread" : `${count} threads`;
