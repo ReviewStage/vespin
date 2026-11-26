@@ -180,6 +180,7 @@ export function useManagerChatLooks(
     (messageId: string, sentAt: number) => {
       if (agentId === undefined) return;
       const before = stay;
+      const held = markedUnread.current;
       markedUnread.current = true;
       setStay({ agentId, newAfter: unreadThroughOf(sentAt), newOverOwn: true });
 
@@ -198,9 +199,11 @@ export function useManagerChatLooks(
       ).then((went) => {
         if (went) return;
 
-        // Note that a mark the service did not take is let go, as the host lets its drawn mark go, and the looks held meanwhile are caught up by one.
-        markedUnread.current = false;
+        // Note that a mark the service did not take is let go, as the host lets its drawn mark go, back to the stay as it stood: one marked unread earlier in it stays held, and one that held nothing catches the looks it held up by one.
+        markedUnread.current = held;
         setStay((standing) => (standing.agentId === agentId ? before : standing));
+
+        if (held) return;
         acts[ACT_KIND.AGENTS_MARK_READ]({ agentId, readMark: READ_MARK.SEEN }).catch(lookRefused);
       });
     },

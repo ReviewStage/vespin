@@ -175,8 +175,8 @@ async function drawChat(
     readonly findable?: boolean;
     /** What a reaction pressed is answered with, once it settles; refused at once where none is named. */
     readonly reactAnswer?: Promise<FakeActAnswer>;
-    /** Whether the service refuses Mark as unread. */
-    readonly unreadRefused?: boolean;
+    /** The message whose Mark as unread the service refuses, by its id. */
+    readonly unreadRefused?: string;
   } = {},
 ) {
   const manager = held.manager ?? MANAGER;
@@ -211,7 +211,7 @@ async function drawChat(
       if (request.kind === ACT_KIND.AGENTS_MARK_READ) {
         marks.push(request.payload);
 
-        if (held.unreadRefused === true && request.payload.readMark === READ_MARK.UNREAD) {
+        if (request.payload.unreadFrom?.messageId === held.unreadRefused) {
           return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." });
         }
 
@@ -450,33 +450,57 @@ test("New stands over the first message after the mark the page opened on, the r
   ]);
 });
 
-test("a Mark as unread the service refuses lets New go back to where it stood, and the page's looks go on", async () => {
-  const { container, root, marks } = await drawChat(
-    [row("first", 1, "On it."), row("second", 2, "Shipped.")],
-    { manager: { ...MANAGER, readThrough: 1_500, saidAt: 2_000 }, unreadRefused: true },
-  );
+test("a Mark as unread the service refuses lets New go back to where it stood: to an earlier mark the stay holds, which stays held, and else to where the page opened, its looks going on", async () => {
+  /** Marks the message holding `text` unread from its menu. */
+  const markUnreadOn = async (container: Element, text: string) => {
+    const words =
+      [...container.querySelectorAll(".ui-channel-message-words")].find(
+        (each) => each.textContent === text,
+      ) ?? assert.fail("the message stands");
 
-  const words =
-    [...container.querySelectorAll(".ui-channel-message-words")].find(
-      (each) => each.textContent === "On it.",
-    ) ?? assert.fail("the message stands");
+    act(() => {
+      words.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
+      );
+    });
+    act(() => menuItem("Mark as unread").click());
+    await settleQueries();
+  };
 
-  act(() => {
-    words.dispatchEvent(
-      new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 12, clientY: 8 }),
-    );
-  });
-  act(() => menuItem("Mark as unread").click());
+  const rows = [row("first", 1, "On it."), row("second", 2, "Shipped.")];
+  // The chat opens read, with no New.
+  const manager = { ...MANAGER, readThrough: 2_500, saidAt: 2_000 };
+
+  // Marked unread from the second message, then refused on the first: New goes back over the second, held as the page closes.
+  const earlier = await drawChat(rows, { manager, unreadRefused: "first" });
+  await markUnreadOn(earlier.container, "Shipped.");
+  await markUnreadOn(earlier.container, "On it.");
+  const heldOver = newOver(earlier.container);
+  act(() => earlier.root.unmount());
+  roots.splice(roots.indexOf(earlier.root), 1);
   await settleQueries();
 
-  assert.equal(newOver(container), "Shipped.");
-  act(() => root.unmount());
-  roots.splice(roots.indexOf(root), 1);
+  // Refused with nothing marked before: New goes back to where the page opened, nowhere, and its looks go on.
+  const alone = await drawChat(rows, { manager, unreadRefused: "first" });
+  await markUnreadOn(alone.container, "On it.");
+  const openedOver = newOver(alone.container);
+  act(() => alone.root.unmount());
+  roots.splice(roots.indexOf(alone.root), 1);
   await settleQueries();
 
   assert.deepEqual(
-    marks.map((mark) => mark.readMark),
-    [READ_MARK.READ, READ_MARK.UNREAD, READ_MARK.SEEN, READ_MARK.SEEN],
+    [
+      heldOver,
+      earlier.marks.map((mark) => mark.readMark),
+      openedOver,
+      alone.marks.map((mark) => mark.readMark),
+    ],
+    [
+      "Shipped.",
+      [READ_MARK.READ, READ_MARK.UNREAD, READ_MARK.UNREAD],
+      undefined,
+      [READ_MARK.READ, READ_MARK.UNREAD, READ_MARK.SEEN, READ_MARK.SEEN],
+    ],
   );
 });
 

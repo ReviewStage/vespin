@@ -114,15 +114,18 @@ export function useManagerChatLooks(
     (message: ManagerChatLiveMessage) => {
       if (agentId === undefined) return;
       const before = stay;
+      const held = markedUnread.current;
       markedUnread.current = true;
       markedUnreadStore.setState(() => agentId);
       setStay({ agentId, newAfter: unreadThroughOf(message.createdAt), newOverOwn: true });
 
-      // Note that a mark the service did not take is let go, as the host lets its drawn mark go, and the looks held meanwhile are caught up by one.
+      // Note that a mark the service did not take is let go, as the host lets its drawn mark go, back to the stay as it stood: one marked unread earlier in it stays held, and one that held nothing catches the looks it held up by one.
       const refused = () => {
-        markedUnread.current = false;
-        markedUnreadStore.setState((marked) => (marked === agentId ? undefined : marked));
+        markedUnread.current = held;
         setStay((standing) => (standing.agentId === agentId ? before : standing));
+
+        if (held) return;
+        markedUnreadStore.setState((marked) => (marked === agentId ? undefined : marked));
         markAgentRead({ agentId, readMark: READ_MARK.SEEN });
       };
 
