@@ -14,10 +14,9 @@ import { CatalogSection } from "../section";
 
 /**
  * reveals.tsx -- a settings page whose switch brings rows of its own, which
- * unroll in under it as it turns on, the rows and section under them
- * gliding down, and roll up as it turns off; and a choice whose every value
- * brings rows of its own, the rows of the value left rolling up as those of
- * the one picked unroll.
+ * stand under it while it is on and go as it turns off; and a choice whose
+ * every value brings rows of its own, the rows of the value left swapped
+ * for those of the one picked. Both land at once.
  */
 
 /** How a sample automation is started, each way with rows of its own. */

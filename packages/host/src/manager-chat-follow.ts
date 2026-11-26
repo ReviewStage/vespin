@@ -3,6 +3,8 @@ import {
   type AgentChatSendAnswerView,
   type AgentChatSendParams,
   type AgentTranscriptOlderAnswer,
+  type ManagerChatReactAnswerView,
+  type ManagerChatReactParams,
   type ManagerChatSending,
   type ManagerChatUnsendParams,
 } from "@repo/features/agent-view";
@@ -11,6 +13,7 @@ import {
   MANAGER_CHAT_READ,
   type ManagerChatPageView,
   managerChatPageOf,
+  withReactionPress,
 } from "@repo/features/manager-chat-live";
 import { Effect, Option, Schema, type Scope } from "effect";
 import { type AppManagerChat, type AppManagerChats, NO_KEYS_HELD } from "./app-state.js";
@@ -43,6 +46,12 @@ import { pushLive } from "./live-push.js";
  * messages on their way are kept for the account that sent them, in this
  * process alone, and a sign-out lets them all go, since the next account
  * signed in may reach the same chat but never another's words that did not go.
+ *
+ * A reaction the reader gives a message, or takes off it, is written into
+ * the chat held as the service takes it (`reacting`), as a read would
+ * carry it, so it stands from the answer rather than from the next read;
+ * the window draws it before that, while it is asked. One refused writes
+ * nothing.
  */
 
 /** A read the service did not answer, as the client and the gate tell it. */
@@ -85,6 +94,9 @@ export interface ManagerChatFollowDependencies {
 /** A person's message sent to a Manager's chat, as the service is asked it. */
 type ChatSend = (params: AgentChatSendParams) => Effect.Effect<AgentChatSendAnswerView>;
 
+/** A member's reaction to a message of a Manager's chat, as the service is asked it. */
+type ChatReact = (params: ManagerChatReactParams) => Effect.Effect<ManagerChatReactAnswerView>;
+
 /** The held chats, the read of an older page of one laid on them, and the reader's messages on their way to one drawn over it. */
 export type HeldManagerChats = HeldSlice<string> &
   HeldRows<string, AppManagerChat> & {
@@ -94,6 +106,8 @@ export type HeldManagerChats = HeldSlice<string> &
     readonly sending: (send: ChatSend) => ChatSend;
     /** A refused message let go, by the key it went under. */
     readonly unsend: (params: ManagerChatUnsendParams) => Effect.Effect<void>;
+    /** `react` written into the chat held as the reaction it gives or takes off, once the service takes it. */
+    readonly reacting: (react: ChatReact) => ChatReact;
   };
 
 const decodePage = Schema.decodeUnknownOption(MANAGER_CHAT_READ.rows);
@@ -319,12 +333,26 @@ export function heldManagerChats(
         redraw(agentId);
       });
 
+    const reacting =
+      (react: ChatReact): ChatReact =>
+      (params) =>
+        Effect.gen(function* () {
+          const answer = yield* react(params);
+          const { agentId, ...press } = params;
+          const chat = slice.rowsOf(agentId);
+
+          if ("failure" in answer || chat === undefined) return answer;
+          slice.lay(agentId, { ...chat, messages: withReactionPress(chat.messages, press) });
+
+          return answer;
+        });
+
     // Note that a sign-out lets every message on its way go with the chats, since they are the signed-out account's words.
     const end = Effect.andThen(
       Effect.sync(() => sendings.clear()),
       slice.end,
     );
 
-    return { ...slice, end, older, sending, unsend };
+    return { ...slice, end, older, sending, unsend, reacting };
   });
 }

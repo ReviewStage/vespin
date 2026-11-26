@@ -20,7 +20,6 @@ import {
 import { cssCustomProperties } from "../../css.js";
 import { ChevronRightIcon, FoldChevronIcon } from "../../icons/lucide-glyphs.js";
 import { middleOpensTab } from "../../middle-press.js";
-import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { said } from "../../said.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { Checkbox as ShadcnCheckbox } from "../../shadcn/checkbox.js";
@@ -474,13 +473,6 @@ function plainWords(words: ReactNode): string | undefined {
  */
 const ListDensityContext = createContext<ListDensity>(LIST_DENSITY.REGULAR);
 
-/**
- * How the `List` a row stands in stands, so a row in a card, edge to edge
- * on the card's ground, answers a press inside its fill rather than pulling
- * that fill back from the card's edges.
- */
-const ListVariantContext = createContext<ListVariant>(LIST_VARIANT.PLAIN);
-
 /** The custom properties a row's sheet reads: how deep it stands. */
 function rowProperties(depth: number): CSSProperties | undefined {
   return depth === 0 ? undefined : cssCustomProperties({ "--ui-list-row-depth": depth });
@@ -591,11 +583,9 @@ export function List({
   };
 
   const contexts = (rows: ReactNode) => (
-    <ListVariantContext value={variant}>
-      <ListDensityContext value={density}>
-        <ListSelectionContext value={chooser.selecting}>{rows}</ListSelectionContext>
-      </ListDensityContext>
-    </ListVariantContext>
+    <ListDensityContext value={density}>
+      <ListSelectionContext value={chooser.selecting}>{rows}</ListSelectionContext>
+    </ListDensityContext>
   );
 
   if (run !== undefined) {
@@ -883,9 +873,6 @@ export function ListRow({
   const [descriptionMeasured, descriptionClipped] = useClipped(plainWords(description));
   const listDensity = useContext(ListDensityContext);
 
-  const pressPulse =
-    useContext(ListVariantContext) === LIST_VARIANT.CARD ? PRESS_PULSE.FLUSH : PRESS_PULSE.QUIET;
-
   const selecting = useContext(ListSelectionContext);
   const choosable = selecting !== undefined && selectKey !== undefined;
   const chosen = choosable && selecting.selected.has(selectKey);
@@ -1058,10 +1045,6 @@ export function ListRow({
         keepFocus ? preventFocusMove : choosable ? holdRun : undefined,
       )}
       onClick={(event) => {
-        // Note that the row around the press is what is pressed, its fill and its actions with it.
-        const row = event.currentTarget.closest<HTMLElement>(".ui-list-row");
-        pulsePress(row ?? event.currentTarget, pressPulse);
-
         // Note that a right-click's menu holds the press as its opener, which its outside press leaves alone, so the press closes it.
         if (rowMenu.open) rowMenu.close(false);
 

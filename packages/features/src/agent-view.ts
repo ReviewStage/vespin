@@ -63,6 +63,7 @@ import {
   liveActivityTokenRequestSchema,
 } from "./live-activity-wire.js";
 import { machineAskAnswerRequestSchema } from "./machine-ask-wire.js";
+import { managerChatReactRequestSchema } from "./manager-chat-live.js";
 import {
   MEMORY_QUERY,
   memoryIdSchema,
@@ -843,6 +844,20 @@ export const managerChatUnsendParamsSchema = EffectSchema.Struct({
 });
 
 export type ManagerChatUnsendParams = typeof managerChatUnsendParamsSchema.Type;
+
+/** A member's reaction given a message of a Manager's chat, or taken off it, as the window asks it: the Manager, the message, and the reaction as the service takes it (`managerChatReactRequestSchema`). */
+export const managerChatReactParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  messageId: EffectSchema.NonEmptyString,
+  ...managerChatReactRequestSchema.fields,
+});
+
+export type ManagerChatReactParams = typeof managerChatReactParamsSchema.Type;
+
+/** A member's reaction to a message of a Manager's chat, as the host hears the service answer it: whether it changed what stood, or why it was not taken. */
+export const managerChatReactAnswerViewSchema = answerView(messagesContract.chatReact);
+
+export type ManagerChatReactAnswerView = typeof managerChatReactAnswerViewSchema.Type;
 
 /**
  * One change of an agent's queue, as the window asks it: the agent, the

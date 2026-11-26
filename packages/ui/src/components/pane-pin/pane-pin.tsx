@@ -7,7 +7,7 @@ import { createElement, type HTMLAttributes, type ReactNode, type Ref } from "re
  * document as it bubbles; a press inside it, or on the toggle that floated
  * it, is marked as its own first (`onPin`), so the document's press leaves
  * it standing. It is no control: the controls inside it keep their own
- * presses, it plays no pulse, and it speaks as the region it is. Its owner
+ * presses, and it speaks as the region it is. Its owner
  * names, places, and draws it by its own class, and hands it the pane's own
  * events, the pointer leaving a peek and the keys a pane hears as a
  * container (Escape), as any element takes them.

@@ -79,6 +79,35 @@ export const managerChatReactAnswerSchema = EffectSchema.Struct({
 
 export type ManagerChatReactAnswer = typeof managerChatReactAnswerSchema.Type;
 
+/** The order a message's reactions stand in, as the statement reads them: 👍, then 👎. */
+const REACTION_ORDER: readonly ManagerChatReaction[] = Object.values(MANAGER_CHAT_REACTION);
+
+/**
+ * A message's reactions with the reader's own of `kind` given or taken off,
+ * as `reacted` says: counted one more where the reader gives one they had
+ * not, one fewer where they take theirs off, gone where nobody else gave
+ * it, and left as they stand where the reader's stands so already, so the
+ * same press drawn twice counts once. Each kind keeps its place in
+ * `MANAGER_CHAT_REACTION`'s order.
+ */
+export function withReaction(
+  reactions: readonly ManagerChatReactionCount[],
+  kind: ManagerChatReaction,
+  reacted: boolean,
+): readonly ManagerChatReactionCount[] {
+  const held = reactions.find((reaction) => reaction.kind === kind);
+
+  if ((held?.reacted ?? false) === reacted) return reactions;
+  const count = (held?.count ?? 0) + (reacted ? 1 : -1);
+  const rest = reactions.filter((reaction) => reaction.kind !== kind);
+
+  if (count <= 0) return rest;
+
+  return [...rest, { kind, count, reacted }].sort(
+    (a, b) => REACTION_ORDER.indexOf(a.kind) - REACTION_ORDER.indexOf(b.kind),
+  );
+}
+
 /** How many messages one page of a Manager's chat holds. */
 export const MANAGER_CHAT_PAGE = 50;
 
@@ -193,6 +222,28 @@ function messageOf(row: ManagerChatLiveRow): ManagerChatLiveMessage {
   }));
 
   return { ...message, reactions };
+}
+
+/** The reader's reaction given a message of the chat, or taken off it, as a reader draws it before the chat's read carries it: the message, the kind, and whether it stands after. */
+export interface ManagerChatReactionPress {
+  readonly messageId: string;
+  readonly kind: ManagerChatReaction;
+  readonly reacted: boolean;
+}
+
+/** `messages` with `press` drawn on the message it names (`withReaction`): the very list where none is that message or its reaction stands so already. */
+export function withReactionPress<Message extends ManagerChatLiveMessage>(
+  messages: readonly Message[],
+  { messageId, kind, reacted }: ManagerChatReactionPress,
+): readonly Message[] {
+  const at = messages.findIndex((message) => message.id === messageId);
+  const message = messages[at];
+
+  if (message === undefined) return messages;
+  const held = message.reactions ?? [];
+  const reactions = withReaction(held, kind, reacted);
+
+  return reactions === held ? messages : messages.with(at, { ...message, reactions });
 }
 
 /** A page of the chat from its rows: at most a page of them, newest first, and where the next older page stands before, where the statement read past the page. */

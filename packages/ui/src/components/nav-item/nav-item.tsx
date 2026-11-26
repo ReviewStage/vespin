@@ -7,7 +7,6 @@ import {
   useContext,
 } from "react";
 import { middleOpensTab, middlePressOf } from "../../middle-press.js";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { said } from "../../said.js";
 import { STATUS_TONE, type StatusTone } from "../../status-tone.js";
 import { CountFigure } from "../count-figure/count-figure.js";
@@ -281,8 +280,6 @@ export function NavItemLink({
   /** Its name, where the words drawn do not say the whole of it. */
   "aria-label"?: string | undefined;
 }): React.JSX.Element {
-  const press = pulseOnPress(onClick, PRESS_PULSE.QUIET);
-
   return (
     <a
       className={ROW}
@@ -293,8 +290,8 @@ export function NavItemLink({
       title={title}
       aria-label={props["aria-label"]}
       aria-current={current}
-      onClick={press}
-      onAuxClick={onClick === undefined ? undefined : middlePressOf(press)}
+      onClick={onClick}
+      onAuxClick={onClick === undefined ? undefined : middlePressOf(onClick)}
     >
       {said(icon) ? <Glyph icon={icon} /> : null}
       <Name>{children}</Name>
@@ -354,7 +351,7 @@ export function NavItem({
       {...middleOpensTab(onOpenInTab, keepFocus === true ? preventFocusMove : undefined)}
       onFocus={props.onFocus}
       onBlur={props.onBlur}
-      onClick={pulseOnPress(menu?.onClick ?? go, PRESS_PULSE.QUIET)}
+      onClick={menu?.onClick ?? go}
       {...withContextMenu(framed ? undefined : props.contextMenu, {
         onPointerDown: props.onPointerDown,
       })}

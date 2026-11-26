@@ -114,6 +114,8 @@ export type MessageActionProps = {
   tooltip?: boolean | string;
   /** A hover card hung in the hint's place, saying more about the action than its label (`@repo/ui`'s `Tooltip`'s `card`). */
   card?: ReactNode;
+  /** Whether it stands pressed, as a toggle does (`aria-pressed`), where it is one: the reader's reaction given. */
+  pressed?: boolean | undefined;
   onClick: () => void;
   /** Its glyph. */
   children: ReactNode;
@@ -124,11 +126,18 @@ export function MessageAction({
   label,
   tooltip = false,
   card,
+  pressed,
   onClick,
   children,
 }: MessageActionProps): ReactNode {
   const button = (
-    <IconButton icon={children} label={label} size={BUTTON_SIZE.COMPACT} onClick={onClick} />
+    <IconButton
+      icon={children}
+      label={label}
+      size={BUTTON_SIZE.COMPACT}
+      pressed={pressed}
+      onClick={onClick}
+    />
   );
 
   if (card !== undefined) {

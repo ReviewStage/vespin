@@ -128,7 +128,12 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
-import { MANAGER_CHAT_AUTHOR } from "@repo/features/manager-chat-live";
+import {
+  MANAGER_CHAT_AUTHOR,
+  MANAGER_CHAT_REACTION,
+  type ManagerChatReactionPress,
+  withReactionPress,
+} from "@repo/features/manager-chat-live";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
@@ -2247,7 +2252,9 @@ const MANAGER_THREAD_ROOT = "7b2d40e8";
  * the thread of the first of them, the account's question and the
  * Manager's answer, which the chat sums as "2 replies" under it. First
  * of all stands a picture the account sent with no words with its ask,
- * whose own long press opens its thread.
+ * whose own long press opens its thread. The Manager gave the account's
+ * ask its 👍, the account and Grace gave its first answer theirs, and the
+ * account gave its 👍 to the answer in the thread.
  */
 const MANAGER_CHAT: AppManagerChat = {
   messages: [
@@ -2266,6 +2273,7 @@ const MANAGER_CHAT: AppManagerChat = {
       lineId: null,
       createdAt: MANAGER_STARTED + 5 * MINUTE,
       editedAt: null,
+      reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 1, reacted: true }],
     },
     {
       id: "5d9e2a70",
@@ -2314,6 +2322,7 @@ const MANAGER_CHAT: AppManagerChat = {
       lineId: null,
       createdAt: MANAGER_STARTED + 2 * MINUTE,
       editedAt: null,
+      reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 2, reacted: true }],
     },
     {
       id: "e0f5a612",
@@ -2330,6 +2339,7 @@ const MANAGER_CHAT: AppManagerChat = {
       lineId: "fixture-manager-ask",
       createdAt: MANAGER_STARTED,
       editedAt: null,
+      reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 1, reacted: false }],
     },
     {
       id: "9a41c6d2",
@@ -2355,6 +2365,14 @@ const MANAGER_CHAT: AppManagerChat = {
     },
   ],
 };
+
+/** The account's reactions given the release Manager's chat or taken off it in this run, oldest pressed first, which the chat stands with, as the service would. */
+let managerChatPresses: readonly ManagerChatReactionPress[] = [];
+
+/** The release Manager's chat with the account's reactions in this run drawn on it. */
+function reactedManagerChat(): AppManagerChat {
+  return { messages: managerChatPresses.reduce(withReactionPress, MANAGER_CHAT.messages) };
+}
 
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
 function withQueued(transcript: AppTranscript): AppTranscript {
@@ -2875,7 +2893,7 @@ export function inboxAppState(
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MANAGER_CHAT]: {
       ...state[LIVE_READ.MANAGER_CHAT],
-      [AGENT.MANAGER]: { rows: MANAGER_CHAT },
+      [AGENT.MANAGER]: { rows: reactedManagerChat() },
     },
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
@@ -3905,6 +3923,20 @@ const ANSWERS: StagedAnswers = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
 
     return { agent: held, messageId: clientKey };
+  },
+  // Note that a reaction to a message of the release Manager's chat is kept for the run, so the chat stands with it as it would once its read carries it; the panel's run stages its document again on it (`tasks-fixture-loader.ts`).
+  [ACT_KIND.AGENTS_CHAT_REACT]: ({ agentId, messageId, kind, reacted }) => {
+    if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const message = reactedManagerChat().messages.find((each) => each.id === messageId);
+    const mine = message?.reactions?.find((each) => each.kind === kind)?.reacted ?? false;
+
+    const others = managerChatPresses.filter(
+      (each) => each.messageId !== messageId || each.kind !== kind,
+    );
+
+    managerChatPresses = [...others, { messageId, kind, reacted }];
+
+    return { changed: message !== undefined && mine !== reacted };
   },
   [ACT_KIND.AGENTS_QUEUE]: ({ agentId }) => {
     if (stagedAgent(agentId) === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };

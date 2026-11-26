@@ -15,7 +15,6 @@ import { cn } from "../../cn.js";
 import { isComposingKey } from "../../composing-key.js";
 import { cssCustomProperties } from "../../css.js";
 import { CheckIcon, ChevronRightIcon } from "../../icons/lucide-glyphs.js";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import {
   DROPDOWN_MENU_ITEM,
@@ -1072,8 +1071,6 @@ export function MenuItem({
     );
   }
 
-  const pressed = pulseOnPress(onChoose, PRESS_PULSE.QUIET);
-
   const shared = {
     nativeButton: true,
     // Note that a dimmed item is a disabled button outright, as it was,
@@ -1093,7 +1090,7 @@ export function MenuItem({
     closeOnClick: false,
     onClick: (event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
       event.preventBaseUIHandler();
-      pressed(event);
+      onChoose();
     },
   } as const;
 
@@ -1172,7 +1169,7 @@ function SteeredItem({
     "data-detail": secondLine(action) ? "true" : undefined,
     onMouseDown: (event: React.MouseEvent) => event.preventDefault(),
     onMouseMove: off ? undefined : steered.onHover,
-    onClick: off ? undefined : pulseOnPress(onChoose, PRESS_PULSE.QUIET),
+    onClick: off ? undefined : onChoose,
   } as const;
 
   // A setting is a switch for the keyboard and the reader, whatever its end draws.
@@ -1431,11 +1428,11 @@ function Submenu({
         data-open={open ? "true" : undefined}
         {...{ [SUBMENU_ITEM_ATTRIBUTE]: entry.label }}
         endClassName={endSlot(entry.hint !== undefined, false)}
-        onClick={pulseOnPress((event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
+        onClick={(event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
           // Note that Base UI's own press would take focus back to the item after it went into the submenu.
           event.preventBaseUIHandler();
           enter();
-        }, PRESS_PULSE.QUIET)}
+        }}
         onKeyDown={(event: BaseUIEvent<React.KeyboardEvent<HTMLElement>>) => {
           if (event.key !== "ArrowRight") return;
           event.preventDefault();
@@ -1608,10 +1605,10 @@ function PanelItem({
       data-popup-open={open ? "" : undefined}
       {...{ [PANEL_ATTRIBUTE]: entry.label }}
       closeOnClick={false}
-      onClick={pulseOnPress((event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
+      onClick={(event: BaseUIEvent<React.MouseEvent<HTMLElement>>) => {
         event.preventBaseUIHandler();
         onEnter();
-      }, PRESS_PULSE.QUIET)}
+      }}
       onKeyDown={(event: BaseUIEvent<React.KeyboardEvent<HTMLElement>>) => {
         if (event.key !== "ArrowRight") return;
         event.preventDefault();
@@ -2234,7 +2231,7 @@ function SheetItem({
     "data-detail": secondLine(action) ? "true" : undefined,
     [SUBMENU_ATTRIBUTE]: submenu,
     ...rovingItem(),
-    onClick: pulseOnPress(onChoose, PRESS_PULSE.QUIET),
+    onClick: onChoose,
     onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
       if (submenu === undefined || event.key !== "ArrowRight") return;
       event.preventDefault();
