@@ -2,8 +2,9 @@
 
 import {
   type AgentOverviewPullRequest,
-  CHECK_SUMMARY,
+  type CheckSummary,
   PULL_REQUEST_STATE,
+  type PullRequestCheck,
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -18,10 +19,11 @@ import {
 import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
 import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
+import { formatCount } from "@repo/features/number-format";
 import {
   CHECK_SUMMARY_WORDS,
   CLOSE_WORDS,
-  checksLineOf,
+  checksCountOf,
   checksSummaryOf,
   conversationCount,
   descriptionFolds,
@@ -89,6 +91,7 @@ import {
   REVIEW_LOOK,
   ROW_ACTION_TONE,
   type RowAction,
+  type RowCount,
   RowList,
   Screen,
   STATUS_TONE,
@@ -317,6 +320,41 @@ function methodsOffered(pullRequest: AgentOverviewPullRequest | undefined): read
   return chooses ? (pullRequest?.merging?.methods ?? []) : [];
 }
 
+/** What the Files changed row counts, as the panel's tab counts the files: how many, heard with its noun. */
+function filesRowCount(files: number): RowCount {
+  return {
+    words: formatCount(files),
+    tone: STATUS_TONE.NEUTRAL,
+    heard: filesWords(files),
+  };
+}
+
+/**
+ * What the Checks row counts, as the panel's tab counts the checks
+ * (`checksCount`): how they went, by its glyph in its tone from the first
+ * frame, and how many once read (`checksCountOf`): those that failed, those
+ * still running, or every one once they passed; nothing where neither
+ * stands.
+ */
+function checksRowCount(
+  summary: CheckSummary | undefined,
+  checks: readonly PullRequestCheck[] | undefined,
+): RowCount | undefined {
+  if (summary === undefined) return undefined;
+  const look = CHECK_SUMMARY_LOOK[summary];
+  const count = checks === undefined ? undefined : checksCountOf(checks, summary);
+
+  if (look === undefined && count === undefined) return undefined;
+  const words = count === undefined ? "" : formatCount(count);
+
+  return {
+    words,
+    tone: look?.tone ?? STATUS_TONE.NEUTRAL,
+    glyph: look?.symbol,
+    heard: [words, CHECK_SUMMARY_WORDS[summary]].filter((part) => part !== "").join(" "),
+  };
+}
+
 /** The glyph each change to where the pull request stands leads its item with, the panel's own. */
 const STATE_ACTION_GLYPHS = {
   [PULL_REQUEST_ACTION.READY_FOR_REVIEW]: GLYPH.PULL_REQUEST,
@@ -375,9 +413,10 @@ function PullRequestToolbar({ url }: { readonly url: string | undefined }) {
  * its heading, where it stands as the panel's pill says it and its
  * branches, with GitHub's sentence of whether it merges; its description
  * as its author wrote it, in Markdown, where it has one; a row for its
- * checks, how many stand where, a failure first, and a row for the files
- * it changes, how many and their lines where its agent's listing counts
- * them, each pushing its own screen, as GitHub's app pushes its Checks and
+ * checks and a row for the files it changes, each counting them as the
+ * panel's tabs do, the checks by how they went and how many, and the files
+ * by how many where its agent's listing counts them, their lines standing
+ * after its branches, each row pushing its own screen, as GitHub's app pushes its Checks and
  * Files changed; its reviewers' faces in its heading, each wearing where
  * they stand, as the panel's people line draws them; and its conversation
  * inline, as GitHub's app runs its timeline under the page: each comment
@@ -688,7 +727,13 @@ function PullRequestPage({
   }
 
   const action = pullRequest === undefined ? undefined : mergeActionFor(pullRequest);
-  const summary = checks === undefined ? undefined : checksSummaryOf(checks);
+
+  // Note that how the checks went is said from the first frame, by the merge read's word for them or what the agent published, and their own read's once it lands, as the panel's Checks tab counts them.
+  const summary =
+    checks === undefined
+      ? (pullRequest?.merging?.checks ?? listed?.checks)
+      : checksSummaryOf(checks);
+
   // Note that a pull request with no description, one read from a service before it, or one that holds only HTML GitHub's page hides (a template's comments, a bot's badges), shows no Description section, rather than the panel's "No description provided.", since the phone draws no empty section.
   const description = pullRequest?.body ?? "";
   // Note that the review threads still unresolved are said beside GitHub's sentence, as a branch that requires them resolved holds the merge for them, so the reader sees why before scrolling to them.
@@ -791,6 +836,11 @@ function PullRequestPage({
                 }
           }
           labels={pullRequest?.labels}
+          lines={
+            listed === undefined
+              ? undefined
+              : { additions: listed.additions, deletions: listed.deletions }
+          }
           reviewers={reviewers.map((reviewer) => ({
             by: githubFace(reviewer.by),
             state: reviewer.state,
@@ -856,30 +906,16 @@ function PullRequestPage({
       <ListSection>
         <MarkRow
           id={PAGE_ROW.CHECKS}
-          mark={
-            (summary === undefined ? undefined : CHECK_SUMMARY_LOOK[summary]) ?? {
-              symbol: GLYPH.CHECK,
-              tone: STATUS_TONE.NEUTRAL,
-            }
-          }
+          mark={{ symbol: GLYPH.CHECKS, tone: STATUS_TONE.NEUTRAL }}
           title={PAGE_ROW_WORDS.CHECKS}
-          detail={
-            checks === undefined
-              ? undefined
-              : (checksLineOf(checks) ?? CHECK_SUMMARY_WORDS[CHECK_SUMMARY.NONE])
-          }
+          count={checksRowCount(summary, checks)}
           pushes
         />
         <MarkRow
           id={PAGE_ROW.FILES}
           mark={{ symbol: GLYPH.CHANGES, tone: STATUS_TONE.NEUTRAL }}
           title={PAGE_ROW_WORDS.FILES_CHANGED}
-          detail={listed === undefined ? undefined : filesWords(listed.changedFiles)}
-          lines={
-            listed === undefined
-              ? undefined
-              : { additions: listed.additions, deletions: listed.deletions }
-          }
+          count={listed === undefined ? undefined : filesRowCount(listed.changedFiles)}
           pushes
         />
       </ListSection>

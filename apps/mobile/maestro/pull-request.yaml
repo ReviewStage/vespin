@@ -259,7 +259,8 @@ env:
 - assertVisible: ".*1 unresolved conversation"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-failing
-# Its Checks row sums them up, the failure first, and pushes their list,
+# Its Checks row counts them as the panel's tab does, the failed one by a
+# red cross, and pushes their list,
 # each check where it stands and how long it ran; Back returns to the page.
 - assertVisible: "Checks.*"
 - runFlow:

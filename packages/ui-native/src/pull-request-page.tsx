@@ -53,13 +53,13 @@ import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { menuActContent } from "./glyph-label.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { useRowInset } from "./layout-margin.js";
-import { LineCounts, lineCountsHeard } from "./line-counts.js";
+import { LineCounts } from "./line-counts.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
 import { REVIEW_LOOK } from "./pull-request-look.js";
 import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
 import { Text } from "./text.js";
-import { STATUS_TONE, toneColor, useColors } from "./tokens/colors.js";
+import { STATUS_TONE, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -136,6 +136,8 @@ type PullRequestHeadProps = {
   readonly labels?: readonly PullRequestLabel[] | undefined;
   /** Its reviewers, where each stands, in the order the panel's header draws them (`reviewersOf`); none where it has none. */
   readonly reviewers?: readonly HeadReviewer[] | undefined;
+  /** The lines it adds and removes, after its branches as the panel's header counts them; none until any is known. */
+  readonly lines?: { readonly additions: number; readonly deletions: number } | undefined;
 };
 
 /** A reviewer as a pull request's heading draws them: by their face, and where their reviews leave them. */
@@ -366,7 +368,8 @@ function HeadReviewers({ reviewers }: { readonly reviewers: readonly HeadReviewe
  * when, by their face, and its reviewers' faces, each wearing where they
  * stand, as the panel's people line draws them, then its labels filled with their colors, scrolling
  * sideways where they run past the row, then its branches on a line of
- * their own, the one it merges into first, then GitHub's sentence of
+ * their own, the one it merges into first, and the lines it adds and
+ * removes after them, as the panel's header counts them, then GitHub's sentence of
  * whether it would merge, in the body's ink. Past the accessibility sizes,
  * who opened it wraps rather than cuts, and the branches stand on two
  * lines, the one it merges from under the arrow, each wrapping.
@@ -384,6 +387,7 @@ export function PullRequestHead({
   opened,
   labels = [],
   reviewers = [],
+  lines,
 }: PullRequestHeadProps) {
   const colors = useColors();
   const inset = useRowInset();
@@ -469,12 +473,18 @@ export function PullRequestHead({
             {arrow}
             <Branch name={branches.head} wraps />
           </HStack>
+          {lines === undefined ? null : (
+            <LineCounts {...lines} textStyle={TYPE_ROLE.ROW_LINE} heard />
+          )}
         </VStack>
       ) : (
         <HStack spacing={SPACE.TIGHT + 2}>
           <Branch name={branches.base} wraps={false} />
           {arrow}
           <Branch name={branches.head} wraps={false} />
+          {lines === undefined ? null : (
+            <LineCounts {...lines} textStyle={TYPE_ROLE.ROW_LINE} heard />
+          )}
         </HStack>
       )}
       {sentence === undefined ? null : (
@@ -504,9 +514,43 @@ type MarkRowProps = {
   readonly opens?: string | undefined;
   /** Whether a press on it pushes a page of its own, such as the checks' list, marked at its end by the chevron; none where it opens an address or takes no press. */
   readonly pushes?: boolean | undefined;
-  /** The lines it counts after its words, in green and red (`LineCounts`), such as the files changed's; none where it counts none. */
-  readonly lines?: { readonly additions: number; readonly deletions: number } | undefined;
+  /** What it counts at its end in the detail's place, as the panel's tab counts what it opens: "✓ 5", "1/4 viewed"; none where it counts nothing. */
+  readonly count?: RowCount | undefined;
 };
+
+/** What a row counts at its end, as the panel's tab counts it: a glyph saying how what it counts went where one does, and the count, both in its tone; heard as `heard`. */
+export type RowCount = {
+  readonly words: string;
+  readonly tone: StatusTone;
+  readonly glyph?: Glyph | undefined;
+  readonly heard: string;
+};
+
+/** A row's count, its glyph and its words in its tone, in figures of one width. */
+function CountWords({ count }: { readonly count: RowCount }) {
+  const colors = useColors();
+  const ink = toneColor(colors, count.tone);
+
+  return (
+    <HStack spacing={SPACE.TIGHT}>
+      {count.glyph === undefined ? null : (
+        <ToneGlyph glyph={count.glyph} tone={count.tone} textStyle={TYPE_ROLE.TIME} hidden />
+      )}
+      {count.words === "" ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.TIME }),
+            monospacedDigit(),
+            foregroundStyle(ink),
+            lineLimit(1),
+          ]}
+        >
+          {count.words}
+        </Text>
+      )}
+    </HStack>
+  );
+}
 
 /** What a row that opens an address out of the app is heard to do, in the arrow's place: GitHub by name where the address is GitHub's, since a check's run may be another CI's page. */
 const OPENS_HEARD = {
@@ -533,7 +577,8 @@ function opensHeard(address: string): string {
  * with a hairline under the words. A check's App stands by its avatar
  * beside the mark. A row that opens an address out of the app ends in its arrow, and one
  * that pushes a page of its own, such as the checks' list, in the chevron;
- * one that counts lines ends its words with them in green and red. The row is heard as one
+ * one that counts what it opens, as the panel's tab does, ends in its count
+ * in the detail's place. The row is heard as one
  * element: its name, where it stands, its words, and where a press goes.
  */
 export function MarkRow({
@@ -545,7 +590,7 @@ export function MarkRow({
   face,
   opens,
   pushes,
-  lines,
+  count,
 }: MarkRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.FACE);
@@ -570,17 +615,6 @@ export function MarkRow({
       </Text>
     );
 
-  // Note that the lines stand after the words in their own inks, as the pull request card ends with them.
-  const said =
-    lines === undefined ? (
-      words
-    ) : (
-      <HStack spacing={SPACE.TIGHT + 2}>
-        {words}
-        <LineCounts additions={lines.additions} deletions={lines.deletions} />
-      </HStack>
-    );
-
   const row: ReactElement = (
     <RowHead
       unread={false}
@@ -590,7 +624,7 @@ export function MarkRow({
       title={title}
       after={face?.bot === true ? <BotTag /> : undefined}
       ink={colors.TEXT_BODY}
-      end={said}
+      end={count === undefined ? words : <CountWords count={count} />}
       trail={
         opens !== undefined ? (
           <GoesMark goes={PUSH_ROW_GOES.OUT} />
@@ -611,7 +645,7 @@ export function MarkRow({
           face?.bot === true && BOT_TAG_WORDS,
           standing !== detail && standing,
           detail,
-          lines !== undefined && lineCountsHeard(lines.additions, lines.deletions),
+          count?.heard,
           opens !== undefined && opensHeard(opens),
         ],
       }}
