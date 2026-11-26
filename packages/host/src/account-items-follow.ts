@@ -16,7 +16,10 @@ import type { AppInboxItems, AppInboxRead } from "./app-state.js";
 import {
   type AccountWideReads,
   INBOX_ITEM,
+  INBOX_KEEPING,
+  INBOX_THREAD,
   type InboxChange,
+  type InboxKeeping,
   itemOf,
   type PlacedInboxItem,
   placedItem,
@@ -136,6 +139,8 @@ export interface AccountItemsDependencies {
   readonly tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
   /** Hears each part of an answer whose reading left rows out, since they did not decode, and how many (`live-follow.ts`). */
   readonly dropped?: (part: AccountItemsPart, count: number) => void;
+  /** How the platform keeps the Inbox's items in the pool: lean rows beside their messages, which the screens read through live queries, or whole, told on the document; whole where none is said. */
+  readonly inboxKeeping?: InboxKeeping;
 }
 
 /** A part of the account's items read, whose dropped rows are counted by it. */
@@ -438,31 +443,21 @@ export function followAccountItems(
           return toldNow;
         });
 
-      const items: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
-        INBOX_ITEM,
-        {
-          redraw: drawn,
+      // Note that where the platform keeps the Inbox lean, the follow writes each answer to the pool's lean rows and their messages, which the screens read, and tells no item on the document (`account-items-stored.ts`).
+      if (dependencies.inboxKeeping === INBOX_KEEPING.LEAN) {
+        const threads = yield* dependencies.pool.stand(INBOX_THREAD, {
+          redraw: () => Effect.void,
           confirmation: () => {
             const handed = wait;
 
             return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
           },
-          kept: { ...KEPT_LIST.INBOX, bound: KEPT_INBOX_BOUND },
+          kept: KEPT_LIST.INBOX,
           owns: true,
-        },
-      );
+        });
 
-      yield* dependencies.accountWide.stand(() => wait);
+        yield* dependencies.accountWide.stand(() => wait);
 
-      /** The item `id` names as a window is told it, a write standing over it drawn, without the task the pool holds it on. */
-      const toldRow = (id: string) => {
-        const row = items.row(id);
-
-        return row === undefined ? undefined : itemOf(row);
-      };
-
-      // Note that where the account's database keeps the Inbox kind whole, the follow writes each answer there and tells no item on the document (`account-items-stored.ts`).
-      if (items.onDisk) {
         // Note that the messages are answered by this follow alone, whole or by what moved, so it stands as the read that answers every one.
         const messages = yield* dependencies.pool.stand(INBOX_MESSAGE, {
           owns: true,
@@ -473,7 +468,7 @@ export function followAccountItems(
         const read = yield* followStoredItems({
           seal: (sync) => dependencies.seal(userId, sync),
           pool: dependencies.pool,
-          items,
+          items: threads,
           messages,
           resumes,
           tasksListed: dependencies.tasksListed ?? noneListed,
@@ -497,6 +492,29 @@ export function followAccountItems(
 
         return true;
       }
+
+      const items: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
+        INBOX_ITEM,
+        {
+          redraw: drawn,
+          confirmation: () => {
+            const handed = wait;
+
+            return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
+          },
+          kept: { ...KEPT_LIST.INBOX, bound: KEPT_INBOX_BOUND },
+          owns: true,
+        },
+      );
+
+      yield* dependencies.accountWide.stand(() => wait);
+
+      /** The item `id` names as a window is told it, a write standing over it drawn, without the task the pool holds it on. */
+      const toldRow = (id: string) => {
+        const row = items.row(id);
+
+        return row === undefined ? undefined : itemOf(row);
+      };
 
       /** The items `after` holds taken in place of those `was` held, `sent` the ones that came with it, read where `standing` says, and told. */
       const taken = (

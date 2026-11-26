@@ -87,7 +87,7 @@ export interface LocalCopy {
   ) => Effect.Effect<readonly QueuedEntry[]>;
   /** Closes the database and deletes the folder of the account it was last opened for, as a sign-out does. */
   readonly forget: Effect.Effect<void>;
-  /** Whether the platform keeps collections on disk beside the database (`LocalDatabaseDriverSeam.collections`), as the iPhone does, which keeps the Inbox kind there. */
+  /** Whether the platform keeps collections on disk beside the database (`LocalDatabaseDriverSeam.collections`), as the iPhone does, which keeps the Inbox lean. */
   readonly keepsCollections: boolean;
 }
 

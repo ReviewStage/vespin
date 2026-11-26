@@ -84,6 +84,7 @@ import {
   type EntityPool,
   type FieldChange,
   ROW_GONE,
+  type RowKind,
   type WriteDeclaration,
 } from "@repo/sync";
 import { Clock, Effect, FiberHandle, Option, RcMap, Schema, type Scope, Stream } from "effect";
@@ -138,11 +139,15 @@ import {
   accountWideReads,
   INBOX_CHANGE,
   INBOX_ITEM,
-  INBOX_SCOPED_ITEM,
+  INBOX_KEEPING,
+  INBOX_THREAD,
   type InboxChange,
+  type InboxKeeping,
   type InboxWritten,
   inboxSent,
-  type PlacedInboxItem,
+  itemOf,
+  type PlacedInboxFields,
+  threadItemOf,
 } from "./inbox-collections.js";
 import {
   AgentPictureKey,
@@ -337,8 +342,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
   focus: WindowFocus;
   /** The member signed in now, as an answer or a close drawn before the service says how it stands names them; none where nobody is. */
   reader?: () => InboxReader | undefined;
-  /** Whether the platform keeps the Inbox kind on disk (`LocalCopy.keepsCollections`), so a plan's inbox read stands apart from the kept feed it would otherwise be drawn in; none keeps none. */
-  keepsInbox?: boolean;
+  /** How the platform keeps the Inbox's items in the pool: lean, beside their messages, where it keeps collections on disk, as the iPhone does; whole where none is said. */
+  inboxKeeping?: InboxKeeping;
   /**
    * Waits for a write's transaction to arrive on the task list followed
    * live, which holds every agent's row (`TasksComposer.listed`), so a
@@ -562,7 +567,6 @@ export function composeAgents(
         ),
       accountId: dependencies.accountId,
       pool: dependencies.pool,
-      ...(dependencies.keepsInbox === true ? { kind: INBOX_SCOPED_ITEM } : undefined),
     });
 
     const accounts = yield* accountInboxes({
@@ -570,6 +574,9 @@ export function composeAgents(
         asked(client.liveRead(ACCOUNT_INBOX_READ, { userId }, poll ? { after } : undefined)),
       pool: dependencies.pool,
       accountWide,
+      ...(dependencies.inboxKeeping === undefined
+        ? undefined
+        : { inboxKeeping: dependencies.inboxKeeping }),
     });
 
     const tellItems = (read: AppInboxRead) =>
@@ -649,6 +656,9 @@ export function composeAgents(
           pool: dependencies.pool,
           accountWide,
           dropped: (part, count) => countDropped(ACCOUNT_ITEMS_ROW_KIND[part], count),
+          ...(dependencies.inboxKeeping === undefined
+            ? undefined
+            : { inboxKeeping: dependencies.inboxKeeping }),
           ...(dependencies.tasksListed === undefined
             ? undefined
             : { tasksListed: dependencies.tasksListed }),
@@ -1101,170 +1111,206 @@ function composed(
       : { txid: answer.txid, item: answer.item, kept: answer.taken !== false };
 
   /**
-   * A member's write on inbox items, as the inbox's writes declare it: its
-   * change drawn at once over every read holding its items
-   * (`inbox-collections.ts`), sent as `send` asks, and kept, refused, or
-   * landed on the service's item as its answer says. One that may wait
-   * (`queue`) is sent under its idempotency key and, where the service did
-   * not answer it, goes on standing and is sent again once it answers, its
-   * caller answered at once what `queue.queued` says, as if it were kept.
+   * The Inbox's writes over the kind its rows are kept in, as the platform
+   * keeps them (`InboxKeeping`): one set of declarations, each change drawn
+   * over a row as its kind draws it, handed out as the acts the port asks
+   * and the writes that may wait. Note that the kind's row is named in here
+   * alone, so the acts read the same whichever kind the platform keeps.
    */
-  const inboxWrite = <Input, Answer extends Parameters<typeof writtenOf>[0]>(
-    keys: (input: Input) => readonly string[],
-    change: (input: Input) => InboxChange,
-    send: (input: Input, key: string | undefined, waited: boolean) => Effect.Effect<Answer>,
-    queue?: {
-      readonly name: string;
-      readonly input: Schema.Codec<Input, unknown>;
-      readonly queued: (input: Input) => Answer;
-    },
-  ): WriteDeclaration<PlacedInboxItem, InboxChange, Input, Answer> => ({
-    kind: INBOX_ITEM,
-    keys,
-    change,
-    send: (input, { key, waited }) =>
-      Effect.map(send(input, key, waited), (answer) =>
-        queue === undefined || !("failure" in answer)
-          ? inboxSent(answer, writtenOf(answer))
-          : untaken(writeUntakenOf(answer.cause), { kept: queue.queued(input), refused: answer }),
-      ),
-    ...(queue === undefined ? undefined : { queue }),
-  });
+  const inboxWritesOn = <Row extends PlacedInboxFields>(
+    kind: RowKind<Row, InboxChange>,
+    itemOfRow: (row: Row) => InboxItem,
+  ) => {
+    /**
+     * A member's write on inbox items, as the inbox's writes declare it: its
+     * change drawn at once over every read holding its items
+     * (`inbox-collections.ts`), sent as `send` asks, and kept, refused, or
+     * landed on the service's item as its answer says. One that may wait
+     * (`queue`) is sent under its idempotency key and, where the service did
+     * not answer it, goes on standing and is sent again once it answers, its
+     * caller answered at once what `queue.queued` says, as if it were kept.
+     */
+    const inboxWrite = <Input, Answer extends Parameters<typeof writtenOf>[0]>(
+      keys: (input: Input) => readonly string[],
+      change: (input: Input) => InboxChange,
+      send: (input: Input, key: string | undefined, waited: boolean) => Effect.Effect<Answer>,
+      queue?: {
+        readonly name: string;
+        readonly input: Schema.Codec<Input, unknown>;
+        readonly queued: (input: Input) => Answer;
+      },
+    ): WriteDeclaration<Row, InboxChange, Input, Answer> => ({
+      kind,
+      keys,
+      change,
+      send: (input, { key, waited }) =>
+        Effect.map(send(input, key, waited), (answer) =>
+          queue === undefined || !("failure" in answer)
+            ? inboxSent(answer, writtenOf(answer))
+            : untaken(writeUntakenOf(answer.cause), { kept: queue.queued(input), refused: answer }),
+        ),
+      ...(queue === undefined ? undefined : { queue }),
+    });
 
-  /** A nod or a close that waits, answered as taken over the item as the reads now draw it, or unanswered where none holds it. */
-  const settledAs = ({ itemId }: { readonly itemId: string }): AgentInboxAnsweredView => {
-    const item = dependencies.pool.row(INBOX_ITEM, itemId);
+    /** A nod or a close that waits, answered as taken over the item as the reads now draw it, or unanswered where none holds it. */
+    const settledAs = ({ itemId }: { readonly itemId: string }): AgentInboxAnsweredView => {
+      const row = dependencies.pool.row(kind, itemId);
 
-    return item === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : { item, taken: true };
+      return row === undefined
+        ? { failure: AGENT_CALL_FAILURE.UNANSWERED }
+        : { item: itemOfRow(row), taken: true };
+    };
+
+    // Note that who and when are read once a write is asked, since its change is drawn again over each answer a read takes while it stands.
+    /** A nod to an item, settling it. */
+    const nodded = inboxWrite<AgentInboxAnswerParams, AgentInboxAnsweredView>(
+      ({ itemId }) => [itemId],
+      ({ itemId, revision }) => {
+        const [by, at] = [reader(), kernel.now()];
+
+        return {
+          kind: INBOX_CHANGE.SETTLED,
+          itemId,
+          item: (item) => (item.revision === revision ? acknowledgedNow(item, by, at) : undefined),
+        };
+      },
+      ({ itemId, ...request }, key) => asked(client.answerInbox(itemId, request, key)),
+      {
+        name: INBOX_QUEUED_WRITE.ANSWER,
+        input: agentInboxAnswerParamsSchema,
+        queued: settledAs,
+      },
+    );
+
+    /** An open item closed without an answer, settling it. Note that a close an older build queued held names `held`, which goes no further. */
+    const closed = inboxWrite<AgentInboxCloseParams, AgentInboxAnsweredView>(
+      ({ itemId }) => [itemId],
+      ({ itemId, revision }) => {
+        const [by, at] = [reader(), kernel.now()];
+
+        return {
+          kind: INBOX_CHANGE.SETTLED,
+          itemId,
+          item: (item) => (item.revision === revision ? closedNow(item, by, at) : undefined),
+        };
+      },
+      ({ itemId, held: _held, ...request }, key) => asked(client.closeInbox(itemId, request, key)),
+      {
+        name: INBOX_QUEUED_WRITE.CLOSE,
+        input: agentInboxCloseParamsSchema,
+        queued: settledAs,
+      },
+    );
+
+    /**
+     * The reader's own nod or close taken back, as their Undo asks, drawn open
+     * at once and landing as the service answers it: still settled where it
+     * refused, its agent told or the item moved on. It is keyed by its item,
+     * so it goes after the nod or close it takes back where that is still out.
+     */
+    const tookBack = inboxWrite<AgentInboxTakeBackParams, AgentInboxTakenBackView>(
+      ({ itemId }) => [itemId],
+      ({ itemId }) => {
+        const at = kernel.now();
+
+        return { kind: INBOX_CHANGE.REOPENED, itemId, item: (item) => takenBackNow(item, at) };
+      },
+      ({ itemId, ...request }, key) => asked(client.takeBackInbox(itemId, request, key)),
+    );
+
+    /**
+     * A message on an item's thread. Note that a reply carrying an answer
+     * settles the ask while it stands open, where a plain one only leaves the
+     * item read, its words drawn by the window's own box while they go. An
+     * item whose ask the service has answered already, as one the agent has
+     * posted over since and so opened again, is left as it is, or the reply
+     * would be drawn a second time under its key below the agent's post.
+     */
+    const messaged = inboxWrite<AgentInboxMessageParams, AgentInboxMessagedView>(
+      ({ itemId }) => [itemId],
+      ({ itemId, answers, clientKey: key, text }) => {
+        if (answers === undefined) {
+          return { kind: INBOX_CHANGE.MARKED, itemIds: new Set([itemId]), unread: false };
+        }
+
+        const [by, at] = [reader(), kernel.now()];
+
+        return {
+          kind: INBOX_CHANGE.SETTLED,
+          itemId,
+          item: (item) =>
+            asksOpen(item, answers.ask)
+              ? answeredNow(item, { key, text, answers }, by, at)
+              : undefined,
+        };
+      },
+      ({ itemId, ...request }) => asked(client.messageInbox(itemId, request)),
+    );
+
+    /** An item marked read or unread. */
+    const marked = inboxWrite<AgentInboxReadStateParams, AgentInboxReadStateView>(
+      ({ itemId }) => [itemId],
+      ({ itemId, unread }) => ({ kind: INBOX_CHANGE.MARKED, itemIds: new Set([itemId]), unread }),
+      ({ itemId, unread }, key) =>
+        asked(
+          unread ? client.markInboxItemUnread(itemId, key) : client.markInboxItemRead(itemId, key),
+        ),
+      {
+        name: INBOX_QUEUED_WRITE.READ_STATE,
+        input: agentInboxReadStateParamsSchema,
+        queued: ({ itemId, unread }) => ({ id: itemId, unread }),
+      },
+    );
+
+    /** An item's reminder set for an instant, or canceled, drawn at once; whether it is read stands as it was. */
+    const reminded = inboxWrite<AgentInboxRemindParams, AgentInboxReadStateView>(
+      ({ itemId }) => [itemId],
+      ({ itemId, until }) => ({ kind: INBOX_CHANGE.REMINDED, itemId, until }),
+      ({ itemId, until }, key) => asked(client.remindInboxItem(itemId, until, key)),
+      {
+        name: INBOX_QUEUED_WRITE.REMIND,
+        input: agentInboxRemindParamsSchema,
+        queued: ({ itemId }) => ({
+          id: itemId,
+          unread: dependencies.pool.row(kind, itemId)?.unread === true,
+        }),
+      },
+    );
+
+    /** Every item the inbox lists marked read. */
+    const markedAll = inboxWrite<AgentInboxReadAllParams, AgentInboxReadAllView>(
+      ({ itemIds }) => itemIds,
+      ({ itemIds }) => ({ kind: INBOX_CHANGE.MARKED, itemIds: new Set(itemIds), unread: false }),
+      ({ itemIds: _listed, ...request }, key) => asked(client.markInboxRead(request, key)),
+      {
+        name: INBOX_QUEUED_WRITE.READ_ALL,
+        input: agentInboxReadAllParamsSchema,
+        queued: ({ itemIds }) => ({ marked: itemIds.length }),
+      },
+    );
+
+    return {
+      answer: declaredWrite(dependencies.pool, nodded),
+      close: declaredWrite(dependencies.pool, closed),
+      takeBack: declaredWrite(dependencies.pool, tookBack),
+      message: declaredWrite(dependencies.pool, messaged),
+      readState: declaredWrite(dependencies.pool, marked),
+      remind: declaredWrite(dependencies.pool, reminded),
+      readAll: declaredWrite(dependencies.pool, markedAll),
+      queueable: [
+        anyWrite(nodded),
+        anyWrite(closed),
+        anyWrite(marked),
+        anyWrite(reminded),
+        anyWrite(markedAll),
+      ],
+    };
   };
 
-  // Note that who and when are read once a write is asked, since its change is drawn again over each answer a read takes while it stands.
-  /** A nod to an item, settling it. */
-  const nodded = inboxWrite<AgentInboxAnswerParams, AgentInboxAnsweredView>(
-    ({ itemId }) => [itemId],
-    ({ itemId, revision }) => {
-      const [by, at] = [reader(), kernel.now()];
-
-      return {
-        kind: INBOX_CHANGE.SETTLED,
-        itemId,
-        item: (item) => (item.revision === revision ? acknowledgedNow(item, by, at) : undefined),
-      };
-    },
-    ({ itemId, ...request }, key) => asked(client.answerInbox(itemId, request, key)),
-    {
-      name: INBOX_QUEUED_WRITE.ANSWER,
-      input: agentInboxAnswerParamsSchema,
-      queued: settledAs,
-    },
-  );
-
-  /** An open item closed without an answer, settling it. Note that a close an older build queued held names `held`, which goes no further. */
-  const closed = inboxWrite<AgentInboxCloseParams, AgentInboxAnsweredView>(
-    ({ itemId }) => [itemId],
-    ({ itemId, revision }) => {
-      const [by, at] = [reader(), kernel.now()];
-
-      return {
-        kind: INBOX_CHANGE.SETTLED,
-        itemId,
-        item: (item) => (item.revision === revision ? closedNow(item, by, at) : undefined),
-      };
-    },
-    ({ itemId, held: _held, ...request }, key) => asked(client.closeInbox(itemId, request, key)),
-    {
-      name: INBOX_QUEUED_WRITE.CLOSE,
-      input: agentInboxCloseParamsSchema,
-      queued: settledAs,
-    },
-  );
-
-  /**
-   * The reader's own nod or close taken back, as their Undo asks, drawn open
-   * at once and landing as the service answers it: still settled where it
-   * refused, its agent told or the item moved on. It is keyed by its item,
-   * so it goes after the nod or close it takes back where that is still out.
-   */
-  const tookBack = inboxWrite<AgentInboxTakeBackParams, AgentInboxTakenBackView>(
-    ({ itemId }) => [itemId],
-    ({ itemId }) => {
-      const at = kernel.now();
-
-      return { kind: INBOX_CHANGE.REOPENED, itemId, item: (item) => takenBackNow(item, at) };
-    },
-    ({ itemId, ...request }, key) => asked(client.takeBackInbox(itemId, request, key)),
-  );
-
-  /**
-   * A message on an item's thread. Note that a reply carrying an answer
-   * settles the ask while it stands open, where a plain one only leaves the
-   * item read, its words drawn by the window's own box while they go. An
-   * item whose ask the service has answered already, as one the agent has
-   * posted over since and so opened again, is left as it is, or the reply
-   * would be drawn a second time under its key below the agent's post.
-   */
-  const messaged = inboxWrite<AgentInboxMessageParams, AgentInboxMessagedView>(
-    ({ itemId }) => [itemId],
-    ({ itemId, answers, clientKey: key, text }) => {
-      if (answers === undefined) {
-        return { kind: INBOX_CHANGE.MARKED, itemIds: new Set([itemId]), unread: false };
-      }
-
-      const [by, at] = [reader(), kernel.now()];
-
-      return {
-        kind: INBOX_CHANGE.SETTLED,
-        itemId,
-        item: (item) =>
-          asksOpen(item, answers.ask)
-            ? answeredNow(item, { key, text, answers }, by, at)
-            : undefined,
-      };
-    },
-    ({ itemId, ...request }) => asked(client.messageInbox(itemId, request)),
-  );
-
-  /** An item marked read or unread. */
-  const marked = inboxWrite<AgentInboxReadStateParams, AgentInboxReadStateView>(
-    ({ itemId }) => [itemId],
-    ({ itemId, unread }) => ({ kind: INBOX_CHANGE.MARKED, itemIds: new Set([itemId]), unread }),
-    ({ itemId, unread }, key) =>
-      asked(
-        unread ? client.markInboxItemUnread(itemId, key) : client.markInboxItemRead(itemId, key),
-      ),
-    {
-      name: INBOX_QUEUED_WRITE.READ_STATE,
-      input: agentInboxReadStateParamsSchema,
-      queued: ({ itemId, unread }) => ({ id: itemId, unread }),
-    },
-  );
-
-  /** An item's reminder set for an instant, or canceled, drawn at once; whether it is read stands as it was. */
-  const reminded = inboxWrite<AgentInboxRemindParams, AgentInboxReadStateView>(
-    ({ itemId }) => [itemId],
-    ({ itemId, until }) => ({ kind: INBOX_CHANGE.REMINDED, itemId, until }),
-    ({ itemId, until }, key) => asked(client.remindInboxItem(itemId, until, key)),
-    {
-      name: INBOX_QUEUED_WRITE.REMIND,
-      input: agentInboxRemindParamsSchema,
-      queued: ({ itemId }) => ({
-        id: itemId,
-        unread: dependencies.pool.row(INBOX_ITEM, itemId)?.unread === true,
-      }),
-    },
-  );
-
-  /** Every item the inbox lists marked read. */
-  const markedAll = inboxWrite<AgentInboxReadAllParams, AgentInboxReadAllView>(
-    ({ itemIds }) => itemIds,
-    ({ itemIds }) => ({ kind: INBOX_CHANGE.MARKED, itemIds: new Set(itemIds), unread: false }),
-    ({ itemIds: _listed, ...request }, key) => asked(client.markInboxRead(request, key)),
-    {
-      name: INBOX_QUEUED_WRITE.READ_ALL,
-      input: agentInboxReadAllParamsSchema,
-      queued: ({ itemIds }) => ({ marked: itemIds.length }),
-    },
-  );
+  const inboxWrites =
+    dependencies.inboxKeeping === INBOX_KEEPING.LEAN
+      ? inboxWritesOn(INBOX_THREAD, threadItemOf)
+      : inboxWritesOn(INBOX_ITEM, itemOf);
 
   /** The agent's or worker's transcript a follow names, and the key its subscription and follow are held under. */
 
@@ -1412,18 +1458,18 @@ function composed(
     AGENTS_PART: ({ agentId, messageId, index, callId }) =>
       asked(client.agentPart(agentId, messageId, index, callId)),
     // The Inbox's acts (`AGENT_INBOX_ACTS`): each row write drawn over the pool the moment it is asked.
-    AGENTS_INBOX_ANSWER: declaredWrite(dependencies.pool, nodded),
-    AGENTS_INBOX_CLOSE: declaredWrite(dependencies.pool, closed),
-    AGENTS_INBOX_TAKE_BACK: declaredWrite(dependencies.pool, tookBack),
-    AGENTS_INBOX_MESSAGE: declaredWrite(dependencies.pool, messaged),
+    AGENTS_INBOX_ANSWER: inboxWrites.answer,
+    AGENTS_INBOX_CLOSE: inboxWrites.close,
+    AGENTS_INBOX_TAKE_BACK: inboxWrites.takeBack,
+    AGENTS_INBOX_MESSAGE: inboxWrites.message,
     AGENTS_INBOX_START: (start) =>
       Effect.tap(asked(client.startInboxThread(start)), (answer) =>
         accountWide.confirm("failure" in answer ? undefined : answer.txid),
       ),
-    AGENTS_INBOX_READ_STATE: declaredWrite(dependencies.pool, marked),
-    AGENTS_INBOX_REMIND: declaredWrite(dependencies.pool, reminded),
+    AGENTS_INBOX_READ_STATE: inboxWrites.readState,
+    AGENTS_INBOX_REMIND: inboxWrites.remind,
     AGENTS_INBOX_ITEM_HOME: ({ itemId }) => asked(client.inboxItemHome(itemId)),
-    AGENTS_INBOX_READ_ALL: declaredWrite(dependencies.pool, markedAll),
+    AGENTS_INBOX_READ_ALL: inboxWrites.readAll,
     AGENTS_INBOX_ATTACHMENT: ({ itemId, attachmentId, playable = PLAYABLE_VIDEO_TYPE.WEBM }) =>
       keptAsked(
         new InboxAttachmentKey({ itemId, attachmentId, playable }),
@@ -1596,15 +1642,6 @@ function composed(
       restored: queues.refusedRestored,
       forgotten: queues.refusedForgotten,
     },
-    queueable: [
-      anyWrite(started),
-      anyWrite(renamed),
-      anyWrite(pinned),
-      anyWrite(nodded),
-      anyWrite(closed),
-      anyWrite(marked),
-      anyWrite(reminded),
-      anyWrite(markedAll),
-    ],
+    queueable: [anyWrite(started), anyWrite(renamed), anyWrite(pinned), ...inboxWrites.queueable],
   };
 }

@@ -1384,7 +1384,7 @@ export function subject(
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
     fileDownload?: FileDownloadSeam;
-    keepsInbox?: boolean;
+    inboxKeeping?: InboxKeeping;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1408,7 +1408,7 @@ export function subject(
 
     const composer = yield* composeAgents({
       kernel,
-      ...(options.keepsInbox === undefined ? undefined : { keepsInbox: options.keepsInbox }),
+      ...(options.inboxKeeping === undefined ? undefined : { inboxKeeping: options.inboxKeeping }),
       recordProductEvent: () => undefined,
       account,
       accountId,

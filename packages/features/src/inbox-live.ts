@@ -499,8 +499,10 @@ function inboxItemOfLiveRow(
 }
 
 /** Items as the held read orders a scope's: every open one, then the settled, each the latest changed first. */
-export function inboxInOrder(items: readonly InboxItem[]): readonly InboxItem[] {
-  const ordered = latestFirst((item: InboxItem) => item.id);
+export function inboxInOrder<Item extends Pick<InboxItem, "id" | "status" | "updatedAt">>(
+  items: readonly Item[],
+): readonly Item[] {
+  const ordered = latestFirst((item: Item) => item.id);
 
   return [
     ...items.filter((item) => item.status === INBOX_STATUS.OPEN).toSorted(ordered),

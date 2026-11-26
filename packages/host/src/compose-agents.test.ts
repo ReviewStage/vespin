@@ -58,7 +58,7 @@ import {
 } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppManagerChats, AppTranscript } from "./app-state.js";
-import { INBOX_CHANGE, INBOX_ITEM } from "./inbox-collections.js";
+import { INBOX_CHANGE, INBOX_KEEPING, INBOX_THREAD } from "./inbox-collections.js";
 import { INBOX_MESSAGE } from "./inbox-messages.js";
 import { localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
@@ -2508,7 +2508,7 @@ const keptPlatform = Layer.mergeAll(
 
 /** The ids of every item the Inbox kind's collection keeps now, as a live query loads them from the account's database. */
 function keptItemIds(pool: EntityPool) {
-  return Effect.flatMap(pool.collection(INBOX_ITEM), (collection) =>
+  return Effect.flatMap(pool.collection(INBOX_THREAD), (collection) =>
     Effect.promise(async () => {
       const query = createLiveQueryCollection({
         query: (q) => q.from({ item: collection }),
@@ -2536,7 +2536,7 @@ function keptLaunch(root: string, account = "user-dana") {
       store: local.store,
     });
 
-    const launch = yield* subject({ pool, keepsInbox: true });
+    const launch = yield* subject({ pool, inboxKeeping: INBOX_KEEPING.LEAN });
     yield* local.open(account, {
       kept: () => [],
       moves: Stream.empty,
@@ -2750,7 +2750,7 @@ it.effect(
       yield* Effect.forkChild(
         next.pool.write(
           {
-            kind: INBOX_ITEM,
+            kind: INBOX_THREAD,
             keys: () => [settledItem.id],
             change: () => ({
               kind: INBOX_CHANGE.REOPENED,

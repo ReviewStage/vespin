@@ -30,7 +30,7 @@ import {
   INBOX_ITEMS_READ,
   inboxOfLiveRows,
 } from "@repo/features/inbox-live";
-import { INBOX_STATUS } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
@@ -47,10 +47,10 @@ import {
 import { Clock, Effect, Option, Schema } from "effect";
 import type { AppInboxItems, AppInboxRead } from "./app-state.js";
 import {
-  INBOX_ITEM,
+  INBOX_THREAD,
   type InboxChange,
-  type PlacedInboxItem,
-  placedItem,
+  type PlacedInboxRow,
+  placedRow,
 } from "./inbox-collections.js";
 import { INBOX_MESSAGE, type ThreadMessage, threadMessagesOf } from "./inbox-messages.js";
 import {
@@ -111,7 +111,7 @@ function holdersOf(cursor: StoredCursor | undefined): Holders {
  */
 function holdersAfter(
   holders: Holders,
-  items: readonly PlacedInboxItem[],
+  items: readonly PlacedInboxRow[],
   listed: (taskIds: readonly string[]) => readonly TaskSummary[],
 ): Holders {
   const at = new Map(holders.at);
@@ -153,15 +153,31 @@ function cursorOf(holders: Holders, standing: SyncStanding | undefined): StoredC
   return standing === undefined ? kept : { at: standing.next, ...kept };
 }
 
-/** Each item an answer carries that its stamps place, on the task its stamp names. */
-function placedOf(rows: AccountInboxItemsLiveRows): readonly PlacedInboxItem[] {
+/** Each item an answer carries that its stamps place, whole, with the task its stamp names. */
+function placedOf(rows: AccountInboxItemsLiveRows): readonly PlacedItem[] {
   const taskOf = new Map(rows.stamps.map((stamp) => [stamp.id, stamp.taskId]));
 
   return inboxOfLiveRows(rows).flatMap((item) => {
     const taskId = taskOf.get(item.id);
 
-    return taskId === undefined ? [] : [placedItem(item, taskId)];
+    return taskId === undefined ? [] : [{ item, taskId }];
   });
+}
+
+/** An item an answer carries, whole, and the task it stands on, from which its lean row and its messages are each written. */
+interface PlacedItem {
+  readonly item: InboxItem;
+  readonly taskId: string | null;
+}
+
+/** Every message of the items placed, each a row of the message kind. */
+function messagesOf(placed: readonly PlacedItem[]): readonly ThreadMessage[] {
+  return placed.flatMap(({ item }) => threadMessagesOf(item));
+}
+
+/** The lean row of each item placed, its digest taken from its thread whole. */
+function rowsOf(placed: readonly PlacedItem[]): readonly PlacedInboxRow[] {
+  return placed.map(({ item, taskId }) => placedRow(item, taskId));
 }
 
 /**
@@ -173,7 +189,7 @@ function placedOf(rows: AccountInboxItemsLiveRows): readonly PlacedInboxItem[] {
 function agedIds(pool: EntityPool, now: number): Effect.Effect<readonly string[]> {
   const before = now - ACCOUNT_INBOX_ITEMS.SETTLED_WINDOW_MILLIS;
 
-  return Effect.flatMap(pool.collection(INBOX_ITEM), (collection) =>
+  return Effect.flatMap(pool.collection(INBOX_THREAD), (collection) =>
     Effect.promise(async () => {
       const aged = createLiveQueryCollection({
         query: (q) =>
@@ -241,14 +257,14 @@ function threadMessageIds(
  */
 function movedMessages(
   pool: EntityPool,
-  placed: readonly PlacedInboxItem[],
+  placed: readonly PlacedItem[],
   gone: readonly string[],
 ): Effect.Effect<{ readonly rows: readonly ThreadMessage[]; readonly gone: readonly string[] }> {
-  const rows = placed.flatMap(threadMessagesOf);
+  const rows = messagesOf(placed);
   const carried = new Set(rows.map((row) => row.id));
 
   return Effect.map(
-    threadMessageIds(pool, [...placed.map((item) => item.id), ...gone]),
+    threadMessageIds(pool, [...placed.map(({ item }) => item.id), ...gone]),
     (kept) => ({ rows, gone: [...kept].filter((id) => !carried.has(id)) }),
   );
 }
@@ -261,7 +277,7 @@ export interface StoredItemsFollow {
   ) => Effect.Effect<AccountInboxItemsLiveAnswer | LiveFailure>;
   readonly pool: EntityPool;
   /** The items the follow stands on, kept on disk whole. */
-  readonly items: HeldRows<PlacedInboxItem, InboxChange>;
+  readonly items: HeldRows<PlacedInboxRow, InboxChange>;
   /** Each message of their threads, kept on disk whole beside them, which a thread reads as it opens. */
   readonly messages: HeldRows<ThreadMessage, never>;
   /** Whether this attempt may read past the sync id kept, as the first of a follow's does. */
@@ -300,7 +316,7 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
     /** Deletes every item kept that settled before the read's window now, but one a write stands over, which draws over it until it lands. */
     const agedOut = Effect.gen(function* () {
       const found = yield* agedIds(pool, yield* Clock.currentTimeMillis);
-      const pending = pool.standing(INBOX_ITEM)?.pending;
+      const pending = pool.standing(INBOX_THREAD)?.pending;
       const aged = found.filter((id) => pending?.has(id) !== true);
 
       if (aged.length === 0) return;
@@ -322,14 +338,15 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
     const landed = (rows: AccountInboxItemsLiveRows, standing: SyncStanding | undefined) =>
       Effect.gen(function* () {
         const placed = placedOf(rows);
-        holders = holdersAfter(holders, placed, follow.tasksListed);
+        const threads = rowsOf(placed);
+        holders = holdersAfter(holders, threads, follow.tasksListed);
         const at = syncIdOf(standing);
         const cursor = cursorOf(holders, standing);
 
         const whole = standing?.past === undefined;
 
         // Note that the messages are written before the items and the sync id beside them, so a launch cut short between the two reads past an older id and writes them again, never past messages it lacks.
-        if (whole) yield* follow.messages.answer(placed.flatMap(threadMessagesOf));
+        if (whole) yield* follow.messages.answer(messagesOf(placed));
         else {
           const moved = yield* movedMessages(pool, placed, standing.gone);
           yield* follow.messages.answer(moved.rows, { gone: moved.gone });
@@ -337,8 +354,8 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
 
         // Note that a whole answer names every item there is, so it replaces what the database keeps; one past a sync id names only what moved, and what stands no longer.
         yield* whole
-          ? items.answer(placed, { ...(at === undefined ? undefined : { at }), cursor })
-          : items.answer(placed, {
+          ? items.answer(threads, { ...(at === undefined ? undefined : { at }), cursor })
+          : items.answer(threads, {
               gone: standing.gone,
               ...(at === undefined ? undefined : { at }),
               cursor,
