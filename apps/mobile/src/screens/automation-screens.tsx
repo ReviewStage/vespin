@@ -206,22 +206,29 @@ export function AutomationsScreen() {
           <StackBarMenu menu={menu} />
         </Stack.Toolbar.View>
         {/* Note that Runs stands beside View options, as the desktop's page stands its Runs tab beside the list, since every run's agent is found there. */}
+        {/* Note that each button's words are its title as well, which the bar's overflow names it by where the bar has no room for it, as beside an iPad's tab bar; the bar itself draws its glyph alone. */}
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.HISTORY)}
           accessibilityLabel={RUNS}
           onPress={() => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE))}
-        />
+        >
+          {RUNS}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.ADD)}
           accessibilityLabel={NEW_AUTOMATION}
           onPress={() => router.push(newAutomationRoute())}
-        />
+        >
+          {NEW_AUTOMATION}
+        </Stack.Toolbar.Button>
         {/* Note that New task's compose ends the bar, as every tab root's does. */}
         <Stack.Toolbar.Button
           icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
           accessibilityLabel={compose.label}
           onPress={compose.onPress}
-        />
+        >
+          {compose.label}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         {chosen === undefined ? null : (
