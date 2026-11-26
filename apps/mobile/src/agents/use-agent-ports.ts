@@ -24,7 +24,7 @@ import {
   type PortRow,
   portRows,
 } from "@repo/features/agent-ports-model";
-import { AGENT_MACHINE, agentMachineOf } from "@repo/features/agent-wire";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import type { AgentSharedPortAnswerView } from "@repo/features/port-forward-acts";
 import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, buzz } from "@repo/ui-native";
@@ -42,11 +42,11 @@ const QUERY_ROOT = {
   SHARED: "agent-shared-port",
 } as const;
 
-/** Whether the agent `agentId` names has ports to list: one that runs in the cloud, since neither a device nor a workspace's machine forwards one, read once the list holds it. */
+/** Whether the agent `agentId` names has ports to list: one that runs in the cloud, read once the list holds it. */
 export function useAgentHasPorts(agentId: string): boolean {
   const agent = useFollowedAgent(agentId);
 
-  return agent !== undefined && agentMachineOf(agent) === AGENT_MACHINE.VERCEL;
+  return agent !== undefined && agent.machine !== AGENT_MACHINE.DEVICE;
 }
 
 /** The agent's ports as its sheet draws them. */
