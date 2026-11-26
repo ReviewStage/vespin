@@ -20,7 +20,7 @@ import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/
 import { backToWords, readFailedWords } from "@repo/features/words";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
-import { ERROR_STATE_PLACEMENT, ErrorState, Toolbar } from "@repo/ui";
+import { ERROR_STATE_PLACEMENT, ErrorState, FILL_ELEMENT, Fill, Toolbar } from "@repo/ui";
 import {
   agentTab,
   changesTab,
@@ -28,6 +28,7 @@ import {
   STRIP_TAB_KIND,
   type StripTab,
   sameTab,
+  threadTab,
 } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
@@ -90,6 +91,7 @@ import { type HeldTaskInboxControl, useInboxCardDrafts } from "../tasks/use-task
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useCloudTerminalTab } from "../tasks/use-terminal-session.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
+import { PrototypeManagerThreadBeside } from "./desktop-agent-page.js";
 import { AgentPane } from "./main-tabs.js";
 import { PhoneHead } from "./phone-head.js";
 import {
@@ -209,23 +211,72 @@ export const DesktopInbox = memo(function DesktopInbox({
   room?: ShellRoom;
   phoneStart?: React.ReactNode;
 }): React.JSX.Element {
+  const { sidePanel } = tasks;
+  const { onArea, focus, setFocus } = useColumnFocus(tasks.tabKeys, tasks.onTabKeysTaken);
+  const drawing = useSidePanelDrawing(sidePanel);
+  const views = useTabViews();
+  // The panel holds the keys while the focus went into it last, or while it fills the window over the feed.
+  const sideFocused = sidePanel.open && (focus === COLUMN.SIDE || sidePanel.fullScreen);
+  const narrow = room === SHELL_ROOM.NARROW;
+
+  // A Manager's thread opens in the window's side panel, as its chat opens one, through the window's one door for a press.
+  const viewThread = (root: string) =>
+    pressTab(
+      { sidePanel, mainTabs: tasks.mainTabs, onKeys: setFocus },
+      { kind: TAB_PRESS.PANEL, tab: threadTab(root, PROTO_MANAGER) },
+    );
+
   return (
-    <div className="desktop-inbox flex min-h-0 min-w-0 flex-1 flex-col">
-      {room === SHELL_ROOM.NARROW ? (
-        <PhoneHead place="inbox" start={phoneStart} title="Inbox" end={null} />
-      ) : (
-        <Toolbar title="Inbox" />
-      )}
-      <PrototypeInboxFeed
-        narrow={room === SHELL_ROOM.NARROW}
-        onOpenManagerThread={(root) => {
-          landInPrototypeThread(root);
-          tasks.agentView.onOpen(PROTO_MANAGER);
-        }}
-        onOpenTask={(taskId) => tasks.onShowTask(taskId)}
-        readInboxImage={tasks.agents.readInboxImage}
-      />
-    </div>
+    <MemberDirectory workspace={tasks.workspace} readerId={tasks.me}>
+      <div
+        ref={onArea}
+        className="desktop-task relative flex min-h-0 flex-1"
+        data-panel-open={String(sidePanel.open)}
+      >
+        <Fill as={FILL_ELEMENT.SECTION} aria-label="Inbox" hidden={sidePanel.fullScreen}>
+          {narrow ? (
+            <PhoneHead place="inbox" start={phoneStart} title="Inbox" end={null} />
+          ) : (
+            <Toolbar title="Inbox" />
+          )}
+          <PrototypeInboxFeed
+            onViewManagerThread={viewThread}
+            onOpenManagerThread={(root) => {
+              landInPrototypeThread(root);
+              tasks.agentView.onOpen(PROTO_MANAGER);
+            }}
+            onOpenTask={(taskId) => tasks.onShowTask(taskId)}
+            readInboxImage={tasks.agents.readInboxImage}
+          />
+        </Fill>
+        {drawing.panel !== undefined || sidePanel.toggleAsked ? (
+          <SidePanel
+            {...drawing}
+            panel={drawing.panel ?? sidePanel}
+            unread={NO_UNREAD}
+            holder={SIDE_PANEL_HOLDER.INBOX}
+            taskId=""
+            workspaceId={undefined}
+            repository={null}
+            pages={undefined}
+            agents={tasks.agents}
+            openAgents={NO_OPEN_AGENTS}
+            shownAgent={undefined}
+            views={views}
+            shown={tasks.shown}
+            focused={sideFocused}
+            onOpenTarget={(target) => {
+              if (target.kind === TOOL_TARGET.TASK) tasks.onShowTask(target.task);
+            }}
+            phone={narrow ? { back: "Inbox", onBack: sidePanel.onToggle } : undefined}
+            taskOfTab={tasks}
+            thread={(tab) => (
+              <PrototypeManagerThreadBeside tasks={tasks} agentId={tab.manager} root={tab.thread} />
+            )}
+          />
+        ) : null}
+      </div>
+    </MemberDirectory>
   );
 });
 

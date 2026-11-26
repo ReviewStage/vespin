@@ -217,179 +217,93 @@ export * from "./components/layout/layout.js";
 export * from "./components/length-counter/length-counter.js";
 
 export * from "./components/line-button/line-button.js";
-
+export * from "./components/line-clamp/line-clamp.js";
 export * from "./components/link-field/link-field.js";
-
 export * from "./components/list-row/list-row.js";
-
 export * from "./components/list-row/list-row-hint.js";
-
 export * from "./components/mac-app-card/mac-app-card.js";
-
 export * from "./components/mark-strip/mark-strip.js";
-
 export type { WordsMark } from "./components/marked-words/marked-words.js";
-
 export * from "./components/menu/context-menu.js";
-
 export * from "./components/menu/link-address.js";
-
 export * from "./components/menu/menu.js";
-
 export * from "./components/menu/menu-surface.js";
-
 export * from "./components/menu/touch-hold.js";
-
 export * from "./components/menu-section/menu-section.js";
-
 export * from "./components/message/channel-message.js";
-
 export * from "./components/message/chat-bubble.js";
-
 export * from "./components/message/message.js";
-
 export * from "./components/message/message-failed-mark.js";
-
 export * from "./components/message/message-head.js";
-
 export * from "./components/message/message-line.js";
-
 export * from "./components/more-button/more-button.js";
-
 export * from "./components/name-value-rows/name-value-rows.js";
-
 export * from "./components/nav-item/nav-item.js";
-
 export * from "./components/note-line/note-line.js";
-
 export * from "./components/one-line/one-line.js";
-
 export * from "./components/option-media/option-media.js";
-
 export * from "./components/over-pane/over-pane.js";
-
 export * from "./components/page-embed/page-embed.js";
-
 export * from "./components/page-frame/page-frame.js";
-
 export * from "./components/page-frame/page-scroll.js";
-
 export * from "./components/page-header/heading-away.js";
-
 export * from "./components/page-header/page-header.js";
-
 export * from "./components/page-swipe/use-page-swipe.js";
-
 export * from "./components/page-thumb/page-thumb.js";
-
 export * from "./components/page-toolbar/page-toolbar.js";
-
 export * from "./components/pager/pager.js";
-
 export * from "./components/pagination/pagination.js";
-
 export * from "./components/pane-bar/pane-bar.js";
-
 export * from "./components/pane-pin/pane-pin.js";
-
 export * from "./components/pdf-pages/pdf-pages-skeleton.js";
-
 export * from "./components/photo-pick/photo-pick.js";
-
 export * from "./components/picture-set/picture-set.js";
-
 export * from "./components/picture-tile/picture-tile.js";
-
 export * from "./components/popover-icon-button/popover-icon-button.js";
-
 export * from "./components/popover-panel/popover-panel.js";
-
 export * from "./components/port-table/port-table.js";
-
 export * from "./components/portal-fence/portal-fence.js";
-
 export * from "./components/progress/progress.js";
-
 export * from "./components/progress-ring/progress-ring.js";
-
 export * from "./components/prose/prose.js";
-
 export * from "./components/provider-button/provider-button.js";
-
 export * from "./components/public-page/public-page.js";
-
 export * from "./components/quiet-words/quiet-words.js";
-
 export * from "./components/readable-controls/readable-controls.js";
-
 export * from "./components/rect-float/rect-float.js";
-
 export * from "./components/remote-surface/remote-surface.js";
-
 export * from "./components/repository/repository.js";
-
 export * from "./components/resize-edge/resize-edge.js";
-
 export * from "./components/resources-popover/resources-popover.js";
-
 export * from "./components/retry-button/retry-button.js";
-
 export * from "./components/reveal/reveal.js";
-
 export * from "./components/rolling-number/rolling-number.js";
-
 export * from "./components/roving-keys/roving-keys.js";
-
 export * from "./components/row-count/row-count.js";
-
 export * from "./components/row-mark/row-mark.js";
-
 export * from "./components/row-menu/row-menu.js";
-
 export * from "./components/saved-tick/saved-tick.js";
-
 export * from "./components/scroll-area/scroll-area.js";
-
 export * from "./components/search-field/search-field.js";
-
 export * from "./components/search-line/search-line.js";
-
 export * from "./components/search-match/search-match.js";
-
 export * from "./components/searchable-menu/menu-note-row.js";
-
 export * from "./components/searchable-menu/searchable-menu.js";
-
 export * from "./components/secret-field/secret-field.js";
-
 export * from "./components/selection/selection-bar.js";
-
 export * from "./components/selection/selection-menu.js";
-
 export * from "./components/selection/selection-picker.js";
-
 export * from "./components/selection/selection-region.js";
-
 export * from "./components/selection/selection-toolbar.js";
-
 export * from "./components/session-line/session-line.js";
-
 export * from "./components/settings-dialog/settings-dialog.js";
-
 export * from "./components/settings-ordered-rows/settings-ordered-rows.js";
-
 export * from "./components/settings-page/settings-page.js";
-
 export * from "./components/settings-row/settings-link-row.js";
-
 export * from "./components/settings-row/settings-row.js";
-
 export * from "./components/settings-row/settings-row-fold.js";
-
 export * from "./components/settings-section/settings-section.js";
-
 export * from "./components/shimmer/shimmer.js";
-
 export * from "./components/shortcut/shortcut.js";
 
 export * from "./components/show-more-row/show-more-row.js";

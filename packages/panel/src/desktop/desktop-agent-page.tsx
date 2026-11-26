@@ -221,7 +221,7 @@ function useAgentFound(tasks: TasksControl, agentId: string): AgentFound {
  * pane, its box, and its menu read and write it as its tab on a task does;
  * its skills and dictation words are its own place's (`own-agent-place.tsx`).
  */
-function useOwnAgents(
+export function useOwnAgents(
   tasks: TasksControl,
   agent: ListedAgent,
   place: OwnAgentPlace,
@@ -666,7 +666,7 @@ function OwnAgentPage({
               <Fill id={panels(view).panel} role="tabpanel" aria-labelledby={panels(view).tab}>
                 <PrototypeInboxFeed
                   only="manager"
-                  narrow={away !== undefined}
+                  onViewManagerThread={(root) => openThread(root)}
                   onOpenManagerThread={(root) => landInThread.current(root)}
                   onOpenTask={(taskId) => tasks.onShowTask(taskId)}
                   readInboxImage={agents.readInboxImage}
@@ -729,6 +729,52 @@ function OwnAgentPage({
           ) : null}
         </div>
       </OpenAddressesHere>
+    </OwnAgentPlaceProvider>
+  );
+}
+
+/** PROTOTYPE 2: a Manager's chat thread as the window's side panel draws it beside the Inbox, read through the Manager's own place, as its page reads it. */
+export function PrototypeManagerThreadBeside({
+  tasks,
+  agentId,
+  root,
+}: {
+  tasks: TasksControl;
+  agentId: string;
+  root: string;
+}): React.JSX.Element | null {
+  const row = useTaskListRow(useTaskListCollections().agents, agentId);
+
+  return row === undefined ? null : <ManagerThreadOf tasks={tasks} agent={row} root={root} />;
+}
+
+function ManagerThreadOf({
+  tasks,
+  agent,
+  root,
+}: {
+  tasks: TasksControl;
+  agent: ListedAgent;
+  root: string;
+}): React.JSX.Element | null {
+  const place = useOwnAgentPlace(tasks, agent, tasks.agents.models, undefined);
+  const agents = useOwnAgents(tasks, agent, place);
+  const summary = agents.agents?.find((each) => each.id === agent.id);
+
+  if (summary === undefined) return null;
+
+  return (
+    <OwnAgentPlaceProvider place={place} readerId={tasks.me}>
+      <ManagerThreadTab
+        key={root}
+        agent={summary}
+        control={agents}
+        shown={tasks.shown}
+        root={root}
+        onOpenTarget={(target) => {
+          if (target.kind === TOOL_TARGET.TASK) tasks.onShowTask(target.task);
+        }}
+      />
     </OwnAgentPlaceProvider>
   );
 }

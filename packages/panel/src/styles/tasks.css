@@ -1982,7 +1982,8 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue
   max-height: min(var(--agent-composer-field-lines), var(--agent-composer-field-cap));
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  /* PROTOTYPE: a field that does not scroll hands the wheel on, so a feed of boxes scrolls over each; contain trapped it. */
+  overscroll-behavior: auto;
   padding: var(--ui-space-16) var(--ui-space-16) var(--ui-row-inset);
   background: transparent;
   color: var(--ui-color-text);

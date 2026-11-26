@@ -2547,7 +2547,20 @@ const LONG_REPLIES: readonly (readonly ["agent" | "ada" | "grace", string])[] = 
   ["agent", "Confirmed: three green runs since the fix."],
   [
     "agent",
-    "[@Ada Lovelace](https://vespin.dev/personal/person/user-ada), can you confirm the changelog wording before I tag? It leads with invites and mentions the digest for the beta cohort.",
+    [
+      "[@Ada Lovelace](https://vespin.dev/personal/person/user-ada), can you confirm the changelog wording before I tag? Here's the draft:",
+      "",
+      "**0.25.0**",
+      "",
+      "- Invite teammates by email, with resend and a seven-day expiry.",
+      "- Pending invites list who sent them and when they expire.",
+      "- An expired invite says so, and offers to ask its sender for a new one while they are still a member.",
+      "- Admins can withdraw any invite; members can withdraw their own.",
+      "- The weekly digest, for the beta cohort: what your agents got done, every Monday at 9am in your zone.",
+      "- Fixed: a ledger total could round a partial cent the other way from its lines.",
+      "",
+      "It leads with invites and mentions the digest for the beta cohort only.",
+    ].join("\n"),
   ],
 ];
 

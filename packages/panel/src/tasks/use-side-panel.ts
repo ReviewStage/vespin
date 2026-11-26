@@ -1469,7 +1469,12 @@ function drawsTranscript(
  * Manager's id, standing for no task.
  */
 function drawsThread(tab: ThreadStripTab, drawn: Pick<DrawnTabs, "task">): boolean {
-  return drawn.task.bare === true && drawn.task.id === undefined && drawn.task.stop === tab.manager;
+  // PROTOTYPE 2: a Manager's thread is drawn beside the Inbox's feed too, which stands for no stop, as beside its Manager's page.
+  return (
+    drawn.task.bare === true &&
+    drawn.task.id === undefined &&
+    (drawn.task.stop === tab.manager || drawn.task.stop === undefined)
+  );
 }
 
 /** Whether a Terminal tab is drawn: its agent the task's, and its terminal held for the account signed in where the caller reads the lists. */
