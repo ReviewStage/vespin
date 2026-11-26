@@ -671,11 +671,24 @@ function useComposerParts(props: ComposerProps): ComposerParts {
   const lines = useAccessibilitySize() ? FIELD_LINES.LARGE : FIELD_LINES.REGULAR;
   const rowed = stacked(props);
 
-  // Note that a press sends what the field holds, once (`pressSend`), read against the words this render drew Send over.
+  // Note that a press sends what the field holds, once (`pressSend`), read against the words this render drew Send over; words given back are what the field last held, never a paste, so they are read against themselves and stand as words whatever their length.
   const takeFor = (act: ComposerSend) => {
     const field = door.current;
 
-    if (field !== null) void pressSend(field, words, act);
+    if (field === null) return;
+
+    const taking = {
+      take: () =>
+        field.take().then((taken) => ({
+          words: taken.words,
+          giveBack: () => {
+            shown.current = taken.words;
+            taken.giveBack();
+          },
+        })),
+    };
+
+    void pressSend(taking, words, act);
   };
 
   const send = onSend === undefined ? undefined : () => takeFor(onSend);
