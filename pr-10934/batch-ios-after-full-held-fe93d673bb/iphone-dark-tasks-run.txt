@@ -1,0 +1,106 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane C) - iOS 27.2 - D479E601-B915-45AA-99C5-5295A84F641E
+ > Flow .kbd-tasks
+  > On Flow Complete
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Pinned" is visible... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Assert that "Experiments" is visible... COMPLETED
+Assert that "Ideas" is visible... COMPLETED
+Assert that "New task in Ideas" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot tasks-list... COMPLETED
+Tap on "Launch", Child of: "Launch, [0-9]+"... COMPLETED
+Assert that "Launch checklist" is not visible... COMPLETED
+Tap on "Launch", Child of: "Launch, [0-9]+"... COMPLETED
+Assert that "Launch checklist" is visible... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Launch checklist", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Take screenshot tasks-menu... COMPLETED
+Tap on "Status"... COMPLETED
+Tap on "Done"... COMPLETED
+Assert that "Launch checklist" is not visible... COMPLETED
+Run flow when "No task selected" is not visible...
+  Run subflows/to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+        Swipe from (50%, 60%) to (50%, 35%) in 800 ms... COMPLETED
+      Run flow when "Usage alerts", Above id: search-tab is not visible and true is true... COMPLETED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run subflows/to-row.yaml... COMPLETED
+  Wait for animation to end... COMPLETED
+  Swiping in LEFT direction on "Usage alerts"...Set orientation PORTRAIT... COMPLETED
+Exception in thread "main" UnknownFailure(errorResponse=Request for swipeV2 failed, code: 500, body: {"errorMessage":"Swipe v2 request failure. Error: Error Domain=com.apple.dt.XCTest.XCTFuture Code=1000 \"Swipe (v2) from (101.0, 764.0) to (40.0, 764.0) with 0.4 duration: Timed out while synthesizing event.\" UserInfo={NSLocalizedDescription=Swipe (v2) from (101.0, 764.0) to (40.0, 764.0) with 0.4 duration: Timed out while synthesizing event.}","code":"internal"})
+	at xcuitest.XCTestDriverClient.handleExceptions(XCTestDriverClient.kt:355)
+	at xcuitest.XCTestDriverClient.processResponse(XCTestDriverClient.kt:300)
+	at xcuitest.XCTestDriverClient.executeJsonRequest$lambda$7(XCTestDriverClient.kt:279)
+	at xcuitest.XCTestDriverClient.transportCall(XCTestDriverClient.kt:67)
+	at xcuitest.XCTestDriverClient.executeJsonRequest(XCTestDriverClient.kt:267)
+	at xcuitest.XCTestDriverClient.swipeV2(XCTestDriverClient.kt:157)
+	at ios.xctest.XCTestIOSDevice.scrollV2$lambda$7(XCTestIOSDevice.kt:104)
+	at ios.xctest.XCTestIOSDevice.execute(XCTestIOSDevice.kt:240)
+	at ios.xctest.XCTestIOSDevice.scrollV2(XCTestIOSDevice.kt:102)
+	at ios.LocalIOSDevice.scroll(LocalIOSDevice.kt:80)
+	at maestro.drivers.IOSDriver.swipe$lambda$28$lambda$27(IOSDriver.kt:273)
+	at maestro.drivers.IOSDriver.runDeviceCall(IOSDriver.kt:655)
+	at maestro.drivers.IOSDriver.swipe$lambda$28(IOSDriver.kt:271)
+	at maestro.utils.Metrics.measured(Metrics.kt:48)
+	at maestro.drivers.IOSDriver.swipe(IOSDriver.kt:266)
+	at maestro.drivers.IOSDriver.swipe$lambda$30(IOSDriver.kt:366)
+	at maestro.utils.Metrics.measured(Metrics.kt:48)
+	at maestro.drivers.IOSDriver.swipe(IOSDriver.kt:343)
+	at maestro.Maestro.swipe$lambda$18(Maestro.kt:197)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
