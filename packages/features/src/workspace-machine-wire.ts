@@ -1,19 +1,21 @@
 import { Schema as EffectSchema } from "effect";
-import { DEVICE_ARCH, DEVICE_PLATFORM, machineNetworkSchema } from "./device-agent-wire.js";
-import { MACHINE_NAME_MAX_CHARS } from "./host-wire.js";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "./device-agent-wire.js";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
 import { workspaceIdSchema } from "./task-wire.js";
 
 /**
- * workspace-machine-wire.ts -- the machines a workspace owns, which every member's agents may run on: listed to its members, renamed and removed by its owners and admins.
+ * workspace-machine-wire.ts -- the machines a workspace owns, as a released build lists, renames, and removes them: kept only so those builds are answered, since no workspace owns a machine.
  *
- * A workspace's machine is a box or a Mac an owner or an admin connected to
- * the workspace by approving its pairing for it (`host-wire.ts`'s
- * `hostPairingTargetSchema`), rather than as their own. It is the
- * workspace's, never any member's, and stays with it when the member who
- * connected it leaves or is deleted. Its name is its admins' to give, which
- * its own register never changes.
+ * A desktop from v0.41.0 to v0.42.0 and an iPhone build at
+ * `HOSTED_API_VERSION` 7 to 10 list a workspace's machines in Settings ›
+ * Machines and may rename or remove one. No machine is connected to a
+ * workspace, so the service answers every list with none and every rename
+ * or remove as not found (`workspace-machines-procedures.ts`). These go once
+ * the floor reaches 11, from which no build asks (`client-identity.ts`).
  */
+
+/** The most characters a machine's name may hold, as a released build names one. */
+const MACHINE_NAME_MAX_CHARS = 200;
 
 /** The query a workspace's machines are listed under. */
 const WORKSPACE_MACHINES_QUERY = {
@@ -26,10 +28,10 @@ export const workspaceMachinesQuerySchema = EffectSchema.Struct({
 });
 
 /**
- * One machine the workspace owns, as its members read it: its name, its
- * platform and architecture, who connected it, null once that account is
- * gone, which networks its agents may reach beyond the open internet, and
- * when it last beat, in epoch milliseconds.
+ * One machine the workspace owns, as a released build reads it: its name,
+ * its platform and architecture, who connected it, null once that account
+ * is gone, which networks its agents may reach, and when it last beat, in
+ * epoch milliseconds. Note that the service lists none.
  */
 const workspaceMachineSchema = EffectSchema.Struct({
   id: wireUuidSchema,
@@ -37,7 +39,7 @@ const workspaceMachineSchema = EffectSchema.Struct({
   platform: EffectSchema.Literals(Object.values(DEVICE_PLATFORM)),
   arch: EffectSchema.Literals(Object.values(DEVICE_ARCH)),
   connectedBy: EffectSchema.NullOr(EffectSchema.String),
-  network: machineNetworkSchema,
+  network: EffectSchema.String,
   seenAt: countedNumber,
 });
 
