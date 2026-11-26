@@ -97,10 +97,13 @@ env:
 - tapOn: "invite-test-plan.pdf, PDF.*"
 # The PDF opens in the system's Quick Look, titled with its name, and its
 # close button closes it. Note that the button is found by Quick Look's own
-# id, since it reads "Done" on an iPhone and "close" on an iPad.
+# id, since it reads "Done" on an iPhone and "close" on an iPad, and that the
+# flow waits for Quick Look's Markup button first, which it draws only once
+# the PDF has loaded, because the close button stands from the moment Quick
+# Look opens, and a press on it while the PDF still loads closes nothing.
 - extendedWaitUntil:
     visible:
-      id: "QLOverlayDoneButtonAccessibilityIdentifier"
+      id: "QLOverlayMarkupButtonAccessibilityIdentifier"
     timeout: 15000
 - waitForAnimationToEnd
 - takeScreenshot: inbox-pdf
