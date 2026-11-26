@@ -18,7 +18,8 @@
  * reader's own messages that has words, whatever opened a turn, and its words
  * are saved in place, the message marked edited and the Manager told, its
  * files and everything after it standing as they were
- * (`AGENTS_CHAT_EDIT`); nothing is rewound. Fork to new agent opens New agent as the panel's
+ * (`AGENTS_CHAT_EDIT`); nothing is rewound, and no Rewind conversation to
+ * here is offered there. Fork to new agent opens New agent as the panel's
  * fork opens its draft (`@repo/features/agent-fork-model`), on a turn of
  * an agent that stands under a task and is not archived.
  */
@@ -170,7 +171,8 @@ export function useMessageActs(input: {
 
   /** A finished turn's Fork to new agent and Rewind conversation to here, in the panel's order, each where it is offered. */
   const turnActs = (id: string, words: string): readonly HeldAct[] => {
-    const line = rewinds ? points.revertsAt.get(id) : undefined;
+    // Note that a Manager's chat offers no rewind, as a channel takes nothing back; its messages are edited in place instead.
+    const line = rewinds && chatMessages === undefined ? points.revertsAt.get(id) : undefined;
 
     return [
       ...(forks

@@ -10,8 +10,8 @@
  * corner while the pointer or the keyboard is on it, as a channel's do, so
  * they add nothing to its height.
  *
- * A message whose words were edited since it was sent says so after them
- * (`edited`), in the muted ink, as a channel's do.
+ * A message whose words were edited since it was sent says so right after
+ * its last word (`edited`), in the muted ink, as a channel's do.
  *
  * A message others answered in its thread says so under its words
  * (`ThreadReplies`): the faces of who answered and how many replies, in the
@@ -89,14 +89,17 @@ export function ChannelMessage({
             )}
           </div>
         )}
-        <div className="ui-channel-message-words min-w-0 text-body leading-reading text-foreground">
+        {/* Note that an edited message's mark runs on after its last paragraph, as Slack's does: the words' own block and that paragraph stand inline, so the mark follows the last word. */}
+        <div
+          className={`ui-channel-message-words min-w-0 text-body leading-reading text-foreground ${edited ? "[&>:nth-last-child(2)>p:last-child]:inline [&>:nth-last-child(2)]:inline" : ""}`}
+        >
           {children}
+          {edited ? (
+            <span className="ui-channel-message-edited ms-ui-4 text-caption text-muted-foreground">
+              <ReplayUnmask>{CHAT_EDIT_WORDS.EDITED}</ReplayUnmask>
+            </span>
+          ) : null}
         </div>
-        {edited ? (
-          <span className="ui-channel-message-edited text-caption text-muted-foreground">
-            <ReplayUnmask>{CHAT_EDIT_WORDS.EDITED}</ReplayUnmask>
-          </span>
-        ) : null}
         {under}
       </div>
       {actions === undefined || actions === null ? null : (

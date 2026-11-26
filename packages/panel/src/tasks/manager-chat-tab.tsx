@@ -27,14 +27,15 @@
  * given under its words (`manager-chat-reactions.tsx`). The reader's own
  * message offers Edit, which writes its words again where it stands, as a
  * channel's edit does, marking it edited and telling the Manager, and
- * never takes the Manager back (`manager-chat-edit.tsx`).
+ * never takes the Manager back (`manager-chat-edit.tsx`). No message of the
+ * chat offers Rewind conversation to here, as a channel takes nothing back;
+ * the rewind itself stays the agent tab's (`rewind-action.tsx`).
  */
 
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { endLineReason } from "@repo/features/agent-continue-model";
 import { computerAppsOf } from "@repo/features/agent-parts";
 import type { ShownPicture } from "@repo/features/agent-pictures-model";
-import { REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
 import type {
   AgentChatSendParams,
   ManagerChatSending,
@@ -59,7 +60,6 @@ import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-fac
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MessageFileChip } from "@repo/features/message-files";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
 import { ChannelMessage, EmptyState, GlyphSlot, ThreadRule, TIME_LOOK, Time } from "@repo/ui";
 import { ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
@@ -83,7 +83,6 @@ import { useFindOpen } from "../find-in-tab.js";
 import { managerChatQuery, managerChatRetryMutation } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { keepPictureRead } from "../picture-query.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import {
   ApprovalsProvider,
@@ -139,7 +138,6 @@ import {
   useThreadDoors,
 } from "./manager-chat-threads.js";
 import { useMoveToCloud } from "./move-agent.js";
-import { RewindProvider } from "./rewind-action.js";
 import { SentMessage } from "./skill-chip.js";
 import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
 import { TranscriptWords } from "./transcript-blocks.js";
@@ -350,9 +348,8 @@ function ManagerMessage({
           ) : (
             <CopyMessageAction
               words={message.text}
-              // Note that a turn's journal stands under the turn's own id, which Rewind conversation to here names it by.
+              // Note that a turn's journal stands under the turn's own id, which its Copy link names it by; a Manager's chat offers no rewind, as a channel takes nothing back.
               messageId={place.closes && message.turnId !== null ? message.turnId : undefined}
-              rewind={place.closes && message.turnId !== null ? REWIND_ACTION.REVERT : undefined}
               lead={
                 <>
                   {reactions}
@@ -863,8 +860,6 @@ function useManagerChatBox({
     running: agent.status === AGENT_STATUS.RUNNING,
     send,
     unsend,
-    // Note that a line is written again only where it stands in the chat itself, so a thread's box takes the Manager back nowhere.
-    rewind: thread === undefined ? control.onRewind : undefined,
     starter,
     shown,
   });
@@ -1035,44 +1030,6 @@ export function ManagerChatTab({
 
   const { endPress, endTrail, continuable } = ends;
 
-  // A rewind writes in the box, so it is offered only while the box takes words, and nothing is rewound under a call into the Manager.
-  const rewinds = chatBox.boxOpen && transcript.calls.length === 0;
-
-  const restores =
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.REWIND_FILES) }).data === true;
-
-  const pendingSends = composer.sent.length > 0;
-
-  const points = useMemo(
-    () => rewindPoints(transcript.messages, pendingSends, control.me, composer.going, restores),
-    [transcript.messages, pendingSends, control.me, composer.going, restores],
-  );
-
-  // Note that the line's box reads what the tab's own box reads, as it opens.
-  const editorProps = useRef({
-    agentId: agent.id,
-    keywords: control.keywords,
-    skills: control.readSkills,
-  });
-
-  editorProps.current = {
-    agentId: agent.id,
-    keywords: control.keywords,
-    skills: control.readSkills,
-  };
-
-  const rewind = rewinds
-    ? {
-        editing: composer.editing,
-        onEdit: composer.edit,
-        onCancelEdit: composer.dropEdit,
-        onSendEdit: composer.sendEdit,
-        onRevert: composer.revert,
-        editor: () => editorProps.current,
-        ...points,
-      }
-    : undefined;
-
   // Note that a message's thread opens in its page's side panel, where one stands beside the chat; elsewhere its messages offer none.
   const opener = useThreadDoors();
 
@@ -1236,18 +1193,16 @@ export function ManagerChatTab({
     <AgentTabFrame label={name}>
       <AgentPicturesProvider value={pictures}>
         <UndeliveredLines value={marks}>
-          <RewindProvider value={rewind}>
-            {log}
-            <AgentTabFoot>
-              <ThreadsDock threads={threads} />
-              {chatBox.dock({
-                box,
-                approvalsWaiting: approvals.waiting,
-                transcript,
-                queue: { controls: true, working: standing.working, editing: queueEditing },
-              })}
-            </AgentTabFoot>
-          </RewindProvider>
+          {log}
+          <AgentTabFoot>
+            <ThreadsDock threads={threads} />
+            {chatBox.dock({
+              box,
+              approvalsWaiting: approvals.waiting,
+              transcript,
+              queue: { controls: true, working: standing.working, editing: queueEditing },
+            })}
+          </AgentTabFoot>
         </UndeliveredLines>
       </AgentPicturesProvider>
     </AgentTabFrame>

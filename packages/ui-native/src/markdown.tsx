@@ -786,6 +786,7 @@ function Line({
   style,
   heading,
   onFirstLine,
+  after,
 }: {
   readonly runs: readonly MarkdownRun[];
   readonly drawing: Drawing;
@@ -793,8 +794,11 @@ function Line({
   /** Whether the line is heard as a heading. */
   readonly heading?: boolean | undefined;
   readonly onFirstLine?: OnFirstLine;
+  /** Muted words that run on after the line's own, as an edited message's mark; none on most lines. */
+  readonly after?: string | undefined;
 }) {
   const openings = lineOpenings(runs, drawing);
+  const heard = lineHeard(runs, drawing);
 
   const actions =
     openings.length === 0
@@ -807,13 +811,18 @@ function Line({
 
   return (
     <Text
-      accessibilityLabel={lineHeard(runs, drawing)}
+      accessibilityLabel={after === undefined ? heard : `${heard} ${after}`}
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       {...actions}
       {...(onFirstLine === undefined ? {} : { onTextLayout: firstLineOf(onFirstLine) })}
       style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
     >
       <Runs runs={runs} drawing={drawing} />
+      {after === undefined ? null : (
+        <Text style={{ fontSize: ROLE_SIZE.TIME, color: drawing.colors.TEXT_MUTED }}>
+          {` ${after}`}
+        </Text>
+      )}
     </Text>
   );
 }
@@ -1411,11 +1420,14 @@ function BlockView({
   block,
   drawing,
   onFirstLine,
+  after,
 }: {
   readonly block: MarkdownBlock;
   readonly drawing: Drawing;
   /** Reports a heading's or a paragraph's first line, where a list item opens with it. */
   readonly onFirstLine?: OnFirstLine;
+  /** Muted words a paragraph runs on into after its own (`Line`'s `after`). */
+  readonly after?: string | undefined;
 }) {
   const { colors } = drawing;
 
@@ -1432,7 +1444,7 @@ function BlockView({
         />
       );
     case MARKDOWN_BLOCK.PARAGRAPH:
-      return <Line runs={block.runs} drawing={drawing} onFirstLine={onFirstLine} />;
+      return <Line runs={block.runs} drawing={drawing} onFirstLine={onFirstLine} after={after} />;
     case MARKDOWN_BLOCK.LIST:
       return <ListView block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.QUOTE:
@@ -1493,19 +1505,27 @@ function Blocks({
   drawing,
   gap = BLOCK_GAP.BLOCK,
   onFirstLine,
+  after,
 }: {
   readonly blocks: readonly MarkdownBlock[];
   readonly drawing: Drawing;
   readonly gap?: number;
   /** Reports the first block's first line, a list item's, which its marker stands on. */
   readonly onFirstLine?: OnFirstLine;
+  /** Muted words the last block, a paragraph, runs on into after its own. */
+  readonly after?: string | undefined;
 }): ReactNode {
   return blocks.map((block, at) => (
     <View
       key={at}
       style={{ marginTop: PROSE_SIZE * gapOver(block, blocks[at - 1], gap) * drawing.fontScale }}
     >
-      <BlockView block={block} drawing={drawing} onFirstLine={at === 0 ? onFirstLine : undefined} />
+      <BlockView
+        block={block}
+        drawing={drawing}
+        onFirstLine={at === 0 ? onFirstLine : undefined}
+        after={at === blocks.length - 1 ? after : undefined}
+      />
     </View>
   ));
 }
@@ -1545,6 +1565,8 @@ type MarkdownProps = {
   readonly wordPictures?: Pick<ReadonlySet<string>, "has"> | undefined;
   /** The picture a marker names, by its name, which its chip is drawn from. */
   readonly wordPicture?: ((name: string) => MarkdownWordPicture | undefined) | undefined;
+  /** Muted words standing right after the words, run on after the last paragraph's, as an edited message's "(edited)"; none on most words. */
+  readonly after?: string | undefined;
 };
 
 /** A picture the words name by its marker, as its chip draws it: the address it is drawn from, none while its bytes are on their way and `null` where they could not be read, and what reads it again. */
@@ -1628,6 +1650,7 @@ export function Markdown({
   diagrams = false,
   wordPictures,
   wordPicture = noWordPicture,
+  after,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
@@ -1673,6 +1696,9 @@ export function Markdown({
     viewPictures,
   };
 
+  // Note that muted words after the words run on after the last paragraph's, as Slack's "(edited)" does, and stand on a line of their own after any other block.
+  const runsOn = blocks.at(-1)?.kind === MARKDOWN_BLOCK.PARAGRAPH;
+
   // Note that the words' pictures are one set a viewer swipes through, as a description's are, or join the set of the thread or message around them.
   return (
     <PictureSetProvider>
@@ -1686,10 +1712,13 @@ export function Markdown({
       >
         {diagrams ? (
           <DiagramRenderer>
-            <Blocks blocks={blocks} drawing={drawing} />
+            <Blocks blocks={blocks} drawing={drawing} after={runsOn ? after : undefined} />
           </DiagramRenderer>
         ) : (
-          <Blocks blocks={blocks} drawing={drawing} />
+          <Blocks blocks={blocks} drawing={drawing} after={runsOn ? after : undefined} />
+        )}
+        {after === undefined || runsOn ? null : (
+          <Text style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>{after}</Text>
         )}
       </View>
     </PictureSetProvider>
