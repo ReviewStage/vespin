@@ -20,7 +20,6 @@ import { type IconPickerColor, IconPickerColors } from "../icon-picker/icon-pick
 import {
   IconPickerEmoji,
   type IconPickerEmojiColors,
-  IconPickerEmojiFace,
   useEmojiGroups,
 } from "../icon-picker/icon-picker-emoji.js";
 import { PopoverIconButton } from "../popover-icon-button/popover-icon-button.js";
@@ -188,14 +187,13 @@ interface GridProps {
 /**
  * One face's cell in `group`, drawn as `face` and starting its colors on
  * `face`'s, whose press floats its colors from it (`IconPickerChoice`'s
- * flyout). An emoji is drawn bare where `bare`, as an emoji not chosen is.
+ * flyout).
  */
 function FaceCell({
   group,
   face,
   label,
   pressed,
-  bare,
   stop,
   props,
 }: {
@@ -203,7 +201,6 @@ function FaceCell({
   face: ManagerFaceValue;
   label: string;
   pressed: boolean;
-  bare: boolean;
   stop: boolean;
   props: GridProps;
 }): React.JSX.Element {
@@ -215,13 +212,7 @@ function FaceCell({
       label={label}
       pressed={pressed}
       stop={stop}
-      face={
-        face.emoji !== undefined && bare ? (
-          <IconPickerEmojiFace emoji={face.emoji} />
-        ) : (
-          <ManagerFace face={face} size={MANAGER_FACE_SIZE.ROW} />
-        )
-      }
+      face={<ManagerFace face={face} size={MANAGER_FACE_SIZE.ROW} />}
       popup
       flyout={
         open
@@ -262,7 +253,6 @@ function characterCell(
       face={{ character, color }}
       label={MANAGER_FACE_CHARACTER_NAME[character]}
       pressed={pressed}
-      bare={false}
       stop={stop}
       props={props}
     />
@@ -300,7 +290,6 @@ function CharacterFaces(
                 face={shown}
                 label={managerFaceName(shown)}
                 pressed={pressed}
-                bare={false}
                 stop={at === stopAt}
                 props={props}
               />
@@ -449,12 +438,7 @@ export function ManagerFacePicker({
 
   const emojiColors = useMemo<IconPickerEmojiColors>(
     () => ({
-      face: (emoji, pressed) =>
-        pressed ? (
-          <ManagerFace face={emojiFace(face, emoji)} size={MANAGER_FACE_SIZE.ROW} />
-        ) : (
-          <IconPickerEmojiFace emoji={emoji} />
-        ),
+      chosen: (emoji) => <ManagerFace face={emojiFace(face, emoji)} size={MANAGER_FACE_SIZE.ROW} />,
       colors: (emoji) => faceColors(emojiFace(face, emoji), pick),
       onClose: close,
     }),

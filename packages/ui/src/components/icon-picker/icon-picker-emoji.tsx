@@ -77,14 +77,14 @@ export interface IconPickerEmojiBeside {
 }
 
 /**
- * How an owner whose emoji is picked in a color draws each and floats its
- * colors, as a Manager's face does, rather than an emoji pressed being
- * chosen at once. Note that it is held across presses (`useMemo`), since
+ * How an owner whose emoji is picked in a color draws the one chosen and
+ * floats each one's colors, as a Manager's face does, rather than an emoji
+ * pressed being chosen at once; the rest are drawn bare. Note that it is held across presses (`useMemo`), since
  * every cell is drawn again where it changes.
  */
 export interface IconPickerEmojiColors {
-  /** The emoji drawn in its cell, in the color it was chosen in where `pressed`. */
-  readonly face: (emoji: string, pressed: boolean) => ReactNode;
+  /** The emoji chosen drawn in its cell, in the color it was chosen in. */
+  readonly chosen: (emoji: string) => ReactNode;
   /** The emoji's colors (`IconPickerColors`), floated from its cell while they stand open. */
   readonly colors: (emoji: string) => ReactNode;
   /** Hears the colors put away, by Escape or a press away. */
@@ -97,7 +97,7 @@ export function useEmojiGroups(): UseQueryResult<EmojiGroup[]> {
 }
 
 /** An emoji as a cell of the grid draws it, bare, in the text's own ink. */
-export function IconPickerEmojiFace({ emoji }: { emoji: string }): React.JSX.Element {
+function EmojiFace({ emoji }: { emoji: string }): React.JSX.Element {
   return <span className="ui-icon-picker-emoji text-foreground">{emoji}</span>;
 }
 
@@ -121,7 +121,7 @@ export function IconPickerEmojiChoice({
       label={label}
       pressed={pressed}
       stop={stop}
-      face={<IconPickerEmojiFace emoji={emoji} />}
+      face={<EmojiFace emoji={emoji} />}
       onPress={onPress}
     />
   );
@@ -174,7 +174,7 @@ const EmojiCell = memo(function EmojiCell({
       label={label}
       pressed={pressed}
       stop={stop}
-      face={colors.face(emoji, pressed)}
+      face={pressed ? colors.chosen(emoji) : <EmojiFace emoji={emoji} />}
       popup
       flyout={
         open
