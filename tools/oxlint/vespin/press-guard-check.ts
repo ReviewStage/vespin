@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ARCHIVE_WRITE_GUARD_RULE, namesArchiveWrite } from "./shared/archive-write-guard.ts";
 import { ARROW_KEY_GUARD_RULE, NAMES_ARROW_KEY } from "./shared/arrow-key-guard.ts";
+import { BAR_ITEM_GUARD_RULE } from "./shared/bar-item-guard.ts";
 import { BUSY_GUARD_RULE } from "./shared/busy-guard.ts";
 import { ENTITY_CHOICE_GUARD_RULE, isMobileSource } from "./shared/entity-choice-guard.ts";
 import { GITHUB_MODULE_GUARD_RULE, namesGitHubBypass } from "./shared/github-module-guard.ts";
@@ -49,8 +50,8 @@ import { WRITE_MUTATION_GUARD_RULE } from "./shared/write-mutation-guard.ts";
  * directive that would silence `no-raw-press-outside-ui`, on one outside
  * `@repo/ui-native` holding one that would silence
  * `no-raw-press-outside-ui-native`, on any of the iOS app's TypeScript files
- * holding one that would silence `entity-choice-through-helper`, which has no
- * way past it, on any JSX-capable
+ * holding one that would silence `entity-choice-through-helper` or, where it
+ * draws JSX, `bar-item-titled`, neither of which has a way past it, on any JSX-capable
  * file holding one that would silence `skeleton-through-components`,
  * `settings-row-end`, `row-behavior-in-row`, whose list of row components
  * is the only way past it, on a Settings page's file holding one that would
@@ -129,6 +130,13 @@ const GUARDS = [
     sources: JSX_SOURCE,
     watches: (absolute: string) => isOutsideUiNative(absolute),
     remedy: "Move the press onto a @repo/ui-native component or variant instead",
+  },
+  {
+    rule: BAR_ITEM_GUARD_RULE,
+    sources: JSX_SOURCE,
+    watches: (absolute: string) => isMobileSource(absolute),
+    remedy:
+      "Hand the bar item its words as its title: a Button's children, or a Stack.Toolbar.Label among a Menu's",
   },
   {
     rule: ENTITY_CHOICE_GUARD_RULE,

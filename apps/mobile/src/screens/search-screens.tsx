@@ -660,7 +660,9 @@ function SearchStackScreen(words: SearchWords) {
           icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
           accessibilityLabel={compose.label}
           onPress={compose.onPress}
-        />
+        >
+          {compose.label}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       {query.trim() !== "" ? (
         <SearchStackFound {...words} leave={leave} />
