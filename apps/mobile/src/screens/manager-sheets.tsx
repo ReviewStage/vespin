@@ -70,6 +70,9 @@ const WORDS = {
 /** The page a Manager's repositories are listed on, pushed in its Settings sheet. */
 const REPOSITORIES_ROUTE = "/manager-settings/repositories";
 
+/** What a flow finds the Repositories row by once it names several, which only then takes a press. */
+const REPOSITORIES_ROW_ID = "manager-repositories";
+
 /** What a flow finds the name field by. */
 const NAME_FIELD_ID = "manager-name";
 
@@ -165,6 +168,7 @@ function RepositoriesRow({
       detail={`${checkout} +${rest.length}`}
       goes={PUSH_ROW_GOES.PAGE}
       onPress={() => router.push({ pathname: REPOSITORIES_ROUTE, params: { agent: agentId } })}
+      testId={REPOSITORIES_ROW_ID}
     />
   );
 }

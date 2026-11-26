@@ -85,7 +85,14 @@ env:
 - takeScreenshot: managers-settings-face
 # Its Repositories row names its checkout and counts the rest, as the
 # desktop's chip does, and its press lists every one on a page of their own.
-- tapOn: "Repositories"
+# Note that the row takes a press only once the Manager's own read names both,
+# so the flow waits for it rather than tapping the checkout's plain row.
+- extendedWaitUntil:
+    visible:
+      id: "manager-repositories"
+    timeout: 15000
+- tapOn:
+    id: "manager-repositories"
 - extendedWaitUntil:
     visible: "ada/ledger"
     timeout: 10000
