@@ -111,9 +111,11 @@ async function settle(): Promise<void> {
 /**
  * The hook drawn under a probe that keeps every frame it drew, once the
  * window's document has landed, as the window draws nothing before it, over
- * a host telling the transcripts' pages as the test hands them.
+ * a host telling the transcripts' pages as the test hands them; under as
+ * many probes side by side as `surfaces` asks, as two surfaces of one window
+ * showing the same transcript.
  */
-function drawn(older?: TranscriptOlderReader) {
+function drawn(older?: TranscriptOlderReader, surfaces = 1) {
   const telling = tellingTranscripts();
   const frames: AgentTranscriptControl[] = [];
 
@@ -126,7 +128,9 @@ function drawn(older?: TranscriptOlderReader) {
   function Window(props: { shown: boolean }) {
     return useQuery({ ...appStateQuery, select: selectRun }).data === undefined
       ? null
-      : createElement(Probe, props);
+      : Array.from({ length: surfaces }, (_, surface) =>
+          createElement(Probe, { ...props, key: surface }),
+        );
   }
 
   const container = document.body.appendChild(document.createElement("div"));
@@ -344,10 +348,9 @@ test("a hold whose transcript the host already held is timed as a cache hit, cau
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(1_000_000);
 
-  // The host read it before this hold, as a tab shown lately left it.
+  // The host read it before this hold, as a tab shown lately left it, and let its follow go, so it is no longer caught up.
   const held: ToldPage = {
     ...newestOf(["m-1", "m-2"], "1"),
-    caughtUp: true,
     read: { followedAt: 990_000, askedAt: 990_000, answeredAt: 990_200, laidAt: 990_210 },
   };
 
@@ -377,6 +380,45 @@ test("a hold whose transcript the host already held is timed as a cache hit, cau
       [PANEL_SPAN.TRANSCRIPT_FIRST_PAINT, 1],
       [PANEL_SPAN.TRANSCRIPT_CAUGHT_UP, 1],
     ],
+  );
+});
+
+test("a hold on a transcript a follow already stands on, read to its end, is caught up at its first paint", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(1_000_000);
+
+  // Another window holds it, so the host follows it and has read it to its end: no read is asked for this hold.
+  heldOnFirstDocument({ ...newestOf(["m-1", "m-2"], "1"), caughtUp: true });
+  const spans: PanelSpan[] = [];
+  const uninstall = installPanelSpanRecorder((span) => spans.push(span));
+  const { draw } = drawn();
+
+  await draw(true);
+  vi.setSystemTime(1_016_000);
+  uninstall();
+
+  assert.deepEqual(
+    spans.map((span) => [span.name, span.endedAt - span.startedAt]),
+    [
+      [PANEL_SPAN.TRANSCRIPT_FIRST_PAINT, 0],
+      [PANEL_SPAN.TRANSCRIPT_CAUGHT_UP, 0],
+    ],
+  );
+});
+
+test("two surfaces showing one transcript time its hold once", async () => {
+  const spans: PanelSpan[] = [];
+  const uninstall = installPanelSpanRecorder((span) => spans.push(span));
+  const { draw, push } = drawn(undefined, 2);
+
+  await draw(true);
+  await push(AGENT, newestOf(["m-1"]));
+  await push(AGENT, { ...pageOf("m-2", "Writing."), caughtUp: true });
+  uninstall();
+
+  assert.deepEqual(
+    spans.map((span) => span.name),
+    [PANEL_SPAN.TRANSCRIPT_FIRST_PAINT, PANEL_SPAN.TRANSCRIPT_CAUGHT_UP],
   );
 });
 

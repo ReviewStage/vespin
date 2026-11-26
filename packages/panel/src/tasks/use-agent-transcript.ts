@@ -159,16 +159,49 @@ const NO_SENDING: readonly SendingMessage[] = [];
 const NO_CALLS: readonly AgentStandingCall[] = [];
 
 /**
- * One hold, as it is timed: when it was taken, the pages the transcript had
- * been read for then, whether rows already stood, and which of its two
- * spans ended.
+ * One hold, as it is timed: when it was taken, whether rows already stood,
+ * which of its two spans ended, and how many of the window's surfaces hold
+ * the transcript under it.
  */
 interface HoldTiming {
   readonly startedAt: number;
-  readonly pagesAtStart: number;
   readonly held: boolean;
   painted: boolean;
   caughtUp: boolean;
+  holders: number;
+}
+
+/**
+ * The holds this window is timing, by the transcript's agent and then the
+ * call that started its worker, none for the agent's own: so two surfaces
+ * showing one transcript at once, as an agent's tab and a replay of it,
+ * time it once rather than each record the same wait.
+ */
+const holdsTimed = new Map<string, Map<string | undefined, HoldTiming>>();
+
+/** Which transcript a hold times: its agent, and the call that started its worker where it is one. */
+type TimedTranscript = Pick<AgentTranscriptKey, "agentId" | "callId">;
+
+/** The timing standing for `transcript` in this window, joined; or `timing` begun for it. */
+function joinedTiming(transcript: TimedTranscript, begun: () => HoldTiming): HoldTiming {
+  const calls = holdsTimed.get(transcript.agentId) ?? new Map<string | undefined, HoldTiming>();
+  holdsTimed.set(transcript.agentId, calls);
+  const timing = calls.get(transcript.callId) ?? begun();
+  calls.set(transcript.callId, timing);
+  timing.holders += 1;
+
+  return timing;
+}
+
+/** `timing` let go by one of its holders, and forgotten once none holds it. */
+function leftTiming(transcript: TimedTranscript, timing: HoldTiming): void {
+  timing.holders -= 1;
+  const calls = holdsTimed.get(transcript.agentId);
+
+  if (timing.holders > 0 || calls?.get(transcript.callId) !== timing) return;
+  calls.delete(transcript.callId);
+
+  if (calls.size === 0) holdsTimed.delete(transcript.agentId);
 }
 
 /**
@@ -262,27 +295,37 @@ export function useAgentTranscript(input: {
   const { agentId, callId } = transcript;
   useEffect(() => {
     if (!shown) return;
-    const standing = heldNow.current;
+    const key = callId === undefined ? { agentId } : { agentId, callId };
 
-    const timed: HoldTiming = {
-      startedAt: Date.now(),
-      pagesAtStart: standing?.pages ?? 0,
-      // Note that a hold whose transcript already stands is timed as such, so a span with no round trip in it is told apart.
-      held: standing !== undefined && standing.pages > 0,
-      painted: false,
-      caughtUp: false,
-    };
+    const timed = joinedTiming(key, () => {
+      const standing = heldNow.current;
+
+      return {
+        startedAt: Date.now(),
+        // Note that a hold whose transcript already stands is timed as such, so a span with no round trip in it is told apart.
+        held: standing !== undefined && standing.pages > 0,
+        painted: false,
+        caughtUp: false,
+        holders: 0,
+      };
+    });
 
     timing.current = timed;
 
     return () => {
+      leftTiming(key, timed);
+
       if (timing.current === timed) timing.current = undefined;
     };
   }, [shown, agentId, callId]);
 
   // Note that a span ends once the transcript that ends it has been drawn,
   // since this runs after the commit that drew it, and never for a hold let
-  // go before its first page landed.
+  // go before its first page landed. The host says a transcript caught up
+  // only while a follow stands on it and has read to its end, and lays one
+  // let go as no longer caught up, so one held caught up as the hold is
+  // taken, beside a follow another surface or window holds, is caught up at
+  // its first paint.
   useEffect(() => {
     const timed = timing.current;
 
@@ -293,10 +336,7 @@ export function useAgentTranscript(input: {
       endHoldSpan(PANEL_SPAN.TRANSCRIPT_FIRST_PAINT, timed, held);
     }
 
-    // Note that a transcript held before the hold is read past its cursor again, so only a page since says it caught up.
-    const read = !timed.held || held.pages > timed.pagesAtStart;
-
-    if (held.word?.caughtUp === true && read && !timed.caughtUp) {
+    if (held.word?.caughtUp === true && !timed.caughtUp) {
       timed.caughtUp = true;
       endHoldSpan(PANEL_SPAN.TRANSCRIPT_CAUGHT_UP, timed, held);
     }
