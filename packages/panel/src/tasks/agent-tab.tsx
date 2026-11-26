@@ -2459,6 +2459,36 @@ function railLinesOf(
   });
 }
 
+/**
+ * `readOf` kept by the message it read, so a transcript written a line
+ * longer reads only the messages that changed: the document shares every
+ * message it did not change (`shareAppState`), so the rest are the very
+ * messages read before.
+ */
+function cachedByMessage(
+  readOf: (message: AgentTranscriptMessage) => readonly RailSentLine[],
+): (message: AgentTranscriptMessage) => readonly RailSentLine[] {
+  const read = new WeakMap<AgentTranscriptMessage, readonly RailSentLine[]>();
+
+  return (message) => {
+    const kept = read.get(message);
+
+    if (kept !== undefined) return kept;
+    const lines = readOf(message);
+    read.set(message, lines);
+
+    return lines;
+  };
+}
+
+/** Whether two runs of rail lines mark the same lines on the same rows. */
+function sameRailLines(one: readonly RailLine[], other: readonly RailLine[]): boolean {
+  return (
+    one.length === other.length &&
+    one.every((each, at) => each.rowKey === other[at]?.rowKey && each.line === other[at]?.line)
+  );
+}
+
 /** Each piece's own words as a find counts them, kept by the piece. */
 const pieceWords = new WeakMap<TurnPiece, Omit<FindRow, "key">>();
 
@@ -2980,8 +3010,8 @@ function AgentTranscriptView({
     bringIn.current = bringMessage;
   });
 
-  // The lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief where that is a card, then its note, and the task the agent was handed, as the note is, under whoever handed it.
-  const railLines = useMemo(() => {
+  // How each message reads as lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief where that is a card, then its note, and the task the agent was handed, as the note is, under whoever handed it.
+  const readRailLines = useMemo(() => {
     const { description, task } = openingLinesOf(brief, drawnOrigin, firstLine);
 
     // Note that the description's card says what its origin hands it where it hands words, an automation's prompt, rather than the line's own.
@@ -3011,18 +3041,14 @@ function AgentTranscriptView({
       ];
     };
 
-    return railLinesOf(entries, readOf);
-  }, [
-    entries,
-    brief,
-    drawnOrigin,
-    briefSender,
-    firstLine,
-    replayOpened,
-    readerId,
-    members,
-    former,
-  ]);
+    return cachedByMessage(readOf);
+  }, [brief, drawnOrigin, briefSender, firstLine, replayOpened, readerId, members, former]);
+
+  // Note that the rail is handed the run it drew last while no line changed, so it neither draws again nor reads where its lines stand as the agent's own words grow, which is what moves while it works.
+  const railLines = useKept(
+    useMemo(() => railLinesOf(entries, readRailLines), [entries, readRailLines]),
+    sameRailLines,
+  );
 
   if (!holding && messages.length > 0) {
     const { todos, first, opening, placed, writing, calls, delegated } = placing;
