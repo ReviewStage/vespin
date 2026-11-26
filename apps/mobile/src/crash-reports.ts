@@ -1,5 +1,5 @@
 /**
- * crash-reports.ts -- the app's crash and error reports: Sentry's React Native SDK, started as the bundle loads, on the desktop's and the web's terms.
+ * crash-reports.ts -- the app's crash and error reports and its masked session replay: Sentry's React Native SDK, started as the bundle loads, on the desktop's and the web's terms.
  *
  * The app reports to the project the desktop does, under the same DSN
  * (`SENTRY_DSN`), which `app.config.ts` writes into the build's `extra` as
@@ -36,6 +36,17 @@
  * a request's URL reaches a report only as the JavaScript `fetch` breadcrumb,
  * through the filter above.
  *
+ * It records every session as Sentry's mobile replay, fully masked, as the
+ * desktop's and the web's replays are (`packages/panel/src/session-replay.ts`):
+ * every word, field, symbol and vector, and every picture the app did not
+ * ship with, is drawn as a box of its color in its place, and a web view, a video, a PDF and a Safari sheet
+ * always are, so what leaves is the screens' layout and where they were
+ * touched, never a person's words or pictures (`REPLAY_MASKING`). Nothing is
+ * unmasked, since `@repo/ui-native` has no mark for the app's own words as
+ * `@repo/ui`'s `ReplayUnmask` is; a request's details stay out of it, as no
+ * address is allowed one; and a replay, like every report, names no account.
+ * It stands and stops with the SDK, so the same switch holds it.
+ *
  * Every event names the build's release and build number, the names
  * `release-ios.yml` uploads the build's Hermes source maps and dSYMs under
  * (`<bundle id>@<version>+<build>`, as sentry-cli reads them from the app's
@@ -59,6 +70,7 @@ import {
   finishExtendedAppStart,
   getExtendedAppStartSpan,
   init,
+  mobileReplayIntegration,
   nativeCrash,
   setTag,
   startInactiveSpan,
@@ -121,6 +133,18 @@ const UNTRACED: ReadonlySet<string> = new Set([
   "TimeToDisplay",
 ]);
 
+/**
+ * The replay's masking, every kind named though each is the SDK's default, so
+ * a later default never unmasks one: text, pictures, and vectors drawn as
+ * boxes, a web view, a video, a PDF and a Safari sheet always. Note that the
+ * SDK masks SwiftUI's text, pictures and symbols by their layers on iOS 26,
+ * where SwiftUI draws them with no view of their own.
+ */
+const REPLAY_MASKING = { maskAllText: true, maskAllImages: true, maskAllVectors: true } as const;
+
+/** The name the SDK adds its own replay under where a replay rate is set, which `REPLAY_MASKING`'s takes the place of. */
+const MOBILE_REPLAY = "MobileReplay";
+
 /** The operation a launch phase's span names, inside the app start's extension. */
 const LAUNCH_PHASE_OP = "app.start.phase";
 
@@ -181,7 +205,13 @@ function sentryOptions(enabled: boolean): Parameters<typeof init>[0] {
     // Note that every launch is traced and profiled, and nothing else: the SDK's automatic tracing is left out, so no request, screen, or press becomes a span, and no request carries a trace header.
     tracesSampleRate: 1,
     profilesSampleRate: 1,
-    integrations: (defaults) => defaults.filter(({ name }) => !UNTRACED.has(name)),
+    // Note that every session is recorded, masked whole (`REPLAY_MASKING`).
+    replaysSessionSampleRate: 1,
+    replaysOnErrorSampleRate: 1,
+    integrations: (defaults) => [
+      ...defaults.filter(({ name }) => !UNTRACED.has(name) && name !== MOBILE_REPLAY),
+      mobileReplayIntegration(REPLAY_MASKING),
+    ],
     tracePropagationTargets: [],
     _experiments: { enableStandaloneAppStartTracing: true },
   };
