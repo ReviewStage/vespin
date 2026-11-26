@@ -17,7 +17,7 @@ import {
   inboxRowsDrawn,
   inboxRowsMerged,
   inboxRowsWhere,
-  type PlacedInboxItem,
+  type PlacedInboxRow,
   threadMessagesWhere,
   threadOfRows,
 } from "@repo/host/inbox-rows";
@@ -32,15 +32,15 @@ import { useEffect, useMemo, useReducer } from "react";
 import { useInboxRowsSource } from "../host/host-provider.js";
 
 /** No write standing over any row. */
-const NONE_PENDING: ReadonlyMap<string, PlacedInboxItem> = new Map();
+const NONE_PENDING: ReadonlyMap<string, PlacedInboxRow> = new Map();
 
 /** No row drawn by a write. */
-const NONE_DRAWN: readonly PlacedInboxItem[] = [];
+const NONE_DRAWN: readonly PlacedInboxRow[] = [];
 
 /** The query a screen reads `source`'s rows by, as far as `reach` reads. */
 function rowsQuery(
   q: InitialQueryBuilder,
-  source: Collection<PlacedInboxItem, string>,
+  source: Collection<PlacedInboxRow, string>,
   reach: InboxReach,
 ) {
   const rows = q.from({ item: source });
@@ -71,9 +71,7 @@ function useStanding(source: InboxRowsSource) {
  * draws it; none while nothing reads (`reach` none) or the query has not
  * loaded yet.
  */
-export function useInboxRows(
-  reach: InboxReach | undefined,
-): readonly PlacedInboxItem[] | undefined {
+export function useInboxRows(reach: InboxReach | undefined): readonly PlacedInboxRow[] | undefined {
   const standing = useStanding(useInboxRowsSource());
   const collection = standing?.collection;
   const pending = standing?.pending ?? NONE_PENDING;
@@ -85,7 +83,7 @@ export function useInboxRows(
     return reach === undefined || rows.length === 0
       ? undefined
       : createCollection(
-          localOnlyCollectionOptions<PlacedInboxItem, string>({
+          localOnlyCollectionOptions<PlacedInboxRow, string>({
             getKey: (row) => row.id,
             initialData: [...rows],
           }),

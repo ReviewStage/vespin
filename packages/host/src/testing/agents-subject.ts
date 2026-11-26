@@ -85,6 +85,7 @@ import {
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
 import { type AgentClient, composeAgents, type PullRequestClient } from "../compose-agents.js";
 import type { FileDownloadSeam } from "../effect/seams.js";
+import type { InboxKeeping } from "../inbox-collections.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "../kept-content.js";
 import { windowFocus } from "../window-focus.js";
 import { type PolledLive, polledLive } from "./polled-live.js";

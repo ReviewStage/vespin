@@ -35,7 +35,6 @@ import {
   inboxGroup,
   inboxList,
   inboxPinnedRuns,
-  inboxRowGroups,
   inboxSearchWordsOf,
   inboxShownItems,
   isUnread,
@@ -49,6 +48,7 @@ import {
   INBOX_STATUS,
   type InboxItem,
   type InboxItemHome,
+  type InboxMessage,
 } from "@repo/features/inbox-wire";
 import {
   acknowledgedNote,
@@ -73,6 +73,7 @@ import {
   type InboxFeed,
   inboxFeedHolds,
   selectInboxFeed,
+  selectInboxHoldings,
   selectInboxReader,
   selectTaskListStatus,
   selectWorkspaces,
@@ -100,7 +101,7 @@ import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { useInboxGroupsIn } from "./inbox-groups.js";
+import { useInboxGroupsIn, useInboxWholeGroupsIn } from "./inbox-groups.js";
 import { useThreadMessages } from "./inbox-rows.js";
 import { useInboxRunFolds } from "./inbox-runs.js";
 import { useInboxShown } from "./inbox-shown.js";
@@ -109,6 +110,7 @@ import {
   SETTLE,
   type SettledThread,
   useSendsDrawn,
+  useSendsDrawnOnRows,
   useSettleUndo,
 } from "./use-thread-answer.js";
 
@@ -133,9 +135,9 @@ const CLOSE_WENT = {
 } as const;
 
 type UseChosenInboxResult = {
-  /** Every holder's items as the list reads them, each as its row (`inboxRowGroups`). */
+  /** Every holder's items as the list reads them, each as its row, the reader's sends drawn on them. */
   readonly groups: readonly InboxGroup<InboxAnyHolder>[];
-  /** The same holders' whole items, the reader's sends drawn on them, which a search reads every word of. */
+  /** The same holders' whole items, the reader's sends drawn on them, which a search reads every word of, where the document holds them; none where the phone keeps them on disk. */
   readonly whole: readonly InboxGroup<InboxAnyHolder, InboxItem>[];
   readonly chosen: Workspace | undefined;
   readonly workspaces: number;
@@ -152,8 +154,8 @@ export function useChosenInbox(reach: InboxReach = INBOX_ATTENTION): UseChosenIn
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
 
-  const whole = useSendsDrawn(useInboxGroupsIn(chosen?.id, reach));
-  const groups = useMemo(() => inboxRowGroups(whole), [whole]);
+  const groups = useSendsDrawnOnRows(useInboxGroupsIn(chosen?.id, reach));
+  const whole = useSendsDrawn(useInboxWholeGroupsIn(chosen?.id));
 
   return { groups, whole, chosen, workspaces: workspaces.length };
 }
@@ -409,25 +411,25 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
     [id],
   );
 
+  const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
   const read = useInboxGroupsIn(undefined, reach);
+  const wholeRead = useInboxWholeGroupsIn(undefined);
   const messages = useThreadMessages(id);
+  const stored = told?.stored === true;
 
-  // Note that where the Inbox is kept on disk the thread's messages are read as it opens, from their own kind, and laid on its item before the reader's sends still out are drawn after them.
+  // Note that where the Inbox is kept on disk the thread is made whole from its row and the messages kept for it, read as it opens, and stands with none until they load, so it is never looked for outside the feed; a fixture run's is the document's whole item.
   const threaded = useMemo(
     () =>
-      id === undefined || messages === undefined
-        ? read
-        : read.map((group) =>
-            group.items.some((item) => item.id === id)
-              ? {
-                  ...group,
-                  items: group.items.map((item) =>
-                    item.id === id ? { ...item, thread: messages } : item,
-                  ),
-                }
-              : group,
-          ),
-    [read, messages, id],
+      !stored
+        ? wholeRead
+        : read.flatMap((group) => {
+            const row = group.items.find((item) => item.id === id);
+
+            return row === undefined
+              ? []
+              : [{ holder: group.holder, items: [wholeOf(row, messages ?? NO_MESSAGES)] }];
+          }),
+    [stored, wholeRead, read, messages, id],
   );
 
   const groups = useSendsDrawn(threaded);
@@ -492,6 +494,16 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   };
 
   return { listed, readerId, feed, retry };
+}
+
+/** No message read yet of a thread kept on disk. */
+const NO_MESSAGES: readonly InboxMessage[] = [];
+
+/** The whole item a row and its thread's messages make, as a thread's screen draws it. */
+function wholeOf(row: InboxRow, thread: readonly InboxMessage[]): InboxItem {
+  const { digest: _digest, thread: _none, ...fields } = row;
+
+  return { ...fields, thread };
 }
 
 /** The thread `id` names among `groups`, with what holds it; none where none holds it. */

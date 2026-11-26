@@ -124,7 +124,7 @@ import {
   useWholeListRead,
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
-import { useInboxRowGroupsIn } from "../inbox/inbox-groups.js";
+import { useInboxGroupsIn } from "../inbox/inbox-groups.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useMenuPhotos, useMenuRepositoryPictures } from "../menu-photos.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
@@ -151,7 +151,7 @@ export function useWaiting(workspaceId: string | undefined): {
   readonly byTask: ReadonlyMap<string, number>;
   readonly byAgent: ReadonlyMap<string, number>;
 } {
-  const groups = useInboxRowGroupsIn(workspaceId);
+  const groups = useInboxGroupsIn(workspaceId);
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 

@@ -22,6 +22,7 @@ import { automationTriggerText } from "@repo/features/automation-list-model";
 import { readerZone } from "@repo/features/date-mention";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { entityOfDestination } from "@repo/features/entity-kind";
+import type { InboxFields } from "@repo/features/inbox-digest";
 import { inboxRowOf } from "@repo/features/inbox-digest";
 import { inboxLineKind } from "@repo/features/inbox-list-model";
 import {
@@ -265,7 +266,7 @@ export function useMentionOffer(
   const keptRows = useInboxRows(reading && told?.stored === true ? INBOX_WHOLE : undefined);
 
   const heldThreads = useMemo(
-    () =>
+    (): Readonly<Record<string, readonly InboxFields[]>> | undefined =>
       told?.stored === true
         ? Object.fromEntries(inboxHoldingsOfRows(keptRows ?? [], told).read)
         : held?.threads,

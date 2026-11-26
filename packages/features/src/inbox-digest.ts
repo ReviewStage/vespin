@@ -162,3 +162,43 @@ export function threadNeedsReader(row: InboxRowWaiting, readerId: string | undef
     inboxWaitsOn(row)?.userId === readerId
   );
 }
+
+/** The messages a digest still carries, its open ask and its tail, each once, oldest first: the thread a change is drawn over on a row alone. */
+function carriedThread(digest: InboxDigest): readonly InboxMessage[] {
+  const asks = digest.openAsk === undefined ? [] : [digest.openAsk];
+  const byId = new Map([...asks, ...digest.tail].map((message) => [message.id, message] as const));
+
+  return [...byId.values()].sort((one, other) => one.createdAt - other.createdAt);
+}
+
+/**
+ * The row as `draw` leaves its item, from a row that carries no thread of
+ * its own: the item is drawn over the thread the digest still carries, and
+ * the digest taken anew from what that leaves, so a reply or a settle draws
+ * at once; what it keeps of the thread beyond that, whether every message
+ * is a member's and whether an ask was withdrawn, is carried and extended
+ * by what the draw wrote. None where `draw` leaves the item as it was.
+ * Note that this holds only while a write or a send stands, since the
+ * service's item, which replaces it once answered, carries the thread whole.
+ */
+export function inboxRowDrawn(
+  row: InboxRow,
+  draw: (item: InboxItem) => InboxItem | undefined,
+): InboxRow | undefined {
+  const { digest, thread: _none, ...fields } = row;
+  const carried: InboxItem = { ...fields, thread: carriedThread(digest) };
+  const changed = draw(carried);
+
+  if (changed === undefined || changed === carried) return undefined;
+  const { thread, ...rest } = changed;
+  const drawn = inboxDigestOf(thread ?? []);
+
+  // Note that an empty thread holds no message to be a member's, so its first decides alone.
+  const allMember =
+    digest.tail.length === 0 ? drawn.allMember : digest.allMember && drawn.allMember;
+
+  return {
+    ...rest,
+    digest: { ...drawn, allMember, withdrawn: digest.withdrawn || drawn.withdrawn },
+  };
+}

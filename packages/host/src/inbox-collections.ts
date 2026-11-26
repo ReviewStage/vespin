@@ -27,18 +27,8 @@
  * the service's word.
  */
 
-import {
-  type InboxDigest,
-  type InboxRow,
-  inboxDigestOf,
-  inboxRowOf,
-} from "@repo/features/inbox-digest";
-import {
-  INBOX_STATUS,
-  type InboxItem,
-  type InboxMessage,
-  inboxItemSchema,
-} from "@repo/features/inbox-wire";
+import { type InboxRow, inboxRowDrawn, inboxRowOf } from "@repo/features/inbox-digest";
+import { INBOX_STATUS, type InboxItem, inboxItemSchema } from "@repo/features/inbox-wire";
 import type { Refused, RowKind, Written } from "@repo/sync";
 import { Effect, Schema, type Scope } from "effect";
 import { confirmWrite, type TxWait } from "./live-follow.js";
@@ -218,23 +208,12 @@ export function placedRow(item: InboxItem, taskId: string | null): PlacedInboxRo
   return { ...inboxRowOf(item), taskId };
 }
 
-/** The messages a row's digest still carries, its open asks and its tail, each once, oldest first, as the thread a write is drawn over. */
-function carriedThread(digest: InboxDigest): readonly InboxMessage[] {
-  const asks = digest.openAsk === undefined ? [] : [digest.openAsk];
-  const byId = new Map([...asks, ...digest.tail].map((message) => [message.id, message] as const));
-
-  return [...byId.values()].sort((one, other) => one.createdAt - other.createdAt);
-}
-
 /**
  * The row as the change leaves it, from the row as a read holds it; none
  * where it leaves it alone. A change is drawn over the thread the digest
- * still carries, and the digest taken anew from what that leaves, so a
- * reply or a settle draws at once; what the digest keeps of the thread
- * beyond it, whether every message is a member's and whether an ask was
- * withdrawn, is carried and extended by what the change wrote. Note that
- * this stands only while the write does, since the service's item, which
- * the write stands as once answered, carries the thread whole.
+ * still carries (`inboxRowDrawn`), so a reply or a settle draws at once,
+ * and the service's own item, which a write stands as once answered,
+ * carries the thread whole, so its digest is taken from all of it.
  */
 function drawnRow(change: InboxChange, row: PlacedInboxRow): PlacedInboxRow | undefined {
   if (change.kind === INBOX_CHANGE.ANSWERED) {
@@ -243,22 +222,9 @@ function drawnRow(change: InboxChange, row: PlacedInboxRow): PlacedInboxRow | un
       : undefined;
   }
 
-  const { digest, taskId, thread: _none, ...fields } = row;
-  const changed = changedItem(change, { ...fields, thread: carriedThread(digest) });
+  const drawn = inboxRowDrawn(threadRowOf(row), (item) => changedItem(change, item));
 
-  if (changed === undefined) return undefined;
-  const { thread, ...rest } = changed;
-  const drawn = inboxDigestOf(thread ?? []);
-
-  // Note that an empty thread holds no message to be a member's, so its first decides alone.
-  const allMember =
-    digest.tail.length === 0 ? drawn.allMember : digest.allMember && drawn.allMember;
-
-  return {
-    ...rest,
-    taskId,
-    digest: { ...drawn, allMember, withdrawn: digest.withdrawn || drawn.withdrawn },
-  };
+  return drawn === undefined ? undefined : { ...drawn, taskId: row.taskId };
 }
 
 /** Each item as `threadItemOf` last read it out, by the row it read, so a row that did not move reads out as the very item. */
