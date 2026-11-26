@@ -1,0 +1,35 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane C) - iOS 27.2 - D479E601-B915-45AA-99C5-5295A84F641E
+ > Flow .kbd-new-task
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "New task"... COMPLETED
+Assert that "Describe the task" is visible... COMPLETED
+Assert that "ada/relay" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot new-task-sheet... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text Let a workspace owner revoke a pending invite.... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Tap on "ada/relay"... FAILED
+App crashed (SIGABRT)
+
+Element not found: Text matching regex: ada/relay
+
+Element with Text matching regex: ada/relay not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjpk10921/iphone-light-new-task-3/2026-11-25_163639
