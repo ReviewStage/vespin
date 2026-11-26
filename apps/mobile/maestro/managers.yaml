@@ -66,7 +66,8 @@ env:
 - assertVisible: "1 reacted with :tada:"
 - assertVisible: "1 reacted with :eyes:"
 # Its long press offers Add reaction, 👍 and 👎 first, then More emoji…,
-# which opens the picker over every emoji Slack names, searched by name.
+# which opens the app's one icon picker over every emoji, Quick reactions
+# leading, searched by an emoji's Unicode name or a name Slack gives it.
 - longPressOn: "On it. The invitations agent has its pull request open.*"
 - tapOn: "Add reaction"
 - assertVisible: "Thumbs down"
@@ -76,6 +77,9 @@ env:
 - extendedWaitUntil:
     visible: "Search emoji"
     timeout: 10000
+- assertVisible: "Quick reactions"
+- waitForAnimationToEnd
+- takeScreenshot: managers-reaction-picker-open
 - tapOn: "Search emoji"
 - inputText: "heart"
 - extendedWaitUntil:
@@ -84,7 +88,7 @@ env:
 - waitForAnimationToEnd
 - takeScreenshot: managers-reaction-picker
 # A pick gives the reaction and puts the picker away, its chip standing lit.
-- tapOn: "heart"
+- tapOn: "red heart"
 - extendedWaitUntil:
     visible: "You reacted with :heart:"
     timeout: 10000

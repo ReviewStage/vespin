@@ -8,10 +8,12 @@ import {
   MANAGER_CHAT_REACTION,
   type ManagerChatReactionCount,
   type ManagerChatReactionPress,
+  reactionOfEmoji,
 } from "@repo/features/manager-chat-live";
 import {
   CHAT_ADD_REACTION_WORDS,
   CHAT_EDIT_WORDS,
+  CHAT_REACTION_PICKER_WORDS,
   CHAT_THREAD_WORDS,
   chatReactionEmoji,
   chatReactionWords,
@@ -19,6 +21,7 @@ import {
   MANAGER_CHAT_REACTION_FACES,
 } from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
+import type { EmojiGroup } from "@repo/features/emoji-model";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { Predicate } from "effect";
@@ -70,6 +73,7 @@ import {
   TurnActs,
   useCopyWords,
 } from "./held-menu.js";
+import { emojiIndex, IconPickerEmojiSheet } from "./icon-picker-emoji.js";
 import { InlineHost } from "./inline-host.js";
 import { ROW_ACTION_TONE } from "./list-row.js";
 import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
@@ -80,7 +84,6 @@ import { LoaderImage, PICTURE_FIT, type PictureRef, usePictureRef } from "./pict
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import { ReactionChips } from "./reaction-chips.js";
-import { ReactionPickerSheet } from "./reaction-picker.js";
 import { CHOICE_MARK, type LongPressGroup } from "./row-menu-model.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -329,6 +332,18 @@ const MORE_EMOJI = "More emoji…";
 
 /** The reactions a message's Add reaction offers first, in the order they stand: 👍, then 👎. */
 const OFFERED_REACTIONS = Object.values(MANAGER_CHAT_REACTION);
+
+/** The group 👍 and 👎 lead the picker over every emoji in, as they lead the panel's. */
+const QUICK_REACTIONS: EmojiGroup = {
+  name: CHAT_REACTION_PICKER_WORDS.QUICK,
+  // Note that the lead is never searched, since a search lists what the table finds, so its emoji carry no words to find them by.
+  emojis: OFFERED_REACTIONS.map((kind) => ({
+    emoji: MANAGER_CHAT_REACTION_FACES[kind].emoji,
+    name: MANAGER_CHAT_REACTION_FACES[kind].name,
+    terms: [],
+    words: [],
+  })),
+};
 
 /** Whether the reader gave `kind` among `reactions`. */
 function reactedWith(reactions: readonly ManagerChatReactionCount[], kind: string): boolean {
@@ -2179,18 +2194,24 @@ export function AgentTranscript({
         />
       ) : null}
       {react === undefined ? null : (
-        <ReactionPickerSheet
+        <IconPickerEmojiSheet
+          title={CHAT_ADD_REACTION_WORDS}
           presented={picked !== undefined}
-          given={
+          lead={QUICK_REACTIONS}
+          chosen={
             new Set(
-              (picked?.reactions ?? []).filter((each) => each.reacted).map((each) => each.kind),
+              (picked?.reactions ?? [])
+                .filter((each) => each.reacted)
+                .map((each) => chatReactionEmoji(each)),
             )
           }
-          onPick={({ emoji, name }, given) => {
+          onPick={(emoji) => {
             setPicking(undefined);
+            const kept = reactionOfEmoji(emojiIndex(), emoji);
 
-            if (picking !== undefined)
-              react({ messageId: picking, kind: name, reacted: !given, emoji });
+            if (picking === undefined || kept === undefined) return;
+            const given = reactedWith(picked?.reactions ?? [], kept.name);
+            react({ messageId: picking, kind: kept.name, reacted: !given, emoji: kept.emoji });
           }}
           onDismiss={() => setPicking(undefined)}
         />
