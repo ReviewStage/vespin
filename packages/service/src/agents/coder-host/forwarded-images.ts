@@ -9,6 +9,8 @@ import {
 import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import type { InboxImageType } from "@repo/features/inbox-wire";
 import { Effect, Option, Result } from "effect";
+import { attachmentBytes } from "../../storage/attachment-bytes.js";
+import type { BlobStoreFailure } from "../../storage/blob-store.js";
 
 /**
  * forwarded-images.ts -- pictures one agent hands another by their attachment ids, read as the forwarder may read them and made the files a Start or a steer carries.
@@ -86,7 +88,7 @@ export function forwardedImages(
   ids: readonly string[],
 ): Effect.Effect<
   Result.Result<readonly AgentAttachment[], ForwardedImageRefusal>,
-  StoreFailure,
+  StoreFailure | BlobStoreFailure,
   DatabaseServices
 > {
   return Effect.gen(function* () {
@@ -103,10 +105,14 @@ export function forwardedImages(
         return Result.fail({ kind: FORWARDED_IMAGE_REFUSAL.UNREACHED, id });
       }
 
-      const { contentType, bytes } = picture.value;
+      const { contentType, body } = picture.value;
 
       if (isPlayedType(contentType))
         return Result.fail({ kind: FORWARDED_IMAGE_REFUSAL.PLAYED, id });
+      const read = yield* attachmentBytes(body);
+
+      if (Option.isNone(read)) return Result.fail({ kind: FORWARDED_IMAGE_REFUSAL.UNREACHED, id });
+      const bytes = read.value;
 
       if (bytes.byteLength > AGENT_BOUNDS.MAX_IMAGE_BYTES) {
         return Result.fail({

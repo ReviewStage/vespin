@@ -58,16 +58,21 @@ export const PRODUCT_EVENT = {
   ROWS_DROPPED: "rows:dropped",
   /** A reply sent on an Inbox thread stood in its thread, counted once a send by how long that took from the press, on a rung, and whether it carried pictures. */
   REPLY_DRAWN: "reply:drawn",
-  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was held by long tasks (50 ms or more) before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew. */
+  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was held by long tasks (50 ms or more) before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew; and, for an open a list's row picked, how many row picks reached JavaScript since the last open, on a rung of `productLoadCount`, and how long from the touch that got through to the page's first render, on a rung of `productOpenMilliseconds`: never where a touch landed. */
   OPEN_DRAWN: "open:drawn",
   /** A tab of the iOS app chosen for the first time since launch, Tasks, counted once a launch by how long from the tap that chose it the app took to hear the switch, to draw the tab's first frame, and to draw its rows, each on a rung of `productOpenMilliseconds`, and its kind: never what it shows. */
   TAB_DRAWN: "tab:drawn",
+  /** The iOS app brought back from the background, counted once a return by its first minute: how many times the JS thread was held over 50 ms, for how long in all, and its longest hold, each on a rung, how many documents the host delivered to the screens meanwhile, and how long the app was away, on rungs; never what ran or what was delivered. */
+  RESUME_LOAD: "resume:load",
   /** A launch of the iOS app begun in front, counted once its first three minutes are over, or as it leaves the front before then: how many times the JS thread was held over 50 ms and for how long in all, and how many tasks outside the live list were read one by one and drawn and how long their drawing took, each on a rung, and whether the window ran its whole length; never what was read. */
   LAUNCH_LOAD: "launch:load",
   /** A page an agent showed, opened on the iOS app, counted once an open by how long it took to read its HTML and to draw it, each on a rung of `productOpenMilliseconds`, whether its opener named its version or it waited on the task's pages for the newest, and whether it was the first page since launch. */
   PAGE_SHOWN: "page:shown",
   /** A picture an agent showed, drawn on the iOS app, counted once a read by how long it took from the page asking for it to its file in hand, on a rung of `productOpenMilliseconds`, whether it came from the phone's own copy or was read through the service, its kind, and its size on a rung. */
   PICTURE_SHOWN: "picture:shown",
+  STANDING_DRAWN: "standing:drawn",
+  /** A file refused for being over the size its kind may be, counted once a file by its kind and its size on a rung: never its name, its type, or where it was handed. */
+  ATTACHMENT_TOO_LARGE: "attachment:too_large",
 } as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT)[keyof typeof PRODUCT_EVENT];
@@ -93,9 +98,12 @@ export const PRODUCT_SURFACE_EVENT = {
   REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
   OPEN_DRAWN: PRODUCT_EVENT.OPEN_DRAWN,
   TAB_DRAWN: PRODUCT_EVENT.TAB_DRAWN,
+  RESUME_LOAD: PRODUCT_EVENT.RESUME_LOAD,
   LAUNCH_LOAD: PRODUCT_EVENT.LAUNCH_LOAD,
   PAGE_SHOWN: PRODUCT_EVENT.PAGE_SHOWN,
   PICTURE_SHOWN: PRODUCT_EVENT.PICTURE_SHOWN,
+  STANDING_DRAWN: PRODUCT_EVENT.STANDING_DRAWN,
+  ATTACHMENT_TOO_LARGE: PRODUCT_EVENT.ATTACHMENT_TOO_LARGE,
 } as const;
 
 export type ProductSurfaceEventName =
@@ -135,6 +143,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   LAUNCH_SECONDS: "launch_seconds",
   DRAWN_MS: "drawn_ms",
   REPLY_KIND: "reply_kind",
+  STANDING_FIELD: "standing_field",
   STANDING_SECONDS: "standing_seconds",
   EVALUATED_SECONDS: "evaluated_seconds",
   ACCOUNT_SECONDS: "account_seconds",
@@ -169,6 +178,12 @@ export const PRODUCT_EVENT_PROPERTY = {
   COLD_READS: "cold_reads",
   COLD_READ_MS: "cold_read_ms",
   LOAD_WINDOW: "load_window",
+  KIND: "kind",
+  SIZE_BUCKET: "size_bucket",
+  TAP_MS: "tap_ms",
+  PRESSES: "presses",
+  LONGEST_TASK_MS: "longest_task_ms",
+  AWAY_SECONDS: "away_seconds",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -407,6 +422,7 @@ export const PRODUCT_EXPERIMENT = {
   MOVE_AGENTS: "move-agents",
   CURSOR: "cursor",
   MANAGERS: "managers",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   MANAGER_ACTS_FOR_ASKER: "manager-acts-for-asker",
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   STARTER_TASKS: "starter-tasks",
@@ -820,6 +836,59 @@ export function productPictureBytes(bytes: number): ProductPictureBytes {
   );
 }
 
+/** Which of a task's standing chips a press changed: its status, its priority, or who it is assigned to; never the value it took. */
+export const PRODUCT_STANDING_FIELD = {
+  STATUS: "status",
+  PRIORITY: "priority",
+  ASSIGNEE: "assignee",
+} as const;
+
+export type ProductStandingField =
+  (typeof PRODUCT_STANDING_FIELD)[keyof typeof PRODUCT_STANDING_FIELD];
+
+/** What kind of file was refused for its size, by what it is and never what it was called. */
+export const PRODUCT_ATTACHMENT_KIND = {
+  IMAGE: "image",
+  PDF: "pdf",
+  TEXT: "text",
+  VIDEO: "video",
+  AUDIO: "audio",
+  OTHER: "other",
+} as const;
+
+export type ProductAttachmentKind =
+  (typeof PRODUCT_ATTACHMENT_KIND)[keyof typeof PRODUCT_ATTACHMENT_KIND];
+
+/** The rungs a refused file's size travels on, set at the limits a larger upload may take (7 MB an image, 25 MB and 100 MB a file, 250 MB a video), so no size itself travels. */
+export const PRODUCT_ATTACHMENT_SIZE = {
+  UNDER_3MB: "under_3mb",
+  FROM_3_TO_7MB: "3_to_7mb",
+  FROM_7_TO_25MB: "7_to_25mb",
+  FROM_25_TO_100MB: "25_to_100mb",
+  FROM_100_TO_250MB: "100_to_250mb",
+  OVER_250MB: "over_250mb",
+} as const;
+
+export type ProductAttachmentSize =
+  (typeof PRODUCT_ATTACHMENT_SIZE)[keyof typeof PRODUCT_ATTACHMENT_SIZE];
+
+/** Each rung under its bound in bytes, the smallest first; a megabyte is a million bytes, as the bounds are stated. */
+const PRODUCT_ATTACHMENT_SIZE_LADDER: readonly (readonly [number, ProductAttachmentSize])[] = [
+  [3_000_000, PRODUCT_ATTACHMENT_SIZE.UNDER_3MB],
+  [7_000_000, PRODUCT_ATTACHMENT_SIZE.FROM_3_TO_7MB],
+  [25_000_000, PRODUCT_ATTACHMENT_SIZE.FROM_7_TO_25MB],
+  [100_000_000, PRODUCT_ATTACHMENT_SIZE.FROM_25_TO_100MB],
+  [250_000_000, PRODUCT_ATTACHMENT_SIZE.FROM_100_TO_250MB],
+];
+
+/** The rung a file of `bytes` stands on; one past the last bound, or a size that is no number, the last. */
+export function productAttachmentSize(bytes: number): ProductAttachmentSize {
+  return (
+    PRODUCT_ATTACHMENT_SIZE_LADDER.find(([bound]) => bytes < bound)?.[1] ??
+    PRODUCT_ATTACHMENT_SIZE.OVER_250MB
+  );
+}
+
 interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: string;
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: ProductSessionCountBucket;
@@ -843,6 +912,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: ProductDrawnMilliseconds;
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: ProductReplyKind;
+  [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: ProductStandingField;
   [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.ACCOUNT_SECONDS]: ProductLaunchSeconds;
@@ -877,6 +947,12 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.COLD_READS]: ProductLoadCount;
   [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: ProductLoadMilliseconds;
   [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: ProductLoadWindow;
+  [PRODUCT_EVENT_PROPERTY.KIND]: ProductAttachmentKind;
+  [PRODUCT_EVENT_PROPERTY.SIZE_BUCKET]: ProductAttachmentSize;
+  [PRODUCT_EVENT_PROPERTY.TAP_MS]: ProductOpenMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.PRESSES]: ProductLoadCount;
+  [PRODUCT_EVENT_PROPERTY.LONGEST_TASK_MS]: ProductLoadMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.AWAY_SECONDS]: ProductElapsedSeconds;
 }
 
 /**
@@ -914,6 +990,10 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.LONG_TASK_MS
   | typeof PRODUCT_EVENT_PROPERTY.COLD_READS
   | typeof PRODUCT_EVENT_PROPERTY.COLD_READ_MS
+  | typeof PRODUCT_EVENT_PROPERTY.TAP_MS
+  | typeof PRODUCT_EVENT_PROPERTY.PRESSES
+  | typeof PRODUCT_EVENT_PROPERTY.LONGEST_TASK_MS
+  | typeof PRODUCT_EVENT_PROPERTY.AWAY_SECONDS
 >;
 
 /** Every value each enumerable property may ever hold. */
@@ -933,6 +1013,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.MIRROR_STEP]: Object.values(MIRROR_STEP),
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: Object.values(MIRROR_FAILURE),
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
+  [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: Object.values(PRODUCT_STANDING_FIELD),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
   [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: Object.values(PRODUCT_LAUNCHED_IN),
@@ -947,6 +1028,8 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: Object.values(PRODUCT_PICTURE_KIND),
   [PRODUCT_EVENT_PROPERTY.PICTURE_BYTES]: Object.values(PRODUCT_PICTURE_BYTES),
   [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: Object.values(PRODUCT_LOAD_WINDOW),
+  [PRODUCT_EVENT_PROPERTY.KIND]: Object.values(PRODUCT_ATTACHMENT_KIND),
+  [PRODUCT_EVENT_PROPERTY.SIZE_BUCKET]: Object.values(PRODUCT_ATTACHMENT_SIZE),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
 /**
@@ -1019,6 +1102,14 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.COLD_READ_MS,
     PRODUCT_EVENT_PROPERTY.LOAD_WINDOW,
   ],
+  [PRODUCT_EVENT.RESUME_LOAD]: [
+    PRODUCT_EVENT_PROPERTY.LONG_TASKS,
+    PRODUCT_EVENT_PROPERTY.LONG_TASK_MS,
+    PRODUCT_EVENT_PROPERTY.LONGEST_TASK_MS,
+    PRODUCT_EVENT_PROPERTY.DELIVERIES,
+    PRODUCT_EVENT_PROPERTY.AWAY_SECONDS,
+    PRODUCT_EVENT_PROPERTY.LOAD_WINDOW,
+  ],
   [PRODUCT_EVENT.PAGE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.READ_MS,
     PRODUCT_EVENT_PROPERTY.SHOWN_MS,
@@ -1029,6 +1120,14 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.READ_MS,
     PRODUCT_EVENT_PROPERTY.PICTURE_FROM,
     PRODUCT_EVENT_PROPERTY.PICTURE_KIND,
+  ],
+  [PRODUCT_EVENT.STANDING_DRAWN]: [
+    PRODUCT_EVENT_PROPERTY.DRAWN_MS,
+    PRODUCT_EVENT_PROPERTY.STANDING_FIELD,
+  ],
+  [PRODUCT_EVENT.ATTACHMENT_TOO_LARGE]: [
+    PRODUCT_EVENT_PROPERTY.KIND,
+    PRODUCT_EVENT_PROPERTY.SIZE_BUCKET,
   ],
 } as const satisfies { [Name in ProductEventName]: readonly ProductEventProperty[] };
 
@@ -1071,9 +1170,12 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
     PRODUCT_EVENT_PROPERTY.BUSY_MS,
     PRODUCT_EVENT_PROPERTY.PAGE_DATA,
+    PRODUCT_EVENT_PROPERTY.TAP_MS,
+    PRODUCT_EVENT_PROPERTY.PRESSES,
   ],
   [PRODUCT_EVENT.TAB_DRAWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.LAUNCH_LOAD]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
+  [PRODUCT_EVENT.RESUME_LOAD]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PAGE_SHOWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PICTURE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.PICTURE_BYTES,
@@ -1305,6 +1407,10 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.LONG_TASK_MS]: loadMillisecondsReader,
   [PRODUCT_EVENT_PROPERTY.COLD_READS]: loadCountReader,
   [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: loadMillisecondsReader,
+  [PRODUCT_EVENT_PROPERTY.TAP_MS]: openReader,
+  [PRODUCT_EVENT_PROPERTY.PRESSES]: loadCountReader,
+  [PRODUCT_EVENT_PROPERTY.LONGEST_TASK_MS]: loadMillisecondsReader,
+  [PRODUCT_EVENT_PROPERTY.AWAY_SECONDS]: elapsedReader,
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE]: experimentScopeReader,
 };
 

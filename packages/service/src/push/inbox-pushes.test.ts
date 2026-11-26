@@ -22,7 +22,7 @@ import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { postToInbox } from "../agents/coder-host/inbox.js";
 import { TURN_FAILURE } from "../core.js";
-import { answerInboxAsk, taskInboxItems } from "../inbox/inbox-store.js";
+import { agentInboxItems, answerInboxAsk, taskInboxItems } from "../inbox/inbox-store.js";
 import { endedAt } from "../testing/agent-turns.js";
 import { recordingApnsSender } from "../testing/apns-fake.js";
 import { APNS_PUSH_TYPE } from "./apns.js";
@@ -57,8 +57,8 @@ const openUser = Effect.gen(function* () {
   return userId;
 });
 
-/** A phone registered under the account, its token synthetic hex as Apple spells one. */
-const phoneOf = (userId: string) =>
+/** A phone registered under the account, its token synthetic hex as Apple spells one, by a build that named the API version given, or none. */
+const phoneOf = (userId: string, apiVersion?: number) =>
   Effect.gen(function* () {
     const phone = {
       token: randomUUID().replaceAll("-", "").repeat(2),
@@ -66,7 +66,7 @@ const phoneOf = (userId: string) =>
       bundleId: BUNDLE_ID,
     };
 
-    yield* registerPushDevice(userId, phone);
+    yield* registerPushDevice(userId, apiVersion === undefined ? phone : { ...phone, apiVersion });
 
     return phone;
   });
@@ -361,6 +361,56 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
 
         assert.equal(yield* walkAway, 1);
         assert.deepEqual(alertedTokens(sender), [askersPhone.token]);
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
+  it.effect(
+    "a Manager's thread pushes the member it waits on at a phone whose build opens a thread on no task, and opens that thread",
+    () => {
+      const sender = recordingApnsSender();
+
+      return Effect.gen(function* () {
+        const starter = yield* openUser;
+        const asker = yield* openUser;
+        const { workspaceId } = yield* startTask(starter, { name: "Workspace" });
+        yield* joinWorkspace(workspaceId, asker);
+
+        const started = yield* createAgent(starter, {
+          taskId: null,
+          workspaceId,
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          repository: null,
+          descriptionSnapshot: null,
+          prompt: "Watch the release.",
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+          kind: AGENT_KIND.MANAGER,
+        });
+
+        const { agent } = Option.getOrThrow(started);
+        const reads = yield* phoneOf(asker, 9);
+        yield* phoneOf(asker, 8);
+        yield* phoneOf(asker);
+
+        const manager = {
+          userId: starter,
+          taskId: null,
+          agentId: agent.id,
+          organizationId: workspaceId,
+          conversationId: agent.conversationId,
+        };
+
+        yield* postToInbox(manager, decide("cut-release", asker), noSandbox);
+
+        assert.deepEqual(alertedTokens(sender), [reads.token]);
+        const [item] = yield* agentInboxItems(manager);
+
+        assert.deepEqual(
+          inboxPushResponseOf(inboxPushOf(sender.sent[0]?.payload), { actionId: "" }),
+          { route: `/inbox/${item?.id}` },
+        );
       }).pipe(Effect.provide(sender.layer));
     },
   );

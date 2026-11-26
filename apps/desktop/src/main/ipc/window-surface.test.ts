@@ -64,6 +64,7 @@ function fixture() {
         focusIfExpanded: (displayId) => heard.push(`focus:${displayId}`),
       },
       requestMicrophone: async () => MICROPHONE_STATUS.GRANTED,
+      watchMicrophoneUntilActive: () => void heard.push("watch microphone"),
       microphoneRoute: () => ROUTE,
       microphoneRouteWatcher: () => ({
         start: () => true,

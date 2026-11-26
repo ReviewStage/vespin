@@ -1,6 +1,7 @@
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
+  MANAGER_FACE_PICK_COLORS,
   type ManagerFace as ManagerFaceValue,
 } from "@repo/features/manager-face";
 import {
@@ -18,13 +19,17 @@ import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**
- * manager-faces.tsx -- every character in every color at a row's and a
- * message's size, at rest and working, a row of each character so the
- * colors line up; and a few faces beside the Managers' names, as the sidebar
- * and the chat will draw them, and among words, in a mention's chip.
+ * manager-faces.tsx -- every character, and a few emoji, in every color a
+ * face is given in, at a row's and a message's size, at rest and working, a
+ * row of each so the colors line up; and a few faces beside the Managers'
+ * names, as the sidebar and the chat draw them, and among words, in a
+ * mention's chip.
  */
 
-/** The faces beside their names, each a character in a different color, two of them at work. */
+/** A few emoji a face may wear in its character's place, a row of each in the grid. */
+const EMOJI = ["🚀", "🦊", "📚", "🧪"] as const;
+
+/** The faces beside their names, each a character or an emoji in a different color, some of them at work. */
 const MANAGERS = [
   {
     name: "Release train",
@@ -46,13 +51,27 @@ const MANAGERS = [
     face: { character: MANAGER_FACE_CHARACTER.MUG, color: MANAGER_FACE_COLOR.GREEN },
     working: false,
   },
+  {
+    name: "Launch",
+    face: { character: MANAGER_FACE_CHARACTER.GHOST, color: MANAGER_FACE_COLOR.TEAL, emoji: "🚀" },
+    working: true,
+  },
+  {
+    name: "Research",
+    face: {
+      character: MANAGER_FACE_CHARACTER.GHOST,
+      color: MANAGER_FACE_COLOR.ORANGE,
+      emoji: "📚",
+    },
+    working: false,
+  },
 ] as const satisfies readonly {
   name: string;
   face: ManagerFaceValue;
   working: boolean;
 }[];
 
-/** Every character in every color at `size`, a row to each character. */
+/** Every character and each emoji in every color a face is given in at `size`, a row to each. */
 function FaceGrid({
   size,
   working,
@@ -64,8 +83,20 @@ function FaceGrid({
     <Stack gap={GAP.CONTROL}>
       {Object.values(MANAGER_FACE_CHARACTER).map((character) => (
         <Inline key={character} gap={GAP.CONTROL}>
-          {Object.values(MANAGER_FACE_COLOR).map((color) => (
+          {MANAGER_FACE_PICK_COLORS.map((color) => (
             <ManagerFace key={color} face={{ character, color }} size={size} working={working} />
+          ))}
+        </Inline>
+      ))}
+      {EMOJI.map((emoji) => (
+        <Inline key={emoji} gap={GAP.CONTROL}>
+          {MANAGER_FACE_PICK_COLORS.map((color) => (
+            <ManagerFace
+              key={color}
+              face={{ character: MANAGER_FACE_CHARACTER.GHOST, color, emoji }}
+              size={size}
+              working={working}
+            />
           ))}
         </Inline>
       ))}

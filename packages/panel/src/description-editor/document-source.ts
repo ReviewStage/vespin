@@ -3,7 +3,7 @@ import { BulletList, TaskList } from "@tiptap/extension-list";
 import { MarkdownManager } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { diffArrays } from "diff";
-import type { ChipsRead } from "./contract.js";
+import type { ChipsRead, RawDrawer } from "./contract.js";
 import { withMentions } from "./mention-node.js";
 
 /**
@@ -65,6 +65,9 @@ export type BlankEnds = (typeof BLANK_ENDS)[keyof typeof BLANK_ENDS];
 /** The blocks a bullet list opens as, a run of plain items or of task items (`tokenSources`). */
 const LIST_BLOCKS = new Set([BulletList.name, TaskList.name]);
 
+/** The class the locked block wears, drawn or as its words. */
+const RAW_BLOCK_CLASS = "description-raw-block";
+
 /** The locked block a source the editor cannot draw faithfully opens as, drawn as its words, as the read view draws them (`@repo/ui`'s note). */
 export const RawBlock = Node.create({
   name: "rawBlock",
@@ -75,11 +78,34 @@ export const RawBlock = Node.create({
   parseHTML: () => [{ tag: "p[data-raw-block]" }, { tag: "pre[data-raw-block]" }],
   renderHTML: ({ node }) => [
     "p",
-    { "data-raw-block": "", class: "description-raw-block", contenteditable: "false" },
+    { "data-raw-block": "", class: RAW_BLOCK_CLASS, contenteditable: "false" },
     String(node.attrs.source).trimEnd(),
   ],
   renderMarkdown: (node: JSONContent) => String(node.attrs?.source ?? "").trimEnd(),
 });
+
+/**
+ * The locked block, drawn by the panel where it draws one (`drawRaw`) as the
+ * read view draws its source, a pull request's description's HTML as GitHub
+ * renders it, and as its words where it draws none.
+ */
+export function rawBlockNode(drawRaw: RawDrawer | undefined): typeof RawBlock {
+  if (drawRaw === undefined) return RawBlock;
+
+  return RawBlock.extend({
+    addNodeView() {
+      return ({ node }) => {
+        const dom = document.createElement("div");
+        dom.contentEditable = "false";
+        dom.dataset.rawBlock = "";
+        dom.className = RAW_BLOCK_CLASS;
+        const undraw = drawRaw(dom, String(node.attrs.source));
+
+        return { dom, ignoreMutation: () => true, destroy: undraw };
+      };
+    },
+  });
+}
 
 /** One top-level token of the lexer TipTap's Markdown reads with. */
 type LexedToken = ReturnType<MarkdownManager["instance"]["lexer"]>[number];

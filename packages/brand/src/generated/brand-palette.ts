@@ -87,10 +87,14 @@ export const BRAND_PALETTE = {
 // the dark: the same values @repo/ui's manager-face.css names
 // --ui-color-manager-face-*, which the iOS app's faces are filled with.
 export const MANAGER_FACE_FILL = {
-  yellow: { LIGHT: "#f9c74f", DARK: "#ffd882" },
-  green: { LIGHT: "#8fd47a", DARK: "#a6e191" },
-  blue: { LIGHT: "#6cc4f5", DARK: "#83d1fb" },
-  pink: { LIGHT: "#f78fcb", DARK: "#fda7dc" },
-  purple: { LIGHT: "#b08cff", DARK: "#c5a6ff" },
-  peach: { LIGHT: "#ff9a6c", DARK: "#ffb08a" },
+  yellow: { LIGHT: "#e7ce8d", DARK: "#ffe7a5" },
+  green: { LIGHT: "#8ac893", DARK: "#a7e3ad" },
+  blue: { LIGHT: "#86b9e9", DARK: "#aad3ff" },
+  pink: { LIGHT: "#ee8ea0", DARK: "#ffabbc" },
+  purple: { LIGHT: "#ce8fdc", DARK: "#e9abf5" },
+  peach: { LIGHT: "#eab08a", DARK: "#ffcba3" },
+  red: { LIGHT: "#f08f89", DARK: "#ffaba3" },
+  orange: { LIGHT: "#eab08a", DARK: "#ffcba3" },
+  teal: { LIGHT: "#8ecbd0", DARK: "#ace5ea" },
+  gray: { LIGHT: "#b6b6ba", DARK: "#cfcfd1" },
 } as const;

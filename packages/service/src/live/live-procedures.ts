@@ -240,7 +240,7 @@ import {
   pathUuid,
   type UserIdResolver,
 } from "../http/http-effect.js";
-import { accountMiddleware, hosted } from "../orpc/base.js";
+import { accountMiddleware, heldReadMiddleware, hosted } from "../orpc/base.js";
 import { type LiveTopics, ownMovedKeys, syncMovedOf } from "../sync/live-query.js";
 import { NO_TOPICS } from "../sync/watch.js";
 import { pageParents, pageTokenOf, readsPages } from "./live-pages.js";
@@ -1048,7 +1048,7 @@ function answerBoundRead<Read extends AnyLiveRead>(read: BoundLiveRead<Read>) {
 
 /** The live reads, each to a signed-in caller who is the account it names. */
 export function liveProcedures(seams: LiveProcedureSeams) {
-  const signedIn = hosted.live.use(accountMiddleware(seams.resolveUserId));
+  const signedIn = hosted.live.use(heldReadMiddleware).use(accountMiddleware(seams.resolveUserId));
   const answerWorkspaces = answerBoundRead(workspacesRead);
 
   return {

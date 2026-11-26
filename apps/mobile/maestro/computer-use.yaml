@@ -54,8 +54,16 @@ env:
     id: "picture-viewer-close"
 # The read opens on its body: what it was given, what it answered, and the
 # window it kept, the last thing in its body, over the click's row.
+# Note that the transcript holds its newest row in place, so a row opened
+# above it grows upward and its body's head may stand over the screen's top:
+# its Input is scrolled to rather than asserted where it lands.
 - tapOn: "Looked at.*"
-- assertVisible: "Input"
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Input"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
 - runFlow:
     file: subflows/scroll-in.yaml
     env:

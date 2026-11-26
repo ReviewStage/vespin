@@ -36,7 +36,11 @@ import {
   linkWorkspaceStep,
   pullRequestAddressOf,
 } from "@repo/features/link-grammar";
-import { managerChatView } from "@repo/features/manager-chat-view";
+import {
+  CHAT_LANDING,
+  chatMessageLanding,
+  managerChatView,
+} from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
@@ -141,6 +145,7 @@ import {
   appsDockMediaIds,
   useAgentDock,
 } from "../agents/agent-dock.js";
+import { useMessageLink } from "../agents/message-link.js";
 import {
   useAgentMedia,
   useAgentPullRequests,
@@ -173,7 +178,7 @@ import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
   useOpenedSuggestion,
-  useSuggestionAddress,
+  usePlaceAddress,
   useSuggestionLooks,
   useSuggestionSender,
 } from "../agents/use-suggestions.js";
@@ -190,6 +195,7 @@ import {
   usePullRequestsRead,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { rigBusyRender } from "../rig-busy-render.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -268,23 +274,6 @@ function useAgentAddress(
       : { kind: LINK_DESTINATION.AGENT, taskId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
-}
-
-/**
- * A message's address on vespin.dev under its agent, as the panel's Copy
- * link names one (`agentMessagePlace`), by the message's id; none before the
- * agent's workspace is known.
- */
-function useMessageLink(
-  agentId: string,
-  workspaceId: string | undefined,
-): ((messageId: string) => string | undefined) | undefined {
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const step = linkWorkspaceStep(workspaceId, workspaces);
-
-  if (step === undefined) return undefined;
-
-  return (messageId) => linkOf({ kind: LINK_DESTINATION.MESSAGE, agentId, messageId }, step);
 }
 
 /** An automation's address on vespin.dev, under the agent's workspace, which opens in Safari, since the phone draws no Automations; none before the workspace is known. */
@@ -541,8 +530,7 @@ const NONE_SHOWN: readonly TranscriptItem[] = [];
  * queue and its edits ask first: the one place the words typed live, so a
  * keystroke draws the composer alone, never the transcript over it. Note
  * that Edit on a sent line in the transcript reaches it through `editMessage`,
- * and Reply on a chat message through `replyTo`, which it keeps pointed at
- * its own.
+ * which it keeps pointed at its own.
  */
 function AgentComposerArea({
   id,
@@ -552,7 +540,6 @@ function AgentComposerArea({
   messageSent,
   suggested,
   editMessage,
-  replyTo,
   undeliveredActs,
   approvals,
   onShowWaiting,
@@ -575,7 +562,6 @@ function AgentComposerArea({
   readonly messageSent: Parameters<typeof useAgentComposer>[4];
   readonly suggested: Parameters<typeof useAgentComposer>[5];
   readonly editMessage: RefObject<AgentComposer["editMessage"] | undefined>;
-  readonly replyTo: RefObject<AgentComposer["reply"] | undefined>;
   readonly undeliveredActs: RefObject<UndeliveredActs | undefined>;
   readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
   readonly onShowWaiting: (() => void) | undefined;
@@ -599,21 +585,14 @@ function AgentComposerArea({
 }) {
   const threadsLine = useAgentThreadsLine(id);
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
+  rigBusyRender(composer.words !== "");
   const dictated = useDictation(composer.words, composer.onWords);
   // Note that one pick holds the newest refusal, a send's, a dictation's or the page's, so an older one never hides why the last act did not go.
   const said = useNewestNote([composer.note, dictated.note, note]);
   useEffect(() => {
     editMessage.current = composer.editMessage;
-    replyTo.current = composer.reply;
     undeliveredActs.current = composer.undelivered;
-  }, [
-    editMessage,
-    composer.editMessage,
-    replyTo,
-    composer.reply,
-    undeliveredActs,
-    composer.undelivered,
-  ]);
+  }, [editMessage, composer.editMessage, undeliveredActs, composer.undelivered]);
 
   return (
     <>
@@ -650,7 +629,11 @@ function AgentComposerArea({
  */
 function agentAddMenu(composer: AgentComposer, submenus: readonly BarMenu[]): ComposerMenu {
   return {
-    actions: [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
+    // Note that Photos steps aside while the field holds a Manager chat message's words to save, which takes no file.
+    actions:
+      composer.attach === undefined
+        ? []
+        : [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
     submenus,
   };
 }
@@ -749,18 +732,29 @@ export function AgentScreen() {
     suggestedBy,
     button,
     brief,
+    message,
   } = useLocalSearchParams<{
     id: string;
     suggestedBy?: string;
     button?: string;
     /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
     brief?: string;
+    /** The message a link names, which the page lands on (`IOS_AGENT_MESSAGE_PARAM`). */
+    message?: string;
   }>();
 
   const listed = useTaskListRow(useTaskListCollections().agents, id || undefined);
   useOpenDrawnCount(PRODUCT_SURFACE.AGENT, listed !== undefined);
 
-  return <AgentConversation id={id} suggestedBy={suggestedBy} button={button} brief={brief} />;
+  return (
+    <AgentConversation
+      id={id}
+      suggestedBy={suggestedBy}
+      button={button}
+      brief={brief}
+      message={message}
+    />
+  );
 }
 
 /**
@@ -777,12 +771,15 @@ const AgentConversation = memo(function AgentConversation({
   suggestedBy,
   button,
   brief,
+  message,
 }: {
   readonly id: string;
   readonly suggestedBy?: string | undefined;
   readonly button?: string | undefined;
   /** The words a start sheet started the agent on, naming it until the list or its transcript does. */
   readonly brief?: string | undefined;
+  /** The message a link names, which the page lands on once it holds it. */
+  readonly message?: string | undefined;
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -866,7 +863,7 @@ const AgentConversation = memo(function AgentConversation({
   const automated = shown?.automationId !== undefined || shown?.automationName !== undefined;
   const run = useAgentOrigin(id, automated);
   const automationAddress = useAutomationAddress(shown?.automationId, shown?.workspaceId);
-  const suggestionAddress = useSuggestionAddress(shown?.workspaceId);
+  const placeAddress = usePlaceAddress(shown?.workspaceId);
 
   // Note that the run's card stands on the transcript's first line, so it waits until no older page is left to read.
   const origin = useMemo(
@@ -891,7 +888,7 @@ const AgentConversation = memo(function AgentConversation({
 
   // Note that a Manager's page is its chat, never its transcript, as the panel draws it: the chat's own rows (`managerChat`), its transcript read only for the work each turn did.
   const chat = shown?.kind === AGENT_KIND.MANAGER;
-  useManagerChatLooks(shown);
+  const chatMark = useManagerChatLooks(shown);
   const chatFaces = useChatFaces(chat ? shown : undefined, readerId);
   const chatHeld = useManagerChat(id, chat);
   const chatPage = chatHeld?.rows;
@@ -911,50 +908,57 @@ const AgentConversation = memo(function AgentConversation({
   // Note that the turn under way is the agent's newest while it may still write, whose work stands under the chat's working line rather than under a message.
   const running = writing ? (agent?.turnId ?? undefined) : undefined;
 
+  const chatView = useMemo(
+    () =>
+      chat && chatPage !== undefined
+        ? managerChatView(chatPage.messages, messages ?? [], {
+            running,
+            sending: chatPage.sending ?? [],
+          })
+        : undefined,
+    [chat, chatPage, messages, running],
+  );
+
   // Note that a Manager's chat is its rows alone, with the work of each turn a press away, read from the transcript held beside it.
   const chatItems = useMemo(
     () =>
-      chat && chatPage !== undefined
-        ? managerChatItems(
-            managerChatView(chatPage.messages, messages ?? [], {
-              running,
-              sending: chatPage.sending ?? [],
-            }),
-            messages ?? [],
-            {
-              writing,
-              readerId,
-              toggles,
-              now: Date.now(),
-              pullRequests,
-              wholePart: whole.read,
-              suggestionAddress,
-              waitingCalls,
-              sending: chatPage.sending,
-              managerName: chatFaces?.managerName,
-              readerName: chatFaces?.readerName,
-              // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
-              greeting:
-                shown !== undefined && chatPage.before === undefined
-                  ? managerGreeting(shown.title)
-                  : undefined,
-            },
-          )
+      chatView !== undefined && chatPage !== undefined
+        ? managerChatItems(chatView, messages ?? [], {
+            writing,
+            readerId,
+            toggles,
+            now: Date.now(),
+            pullRequests,
+            wholePart: whole.read,
+            placeAddress,
+            waitingCalls,
+            sending: chatPage.sending,
+            managerName: chatFaces?.managerName,
+            readerName: chatFaces?.readerName,
+            newAfter: chatMark.newAfter,
+            newOverOwn: chatMark.newOverOwn,
+            // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
+            greeting:
+              shown !== undefined && chatPage.before === undefined
+                ? managerGreeting(shown.title)
+                : undefined,
+          })
         : undefined,
     [
-      chat,
+      chatView,
       chatPage,
       messages,
-      running,
       writing,
       readerId,
       toggles,
       pullRequests,
       whole.read,
-      suggestionAddress,
+      placeAddress,
       waitingCalls,
       shown,
       chatFaces,
+      chatMark.newAfter,
+      chatMark.newOverOwn,
     ],
   );
 
@@ -971,7 +975,7 @@ const AgentConversation = memo(function AgentConversation({
             pullRequests,
             wholePart: whole.read,
             origin,
-            suggestionAddress,
+            placeAddress,
             waitingCalls,
           }),
     [
@@ -985,7 +989,7 @@ const AgentConversation = memo(function AgentConversation({
       pullRequests,
       whole.read,
       origin,
-      suggestionAddress,
+      placeAddress,
     ],
   );
 
@@ -1041,8 +1045,6 @@ const AgentConversation = memo(function AgentConversation({
 
   // Note that Edit on a sent line reaches the composer through this one handle, so the page holds none of the composer's state, whose every keystroke would draw the transcript again.
   const editMessage = useRef<AgentComposer["editMessage"] | undefined>(undefined);
-  // Note that Reply on a chat message reaches it the same way.
-  const replyTo = useRef<AgentComposer["reply"] | undefined>(undefined);
   // Note that a refused line's Retry, Edit, and Delete reach the composer the same way.
   const undeliveredActs = useRef<UndeliveredActs | undefined>(undefined);
 
@@ -1086,7 +1088,6 @@ const AgentConversation = memo(function AgentConversation({
     () => ({
       editMessage: (line: Parameters<AgentComposer["editMessage"]>[0]) =>
         editMessage.current?.(line),
-      reply: (words: string) => replyTo.current?.(words),
     }),
     [],
   );
@@ -1215,12 +1216,9 @@ const AgentConversation = memo(function AgentConversation({
   const talk = useAgentTalk(id, taskId);
   const otherCall = useStandingCallCard(id);
 
-  // Each chat message by its row, to the line it went as, which its Edit rewinds to; null for the Manager's own, which went as none.
-  const chatLines = useMemo(
-    () =>
-      chat
-        ? new Map((chatPage?.messages ?? []).map((message) => [message.id, message.lineId]))
-        : undefined,
+  // Note that only a message the chat holds is edited in place, never one still on its way or refused, which goes by its send's key.
+  const chatMessages = useMemo(
+    () => (chat ? new Set((chatPage?.messages ?? []).map((message) => message.id)) : undefined),
     [chat, chatPage?.messages],
   );
 
@@ -1231,7 +1229,8 @@ const AgentConversation = memo(function AgentConversation({
     readerId,
     composer,
     calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
-    chatLines,
+    chatMessages,
+    markUnread: chatMark.markUnread,
   });
 
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
@@ -1260,6 +1259,48 @@ const AgentConversation = memo(function AgentConversation({
   // Note that a chat message's thread opens on its own page pushed over the chat, on iPhone and iPad alike, as Slack's app pushes a thread.
   const openChatThread = (root: string) =>
     router.push({ pathname: onOwnTab("/tasks/agent/[id]/thread/[root]"), params: { id, root } });
+
+  // The message a link named that the page has landed on, so it lands once.
+  const landedOn = useRef<string | undefined>(undefined);
+
+  // Note that a link to one of the agent's messages lands on it once the page holds it, older pages read for it a page at a time, as the panel's does: a message of a Manager's chat on its row, or in the thread it stands in alone, pushed over the chat as Reply in thread opens it; a transcript's on its row.
+  useEffect(() => {
+    if (message === undefined || landedOn.current === message || shown === undefined) return;
+
+    const land = () => {
+      landedOn.current = message;
+      setReveal((was) => ({ messageId: message, serial: (was?.serial ?? 0) + 1 }));
+    };
+
+    const landing = chatView === undefined ? undefined : chatMessageLanding(chatView, message);
+
+    if (landing?.kind === CHAT_LANDING.CHAT) {
+      land();
+
+      return;
+    }
+
+    if (landing?.kind === CHAT_LANDING.THREAD) {
+      landedOn.current = message;
+      router.push({
+        pathname: onOwnTab("/tasks/agent/[id]/thread/[root]"),
+        params: { id, root: landing.root, message },
+      });
+
+      return;
+    }
+
+    // Note that a line someone sent during a turn is linked by its own row's id, the turn's rows by the turn's.
+    const held = items.some((item) => item.place.message === message || item.place.row === message);
+
+    if (!chat && held) {
+      land();
+
+      return;
+    }
+
+    if (older !== undefined && !older.reading && !older.failed) older.onRead();
+  }, [message, shown, chat, chatView, items, older, router, onOwnTab, id]);
 
   // Note that a pull request the agent's workspace is not read for yet opens on GitHub, which reads it whoever opened it.
   const openPullRequest = (url: string) => {
@@ -1299,7 +1340,6 @@ const AgentConversation = memo(function AgentConversation({
       messageSent={approvals.messageSent}
       suggested={suggested}
       editMessage={editMessage}
-      replyTo={replyTo}
       undeliveredActs={undeliveredActs}
       approvals={approvals}
       onShowWaiting={showWaiting}
@@ -1603,21 +1643,27 @@ const AgentConversation = memo(function AgentConversation({
             icon={glyphSymbol(GLYPH.LIST)}
             accessibilityLabel={MENU_WORDS.OVERVIEW}
             onPress={openOverview}
-          />
+          >
+            {MENU_WORDS.OVERVIEW}
+          </Stack.Toolbar.Button>
         )}
         {barActs ? (
           <Stack.Toolbar.Button
             icon={glyphSymbol(archived ? GLYPH.UNARCHIVE : GLYPH.ARCHIVE)}
             accessibilityLabel={archived ? MENU_WORDS.UNARCHIVE : MENU_WORDS.ARCHIVE}
             onPress={archived ? actions.unarchive : askArchive}
-          />
+          >
+            {archived ? MENU_WORDS.UNARCHIVE : MENU_WORDS.ARCHIVE}
+          </Stack.Toolbar.Button>
         ) : null}
         {barActs ? (
           <Stack.Toolbar.Button
             icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
             accessibilityLabel={actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
             onPress={actions.pin}
-          />
+          >
+            {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+          </Stack.Toolbar.Button>
         ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
@@ -1740,7 +1786,9 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           tintColor={colors.ACCENT}
           accessibilityLabel={PORTS_WORDS.DONE}
           onPress={() => router.back()}
-        />
+        >
+          {PORTS_WORDS.DONE}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen clear={half}>
         <SettingsForm clear={half} spacing={FORM_SPACING.COMPACT}>

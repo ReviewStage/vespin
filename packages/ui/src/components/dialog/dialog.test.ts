@@ -25,7 +25,8 @@ import {
  * behind; a busy dialog holds focus on its card until it is done, and
  * its owner still hears it asked away meanwhile; one
  * given a title and actions is named by the title, its answers after what
- * it holds; one its owner closes through `open` fades out before it
+ * it holds; a page's sheet is named by its title, its close first and
+ * putting it away; one its owner closes through `open` fades out before it
  * goes, or goes at once where motion is held, and hands focus back once it
  * has gone; and one whose act took its opener's row away hands focus to the
  * row after it, or to the list's head where none is left.
@@ -375,6 +376,40 @@ test("a dialog given a title and actions is named by its title, and what it hold
   button("Send").focus();
   key("Tab");
   expect(holds(field.current)).toBe(true);
+});
+
+/** A sheet holding a field, its owner taking it away once asked. */
+function SheetOwner({ field }: { field: React.RefObject<HTMLTextAreaElement | null> }) {
+  const [open, setOpen] = useState(true);
+
+  return open
+    ? createElement(Dialog, {
+        open: true,
+        size: DIALOG_SIZE.PAGE_SHEET,
+        title: "New task",
+        closeLabel: "Close",
+        initialFocus: field,
+        onDismiss: () => setOpen(false),
+        children: createElement("textarea", { ref: field, "aria-label": "Task" }),
+      })
+    : null;
+}
+
+test("a page's sheet is named by its title, its close stands before what it holds, and the close puts it away", () => {
+  const field = createRef<HTMLTextAreaElement>();
+  draw(createElement(SheetOwner, { field }));
+  const sheet = card() ?? expect.fail("the sheet opens");
+  expect(nameOf(sheet)).toBe("New task");
+  expect(holds(field.current)).toBe(true);
+
+  const controls = [...sheet.querySelectorAll("textarea, button")].map(
+    (control) => control.getAttribute("aria-label") || control.textContent,
+  );
+
+  expect(controls).toEqual(["Close", "Task"]);
+  const close = sheet.querySelector<HTMLButtonElement>('button[aria-label="Close"]');
+  act(() => close?.click());
+  expect(card()).toBeNull();
 });
 
 test("a dialog holding a draft is kept by the first Escape or press on the dimmed window, says why, and is put away by the next; one holding none goes at once", () => {

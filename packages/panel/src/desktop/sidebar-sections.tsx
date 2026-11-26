@@ -67,9 +67,11 @@ import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { useSectionWrites, useTaskSections } from "../tasks/use-pin-writes.js";
 import { useReadMark } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -974,7 +976,9 @@ export function TaskRowsSkeleton({ widths }: { widths: readonly string[] }): Rea
  * What a section draws in place of its rows while the view leaves none
  * standing: a row's skeleton while the list is first read, nothing where it
  * could not be read, which the list's own line says, and once read a word
- * that tasks are dragged in; nothing while it draws rows.
+ * that tasks are dragged in; nothing while it draws rows. Note that under a
+ * finger, which drags no row in, an empty section stands as its header
+ * alone, as the iOS app's does.
  */
 function SectionFoot({
   drawn,
@@ -983,9 +987,13 @@ function SectionFoot({
   drawn: DrawnSection;
   tasks: SidebarTasksControl;
 }): React.JSX.Element | null {
+  const coarse = useCoarsePointer();
+
   if (drawn.tasks.length > 0 || drawn.managers.length > 0 || tasks.listFailed) return null;
 
   if (!tasks.listRead) return <TaskRowsSkeleton widths={SECTION_SKELETON} />;
+
+  if (coarse) return null;
 
   return (
     <div className={SIDEBAR_SECTION_SLOT}>
@@ -1018,6 +1026,8 @@ function SidebarSection({
   );
 
   const rowCount = drawn.tasks.length + drawn.managers.length;
+  // Note that a phone's header draws no ⋯, its menu a long press away, as the iOS app's is; its + stays.
+  const phone = usePhoneRoom();
   const menu = useMenu(tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
@@ -1071,12 +1081,15 @@ function SidebarSection({
             />
           )
         }
-        {...sidebarHead({
-          folded,
-          onToggle: () => context.onToggle(section.id),
-          count: rowCount,
-          noun: TASK_NOUN,
-        })}
+        {...sidebarHead(
+          {
+            folded,
+            onToggle: () => context.onToggle(section.id),
+            count: rowCount,
+            noun: TASK_NOUN,
+          },
+          phone,
+        )}
         glyph={glyph}
         label={<ReplayMask>{section.title}</ReplayMask>}
         menuOpen={menu.open !== undefined}
@@ -1094,12 +1107,14 @@ function SidebarSection({
         }
         actions={
           <>
-            <MoreButton
-              ref={ellipsis}
-              thing={section.title}
-              size={BUTTON_SIZE.COMPACT}
-              {...menu.trigger()}
-            />
+            {phone ? null : (
+              <MoreButton
+                ref={ellipsis}
+                thing={section.title}
+                size={BUTTON_SIZE.COMPACT}
+                {...menu.trigger()}
+              />
+            )}
             <NewTaskInButton
               label={`New task in ${section.title}`}
               onPress={() => context.onNewTaskIn(section.id)}
@@ -1156,6 +1171,7 @@ export function SidebarSections({
 
   const drag = useRowDrag(move, { handle: SECTION_HANDLE });
   const keys = useRowMoveKeys(move);
+  const phone = usePhoneRoom();
   const { edits } = context;
 
   const creating =
@@ -1202,7 +1218,14 @@ export function SidebarSections({
         {creating === undefined ? null : (
           <li className="sidebar-sections-item sidebar-sections-new">
             <div className="sidebar-repository sidebar-own-section">
-              <SectionEditor title="" icon={undefined} picking={false} onEnd={created} />
+              {/* Note that the new section's field stands in a head of its own, so it holds the place a section's head holds. */}
+              <GroupHeader
+                {...sidebarHead(undefined, phone)}
+                label=""
+                editing={
+                  <SectionEditor title="" icon={undefined} picking={false} onEnd={created} />
+                }
+              />
             </div>
           </li>
         )}

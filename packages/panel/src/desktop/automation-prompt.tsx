@@ -20,7 +20,7 @@ import { keptSkills } from "../tasks/repository-skills.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import type { SkillSource } from "../tasks/skill-picker.js";
 import type { SkillWithFile } from "../tasks/skill-ref.js";
-import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "../tasks/task-mentions.js";
+import { TaskMentions, useTasklessMentions } from "../tasks/task-mentions.js";
 import { useOpenTask } from "../tasks/use-open-link.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 
@@ -145,18 +145,12 @@ export function AutomationPrompt({
             .where(({ task }) => eq(task.workspaceId, workspaceId)),
     ).data ?? NO_TASKS;
 
-  const readAgents = useMentionAgentsReader(workspaceId, tasks, useMentionedPlace().models);
-
-  const mentions = useMemo(
-    () =>
-      workspaceId === undefined
-        ? undefined
-        : tasklessMentions(
-            { workspace: slug ?? workspaceId, workspaceId, repository },
-            onOpenTask,
-            readAgents,
-          ),
-    [workspaceId, slug, repository, onOpenTask, readAgents],
+  const mentions = useTasklessMentions(
+    workspaceId === undefined
+      ? undefined
+      : { workspace: slug ?? workspaceId, workspaceId, repository },
+    { tasks, models: useMentionedPlace().models },
+    onOpenTask,
   );
 
   // A `/` offers the repository's skills, none while the Skills experiment is off.

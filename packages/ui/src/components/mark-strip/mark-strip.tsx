@@ -1,5 +1,4 @@
 import type { PointerEvent } from "react";
-import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import type { StatusTone } from "../../status-tone.js";
 /**
  * mark-strip.tsx -- the thin strip a hidden rail leaves in its place: one mark for each of its rows, a press on which shows the rail again, or the pointer resting on which peeks it.
@@ -89,7 +88,7 @@ export function MarkStrip({
       data-look={look}
       data-pressable={onPress === undefined ? undefined : "true"}
       aria-hidden="true"
-      onClick={onPress === undefined ? undefined : pulseOnPress(onPress, PRESS_PULSE.QUIET)}
+      onClick={onPress === undefined ? undefined : onPress}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
     >

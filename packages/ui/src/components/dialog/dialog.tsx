@@ -143,6 +143,14 @@ export const DIALOG_SIZE = {
   SHEET: "sheet",
   /** A settings dialog's card (`settings-dialog.tsx`), its section list beside the section shown at Settings' measure, at a height held from section to section, flush so the list's ground meets its edge; on a phone, the window's whole room. */
   SECTIONS: "sections",
+  /**
+   * A sheet the window's whole height and width, risen from its foot to a
+   * margin under its top, as a phone's own compose sheet stands (the
+   * panel's New task on a phone): its head the close at its start and the
+   * title centered, and what it holds standing at its foot, on the
+   * keyboard where one is up, the room over it left empty.
+   */
+  PAGE_SHEET: "page-sheet",
 } as const;
 
 export type DialogSize = (typeof DIALOG_SIZE)[keyof typeof DIALOG_SIZE];
@@ -205,6 +213,7 @@ const CARD_LOOK = [
   "data-[size=media]:w-auto data-[size=media]:min-w-dialog-media-min data-[size=media]:max-w-dialog-media-max data-[size=media]:gap-0 data-[size=media]:overflow-hidden data-[size=media]:p-0",
   "data-[size=window]:w-auto data-[size=window]:max-h-none data-[size=window]:max-w-none data-[size=window]:place-self-stretch data-[size=window]:min-h-0 data-[size=window]:min-w-0 data-[size=window]:gap-0 data-[size=window]:rounded-none data-[size=window]:border-0 data-[size=window]:bg-transparent data-[size=window]:p-0 data-[size=window]:shadow-none data-[size=window]:ml-[max(var(--spacing-ui-16),env(safe-area-inset-left,0px))] data-[size=window]:mr-[max(var(--spacing-ui-16),env(safe-area-inset-right,0px))] data-[size=window]:mb-[max(var(--spacing-ui-16),env(safe-area-inset-bottom,0px)_-_var(--ui-keyboard-inset))] data-[size=window]:mt-[max(var(--spacing-dialog-window-top),env(safe-area-inset-top,0px))] @min-[1024px]/ui-dialog-room:data-[size=window]:mx-ui-48 @min-[1024px]/ui-dialog-room:data-[size=window]:mb-ui-24",
   "data-[size=sheet]:w-dialog-wide data-[size=sheet]:gap-0 data-[size=sheet]:rounded-none data-[size=sheet]:border-0 data-[size=sheet]:bg-transparent data-[size=sheet]:p-0 data-[size=sheet]:shadow-none data-[size=sheet]:animate-none data-[size=sheet]:data-ending-style:animate-sheet-leave",
+  "data-[size=page-sheet]:w-full data-[size=page-sheet]:max-h-none data-[size=page-sheet]:place-self-stretch data-[size=page-sheet]:min-h-0 data-[size=page-sheet]:gap-3 data-[size=page-sheet]:rounded-b-none data-[size=page-sheet]:border-b-0 data-[size=page-sheet]:shadow-none data-[size=page-sheet]:mt-dialog-page-sheet-top data-[size=page-sheet]:pt-card-inset-snug data-[size=page-sheet]:pr-[max(var(--spacing-card-inset-snug),env(safe-area-inset-right,0px))] data-[size=page-sheet]:pl-[max(var(--spacing-card-inset-snug),env(safe-area-inset-left,0px))] data-[size=page-sheet]:pb-[max(var(--spacing-card-inset-snug),env(safe-area-inset-bottom,0px)_-_var(--ui-keyboard-inset))] data-[size=page-sheet]:animate-sheet-rise data-[size=page-sheet]:data-ending-style:animate-sheet-sink",
   "data-[size=sections]:w-dialog-sections data-[size=sections]:h-dialog-sections-height data-[size=sections]:gap-0 data-[size=sections]:overflow-hidden data-[size=sections]:p-0 room-narrow:data-[size=sections]:w-full room-narrow:data-[size=sections]:h-dialog-room",
   "data-[expanding=true]:animate-none",
   "data-[dropping=true]:shadow-dialog-drop",
@@ -227,7 +236,7 @@ const CARD_LOOK = [
  * so its field yields to a short window (`desktop.css`) and its foot stays.
  */
 const MIDDLE =
-  "flex min-h-0 flex-1 flex-col gap-[inherit] overflow-x-hidden overflow-y-auto overscroll-contain [--ui-focus-ring-offset:var(--ui-focus-ring-inset)] data-[size=media]:contents data-[size=window]:contents data-[size=sheet]:contents data-[size=sections]:contents data-[size=composer]:overflow-visible";
+  "flex min-h-0 flex-1 flex-col gap-[inherit] overflow-x-hidden overflow-y-auto overscroll-contain [--ui-focus-ring-offset:var(--ui-focus-ring-inset)] data-[size=media]:contents data-[size=window]:contents data-[size=sheet]:contents data-[size=sections]:contents data-[size=composer]:overflow-visible data-[size=page-sheet]:justify-end data-[size=page-sheet]:overflow-visible";
 
 /** What marks the part of a bare dialog that stands for the dimmed window. */
 const VEIL_ATTRIBUTE = "data-dialog-veil";
@@ -328,6 +337,43 @@ function DialogHead({
   );
 }
 
+/**
+ * A page's sheet's head (`DIALOG_SIZE.PAGE_SHEET`), as a phone's own bar
+ * stands: the close in its start corner, the title centered over the sheet
+ * and cut short between the corners, and the end corner kept as wide as the
+ * start's, so the title's center is the sheet's.
+ */
+function PageSheetHead({
+  titleId,
+  title,
+  closeLabel,
+  replayUnmasked,
+  titleReplayMasked,
+  onClose,
+}: {
+  titleId: string;
+  title: string;
+  closeLabel: string | undefined;
+  replayUnmasked: boolean;
+  titleReplayMasked: boolean;
+  onClose: () => void;
+}): React.JSX.Element {
+  return (
+    <div className="ui-dialog-sheet-head grid min-h-control grid-cols-[1fr_minmax(0,auto)_1fr] items-center gap-control-gap">
+      <span className="flex items-center justify-self-start">
+        {closeLabel === undefined ? null : (
+          <IconButton icon={<GLYPH.CLOSE />} label={closeLabel} onClick={onClose} />
+        )}
+      </span>
+      <Text variant={TEXT_VARIANT.DIALOG} as={TEXT_ELEMENT.H2} id={titleId} truncate>
+        <ReplayWords unmasked={replayUnmasked} masked={titleReplayMasked}>
+          {title}
+        </ReplayWords>
+      </Text>
+    </div>
+  );
+}
+
 /** The dimmed window under a bare dialog, which keeps its own margins (`CARD_LOOK`). */
 const WINDOW_ROOM = "ui-dialog-backdrop p-0";
 
@@ -335,9 +381,15 @@ const WINDOW_ROOM = "ui-dialog-backdrop p-0";
 const SHEET_ROOM =
   "ui-dialog-backdrop items-end justify-items-center p-0 animate-sheet-scrim data-ending-style:animate-sheet-leave";
 
+/** The dimmed window under a page's sheet, which fills it to its edges but a margin at its top, and dims and clears on the sheet's own beat. */
+const PAGE_SHEET_ROOM =
+  "ui-dialog-backdrop p-0 animate-sheet-scrim data-ending-style:animate-sheet-leave";
+
 /** The dimmed window's room by the card's size. */
 function roomOf(size: DialogSize): string {
   if (size === DIALOG_SIZE.WINDOW) return WINDOW_ROOM;
+
+  if (size === DIALOG_SIZE.PAGE_SHEET) return PAGE_SHEET_ROOM;
 
   return size === DIALOG_SIZE.SHEET ? SHEET_ROOM : "ui-dialog-backdrop";
 }
@@ -847,7 +899,16 @@ export function Dialog({
           ...dropTarget,
         }}
       >
-        {title === undefined ? null : (
+        {title === undefined ? null : size === DIALOG_SIZE.PAGE_SHEET ? (
+          <PageSheetHead
+            titleId={titleId}
+            title={title}
+            closeLabel={closeLabel}
+            replayUnmasked={replayUnmasked}
+            titleReplayMasked={titleReplayMasked}
+            onClose={dismiss}
+          />
+        ) : (
           <DialogHead
             titleId={titleId}
             subtitleId={subtitleId}

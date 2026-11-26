@@ -8,6 +8,7 @@ import type { CatalogModel } from "@repo/features/models-wire";
 import { formatCount } from "@repo/features/number-format";
 import { runSpanText } from "@repo/features/time-format";
 import {
+  HarnessMark,
   HoverCard,
   type HoverCardFigure,
   HoverCardFigures,
@@ -15,7 +16,6 @@ import {
   HoverCardNote,
   HoverCardRule,
 } from "@repo/ui";
-import { HarnessMark } from "../harness-marks.js";
 import { providerOf } from "./agent-model.js";
 import { ModelLabel } from "./model-label.js";
 

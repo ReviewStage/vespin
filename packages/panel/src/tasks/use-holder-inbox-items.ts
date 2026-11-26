@@ -1,5 +1,5 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import type { InboxReads } from "@repo/features/inbox-list-model";
+import type { InboxItemReads } from "@repo/features/inbox-digest";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { AppInboxItems, AppInboxTaskHolding } from "@repo/host/app-state";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -27,7 +27,7 @@ export interface InboxHolding {
 /** What the window's Inbox lists from. */
 export interface HolderInboxItems {
   /** Each task's items as last pushed, the window's own answers laid over them, by id; a task not yet pushed is absent. */
-  readonly items: InboxReads;
+  readonly items: InboxItemReads;
   /** Whether a task handed here could not be read, so the list offers to try again. */
   readonly failed: boolean;
   /** Whether a task handed here has not been pushed as main says it now stands, and was not refused: its items are on their way. */
@@ -53,7 +53,7 @@ function newest(items: readonly InboxItem[]): number {
 }
 
 /** No task held, as the feed stands before it first answers. */
-const NOTHING_HELD: InboxReads = new Map();
+const NOTHING_HELD: InboxItemReads = new Map();
 
 /** The tasks the feed holds, by id; none until it first answers. */
 type Fed = AppInboxItems[typeof INBOX_SCOPE_KIND.TASK] | undefined;
@@ -63,7 +63,7 @@ type Fed = AppInboxItems[typeof INBOX_SCOPE_KIND.TASK] | undefined;
  * each handed here that it holds nothing of with none, since the feed
  * stands for every task whole; nothing until it first answers.
  */
-function feedStanding(fed: Fed, holdings: readonly InboxHolding[]): InboxReads {
+function feedStanding(fed: Fed, holdings: readonly InboxHolding[]): InboxItemReads {
   if (fed === undefined) return NOTHING_HELD;
   const standing = new Map(Object.entries(fed));
 
@@ -81,7 +81,7 @@ function feedStanding(fed: Fed, holdings: readonly InboxHolding[]): InboxReads {
  * the change.
  */
 function currentOf(
-  pushed: InboxReads,
+  pushed: InboxItemReads,
   holdings: readonly InboxHolding[],
   /** The account's feed: a task it holds nothing of is current. */
   fed: Fed,

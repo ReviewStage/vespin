@@ -2,8 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
-import { DEVICE_KIND, DEVICE_PLATFORM, DEVICE_SETUP } from "@repo/features/device-agent-wire";
-import { LIVE_READ } from "@repo/features/live-wire";
+import { DEVICE_KIND, DEVICE_SETUP } from "@repo/features/device-agent-wire";
 import { type MacOffer, MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   TASK_CREATE_RELATION_KIND,
@@ -55,8 +54,6 @@ const ACME: Workspace = {
 
 const STUDIO = "6f0c1d0e-6b1a-4d43-9a49-2b7b6f1f0a11";
 const BUILDER = "0b8e4c1a-2f6d-4f53-8a2e-9d1c7e5b3a40";
-const WORKSPACE_BOX = "5c0f6c84-1d2e-4f3a-8b4c-5d6e7f8a9b01";
-const WORKSPACE_MAC = "5c0f6c84-1d2e-4f3a-8b4c-5d6e7f8a9b02";
 
 const roots: Root[] = [];
 
@@ -276,32 +273,6 @@ test("a task starts on the device Runs on picked, by its id, and an offline devi
 
   assert.equal(chip().getAttribute("aria-label"), "Machine: Studio");
   assert.deepEqual(starts, [{ machine: AGENT_MACHINE.DEVICE, deviceId: STUDIO }]);
-});
-
-test("a machine the workspace owns is listed after the devices and starts the task there as the workspace's, and one still setting up is listed but not picked", async () => {
-  const owned = { connectedBy: null, calledIn: true, away: false } as const;
-  handState(experimentsOn(), {
-    [LIVE_READ.WORKSPACE_MACHINES]: {
-      [ACME.id]: {
-        rows: [
-          { ...owned, id: WORKSPACE_BOX, name: "build-01", platform: DEVICE_PLATFORM.LINUX },
-          { ...owned, id: WORKSPACE_MAC, name: "Team Mac", setup: DEVICE_SETUP.PREPARING },
-        ],
-      },
-    },
-  });
-  const { container, starts } = await mount();
-
-  act(() => runsOnChip(container).click());
-  await settle();
-  assert.equal(row("Team Mac").getAttribute("aria-disabled"), "true");
-  act(() => row("build-01").click());
-  await settle();
-  pressInComposer(container, "Enter", { metaKey: true });
-  await settle();
-
-  assert.equal(runsOnChip(container).getAttribute("aria-label"), "Machine: build-01");
-  assert.deepEqual(starts, [{ machine: AGENT_MACHINE.WORKSPACE, deviceId: WORKSPACE_BOX }]);
 });
 
 test("a device online but still getting ready, or that couldn't set up, is listed saying so and not picked", async () => {

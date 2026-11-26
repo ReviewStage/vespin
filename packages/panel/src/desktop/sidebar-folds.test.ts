@@ -16,7 +16,7 @@ import { windowRouter } from "../testing/window-router.js";
 /**
  * sidebar-folds.test.ts -- every group that folds folds under one
  * header, `GroupHeader`: the sidebar's Pinned, My tasks, and repositories, alike but
- * for what each counts, each unrolling as it opens, and a
+ * for what each counts, each opening at once, and a
  * folded group leaving the task open standing.
  */
 

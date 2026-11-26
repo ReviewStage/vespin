@@ -120,6 +120,15 @@
     grid-template-columns: var(--ui-control-height) minmax(0, 1fr) var(--ui-control-height);
   }
 
+  /* A phone's corners as wide as their controls (`TOOLBAR_CORNERS.FIT`):
+     each corner at least its own controls' width, then the room the title
+     leaves shared between them alike, so a short title stands at the row's
+     center however many controls one corner holds, and a long one takes
+     every width the corners leave and is cut there. */
+  .ui-toolbar[data-look="phone"][data-corners="fit"] {
+    grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
+  }
+
   .ui-toolbar[data-look="phone"] > .ui-toolbar-heading {
     display: flex;
     grid-column: 2;

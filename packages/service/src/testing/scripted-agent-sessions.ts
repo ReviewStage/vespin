@@ -107,9 +107,9 @@ const HELD_TURN_LOOK = Duration.millis(50);
 /**
  * The scripts the end-to-end journeys play: words held while the journey
  * watches them stand in a running turn, then a tool call and more words to
- * the turn's end, and an ask that waits on its answer and a turn that says
- * it heard. A journey picks one by starting its agent on a prompt
- * holding its cue.
+ * the turn's end, and an ask, posted once the journey lets the turn go, that
+ * waits on its answer and a turn that says it heard. A journey picks one by
+ * starting its agent on a prompt holding its cue.
  * @public
  */
 export const E2E_AGENT_SCRIPTS: readonly AgentScript[] = [
@@ -135,6 +135,7 @@ export const E2E_AGENT_SCRIPTS: readonly AgentScript[] = [
     turns: [
       [
         { say: "I need one decision before I go on." },
+        { hold: true },
         {
           ask: {
             key: "e2e-color",

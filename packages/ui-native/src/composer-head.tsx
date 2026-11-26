@@ -1,6 +1,6 @@
 // composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, the line saying the field holds a sent message's words to send in its place, and a note of what a send does, such as denying a call waiting.
 
-import { Button, HStack, Image, ScrollView, Spacer, Text, VStack, ZStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, ScrollView, Spacer, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
@@ -17,6 +17,7 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { CHIP_MARK, type ChipMark } from "./chip-mark-model.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar, AvatarPhoto, HarnessMark, MANAGER_FACE_SEAT, ManagerFace } from "./marks.js";
+import { Text } from "./text.js";
 import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

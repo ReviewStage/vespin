@@ -1115,10 +1115,16 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   const prompts = yield* Queue.unbounded<SDKUserMessage, Cause.Done>();
   const goals = MutableRef.make<readonly RunnerGoal[]>([]);
 
+  // A resume that neither rewinds nor forks loads its transcript from its latest compaction (`transcripts.ts`).
+  const fromLatestCompaction = config.rewindBefore === undefined && config.fork !== true;
+
   const store =
     config.transcriptsUrl === undefined
       ? undefined
-      : goalWatchedStore(transcriptStore(config.transcriptsUrl, bearer, trace.headers), goals);
+      : goalWatchedStore(
+          transcriptStore(config.transcriptsUrl, bearer, trace.headers, { fromLatestCompaction }),
+          goals,
+        );
 
   const resumed = yield* resumePointOf(claudeCode, config, store).pipe(Effect.result);
 
@@ -1346,6 +1352,7 @@ const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunc
 
   const posted = yield* openEventSink({
     url: config.eventsUrl,
+    picturesUrl: config.picturesUrl,
     bearer,
     firstSequence: config.firstSequence,
     secrets,

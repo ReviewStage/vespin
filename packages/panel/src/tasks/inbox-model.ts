@@ -1,6 +1,7 @@
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import type { AgentSummary } from "@repo/features/agent-wire";
 import type { FileChip } from "@repo/features/attachment-model";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import { waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import {
   codeLinesReadable,
@@ -110,7 +111,7 @@ export function inboxBoard(
 
   return {
     open,
-    waiting: open.filter((item) => waitsOnReaderNow(item, readerId, now)),
+    waiting: open.filter((item) => waitsOnReaderNow(inboxRowOf(item), readerId, now)),
     settled: items
       .filter((item) => item.status !== INBOX_STATUS.OPEN)
       .toSorted((a, b) => b.updatedAt - a.updatedAt),

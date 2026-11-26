@@ -15,9 +15,6 @@ import {
   TerminalIcon,
   WaveformIcon,
 } from "@repo/ui";
-import codexOneX from "../../../../packages/panel/marks/codex-16.png";
-import codexTwoX from "../../../../packages/panel/marks/codex-32.png";
-import codexThreeX from "../../../../packages/panel/marks/codex-48.png";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -86,7 +83,6 @@ function Landing(): React.JSX.Element {
         title="Bring your own subscriptions and keys."
         lead="Run agents on your Codex or Claude plan, or bring your own API keys."
         scene={LANDING_SCENE.KEYS}
-        codexArt={{ oneX: codexOneX, twoX: codexTwoX, threeX: codexThreeX }}
         aside={
           <LandingFacts
             facts={[

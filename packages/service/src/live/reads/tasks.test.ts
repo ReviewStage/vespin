@@ -4,7 +4,12 @@ import { it } from "@effect/vitest";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { expireTurnApprovals, recordApprovalAsked } from "@repo/database/models/agent-approvals";
-import { markAgentRead, stampAgentSaid } from "@repo/database/models/agent-chat-reads";
+import {
+  markAgentRead,
+  markAgentSeen,
+  markAgentUnread,
+  stampAgentSaid,
+} from "@repo/database/models/agent-chat-reads";
 import {
   recordAgentSandboxBooted,
   recordAgentSandboxBooting,
@@ -88,6 +93,7 @@ import {
   TASK_STATUS,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { managerChatUnread } from "@repo/features/workspace-managers-model";
 import { SANDBOX_IDLE } from "@repo/sandbox";
 import {
   MESSAGE_AUTHOR,
@@ -1172,6 +1178,48 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
 
         assert.deepEqual(yield* marksOf(owner), [[looked, said]]);
         assert.deepEqual(yield* marksOf(teammate), [[agent.createdAt.getTime(), said]]);
+      }),
+  );
+
+  it.effect(
+    "a Manager's row Mark unread left past its last message, on the reader's own last line or a teammate's the Manager has not answered, reads unread for that reader alone until they open it, leaving it keeping it so",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const workspaceId = yield* openWorkspace(owner);
+        yield* joinWorkspace(workspaceId, teammate);
+
+        const { agent } = Option.getOrThrow(
+          yield* createAgent(owner, {
+            taskId: null,
+            workspaceId,
+            idempotencyKey: randomUUID(),
+            model: "anthropic/claude-opus-5.5",
+            effort: "high",
+            repository: null,
+            descriptionSnapshot: null,
+            prompt: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind: AGENT_KIND.MANAGER,
+          }),
+        );
+
+        // The Manager said its last, then the owner wrote a line it has not answered, which both mark unread.
+        const said = agent.createdAt.getTime() + 60_000;
+        const line = said + 60_000;
+        yield* stampAgentSaid(agent.id, new Date(said));
+        yield* markAgentUnread(owner, agent.id, new Date(line - 1));
+        yield* markAgentUnread(teammate, agent.id, new Date(line - 1));
+        yield* markAgentSeen(teammate, agent.id, new Date(line + 60_000));
+        yield* markAgentRead(owner, agent.id, new Date(line + 120_000));
+
+        const unreadFor = (userId: string) =>
+          Effect.map(liveRowsOf(userId, EVERY_TASK, TASKLESS_LIVE.CARRIED), (rows) =>
+            taskAgentsOfLiveRows(rows, NOW).map(managerChatUnread),
+          );
+
+        assert.deepEqual([yield* unreadFor(owner), yield* unreadFor(teammate)], [[false], [true]]);
       }),
   );
 

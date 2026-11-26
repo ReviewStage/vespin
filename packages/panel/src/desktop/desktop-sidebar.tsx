@@ -148,7 +148,6 @@ import {
 } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlaceOf } from "../automations-route.js";
-import { useConnected } from "../connection.js";
 import { LinkWorkspaceProvider, openInTabOf } from "../copy-link-item.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
@@ -181,6 +180,7 @@ import type { NavigationHistory } from "../places/window-history.js";
 import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/window-steps.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { stateEndMark } from "../state-glyph.js";
 import { useSteadyDoor, useSteadyDoors, useSteadyList } from "../steady-door.js";
 import {
@@ -1405,7 +1405,8 @@ function PinnedSection({
   );
 
   const empty = rows.length === 0;
-
+  // Note that a phone's header draws no ⋯, its menu a long press away, as the iOS app's is.
+  const phone = usePhoneRoom();
   const menu = useMenu(context.tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
@@ -1432,13 +1433,14 @@ function PinnedSection({
                 count: rows.length,
                 noun: PIN_NOUN,
               },
+          phone,
         )}
         glyph={<GLYPH.PIN />}
         label="Pinned"
         menuOpen={menu.open !== undefined}
         contextMenu={actionGroups.length === 0 ? undefined : menu.contextMenu(ellipsis)}
         actions={
-          actionGroups.length === 0 ? null : (
+          phone || actionGroups.length === 0 ? null : (
             <MoreButton
               ref={ellipsis}
               thing="Pinned"
@@ -1512,6 +1514,7 @@ function FollowingSection({
 }): React.JSX.Element {
   const folded = folds.followingFolded;
   const standing = tasks.filter(context.currentTask);
+  const phone = usePhoneRoom();
   const menu = useMenu(context.tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const markRead = useReadMark();
@@ -1520,18 +1523,16 @@ function FollowingSection({
   return (
     <nav className="sidebar-group" aria-label={FOLLOWING_HEAD}>
       <GroupHeader
-        {...sidebarHead({
-          folded,
-          onToggle: folds.toggleFollowing,
-          count: tasks.length,
-          noun: TASK_NOUN,
-        })}
+        {...sidebarHead(
+          { folded, onToggle: folds.toggleFollowing, count: tasks.length, noun: TASK_NOUN },
+          phone,
+        )}
         glyph={<GLYPH.SHOW />}
         label={FOLLOWING_HEAD}
         menuOpen={menu.open !== undefined}
         contextMenu={actionGroups.length === 0 ? undefined : menu.contextMenu(ellipsis)}
         actions={
-          actionGroups.length === 0 ? null : (
+          phone || actionGroups.length === 0 ? null : (
             <MoreButton
               ref={ellipsis}
               thing={FOLLOWING_HEAD}
@@ -1659,6 +1660,7 @@ function RepositorySection({
   const folded = folds.folded(repository);
   const named = repository === null ? NO_REPOSITORY : label;
   const standing = group.tasks.filter(context.currentTask);
+  const phone = usePhoneRoom();
   // The menu is drawn over the window rather than inside the sidebar, so it
   // closes with the sidebar folding away as well as with the tab hiding.
   const menu = useMenu(context.tasks.shown && context.inSight);
@@ -1675,12 +1677,15 @@ function RepositorySection({
   return (
     <div className="sidebar-repository">
       <GroupHeader
-        {...sidebarHead({
-          folded,
-          onToggle: () => folds.toggle(repository),
-          count: group.tasks.length,
-          noun: TASK_NOUN,
-        })}
+        {...sidebarHead(
+          {
+            folded,
+            onToggle: () => folds.toggle(repository),
+            count: group.tasks.length,
+            noun: TASK_NOUN,
+          },
+          phone,
+        )}
         glyph={
           repository === null ? (
             <NoRepositoryGlyph />
@@ -1709,7 +1714,7 @@ function RepositorySection({
         }
         actions={
           <>
-            {actionGroups.length === 0 ? null : (
+            {phone || actionGroups.length === 0 ? null : (
               <MoreButton
                 ref={ellipsis}
                 thing={named}
@@ -1947,11 +1952,13 @@ interface FloatingSidebar extends HoverPane {
   readonly inSight: boolean;
 }
 
-/** Where a sidebar opened from away takes the keyboard: the row or glyph it marks, else Search, the first of its places. */
+/** Where a sidebar opened from away takes the keyboard: the row or glyph it marks, else Search, the first of its places, else, on a phone, which draws no places, the first of its rows, or the first of its bar's controls where its list holds no row to press. */
 function sidebarFocus(sidebar: HTMLElement): HTMLElement | null {
   return (
     sidebar.querySelector<HTMLElement>('[aria-current="page"]') ??
-    sidebar.querySelector<HTMLElement>(".sidebar-places > button")
+    sidebar.querySelector<HTMLElement>(".sidebar-places > button") ??
+    sidebar.querySelector<HTMLElement>(".sidebar-section-body button") ??
+    sidebar.querySelector<HTMLElement>("button")
   );
 }
 
@@ -2342,9 +2349,10 @@ function useFirstUsableSpan(tasks: SidebarTasksControl): void {
  * was opened from a pin, for as long as the task stays open.
  *
  * On a phone the column is the Tasks page (`mobile-bar.tsx`). The bar
- * already holds New task, Search, the Inbox, and Tasks, and the phone opens
- * on the Inbox rather than Home, so the column leaves those rows to the bar.
- * Its workspaces and account sit behind the reader's face
+ * already holds New task, Search, the Inbox, Tasks, and Automations, and the
+ * phone opens on the Inbox rather than Home, so the column leaves those rows
+ * to the bar, and the Merge queue to Search's Go to, drawing no page rows.
+ * Its workspaces and account sit behind the workspace's tile
  * (`phone-account.tsx`), as on every phone place.
  *
  * Its right edge resizes it, and a drag well past its least width folds it
@@ -2373,7 +2381,6 @@ function SidebarColumn({
   const pins = useSteadyDoors(usePins(control.typedNamesNow));
   const tasks: SidebarTasks = useMemo(() => ({ ...control, ...pins }), [control, pins]);
   const pictures = useRepositoryPictures();
-  const connected = useConnected();
   const onTasks = tab === PANEL_TAB.TASKS;
   // Whether a row of the column is lifted into a drag, while which an empty Pinned stands to take it.
   const [carrying, setCarrying] = useState(false);
@@ -2969,6 +2976,21 @@ function SidebarColumn({
 
   const standingManagers = sectionedManagers.filter((agent) => agent.id === openManagerId);
   const headedCount = tasksHeaded.length + sectionedManagers.length;
+  const phone = room === SHELL_ROOM.NARROW;
+  // A phone's Tasks head draws no buttons, View options standing in its bar, and offers New section and Mark all as read on a long press, as the iOS app's My tasks offers its own.
+  const headMenu = useMenu(tasks.shown && overlay.inSight);
+  const markHeadRead = useReadMark();
+  const headUnread = useUnreadAmong(tasksHeaded, marks);
+
+  const headGroups: MenuEntry[][] = phone
+    ? [
+        ...(newSectionOffered
+          ? [[{ label: NEW_SECTION, icon: <FolderPlusIcon />, onSelect: askNewSection }]]
+          : []),
+        ...markAllReadGroups(headUnread, markHeadRead),
+      ]
+    : [];
+
   // The tasks' rows chosen together, in the order drawn, those the runs leave undrawn among them, as one run, so ⇧-click chooses across the lists.
   const chooseOrder = drawn.map((task) => task.id);
   const listed = tasks.signedIn && drawn.length > 0;
@@ -2992,7 +3014,6 @@ function SidebarColumn({
 
   // Whether Home's composer is in sight; a person's page stands in Home's place without leaving its page, and draws no composer.
   const homeComposer = atHome && place !== ROUTED_PLACE.PERSON;
-  const phone = room === SHELL_ROOM.NARROW;
 
   // Each place opens in a tab of its own on a middle-click, at its address under the listed workspace, where the window opens tabs.
   const listedStep =
@@ -3018,39 +3039,33 @@ function SidebarColumn({
     onSignOut,
   });
 
-  // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the rest (`mobile-bar.tsx`).
-  const places = (
+  // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the places and Search's Go to the rest (`mobile-bar.tsx`), so none stands.
+  const places = phone ? null : (
     <>
       <SidebarPlaces>
-        {phone ? null : (
-          <>
-            <HeldSearchRow onOpen={placeDoors.onSearch} />
-            <HeldHomeRow
-              current={atHome}
-              disabled={!tasks.signedIn}
-              onOpen={placeDoors.onHome}
-              onOpenInTab={placeDoors.onHomeInTab}
-            />
-            {inboxOn ? (
-              <HeldInboxRow
-                count={inboxCount}
-                current={inInbox}
-                disabled={!tasks.signedIn}
-                onOpen={placeDoors.onInbox}
-                onOpenInTab={placeDoors.onInboxInTab}
-              />
-            ) : null}
-          </>
-        )}
-        {phone ? null : (
-          <HeldTasksRow
-            current={inBoard}
+        <HeldSearchRow onOpen={placeDoors.onSearch} />
+        <HeldHomeRow
+          current={atHome}
+          disabled={!tasks.signedIn}
+          onOpen={placeDoors.onHome}
+          onOpenInTab={placeDoors.onHomeInTab}
+        />
+        {inboxOn ? (
+          <HeldInboxRow
+            count={inboxCount}
+            current={inInbox}
             disabled={!tasks.signedIn}
-            onOpen={placeDoors.onBoard}
-            onOpenInTab={placeDoors.onBoardInTab}
-            onPreload={placeDoors.onBoardPreload}
+            onOpen={placeDoors.onInbox}
+            onOpenInTab={placeDoors.onInboxInTab}
           />
-        )}
+        ) : null}
+        <HeldTasksRow
+          current={inBoard}
+          disabled={!tasks.signedIn}
+          onOpen={placeDoors.onBoard}
+          onOpenInTab={placeDoors.onBoardInTab}
+          onPreload={placeDoors.onBoardPreload}
+        />
         <HeldAutomationsRow
           current={inAutomations}
           failed={automationFailed}
@@ -3091,7 +3106,7 @@ function SidebarColumn({
       <SidebarDoors tasks={tasks} keep={keepDoors} />
       {/* The workspace heads the sidebar once one is read, as everything under it is that
           workspace's; the app's own head stands until then. A phone heads it as it heads
-          every place, the reader's face opening their workspaces and account (`phone-account.tsx`). */}
+          every place, the workspace's tile opening its workspaces and account (`phone-account.tsx`). */}
       {phone ? (
         <PhoneHead
           place="sidebar"
@@ -3114,7 +3129,17 @@ function SidebarColumn({
               Tasks
             </Text>
           }
-          end={null}
+          end={
+            tasks.signedIn ? (
+              <TaskViewOptions
+                shown={tasks.shown && overlay.inSight}
+                control={taskView}
+                shared={shared}
+                filtered={shared && assignedTo.kind !== mine.kind}
+                size={BUTTON_SIZE.CONTROL}
+              />
+            ) : null
+          }
         />
       ) : tasks.signedIn && tasks.workspace !== undefined ? (
         <WorkspaceSwitcher
@@ -3193,6 +3218,7 @@ function SidebarColumn({
                               count: headedCount,
                               noun: TASK_NOUN,
                             },
+                        phone,
                       )}
                       head={tasks.signedIn ? GROUP_HEAD.SCROLLS : GROUP_HEAD.NONE}
                       label={
@@ -3202,26 +3228,32 @@ function SidebarColumn({
                           tasksHead
                         )
                       }
+                      menuOpen={headMenu.open !== undefined}
+                      contextMenu={
+                        headGroups.length === 0 ? undefined : headMenu.contextMenu(newSectionButton)
+                      }
                       actions={
-                        <>
-                          {!newSectionOffered ? null : (
-                            <Tooltip label={NEW_SECTION}>
-                              <IconButton
-                                ref={newSectionButton}
-                                icon={<FolderPlusIcon />}
-                                label={NEW_SECTION}
-                                size={BUTTON_SIZE.COMPACT}
-                                onClick={askNewSection}
-                              />
-                            </Tooltip>
-                          )}
-                          <TaskViewOptions
-                            shown={tasks.shown && overlay.inSight}
-                            control={taskView}
-                            shared={shared}
-                            filtered={shared && assignedTo.kind !== mine.kind}
-                          />
-                        </>
+                        phone ? null : (
+                          <>
+                            {!newSectionOffered ? null : (
+                              <Tooltip label={NEW_SECTION}>
+                                <IconButton
+                                  ref={newSectionButton}
+                                  icon={<FolderPlusIcon />}
+                                  label={NEW_SECTION}
+                                  size={BUTTON_SIZE.COMPACT}
+                                  onClick={askNewSection}
+                                />
+                              </Tooltip>
+                            )}
+                            <TaskViewOptions
+                              shown={tasks.shown && overlay.inSight}
+                              control={taskView}
+                              shared={shared}
+                              filtered={shared && assignedTo.kind !== mine.kind}
+                            />
+                          </>
+                        )
                       }
                       standing={
                         tasksHeaded.some(currentTask) || standingManagers.length > 0 ? (
@@ -3312,8 +3344,8 @@ function SidebarColumn({
                             )}
                           </NoteLine>
                         ) : null}
-                        {/* Note that rows the list still holds stand with no line over them while the app is offline, since the Offline mark says why; a list with none still says it. */}
-                        {tasks.listFailed && (connected || unlisted) ? (
+                        {/* Note that the line says nothing while the app is offline, since the Offline mark says why (`ServiceReachedByWindow`). */}
+                        {tasks.listFailed ? (
                           <ErrorState
                             failure={unreadShown(FAILURE_SURFACE.TASKS_READ)}
                             onRetry={tasks.onRetryList}
@@ -3342,6 +3374,15 @@ function SidebarColumn({
                         />
                       </nav>
                     </GroupHeader>
+                    {headMenu.drawn === undefined ? null : (
+                      <ActionMenu
+                        label={`${tasksHead} actions`}
+                        replayUnmasked
+                        menu={headMenu.drawn}
+                        groups={headGroups}
+                        onClose={headMenu.close}
+                      />
+                    )}
                   </div>
                 </div>
               </SelectionRegion>

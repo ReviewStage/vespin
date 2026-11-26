@@ -135,6 +135,7 @@ import { EXPERIMENT } from "@repo/settings";
 import {
   ANNOUNCE,
   announce,
+  CarryOnLine,
   CHAT_RUN,
   CHAT_SIDE,
   ChatBubble,
@@ -220,7 +221,7 @@ import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
-import { useFindDetails, useFindOpen } from "../find-in-tab.js";
+import { FIND_DETAIL, FindDetailFolds, useFindDetails, useFindOpen } from "../find-in-tab.js";
 import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
@@ -413,7 +414,7 @@ import { WorkedFor, WorkingLine } from "./working-time.js";
  * the developer sent it after the description is the developer's bubble, each skill it
  * names the chip that opens the skill's file (`skill-chip.tsx`), as a
  * "Loaded skill" row opens it too, hanging the same card; and while
- * the agent may still write, a shimmering line stands at the end saying
+ * the agent may still write, a quiet line stands at the end saying
  * what its newest turn's record says it is doing (`tabTurnOf`): "Starting…"
  * until a runner opens the turn, whatever its start waits on, "Working…"
  * while it runs, and "Stopping…" once a Stop was asked of it,
@@ -787,7 +788,14 @@ export function ToolCallView({
           ) : undefined
         }
       />
-      {inBody ? null : <CallPictures tool={part.tool} input={part.input} output={part.output} />}
+      {inBody ? null : (
+        <CallPictures
+          tool={part.tool}
+          input={part.input}
+          output={part.output}
+          runnerKept={part.pictures}
+        />
+      )}
       <ComputerPermissionNote tool={part.tool} output={part.output} />
       <MachineRefusalCard tool={part.tool} output={part.output} />
       {part.outOfMemory === undefined ? null : <OutOfMemoryOffer outOfMemory={part.outOfMemory} />}
@@ -1780,9 +1788,31 @@ function MessageSender({ actor }: { actor: Actor }): React.JSX.Element {
   );
 }
 
-/** A carry-on's head: where the turn before it was cut off and carried on by itself, in the words its reason reads (`carryOnLineWords`). */
-function CarryOnHead({ reason }: { reason: CarryOnReason }): React.JSX.Element {
-  return <SubjectLine lead={carryOnLineWords(reason)} fit={SUBJECT_FIT.OWN} />;
+/**
+ * A carry-on: where the turn before it was cut off and carried on by itself,
+ * one of the transcript's steps in the words its reason reads
+ * (`carryOnLineWords`), never a message anyone sent, the words the agent was
+ * sent folded under it as a thought's are, a detail a find may leave out.
+ */
+function CarryOnView({
+  message,
+  reason,
+  words,
+}: {
+  message: AgentTranscriptMessage;
+  reason: CarryOnReason;
+  words: string;
+}): React.JSX.Element {
+  return (
+    <FindDetailFolds>
+      <CarryOnLine
+        line={carryOnLineWords(reason)}
+        sent={words}
+        data-message-id={message.id}
+        {...FIND_DETAIL}
+      />
+    </FindDetailFolds>
+  );
 }
 
 /** What a wakeup's line says the agent did, after its own chip. */
@@ -1984,6 +2014,13 @@ export function AgentMessage({
   // A line the voice said on a call is the voice's, never the agent's words.
   if (isVoiceLine(message)) return <VoiceLineRow message={message} />;
 
+  // A carry-on is the app's word to the agent where a turn was cut off, drawn as a step of the transcript rather than under a sender.
+  const carryOn = carryOnLineOf(message);
+
+  if (carryOn !== undefined) {
+    return <CarryOnView message={message} reason={carryOn.reason} words={words} />;
+  }
+
   const named =
     sender === undefined ? null : senderFor === undefined ? (
       <MessageSender actor={sender} />
@@ -2051,16 +2088,8 @@ export function AgentMessage({
         <ThreadLineHead line={thread} words={words} received={received} fit={SUBJECT_FIT.OWN} />
       );
 
-    // A wakeup is the agent's own line, headed by what it did, as a thread's line is; a carry-on is headed by what cut the turn before it off.
-    const carryOn = carryOnLineOf(message);
-
-    const subject = isWakeupLine(message) ? (
-      <WakeupHead delay={wakeupDelay} />
-    ) : carryOn !== undefined ? (
-      <CarryOnHead reason={carryOn.reason} />
-    ) : (
-      threadHead
-    );
+    // A wakeup is the agent's own line, headed by what it did, as a thread's line is.
+    const subject = isWakeupLine(message) ? <WakeupHead delay={wakeupDelay} /> : threadHead;
 
     // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
     const copy = (
@@ -2430,6 +2459,36 @@ function railLinesOf(
   });
 }
 
+/**
+ * `readOf` kept by the message it read, so a transcript written a line
+ * longer reads only the messages that changed: the document shares every
+ * message it did not change (`shareAppState`), so the rest are the very
+ * messages read before.
+ */
+function cachedByMessage(
+  readOf: (message: AgentTranscriptMessage) => readonly RailSentLine[],
+): (message: AgentTranscriptMessage) => readonly RailSentLine[] {
+  const read = new WeakMap<AgentTranscriptMessage, readonly RailSentLine[]>();
+
+  return (message) => {
+    const kept = read.get(message);
+
+    if (kept !== undefined) return kept;
+    const lines = readOf(message);
+    read.set(message, lines);
+
+    return lines;
+  };
+}
+
+/** Whether two runs of rail lines mark the same lines on the same rows. */
+function sameRailLines(one: readonly RailLine[], other: readonly RailLine[]): boolean {
+  return (
+    one.length === other.length &&
+    one.every((each, at) => each.rowKey === other[at]?.rowKey && each.line === other[at]?.line)
+  );
+}
+
 /** Each piece's own words as a find counts them, kept by the piece. */
 const pieceWords = new WeakMap<TurnPiece, Omit<FindRow, "key">>();
 
@@ -2765,7 +2824,7 @@ function AgentTranscriptView({
   approvals?: AgentApprovalsControl | undefined;
   /** The current turn, whose own native notice replaces its generic failure line. */
   turnId?: string | null | undefined;
-  /** When the run under way began, which the working line counts from; none where unknown, when the line only shimmers. */
+  /** When the run under way began, which the working line counts from; none where unknown, when the line says its words alone. */
   startedAt?: number | undefined;
   /** The line the transcript ends on once its turn was stopped or failed (`endLineParts`); nothing otherwise. */
   ended?: EndLineParts | undefined;
@@ -2951,8 +3010,8 @@ function AgentTranscriptView({
     bringIn.current = bringMessage;
   });
 
-  // The lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief where that is a card, then its note, and the task the agent was handed, as the note is, under whoever handed it.
-  const railLines = useMemo(() => {
+  // How each message reads as lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief where that is a card, then its note, and the task the agent was handed, as the note is, under whoever handed it.
+  const readRailLines = useMemo(() => {
     const { description, task } = openingLinesOf(brief, drawnOrigin, firstLine);
 
     // Note that the description's card says what its origin hands it where it hands words, an automation's prompt, rather than the line's own.
@@ -2982,18 +3041,14 @@ function AgentTranscriptView({
       ];
     };
 
-    return railLinesOf(entries, readOf);
-  }, [
-    entries,
-    brief,
-    drawnOrigin,
-    briefSender,
-    firstLine,
-    replayOpened,
-    readerId,
-    members,
-    former,
-  ]);
+    return cachedByMessage(readOf);
+  }, [brief, drawnOrigin, briefSender, firstLine, replayOpened, readerId, members, former]);
+
+  // Note that the rail is handed the run it drew last while no line changed, so it neither draws again nor reads where its lines stand as the agent's own words grow, which is what moves while it works.
+  const railLines = useKept(
+    useMemo(() => railLinesOf(entries, readRailLines), [entries, readRailLines]),
+    sameRailLines,
+  );
 
   if (!holding && messages.length > 0) {
     const { todos, first, opening, placed, writing, calls, delegated } = placing;

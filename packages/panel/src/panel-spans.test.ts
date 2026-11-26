@@ -68,6 +68,7 @@ afterEach(() => {
   uninstall();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 /** Lets an observer's report, and an effect's, land. */
@@ -174,7 +175,9 @@ test("a window whose first task list read fails is not timed through its Retry",
   assert.deepEqual(recorded(), []);
 });
 
-test("a key pressed in a timed box is timed to the paint after it, saying how long it waited and ran, and a key pressed elsewhere is not", async () => {
+test("a key pressed in a timed box is timed to the paint after it, on the wall's clock however long the Mac slept, saying how long it waited and ran, and a key pressed elsewhere is not", async () => {
+  // The page's clock reads 2 s at the wall's 5,000 s, whatever its origin says, as after a sleep.
+  vi.spyOn(performance, "now").mockReturnValue(2_000);
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() => root.render(createElement(TimedBox, { name: PANEL_SPAN.KEYSTROKE_COMPOSER })));
@@ -197,7 +200,7 @@ test("a key pressed in a timed box is timed to the paint after it, saying how lo
   assert.deepEqual(recorded(), [
     {
       name: PANEL_SPAN.KEYSTROKE_COMPOSER,
-      startedAt: performance.timeOrigin + 1_000,
+      startedAt: 4_999_000,
       waited: 72,
       measured: { "keystroke.input_delay_ms": 12, "keystroke.processing_ms": 28 },
     },

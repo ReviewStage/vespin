@@ -1,22 +1,25 @@
 /**
- * use-message-acts.ts -- what an agent's messages offer past copying and sharing them, as the panel's message actions offer it: a line of the member's Edit, and an agent's finished turn Fork to new agent and Rewind conversation to here.
+ * use-message-acts.ts -- what an agent's messages offer past copying and sharing them, as the panel's message actions offer it: a line of the member's Edit, a Manager's chat message Mark as unread, and an agent's finished turn Fork to new agent and Rewind conversation to here.
  *
  * Where each lands is the panel's (`@repo/features/agent-rewind-model`'s
  * `rewindPoints` and `editsInPlace`): Edit on a person's line that opened a
  * turn, never a comment's, a Slack message's, one said on a call, or files
  * alone; Rewind conversation to here on a reply some such line follows.
- * Every message of a Manager's chat, of any author's, offers Reply first,
- * which quotes it whole into the composer as the panel's Reply does.
  * Edit and Rewind are offered only while the agent takes messages, not archived and
  * with no call of this phone's standing into it, as the service refuses a
  * rewind under a call. Rewind asks first, in the panel's words
  * (`revertAsk`), and sends the panel's `AGENTS_REWIND`; only the
  * conversation goes back from the phone, the files staying as they are.
  * Edit lays the line's words in the composer, which sends them in its place
- * (`use-agent-composer.ts`), a Manager's chat message edited as the line it
- * went as (its row's `lineId`); a line that carried files is written again only
+ * (`use-agent-composer.ts`); a line that carried files is written again only
  * on the desktop and the web, since the phone does not read a line's files
- * back into its field. Fork to new agent opens New agent as the panel's
+ * back into its field. A Manager's chat, in the channel and in a thread, is
+ * a team channel instead, as the panel's is: Edit stands on each of the
+ * reader's own messages that has words, whatever opened a turn, and its words
+ * are saved in place, the message marked edited and the Manager told, its
+ * files and everything after it standing as they were
+ * (`AGENTS_CHAT_EDIT`); nothing is rewound, and no Rewind conversation to
+ * here is offered there. Fork to new agent opens New agent as the panel's
  * fork opens its draft (`@repo/features/agent-fork-model`), on a turn of
  * an agent that stands under a task and is not archived.
  */
@@ -30,6 +33,7 @@ import {
   rewindPoints,
 } from "@repo/features/agent-rewind-model";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { INBOX_READ_MARK } from "@repo/features/inbox-list-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppTranscript } from "@repo/host/app-state";
 import type { FollowedAgent } from "@repo/host/app-state-reads";
@@ -39,9 +43,6 @@ import { useMemo, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 import type { AgentComposer } from "./use-agent-composer.js";
-
-/** What Reply on a chat message says, as the panel's does. */
-const REPLY_WORD = "Reply";
 
 /** A sent line, as the transcript draws it. */
 type SaidItem = Extract<MessageItem, { kind: typeof TRANSCRIPT_ITEM.SAID }>;
@@ -71,12 +72,16 @@ export function useMessageActs(input: {
   readonly agent: FollowedAgent | undefined;
   readonly transcript: AppTranscript | undefined;
   readonly readerId: string | undefined;
-  readonly composer: Pick<AgentComposer, "editMessage" | "reply">;
+  readonly composer: Pick<AgentComposer, "editMessage">;
   readonly calling: boolean;
-  /** Each message of a Manager's chat by its row's id, to the transcript line it went as (`lineId`), which its Edit takes the Manager back to, or null for one that went as none, such as the Manager's own; none for any other agent. */
-  readonly chatLines?: ReadonlyMap<string, string | null> | undefined;
+  /** Where the messages are a Manager's chat's, the ids of those the chat holds, each standing under its row's id, whose Edit saves the reader's own words in place; none for any other agent. A message still on its way or refused stands under its send's key instead, so it offers no such Edit, keeping its own. */
+  readonly chatMessages?: ReadonlySet<string> | undefined;
+  /** Moves the reader's mark of a Manager's chat back to just before one of its messages, by its id and when it was sent, as its Mark as unread presses; none for any other agent. */
+  readonly markUnread?: ((messageId: string, sentAt: number) => void) | undefined;
 }): MessageActs {
-  const { agentId, agent, transcript, readerId, composer, calling, chatLines } = input;
+  const { agentId, agent, transcript, readerId, composer, calling, chatMessages, markUnread } =
+    input;
+
   const acts = useHostActs();
   const write = useWrite();
   const router = useRouter();
@@ -119,12 +124,28 @@ export function useMessageActs(input: {
     });
   };
 
+  /** A message of a Manager's chat's Edit, on the reader's own with words while the Manager stands unarchived, which lays its words in the field to save in place. */
+  const chatActs = (item: SaidItem, held: ReadonlySet<string>): readonly HeldAct[] =>
+    standing && !item.received && held.has(item.place.row) && item.words.trim() !== ""
+      ? [
+          {
+            label: REWIND_WORDS.EDIT,
+            symbol: GLYPH.EDIT_MESSAGE,
+            onPress: () =>
+              composer.editMessage({
+                messageId: item.place.row,
+                words: item.words,
+                cuts: false,
+                takes: undefined,
+              }),
+          },
+        ]
+      : [];
+
   /** A line's Edit, where it opened a turn a person wrote, carried words alone, and the agent takes messages. */
   const lineActs = (item: SaidItem): readonly HeldAct[] => {
-    // Note that a chat message stands under its row's id, and is edited as the transcript line it went as, so one with no line, the Manager's own, offers no Edit.
-    const id = chatLines === undefined ? item.place.row : chatLines.get(item.place.row);
-
-    if (id === undefined || id === null) return [];
+    if (chatMessages !== undefined) return chatActs(item, chatMessages);
+    const id = item.place.row;
     const line = byId.get(id);
     const { words } = item;
 
@@ -153,22 +174,10 @@ export function useMessageActs(input: {
       : [];
   };
 
-  /** Reply on a chat message of any author's, which quotes its words whole into the composer, as every message of the panel's chat offers it; none for a message of no words, or outside a Manager's chat. */
-  const replyActs = (item: SaidItem): readonly HeldAct[] =>
-    // Note that the greeting and a message still on its way are no row of the chat, so they offer none.
-    chatLines?.has(item.place.row) !== true || item.words.trim() === ""
-      ? []
-      : [
-          {
-            label: REPLY_WORD,
-            symbol: GLYPH.REPLY,
-            onPress: () => composer.reply(item.words),
-          },
-        ];
-
   /** A finished turn's Fork to new agent and Rewind conversation to here, in the panel's order, each where it is offered. */
   const turnActs = (id: string, words: string): readonly HeldAct[] => {
-    const line = rewinds ? points.revertsAt.get(id) : undefined;
+    // Note that a Manager's chat offers no rewind, as a channel takes nothing back; its messages are edited in place instead.
+    const line = rewinds && chatMessages === undefined ? points.revertsAt.get(id) : undefined;
 
     return [
       ...(forks
@@ -196,11 +205,27 @@ export function useMessageActs(input: {
   // Note that a question whose line is no longer where it was, dropped or rewound elsewhere, asks nothing.
   const stands = asked !== undefined && points.revertsAt.get(asked.reply) === asked.line;
 
+  /** Mark as unread on a message of a Manager's chat, anyone's, where the page offers it; never on the greeting or a line still on its way, which the chat holds no row of. */
+  const readActs = (item: SaidItem): readonly HeldAct[] => {
+    const sentAt = item.at;
+    const kept = chatMessages?.has(item.place.row) === true;
+
+    if (markUnread === undefined || !kept || sentAt === undefined) return [];
+
+    return [
+      {
+        label: INBOX_READ_MARK.UNREAD,
+        symbol: GLYPH.MARK_UNREAD,
+        onPress: () => markUnread(item.place.row, sentAt),
+      },
+    ];
+  };
+
   return {
     more: (item) =>
       item.kind === TRANSCRIPT_ITEM.FOOT
         ? turnActs(item.place.message, item.copy)
-        : [...replyActs(item), ...lineActs(item)],
+        : [...lineActs(item), ...readActs(item)],
     reverting: {
       title: ask.title,
       message: ask.body,

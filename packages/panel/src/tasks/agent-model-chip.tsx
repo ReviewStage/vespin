@@ -8,13 +8,13 @@ import {
   type ChipLook,
   ChipName,
   type ChipWidth,
+  HarnessMark,
   POPOVER_ALIGN,
   Tooltip,
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useEffect, useId, useRef, useState } from "react";
-import { HarnessMark } from "../harness-marks.js";
 import { type AgentModeControl, MODE_GLYPH, modeShown } from "./agent-approvals.js";
 import { choiceLabel, paidByOf, providerOf } from "./agent-model.js";
 import { payerLastLine, usePayerPlan } from "./agent-payer.js";

@@ -290,7 +290,7 @@ export function SchemaSettingRows({
     );
   };
 
-  // Note that a row standing only while its condition holds is revealed, so it unrolls in and rolls up with what turned it rather than popping.
+  // Note that a row standing only while its condition holds is revealed, in a reveal's box, standing and going with what turned it.
   const rows = settingRowsDrawnForPage(page, section, view).map((row) =>
     row.revealed ? (
       <Reveal key={row.entry.id} shown={row.shown}>

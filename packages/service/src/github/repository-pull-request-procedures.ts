@@ -23,6 +23,7 @@ import {
   changesOf,
   overviewOf,
   publishedOf,
+  reachedOverview,
   reachedPullRequest,
   reachedRepository,
   viewedOf,
@@ -69,17 +70,17 @@ export function repositoryPullRequestProcedures(seams: RepositoryPullRequestProc
       );
     }),
     overviewPullRequest: signedIn.overviewPullRequest.effect(function* ({ input, context }) {
-      const reached = yield* reachedPullRequest(context.userId, input);
+      const reached = yield* reachedOverview(context.userId, input);
 
       return yield* overviewOf(reached, context.userId, overviewPullRequestRead);
     }),
     overviewChecks: signedIn.overviewChecks.effect(function* ({ input, context }) {
-      const reached = yield* reachedPullRequest(context.userId, input);
+      const reached = yield* reachedOverview(context.userId, input);
 
       return yield* overviewOf(reached, context.userId, overviewChecksRead);
     }),
     overviewConversation: signedIn.overviewConversation.effect(function* ({ input, context }) {
-      const reached = yield* reachedPullRequest(context.userId, input);
+      const reached = yield* reachedOverview(context.userId, input);
 
       return yield* overviewOf(reached, context.userId, overviewConversationRead);
     }),

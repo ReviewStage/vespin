@@ -49,6 +49,7 @@ import { ACTOR_SIZE, ActorMark, type ActorSize } from "../actor-ref.js";
 import { runAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { CallCardDock } from "../call/standing-call.js";
+import { useCoarsePointer } from "../coarse-pointer.js";
 import { useOpenPerson } from "../person-door.js";
 import { signOutSayingFailure } from "../settings/account-section.js";
 import { useReadyToastStanding } from "../update-toast.js";
@@ -240,10 +241,13 @@ export function AccountHeading({
  * changelog, the Keyboard shortcuts page, and the ways to write to the people
  * who make the app; then Sign out, while anyone is signed in to leave. Note
  * that Settings and Send feedback are left to the gear and the button beside
- * the account, which already stand one press away.
+ * the account, which already stand one press away, and that Keyboard
+ * shortcuts is left out where a finger works the window, which has no keys
+ * to press them with.
  */
 function accountMenuGroups(
   signedIn: boolean,
+  finger: boolean,
   acts: {
     /** Opens the reader's own page; none outside the window, or before the account's id is known. */
     onProfile: (() => void) | undefined;
@@ -262,12 +266,16 @@ function accountMenuGroups(
     ...(profile.length === 0 ? [] : [profile]),
     [
       { label: "Changelog", icon: <NewspaperIcon />, onSelect: acts.onOpenChangelog },
-      {
-        label: "Keyboard shortcuts",
-        icon: <KeyboardIcon />,
-        command: APP_COMMAND.KEYBOARD_SHORTCUTS,
-        onSelect: () => runAppCommand(APP_COMMAND.KEYBOARD_SHORTCUTS),
-      },
+      ...(finger
+        ? []
+        : [
+            {
+              label: "Keyboard shortcuts",
+              icon: <KeyboardIcon />,
+              command: APP_COMMAND.KEYBOARD_SHORTCUTS,
+              onSelect: () => runAppCommand(APP_COMMAND.KEYBOARD_SHORTCUTS),
+            },
+          ]),
       {
         label: "Contact us",
         icon: <LifeBuoyIcon />,
@@ -303,8 +311,9 @@ export function useAccountMenuGroups(
   const { mutate: sendEmail } = useMutation(pressMutation(ACT_KIND.CONTACT_EMAIL));
   const openPerson = useOpenPerson();
   const accountId = account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
+  const finger = useCoarsePointer();
 
-  return accountMenuGroups(account.status === ACCOUNT_STATUS.SIGNED_IN, {
+  return accountMenuGroups(account.status === ACCOUNT_STATUS.SIGNED_IN, finger, {
     onProfile:
       openPerson === undefined || accountId === undefined ? undefined : () => openPerson(accountId),
     onOpenChangelog: () => openChangelog(),

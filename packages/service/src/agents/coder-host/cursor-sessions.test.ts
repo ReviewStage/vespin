@@ -153,6 +153,7 @@ it.layer(SUITE)("a coding agent's sessions on Cursor", (it) => {
           linesUrl: "https://app.test/api/agents/runner-lines",
           mcpUrl: "https://app.test/api/agents/mcp",
           transcriptsUrl: "https://app.test/api/agents/runner-transcripts",
+          picturesUrl: "https://app.test/api/agents/runner-pictures",
           integrations: () => Effect.succeed([]),
           instructions: () => Effect.succeed(INSTRUCTIONS),
           nextSequence: () => Effect.succeed(0),

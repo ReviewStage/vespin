@@ -5,7 +5,6 @@ import {
   ConfirmationDialog,
   Host,
   Button as SwiftUIButton,
-  Text,
   TextField,
   useNativeState,
 } from "@expo/ui/swift-ui";
@@ -26,6 +25,7 @@ import {
 } from "react";
 import { ActionSheetIOS, type ActionSheetIOSOptions, Alert as SystemAlert } from "react-native";
 import { WORDS_KIND, type WordsKind } from "./system-asks.js";
+import { Text } from "./text.js";
 import { useWindowSizeClass } from "./use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
 

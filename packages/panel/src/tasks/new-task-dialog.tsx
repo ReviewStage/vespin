@@ -1,9 +1,10 @@
 import { DIALOG_SIZE, Dialog, type DialogHandle } from "@repo/ui";
 import { type RefObject, useId, useMemo, useRef, useState } from "react";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { useDrawnThroughExit } from "../use-held-through-exit.js";
 import { MENTION_MENU_SIDE } from "./mention-picker.js";
-import { NewTaskComposer } from "./new-task-composer.js";
+import { NewTaskComposer, PURPOSE_HEADING } from "./new-task-composer.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
 import { type NewTaskPreset, useNewTaskShown } from "./use-new-task.js";
 import type { TasksControl } from "./use-tasks-tab.js";
@@ -30,6 +31,13 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * composer, and Start can be pressed again; a task started closes the card
  * and opens as the host's open task.
  *
+ * On a phone the card is a sheet the screen's whole height instead
+ * (`DIALOG_SIZE.PAGE_SHEET`), as a phone's own compose sheet stands: "New
+ * task" centered at its head with a close in its start corner, which puts
+ * it away as Escape does, its draft kept, and the composer at its foot, on
+ * the keyboard, the room over it empty. What it starts, and how, is the
+ * card's.
+ *
  * The add menu's New task, and a task's menu and ⌘K's New sub-task, open
  * this same card with that task's relation as a row over it (New task's preset's
  * `relation`), started in that task's workspace rather than the one listed.
@@ -38,6 +46,9 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * agent that makes an automation (New task's preset's `purpose`), so it is
  * asked as New task asks.
  */
+
+/** What a phone's sheet's close is called, which puts it away as Escape does. */
+const CLOSE_LABEL = "Close";
 
 /** The composer's words field, the editor's own root, which the card hands focus to. */
 const FIELD_SELECTOR = EDITOR_ROOT_SELECTOR;
@@ -88,6 +99,13 @@ function NewTaskCard({
     [],
   );
 
+  // A phone's sheet names itself in its own head; the card is named by the composer's head row.
+  const phone = usePhoneRoom();
+
+  const name = phone
+    ? { size: DIALOG_SIZE.PAGE_SHEET, title: PURPOSE_HEADING[purpose], closeLabel: CLOSE_LABEL }
+    : { size: DIALOG_SIZE.COMPOSER, labelledBy: titleId };
+
   const close = () => {
     if (!starting) newTask.onClose();
   };
@@ -95,8 +113,7 @@ function NewTaskCard({
   return (
     <Dialog
       open={open}
-      size={DIALOG_SIZE.COMPOSER}
-      labelledBy={titleId}
+      {...name}
       ref={dialog}
       busy={starting}
       initialFocus={field}
@@ -112,7 +129,8 @@ function NewTaskCard({
           // Note that the field's Escape goes through the dialog, so a start under way holds it back as it holds the card's own.
           onLeave={() => dialog.current?.dismiss()}
           focusedByOwner
-          titleId={titleId}
+          titleId={phone ? undefined : titleId}
+          titledByOwner={phone}
           purpose={purpose}
           // Note that the dialog's card is not at a page's top, so a list rises over the line as an agent's box's does.
           listSide={MENTION_MENU_SIDE.ABOVE}

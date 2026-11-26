@@ -37,7 +37,12 @@
 import { randomUUID } from "node:crypto";
 import type { ContractedRouter } from "@orpc/server";
 import type { DatabaseServices } from "@repo/database/core/query";
-import { markAgentRead } from "@repo/database/models/agent-chat-reads";
+import {
+  markAgentRead,
+  markAgentSeen,
+  markAgentUnread,
+} from "@repo/database/models/agent-chat-reads";
+import { readAgentRepositories } from "@repo/database/models/agent-repositories";
 import {
   type Agent,
   type AgentCommitted,
@@ -50,6 +55,7 @@ import {
   updateAgentTargetDevice,
 } from "@repo/database/models/agent-store";
 import { machinesNamed } from "@repo/database/models/device-store";
+import { readManagerChatMessage } from "@repo/database/models/manager-chat-messages";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember, readAccountNames } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -62,10 +68,11 @@ import {
   AGENT_LIST_ARCHIVED,
   AGENT_MACHINE,
   type AgentPullRequest,
+  type AgentReadRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import { AGENT_START_STATUS, type HostedContract } from "@repo/features/contract";
-import { READ_MARK } from "@repo/features/read-mark";
+import { READ_MARK, unreadThroughOf } from "@repo/features/read-mark";
 import type { Sandbox } from "@repo/sandbox";
 import { Clock, Effect, type Layer, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
@@ -218,6 +225,39 @@ const committedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   const { txid } = changed.value;
 
   return txid === undefined ? { agent } : { agent, txid };
+});
+
+/**
+ * The asking member's own mark of a Manager's chat moved as `readMark` asks,
+ * and the write's transaction id. A look reads it through now, never back,
+ * opening the chat taking a mark by hand back and leaving it leaving one
+ * standing; Mark unread (`unreadFrom`) moves it back to just before the
+ * message it names, as the member reaches the chat, and marks it unread by
+ * hand, refused as not found where they reach no such message; a mark by
+ * hand naming none moves nothing.
+ */
+const movedChatMark = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  agentId: string,
+  request: AgentReadRequest,
+): Effect.fn.Return<string | undefined, HostedRefusal, DatabaseServices> {
+  if (request.readMark !== READ_MARK.UNREAD) {
+    const now = new Date(yield* Clock.currentTimeMillis);
+    const look = request.readMark === READ_MARK.READ ? markAgentRead : markAgentSeen;
+
+    return yield* hostedStoreOrUnavailable(look(userId, agentId, now));
+  }
+
+  if (request.unreadFrom === undefined) return undefined;
+
+  const message = yield* hostedStoreOrUnavailable(
+    readManagerChatMessage(userId, agentId, request.unreadFrom),
+  );
+
+  if (Option.isNone(message)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  const through = new Date(unreadThroughOf(message.value.createdAt.getTime()));
+
+  return yield* hostedStoreOrUnavailable(markAgentUnread(userId, agentId, through));
 });
 
 /** The session alone of the agent the path names, as `reachedAgentSession` reads it. */
@@ -490,6 +530,10 @@ export function agentsProcedures(
       const names = yield* hostedStoreOrUnavailable(readAccountNames(pageAccounts(agent)));
       const continuedBy = yield* continuedByOf(userId, [agent.id]);
       const macs = yield* hostedStoreOrUnavailable(machinesNamed(summaryDevices([agent])));
+
+      // Note that they are read as the reader, who reached the agent above, since its starter may have left the workspace.
+      const repositories = yield* hostedStoreOrUnavailable(readAgentRepositories(userId, agent.id));
+
       const now = yield* Clock.currentTimeMillis;
 
       return {
@@ -500,6 +544,7 @@ export function agentsProcedures(
           names,
           continuedBy(agent.id),
           macs,
+          repositories.map((each) => each.repository),
         ),
       };
     }),
@@ -511,7 +556,8 @@ export function agentsProcedures(
      * `pinned` pins it for the asking member alone, or unpins it.
      * `readMark` reads a Manager's chat through now for the asking member
      * alone (`markAgentRead`), which a look at its page sends; a mark by
-     * hand changes nothing.
+     * hand moves their mark back to just before the message it names
+     * (`unreadFrom`), as Mark unread does, and changes nothing naming none.
      * `disabledServers` replaces the list of MCP servers switched off for
      * it, which its next turn reads as it starts, set only by its starter,
      * whose own accounts its servers are. A model and effort, and the
@@ -562,10 +608,7 @@ export function agentsProcedures(
       }
 
       if ("readMark" in body) {
-        // Note that a mark by hand moves nothing, since no window offers one on an agent.
-        if (body.readMark === READ_MARK.UNREAD) return { agent: yield* summaryOf(userId, agent) };
-        const now = new Date(yield* Clock.currentTimeMillis);
-        const txid = yield* hostedStoreOrUnavailable(markAgentRead(userId, agent.id, now));
+        const txid = yield* movedChatMark(userId, agent.id, body);
         const marked = yield* summaryOf(userId, agent);
 
         return txid === undefined ? { agent: marked } : { agent: marked, txid };

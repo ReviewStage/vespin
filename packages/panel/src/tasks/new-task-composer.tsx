@@ -74,18 +74,10 @@ import { heldUpdateOver, putBackRefused } from "./refused-send.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { useRepositoryDefault } from "./repository-default.js";
 import { keptSkills } from "./repository-skills.js";
-import {
-  deviceOfPlace,
-  NewTaskRunsOnChip,
-  newTaskRunsOn,
-  placeIdOf,
-  useDevicesRead,
-  useNewTaskRunsOn,
-  useOwnedMachines,
-} from "./runs-on.js";
+import { NewTaskRunsOnChip, newTaskRunsOn, useDevicesRead, useNewTaskRunsOn } from "./runs-on.js";
 import { SkillFiles } from "./skill-chip.js";
 import type { SkillWithFile } from "./skill-ref.js";
-import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
+import { TaskMentions, useTasklessMentions } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 import {
   type AgentAsk,
@@ -236,8 +228,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
 /** ⌘Return: a bare task from a box with nothing in it. */
 const BARE_CHORD: ShortcutChord = { key: SHORTCUT_KEY.ENTER };
 
-/** Each purpose's head row title, before the repository's chip: drawn for an automation's, and named to a reader alone for a task's. */
-const PURPOSE_HEADING = {
+/** Each purpose's head row title, before the repository's chip: drawn for an automation's, and named to a reader alone for a task's; a phone's sheet draws it in its own head (`titledByOwner`). */
+export const PURPOSE_HEADING = {
   [NEW_TASK_PURPOSE.TASK]: "New task",
   [NEW_TASK_PURPOSE.AUTOMATION]: CREATE_WITH_AGENT_WORDS.TITLE,
 } as const satisfies Record<NewTaskPurpose, string>;
@@ -369,6 +361,7 @@ export function NewTaskComposer({
   focusedByOwner = false,
   takesFocus = true,
   titleId,
+  titledByOwner = false,
   listSide,
   purpose = NEW_TASK_PURPOSE.TASK,
   notices = NOTICE_LOOK.INSET,
@@ -388,6 +381,8 @@ export function NewTaskComposer({
   takesFocus?: boolean;
   /** The id the head row's title stands under, which names the dialog's card. */
   titleId?: string | undefined;
+  /** Whether the owner draws the purpose's title in a head of its own, as a phone's sheet does, so the head row draws none. */
+  titledByOwner?: boolean | undefined;
   /** Which side of the caret's line an `@` or `/` list opens: over it in the dialog, under it on Home, whose card stands near the page's top, where a list risen over it is cut off under the page's head. */
   listSide: MentionMenuSide;
   /** What the card starts; a task's agent where none is named. */
@@ -549,9 +544,7 @@ export function NewTaskComposer({
     if (runsOnStands) readModels.current();
   }, [runsOnStands]);
   const devices = (runsOnStands ? newTask.devices : undefined) ?? NO_DEVICES;
-  const owned = useOwnedMachines(runsOnStands ? workspaceId : undefined);
-  const [place, choosePlace, keptDevice] = useNewTaskRunsOn(devices, owned);
-  const device = deviceOfPlace(place);
+  const [device, chooseDevice, keptDevice] = useNewTaskRunsOn(devices);
 
   // Start is held until a read made since the card opened lands, where the member's last pick is a device (`useDevicesRead`).
   const { modelsRead } = useNewTaskShown();
@@ -565,7 +558,7 @@ export function NewTaskComposer({
   const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
 
   // Note that a card whose chip says Cloud names the cloud, because the service keeps the pick as where the tasks an agent makes for the member run.
-  const runsOn = runsOnStands ? newTaskRunsOn(place) : undefined;
+  const runsOn = runsOnStands ? newTaskRunsOn(device) : undefined;
   const { repository: picked, judged, drop } = repositoryDefault;
 
   // A tree's two tasks work in one repository, the other task's, which the chip is held to.
@@ -582,21 +575,14 @@ export function NewTaskComposer({
 
   const canStart = !devicesUnread && unpaid === undefined && filled;
   // What an `@` and a `/` offer: the chosen repository's, read through the workspace, as on an agent's page no task holds.
-  const readMentionAgents = useMentionAgentsReader(workspaceId, relatable, newTask.models);
   const reader = useMentionedReader();
-  const slug = workspace?.slug;
-  const { onShowMention } = newTask;
 
-  const mentions = useMemo(
-    () =>
-      workspaceId === undefined
-        ? undefined
-        : tasklessMentions(
-            { workspace: slug ?? workspaceId, workspaceId, repository },
-            onShowMention,
-            readMentionAgents,
-          ),
-    [workspaceId, slug, repository, onShowMention, readMentionAgents],
+  const mentions = useTasklessMentions(
+    workspaceId === undefined
+      ? undefined
+      : { workspace: workspace?.slug ?? workspaceId, workspaceId, repository },
+    { tasks: relatable, models: newTask.models },
+    newTask.onShowMention,
   );
 
   // A `/` offers no skill while the Skills experiment is off.
@@ -677,7 +663,7 @@ export function NewTaskComposer({
     const ask: AgentAsk = {
       repository,
       workspaceId,
-      deviceId: placeIdOf(place),
+      deviceId: device?.deviceId,
       relations: relationsAsked(relations),
       agent: {
         prompt,
@@ -713,7 +699,7 @@ export function NewTaskComposer({
     const ask: AgentAsk = {
       repository,
       workspaceId,
-      deviceId: placeIdOf(place),
+      deviceId: device?.deviceId,
       relations: relationsAsked(relations),
       agent: {
         prompt: "",
@@ -835,7 +821,7 @@ export function NewTaskComposer({
       ) : null}
       <div className="new-task-head flex min-w-0 flex-wrap items-center gap-item-gap">
         <div className="new-task-title flex min-w-0 max-w-full items-center gap-item-gap">
-          {forAutomation ? (
+          {titledByOwner ? null : forAutomation ? (
             <Text
               variant={TEXT_VARIANT.DIALOG}
               as={TEXT_ELEMENT.H2}
@@ -891,11 +877,10 @@ export function NewTaskComposer({
             ? (narrow) => (
                 <NewTaskRunsOnChip
                   devices={devices}
-                  owned={owned}
-                  place={place}
+                  device={device}
                   disabled={starting}
                   narrow={narrow}
-                  onChoose={choosePlace}
+                  onChoose={chooseDevice}
                 />
               )
             : undefined

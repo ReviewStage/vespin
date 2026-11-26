@@ -1,6 +1,6 @@
 // queued-lines.tsx -- the messages queued behind an agent's turn, standing in a glass of their own over its composer, as the panel stands its queue over the box: each with Steer and Delete, a long press offering them with Edit, Move Up and Move Down, one being edited muted with Cancel, and Resume while the queue stands paused.
 
-import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
@@ -16,6 +16,7 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { BAR_GLASS } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { type HeldAct, HeldSwiftMenu } from "./held-menu.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

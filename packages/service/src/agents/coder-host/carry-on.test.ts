@@ -66,11 +66,11 @@ const cutOff = (at: number): CarryOnTurn => ({
   settledAt: new Date(at),
 });
 
-/** The decision's input as it reads where everything holds: a Mac's agent, its turn just cut off, no carry-on among its lines, nothing queued. */
+/** The decision's input as it reads where everything holds: a Mac's agent, its turn just cut off, every carry-on before it answered, nothing queued. */
 const resumable = (now: number): CarryOnInput => ({
   agent: { archivedAt: null, machine: AGENT_MACHINE.DEVICE },
   turn: cutOff(now),
-  carriedOn: false,
+  unanswered: 0,
   queued: false,
   now,
 });
@@ -154,18 +154,6 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
       assert.equal(inside.outcome, CARRY_ON_OUTCOME.RESUME);
       assert.deepEqual(past, { outcome: CARRY_ON_OUTCOME.NONE });
     }),
-  );
-
-  it.effect(
-    "a turn a carry-on opened is never carried on again, so a crash at every resume never loops",
-    () =>
-      Effect.gen(function* () {
-        const now = yield* Clock.currentTimeMillis;
-
-        assert.deepEqual(carryOnDecision({ ...resumable(now), carriedOn: true }), {
-          outcome: CARRY_ON_OUTCOME.NONE,
-        });
-      }),
   );
 
   it.effect(
@@ -275,71 +263,66 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
   (it) => {
     // Note that a launch can end before it takes any line, its carry-on's among them, as one that fails on a line it was handed ahead of it does.
     it.effect.each([
-      ["its runner took the carry-on's line", true],
-      ["its runner took no line", false],
+      ["its runner takes the carry-on's line", true],
+      ["its runner takes no line", false],
     ] as const)(
-      "a runner its Mac settled mid-turn is carried on once: a carry-on line queues a launch for the Mac, and the carry-on's own turn cut off the same way, where %s, fails as before",
+      "a runner that dies at every resume, where %s, and says nothing is carried on three times, then its turn is left failed",
       ([, takesLine]) =>
         Effect.gen(function* () {
           const warm = yield* warmLocalAgent;
           const { userId, agent } = warm;
-          const lost = yield* turnRunning(warm, "Now the emails.");
-          // The clock moves before each settle too, so the carry-on's turn is queued after the lost one.
-          yield* TestClock.adjust("1 second");
-          yield* settledDeviceAgentLine(ownDeviceHost(userId, warm.deviceId), warm.launchId, 1);
-
-          yield* turnEnded(warm);
-
-          const resumed = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
-            agent.conversationId,
-          );
-
-          assert.equal(
-            resumed?.status,
-            TURN_STATUS.QUEUED,
-            "the carry-on opened a turn of its own",
-          );
-          assert.notEqual(resumed?.id, lost);
-          assert.equal(yield* carriedOnStands(warm, lost), true);
-          const relaunch = yield* launchClaimed(warm);
-          assert.notEqual(relaunch, undefined, "the carry-on launches the runner again");
-          assert.ok(relaunch !== undefined);
-
-          // The Mac goes down again during the carry-on's turn.
           const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
           const target = { userId, conversationId: agent.conversationId };
-          yield* writer.consume(target, {
-            kind: RUN_EVENT.TURN_STARTED,
-            conversationId: sessionKey(agent.conversationId),
-            turnId: resumed?.id ?? "",
-            sequence: 1,
-            origin: RUN_TURN_ORIGIN.TYPED,
-            trigger: TURN_TRIGGER.ASK,
-            at: yield* Clock.currentTimeMillis,
-          });
 
-          if (takesLine) {
-            yield* writer.takeAwaitingLine(target, {
-              clientId: sentLineId(carryOnKey(lost)),
+          const newest = () =>
+            Effect.map(latestTurnsOf(userId, [agent.conversationId]), (turns) =>
+              turns.get(agent.conversationId),
+            );
+
+          let cut = yield* turnRunning(warm, "Now the emails.");
+          let launch = warm.launchId;
+
+          // The Mac goes down mid-turn, then again at each carry-on's turn once it started.
+          for (let round = 1; round <= 4; round += 1) {
+            // The clock moves before each settle, so the carry-on's turn is queued after the one cut off.
+            yield* TestClock.adjust("1 second");
+            yield* settledDeviceAgentLine(ownDeviceHost(userId, warm.deviceId), launch, 1);
+            yield* turnEnded(warm);
+
+            const resumed = yield* newest();
+
+            if (round === 4) {
+              assert.equal(resumed?.id, cut, "the fourth cut-off is left as it ended");
+              assert.equal(resumed?.status, TURN_STATUS.FAILED);
+              assert.equal(yield* carriedOnStands(warm, cut), false);
+              assert.equal(yield* launchClaimed(warm), undefined);
+              break;
+            }
+
+            assert.equal(yield* carriedOnStands(warm, cut), true, `carry-on ${round} went`);
+            assert.equal(resumed?.status, TURN_STATUS.QUEUED);
+            const relaunch = yield* launchClaimed(warm);
+            assert.ok(relaunch !== undefined, "the carry-on launches the runner again");
+            yield* writer.consume(target, {
+              kind: RUN_EVENT.TURN_STARTED,
+              conversationId: sessionKey(agent.conversationId),
               turnId: resumed?.id ?? "",
+              sequence: 1,
+              origin: RUN_TURN_ORIGIN.TYPED,
+              trigger: TURN_TRIGGER.ASK,
+              at: yield* Clock.currentTimeMillis,
             });
+
+            if (takesLine) {
+              yield* writer.takeAwaitingLine(target, {
+                clientId: sentLineId(carryOnKey(cut)),
+                turnId: resumed?.id ?? "",
+              });
+            }
+
+            cut = resumed?.id ?? "";
+            launch = relaunch;
           }
-
-          yield* TestClock.adjust("1 second");
-          yield* settledDeviceAgentLine(ownDeviceHost(userId, warm.deviceId), relaunch, 1);
-          yield* turnEnded(warm);
-
-          const left = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
-            agent.conversationId,
-          );
-
-          assert.equal(left?.id, resumed?.id);
-          assert.equal(left?.status, TURN_STATUS.FAILED);
-          assert.equal(left?.failure, TURN_FAILURE.RUNNER_LOST);
-          assert.deepEqual(
-            yield* deviceAgentLinesWaiting(ownDeviceHost(userId, warm.deviceId)),
-            [],
-          );
         }),
     );
 

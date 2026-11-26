@@ -24,7 +24,6 @@
  */
 
 import type { GitHubPerson, ReactionGroup } from "@repo/features/agent-wire";
-import { formatCount } from "@repo/features/number-format";
 import { ADD_REACTION_WORDS, REACTION_FACES } from "@repo/features/pull-request-model";
 import {
   PULL_REQUEST_ACTION,
@@ -34,18 +33,13 @@ import {
 import { andList } from "@repo/features/words";
 import {
   AnchoredPopover,
-  Badge,
-  CHIP_LOOK,
-  CHIP_SIZE,
-  Chip,
-  GAP,
   IconButton,
-  Inline,
-  LAYOUT_ELEMENT,
   POPOVER_ALIGN,
   POPOVER_PANEL_LOOK,
   POPOVER_WIDTH,
   PopoverPanel,
+  ReactionChip,
+  ReactionRow,
   Tooltip,
 } from "@repo/ui";
 import { ACTOR_KIND, actorName, githubActor } from "@repo/ui/actor-model";
@@ -152,7 +146,7 @@ interface PillPress {
   readonly waiting: boolean;
 }
 
-/** One reaction: its emoji and count in a pill, lit where the reader gave it, its tooltip naming who did; a press where it may be changed. */
+/** One reaction, its tooltip naming who gave it: a press where it may be changed. */
 function ReactionPill({
   reaction,
   mine,
@@ -170,39 +164,16 @@ function ReactionPill({
     actorName(githubActor(person, { members, readerId, former }), { sentence: at > 0 }),
   );
 
-  const words = reactedWords(names, reaction.count, face.name);
-
-  const inner = (
-    <>
-      <span aria-hidden="true">{face.emoji}</span>
-      <span className="tabular-nums" aria-hidden="true">
-        {formatCount(reaction.count)}
-      </span>
-    </>
-  );
-
   return (
-    <li>
-      <Tooltip label={words}>
-        {press === undefined ? (
-          <span className="flex" role="img" aria-label={words}>
-            <Badge lit={mine}>{inner}</Badge>
-          </span>
-        ) : (
-          <Chip
-            look={CHIP_LOOK.FILTER}
-            size={CHIP_SIZE.COMPACT}
-            aria-label={words}
-            aria-pressed={mine}
-            busy={press.busy}
-            disabled={press.waiting}
-            onClick={press.onPress}
-          >
-            {inner}
-          </Chip>
-        )}
-      </Tooltip>
-    </li>
+    <ReactionChip
+      emoji={face.emoji}
+      count={reaction.count}
+      label={reactedWords(names, reaction.count, face.name)}
+      reacted={mine}
+      onPress={press?.onPress}
+      busy={press?.busy}
+      disabled={press?.waiting}
+    />
   );
 }
 
@@ -371,12 +342,7 @@ export function Reactions({
 
   return (
     <>
-      <Inline
-        as={LAYOUT_ELEMENT.UL}
-        gap={GAP.TIGHT}
-        className="pull-request-reactions"
-        aria-label="Reactions"
-      >
+      <ReactionRow>
         {drawn.map((reaction) => (
           <ReactionPill
             key={reaction.content}
@@ -394,7 +360,7 @@ export function Reactions({
           />
         ))}
         {pressable ? <AddReaction mine={mine} waiting={waiting} onPick={send} /> : null}
-      </Inline>
+      </ReactionRow>
       <PullRequestWriteNote writes={writes} className="pull-request-reaction-note" />
     </>
   );

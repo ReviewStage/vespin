@@ -1,4 +1,4 @@
-// app-ready.ts -- counts how long a launch, a sign-in's return, or a launch woken in the background once it came to the front, took to show the Inbox, once each, on a rung, as `app:ready`, and ends a launch's trace there; and where a launch stood that hadn't shown it 10 s in, once, as `app:not_ready`.
+// app-ready.ts -- counts how long a launch, a sign-in's return, or a launch woken in the background once it came to the front, took to show the Inbox, once each, on a rung, as `app:ready`, and ends a launch's trace there; and where a launch stood that hadn't shown it by 10 s of its time in front, once, as `app:not_ready`.
 
 import {
   PRODUCT_FIRST_ROWS,
@@ -12,6 +12,7 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import type { AppStateSnapshot } from "@repo/host/app-state";
+import { atForeground } from "@repo/runtime/effect";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { File, Paths } from "expo-file-system";
@@ -30,9 +31,15 @@ import {
   launchStood,
   sinceLaunch,
 } from "./launch-phases.js";
-import { launchActiveAt, launchFrontAt, launchLeftFront } from "./launch-state.js";
+import {
+  foregroundClock,
+  launchActiveAt,
+  launchForegroundAfter,
+  launchFrontAt,
+  launchLeftFront,
+} from "./launch-state.js";
 
-/** How long after a launch's start its Inbox may take to show before the launch counts where it stands (`app:not_ready`). */
+/** How long of a launch's time in front, from its start, its Inbox may take to show before the launch counts where it stands (`app:not_ready`). */
 const NOT_READY_MS = 10_000;
 
 /** Whether this launch has counted, or let go of, its first Inbox, which it does once. */
@@ -263,8 +270,11 @@ export function useAppReadyCount(shown: boolean): void {
 }
 
 /**
- * Counts, once a launch already signed in, where it stood 10 s after its
- * start if its Inbox hadn't shown the feed's answer by then
+ * Counts, once a launch already signed in, where it stood 10 s of its time
+ * in front after its start (`launch-state.ts`'s foreground clock, so a
+ * launch woken in the background counts from its coming to the front, not
+ * the minutes it waited suspended) if its Inbox hadn't shown the feed's
+ * answer by then
  * (`useAppReadyCount`), as `app:not_ready`: each phase it had reached and
  * when, on `app:ready`'s rungs, how many documents the host wrote, whether
  * it left the front, and where the Inbox's, the task list's, and the
@@ -281,49 +291,43 @@ export function useAppNotReadyCount(signedIn: boolean): void {
   useEffect(() => {
     // Note that a sign-in after the launch has its own wait, which `app:ready` times from its return.
     if (!signedIn || notReadyCounted || signedInAt !== undefined) return;
-    const since = sinceLaunch();
 
-    if (since === undefined) return;
+    if (sinceLaunch() === undefined) return;
 
-    const timer = setTimeout(
-      () => {
-        const state = client.getQueryData(appStateQuery.queryKey);
+    return atForeground(foregroundClock, launchForegroundAfter(NOT_READY_MS), () => {
+      const state = client.getQueryData(appStateQuery.queryKey);
 
-        if (counted || notReadyCounted || state === undefined) return;
-        notReadyCounted = true;
+      if (counted || notReadyCounted || state === undefined) return;
+      notReadyCounted = true;
 
-        const rung = (ms: number | undefined) =>
-          ms === undefined ? undefined : productLaunchSeconds(ms);
+      const rung = (ms: number | undefined) =>
+        ms === undefined ? undefined : productLaunchSeconds(ms);
 
-        const stood = rung(launchStood()?.ms);
-        const evaluated = rung(launchPhaseMs(LAUNCH_PHASE.EVALUATED));
-        const account = rung(launchPhaseMs(LAUNCH_PHASE.ACCOUNT));
-        const local = rung(launchPhaseMs(LAUNCH_PHASE.LOCAL));
-        const started = rung(launchPhaseMs(LAUNCH_PHASE.STARTED));
-        const screens = rung(launchPhaseMs(LAUNCH_PHASE.SCREENS));
-        const inbox = rung(launchPhaseMs(LAUNCH_PHASE.INBOX));
-        const activeAt = rung(launchActiveAt());
+      const stood = rung(launchStood()?.ms);
+      const evaluated = rung(launchPhaseMs(LAUNCH_PHASE.EVALUATED));
+      const account = rung(launchPhaseMs(LAUNCH_PHASE.ACCOUNT));
+      const local = rung(launchPhaseMs(LAUNCH_PHASE.LOCAL));
+      const started = rung(launchPhaseMs(LAUNCH_PHASE.STARTED));
+      const screens = rung(launchPhaseMs(LAUNCH_PHASE.SCREENS));
+      const inbox = rung(launchPhaseMs(LAUNCH_PHASE.INBOX));
+      const activeAt = rung(launchActiveAt());
 
-        count(PRODUCT_SURFACE_EVENT.APP_NOT_READY, {
-          ...(stood === undefined ? undefined : { standing_seconds: stood }),
-          ...(evaluated === undefined ? undefined : { evaluated_seconds: evaluated }),
-          ...(account === undefined ? undefined : { account_seconds: account }),
-          ...(local === undefined ? undefined : { local_seconds: local }),
-          ...(started === undefined ? undefined : { started_seconds: started }),
-          ...(screens === undefined ? undefined : { screens_seconds: screens }),
-          ...(inbox === undefined ? undefined : { inbox_seconds: inbox }),
-          ...(activeAt === undefined ? undefined : { active_seconds: activeAt }),
-          deliveries: productSessionCountBucket(launchDelivered()),
-          ...(BUILD_NUMBER === undefined ? undefined : { app_build: BUILD_NUMBER }),
-          ready_after: launchLeftFront() ? PRODUCT_READY_AFTER.FRONT : PRODUCT_READY_AFTER.LAUNCH,
-          inbox_read: inboxReadOf(state),
-          tasks_read: tasksReadOf(state),
-          workspaces_read: workspacesReadOf(state),
-        });
-      },
-      Math.max(0, NOT_READY_MS - since),
-    );
-
-    return () => clearTimeout(timer);
+      count(PRODUCT_SURFACE_EVENT.APP_NOT_READY, {
+        ...(stood === undefined ? undefined : { standing_seconds: stood }),
+        ...(evaluated === undefined ? undefined : { evaluated_seconds: evaluated }),
+        ...(account === undefined ? undefined : { account_seconds: account }),
+        ...(local === undefined ? undefined : { local_seconds: local }),
+        ...(started === undefined ? undefined : { started_seconds: started }),
+        ...(screens === undefined ? undefined : { screens_seconds: screens }),
+        ...(inbox === undefined ? undefined : { inbox_seconds: inbox }),
+        ...(activeAt === undefined ? undefined : { active_seconds: activeAt }),
+        deliveries: productSessionCountBucket(launchDelivered()),
+        ...(BUILD_NUMBER === undefined ? undefined : { app_build: BUILD_NUMBER }),
+        ready_after: launchLeftFront() ? PRODUCT_READY_AFTER.FRONT : PRODUCT_READY_AFTER.LAUNCH,
+        inbox_read: inboxReadOf(state),
+        tasks_read: tasksReadOf(state),
+        workspaces_read: workspacesReadOf(state),
+      });
+    });
   }, [signedIn, count, client]);
 }

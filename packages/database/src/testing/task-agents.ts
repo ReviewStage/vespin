@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { AGENT_KIND } from "@repo/features/agent-wire";
 import {
   INBOX_APPROVAL_OPTION,
   INBOX_ASK,
@@ -8,17 +9,19 @@ import {
   INBOX_STATUS,
 } from "@repo/features/inbox-wire";
 import { eq } from "drizzle-orm";
-import { Clock, Effect } from "effect";
+import { Clock, Effect, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { Database } from "../core/query.js";
+import { createAgent } from "../models/agent-store.js";
 import { createTask } from "../models/task-store.js";
 import { agentTable } from "../schemas/agent.js";
 import { inboxItem } from "../schemas/inbox.js";
 import { conversations } from "../schemas/storage.js";
-import { CONVERSATION_KIND } from "../storage-vocabulary.js";
+import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "../storage-vocabulary.js";
+import { openWorkspace } from "./workspaces.js";
 
 /**
- * task-agents.ts -- a coding agent on a test's task, and an inbox item it holds open, written beneath the store.
+ * task-agents.ts -- a coding agent on a test's task, a Manager on none, and an inbox item it holds open, written beneath the store.
  *
  * A test about a task's work or its inbox that wants an agent on the task,
  * or an item of that agent's waiting on the developer, writes the rows here
@@ -74,6 +77,27 @@ export const openAgentConversation = (userId: string, organizationId: string) =>
     if (row === undefined) return yield* Effect.die("the agent just written is gone");
 
     return row.conversationId;
+  });
+
+/** A Manager of the member's, standing on no task in a workspace of their own, started as the store starts one; the agent. */
+export const openManagerAgent = (userId: string) =>
+  Effect.gen(function* () {
+    const workspaceId = yield* openWorkspace(userId);
+
+    const started = yield* createAgent(userId, {
+      taskId: null,
+      workspaceId,
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository: null,
+      descriptionSnapshot: null,
+      prompt: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      kind: AGENT_KIND.MANAGER,
+    });
+
+    return Option.getOrThrow(started).agent;
   });
 
 /** An inbox item of the task's agent, open and holding its message's ask open, or open as a notice, its message asking nothing, where `asking` is false; its id. The task is null only for a migration's test on a database from before every item stood on one. */

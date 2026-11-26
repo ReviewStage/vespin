@@ -94,16 +94,18 @@ test("the workspace's automations come before the personal ones, and an owner wi
 
 test.each([
   [AUTOMATIONS_ORDER.CREATED, ["d", "b", "c", "a"]],
+  [AUTOMATIONS_ORDER.UPDATED, ["a", "d", "b", "c"]],
   [AUTOMATIONS_ORDER.NAME, ["a", "b", "d", "c"]],
   [AUTOMATIONS_ORDER.LAST_RUN, ["c", "d", "a", "b"]],
   [AUTOMATIONS_ORDER.NEXT_RUN, ["d", "c", "a", "b"]],
 ])(
-  "an owner's automations stand in the %s order, one with no run last and a tie to the newest made",
+  "an owner's automations stand in the %s order, one with no run last, one with no change as made, and a tie to the newest made",
   (order, ids) => {
     const listed = [
       automation("a", {
         name: "Audit",
         createdAt: 10,
+        updatedAt: 90,
         nextRunAt: 500,
         lastRun: run({ firedAt: 50 }),
       }),
@@ -111,12 +113,14 @@ test.each([
       automation("c", {
         name: "Weekly digest",
         createdAt: 20,
+        updatedAt: 20,
         nextRunAt: 200,
         lastRun: run({ firedAt: 80 }),
       }),
       automation("d", {
         name: "Nightly sweep",
         createdAt: 40,
+        updatedAt: 40,
         nextRunAt: 200,
         lastRun: run({ firedAt: 50 }),
       }),

@@ -36,6 +36,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readVisibleAgent } from "@repo/database/models/agent-store";
 import { storeWriter } from "@repo/database/models/writer";
+import { inboxRowOf, threadNeedsReader } from "@repo/features/inbox-digest";
 import {
   INBOX_MESSAGE_AUTHOR,
   INBOX_REPLY,
@@ -48,7 +49,6 @@ import {
   inboxStartTitle,
   inboxWaitsOn,
   openAskOf,
-  threadNeedsReader,
 } from "@repo/features/inbox-wire";
 import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
 import { Clock, Effect, Option } from "effect";
@@ -133,7 +133,7 @@ function writerOf(message: InboxMessage, userId: string): string {
 function orderOf(item: InboxItem, userId: string): ThreadOrder {
   if (item.status !== INBOX_STATUS.OPEN) return THREAD_ORDER.SETTLED;
 
-  if (threadNeedsReader(item, userId)) return THREAD_ORDER.NEEDS_MEMBER;
+  if (threadNeedsReader(inboxRowOf(item), userId)) return THREAD_ORDER.NEEDS_MEMBER;
 
   return openAskOf(item.thread ?? []) === undefined ? THREAD_ORDER.NOTICE : THREAD_ORDER.ASKING;
 }

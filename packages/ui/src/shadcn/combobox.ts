@@ -76,6 +76,11 @@ export const COMBOBOX_ITEM_END =
 /** Where a group's heading stands over its run; its words are `Text`'s group role. */
 export const COMBOBOX_HEADING = "px-row-inset pt-row-inset pb-ui-4";
 
-/** What stands where no option does, or after them: one quiet line, centered, a row or two tall. */
+/**
+ * What stands where no option does, or after them: one quiet line, centered,
+ * a row or two tall. Note that it never shrinks, because the list is a
+ * column capped in height, which would squeeze it to its floor and leave
+ * what it holds spilling, centered, over the rows above it.
+ */
 export const COMBOBOX_EMPTY =
-  "m-0 flex min-h-ui-40 items-center justify-center px-list-inset py-ui-4 text-center text-caption text-muted-foreground";
+  "m-0 flex min-h-ui-40 flex-none items-center justify-center px-list-inset py-ui-4 text-center text-caption text-muted-foreground";

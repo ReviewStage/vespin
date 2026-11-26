@@ -879,8 +879,6 @@ export function fakeService(tasks: Task[]): FakeService {
       sandboxSetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       mergeQueue: () => Effect.succeed(UNANSWERED_WORKSPACE),
       machines: () => Effect.succeed(UNANSWERED_WORKSPACE),
-      renameOwnedMachine: () => Effect.succeed(UNANSWERED_WORKSPACE),
-      removeOwnedMachine: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putInstallScript: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRepositorySetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRunActions: () => Effect.succeed(UNANSWERED_WORKSPACE),

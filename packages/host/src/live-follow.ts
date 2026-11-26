@@ -1,10 +1,12 @@
 import { ServiceReach } from "@repo/features";
+import type { FailureFacts } from "@repo/features/failure-facts";
 import {
   LIVE_SIGNED_OUT,
   liveDigestOf,
   liveDigestOn,
   type SealedLiveQueryWire,
 } from "@repo/features/live-wire";
+import { ForegroundClock, foregroundAfter, foregroundPassed } from "@repo/runtime/effect";
 import { cappedExponential } from "@repo/wire/effect";
 import {
   Cause,
@@ -135,8 +137,12 @@ const POLL_BACKOFF = untilRegained(
   ),
 );
 
-/** Why a poll answered no read: what failed, and whether the read names nothing the account reaches any more. */
-export type LiveFailure = { readonly failure: string; readonly gone?: boolean };
+/** Why a poll answered no read: what failed, what failed beneath it where the client said, and whether the read names nothing the account reaches any more. */
+export type LiveFailure = {
+  readonly failure: string;
+  readonly cause?: FailureFacts;
+  readonly gone?: boolean;
+};
 
 /**
  * Whether a failed poll ends the read for good: it names nothing the account
@@ -555,17 +561,17 @@ function liveAnswers<Part extends string>(
       let cursor = cursorOf(first);
       /** The sync id the last answer named, past which the next poll reads; kept through a failed poll, and a whole answer that names none. */
       let sync = syncStandingOf(first)?.next;
-      /** When the sync id last moved, or a stall was last asked around, by the host's clock. */
-      let syncMovedAt = yield* Clock.currentTimeMillis;
+      const foreground = yield* ForegroundClock;
+      /** When the sync id is taken as stalled unless it moves first: `SYNC_STALL` past when it last moved, or a stall was last asked around, in foreground time. */
+      let stallAt = foregroundAfter(foreground.now(), SYNC_STALL);
       /** How many polls have failed in a row since the last answer. */
       let failures = 0;
       yield* answered(first);
 
       const pollOnce = Effect.gen(function* () {
-        const now = yield* Clock.currentTimeMillis;
-        const stalled = sync !== undefined && now - syncMovedAt > Duration.toMillis(SYNC_STALL);
+        const stalled = sync !== undefined && foregroundPassed(foreground, stallAt);
 
-        if (stalled) syncMovedAt = now;
+        if (stalled) stallAt = foregroundAfter(foreground.now(), SYNC_STALL);
         const read = yield* dependencies.poll(seen, cursor, stalled ? undefined : sync);
 
         if ("failure" in read) {
@@ -593,7 +599,7 @@ function liveAnswers<Part extends string>(
 
         if (next !== undefined && next !== sync) {
           sync = next;
-          syncMovedAt = yield* Clock.currentTimeMillis;
+          stallAt = foregroundAfter(foreground.now(), SYNC_STALL);
         }
 
         return yield* answered(read);
@@ -722,7 +728,9 @@ export function followTakingRows<
  * delta back, as a migration during a deploy does, or a database nothing
  * writes to, where a whole answer each 30 s costs nothing. The host cannot
  * see the wakes behind a stalled id, since a delta held over one answers
- * empty and carries no txids.
+ * empty and carries no txids. It is foreground time (`ForegroundClock`), so
+ * an app back from the background, its id standing where it was left, asks
+ * past it rather than whole.
  */
 const SYNC_STALL = Duration.seconds(30);
 

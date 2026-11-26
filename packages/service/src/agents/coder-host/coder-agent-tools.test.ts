@@ -7,6 +7,7 @@ import {
   readAccountPreferences,
   writeAccountPreferences,
 } from "@repo/database/models/account-store";
+import { recordAgentPullRequests } from "@repo/database/models/agent-pull-requests";
 import {
   agentTaskId,
   archiveAgent,
@@ -21,7 +22,6 @@ import {
   readAutomation,
   recordAutomationRun,
 } from "@repo/database/models/automation-store";
-import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import { listRevisions } from "@repo/database/models/description-revisions";
 import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
@@ -85,7 +85,9 @@ import {
   AGENT_RUNTIME,
   AGENT_STATUS,
   agentMessageReplyLine,
+  CHECK_SUMMARY,
   CONTEXT_WINDOW,
+  PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
@@ -163,7 +165,9 @@ import {
 import { REACT_SLACK_TOOL, READ_SLACK_TOOL } from "../../slack/slack-agent-tools.js";
 import { SlackBot, slackBotOver } from "../../slack/slack-bot.js";
 import { SEND_SLACK_MESSAGE_TOOL } from "../../slack/slack-message-tool.js";
+import { keepPictureBytesOne } from "../../storage/attachment-keeps.js";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import {
   connectWorkspaceGitHub,
   githubReaching,
@@ -228,6 +232,7 @@ import {
 import { CODER_REFUSAL } from "./bounds.js";
 import type { InboxSandboxDoor } from "./inbox-image.js";
 import {
+  REACT_CHAT_TOOL,
   READ_CHAT_MESSAGES_TOOL,
   READ_CHAT_THREAD_TOOL,
   SEARCH_CHAT_TOOL,
@@ -322,6 +327,9 @@ const DEFAULT_BRANCH = "main";
 const BRANCH_COMMIT = "89abcdef0123456789abcdef0123456789abcdef";
 
 const database = await openHostedStoreTestDatabase();
+
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
 
 afterAll(() => database.close());
 
@@ -620,6 +628,7 @@ const NO_SANDBOX: InboxSandboxDoor = () => Promise.reject(new Error("the sandbox
 
 /** What the catalog's call runs against beside the suite's, none of which an agent tool reaches: an agent browser, its sandbox, and the integrations, whose every ask dies, page links with no page sandbox, and an environment. */
 const UNREACHED = Layer.mergeAll(
+  blobs.layer,
   Layer.mock(AgentBrowser)({}),
   Layer.mock(AgentSandbox)({}),
   Layer.succeed(PageLinks, { sandbox: undefined }),
@@ -933,7 +942,7 @@ test("list_agents names every other agent of the caller's workspace, on any task
   assert.equal(agentSessions.sent.length, 0, "a list sends nothing");
 });
 
-test("list_agents narrows by archive, by whose agents, by an automation's runs, and by where their task stands, refusing a starter named by no person or by the retired mine", async () => {
+test("list_agents narrows by archive, by whose agents, by an automation's runs, by where their task stands, and by the pull request they linked, refusing a starter named by no person or by the retired mine", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -962,6 +971,28 @@ test("list_agents narrows by archive, by whose agents, by an automation's runs, 
 
   const bobsLink = `[@Bob](https://vespin.dev/workspace-${workspaceId}/person/${agents.teammates.userId})`;
 
+  // The same pull request linked in another workspace the caller is also in is none of this list's.
+  for (const agent of [agents.teammates, agents.otherWorkspaces]) {
+    await database.run(
+      recordAgentPullRequests(agent.userId, agent.id, [
+        {
+          repository: RELAY_FULL_NAME,
+          headBranch: "agent/billing",
+          pullRequest: {
+            number: 57,
+            title: "Bill by the seat",
+            url: `https://github.com/${RELAY_FULL_NAME}/pull/57`,
+            state: PULL_REQUEST_STATE.OPEN,
+            checks: CHECK_SUMMARY.PASSING,
+            additions: 30,
+            deletions: 2,
+            changedFiles: 3,
+          },
+        },
+      ]),
+    );
+  }
+
   // The caller's own task's agents come first, then the rest newest first.
   assert.deepEqual(await idsOf({}), [agents.archived.id, sweeper.id, agents.teammates.id]);
   assert.deepEqual(await idsOf({ archived: true }), [agents.archived.id]);
@@ -971,6 +1002,10 @@ test("list_agents narrows by archive, by whose agents, by an automation's runs, 
   assert.deepEqual(await idsOf({ automation: false }), [agents.archived.id, agents.teammates.id]);
   assert.deepEqual(await idsOf({ automationId }), [sweeper.id]);
   assert.deepEqual(await idsOf({ taskStatus: TASK_STATUS.DONE }), [agents.teammates.id]);
+  assert.deepEqual(await idsOf({ pullRequest: { repository: RELAY_FULL_NAME, number: 57 } }), [
+    agents.teammates.id,
+  ]);
+  assert.deepEqual(await idsOf({ pullRequest: { repository: RELAY_FULL_NAME, number: 58 } }), []);
   assert.deepEqual(await call(AGENT_TOOL.LIST_AGENTS, { mine: true }), {
     status: ACTION_RESULT_STATUS.REJECTED,
     reason: AGENT_LIST_FILTER_REFUSAL.MINE_KEY,
@@ -1401,7 +1436,7 @@ async function managerOn(userId: string, workspaceId: string): Promise<CallingAg
   return { ...target, sessionId: session };
 }
 
-test("start_agent from a Manager, with Managers act for whoever asked on, starts the agent as the member whose line opened its turn, refuses one whose asker pays for none of the model rather than paying as the owner, and with it off starts the owner's", async () => {
+test("start_agent from a Manager starts the agent as the member whose line opened its turn, and refuses one whose asker pays for none of the model rather than paying as the owner", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const owner = agents.caller.userId;
   const asker = agents.teammates.userId;
@@ -1412,7 +1447,6 @@ test("start_agent from a Manager, with Managers act for whoever asked on, starts
   const manager = await managerOn(owner, workspaceId);
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), manager, agentSessions.services);
-  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, true);
 
   const start = (callId: string) =>
     call(
@@ -1438,10 +1472,6 @@ test("start_agent from a Manager, with Managers act for whoever asked on, starts
     reason:
       "Not started: an agent you start is Test User's, who asked for this turn, and no subscription or API key of theirs pays for that model, and Vespin's key pays for no agent. Start it on a model whose provider they connected, or tell them to connect one in Settings › Agents.",
   });
-
-  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, false);
-  const owners = await storedStart(owner, await start("call-off"));
-  assert.equal(owners.userId, owner);
 });
 
 test("start_agent leaves an unassigned backlog task's assignee and status as they stood", async () => {
@@ -1812,10 +1842,10 @@ async function keptPicture(
   contentType: "image/png" | "video/webm" = "image/png",
 ): Promise<string> {
   const kept = await database.run(
-    keepConversationPicture(
+    keepPictureBytesOne(
       { userId: agent.userId, conversationId: agent.conversationId },
       { bytes, contentType, width: 1, height: 1 },
-    ),
+    ).pipe(Effect.provide(blobs.layer)),
   );
 
   return Option.getOrThrow(kept).id;
@@ -1949,6 +1979,10 @@ test("a Manager's chat reads show the model the recorded inputs", async () => {
     READ_CHAT_THREAD_TOOL.inputSchema,
   );
   await settleJsonSchemaGolden(GOLDEN_ROOT, "search-chat-input", SEARCH_CHAT_TOOL.inputSchema);
+});
+
+test("chat_react shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(GOLDEN_ROOT, "react-chat-input", REACT_CHAT_TOOL.inputSchema);
 });
 
 test("send_slack_message shows the model the recorded input", async () => {

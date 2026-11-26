@@ -16,17 +16,11 @@ import { test } from "vitest";
 import { agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { PullRequestCard } from "../tasks/pull-request-card.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import type { SidePanelControl, SidePanelTab } from "../tasks/use-side-panel.js";
+import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
-import { agentsControl, tasksControl } from "../testing/tasks-control.js";
-import {
-  ActivityList,
-  changesOffers,
-  type DrawnTab,
-  type SidePanelDrawing,
-  useSidePanelDrawing,
-} from "./side-panel.js";
+import { agentsControl } from "../testing/tasks-control.js";
+import { ActivityList, changesOffers, type DrawnTab } from "./side-panel.js";
 
 const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 
@@ -130,7 +124,6 @@ test("a pull request's card names the coding agent whose it is on a row by its t
           pullRequest: published,
           place: { taskId: null },
           lines: published,
-          files: published.changedFiles,
           agent: {
             subject: agentSubject(control, THIRD.id, NOTHING_HELD, false),
             models: [],
@@ -141,10 +134,6 @@ test("a pull request's card names the coding agent whose it is on a row by its t
     ),
   );
   assert.equal(container.querySelector(".ui-hover-card-name")?.textContent, "Expire invitations");
-  assert.equal(
-    container.querySelector(".ui-hover-card-note")?.textContent,
-    "+210 −14 in 6 files · Checks passing",
-  );
 
   const named = container.querySelector<HTMLButtonElement>(
     '.ui-hover-card-row button[data-actor-ref][data-kind="agent"]',
@@ -201,31 +190,6 @@ test("the phone's Activity list hangs each tab's card on its row, as the tab han
     document.querySelector(".ui-tooltip-card [data-pull-request-card]")?.textContent,
     "Expire invitations",
   );
-  act(() => root.unmount());
-  container.remove();
-});
-
-test("a panel shut by going to another stop is drawn there no longer, rather than slid out over it", () => {
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  const shut = tasksControl().sidePanel;
-  let drawing: SidePanelDrawing | undefined;
-
-  const Drawn = ({ panel }: { panel: SidePanelControl }) => {
-    drawing = useSidePanelDrawing(panel);
-
-    return null;
-  };
-
-  const draw = (panel: SidePanelControl) => act(() => root.render(createElement(Drawn, { panel })));
-  draw({
-    ...shut,
-    open: true,
-    stop: TASK,
-    tab: changesTab({ repository: "acme/relay", number: 41 }),
-  });
-  draw({ ...shut, open: false, stop: "0e9c4b1d-6a2f-4e3b-9c7d-1f2a3b4c5d6e" });
-  assert.equal(drawing?.panel, undefined);
   act(() => root.unmount());
   container.remove();
 });

@@ -104,6 +104,25 @@ function Automations(): React.JSX.Element {
   );
 }
 
+/** Rows of three lines, as a phone's Automations list draws them: the next run over how the newest run went, its time and a chevron at the end. */
+function ThreeLineRows(): React.JSX.Element {
+  return (
+    <List label="Automations on a phone">
+      {AUTOMATIONS.map((automation) => (
+        <ListRow
+          key={automation.id}
+          title={automation.name}
+          description={automation.trigger}
+          foot="Last run: Finished"
+          meta="2h"
+          chevron
+          onPress={() => undefined}
+        />
+      ))}
+    </List>
+  );
+}
+
 const ignore = (): void => undefined;
 
 /** One task's menu, which its row's ⋯, right-click, and menu key all open. */
@@ -269,6 +288,11 @@ function ListRows(): React.JSX.Element {
       <CatalogSection id="list-row-rows" title="Rows that open, with their acts">
         <div className="catalog-column">
           <Members />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="list-row-foot" title="A line under the description">
+        <div className="catalog-column">
+          <ThreeLineRows />
         </div>
       </CatalogSection>
       <CatalogSection

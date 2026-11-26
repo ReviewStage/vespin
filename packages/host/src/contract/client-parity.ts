@@ -143,11 +143,11 @@ const IOS = {
   MANAGER_PEOPLE: notYet(
     "iOS's Manager Settings has no People section yet, so a Manager's followers are listed and changed on the desktop and the web",
   ),
+  MANAGER_CHAT_REACTIONS: notYet(
+    "iOS's Manager chat draws a message's words and thread alone for now, so its 👍 and 👎 are given on the desktop and the web",
+  ),
   MENTION_APPS: notYet(
     "iOS's composers offer skills after a `/` and no `@` list yet, so no app is offered to mention",
-  ),
-  MENTION_MACHINES: notYet(
-    "iOS's composers offer skills after a `/` and no `@` list yet, so no machine is offered to mention",
   ),
   BILLING: byDesign("iOS v1 leaves billing to the desktop and the web"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
@@ -312,6 +312,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_MANAGER_CHAT_OLDER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MESSAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHAT_SEND]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_CHAT_REACT]: panel(IOS.MANAGER_CHAT_REACTIONS),
+  [PORT_ACT_KIND.AGENTS_CHAT_EDIT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHOOSE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_RENAME]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_SERVERS]: EVERYWHERE,
@@ -602,9 +604,5 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WORKSPACE_BILLING_SETUP]: panel(IOS.BILLING),
   [PORT_ACT_KIND.WORKSPACE_BILLING_PORTAL]: panel(IOS.BILLING),
   [PORT_ACT_KIND.WORKSPACE_MERGE_QUEUE_READ]: EVERYWHERE,
-  [PORT_ACT_KIND.WORKSPACE_MACHINES_READ]: panel(IOS.MENTION_MACHINES),
-  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINES_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINES_RETRY]: EVERYWHERE,
-  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINE_RENAME]: EVERYWHERE,
-  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINE_REMOVE]: EVERYWHERE,
+  [PORT_ACT_KIND.WORKSPACE_MACHINES_READ]: EVERYWHERE,
 } as const satisfies Record<PortActKind, ClientParityRow>;

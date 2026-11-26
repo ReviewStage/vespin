@@ -84,6 +84,7 @@ const pendingWorkspaceMachine: AgentMachineService = {
   writeFile: () => Effect.fail(workspaceRefusal()),
   phoneVideo: () => Effect.fail(workspaceUnavailable()),
   phoneAudio: () => Effect.fail(workspaceUnavailable()),
+  selfUpload: () => Effect.fail(workspaceUnavailable()),
 };
 
 /** The machine of the kind named: a cloud sandbox, a Mac, or a workspace's pending machine; a cloud sandbox where none is named. */
@@ -137,6 +138,7 @@ function routedLifecycle(cloud: MachineLifecycle, mac: DeviceMachineService): Ma
       bySession(session, (machine) => machine.phoneVideo(session, path)),
     phoneAudio: (session, path) =>
       bySession(session, (machine) => machine.phoneAudio(session, path)),
+    selfUpload: (session) => bySession(session, (machine) => machine.selfUpload(session)),
   };
 }
 

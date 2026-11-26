@@ -585,6 +585,8 @@ const automationSummarySchema = EffectSchema.Struct({
   nextRunAt: EffectSchema.NullOr(countedNumber),
   lastRun: EffectSchema.NullOr(automationRunSummarySchema),
   createdAt: countedNumber,
+  /** When it was last changed, made, edited, turned on or off, or taken over, never by a run; absent from a service before it. */
+  updatedAt: EffectSchema.optionalKey(countedNumber),
   scope: EffectSchema.optionalKey(automationScopeSchema),
   repositories: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** Where a run lands; a same-agent target reads as no agent until its first run, and once its agent is deleted until the next. */

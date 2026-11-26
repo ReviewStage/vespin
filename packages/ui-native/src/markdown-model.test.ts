@@ -144,8 +144,8 @@ describe("markdownBlocks", () => {
     ]);
   });
 
-  it("draws a marker of a picture the message carries as its chip, and any other marker, or one in code, as its words", () => {
-    const written = "See [Picture 1] beside [Picture 2], not `[Picture 1]`.";
+  it("draws a marker of a picture the message carries as its chip, and any other marker, one in code, or one escaped into words, as its words", () => {
+    const written = "See [Picture 1] beside [Picture 2] and \\[Picture 1], not `[Picture 1]`.";
 
     expect(markdownBlocks(written, { ...READING, pictures: new Set(["Picture 1"]) })).toEqual([
       {
@@ -153,7 +153,7 @@ describe("markdownBlocks", () => {
         runs: [
           words("See "),
           { kind: MARKDOWN_RUN.PICTURE, name: "Picture 1" },
-          words(" beside [Picture 2], not "),
+          words(" beside [Picture 2] and [Picture 1], not "),
           { kind: MARKDOWN_RUN.CODE, text: "[Picture 1]" },
           words("."),
         ],
