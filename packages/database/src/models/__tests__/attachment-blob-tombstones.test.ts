@@ -158,4 +158,35 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
         yield* dropAttachmentBlobTombstones(tombstoned);
       }),
   );
+
+  it.effect(
+    "a phone copy an upload reserved and its standing row does not name is tombstoned, and the row's own key is not",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const { userId, conversationId } = yield* openConversation;
+        const kept = pictureOf(userId, conversationId);
+        const blobKey = `attachments/${kept.id}`;
+        const phoneKey = `attachments/${kept.id}/phone`;
+
+        // A recording kept without the copy for a phone its upload reserved, as one whose copy failed its checks is.
+        yield* db.insert(attachment).values({
+          ...kept,
+          contentType: CONVERSATION_MEDIA_TYPE.WEBM,
+          byteCount: 2_000,
+          blobKey,
+        });
+
+        yield* tombstoneUnwrittenUploads([{ id: kept.id, keys: [blobKey, phoneKey] }]);
+
+        const tombstoned = yield* readAttachmentBlobTombstones(1_000);
+
+        assert.deepEqual(
+          tombstoned.filter((key) => key === blobKey || key === phoneKey),
+          [phoneKey],
+        );
+
+        yield* dropAttachmentBlobTombstones([phoneKey]);
+      }),
+  );
 });

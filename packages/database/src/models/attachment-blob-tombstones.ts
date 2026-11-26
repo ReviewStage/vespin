@@ -104,11 +104,14 @@ export interface AttachmentUpload {
 }
 
 /**
- * Tombstones the pathnames of every upload whose attachment row does not
- * stand, so the sweep deletes objects a writer stored and then never named.
- * It runs once the write's transaction has ended, so an upload whose row
- * landed after all, a commit answered by a failure among them, keeps its
- * objects.
+ * Tombstones every object an upload put in the store that its row does not
+ * name: all of an upload's objects where its row was never written, and,
+ * where it was, any it reserved and the row kept no key of, such as a copy
+ * for a phone that landed but was not kept, which the sweep deletes once
+ * the row goes, since it purges no object of a row that stands. An object
+ * the row names stays. It runs once the write's transaction has ended, so
+ * an upload whose row landed after all, a commit answered by a failure
+ * among them, keeps its objects.
  */
 export function tombstoneUnwrittenUploads(
   uploads: readonly AttachmentUpload[],
@@ -119,11 +122,17 @@ export function tombstoneUnwrittenUploads(
     const ids = uploads.map((upload) => upload.id);
 
     const written = yield* Database.use((db) =>
-      db.select({ id: attachment.id }).from(attachment).where(inArray(attachment.id, ids)),
+      db
+        .select({ blobKey: attachment.blobKey, phoneBlobKey: attachment.phoneBlobKey })
+        .from(attachment)
+        .where(inArray(attachment.id, ids)),
     );
 
-    const standing = new Set(written.map((row) => row.id));
-    const keys = uploads.flatMap((upload) => (standing.has(upload.id) ? [] : upload.keys));
+    const named = new Set(
+      written.flatMap((row) => [row.blobKey, row.phoneBlobKey].filter((key) => key !== null)),
+    );
+
+    const keys = uploads.flatMap((upload) => upload.keys.filter((key) => !named.has(key)));
 
     if (keys.length === 0) return;
 
