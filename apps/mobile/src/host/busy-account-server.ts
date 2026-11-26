@@ -285,6 +285,18 @@ async function settledItem(id: string): Promise<WireValue | undefined> {
   return item === undefined ? undefined : Schema.encodeSync(inboxItemSchema)(item);
 }
 
+/** The rig's request log for the held-close check: one JSON line a request, as `requests.log` beside the answers. */
+const HOLD_LOG = new File(`file://${ANSWERS}/requests.log`);
+
+/** How long the stub holds a close before it takes it, so the rig can kill the app while it is held. */
+const CLOSE_HOLD_MS = 15_000;
+
+/** Adds `line` to the rig's request log. */
+function logged(line: Readonly<Record<string, string | number | null>>): void {
+  const was = HOLD_LOG.exists ? HOLD_LOG.textSync() : "";
+  HOLD_LOG.writeSync(`${was}${JSON.stringify(line)}\n`);
+}
+
 /** An Inbox write's path: a thread's id, and its read mark or its close where it names one. */
 const INBOX_WRITE_PATH = /^\/api\/inbox\/([0-9a-f-]{36})(\/read|\/close)?$/;
 
@@ -298,6 +310,8 @@ function inboxWrite(request: Request, url: URL): Promise<Response> | undefined {
   const id = matched?.[1];
 
   if (id === undefined) return undefined;
+  const key = request.headers.get("idempotency-key");
+  logged({ at: Date.now(), method: request.method, path: url.pathname, key });
   const writes = writtenNow();
   const was = writes.get(id) ?? { carried: true };
   const rest = matched?.[2];
@@ -315,7 +329,13 @@ function inboxWrite(request: Request, url: URL): Promise<Response> | undefined {
 
   if (request.method !== HTTP_METHOD.POST || rest === "/read") return undefined;
 
-  return threadRows(id).then(async ({ items }) => {
+  // Note that the stub runs in the app, so a kill while a close is held drops it unwritten, as a request cut off in flight is.
+  const held =
+    rest === "/close"
+      ? new Promise((resolve) => setTimeout(resolve, CLOSE_HOLD_MS))
+      : Promise.resolve();
+
+  return held.then(threadRows.bind(undefined, id)).then(async ({ items }) => {
     const row = items?.[0];
 
     if (row === undefined) return new Response(null, { status: 404 });
@@ -332,6 +352,7 @@ function inboxWrite(request: Request, url: URL): Promise<Response> | undefined {
     });
     keepWritten(writes);
     const item = await settledItem(id);
+    logged({ at: Date.now(), answered: url.pathname, key });
 
     return item === undefined ? new Response(null, { status: 404 }) : json({ item, taken: true });
   });
