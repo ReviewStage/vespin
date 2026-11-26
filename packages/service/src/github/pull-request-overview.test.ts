@@ -168,6 +168,8 @@ function repository(answers: {
   readonly deployments?: readonly object[] | Response;
   /** The repository's open pull requests, as the stack's GraphQL read lists them. */
   readonly open?: readonly object[] | Response;
+  /** The merge box's fields, as the listing's first page answers them beside it; `MERGE_FIELDS` where not given. */
+  readonly merging?: object;
 }): RepositoryScript {
   return (sent) => {
     const { pathname } = new URL(sent.url);
@@ -177,8 +179,9 @@ function repository(answers: {
       sent.method === "POST" &&
       sent.body.includes("OpenPullRequests")
     ) {
-      const asked: { variables: { owner: string; name: string; after: string | null } } =
-        JSON.parse(sent.body);
+      const asked: {
+        variables: { owner: string; name: string; after: string | null; merging: boolean };
+      } = JSON.parse(sent.body);
 
       // Note that the stack is read of the agent's repository alone.
       assert.deepEqual([asked.variables.owner, asked.variables.name], ["acme", "relay"]);
@@ -197,6 +200,8 @@ function repository(answers: {
               nodes,
               pageInfo: { hasNextPage: more, endCursor: more ? String(from + 100) : null },
             },
+            // Note that GitHub answers the merge box's fields only where the page asks them, its first.
+            ...(asked.variables.merging ? (answers.merging ?? MERGE_FIELDS) : undefined),
           },
         },
       });
@@ -249,6 +254,22 @@ function repository(answers: {
     return undefined;
   };
 }
+
+/** How the repository merges the pull request, as GitHub's GraphQL answers the merge box's fields: squash or rebase, auto-merge allowed and on, no queue, its review still required and its checks running. */
+const MERGE_FIELDS = {
+  mergeCommitAllowed: false,
+  squashMergeAllowed: true,
+  rebaseMergeAllowed: true,
+  autoMergeAllowed: true,
+  pullRequest: {
+    headRefOid: "a1b2c3d",
+    isMergeQueueEnabled: false,
+    mergeQueueEntry: null,
+    autoMergeRequest: { mergeMethod: "SQUASH" },
+    reviewDecision: "REVIEW_REQUIRED",
+    commits: { nodes: [{ commit: { statusCheckRollup: { state: "PENDING" } } }] },
+  },
+};
 
 /** One open pull request as the stack's GraphQL read lists it. */
 function openPull(number: number, head: string, base: string) {
@@ -319,7 +340,7 @@ const linkedAccount = (githubId: number) =>
     return userId;
   });
 
-/** The pull request itself read off the repository given and named for an agent of the workspace given, its stack read where `stacked` says so; none where GitHub holds no such pull request. */
+/** The pull request itself read off the repository given and named for an agent of the workspace given, its stack and merge box read where `stacked` says so, the merge box as `mergeBox`; none where GitHub holds no such pull request. */
 const pullRequestPartOf = (organizationId: string, stacked = true) =>
   Effect.flatMap(
     Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
@@ -328,9 +349,12 @@ const pullRequestPartOf = (organizationId: string, stacked = true) =>
     (read) =>
       Option.isNone(read)
         ? Effect.succeed(undefined)
-        : namedOverviewPullRequest(
-            { organizationId, repository: REPOSITORY, author: AGENT_AUTHOR.DEVELOPER },
-            read.value,
+        : Effect.map(
+            namedOverviewPullRequest(
+              { organizationId, repository: REPOSITORY, author: AGENT_AUTHOR.DEVELOPER },
+              read.value.overview,
+            ),
+            (named) => ({ ...named, mergeBox: read.value.merging }),
           ),
   );
 
@@ -1576,6 +1600,45 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
   );
 
   it.effect(
+    "an open pull request's merge box is read in its stack's listing: the methods the repository allows, auto-merge, the queue, its head, its review, and its checks as one word",
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
+        const overview = yield* pullRequestPartOf(workspace).pipe(
+          answering(
+            repository({
+              pull: pull(),
+              open: [openPull(NUMBER, "luke/invite-once", "main")],
+              merging: {
+                ...MERGE_FIELDS,
+                pullRequest: {
+                  ...MERGE_FIELDS.pullRequest,
+                  isMergeQueueEnabled: true,
+                  mergeQueueEntry: { position: 2 },
+                },
+              },
+            }),
+          ),
+        );
+
+        assert.deepEqual(
+          overview?.mergeBox,
+          Option.some({
+            methods: ["squash", "rebase"],
+            autoMergeAllowed: true,
+            queue: true,
+            queued: { position: 2 },
+            autoMerge: { method: "squash" },
+            headSha: "a1b2c3d",
+            review: "review-required",
+            checks: "pending",
+          }),
+        );
+      }),
+  );
+
+  it.effect(
     "each pull request of the stack GitHub's merge queue holds says it is queued, the one shown among them, as the open pull requests' listing names it",
     () =>
       Effect.gen(function* () {
@@ -1705,7 +1768,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
   );
 
   it.effect(
-    "no stack for a pull request no longer open, or where GitHub will not list the open ones, the rest standing",
+    "no stack for a pull request no longer open, or where GitHub will not list the open ones, nor the merge box beside it, the rest standing",
     () =>
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
@@ -1737,7 +1800,10 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
         assert.deepEqual(merged?.stack, []);
         assert.equal(refused?.title, "Send the invite once");
         assert.deepEqual(refused?.stack, []);
+        // Note that the merge box rides in the listing, so a listing GitHub refused reads none, and one never asked leaves it to its own read.
+        assert.deepEqual(refused?.mergeBox, Option.none());
         assert.deepEqual(unasked?.stack, []);
+        assert.equal(unasked?.mergeBox, undefined);
       }),
   );
 

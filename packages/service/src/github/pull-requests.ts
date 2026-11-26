@@ -57,6 +57,7 @@ import {
   PULL_REQUEST_STATE,
   type PullRequestCheck,
   type PullRequestDeployment,
+  type PullRequestMerging,
   type PullRequestState,
   REVIEW_STATE,
   type ReviewState,
@@ -77,6 +78,7 @@ import {
   readOptional,
   repositoryParts,
 } from "./github-app.js";
+import { MERGING_FIELDS, MergingFieldsSchema, mergingOf } from "./pull-request-merging.js";
 import { type StackCandidate, type StackEntry, stackOf } from "./pull-request-stack.js";
 
 /** A pull request as much as the agent's pill and its summary row draw: where it stands, its head, and its size. */
@@ -1256,6 +1258,13 @@ export interface GitHubOverviewPullRequest {
   readonly stack: readonly StackEntry[];
 }
 
+/** The pull request itself as its overview reads it, and the merge box the stack's listing read beside it. */
+export interface GitHubOverviewRead {
+  readonly overview: GitHubOverviewPullRequest;
+  /** None where GitHub would not say; undefined where no listing was asked, as of a pull request no longer open. */
+  readonly merging: Option.Option<PullRequestMerging> | undefined;
+}
+
 /** A pull request's conversation as its overview holds it, every account as GitHub names it. */
 export interface GitHubOverviewConversation {
   /** Where each reviewer stands by their reviews alone; who the pull request still asks is its own read's. */
@@ -2027,49 +2036,57 @@ function conversationOf(
 /**
  * The repository's open pull requests a stack is worked out from, a page
  * at a time in GraphQL reads: each by its number, words, and branches, and
- * whether its head is a fork's, and where the next page starts.
+ * whether its head is a fork's, and where the next page starts. Its first
+ * page asks the merge box's fields of the pull request beside them
+ * (`$merging`), so the overview spends one GraphQL request, and one turn of
+ * the token's throttle, on both.
  */
-const OPEN_PULL_REQUESTS_QUERY = `query OpenPullRequests($owner: String!, $name: String!, $after: String) {
+const OPEN_PULL_REQUESTS_QUERY = `query OpenPullRequests($owner: String!, $name: String!, $number: Int!, $after: String, $merging: Boolean!) {
   repository(owner: $owner, name: $name) {
     pullRequests(states: OPEN, first: ${STACK_CANDIDATES}, after: $after) {
       nodes { number title url isDraft headRefName baseRefName isCrossRepository mergeQueueEntry { position } }
       pageInfo { hasNextPage endCursor }
     }
+    ... @include(if: $merging) {
+      ${MERGING_FIELDS}
+    }
   }
 }`;
 
-const OpenPullRequestsAnswerSchema = Schema.Struct({
-  repository: Schema.NullOr(
-    Schema.Struct({
-      pullRequests: Schema.Struct({
-        nodes: Schema.Array(
-          Schema.NullOr(
-            Schema.Struct({
-              number: Schema.Number,
-              title: Schema.String,
-              url: Schema.String,
-              isDraft: Schema.Boolean,
-              headRefName: Schema.String,
-              baseRefName: Schema.String,
-              isCrossRepository: Schema.Boolean,
-              mergeQueueEntry: Schema.optional(
-                Schema.NullOr(Schema.Struct({ position: Schema.Number })),
-              ),
-            }),
-          ),
-        ),
-        pageInfo: Schema.Struct({
-          hasNextPage: Schema.Boolean,
-          endCursor: Schema.NullOr(Schema.String),
-        }),
+const OpenPullRequestsSchema = Schema.Struct({
+  nodes: Schema.Array(
+    Schema.NullOr(
+      Schema.Struct({
+        number: Schema.Number,
+        title: Schema.String,
+        url: Schema.String,
+        isDraft: Schema.Boolean,
+        headRefName: Schema.String,
+        baseRefName: Schema.String,
+        isCrossRepository: Schema.Boolean,
+        mergeQueueEntry: Schema.optional(Schema.NullOr(Schema.Struct({ position: Schema.Number }))),
       }),
-    }),
+    ),
+  ),
+  pageInfo: Schema.Struct({
+    hasNextPage: Schema.Boolean,
+    endCursor: Schema.NullOr(Schema.String),
+  }),
+});
+
+/** A later page of the listing, which asks no merge fields. */
+const OpenPullRequestsAnswerSchema = Schema.Struct({
+  repository: Schema.NullOr(Schema.Struct({ pullRequests: OpenPullRequestsSchema })),
+});
+
+/** The listing's first page, with the merge box's fields beside it. */
+const FirstOpenPageAnswerSchema = Schema.Struct({
+  repository: Schema.NullOr(
+    Schema.Struct({ pullRequests: OpenPullRequestsSchema, ...MergingFieldsSchema.fields }),
   ),
 });
 
-type OpenPullRequestNodes = NonNullable<
-  typeof OpenPullRequestsAnswerSchema.Type.repository
->["pullRequests"]["nodes"];
+type OpenPullRequestNodes = (typeof OpenPullRequestsSchema.Type)["nodes"];
 
 /** The open pull requests a page lists, as a stack is worked out from them. */
 function candidatesOf(nodes: OpenPullRequestNodes): readonly StackCandidate[] {
@@ -2091,63 +2108,82 @@ function candidatesOf(nodes: OpenPullRequestNodes): readonly StackCandidate[] {
   );
 }
 
+/** What the stack's listing read: the repository's open pull requests, none where they could not all be read, and the merge box its first page asked beside them, none where GitHub would not say. */
+interface OpenListing {
+  readonly open: readonly StackCandidate[] | undefined;
+  readonly merging: Option.Option<PullRequestMerging>;
+}
+
 /**
  * The repository's every open pull request, page after page up to the
- * bound, as a stack is worked out from them; none where they could not all
- * be read. Note that a listing cut short is none rather than what it got
- * to, because a pull request it left out could be the second on a branch,
- * which unmakes an edge the rest would make; and that a read that fails, or
- * that GitHub answers only with errors, is none too, said once in the log,
- * because the header stands without its stack.
+ * bound, as a stack is worked out from them, with the merge box of pull
+ * request `number` its first page asked beside them. Note that a listing
+ * cut short is none rather than what it got to, because a pull request it
+ * left out could be the second on a branch, which unmakes an edge the rest
+ * would make, while the merge box its first page read still stands; and
+ * that a read that fails, or that GitHub answers only with errors, is none
+ * too, said once in the log, because the header stands without its stack
+ * and its merge box.
  */
 function openPullRequestsOf(
   bearer: GitHubBearer,
   fullName: string,
-): Effect.Effect<readonly StackCandidate[] | undefined> {
+  number: number,
+): Effect.Effect<OpenListing> {
   const [owner = "", name = ""] = fullName.split("/");
 
-  const page = (
-    after: string | null,
+  const ask = (after: string | null, merging: boolean) => ({ owner, name, number, after, merging });
+
+  const listed = (
+    listing: typeof OpenPullRequestsSchema.Type | undefined,
     held: readonly StackCandidate[],
     pages: number,
-  ): Effect.Effect<readonly StackCandidate[] | undefined, PullRequestReadFailure> =>
-    bearer.client
-      .graphql(OPEN_PULL_REQUESTS_QUERY, { owner, name, after }, OpenPullRequestsAnswerSchema)
-      .pipe(
-        Effect.flatMap((answer) => {
-          const listed = answer.repository?.pullRequests;
-
-          if (listed === undefined) {
-            return Effect.as(
-              Effect.logWarning(`GitHub answered no open pull requests of the repository`),
-              undefined,
-            );
-          }
-
-          const read = [...held, ...candidatesOf(listed.nodes)];
-          const { hasNextPage, endCursor } = listed.pageInfo;
-
-          if (!hasNextPage || endCursor === null) return Effect.succeed(read);
-
-          if (pages + 1 >= STACK_PAGES) {
-            return Effect.as(
-              Effect.logWarning(`the repository holds more open pull requests than a stack reads`),
-              undefined,
-            );
-          }
-
-          return page(endCursor, read, pages + 1);
-        }),
-      );
-
-  return page(null, [], 0).pipe(
-    Effect.catch((failure) =>
-      Effect.as(
-        Effect.logWarning(`the repository's open pull requests were not read: ${failure._tag}`),
+  ): Effect.Effect<readonly StackCandidate[] | undefined, PullRequestReadFailure> => {
+    if (listing === undefined) {
+      return Effect.as(
+        Effect.logWarning(`GitHub answered no open pull requests of the repository`),
         undefined,
+      );
+    }
+
+    const read = [...held, ...candidatesOf(listing.nodes)];
+    const { hasNextPage, endCursor } = listing.pageInfo;
+
+    if (!hasNextPage || endCursor === null) return Effect.succeed(read);
+
+    if (pages + 1 >= STACK_PAGES) {
+      return Effect.as(
+        Effect.logWarning(`the repository holds more open pull requests than a stack reads`),
+        undefined,
+      );
+    }
+
+    return bearer.client
+      .graphql(OPEN_PULL_REQUESTS_QUERY, ask(endCursor, false), OpenPullRequestsAnswerSchema)
+      .pipe(Effect.flatMap((answer) => listed(answer.repository?.pullRequests, read, pages + 1)));
+  };
+
+  const unread = (failure: PullRequestReadFailure, what: string) =>
+    Effect.as(Effect.logWarning(`${what} were not read: ${failure._tag}`), undefined);
+
+  return bearer.client
+    .graphql(OPEN_PULL_REQUESTS_QUERY, ask(null, true), FirstOpenPageAnswerSchema)
+    .pipe(
+      Effect.flatMap((answer) =>
+        Effect.map(
+          listed(answer.repository?.pullRequests, [], 0).pipe(
+            Effect.catch((failure) => unread(failure, "the repository's open pull requests")),
+          ),
+          (open): OpenListing => ({ open, merging: mergingOf(answer.repository) }),
+        ),
       ),
-    ),
-  );
+      Effect.catch((failure) =>
+        Effect.as(unread(failure, "the repository's open pull requests and the merge box"), {
+          open: undefined,
+          merging: Option.none(),
+        }),
+      ),
+    );
 }
 
 /**
@@ -2156,16 +2192,16 @@ function openPullRequestsOf(
  * its mergeability, who opened it, who it still asks for a review, and its
  * labels. Where `stacked` says it was open as last read, the repository's
  * open pull requests are read beside it for the stack it stands in, which
- * one no longer open stands in none of. None where the repository holds no
- * such pull request.
+ * one no longer open stands in none of, and its merge box in the same
+ * GraphQL request. None where the repository holds no such pull request.
  */
 export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOverview")(function* (
   bearer: GitHubBearer,
   fullName: string,
   number: number,
   stacked: boolean,
-): Effect.fn.Return<Option.Option<GitHubOverviewPullRequest>, PullRequestReadFailure> {
-  const [read, open] = yield* Effect.all(
+): Effect.fn.Return<Option.Option<GitHubOverviewRead>, PullRequestReadFailure> {
+  const [read, listing] = yield* Effect.all(
     [
       readOptional(
         githubRead(
@@ -2177,12 +2213,13 @@ export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOve
           OverviewPullSchema,
         ),
       ),
-      stacked ? openPullRequestsOf(bearer, fullName) : Effect.succeed(undefined),
+      stacked ? openPullRequestsOf(bearer, fullName, number) : Effect.succeed(undefined),
     ],
     { concurrency: "unbounded" },
   );
 
   if (Option.isNone(read)) return Option.none();
+  const open = listing?.open;
   const pull = read.value;
   const pullRequest = pullRequestOf(pull);
 
@@ -2205,7 +2242,7 @@ export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOve
 
   const forkOwner = current.crossRepository ? pull.head.repo?.owner?.login : undefined;
 
-  return Option.some({
+  const overview: GitHubOverviewPullRequest = {
     pullRequest,
     body: pull.body ?? "",
     html: pull.body_html?.trim() ?? "",
@@ -2222,7 +2259,9 @@ export const pullRequestOverview = /* @__PURE__ */ Effect.fn("web/pullRequestOve
       .slice(0, CHANGES_BOUNDS.MAX_PEOPLE),
     labels: (pull.labels ?? []).slice(0, OVERVIEW_BOUNDS.MAX_LABELS),
     stack: stands && open !== undefined ? stackOf(current, open) : [],
-  });
+  };
+
+  return Option.some({ overview, merging: listing?.merging });
 });
 
 /**

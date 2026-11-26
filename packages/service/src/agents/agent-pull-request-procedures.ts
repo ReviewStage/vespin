@@ -156,11 +156,14 @@ const reachedAndAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   return { agent, pullRequest };
 });
 
+/** What an overview's read takes of the pull request it reads: its number, where it stood as last read, and its page; an agent's published pull request, or the one a repository's number reached. */
+export type OverviewSubject = Pick<AgentPullRequest, "number" | "state" | "url">;
+
 /** One of the overview's reads of a pull request, on the token minted for its repository; null where GitHub holds no such pull request. */
 export type OverviewRead<A, R> = (
   bearer: GitHubBearer,
   subject: PullRequestSubject,
-  pullRequest: AgentPullRequest,
+  pullRequest: OverviewSubject,
   /** The member reading, whose own reads mark what is theirs. */
   userId: string,
 ) => Effect.Effect<A | null, PullRequestReadFailure, R>;
@@ -192,7 +195,7 @@ export const overviewPart = <A, R>(
   });
 
 /** Whether the pull request was open as last read, which is when the stack it stands in is worth a read of GitHub's open pull requests. */
-function stackable(pullRequest: AgentPullRequest): boolean {
+function stackable(pullRequest: OverviewSubject): boolean {
   return (
     pullRequest.state === PULL_REQUEST_STATE.OPEN || pullRequest.state === PULL_REQUEST_STATE.DRAFT
   );
@@ -230,23 +233,27 @@ const memberRights = (userId: string, repository: string, number: number) =>
 export const overviewPullRequestRead = (
   bearer: GitHubBearer,
   subject: PullRequestSubject,
-  pullRequest: AgentPullRequest,
+  pullRequest: OverviewSubject,
   userId: string,
 ) =>
   Effect.gen(function* () {
     const { repository } = subject;
 
-    const [read, merging, rights] = yield* Effect.all(
+    const stacked = stackable(pullRequest);
+
+    // Note that an open pull request's merge box rides in its stack's listing, one GraphQL request for both; one no longer open lists no stack, so its merge box is asked on its own.
+    const [read, apart, rights] = yield* Effect.all(
       [
-        pullRequestOverview(bearer, repository, pullRequest.number, stackable(pullRequest)),
-        mergingOrNone(bearer, repository, pullRequest.number),
+        pullRequestOverview(bearer, repository, pullRequest.number, stacked),
+        stacked ? Effect.succeed(undefined) : mergingOrNone(bearer, repository, pullRequest.number),
         memberRights(userId, repository, pullRequest.number),
       ],
       { concurrency: "unbounded" },
     );
 
     if (Option.isNone(read)) return null;
-    const named = { ...(yield* namedOverviewPullRequest(subject, read.value)), ...rights };
+    const { overview, merging = apart ?? Option.none() } = read.value;
+    const named = { ...(yield* namedOverviewPullRequest(subject, overview)), ...rights };
 
     return Option.isNone(merging) ? named : { ...named, merging: merging.value };
   });
@@ -260,7 +267,7 @@ export const overviewPullRequestRead = (
 export const overviewChecksRead = (
   bearer: GitHubBearer,
   subject: PullRequestSubject,
-  pullRequest: AgentPullRequest,
+  pullRequest: OverviewSubject,
 ) =>
   Effect.map(
     Effect.all(
@@ -296,7 +303,7 @@ const memberPendingReview = (userId: string, repository: string, number: number)
 export const overviewConversationRead = (
   bearer: GitHubBearer,
   subject: PullRequestSubject,
-  pullRequest: AgentPullRequest,
+  pullRequest: OverviewSubject,
   userId: string,
 ) =>
   Effect.map(
