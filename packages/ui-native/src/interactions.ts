@@ -71,10 +71,12 @@ export type BarTitleMark = { readonly title: string; readonly asset: string };
 
 /**
  * A list the native stack's bar follows as it scrolls, so a tab root's large
- * title collapses into the bar as Mail's does, which UIKit never finds on
- * its own inside a hosting controller. Note that it acts only under a stack
- * bar standing a large title, so every list may carry it, a pushed page's
- * and a split view's column standing as before.
+ * title collapses into the bar as Mail's does, and a search field in the bar
+ * tucks away and stands over the list's top edge effect as Settings' does,
+ * which UIKit never finds on its own inside a hosting controller. Note that
+ * it acts only under a stack bar standing a large title or a search field,
+ * so every list may carry it, a pushed page's plain bar and a split view's
+ * column standing as before.
  */
 export function stackScrollEdge(): ModifierConfig {
   return createModifier(MODIFIER.STACK_SCROLL_EDGE, {});

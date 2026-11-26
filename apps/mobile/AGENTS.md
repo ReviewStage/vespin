@@ -276,7 +276,8 @@ group's header in the Tasks list, or onto Pinned or a section in the iPad's side
 an agent's composer or a sheet that starts work are kept as JPEGs and
 attached. A list hands its scroll view to the native stack's bar
 (`stackScrollEdge`), which UIKit never finds inside a `Host`'s hosting
-controller, so a tab root's large title collapses as the list scrolls. A row's long press menu, its preview, and its swipes are SwiftUI's own,
+controller, so a tab root's large title collapses and a bar's search field
+tucks away over the list's scroll edge as the list scrolls. A row's long press menu, its preview, and its swipes are SwiftUI's own,
 built from the JSON tree the row hands over (`RowMenu.swift`), its menu
 and preview read only as a long press opens them, so a list's rows hold
 none of their views. A view handed a modifier the build does not register draws as it

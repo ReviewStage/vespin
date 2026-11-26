@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, some of its words in colors of their own, and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, some of its words in colors of their own, and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses and its search field tucks away as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -407,7 +407,7 @@ private final class StackSubtitleView: UIView {
 
 // MARK: - Scroll edge
 
-/// A list handed to the native stack's bar as the scroll view at its top edge, so a large title collapses into the bar as the list scrolls, as Mail's does.
+/// A list handed to the native stack's bar as the scroll view at its top edge, so a large title collapses into the bar as the list scrolls, as Mail's does, and a search field in the bar stands over the list's scroll edge, as Settings' does.
 ///
 /// Note that UIKit finds the scroll view a bar follows only as its screen's
 /// view's first descendant, or by the screen's `contentScrollView(for:)`,
@@ -416,9 +416,15 @@ private final class StackSubtitleView: UIView {
 /// while the rows scrolled under it. So the list carries a probe that finds
 /// the scroll view it stands beside and sets it on the screen's controller
 /// (`setContentScrollView(_:for:)`). It acts only for a react-native-screens
-/// screen that stands a large title, so a SwiftUI split view's own columns,
-/// which SwiftUI follows itself, and a pushed page's inline bar are left as
-/// they were.
+/// screen that stands a large title or a search field in its bar, so a
+/// SwiftUI split view's own columns, which SwiftUI follows itself, and a
+/// pushed page's plain inline bar are left as they were.
+///
+/// Note that a pushed page's search field under its inline title, such as a
+/// pull request's Find a file, is the system's own to tuck away as the list
+/// scrolls and to stand over the list's top edge effect, which UIKit does
+/// only for the scroll view it follows: unfollowed, the field stood still
+/// over the rows, a row's words drawn clear through it.
 internal struct StackScrollEdgeModifier: ViewModifier, Record {
   func body(content: Content) -> some View {
     content.background(StackScrollEdgeProbe())
@@ -459,20 +465,22 @@ private final class StackScrollEdgeView: UIView {
     handOver()
   }
 
-  /// Sets the list's scroll view as the top edge's on the screen that stands a large title, where it isn't already.
+  /// Sets the list's scroll view as the top edge's on the screen whose bar follows a scroll, where it isn't already.
   func handOver() {
-    guard window != nil, let screen = largeTitleScreen(), let scrollView = nearestScrollView() else { return }
+    guard window != nil, let screen = followingScreen(), let scrollView = nearestScrollView() else { return }
     if screen.contentScrollView(for: .top) === scrollView { return }
     screen.setContentScrollView(scrollView, for: .top)
   }
 
-  /// The react-native-screens screen above the probe, past the hosting controller standing inside it, where its bar stands a large title.
-  private func largeTitleScreen() -> UIViewController? {
+  /// The react-native-screens screen above the probe, past the hosting controller standing inside it, where its bar follows a scroll: it stands a large title or a search field.
+  private func followingScreen() -> UIViewController? {
     var responder: UIResponder? = next
     while let current = responder {
       if let controller = current as? UIViewController, let stack = controller.parent as? UINavigationController {
         let native = NSStringFromClass(type(of: stack)).hasPrefix("RNS")
-        return native && controller.navigationItem.largeTitleDisplayMode == .always ? controller : nil
+        let item = controller.navigationItem
+        let follows = item.largeTitleDisplayMode == .always || item.searchController != nil
+        return native && follows ? controller : nil
       }
       responder = current.next
     }
