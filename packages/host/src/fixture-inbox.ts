@@ -1035,13 +1035,43 @@ const MANAGER_STARTED = LANDED - 2 * HOUR;
 const MANAGER_REPOSITORIES = ["ada/relay", "ada/ledger"] as const;
 
 const MANAGER: AgentSummary = {
-  ...agentOn(AGENT.MANAGER, "", "Release manager", AGENT_STATUS.COMPLETED, 2 * HOUR),
+  ...agentOn(AGENT.MANAGER, "", "Release manager", AGENT_STATUS.RUNNING, 2 * HOUR),
   taskId: null,
   kind: AGENT_KIND.MANAGER,
-  face: { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.BLUE },
+  face: {
+    character: MANAGER_FACE_CHARACTER.PLANET,
+    color: MANAGER_FACE_COLOR.ORANGE,
+    emoji: "\u{1F680}",
+  },
   readThrough: MANAGER_STARTED,
   saidAt: MANAGER_STARTED + 4 * MINUTE,
 };
+
+// STAGING ONLY (screenshots for PR 8): a character face at rest, a character at work, and an emoji at rest.
+const STAGED_MANAGERS: readonly AgentSummary[] = [
+  {
+    ...agentOn(fixtureId(91), "", "Docs keeper", AGENT_STATUS.COMPLETED, 3 * HOUR),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    face: { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.BLUE },
+  },
+  {
+    ...agentOn(fixtureId(92), "", "Night shift", AGENT_STATUS.RUNNING, 4 * HOUR),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    face: { character: MANAGER_FACE_CHARACTER.CAT, color: MANAGER_FACE_COLOR.TEAL },
+  },
+  {
+    ...agentOn(fixtureId(93), "", "Triage desk", AGENT_STATUS.COMPLETED, 5 * HOUR),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    face: {
+      character: MANAGER_FACE_CHARACTER.GHOST,
+      color: MANAGER_FACE_COLOR.PURPLE,
+      emoji: "\u{1F9ED}",
+    },
+  },
+];
 
 /** A task's agents as its row in the list counts them. */
 function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
@@ -1813,7 +1843,6 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
     ...MANAGER,
     workspaceId: FIXTURE_IDS.WORKSPACE,
     repository: MANAGER_REPOSITORIES[0],
-    settledAt: MANAGER.createdAt,
   };
 
   const invitesAgent = AGENTS.get(TASK.INVITES);
@@ -1830,6 +1859,12 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
       ),
       ...followed,
       manager,
+      ...STAGED_MANAGERS.map((each) => ({
+        ...each,
+        workspaceId: FIXTURE_IDS.WORKSPACE,
+        repository: MANAGER_REPOSITORIES[0],
+        ...(each.status === AGENT_STATUS.RUNNING ? undefined : { settledAt: each.createdAt }),
+      })),
     ],
     taskSections: LISTED_SECTIONS,
     workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)
