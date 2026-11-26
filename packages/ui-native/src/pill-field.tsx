@@ -2,7 +2,13 @@
 
 import { readerZone } from "@repo/features/date-mention";
 import { writtenMarkers } from "@repo/features/file-marker";
-import { PILL_KIND, PILL_RUN, type Pill, pillRuns } from "@repo/features/pill-words";
+import {
+  PILL_KIND,
+  PILL_RUN,
+  type Pill,
+  typedPillRuns,
+  typedRunsMarkdown,
+} from "@repo/features/pill-words";
 import { type Ref, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { NativeSyntheticEvent } from "react-native";
 import { type CaretAtWord, caretAtWord, drawnPill, sameAtWord, toldWord } from "./caret-at-word.js";
@@ -10,6 +16,7 @@ import { useChipMarkOf } from "./chip-mark.js";
 import {
   NativePillField,
   type NativePillFieldDoors,
+  type NativeToldRun,
   type NativeValue,
   type NativeWords,
 } from "./pill-field-native.js";
@@ -21,6 +28,17 @@ const NO_FILES: ReadonlySet<string> = new Set();
 
 /** No thumbnails: every file's pill wears its glyph. */
 const NO_THUMBNAILS: ReadonlyMap<string, string> = new Map();
+
+/** The words the view tells written as the Markdown the wire carries, each marker typed as words escaped so it names no file, as the panel's box writes it. */
+function toldMarkdown(runs: readonly NativeToldRun[]): string {
+  return typedRunsMarkdown(
+    runs.map((run) =>
+      "pill" in run
+        ? { kind: PILL_RUN.PILL, pill: run.pill }
+        : { kind: PILL_RUN.WORDS, text: run.text },
+    ),
+  );
+}
 
 /** The thumbnail a held picture's pill wears, by its name; none for a mention or any other file. */
 function thumbnailOf(pill: Pill, thumbnails: ReadonlyMap<string, string>): string | undefined {
@@ -75,7 +93,9 @@ interface PillFieldProps {
  * (`@repo/features/pill-words`), its look the chip it becomes once sent
  * (`pillLook`). A pill selects and deletes as one, and copies as its
  * Markdown, as the desktop's box copies. The value goes out exactly as the
- * desktop writes it. The field tells the `@` word the caret stands in, so a
+ * desktop writes it: a marker typed as words is never a pill, whatever file
+ * is held, and goes out escaped, `\[Picture 1]`, so it names no file
+ * (`typedPillRuns`, `typedRunsMarkdown`); only a file's own pill names it. The field tells the `@` word the caret stands in, so a
  * mention offer opens on it, and `pick` puts the picked pill in its place.
  * It is UIKit's text view on TextKit 2 (`pill-field-native.ts`): the system's
  * edit menu, dictation, autocorrect, and Dynamic Type are its own.
@@ -121,7 +141,7 @@ export function PillField({
       },
     });
 
-    const runs = pillRuns(value, files).map((run) =>
+    const runs = typedPillRuns(value, files).map((run) =>
       run.kind === PILL_RUN.WORDS ? { text: run.text } : drawn(run.pill),
     );
 
@@ -171,11 +191,12 @@ export function PillField({
   };
 
   const onWords = ({ nativeEvent: words }: NativeSyntheticEvent<NativeWords>) => {
-    const changed = words.markdown !== told.current.markdown;
-    told.current = { markdown: words.markdown };
+    const markdown = toldMarkdown(words.runs);
+    const changed = markdown !== told.current.markdown;
+    told.current = { markdown };
     setSeen(words.changes);
 
-    if (changed) onChange(words.markdown);
+    if (changed) onChange(markdown);
     const word = caretAtWord(words);
 
     if (sameAtWord(word, atWord.current)) return;
