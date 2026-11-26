@@ -341,10 +341,10 @@ error's own words can quote what an agent was working on. The Mac app also sends
 Sentry diagnostic data about its resource use, such as processor usage, and
 how long its main process stopped answering whenever it did, with the stack of
 its own functions it stood still in, never the values they held. The
-Service sends processor profiles of the traces Sentry keeps, and the Mac
-app's windows of the time they are in use, from a click, keystroke, or scroll
-until ten seconds without one: which of their own functions ran and for how
-long, never the values they handled. The Mac app's windows also say, of a slow click, keystroke, or
+Service sends processor profiles of the traces Sentry keeps, and about one in
+ten of the Mac app's windows of the time they are in use, from a click,
+keystroke, or scroll until ten seconds without one: which of their own
+functions ran and for how long, never the values they handled. The Mac app's windows also say, of a slow click, keystroke, or
 screen they timed, which of their own functions held the window and for how
 long. The Mac app and the web app send none of this while "Share
 usage data" is off. A report made as the app starts, before it has read that

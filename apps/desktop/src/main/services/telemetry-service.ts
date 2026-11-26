@@ -73,7 +73,7 @@ let usageData: boolean | undefined;
  * Main reports on behalf of every renderer, so what leaves goes through the
  * same token filters as the preload's and the renderers' own.
  *
- * Every window profiles while it is in use (`SENTRY_PROFILING`,
+ * About one window in ten profiles while it is in use (`SENTRY_PROFILING`,
  * `renderer/desktop-sentry-sdk.ts`), so the spans it times and its
  * interactions carry the stack frames that ran under them: the SDK serves
  * every document with `Document-Policy: js-profiling`, which the browser's
