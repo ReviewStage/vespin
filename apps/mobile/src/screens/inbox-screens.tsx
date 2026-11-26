@@ -1172,13 +1172,17 @@ function ThreadDetail({
           disabled={place.steps.previous === undefined}
           icon={glyphSymbol(GLYPH.PREVIOUS_ITEM)}
           onPress={() => stepTo(place.steps.previous)}
-        />
+        >
+          {STEP_WORDS.PREVIOUS}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Button
           accessibilityLabel={STEP_WORDS.NEXT}
           disabled={place.steps.next === undefined}
           icon={glyphSymbol(GLYPH.NEXT_ITEM)}
           onPress={() => stepTo(place.steps.next)}
-        />
+        >
+          {STEP_WORDS.NEXT}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.View>
           <StackBarMenu menu={compactMenu} />
         </Stack.Toolbar.View>
@@ -1387,6 +1391,7 @@ function InboxStackList(held: InboxHeld) {
           </Stack.Toolbar.Button>
         ) : (
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
+            <Stack.Toolbar.Label>{menu.label}</Stack.Toolbar.Label>
             {toolbarMenuActions(menu)}
           </Stack.Toolbar.Menu>
         )}
@@ -1396,7 +1401,9 @@ function InboxStackList(held: InboxHeld) {
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
             accessibilityLabel={compose.label}
             onPress={compose.onPress}
-          />
+          >
+            {compose.label}
+          </Stack.Toolbar.Button>
         )}
       </Stack.Toolbar>
       {choosing === undefined ? null : (
@@ -1407,6 +1414,7 @@ function InboxStackList(held: InboxHeld) {
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass. A menu that would act on nothing, such as Remind me with no thread chosen, stands as a dimmed button, because the bar's menu draws its `disabled` live on iOS.
             isBarMenu(act) && act.disabled !== true ? (
               <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
+                <Stack.Toolbar.Label>{act.label}</Stack.Toolbar.Label>
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 {toolbarMenuActions(act)}
               </Stack.Toolbar.Menu>
@@ -1417,6 +1425,7 @@ function InboxStackList(held: InboxHeld) {
                 disabled={act.disabled === true}
                 onPress={isBarMenu(act) ? doNothing : act.onPress}
               >
+                <Stack.Toolbar.Label>{act.label}</Stack.Toolbar.Label>
                 {act.symbol === undefined ? null : (
                   <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 )}

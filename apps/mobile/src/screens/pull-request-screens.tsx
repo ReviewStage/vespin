@@ -360,6 +360,7 @@ function PullRequestToolbar({
   return (
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+        <Stack.Toolbar.Label>{MENU_WORDS.MORE}</Stack.Toolbar.Label>
         {editTitle === undefined ? null : (
           <Stack.Toolbar.Menu inline>
             <Stack.Toolbar.MenuAction

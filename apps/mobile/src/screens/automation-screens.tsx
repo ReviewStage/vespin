@@ -206,7 +206,6 @@ export function AutomationsScreen() {
           <StackBarMenu menu={menu} />
         </Stack.Toolbar.View>
         {/* Note that Runs stands beside View options, as the desktop's page stands its Runs tab beside the list, since every run's agent is found there. */}
-        {/* Note that each button's words are its title as well, which the bar's overflow names it by where the bar has no room for it, as beside an iPad's tab bar; the bar itself draws its glyph alone. */}
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.HISTORY)}
           accessibilityLabel={RUNS}

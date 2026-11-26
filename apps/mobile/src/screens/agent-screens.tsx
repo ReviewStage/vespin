@@ -1581,21 +1581,27 @@ const AgentConversation = memo(function AgentConversation({
             icon={glyphSymbol(GLYPH.LIST)}
             accessibilityLabel={MENU_WORDS.OVERVIEW}
             onPress={openOverview}
-          />
+          >
+            {MENU_WORDS.OVERVIEW}
+          </Stack.Toolbar.Button>
         )}
         {barActs ? (
           <Stack.Toolbar.Button
             icon={glyphSymbol(archived ? GLYPH.UNARCHIVE : GLYPH.ARCHIVE)}
             accessibilityLabel={archived ? MENU_WORDS.UNARCHIVE : MENU_WORDS.ARCHIVE}
             onPress={archived ? actions.unarchive : askArchive}
-          />
+          >
+            {archived ? MENU_WORDS.UNARCHIVE : MENU_WORDS.ARCHIVE}
+          </Stack.Toolbar.Button>
         ) : null}
         {barActs ? (
           <Stack.Toolbar.Button
             icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
             accessibilityLabel={actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
             onPress={actions.pin}
-          />
+          >
+            {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+          </Stack.Toolbar.Button>
         ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
@@ -1718,7 +1724,9 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           tintColor={colors.ACCENT}
           accessibilityLabel={PORTS_WORDS.DONE}
           onPress={() => router.back()}
-        />
+        >
+          {PORTS_WORDS.DONE}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen clear={half}>
         <SettingsForm clear={half} spacing={FORM_SPACING.COMPACT}>
