@@ -463,7 +463,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   stopping at the panel's most (`maxLength`), a number field's
   pad standing one Done over it for the rows, a select's menu picker
   under its label, reading "None" until a pick, a
-  boolean's toggle, the rows a SwiftUI `Form` holds, drawn as rows because
+  boolean's words and its bare switch beside them (its label hidden and
+  heard, the words hidden from VoiceOver), the rows a SwiftUI `Form` holds, drawn as rows because
   a `Form` scrolls on its own inside the head's scroll; the rows' words
   line up with the field's, and their hairlines start where the words do,
   as iOS insets a list's separator). **Cards** are kept for the pull request

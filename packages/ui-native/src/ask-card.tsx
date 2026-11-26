@@ -18,6 +18,7 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityHidden,
   accessibilityIdentifier,
   accessibilityLabel,
   buttonStyle,
@@ -399,17 +400,26 @@ function FieldWords({
   optional,
   textStyle,
   ink,
+  hidden = false,
 }: {
   readonly label: string;
   /** Whether the label says the field is optional after it, where nothing else in the row does. */
   readonly optional: boolean;
   readonly textStyle: (typeof TYPE_ROLE)[keyof typeof TYPE_ROLE];
   readonly ink: string;
+  /** Whether VoiceOver passes over the words, where the control beside them is heard by them already. */
+  readonly hidden?: boolean;
 }) {
   const colors = useColors();
 
   return (
-    <Text modifiers={[font({ textStyle, weight: "medium" }), foregroundStyle(ink)]}>
+    <Text
+      modifiers={[
+        font({ textStyle, weight: "medium" }),
+        foregroundStyle(ink),
+        accessibilityHidden(hidden),
+      ]}
+    >
       <Text>{label}</Text>
       {optional ? (
         <Text
@@ -532,9 +542,13 @@ function SelectRow({
 }
 
 /**
- * A boolean: the system's switch with its label, as Settings' rows stand,
- * the system laying out the words and the switch at the row's end and
- * hearing them as one control.
+ * A boolean: its words, then the system's switch at the row's end, as
+ * Settings' rows stand. Note that the switch stands apart from its words,
+ * its own label hidden (`labelsHidden`) and heard by VoiceOver, the words
+ * beside it hidden from VoiceOver so they are heard once, because a toggle
+ * holding its words is one element as wide as the row, whose center is on
+ * its words, where a press never flips it; the switch alone carries the id a
+ * flow presses it by.
  */
 function BooleanRow({
   field,
@@ -544,20 +558,31 @@ function BooleanRow({
   readonly onChange: (value: boolean) => void;
 }) {
   const colors = useColors();
+  const heard = field.required ? field.label : `${field.label}, ${FIELD_WORDS.OPTIONAL}`;
 
   return (
-    <Toggle
-      isOn={field.value === true}
-      onIsOnChange={onChange}
-      modifiers={[toggleStyle("switch"), tint(colors.ACCENT), padding(ASK_ROW_PADDING)]}
-    >
+    <HStack spacing={SPACE.ROW} modifiers={[padding(ASK_ROW_PADDING)]}>
       <FieldWords
         label={field.label}
         optional={!field.required}
         textStyle={TYPE_ROLE.ROW_TITLE}
         ink={colors.TEXT}
+        hidden
       />
-    </Toggle>
+      <Spacer />
+      <Toggle
+        isOn={field.value === true}
+        onIsOnChange={onChange}
+        modifiers={[
+          toggleStyle("switch"),
+          tint(colors.ACCENT),
+          labelsHidden(),
+          accessibilityIdentifier(`answer-field-${field.label}`),
+        ]}
+      >
+        <Text>{heard}</Text>
+      </Toggle>
+    </HStack>
   );
 }
 
