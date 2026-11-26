@@ -143,6 +143,26 @@ function ChoiceFlyout({
       standing.current = false;
     };
   }, []);
+  const close = useRef(flyout.onClose);
+  close.current = flyout.onClose;
+
+  // Note that Escape with the focus back on its choice closes it alone, heard on the choice before it reaches the window, where the picker's popover would close as well.
+  useEffect(() => {
+    const button = choice.current;
+
+    if (button === null) return undefined;
+
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || !standing.current) return;
+      event.preventDefault();
+      event.stopPropagation();
+      close.current();
+    };
+
+    button.addEventListener("keydown", onKey);
+
+    return () => button.removeEventListener("keydown", onKey);
+  }, [choice]);
 
   const stand = (element: HTMLDivElement | null) => {
     row.current = element;
@@ -159,8 +179,13 @@ function ChoiceFlyout({
     <Popover
       open
       onOpenChange={(next, details) => {
-        if (next || !standing.current || towardChoice(details, choice.current)) return;
-        escaped.current = details.reason === ESCAPE_KEY;
+        const byEscape = details.reason === ESCAPE_KEY;
+
+        // Note that Escape always closes it, the focus standing on its choice included.
+        const kept = !byEscape && towardChoice(details, choice.current);
+
+        if (next || !standing.current || kept) return;
+        escaped.current = byEscape;
         flyout.onClose();
       }}
     >
