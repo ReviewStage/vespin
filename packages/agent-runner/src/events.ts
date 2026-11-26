@@ -7,24 +7,31 @@
  * is in flight waits in the queue and goes in the next batch, so a stream of
  * partial messages costs a post per round trip rather than per token. A batch
  * whose body would pass what the service takes (`RUNNER_EVENTS_MAX_BYTES`)
- * goes as several posts, in order, and no event carries a picture's bytes,
- * so a tool's answer of many pictures never ends the launch. Beside
+ * goes as several posts, in order. No event carries a picture's bytes: each
+ * picture is kept apart at the service's pictures route and named in its
+ * place (`RUNNER_KEPT_PICTURE_KEY`), and no event carries more words than one
+ * post may (`EVENT_WORDS_MAX`), so no answer, however large, ends the launch;
+ * a batch the service still refuses as too large or unreadable is logged
+ * and skipped, and the launch goes on. Beside
  * the sender, a heartbeat posts a batch with no events every
  * `RUNNER_HEARTBEAT` for as long as the launch runs, once each, since the
  * next is never far, so the service touches the sandbox through a harness's
  * long silence; it stops as the sink drains.
  */
 
+import { WireValueSchema } from "@repo/wire";
 import {
   Cause,
   Data,
   Duration,
   Effect,
   Fiber,
+  Option,
   Predicate,
   Queue,
   Redacted,
   Schedule,
+  Schema,
   type Scope,
 } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -32,8 +39,10 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import {
   RUNNER_EVENTS_MAX_BYTES,
   RUNNER_HEARTBEAT,
+  RUNNER_KEPT_PICTURE_KEY,
   type RunnerEvent,
   type RunnerMessage,
+  type RunnerPictureAnswer,
 } from "./protocol.js";
 
 /** The most events one post carries. */
@@ -77,18 +86,33 @@ const STOP_DRAIN = POST_TIMEOUT;
 const TRANSIENT_STATUS = new Set([408, 429]);
 const SERVER_ERROR = 500;
 
-/** A post the service did not take. `transient` is whether posting it again may succeed. */
+/**
+ * The statuses that say the service will never take this batch, though it
+ * would take the next: its body is past the route's bound, or not a batch
+ * it can read. Such a batch is skipped, never the launch ended for it.
+ */
+const BATCH_REFUSED_STATUS = new Set([400, 413]);
+
+const HTTP_OK = 200;
+
+/** A post the service did not take. `transient` is whether posting it again may succeed; `batchRefused` is whether the service refused this batch alone (`BATCH_REFUSED_STATUS`). */
 export class EventsUndelivered extends Data.TaggedError("EventsUndelivered")<{
   readonly transient: boolean;
+  readonly batchRefused?: boolean;
   readonly detail: string;
 }> {}
 
-/** Where a launch's events go, as whom, from which number, and the secrets no event may carry. */
+/**
+ * Where a launch's events go, as whom, from which number, the secrets no
+ * event may carry, and where its pictures are kept apart: none where the
+ * service named no pictures route, and every picture's bytes are left out.
+ */
 interface SinkOptions {
   readonly url: string;
   readonly bearer: Redacted.Redacted;
   readonly firstSequence: number;
   readonly secrets: readonly Redacted.Redacted[];
+  readonly picturesUrl?: string | undefined;
 }
 
 export interface EventSink {
@@ -107,47 +131,171 @@ export interface EventSink {
 /** What a secret is replaced with wherever an event carried it. */
 const REDACTED = "[redacted]";
 
-/** The `type` of an image or document block's source that carries its bytes inline, as the Messages API spells it. */
-const BASE64_SOURCE = "base64";
-
-/** What a base64 source's bytes are replaced with in an event. */
+/** What inline bytes are replaced with in an event where they were not kept apart. */
 const BYTES_LEFT_OUT = "";
+
+/**
+ * The most bytes of words one event carries, so an event alone always fits
+ * a post with room to spare for its keys and JSON's escapes
+ * (`RUNNER_EVENTS_MAX_BYTES`). The words past it are cut, in the order the
+ * event holds them, so a tool's answer as the model read it is kept ahead
+ * of the harness's own copy beside it.
+ */
+const EVENT_WORDS_MAX = RUNNER_EVENTS_MAX_BYTES / 2;
+
+/** The longest words never cut, so the short words that say what an event is (its `type`, an id) always stand as they were. */
+const WORDS_KEPT_WHOLE = 1024;
 
 /** A value as it crosses to the service: JSON's own shapes. */
 type Json = string | number | boolean | null | readonly Json[] | { readonly [key: string]: Json };
+
+type JsonObject = { readonly [key: string]: Json };
+
+/** A block that carries bytes inline: the block with them left out, and its picture's base64 where it is a picture. */
+interface InlineBytes {
+  readonly leftOut: JsonObject;
+  readonly picture?: string;
+}
+
+/** What keeps a picture apart from the events: what the service kept, to name in its place, or nothing where it kept none. */
+type KeepPicture = (data: string) => Effect.Effect<Option.Option<Json>>;
+
+/** The `type` of an image or document block's source that carries its bytes inline, as the Messages API spells it. */
+const BASE64_SOURCE = "base64";
+
+const isImageMediaType = (value: Json | undefined): boolean =>
+  Predicate.isString(value) && value.startsWith("image/");
+
+const isJsonObject = (value: Json | undefined): value is JsonObject =>
+  Predicate.isObject(value) && !Array.isArray(value);
+
+/**
+ * Every block shape a harness carries bytes inline in, as one list: the
+ * picture to keep apart where the block is a picture, and the block with its
+ * bytes left out in every case. Note that a block's bytes are left out
+ * however large they are, because the service reads none of them.
+ * - The Messages API's image and document blocks, as Claude Code's answers
+ *   carry them (`{ type, source: { type: "base64", media_type, data } }`).
+ * - MCP's image content, as Codex's MCP results carry it (`{ type: "image", data, mimeType }`).
+ * - Codex's generated image (`{ type: "imageGeneration", result }`).
+ * - Claude Code's raw Read result of an image or a whole PDF (`tool_use_result.file`: `{ base64, originalSize, … }`).
+ */
+function inlineBytesOf(block: JsonObject): InlineBytes | undefined {
+  const { source } = block;
+
+  if (isJsonObject(source) && source.type === BASE64_SOURCE && Predicate.isString(source.data)) {
+    const leftOut = { ...block, source: { ...source, data: BYTES_LEFT_OUT } };
+
+    return isImageMediaType(source.media_type) ? { leftOut, picture: source.data } : { leftOut };
+  }
+
+  if (
+    block.type === "image" &&
+    Predicate.isString(block.data) &&
+    isImageMediaType(block.mimeType)
+  ) {
+    return { leftOut: { ...block, data: BYTES_LEFT_OUT }, picture: block.data };
+  }
+
+  if (block.type === "imageGeneration" && Predicate.isString(block.result)) {
+    return { leftOut: { ...block, result: BYTES_LEFT_OUT } };
+  }
+
+  if (Predicate.isString(block.base64) && Predicate.isNumber(block.originalSize)) {
+    return { leftOut: { ...block, base64: BYTES_LEFT_OUT } };
+  }
+
+  return undefined;
+}
 
 /** A text with every secret taken out. */
 function redactedText(text: string, secrets: readonly string[]): string {
   return secrets.reduce((scrubbing, secret) => scrubbing.replaceAll(secret, REDACTED), text);
 }
 
-/** Whether a value is a base64 source, as an image or document block carries its bytes (`{ type: "base64", data }`). */
-function isBase64Source(value: { readonly [key: string]: Json }): boolean {
-  return value.type === BASE64_SOURCE && Predicate.isString(value.data);
+/** Words cut to `room` bytes, marked with how many were left out. */
+function cutWords(text: string, room: number): string {
+  const bytes = Buffer.from(text, "utf8");
+
+  // Note that a character the cut splits decodes as a replacement, which is dropped.
+  const kept = bytes
+    .subarray(0, room)
+    .toString("utf8")
+    .replace(/\uFFFD$/, "");
+
+  return `${kept}…[${bytes.byteLength - room} bytes left out]`;
+}
+
+/**
+ * One event's walk: the secrets to take out of it, how its pictures are
+ * kept apart, and the bytes of words it may still carry.
+ */
+class EventWalk {
+  room = EVENT_WORDS_MAX;
+
+  constructor(
+    readonly secrets: readonly string[],
+    readonly keep: KeepPicture,
+  ) {}
+
+  /** Words with every secret taken out, cut where they pass the room the event has left. */
+  words(text: string): string {
+    const scrubbed = redactedText(text, this.secrets);
+    const bytes = Buffer.byteLength(scrubbed, "utf8");
+
+    if (bytes <= WORDS_KEPT_WHOLE || bytes <= this.room) {
+      this.room = Math.max(0, this.room - bytes);
+
+      return scrubbed;
+    }
+
+    const cut = cutWords(scrubbed, this.room);
+    this.room = 0;
+
+    return cut;
+  }
 }
 
 /**
  * A value with every secret taken out of each string in it, keys included,
- * and every base64 source's bytes left out. Note that the bytes are left out
- * because the service reads a tool's pictures as `[image]` and never their
- * bytes, while a PDF's pages read as pictures run to megabytes in one answer,
- * past what one post may carry (`RUNNER_EVENTS_MAX_BYTES`).
+ * every picture a block carries kept apart and named in the block's place
+ * (`{ type, keptPicture }`), every other inline bytes left out
+ * (`inlineBytesOf`), and its words cut past what one event carries
+ * (`EVENT_WORDS_MAX`). Note that a picture the service kept nothing of, or
+ * whose keeping failed, is left out as every other inline bytes are, so the
+ * transcript stands in `[image]` for it as it did before pictures were kept.
  */
-function redacted(value: Json, secrets: readonly string[]): Json {
-  if (Predicate.isString(value)) return redactedText(value, secrets);
+const redacted = Effect.fnUntraced(function* (
+  value: Json,
+  walk: EventWalk,
+): Effect.fn.Return<Json> {
+  if (Predicate.isString(value)) return walk.words(value);
 
-  if (Array.isArray(value)) return value.map((each) => redacted(each, secrets));
+  if (Array.isArray(value)) {
+    const each: Json[] = [];
+
+    for (const item of value) each.push(yield* redacted(item, walk));
+
+    return each;
+  }
 
   if (!Predicate.isObject(value)) return value;
-  const kept = isBase64Source(value) ? { ...value, data: BYTES_LEFT_OUT } : value;
+  const object: JsonObject = value;
+  const inline = inlineBytesOf(object);
+  const kept = inline?.picture === undefined ? Option.none() : yield* walk.keep(inline.picture);
 
-  return Object.fromEntries(
-    Object.entries(kept).map(([key, each]) => [
-      redactedText(key, secrets),
-      redacted(each, secrets),
-    ]),
-  );
-}
+  if (Option.isSome(kept)) {
+    return { type: object.type ?? "image", [RUNNER_KEPT_PICTURE_KEY]: kept.value };
+  }
+
+  const walked: [string, Json][] = [];
+
+  for (const [key, each] of Object.entries(inline?.leftOut ?? object)) {
+    walked.push([redactedText(key, walk.secrets), yield* redacted(each, walk)]);
+  }
+
+  return Object.fromEntries(walked);
+});
 
 /** A batch's body around its events, each already spelled as JSON. */
 function bodyOf(events: readonly string[]): string {
@@ -163,19 +311,20 @@ interface FirstBody {
 /**
  * The first body of the events given, in order, as many of them as stay
  * within `maxBytes`, each scrubbed as it is taken (`eventText`), and how many
- * it holds. An event that alone passes the bound goes in a body of its own,
- * which the service then refuses as it would have refused the whole batch.
+ * it holds. An event that alone passes the bound, which its words' cut
+ * leaves only to JSON's escapes, goes in a body of its own.
  */
-function firstBodyWithin(
+const firstBodyWithin = Effect.fnUntraced(function* (
   events: readonly RunnerEvent[],
   secrets: readonly Redacted.Redacted[],
+  keep: KeepPicture,
   maxBytes: number,
-): FirstBody {
+): Effect.fn.Return<FirstBody> {
   const held: string[] = [];
   let bytes = Buffer.byteLength(bodyOf([]));
 
   for (const event of events) {
-    const text = eventText(event, secrets);
+    const text = yield* eventText(event, secrets, keep);
     // One more byte for the comma that sets the event apart from the one before it.
     const size = Buffer.byteLength(text) + 1;
 
@@ -185,11 +334,12 @@ function firstBodyWithin(
   }
 
   return { body: bodyOf(held), count: held.length };
-}
+});
 
 /**
  * An event as the text the service is sent, with every secret the launch holds taken
- * out. Note that we scrub every event, the SDK's included, because a tool's
+ * out, its pictures kept apart and its words cut to what one event carries
+ * (`redacted`). Note that we scrub every event, the SDK's included, because a tool's
  * output or a CLI's error is text the runner never wrote, and a command the
  * agent runs may print a credential it can read: on a host the credential
  * itself, and in a sandbox its placeholder.
@@ -199,7 +349,11 @@ function firstBodyWithin(
  * Note too that we scrub the strings themselves, before they are spelled as
  * JSON, so no escape can hide a secret or be cut in half by its removal.
  */
-function eventText(event: RunnerEvent, secrets: readonly Redacted.Redacted[]): string {
+const eventText = Effect.fnUntraced(function* (
+  event: RunnerEvent,
+  secrets: readonly Redacted.Redacted[],
+  keep: KeepPicture,
+): Effect.fn.Return<string> {
   const values = secrets.flatMap((secret) => {
     const value = Redacted.value(secret);
 
@@ -209,7 +363,82 @@ function eventText(event: RunnerEvent, secrets: readonly Redacted.Redacted[]): s
   // Note that the event is JSON already, as the SDK parsed it from the CLI's stdout.
   const json: Json = JSON.parse(JSON.stringify(event));
 
-  return JSON.stringify(redacted(json, values));
+  return JSON.stringify(yield* redacted(json, new EventWalk(values, keep)));
+});
+
+const decodePictureAnswer = Schema.decodeUnknownOption(Schema.Struct({ picture: WireValueSchema }));
+
+/** A picture the service did not answer for, with why: words with no secret in them. */
+class PictureUnkept extends Data.TaggedError("PictureUnkept")<{ readonly detail: string }> {}
+
+/**
+ * One picture's bytes posted to the service's pictures route, answered as
+ * what it kept (`RunnerPictureAnswer`), or nothing where it kept none; it
+ * fails where the service did not answer.
+ */
+const postPicture = Effect.fnUntraced(function* (
+  client: HttpClient.HttpClient,
+  options: SinkOptions & { readonly picturesUrl: string },
+  data: string,
+): Effect.fn.Return<Option.Option<Json>, PictureUnkept> {
+  const request = HttpClientRequest.post(options.picturesUrl).pipe(
+    HttpClientRequest.bearerToken(options.bearer),
+    HttpClientRequest.bodyUint8Array(Buffer.from(data, "base64"), "application/octet-stream"),
+  );
+
+  // Note that the client's error is not kept, because the request it carries holds the bearer in its headers.
+  const response = yield* client.execute(request).pipe(
+    Effect.timeout(POST_TIMEOUT),
+    Effect.mapError(() => new PictureUnkept({ detail: "the service did not answer" })),
+  );
+
+  if (response.status !== HTTP_OK) {
+    return yield* new PictureUnkept({ detail: `the service answered ${response.status}` });
+  }
+
+  const body = yield* response.json.pipe(
+    Effect.mapError(() => new PictureUnkept({ detail: "the service's answer is not JSON" })),
+  );
+
+  return Option.map(
+    decodePictureAnswer(body),
+    (kept): Json => (kept satisfies RunnerPictureAnswer).picture,
+  );
+});
+
+/**
+ * What keeps the pictures of one taken batch apart, at the launch's
+ * pictures route: each picture posted once, the same bytes asked again (an
+ * event walked again for the next body) answered as before, and none posted
+ * at all where the launch was handed no route. Note that a picture is never
+ * posted again, and once one goes unanswered the rest of the batch's are
+ * left out unasked, because a picture left out costs the transcript that
+ * picture alone, while a wait holds back every event behind it.
+ */
+function batchKeeper(client: HttpClient.HttpClient, options: SinkOptions): KeepPicture {
+  const { picturesUrl } = options;
+  const kept = new Map<string, Option.Option<Json>>();
+  let unanswered = false;
+
+  if (picturesUrl === undefined) return () => Effect.succeed(Option.none());
+
+  return (data) => {
+    const known = kept.get(data);
+
+    if (known !== undefined) return Effect.succeed(known);
+
+    if (unanswered) return Effect.succeed(Option.none());
+
+    return postPicture(client, { ...options, picturesUrl }, data).pipe(
+      Effect.catch((unkept) =>
+        Effect.logWarning(`agent-runner: a picture was left out: ${unkept.detail}`).pipe(
+          Effect.andThen(Effect.sync(() => (unanswered = true))),
+          Effect.as(Option.none()),
+        ),
+      ),
+      Effect.tap((answer) => Effect.sync(() => kept.set(data, answer))),
+    );
+  };
 }
 
 /** One batch's body, posted once: taken, or why the service did not take it. */
@@ -235,7 +464,11 @@ function postOnce(
       const transient = response.status >= SERVER_ERROR || TRANSIENT_STATUS.has(response.status);
 
       return Effect.fail(
-        new EventsUndelivered({ transient, detail: `The service answered ${response.status}` }),
+        new EventsUndelivered({
+          transient,
+          batchRefused: BATCH_REFUSED_STATUS.has(response.status),
+          detail: `The service answered ${response.status}`,
+        }),
       );
     }),
   );
@@ -271,11 +504,27 @@ export const openEventSink = Effect.fn("agent-runner/openEventSink")(function* (
   const sendAll = Effect.gen(function* () {
     for (;;) {
       let left: readonly RunnerEvent[] = yield* Queue.takeBetween(queue, 1, BATCH_MAX);
+      const keep = batchKeeper(client, options);
 
       // Note that each body is scrubbed only as it is posted, so a secret withheld while the body before it was in flight is out of it.
       while (left.length > 0) {
-        const { body, count } = firstBodyWithin(left, secrets, RUNNER_EVENTS_MAX_BYTES);
-        yield* postBatch(client, options, body);
+        const { body, count } = yield* firstBodyWithin(
+          left,
+          secrets,
+          keep,
+          RUNNER_EVENTS_MAX_BYTES,
+        );
+
+        yield* postBatch(client, options, body).pipe(
+          Effect.catchIf(
+            (undelivered) => undelivered.batchRefused === true,
+            (refused) =>
+              Effect.logWarning(
+                `agent-runner: skipped ${count} event(s) the service refused: ${refused.detail}`,
+              ),
+          ),
+        );
+
         left = left.slice(count);
       }
     }

@@ -616,6 +616,8 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   linesUrl: Schema.optionalKey(Schema.String),
   /** Our MCP server's streamable-HTTP endpoint. */
   mcpUrl: Schema.String,
+  /** Where the runner keeps a picture its harness's tool answered apart from its events (`RUNNER_KEPT_PICTURE_KEY`); none in a config written before it, whose events leave every picture's bytes out. */
+  picturesUrl: Schema.optionalKey(Schema.String),
   /** Where the CLI's transcript is kept at the service (`RUNNER_TRANSCRIPTS`), handed to the SDK as its `sessionStore`; none where the CLI's own files are all it keeps. */
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each; none in a config written before them. */
@@ -677,6 +679,8 @@ export const CodexConfigSchema = Schema.Struct({
   /** Where the runner reads the service's lines past its config (`RUNNER_LINES`); none where the service writes them to its stdin. */
   linesUrl: Schema.optionalKey(Schema.String),
   mcpUrl: Schema.String,
+  /** Where the runner keeps a picture its harness's tool answered apart from its events (`RUNNER_KEPT_PICTURE_KEY`); none in a config written before it, whose events leave every picture's bytes out. */
+  picturesUrl: Schema.optionalKey(Schema.String),
   /** Where Codex's rollout is kept at the service (`RUNNER_TRANSCRIPTS`), mirrored as Codex writes it and written back to `CODEX_HOME` where it is missing; none where Codex's own files are all it keeps. */
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each; none in a config written before them. */
@@ -761,6 +765,8 @@ export const CursorConfigSchema = Schema.Struct({
   /** Where the runner reads the service's lines past its config (`RUNNER_LINES`); none where the service writes them to its stdin. */
   linesUrl: Schema.optionalKey(Schema.String),
   mcpUrl: Schema.String,
+  /** Where the runner keeps a picture its harness's tool answered apart from its events (`RUNNER_KEPT_PICTURE_KEY`); none in a config written before it, whose events leave every picture's bytes out. */
+  picturesUrl: Schema.optionalKey(Schema.String),
   /** Where the agent's Cursor store is kept at the service (`RUNNER_TRANSCRIPTS`, `cursor-store.ts`); none where the runner's memory is all it keeps. */
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each. */
