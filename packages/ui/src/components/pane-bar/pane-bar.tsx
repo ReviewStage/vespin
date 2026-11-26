@@ -44,12 +44,12 @@ import { wholeWordsHint } from "../tooltip/hint.js";
 
 /**
  * The bar: one height whatever it holds, its words in the caption's type, its
- * groups a control's gap apart, on the hover's wash over a hairline. Each
+ * groups a control's gap apart, on the pane's own ground over a hairline. Each
  * part keeps its `ui-pane-bar-*` class, which the panel's sheets and tests
  * find it by.
  */
 const BAR =
-  "ui-pane-bar box-border flex min-h-pane-bar min-w-0 flex-none items-center gap-control-gap border-b border-border bg-muted px-list-inset py-tight-gap font-sans text-caption text-muted-foreground";
+  "ui-pane-bar box-border flex min-h-pane-bar min-w-0 flex-none items-center gap-control-gap border-b border-border px-list-inset py-tight-gap font-sans text-caption text-muted-foreground";
 
 /** Words leading the bar start where a tab's glyph does, a row's inset in. */
 const LEAD =
