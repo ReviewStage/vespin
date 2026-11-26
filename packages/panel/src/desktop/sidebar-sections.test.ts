@@ -1731,6 +1731,17 @@ test("with a glyph's colors open, the arrows step the glyphs past them, and anot
   assert.equal(document.querySelectorAll(".ui-icon-picker-flyout").length, 1);
 });
 
+test("a glyph's colors take the focus as they open, not a frame later, so a key pressed at once lands on a color", async () => {
+  const sidebar = await mountSidebar([]);
+
+  await dialogPicker(sidebar);
+  // No frame runs, so nothing that waits a frame to move the focus can.
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation(() => 0);
+  await act(async () => dialogButton("Folder").click());
+
+  assert.equal(document.activeElement?.getAttribute("aria-label"), "Black");
+});
+
 test("a glyph pressed again while its colors stand open closes them, its press taking the focus first as a pointer's does", async () => {
   const sidebar = await mountSidebar([]);
 

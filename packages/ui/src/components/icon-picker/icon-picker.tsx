@@ -1,5 +1,5 @@
 import type { PopoverRoot } from "@base-ui/react/popover";
-import { type ReactNode, type RefObject, useRef } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 import { Popover, PopoverContent } from "../../shadcn/popover.js";
 import { IconButton } from "../button/button.js";
 import { ROVING_ORIENTATION, useRovingKeys } from "../roving-keys/roving-keys.js";
@@ -37,8 +37,8 @@ const GRID_STEPS = new Map([
   ["ArrowDown", GRID_COLUMNS],
 ]);
 
-/** Base UI's reason for a press away from a popover. */
-const OUTSIDE_PRESS = "outside-press" satisfies PopoverRoot.ChangeEventReason;
+/** Base UI's reason for Escape putting a popover away. */
+const ESCAPE_KEY = "escape-key" satisfies PopoverRoot.ChangeEventReason;
 
 /** The grid's choices under `root`, in order. */
 function gridChoices(root: Element, selector = "button"): HTMLButtonElement[] {
@@ -90,24 +90,30 @@ function layerAround(choice: HTMLElement | null): string | undefined {
   return choice?.closest("[data-layer]")?.getAttribute("data-layer") ?? undefined;
 }
 
-/** Whether a change asks a flyout away for a press on its own choice, which the choice's press answers. */
-function pressOnChoice(
+/**
+ * Whether a change asks a flyout away for the press or the focus going to
+ * its own choice, which the choice's press answers. Note that the focus is
+ * heard too, because an engine that focuses a pressed button moves it there
+ * before the click, and closing then would let the click open it again.
+ */
+function towardChoice(
   details: PopoverRoot.ChangeEventDetails,
   choice: HTMLElement | null,
 ): boolean {
-  const target = details.event?.target;
+  const event = details.event;
+  const to = event instanceof FocusEvent ? event.relatedTarget : event?.target;
 
-  return (
-    details.reason === OUTSIDE_PRESS && target instanceof Node && choice?.contains(target) === true
-  );
+  return to instanceof Node && choice?.contains(to) === true;
 }
 
 /**
  * The flyout a choice floats, on Base UI's popover, a child of the
  * picker's own, so a press inside it is no press away from the picker. Its
- * pressed choice, or else its first, takes the focus as it opens; the
- * arrows walk its choices; and Escape or a press away puts it away, the
- * focus going back to the choice it floats from.
+ * pressed choice, or else its first, takes the focus the moment it opens;
+ * the arrows walk its choices; and Escape puts it away, the focus going back
+ * to the choice it floats from, as a press away or the focus leaving does,
+ * the focus staying where it went, and another choice's flyout taking its
+ * place keeps the focus there.
  */
 function ChoiceFlyout({
   choice,
@@ -124,11 +130,38 @@ function ChoiceFlyout({
     row.current?.querySelector<HTMLElement>("button") ??
     true;
 
+  // Note that the row takes the focus the moment it stands rather than on the next frame, as Base UI would, because a key pressed in that frame would land on the choice or the search and close it.
+  const landed = useRef(false);
+  // Whether Escape put it away, which hands the focus back to its choice; a press away or the focus leaving already put the focus where it went, and another choice's flyout taking its place keeps the focus it took.
+  const escaped = useRef(false);
+  // Whether it still stands. Note that Base UI hears the focus leave a moment after it went, so a flyout another choice's took the place of may ask to close once it is gone, which would close the one that replaced it.
+  const standing = useRef(true);
+  useEffect(() => {
+    standing.current = true;
+
+    return () => {
+      standing.current = false;
+    };
+  }, []);
+
+  const stand = (element: HTMLDivElement | null) => {
+    row.current = element;
+    roving.ref(element);
+
+    if (element === null || landed.current) return;
+    landed.current = true;
+    const landing = start();
+
+    if (landing !== true) landing.focus({ preventScroll: true });
+  };
+
   return (
     <Popover
       open
       onOpenChange={(next, details) => {
-        if (!next && !pressOnChoice(details, choice.current)) flyout.onClose();
+        if (next || !standing.current || towardChoice(details, choice.current)) return;
+        escaped.current = details.reason === ESCAPE_KEY;
+        flyout.onClose();
       }}
     >
       <PopoverContent
@@ -136,13 +169,10 @@ function ChoiceFlyout({
         layer={layerAround(choice.current)}
         aria-label={flyout.label}
         initialFocus={start}
-        finalFocus={choice}
+        finalFocus={() => (escaped.current ? choice.current : false)}
       >
         <div
-          ref={(element) => {
-            row.current = element;
-            roving.ref(element);
-          }}
+          ref={stand}
           data-roving={roving["data-roving"]}
           role="toolbar"
           aria-label={flyout.label}
