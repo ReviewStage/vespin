@@ -1991,6 +1991,9 @@ importers:
       '@repo/host':
         specifier: workspace:*
         version: link:../../packages/host
+      '@repo/sync':
+        specifier: workspace:*
+        version: link:../../packages/sync
       '@repo/wire':
         specifier: workspace:*
         version: link:../../packages/wire
