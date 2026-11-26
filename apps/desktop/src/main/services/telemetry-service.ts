@@ -6,6 +6,7 @@ import {
 } from "@repo/features/analytics";
 import type { FeedbackResult, FeedbackSubmission } from "@repo/features/feedback";
 import { feedbackDeliveryFromEnvironment } from "@repo/features/feedback";
+import { followConnections, spanWithConnection } from "@repo/features/node";
 import {
   eventWithoutAccessTokens,
   SPANS_NAMING_ACCESS_TOKENS,
@@ -96,6 +97,7 @@ let usageData: boolean | undefined;
  */
 export function initializeCrashReporting(runMode: RunMode, environment: SentryEnvironment): void {
   startMainLoopStalls();
+  followConnections();
   Sentry.init({
     dsn: PACKAGED_SENTRY_DSN,
     enabled: sentryReportingEnabled(runMode.sendsNetwork, PACKAGED_SENTRY_DSN),
@@ -103,7 +105,11 @@ export function initializeCrashReporting(runMode: RunMode, environment: SentryEn
     environment,
     tracesSampler: sentryTracesSampler,
     enableRendererProfiling: true,
-    integrations: [Sentry.startupTracingIntegration()],
+    // Each request's span says the connection it went out on (`spanWithConnection`).
+    integrations: [
+      Sentry.startupTracingIntegration(),
+      Sentry.nativeNodeFetchIntegration({ responseHook: spanWithConnection }),
+    ],
     beforeBreadcrumb: withoutAccessTokens,
     beforeSend: eventWithoutAccessTokens,
     ignoreSpans: SPANS_NAMING_ACCESS_TOKENS,
