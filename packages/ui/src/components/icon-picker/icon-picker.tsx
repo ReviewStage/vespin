@@ -1,7 +1,7 @@
 import type { PopoverRoot } from "@base-ui/react/popover";
 import { type ReactNode, type RefObject, useEffect, useRef } from "react";
 import { Popover, PopoverContent } from "../../shadcn/popover.js";
-import { IconButton } from "../button/button.js";
+import { ICON_BUTTON_SIZE, IconButton } from "../button/button.js";
 import { ROVING_ORIENTATION, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { ScrollArea } from "../scroll-area/scroll-area.js";
 import { SearchField } from "../search-field/search-field.js";
@@ -247,6 +247,7 @@ export function IconPickerChoice({
       <IconButton
         ref={button}
         icon={face}
+        size={ICON_BUTTON_SIZE.PICKER}
         label={label}
         pressed={pressed}
         tabbable={stop}

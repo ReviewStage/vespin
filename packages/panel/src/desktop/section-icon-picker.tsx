@@ -16,6 +16,7 @@ import {
   type ButtonVariant,
   CHOICE_BAR_LOOK,
   ChoiceBar,
+  ICON_BUTTON_SIZE,
   IconButton,
   IconPicker,
   IconPickerChoice,
@@ -366,6 +367,7 @@ function glyphColors(
   return GLYPH_COLORS.map((value) => (
     <IconButton
       key={value ?? "text"}
+      size={ICON_BUTTON_SIZE.PICKER}
       icon={Glyph === undefined ? null : <Glyph data-icon-color={value} className={inkOf(value)} />}
       label={value === undefined ? textInkLabel() : COLOR_LABEL[value]}
       pressed={value === starts}
