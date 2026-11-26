@@ -67,6 +67,7 @@ const DECLARED_TABLES = [
   "automation_run",
   "claude_broken_sessions",
   "claude_session_entries",
+  "claude_session_mark_backfill",
   "conversations",
   "device",
   "device_agent_line",

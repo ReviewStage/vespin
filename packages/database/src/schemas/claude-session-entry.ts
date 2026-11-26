@@ -109,3 +109,29 @@ export const claudeBrokenSessions = pgTable(
   },
   (table) => [primaryKey({ columns: [table.conversationId, table.sessionId] })],
 );
+
+/**
+ * A Claude Code session whose main transcript holds rows from before the
+ * resume marks (`resumeRole`), queued once by the migration that added
+ * this table for the scheduled sweep to mark, the latest appended first
+ * (`newest`), each a sweep's worth of rows past the last it marked
+ * (`markedThrough`); its latest compaction is given its start once the last
+ * is marked, and the row goes.
+ */
+export const claudeSessionMarkBackfill = pgTable(
+  "claude_session_mark_backfill",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    projectKey: text("project_key").notNull(),
+    sessionId: text("session_id").notNull(),
+    newest: bigint("newest", { mode: "number" }).notNull(),
+    markedThrough: bigint("marked_through", { mode: "number" }).notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ columns: [table.conversationId, table.projectKey, table.sessionId] }),
+    // The next session the sweep takes, the latest appended first.
+    index("claude_session_mark_backfill_newest_idx").on(table.newest),
+  ],
+);
