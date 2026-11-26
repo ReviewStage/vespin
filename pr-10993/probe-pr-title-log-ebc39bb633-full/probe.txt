@@ -1,0 +1,16 @@
+getpwuid_r did not find a match for uid 501
+Filtering the log data using "composedMessage CONTAINS "PROBE""
+Timestamp               Ty Process[PID:TID]
+2026-11-25 20:08:23.587 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE render', '"Invite a teammate by email"', '"Invite a teammate by email"', 'null'
+2026-11-25 20:08:23.655 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE render', '"Invite a teammate by email"', '"Invite a teammate by email"', 'null'
+2026-11-25 20:08:48.997 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE alert onPress', 'Save', '"Invite teammates by email"'
+2026-11-25 20:08:48.997 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE onName', '"Invite teammates by email"', '"Invite teammates by email"', '{"workspaceId":"workspace-personal","repository":"ada/relay","number":128}'
+2026-11-25 20:08:48.998 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE write in', '{"action":"edit-title","title":"Invite teammates by email"}', 'out', false
+2026-11-25 20:08:48.999 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE keepMove', 128, 'number', '{"action":"edit-title","title":"Invite teammates by email"}', '{"title":"Invite teammates by email"}'
+2026-11-25 20:08:49.001 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE stage 128', '{"pullRequest":{"number":128,"title":"Invite teammates by email","url":"https://github.com/ada/relay/pull/128","state":"open","body":"Adds **Invite by email** t', 'moves', '[[128,{"title":"Invite teammates by email"}]]'
+2026-11-25 20:08:49.010 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE stage 128', '{"pullRequest":{"number":128,"title":"Invite teammates by email","url":"https://github.com/ada/relay/pull/128","state":"open","body":"Adds **Invite by email** t', 'moves', '[[128,{"title":"Invite teammates by email"}]]'
+2026-11-25 20:08:49.011 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE write answer', '{"outcome":"done"}', 'workspace-personal', 'ada/relay', 128, 'number'
+2026-11-25 20:08:49.014 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] PROBE write retried
+2026-11-25 20:08:49.016 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE render', '"Invite teammates by email"', '"Invite teammates by email"', 'null'
+2026-11-25 20:09:00.028 E  Vespin[87336:c4eeea5] [com.facebook.react.log:javascript] 'PROBE render', '"Invite teammates by email"', '"Invite teammates by email"', 'null'
+Child process terminated with signal 15: Terminated
