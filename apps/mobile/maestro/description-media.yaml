@@ -87,13 +87,14 @@ env:
     text: "(?s).*A line typed above.*And another.*"
 # The count of the open thread on Context, the description's first block,
 # stands at its line's trailing edge in the field, as the read rows stand it,
-# heard as its count of comments. Note that the page stands at its top once
-# the read rows give way to the field, so Context's count, the first of the
-# two, is reached scrolling down.
+# heard as its count of comments. Note that in one view the page stands
+# where the press left it, Context's heading just over the words pressed, so
+# its count, the first of the two, is reached scrolling up.
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
       ELEMENT: "1 comment"
+      DIRECTION: UP
       BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd
 - takeScreenshot: description-media-comments
