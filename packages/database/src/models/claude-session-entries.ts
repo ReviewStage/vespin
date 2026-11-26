@@ -41,7 +41,6 @@ import { Database, type DatabaseServices, type StoreFailure } from "../core/quer
 import {
   claudeBrokenSessions,
   claudeSessionEntries,
-  claudeSessionMarkBackfill,
   RESUME_ROLE,
   type ResumeRole,
 } from "../schemas/claude-session-entry.js";
@@ -147,14 +146,6 @@ const sessionRows = (conversationId: string, projectKey: string, sessionId: stri
     eq(claudeSessionEntries.conversationId, conversationId),
     eq(claudeSessionEntries.projectKey, projectKey),
     eq(claudeSessionEntries.sessionId, sessionId),
-  );
-
-/** A queued session's row in the backfill. */
-const backfillRow = (conversationId: string, projectKey: string, sessionId: string) =>
-  and(
-    eq(claudeSessionMarkBackfill.conversationId, conversationId),
-    eq(claudeSessionMarkBackfill.projectKey, projectKey),
-    eq(claudeSessionMarkBackfill.sessionId, sessionId),
   );
 
 const findConversation = SqlSchema.findOneOption({
@@ -329,119 +320,6 @@ const findPage = SqlSchema.findAll({
           from walk join claude_session_entries stored on stored.id = walk.id
           order by walk.id`;
     }),
-});
-
-/** The session the backfill marks next: the latest appended first, with the last of its rows marked. */
-const findNextBackfill = SqlSchema.findOneOption({
-  Request: Schema.Struct({}),
-  Result: Schema.Struct({
-    conversationId: Schema.String,
-    projectKey: Schema.String,
-    sessionId: Schema.String,
-    markedThrough: Schema.Number,
-  }),
-  execute: () =>
-    Database.use((db) =>
-      db
-        .select({
-          conversationId: claudeSessionMarkBackfill.conversationId,
-          projectKey: claudeSessionMarkBackfill.projectKey,
-          sessionId: claudeSessionMarkBackfill.sessionId,
-          markedThrough: claudeSessionMarkBackfill.markedThrough,
-        })
-        .from(claudeSessionMarkBackfill)
-        .orderBy(desc(claudeSessionMarkBackfill.newest))
-        .limit(1),
-    ),
-});
-
-const BackfillKeyFields = {
-  conversationId: Schema.String,
-  projectKey: Schema.String,
-  sessionId: Schema.String,
-};
-
-/**
- * The next rows of a queued session's main transcript past the one given,
- * each still unmarked marked as an append marks it (`resumeMarks`), read
- * off the key's index in its order; answers the last row taken and how
- * many were. Note that the marks are written in one statement, each entry
- * read where it is stored, so no entry leaves the database.
- */
-const markBackfillRows = SqlSchema.findAll({
-  Request: Schema.Struct({ ...BackfillKeyFields, after: Schema.Number, rows: Schema.Number }),
-  Result: Schema.Struct({ through: Schema.NullOr(Schema.NumberFromString), taken: Schema.Number }),
-  execute: ({ conversationId, projectKey, sessionId, after, rows }) =>
-    Effect.flatMap(SqlClient.SqlClient, (client) => {
-      const conversation = client`(stored.entry->>'type' in ${client.in([...CONVERSATION_TYPES].map(String))} and jsonb_typeof(stored.entry->'uuid') = 'string')`;
-
-      return client`
-        with batch as (
-          select stored.id from claude_session_entries stored
-            where stored.conversation_id = ${conversationId}
-              and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
-              and stored.subpath is null
-              and stored.id > ${after}
-            order by stored.subpath, stored.id limit ${rows}
-        ), marked as (
-          update claude_session_entries stored set
-            resume_role = case
-              when not ${conversation} then ${RESUME_ROLE.OTHER}
-              when stored.entry->>'type' = ${COMPACTION.TYPE} and stored.entry->>'subtype' = ${COMPACTION.SUBTYPE}
-                then ${RESUME_ROLE.COMPACTION}
-              else ${RESUME_ROLE.CONVERSATION} end,
-            entry_uuid = case when ${conversation} then stored.entry->>'uuid' end
-          from batch
-          where stored.id = batch.id and stored.resume_role is null
-          returning stored.id
-        )
-        select max(batch.id)::text as through, count(*)::int as taken from batch`;
-    }),
-});
-
-/** A session's latest compaction: its row and what it says it preserves, read alone. */
-const findLatestCompaction = SqlSchema.findOneOption({
-  Request: Schema.Struct(BackfillKeyFields),
-  Result: Schema.Struct({
-    id: Schema.NumberFromString,
-    compaction: Schema.fromJsonString(EntrySchema),
-  }),
-  execute: ({ conversationId, projectKey, sessionId }) =>
-    Effect.flatMap(
-      SqlClient.SqlClient,
-      (client) => client`
-        select stored.id::text as id,
-          jsonb_build_object('compactMetadata', stored.entry->'compactMetadata')::text as compaction
-          from claude_session_entries stored
-          where stored.conversation_id = ${conversationId}
-            and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
-            and stored.subpath is null
-            and stored.resume_role = ${RESUME_ROLE.COMPACTION}
-          order by stored.subpath desc, stored.id desc limit 1`,
-    ),
-});
-
-const advanceBackfill = SqlSchema.void({
-  Request: Schema.Struct({ ...BackfillKeyFields, through: Schema.Number }),
-  execute: ({ conversationId, projectKey, sessionId, through }) =>
-    Database.use((db) =>
-      db
-        .update(claudeSessionMarkBackfill)
-        .set({
-          markedThrough: sql`greatest(${claudeSessionMarkBackfill.markedThrough}, ${through})`,
-        })
-        .where(backfillRow(conversationId, projectKey, sessionId)),
-    ),
-});
-
-const dropBackfill = SqlSchema.void({
-  Request: Schema.Struct(BackfillKeyFields),
-  execute: ({ conversationId, projectKey, sessionId }) =>
-    Database.use((db) =>
-      db
-        .delete(claudeSessionMarkBackfill)
-        .where(backfillRow(conversationId, projectKey, sessionId)),
-    ),
 });
 
 const findSessions = SqlSchema.findAll({
@@ -693,21 +571,6 @@ function resolvedCompactions(
   );
 }
 
-/** A fully marked session's latest compaction given its start, as an append gives it; nothing where it has none. */
-function resolveLatestCompaction(session: {
-  readonly conversationId: string;
-  readonly projectKey: string;
-  readonly sessionId: string;
-}): EntryEffect<void> {
-  return Effect.flatMap(findLatestCompaction(session), (latest) => {
-    const preserved = Option.flatMap(latest, (row) => preservedOf(row.compaction));
-
-    return Option.isSome(latest) && Option.isSome(preserved)
-      ? resolveCompaction({ id: latest.value.id, preserved: preserved.value })
-      : Effect.void;
-  });
-}
-
 /** A key's fields as the requests take them: no subpath as null. */
 function keyFields(userId: string, conversationId: string, key: SessionEntryKey) {
   return {
@@ -885,46 +748,4 @@ export function copySessionEntries(
     }),
     copyBreaks(request),
   );
-}
-
-/** How much of the backfill one sweep does: the most rows it marks, and the most one statement does. */
-export interface MarkBackfillBounds {
-  readonly rowsPerSweep: number;
-  readonly rowsPerBatch: number;
-}
-
-/**
- * One sweep's worth of the backfill of rows stored before the resume marks
- * (`claude_session_mark_backfill`): the queued sessions taken the latest
- * appended first, each marked a batch at a time past the last row it
- * marked, so a sweep cut short loses no more than its batch. A session
- * whose last row is marked has its latest compaction given its start, as
- * an append gives it (`resolvedCompactions`), and leaves the queue.
- * Answers how many rows it read; none once the queue is empty.
- */
-export function markSessionsForResume(bounds: MarkBackfillBounds): EntryEffect<number> {
-  return Effect.gen(function* () {
-    let read = 0;
-
-    while (read < bounds.rowsPerSweep) {
-      const next = yield* findNextBackfill({});
-
-      if (Option.isNone(next)) break;
-      const { markedThrough, ...session } = next.value;
-      const rows = Math.min(bounds.rowsPerBatch, bounds.rowsPerSweep - read);
-      const [batch] = yield* markBackfillRows({ ...session, after: markedThrough, rows });
-      const taken = batch?.taken ?? 0;
-      read += taken;
-
-      if (taken === rows && batch?.through !== null && batch?.through !== undefined) {
-        yield* advanceBackfill({ ...session, through: batch.through });
-        continue;
-      }
-
-      yield* resolveLatestCompaction(session);
-      yield* dropBackfill(session);
-    }
-
-    return read;
-  });
 }
