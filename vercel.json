@@ -3,7 +3,6 @@
   "git": {
     "deploymentEnabled": {
       "main": true,
-      "prototype/manager-faces-more": true,
       "**": false
     }
   },
@@ -183,6 +182,10 @@
         {
           "src": "/api/agents/runner-lines",
           "dest": "/api/default.js?route=agents/runner-lines"
+        },
+        {
+          "src": "/api/agents/runner-pictures",
+          "dest": "/api/default.js?route=agents/runner-pictures"
         },
         {
           "src": "/api/agents/runner-token",
