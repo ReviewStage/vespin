@@ -4,7 +4,6 @@ import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   defaultScrollAnchorForRole,
-  fixedSize,
   frame,
   glassEffect,
   type ModifierConfig,
@@ -199,8 +198,8 @@ export function BarHead({
   return (
     <ScrollView
       modifiers={[
-        // Note that while its words fit, the scroll view hugs them, as SwiftUI sizes a scroll view fixed to its content's height, and past the share it stands at the share.
-        scrolls ? frame({ height: most }) : fixedSize({ horizontal: false, vertical: true }),
+        // Note that the scroll view stands as tall as its words, measured, and no taller than the share. Its modifiers keep one shape whatever the height, a frame with a height always set, since `@expo/ui` wraps each modifier in its own view and SwiftUI's frame takes another branch without a height: either change drew the head anew and let a focused field go of the keyboard.
+        frame({ height: Math.min(tall, most) }),
         scrollDisabled(!scrolls),
         // Note that a head that scrolls keeps to its foot as it grows or the keyboard shrinks it, so a note under what it holds, such as why an ask's answer did not go, and the field it is about stand in sight.
         defaultScrollAnchorForRole("bottom", "sizeChanges"),
