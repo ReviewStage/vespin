@@ -1613,6 +1613,9 @@ function LandedWash({ children }: { readonly children: ReactNode }) {
 /** How long a revealed row's scroll takes to settle at most, in milliseconds, after which its row takes VoiceOver's focus where the scroll's own end did not send it: the system's scroll animation, with room. */
 const REVEAL_SETTLE_MS = 600;
 
+/** How the list opens at a row a reveal asked for before it first stood: with the row at its top, which the reveal's own scroll then moves to its place. */
+const OPEN_AT_REVEAL = { viewOffset: 0 } as const;
+
 /** Where a revealed row stands in the screen, from its top: a little above the middle, clear of the composer docked over the foot. */
 const REVEAL_POSITION = 0.35;
 
@@ -1711,6 +1714,15 @@ export function AgentTranscript({
   // Note that the list waits for its own width, so no row is ever laid out unbounded, and its first render, which starts from its newest row, has the rows to start from.
   const measured = width > 0;
   const hasRows = items.length > 0;
+  // The row a reveal already asked for as the list first stands with rows, which it opens at rather than its newest, so the list's own first scroll, which it may apply again as it settles, never takes the reader back off it; -1 where none was asked.
+  // Note that it is chosen as the render that first measures the list, before the list mounts, so the list is first drawn with it.
+  const [opensAtReveal, setOpensAtReveal] = useState<number | undefined>(undefined);
+
+  if (measured && hasRows && opensAtReveal === undefined) {
+    setOpensAtReveal(reveal === undefined ? -1 : revealedIndex(items, reveal));
+  }
+
+  const revealOpening = opensAtReveal ?? -1;
   const keyboard = useDockKeyboard();
   const dock = useDockRoom();
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript, and no more, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`). While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the bar stands right on it.
@@ -1864,8 +1876,12 @@ export function AgentTranscript({
           ]}
           contentInsetAdjustmentBehavior="automatic"
           // Note that FlashList opens at its newest row's top, so the list asks it for an offset past that row which the scroll view clamps to the content's end, and a newest row taller than the screen opens at its end, clear of the composer, as the rest do.
-          initialScrollIndex={hasRows ? items.length - 1 : undefined}
-          initialScrollIndexParams={{ viewOffset: OPEN_PAST_NEWEST }}
+          initialScrollIndex={
+            !hasRows ? undefined : revealOpening >= 0 ? revealOpening : items.length - 1
+          }
+          initialScrollIndexParams={
+            revealOpening >= 0 ? OPEN_AT_REVEAL : { viewOffset: OPEN_PAST_NEWEST }
+          }
           // Note that the list opens at its newest row, keeps it in view as rows land while the reader stands near it, and, as an older page lands before the oldest row, leaves the row the reader reads where it stood, as FlashList's chat lists do.
           maintainVisibleContentPosition={{
             startRenderingFromBottom: true,
