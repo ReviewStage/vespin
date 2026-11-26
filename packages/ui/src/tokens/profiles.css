@@ -49,6 +49,9 @@
      spelled anywhere else (`pointer-cursor`). */
   --ui-cursor-press: default;
   --ui-cursor-link: pointer;
+  /* The gap between a glyph, mark, face or picture and the words beside it, in the iOS app's three steps (`SPACE.GLYPH_GAP`) by the size of what draws the pair: compact in a chip, a badge or a caption-size line, regular in a capsule, a breadcrumb or a row's line above its words, and row, which is `--ui-icon-gap`, in a row, a menu, a control or an editing line. */
+  --ui-icon-gap-compact: var(--ui-space-4);
+  --ui-icon-gap-regular: var(--ui-space-6);
   --ui-icon-gap: var(--ui-space-8);
   /* A settings row's pop-up stands in one column whatever value it names. */
   --ui-select-field-width: 200px;
@@ -344,6 +347,9 @@
      as a link does. */
   --ui-cursor-press: pointer;
   --ui-cursor-link: pointer;
+  /* The gap between a glyph, mark, face or picture and the words beside it, in the iOS app's three steps (`SPACE.GLYPH_GAP`) by the size of what draws the pair: compact in a chip, a badge or a caption-size line, regular in a capsule, a breadcrumb or a row's line above its words, and row, which is `--ui-icon-gap`, in a row, a menu, a control or an editing line. */
+  --ui-icon-gap-compact: var(--ui-space-4);
+  --ui-icon-gap-regular: var(--ui-space-6);
   --ui-icon-gap: var(--ui-space-8);
   --ui-select-field-width: auto;
   --ui-field-gap: var(--ui-space-16);

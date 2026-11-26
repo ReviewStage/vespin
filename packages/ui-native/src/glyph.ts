@@ -210,8 +210,8 @@ export const GLYPH = {
   EDIT: system("pencil"),
   WRITE: lucide(LUCIDE_SYMBOL.FILE_PEN),
   COPY: system("doc.on.doc"),
-  /** Reply in thread, which opens a Manager chat message's thread, the panel's Lucide MessageSquareReply, among every glyph the catalog holds. */
-  REPLY_IN_THREAD: catalogLucide("MessageSquareReply"),
+  /** Reply in thread, which opens a Manager chat message's thread, the panel's Lucide MessageSquareText, among every glyph the catalog holds. */
+  REPLY_IN_THREAD: catalogLucide("MessageSquareText"),
   SAVE: system("square.and.arrow.down"),
   LINK: system("link"),
   UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),

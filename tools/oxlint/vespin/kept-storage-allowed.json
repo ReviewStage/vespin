@@ -4,6 +4,7 @@
   "apps/web/src/app/web-host.ts": "That a sign-in left the tab for the provider, kept for its session so the page it comes back to counts it once: a counter's memory, no view choice.",
   "apps/web/src/connect-return.ts": "The connect flow's handoff on its return: credential handling, kept for the tab's life.",
   "packages/panel/src/composer-drafts.ts": "The words a person had typed and not sent: a draft, never a view choice.",
+  "packages/panel/src/desktop/manager-face-recent.ts": "The Manager faces last picked in this window, offered first as Recent: a history of picks, no view choice.",
   "packages/panel/src/desktop/failed-runs.ts": "Which automation failure was last seen on this Mac: a read mark, not a view choice.",
   "packages/panel/src/desktop/section-icon-picker.tsx": "The section icons last chosen on this Mac, offered first as Recent: a history of picks, no view choice.",
   "packages/panel/src/last-sign-in.ts": "The provider last signed in with, offered first at the next sign-in: credential handling.",

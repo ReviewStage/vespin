@@ -74,6 +74,7 @@ import {
   GITHUB_FIXTURE,
   GITHUB_FIXTURE_MEMBER,
   githubReaching,
+  handedRepositoryMint,
   type InstallationFixture,
   memberRepositoryJson,
   openGithubUser,
@@ -1518,11 +1519,8 @@ it.layer(getTestDB())("the repositories route", (it) => {
           assert.deepEqual(answered, { status: HOSTED_HTTP_STATUS.OK, body: { issue: null } });
         }
 
-        // The listing that finds the repository mints its own token; every token the issue is read on is cut to issues read on the one repository.
-        const mints = github.sent
-          .filter((sent) => sent.url.endsWith("/access_tokens"))
-          .map((sent) => JSON.parse(sent.body))
-          .filter((mint) => "repositories" in mint);
+        // The reach that finds the repository mints its own token; every token the issue is read on is cut to issues read on the one repository.
+        const mints = github.sent.filter(handedRepositoryMint).map((sent) => JSON.parse(sent.body));
 
         assert.ok(mints.length > 0);
 
@@ -1580,9 +1578,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
         // The listing that looks for the repository mints its own token; none is minted for the repository, and no issue is asked.
         const forTheIssue = github.sent
           .filter(
-            (sent) =>
-              new URL(sent.url).pathname.includes("/issues/") ||
-              (sent.url.endsWith("/access_tokens") && "repositories" in JSON.parse(sent.body)),
+            (sent) => new URL(sent.url).pathname.includes("/issues/") || handedRepositoryMint(sent),
           )
           .map((sent) => sent.url);
 

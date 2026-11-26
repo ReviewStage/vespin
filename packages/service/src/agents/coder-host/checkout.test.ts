@@ -33,6 +33,7 @@ import {
   GITHUB_FIXTURE_INSTALLATION_TOKEN,
   GITHUB_FIXTURE_MEMBER,
   githubReaching,
+  handedRepositoryMint,
   type InstallationFixture,
   memberRepositoryJson,
   openGithubUser,
@@ -321,11 +322,7 @@ const APP_CREDENTIAL = {
 
 /** The mints sent to GitHub for one repository, by the permissions each asked for. */
 const repositoryMints = (sent: readonly SentToGitHub[]) =>
-  sent.flatMap((one) =>
-    one.url.endsWith("/access_tokens") && "repositories" in JSON.parse(one.body)
-      ? [JSON.parse(one.body)]
-      : [],
-  );
+  sent.flatMap((one) => (handedRepositoryMint(one) ? [JSON.parse(one.body)] : []));
 
 it.layer(getTestDB())("a coding agent's checkout", (it) => {
   it.effect(

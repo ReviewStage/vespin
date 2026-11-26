@@ -992,6 +992,17 @@ function ThreadDetail({
     ],
   };
 
+  // Note that a press on a message's writer opens their page, the agent's or a member's, as the panel's writer opens theirs; a member no account names opens nothing.
+  const writerOpen = (writer: (typeof messages)[number]["writer"]) => {
+    const { userId } = writer;
+
+    if (writer.agent) return openAgent.onPress;
+
+    if (userId === undefined) return undefined;
+
+    return () => router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.PERSON, userId })));
+  };
+
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
   const undeliveredLines = new Map(undelivered.lines.map((line) => [line.key, line]));
@@ -1006,6 +1017,7 @@ function ThreadDetail({
       picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
       harness: message.writer.agent ? harness : undefined,
       manager: message.writer.agent ? writerManager : undefined,
+      onOpen: writerOpen(message.writer),
     },
     stamp:
       message.stamp === undefined
