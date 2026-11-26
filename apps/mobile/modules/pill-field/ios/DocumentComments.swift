@@ -39,6 +39,11 @@ final class CommentMarks {
   private(set) var marks: [Int: CommentMark] = [:]
   private var buttons: [Int: UIButton] = [:]
 
+  /// The counts standing, which VoiceOver reaches beside the words.
+  var shown: [UIView] {
+    buttons.values.filter { !$0.isHidden }
+  }
+
   /// Takes each block's count, answering the blocks whose words now end short of a count or no longer do.
   func take(_ records: [CommentMarkRecord]) -> Set<Int> {
     let before = Set(marks.keys)

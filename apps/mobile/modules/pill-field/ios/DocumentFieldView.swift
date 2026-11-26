@@ -962,7 +962,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
 
   /// The views standing in the words that VoiceOver reaches beside them.
   private func standingViews() -> [UIView] {
-    media.shownViews() + tables.allObjects
+    media.shownViews() + tables.allObjects + comments.shown
   }
 
   /// Takes what each picture the lines name holds, drawing again only the pictures that changed.
