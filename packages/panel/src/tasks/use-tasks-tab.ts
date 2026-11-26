@@ -292,7 +292,6 @@ const AGENT_PLACE_KINDS: ReadonlySet<LinkDestination["kind"]> = new Set<AgentPla
   LINK_DESTINATION.PULL_REQUEST_THREAD,
 ]);
 
-/** Whether a place is an agent's own. */
 function isAgentPlace(place: LinkDestination): place is AgentPlace {
   return AGENT_PLACE_KINDS.has(place.kind);
 }
@@ -477,7 +476,6 @@ export interface TasksControl {
   atHome: boolean;
   /** Whether the task's own place stands, with neither Home nor any routed place, the not-found page among them, standing in its place. */
   taskPlaceStands: boolean;
-  /** A Home or Board link whose first step names none of the reader's workspaces, which stands as not found (`desktop-shell.tsx`). */
   /** Opens a task's file in its side panel at the commit named, or its default branch's head where none is, the reference's lines lit, opening the task first where it is not the open one: what an inbox item's code opens. */
   onShowFile: (taskId: string, ref: CodeRef, commit: string | undefined) => void;
   /** Opens a tab-shaped pin of the sidebar's: its holder, the task where it is not the open one, and the tab in its column, an agent's in the task's own and any other in the side panel. */
@@ -648,8 +646,6 @@ const NO_TASK_AGENT_PINS: readonly TaskAgentPin[] = [];
 /** What the toast says once Copy description has put the description on the clipboard. */
 const TASK_COPIED_NOTE = "Description copied";
 
-/** What the toast says once a task is deleted. */
-
 /** What the toast says when the service did not move a task, which stays where it was. */
 const MOVE_REFUSED_NOTE = "The task could not be moved. Try again.";
 
@@ -677,15 +673,6 @@ function switchedNote(workspace: string): string {
 function backNote(workspace: string): string {
   return `Back to ${workspace}`;
 }
-
-/*
- * What the Inbox holds, by workspace. Main reads what waits across every
- * task the account can reach, and the window lists one workspace at a time,
- * so everything the window lists of the Inbox, its rows, the sidebar's
- * count, and Home's waiting list, is the listed workspace's share. A task is placed by
- * the workspace the account's task list says it is in, so an item of a task
- * not yet listed is in no workspace's share until it is.
- */
 
 /** The task an Inbox choice stands on; none for one named by its id alone. */
 function choiceTaskOf(choice: InboxChoice): string | undefined {
@@ -817,7 +804,6 @@ export function useTasksTab(input: {
   const navigations = useRef(0);
   // The window's router, which a link is matched on (`places/link-places.ts`).
   const router = useRouter();
-  // How many times the developer arrived on another page of the window, as the binding counts them (`places/place-binding.ts`).
   const { arrivals } = input;
 
   // A link's read of the service stands until any later navigation: a select, start, or switch counted here, or any move of the window to another page.
@@ -1190,12 +1176,12 @@ export function useTasksTab(input: {
 
   const inboxPageIds = useMemo(() => (inboxPages ?? NO_PAGES).map((page) => page.id), [inboxPages]);
   const inboxTaskAgents = useInboxTaskAgents(inboxView === undefined ? undefined : inboxTask);
-  // The cloud Browser tabs, which the panel draws by its holder: a task's own panel its agents', never the Inbox's.
   const activeTaskId = viewed.activeTaskId;
 
   // An agent on no task's page holds the panel at a stop of its own, standing for no task, as a thread on no task in the Inbox does.
   const ownAgentId = inboxView === undefined ? agentView?.agentId : undefined;
 
+  // The cloud Browser tabs, which the panel draws by its holder: a task's own panel its agents', never the Inbox's.
   const cloudPlace = useMemo(
     () =>
       inboxView !== undefined || ownAgentId !== undefined || activeTaskId === undefined
@@ -1370,12 +1356,6 @@ export function useTasksTab(input: {
     }
   }, [sidePanel.pins, listedRows, onUnpin]);
 
-  // Main hears which agent's tab, or which task's Inbox, is on screen, and
-  // neither while the tab is away, the version history stands in the task's
-  // place, the side panel fills the window over the column, or the column
-  // shows something else; a fixture's staged agents are no one's to announce.
-  // The window's Inbox stands in the column's place, showing the task whose item is chosen there.
-  // Whether the column stands on screen, a fixture's among them.
   // Note that a routed place beside the sidebar, Admin, the Board, a person's page, or the Automations pages, stands over the window's state, which stays
   // as it was under it (`admin-route.ts`, `workspace-routes.ts`), so none of it is on screen then.
   const routedOver =
@@ -1386,6 +1366,7 @@ export function useTasksTab(input: {
     routedMergeQueue.open;
 
   const stateShown = shown && !routedOver;
+  // Whether the column stands on screen, a fixture's among them.
   const columnInView = stateShown && !historyRoute.open && !overPlan && !sidePanel.fullScreen;
   const columnShown = columnInView && fixture === undefined;
   // Note that the column is filled only while in view, because a blank draft out of view is let
@@ -1443,6 +1424,10 @@ export function useTasksTab(input: {
       ? sidePanel.tab.transcript
       : undefined;
 
+  // Main hears which agent's tab, or which task's Inbox, is on screen, and
+  // neither while the tab is away, the version history stands in the task's
+  // place, the side panel fills the window over the column, or the column
+  // shows something else; a fixture's staged agents are no one's to announce.
   // Note that an agent's card showing its threads keeps its transcript out of sight, so its end is still unseen.
   const shownAgent =
     stateShown && fixture === undefined && agentView?.agentId !== undefined
@@ -1457,6 +1442,7 @@ export function useTasksTab(input: {
           ? mainTabs.tab.agent
           : null;
 
+  // The window's Inbox stands in the column's place, showing the task whose item is chosen there.
   const shownInbox =
     stateShown && fixture === undefined && inboxView !== undefined ? (inboxTask ?? null) : null;
 
@@ -1737,14 +1723,14 @@ export function useTasksTab(input: {
     input.place.binding !== PLACE_BINDING.KEPT ||
     input.place.inTaskPlace;
 
+  // What the link opening now opens on its task's own place, which the window's move there holds (`places/link-places.ts`).
+  const linking = useRef<LinkStep | undefined>(undefined);
+
   // Stands the own place of `taskId`, where a door opening it does, answering whether the window moved: not where it
   // stands already, read as the router stands at the call. Note that a fixture run binds its task for good, so its task's
   // place stands for any, and Home where it binds none. A door that leaves whatever place stands, `over` one standing
   // beside the task's place too, stands it from there as well, as the sidebar's rows and ⌘K's do; one that `takesStepless`
   // takes an entry holding no step in place (`TaskRoute.onOpen`), as the leave of a routed place does.
-  // What the link opening now opens on its task's own place, which the window's move there holds (`places/link-places.ts`).
-  const linking = useRef<LinkStep | undefined>(undefined);
-
   const standTaskPlace = (
     taskId: string | undefined,
     over = false,
@@ -2091,8 +2077,6 @@ export function useTasksTab(input: {
 
   const { taskAgentPins = NO_TASK_AGENT_PINS } = viewed;
 
-  // Copy formats the document drawn now and hands it to main's clipboard;
-  // it asks the model nothing and reads no flag.
   const pressCopy = () => {
     if (region.kind !== TASK_REGION.READY) return;
     copyWithToast(descriptionMarkdown(region.task), TASK_COPIED_NOTE);
@@ -2559,13 +2543,6 @@ export function useTasksTab(input: {
     });
   };
 
-  /**
-   * An agent's place on its task: the agent's tab, an archived agent's among
-   * them, and the tab of the side panel that shows what the place names. Note
-   * that an agent's worker is drawn only while its agent's tab is open, so
-   * the agent's tab opens with it, and that its tab is opened with no task
-   * words, since a link carries none; its own rows name its task once they land.
-   */
   // The pull request an agent's line names, at once where the task list stands, else once it first answers, unless the window moved on before then.
   const onAgentPullRequest = (
     agentId: string,
@@ -2584,6 +2561,13 @@ export function useTasksTab(input: {
     });
   };
 
+  /**
+   * An agent's place on its task: the agent's tab, an archived agent's among
+   * them, and the tab of the side panel that shows what the place names. Note
+   * that an agent's worker is drawn only while its agent's tab is open, so
+   * the agent's tab opens with it, and that its tab is opened with no task
+   * words, since a link carries none; its own rows name its task once they land.
+   */
   const openOnTask = (taskId: string, place: AgentPlace) => {
     const column = agentTab(place.agentId);
     // A tab of the side panel a link opens, and the link a narrow room's step on it stands at (`places/task-step.ts`).
@@ -2715,14 +2699,6 @@ export function useTasksTab(input: {
     );
   };
 
-  /**
-   * An agent's place opened on its task, or through its own address, which says it is not found, where it is not read.
-   * Note that a link names the task only where it was written under it, so
-   * one naming none finds the task by the agent: at once where the agent is
-   * the open task's or one the list followed live carries, else by reading
-   * the agent, which opens nothing where the window moved on before it
-   * answered.
-   */
   // A page an older link names under the agent that showed it, opened on the agent's task as the list or the service has it;
   // through the agent's own address, which says it is not found, where neither reads it.
   const openAgentsPage = (agentId: string, pageId: string, home: string) => {
@@ -2756,6 +2732,14 @@ export function useTasksTab(input: {
     });
   };
 
+  /**
+   * An agent's place opened on its task, or through its own address, which says it is not found, where it is not read.
+   * Note that a link names the task only where it was written under it, so
+   * one naming none finds the task by the agent: at once where the agent is
+   * the open task's or one the list followed live carries, else by reading
+   * the agent, which opens nothing where the window moved on before it
+   * answered.
+   */
   const openAgentPlace = (place: AgentPlace, home: string) => {
     const open = viewed.activeTaskId;
     const listed = listedAgentIn(listCollections, place.agentId);
@@ -3282,16 +3266,6 @@ export function useTasksTab(input: {
     ],
   );
 
-  // Whether the open task's strips draw a closed tab of it again: an agent's
-  // while the agent is the task's, archived or not, never the Inbox, which the panel
-  // draws no more, a Changes tab while its agent is the task's, archived or not,
-  // and a subagent's or a page's on the strip's own
-  // terms. Note that what the task has not read yet counts as drawn, as the
-  // strips stand a tab until the read says otherwise.
-  // A tab opened again another way since, from the "+", a link, a resume, or a
-  // wake, stands already, so it is passed over too, since opening it would only
-  // move it. The side panel's strip is the task's only while nothing stands in
-  // the task's place.
   // A fixed kind of the side panel draws on every task or on none, so whether it draws again is
   // known before its task opens: the retired Inbox and Comments draw on none.
   const drawsOnAnyTask = (closed: ClosedTab): boolean =>
@@ -3299,11 +3273,20 @@ export function useTasksTab(input: {
     !Predicate.isString(closed.tab) ||
     DRAWN_KINDS.some((kind) => kind === closed.tab);
 
+  // A tab opened again another way since, from the "+", a link, a resume, or a
+  // wake, stands already, so it is passed over, since opening it would only
+  // move it. The side panel's strip is the task's only while nothing stands in
+  // the task's place.
   const standsOpen = (closed: ClosedTab): boolean =>
     closed.strip === CLOSED_TAB_STRIP.COLUMN
       ? mainTabs.tabs.some((each) => sameTab(each, closed.tab))
       : inboxView === undefined && sidePanel.strip.some((each) => sameTab(each, closed.tab));
 
+  // Whether the open task's strips draw a closed tab of it again: an agent's
+  // while the agent is the task's, archived or not, a Changes tab while its
+  // agent is the task's, archived or not, and a subagent's or a page's on the
+  // strip's own terms. Note that what the task has not read yet counts as
+  // drawn, as the strips stand a tab until the read says otherwise.
   const drawsAgain = (closed: ClosedTab): boolean =>
     !standsOpen(closed) &&
     stripTabDrawsAgain(closed.tab, {
@@ -3646,11 +3629,9 @@ export function useTasksTab(input: {
       }
     },
     onShowFile: (taskId, ref, commit) => arriveAt(taskId, () => showFile(taskId, ref, commit)),
-    // A version's Open lands where its writer wrote it: an agent's tab.
     onShowSource: (taskId, source) => arriveAt(taskId, () => showSource(taskId, source)),
     // A task named by an Inbox item or a call's row opens on its agents.
     onShowTask: (taskId) => arriveAt(taskId, () => showTaskAgents(taskId)),
-    // Each ask is its own, so the same section asked twice scrolls twice.
     onShowMention: arriveOnMention,
     onOpenLink: (link: ReadLink, landed?: () => void) => openLink(link, landed),
     messageReveal,
