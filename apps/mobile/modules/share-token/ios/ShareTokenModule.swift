@@ -6,6 +6,10 @@ public final class ShareTokenModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ShareToken")
 
+    OnCreate {
+      A11yProbe.start()
+    }
+
     Function("keep") { (token: String?, expiresAt: Double?) -> Bool in
       ShareToken.keep(token, expiresAt: expiresAt)
     }
