@@ -731,13 +731,13 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       }),
   );
 
-  /** A source whose stopped sandbox holds a change it never committed, over a checkout and remote on disk, and a continue of it; GitHub answers its pull request's reads as `pull` does, where given. */
+  /** A source whose sandbox, running, or stopped owning a drive where `ownsDrive` says so, holds a change it never committed, over a checkout and remote on disk, and a continue of it; GitHub answers its pull request's reads as `pull` does, where given. */
   const copyScenario = (t: TestContext, pull?: RepositoryScript, ownsDrive = false) =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureOidcToken());
       const checkout = sourceCheckout(yield* Effect.promise(() => temporaryDirectory(t, "copy-")));
       writeFileSync(join(checkout.checkout, "invites.ts"), "export const ttl = 7;\n");
-      const sandbox = sourceSandbox(checkout, "stopped", ownsDrive);
+      const sandbox = sourceSandbox(checkout, ownsDrive ? "stopped" : "running", ownsDrive);
 
       const opened = yield* sourceAgentOn(
         pull === undefined ? sandbox.answer : (sent) => sandbox.answer(sent) ?? pull(sent),
@@ -788,7 +788,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   };
 
   it.effect(
-    "a continue copies the source's checkout, what it had not committed included, to a branch of its own from the sandbox it wakes, names that branch and how a fresh checkout fetches it, and keeps it on its record",
+    "a continue copies the source's checkout, what it had not committed included, to a branch of its own from the sandbox it runs in, names that branch and how a fresh checkout fetches it, and keeps it on its record",
     (t) =>
       Effect.gen(function* () {
         const { checkout, sandbox, continued } = yield* copyScenario(t);
@@ -807,7 +807,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         const fresh = fetchedAsHanded(checkout, preamble);
         assert.equal(checkout.sh(fresh, "git", "branch", "--show-current"), branch);
         assert.equal(readFileSync(join(fresh, "invites.ts"), "utf8"), "export const ttl = 7;\n");
-        assert.deepEqual(sandbox.ran, [SOURCE_SANDBOX.WOKEN]);
+        assert.deepEqual(sandbox.ran, [SOURCE_SANDBOX.RUNNING]);
       }),
   );
 
@@ -897,7 +897,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   it.effect(
-    "a source whose task moved to another repository since it started is copied nowhere, its sandbox left asleep, and taken up from the branch it pushed, fetched as one word whatever a shell would read in its name",
+    "a source whose task moved to another repository since it started is copied nowhere, its sandbox left as it runs, and taken up from the branch it pushed, fetched as one word whatever a shell would read in its name",
     (t) =>
       Effect.gen(function* () {
         const { owner, source, checkout, sandbox, continued } = yield* copyScenario(t);
@@ -923,7 +923,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
 
         assert.equal(started.from?.branch, undefined);
         assert.match(preamble, /what it had not pushed could not be copied from its sandbox/u);
-        assert.deepEqual([sandbox.ran, sandbox.stops, sandbox.state.status], [[], [], "stopped"]);
+        assert.deepEqual([sandbox.ran, sandbox.stops, sandbox.state.status], [[], [], "running"]);
         const fresh = fetchedAsHanded(checkout, preamble);
         assert.equal(checkout.sh(fresh, "git", "branch", "--show-current"), pushedBranch);
         assert.equal(existsSync(join(fresh, "pwned")), false);

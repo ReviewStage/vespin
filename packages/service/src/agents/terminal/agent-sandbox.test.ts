@@ -322,7 +322,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           started,
           Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: SANDBOX_STATE.STOPPED }),
         );
-        assert.deepEqual(api.state.resumed, []);
+        assert.deepEqual(api.state.deleted, []);
         assert.deepEqual(api.state.commands, []);
       }),
   );
@@ -495,7 +495,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           refused,
           Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: SANDBOX_STATE.STOPPED }),
         );
-        assert.deepEqual(stopped.state.resumed, []);
+        assert.deepEqual(stopped.state.deleted, []);
       }),
   );
 
@@ -616,24 +616,8 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
     }),
   );
 
-  it.effect("a resume wakes the stopped sandbox by its name and answers it running", () =>
-    Effect.gen(function* () {
-      const api = standing(SANDBOX_STATUS.STOPPED);
-
-      const resumed = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-        sandbox.resume(SESSION),
-      ).pipe(Effect.provide(api.layer));
-
-      assert.equal(resumed, SANDBOX_STATE.RUNNING);
-      assert.deepEqual(
-        api.state.resumed.map((each) => each.name),
-        [SANDBOX],
-      );
-    }),
-  );
-
   it.effect(
-    "a resume of a sandbox under its session's name whose snapshot is gone makes it again under that name, with its tags, the agent's user in it, and answers it running",
+    "a resume makes the stopped sandbox again under its session's name, with its tags, the agent's user in it, and answers it running",
     () =>
       Effect.gen(function* () {
         const api = standing(undefined);
@@ -642,11 +626,8 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         const expired = api.sandbox.stand({
           name: agentSandboxName(SESSION),
           status: SANDBOX_STATUS.STOPPED,
-          snapshotId: "snap_expired",
           tags,
         });
-
-        api.state.goneSnapshots.add("snap_expired");
 
         const resumed = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
           sandbox.resume(SESSION),
@@ -675,10 +656,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
 
         assert.equal(attached.state, SANDBOX_STATE.RUNNING);
         assert.ok("shell" in attached && !attached.readOnly);
-        assert.deepEqual(
-          api.state.resumed.map((each) => each.name),
-          [SANDBOX],
-        );
+        assert.deepEqual(api.state.deleted, [SANDBOX]);
         assert.equal(api.state.interactive.length, 1);
         assert.ok(attachTerminal(unknown).args.join(" ").includes("new-session -A"));
       }),

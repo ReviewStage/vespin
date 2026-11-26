@@ -111,7 +111,7 @@ interface ListedFake {
 
 /** A sandbox as a delete answers it, with the fields `@vercel/sandbox` checks beside those a list names. */
 export function sandboxDeleted<Listed extends ListedFake>(listed: Listed) {
-  return { sandbox: { ...listed, persistent: true, updatedAt: listed.createdAt } };
+  return { sandbox: { ...listed, persistent: false, updatedAt: listed.createdAt } };
 }
 
 /** A sandbox and its current session as a lookup answers them, with the fields `@vercel/sandbox` checks. */
@@ -145,7 +145,7 @@ export function sandboxesListed<Listed extends ListedFake>(
   };
 }
 
-/** A session as a stop, a policy write, an extension, or a snapshot answers it, with the fields `@vercel/sandbox` checks. */
+/** A session as a stop, a policy write, or an extension answers it, with the fields `@vercel/sandbox` checks. */
 export function sessionAnswered(session: {
   readonly id: string;
   readonly status: string;
@@ -223,23 +223,6 @@ export function commandLogsStreamed(stderr: string): Response {
   const printed: OutputLine[] = [{ stream: "stderr", data: stderr }];
 
   return streamed(printed.filter((line) => line.data !== ""));
-}
-
-/** A snapshot as a lookup, a list, or a session's snapshot answers it, with the fields `@vercel/sandbox` checks. */
-export function snapshotOf(snapshot: {
-  readonly id: string;
-  readonly status: string;
-  readonly sourceSessionId?: string;
-}) {
-  return {
-    id: snapshot.id,
-    sourceSessionId: snapshot.sourceSessionId ?? "",
-    region: SESSION_SIZE.REGION,
-    status: snapshot.status,
-    sizeBytes: 0,
-    createdAt: 0,
-    updatedAt: 0,
-  };
 }
 
 /** A drive as a lookup, a create, a fork, or a delete answers it, with the fields `@vercel/sandbox` checks. */

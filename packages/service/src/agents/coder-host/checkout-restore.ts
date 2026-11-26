@@ -6,11 +6,10 @@
  * turn's row keeps the commit, `HEAD` then, and the branch then. As a rewind
  * that restores the files is made (`rewind.ts`), once the agent's runner is
  * ended, the service reaches the agent's sandbox by its session's name
- * (`../agent-sandbox-open.ts`), wakes it where it stopped, as the Terminal
- * tab's resume does (`AgentSandbox`'s `resume`), so one with its own drive
- * is made again from the image on that drive, since a stop kept nothing
- * else of it, while one from before drives resumes from its snapshot; and
- * runs the one restore script both machines run
+ * (`../agent-sandbox-open.ts`), wakes it where it stopped through the one
+ * open the Terminal tab's resume takes (`AgentSandbox`'s `resume`), which
+ * makes it again from the image on its own drive, since a stop kept nothing
+ * else of it; and runs the one restore script both machines run
  * (`@repo/features/checkout-restore`) in the checkout, with the snapshot
  * in its variables: the working tree and the checked-out branch go back,
  * and no commit is moved. Nothing leaves the sandbox: no push, no
@@ -20,7 +19,7 @@
  * `SANDBOX_IDLE` after its last touch (`@repo/sandbox`), as every idle
  * sandbox does. The whole step is bounded. What it came to is an outcome the
  * rewind names to its caller: restored, the snapshot missing, as where the
- * sandbox that held it is released or its stopped copy is gone, or a
+ * sandbox that held it is released or its drive is gone, or a
  * failure, whose stderr's tail is logged with credential-shaped runs
  * redacted. The panel offers no restore for a turn whose sandbox the ledger
  * records gone (`@repo/database`'s `models/agent-sandboxes.ts` forgets the
@@ -43,16 +42,14 @@ import {
 import { redactCredentials } from "@repo/features/credential-redaction";
 import {
   type ListedSandbox,
-  resumedRunning,
   SANDBOX_STATUS,
   Sandbox,
   type SandboxRunning,
   type SandboxService,
   SandboxUnavailable,
-  UP_STATUSES,
 } from "@repo/sandbox";
 import { Duration, Effect, Option } from "effect";
-import { agentSandboxName, agentSandboxOf } from "../agent-sandbox-open.js";
+import { agentSandboxOf } from "../agent-sandbox-open.js";
 import {
   CHECKOUT_DIFF_OUTCOME,
   type CheckoutDiffOutcome,
@@ -127,19 +124,12 @@ const ranInCheckout = (
 
     if (sandbox === undefined) return undefined;
 
-    // MIGRATION: a legacy sandbox (`agentSandboxOf`) is never woken in place; one not up holds no snapshot a restore reaches.
-    if (!UP_STATUSES.has(sandbox.status) && sandbox.name !== agentSandboxName(sessionId)) {
-      return undefined;
-    }
-
-    // A stopped sandbox with its own drive is made again on it, as the Terminal wakes it; one whose snapshot the provider dropped holds no checkout to put back.
+    // A stopped sandbox is made again on its own drive, as the Terminal wakes it; one whose drive is gone holds no checkout to put back.
     const running =
       runningOf(sandbox) ??
       ((yield* sandboxes.ownDriveStands(sandbox.name))
         ? yield* wokenOnDrive(sandboxes, sessionId, sandbox.name)
-        : yield* resumedRunning(sandbox.name).pipe(
-            Effect.catchTag("SnapshotGone", () => Effect.succeed(undefined)),
-          ));
+        : undefined);
 
     if (running === undefined) return undefined;
     yield* touchAgentSandbox(sandbox.name);

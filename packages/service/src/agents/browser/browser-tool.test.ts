@@ -529,7 +529,7 @@ it.layer(Layer.merge(getTestDB(), blobs.layer))("the browser tool", (it) => {
         assert.ok(admin);
         const now = yield* Clock.currentTimeMillis;
         yield* takeOverBrowserTab(admin.id, userId, new Date(now + 60_000), new Date(now));
-        // The sandbox resumed from its snapshot: the browser starts with none of the pages.
+        // The sandbox was made again: the browser starts with none of the pages.
         const { peer } = yield* browser();
 
         const listed = ran(

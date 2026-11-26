@@ -3,10 +3,10 @@
  *
  * The service under them is the real one (`agents/browser/agent-browser.ts`);
  * only what it reaches across a process boundary is faked. The sandbox is
- * Vercel's REST API as a scenario has it: listed under a session's tag or
- * not, running or stopped, resuming after some asks, and running the
- * browser's start as the start script would, started the first time and
- * attached to after, until a resume brings the sandbox up without it. The
+ * Vercel's REST API as a scenario has it: standing under a session's name or
+ * not, running or stopped, made again and up after some asks, and running
+ * the browser's start as the start script would, started the first time and
+ * attached to after, until an open makes the sandbox again without it. The
  * PTY runs the bridge only where its start frame names it, writes what a
  * real PTY would around it (a stray line, `\r\n` line ends, a line split
  * across frames, mid-character), and carries each command line to the
@@ -21,6 +21,7 @@ import { MP4_TYPE } from "@repo/features/video-signature";
 import {
   type CommandAsk,
   type CommandRun,
+  type CreatedSandbox,
   type OpenedSandbox,
   SANDBOX_STATUS,
   type SandboxError,
@@ -304,20 +305,16 @@ export interface FakeSandboxScenario {
   readonly status: SandboxStatus | undefined;
   /** The session tag it is listed under. */
   readonly sessionId: string;
-  /** How many resumes answer it still starting before one answers it running; one that never comes up is `Infinity`. */
+  /** How many opens of it, stopped, answer it still starting before one answers it running; one that never comes up is `Infinity`. */
   readonly pendingResumes?: number;
   /** The exit the browser's start ends on; 0 where it starts or attaches. */
   readonly startExit?: number;
   /** Whether every call is unavailable. */
   readonly unavailable?: true;
-  /** The failure every resume answers, a reopen through `getOrCreate` among them. */
+  /** The failure every open through `getOrCreate` answers. */
   readonly resumeRefusal?: SandboxError;
-  /** How many resumes are refused before one is answered, as an image whose preparation finishes; every one where unsaid. */
+  /** How many opens are refused before one is answered, as an image whose preparation finishes; every one where unsaid. */
   readonly resumeRefusals?: number;
-  /** Whether the sandbox is a legacy one, under a UUID, which a reopen moves to its session's name from its snapshot; under its session's name (`agentSandboxName`) where unsaid. */
-  readonly legacy?: true;
-  /** Whether its snapshot is gone, so a `getOrCreate` deletes it and makes it again. */
-  readonly snapshotGone?: true;
   /** How many vCPUs it is listed with. */
   readonly vcpus?: number;
   /** What the recording's commands answer: the start's output (`started` where none is named), the stop's JSON (none recorded where none is named), the video the stop leaves behind, and the MP4 copy the sandbox makes of it, none where unsaid. */
@@ -332,9 +329,7 @@ export interface FakeSandboxScenario {
 }
 
 export const FAKE_SANDBOX = {
-  NAME: "eve-sbx-browser-fixture",
   RUNNING_SESSION: "sbs_running",
-  RESUMED_SESSION: "sbs_resumed",
   CREATED_SESSION: "sbs_created",
   TAGS: { sessionId: "fixture", agentId: "agent-fixture" },
 } as const;
@@ -353,11 +348,11 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
   const ran: { readonly sandboxSessionId: string; readonly ask: CommandAsk }[] = [];
   let status = scenario.status;
   let current: string = FAKE_SANDBOX.RUNNING_SESSION;
-  let resumes = 0;
+  let opens = 0;
   let browserUp = false;
   /** Every `getOrCreate` that made the sandbox again, as it was asked. */
   const creates: SandboxGetOrCreate[] = [];
-  let name = scenario.legacy === true ? FAKE_SANDBOX.NAME : agentSandboxName(scenario.sessionId);
+  const name = agentSandboxName(scenario.sessionId);
 
   const refused = () =>
     scenario.unavailable === undefined ? undefined : Effect.fail(new SandboxUnavailable({}));
@@ -378,16 +373,27 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
     ...(scenario.vcpus === undefined ? undefined : { vcpus: scenario.vcpus }),
   });
 
-  /** The sandbox resumed: running at once where it runs, and otherwise after the pending resumes the scenario names. */
-  const resumed = () =>
-    Effect.sync(() => {
+  /**
+   * The sandbox opened: as it runs where it is up; made again where it
+   * stopped, a fresh disk where no browser runs, handed to `onCreate`; and up
+   * after the pending opens the scenario names.
+   */
+  const opened = (ask: SandboxGetOrCreate, onCreate?: (created: CreatedSandbox) => Promise<void>) =>
+    Effect.promise(async () => {
       if (status === SANDBOX_STATUS.RUNNING) return listed();
-      resumes += 1;
+      const made = status !== SANDBOX_STATUS.STARTING;
+
+      if (made) {
+        creates.push(ask);
+        current = FAKE_SANDBOX.CREATED_SESSION;
+        browserUp = false;
+      }
+
+      opens += 1;
       status =
-        resumes > (scenario.pendingResumes ?? 0) ? SANDBOX_STATUS.RUNNING : SANDBOX_STATUS.STARTING;
-      current = FAKE_SANDBOX.RESUMED_SESSION;
-      // A resume starts from the snapshot, where no browser runs.
-      browserUp = false;
+        opens > (scenario.pendingResumes ?? 0) ? SANDBOX_STATUS.RUNNING : SANDBOX_STATUS.STARTING;
+
+      if (made) await onCreate?.({ ...listed(), driveKept: true });
 
       return listed();
     });
@@ -399,27 +405,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
       Effect.succeed(sessionId === scenario.sessionId && status !== undefined ? [listed()] : []),
     get: (asked) =>
       refused() ?? Effect.succeed(asked === name && status !== undefined ? listed() : undefined),
-    // A sandbox whose snapshot is gone is made again under its name, a fresh disk where no browser
-    // runs; a legacy one is moved to the name asked, as a resume from its snapshot.
-    getOrCreate: (ask, onCreate) =>
-      refused() ??
-      resumeRefused() ??
-      (scenario.snapshotGone === true && status !== SANDBOX_STATUS.RUNNING
-        ? Effect.promise(async () => {
-            creates.push(ask);
-            status = SANDBOX_STATUS.RUNNING;
-            current = FAKE_SANDBOX.CREATED_SESSION;
-            browserUp = false;
-            await onCreate?.({ ...listed(), driveKept: false });
-
-            return listed();
-          })
-        : Effect.andThen(
-            Effect.sync(() => {
-              name = ask.name;
-            }),
-            resumed(),
-          )),
+    getOrCreate: (ask, onCreate) => refused() ?? resumeRefused() ?? opened(ask, onCreate),
     run: (target, ask) =>
       refused() ??
       Effect.sync((): CommandRun => {

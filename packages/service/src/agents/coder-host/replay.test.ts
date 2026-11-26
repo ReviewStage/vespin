@@ -110,7 +110,7 @@ it("a source handed in its stopped sandbox's snapshot is told to stand in the ne
         source: { ...source, branch: "agent/relay" },
         told: {
           ...from.told,
-          work: { on: TAKEN_ON.SNAPSHOT, sandbox: "agent-sandbox-1" },
+          work: { on: TAKEN_ON.DRIVE, sandbox: "agent-sandbox-1" },
           inPullRequest,
         },
       },

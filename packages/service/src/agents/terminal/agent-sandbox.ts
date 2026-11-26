@@ -5,11 +5,9 @@
  * named (`../agent-sandbox-open.ts`'s `agentSandboxOf`). Where it stands is
  * read and never changed by a read: a stopped sandbox stays stopped until
  * the developer's resume, which opens it as the agent's next turn does,
- * through the same `getOrCreate` (`reopenedOf`): the one standing under its
- * session's name is resumed, or made again from the image, with the tags
- * and the size it stood with, where its snapshot is gone; a legacy one,
- * opened under a UUID, is moved to its session's name from its last
- * snapshot. A shell is started, named,
+ * through the same `getOrCreate` (`reopenedOf`): made again from the image
+ * on the agent's own drive, with the tags and the size it stood with. A
+ * shell is started, named,
  * and ended by a short tmux command run in the sandbox's running session
  * (`tmux.ts`), and the list is
  * read back from tmux, so it is whatever the sandbox holds now. A shell
@@ -292,9 +290,7 @@ function agentSandboxOver(
       if (sandbox === undefined || state === SANDBOX_STATE.RUNNING) return state;
 
       // A sandbox made again on an image still being prepared is opened after the answer, which says it is starting.
-      const opened = yield* Effect.flatMap(reopenedOf(sessionId, sandbox), (of) =>
-        openAgentSandboxPromptly(of),
-      ).pipe(
+      const opened = yield* openAgentSandboxPromptly(reopenedOf(sessionId, sandbox)).pipe(
         Effect.provideService(AgentImage, image),
         Effect.provideService(Sandbox, api),
         Effect.catchTag("ImageNotReady", () => Effect.succeed(undefined)),

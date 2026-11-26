@@ -25,7 +25,7 @@
 
 import { PLAYWRIGHT_PIN, SANDBOX_BROWSER_PIN } from "@repo/agent-runner/pins";
 import type { CommandAsk, CommandRun } from "@repo/sandbox";
-import { LINK_SANDBOX_STATE_FOLDER, SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
+import { SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 
 export const SANDBOX_BROWSER = {
   /** The browser's DevTools port on the sandbox's loopback: apart from the 9222 an agent's own Chromium would take, and Node's inspector's 9229. */
@@ -81,7 +81,6 @@ const START_SCRIPT = [
   "set -u",
   'port="$1" display="$2" width="$3" height="$4" state="$HOME/$5"',
   "shift 5",
-  `(cd "$HOME" && ${LINK_SANDBOX_STATE_FOLDER})`,
   'profile="$state/profile"',
   'mkdir -p "$profile" && chmod 700 "$state"',
   // Note that what the start leaves running closes the lock's descriptor, which would otherwise hold the lock for as long as the browser runs.
@@ -89,9 +88,7 @@ const START_SCRIPT = [
   "flock -w 60 9",
   `answers() { curl -fsS --max-time 1 "http://127.0.0.1:$port/json/version" >/dev/null 2>&1; }`,
   `if answers; then echo ${BROWSER_START_OUTPUT.ATTACHED}; exit 0; fi`,
-  // Note that an image from before Playwright's shared folder kept the browser in the default user's cache, which a sandbox resumed from its snapshot still holds.
   `chrome=$(ls -d ${PLAYWRIGHT_PIN.BROWSERS}/chromium-*/chrome-linux*/chrome 2>/dev/null | sort -V | tail -n 1)`,
-  `[ -n "$chrome" ] || chrome=$(ls -d "$HOME"/.cache/ms-playwright/chromium-*/chrome-linux*/chrome 2>/dev/null | sort -V | tail -n 1)`,
   `[ -x "$chrome" ] || { echo 'no Chromium in the image' >&2; exit ${BROWSER_START_EXIT.NO_CHROMIUM}; }`,
   // Xvfb by the pid its own lock file names, checked by name, since a resumed sandbox may have handed that pid to another process.
   'xvfb_pid=$(cat "/tmp/.X$display-lock" 2>/dev/null | tr -d " ")',

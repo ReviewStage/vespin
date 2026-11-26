@@ -3,8 +3,7 @@
  *
  * The double answers Vercel Sandbox's API as the scenario has it: the
  * session's sandbox under its session's name, in the status given, owning a
- * drive of its own where the scenario says so, a resume
- * that brings it up under a fresh session, a stop that stops it where it is
+ * drive of its own where the scenario says so, a stop that stops it where it is
  * sent as JSON and is refused with 415 where not, as Vercel refuses it, a
  * firewall policy written down, and each command run in a checkout the test
  * made by a real POSIX shell with git, what it printed on stdout and stderr
@@ -33,7 +32,6 @@ export const SOURCE_SANDBOX = {
   /** The source's session, after which its sandbox is named. */
   SESSION: "wrun_source",
   RUNNING: "sbs_running",
-  WOKEN: "sbs_woken",
   /** The session a stopped sandbox last ran, which Vercel's list names as its current one. */
   STOPPED: "sbs_stopped",
 } as const;
@@ -177,11 +175,6 @@ export function sourceSandbox(
       policies.push({ session, hosts: Object.keys(JSON.parse(body).allow ?? {}) });
 
       return Response.json(sessionAnswered({ id: session, status: "running" }));
-    }
-
-    if (parsed.searchParams.get("resume") === "true") {
-      state.status = "running";
-      state.session = SOURCE_SANDBOX.WOKEN;
     }
 
     const listed = {

@@ -9,9 +9,8 @@
  * browser opens a stopped sandbox again as the agent's next turn does,
  * through the same `getOrCreate` (`../agent-sandbox-open.ts`'s
  * `reopenedOf`), which makes one standing under its session's name again
- * from the image, with the tags and the size it stood with, where its
- * snapshot is gone, or moves a legacy one, under a UUID, to its session's
- * name from its last snapshot; it waits for it
+ * from the image on the agent's own drive, with the tags and the size it
+ * stood with; it waits for it
  * to run, and runs the start (`sandbox-browser.ts`), which attaches to a
  * browser already running or starts one.
  *
@@ -149,7 +148,7 @@ export const BROWSER_UNREACHABLE = {
   STARTING: "starting",
   /** The stopped sandbox's snapshot is gone, expired or deleted, so it can never resume. */
   SNAPSHOT_GONE: "snapshot-gone",
-  /** The sandbox's image carries no full Chromium: a snapshot made before it did. */
+  /** The sandbox's image carries no full Chromium. */
   NO_CHROMIUM: "no-chromium",
   /** Xvfb or Chromium did not start in the sandbox. */
   NOT_STARTED: "not-started",
@@ -499,9 +498,10 @@ export function agentBrowserOver(
 
       if (sandbox === undefined) return yield* unreachable(BROWSER_UNREACHABLE.NOT_OPENED);
 
-      const opened = yield* Effect.flatMap(reopenedOf(sessionId, sandbox), (of) =>
-        openAgentSandboxPromptly(of),
-      ).pipe(Effect.provideService(AgentImage, image), Effect.provideService(Sandbox, api));
+      const opened = yield* openAgentSandboxPromptly(reopenedOf(sessionId, sandbox)).pipe(
+        Effect.provideService(AgentImage, image),
+        Effect.provideService(Sandbox, api),
+      );
 
       return opened.sandbox;
     });
@@ -522,8 +522,8 @@ export function agentBrowserOver(
       // Note that each try reads the sandbox again and opens it, which answers a sandbox already
       // coming up as it stands, and that a refusal is tried again too, since a sandbox still stopping
       // may refuse its resume; the last try's failure is the answer, so an outage still says the
-      // sandbox was unavailable. A snapshot gone, which only a legacy sandbox's move answers, is
-      // answered at once, since no later try finds it again, as is an image still being prepared,
+      // sandbox was unavailable. A snapshot gone is answered at once, since no later try finds it
+      // again, as is an image still being prepared,
       // which the open waits on after the answer, so the answer says the sandbox is starting.
       const resumed = reopened(sessionId).pipe(
         Effect.flatMap((found) =>

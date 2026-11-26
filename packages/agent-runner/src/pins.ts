@@ -73,17 +73,8 @@ export const SANDBOX_TOOL_ENV = {
   NODE_PATH: `${PLAYWRIGHT_PIN.PREFIX}/lib/node_modules`,
 } as const;
 
-/**
- * The directory the image installs our own tools under, only root writing
- * it. Note that a persistent sandbox resumes from its own snapshot of the
- * image it was made from, so one made before the product's rename holds them
- * under `SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME`, which each launch links this
- * name to (`sandbox-machine.ts`'s launch).
- */
+/** The directory the image installs our own tools under, only root writing it. */
 export const SANDBOX_TOOLS_DIRECTORY = "/opt/agent";
-
-/** Where a sandbox made before the rename holds our tools, read through `SANDBOX_TOOLS_DIRECTORY`'s link and never written. */
-export const SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME = "/opt/luke";
 
 /** Where a sandbox keeps the runner's unit (`RUNNER_UNIT`): the image's, which each launch installs the deploy's over (`apps/web/agent-image/Dockerfile`). */
 export const RUNNER_DIRECTORY = `${SANDBOX_TOOLS_DIRECTORY}/agent-runner`;

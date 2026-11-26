@@ -87,8 +87,8 @@ import { CODER_TOOL_SET } from "./tool-set.js";
  *
  * A Start from another agent, to continue it or to fork it at one of its messages,
  * hands the new agent that agent's brief with its transcript replayed after
- * it (`replay.ts`) and its work, what it had not pushed included, in a
- * snapshot of its stopped sandbox or copied to a branch of its own
+ * it (`replay.ts`) and its work, what it had not pushed included, on a
+ * fork of its stopped sandbox's drive or copied to a branch of its own
  * (`snapshot.ts`),
  * the note after both with the files the note carries, and runs it on that
  * agent's choice, servers, place, branch, and extra repositories unless the
@@ -509,7 +509,7 @@ const sourceWorkOf = (
       const found = yield* agentSandboxOf(sandbox, session.sessionId);
 
       if (found?.status === SANDBOX_STATUS.STOPPED && (yield* sandbox.ownDriveStands(found.name))) {
-        return { on: TAKEN_ON.SNAPSHOT, sandbox: found.name } satisfies SourceWork;
+        return { on: TAKEN_ON.DRIVE, sandbox: found.name } satisfies SourceWork;
       }
     }
 

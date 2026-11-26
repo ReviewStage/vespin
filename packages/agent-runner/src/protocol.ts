@@ -214,14 +214,15 @@ export type RunnerHarness = (typeof RUNNER_HARNESS)[keyof typeof RUNNER_HARNESS]
 
 /**
  * How a message reached its runner, as the launch's trace names it: a place
- * created from its source agent's snapshot, with a fork of its repository's
- * base drive, or from the agents' image alone; one resumed from its own snapshot; the runner
- * launched again in a place still up; a place made anew where the one found
- * was gone; or a runner already up. The last four are spelled as the
- * service's hand-off event spells them (`SERVER_HANDOFF_PATH`).
+ * created from the agents' image with a fork of its source agent's drive,
+ * with a fork of its workspace's drive, or with an empty drive of its own; a
+ * Mac's place resumed; the runner launched again in a place still up; a
+ * place made anew on the agent's own drive; or a runner already up. The
+ * last four are spelled as the service's hand-off event spells them
+ * (`SERVER_HANDOFF_PATH`).
  */
 export const LAUNCH_PATH = {
-  SOURCE_SNAPSHOT: "source_snapshot",
+  SOURCE_DRIVE: "source_drive",
   WORKSPACE_DRIVE: "workspace_drive",
   IMAGE: "image",
   RESUMED: "resumed",

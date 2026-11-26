@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { ImageNotReady, SANDBOX_STATUS, SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
+import { ImageNotReady, SANDBOX_STATUS, SandboxUnavailable } from "@repo/sandbox";
 import { Duration, Effect, Exit, Fiber, Option, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { keptAfterResponse } from "../../http/after-response.js";
@@ -77,7 +77,7 @@ it.effect("the browser is started once in the running sandbox and attached to af
   }),
 );
 
-it.effect("a stopped sandbox is resumed and waited for, and its browser started afresh", () =>
+it.effect("a stopped sandbox is made again and waited for, and its browser started afresh", () =>
   Effect.gen(function* () {
     const peer = yield* fakeCdpPeer();
     const { service } = browserOver(peer, { status: SANDBOX_STATUS.STOPPED, pendingResumes: 2 });
@@ -86,7 +86,7 @@ it.effect("a stopped sandbox is resumed and waited for, and its browser started 
     yield* TestClock.adjust(Duration.seconds(10));
     const standing = yield* Fiber.join(ensuring);
 
-    assert.deepEqual(standing, { sandboxSessionId: FAKE_SANDBOX.RESUMED_SESSION, started: true });
+    assert.deepEqual(standing, { sandboxSessionId: FAKE_SANDBOX.CREATED_SESSION, started: true });
   }),
 );
 
@@ -320,23 +320,6 @@ it.effect(
     }),
 );
 
-it.effect("a legacy sandbox's move whose snapshot is gone is given up on at once, saying so", () =>
-  Effect.gen(function* () {
-    const peer = yield* fakeCdpPeer();
-
-    const { service } = browserOver(peer, {
-      status: SANDBOX_STATUS.STOPPED,
-      legacy: true,
-      resumeRefusal: new SnapshotGone({}),
-    });
-
-    // Note that the clock never moves, so a resume tried again would never answer.
-    const unreachable = yield* Effect.flip(service.ensure(SESSION));
-
-    assert.equal(unreachable.reason, BROWSER_UNREACHABLE.SNAPSHOT_GONE);
-  }),
-);
-
 it.effect(
   "a reopen whose image is still being prepared answers starting at once, and the open kept past the answer brings the sandbox up once the image is ready",
   () =>
@@ -365,12 +348,12 @@ it.effect(
 
       assert.equal(unreachable.reason, BROWSER_UNREACHABLE.STARTING);
       assert.equal(opened?.status, SANDBOX_STATUS.RUNNING);
-      assert.deepEqual(standing, { sandboxSessionId: FAKE_SANDBOX.RESUMED_SESSION, started: true });
+      assert.deepEqual(standing, { sandboxSessionId: FAKE_SANDBOX.CREATED_SESSION, started: true });
     }),
 );
 
 it.effect(
-  "a sandbox under its session's name whose snapshot is gone is made again under that name on the session's drive, with the tags and size it stood with and the agent's user, and its browser started afresh",
+  "a stopped sandbox under its session's name is made again under that name on the session's drive, with the tags and size it stood with and the agent's user, and its browser started afresh",
   () =>
     Effect.gen(function* () {
       const peer = yield* fakeCdpPeer();
@@ -378,7 +361,6 @@ it.effect(
       const sandbox = fakeSandboxApi({
         status: SANDBOX_STATUS.STOPPED,
         sessionId: SESSION,
-        snapshotGone: true,
         vcpus: 4,
       });
 

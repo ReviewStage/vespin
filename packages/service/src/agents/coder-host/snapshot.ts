@@ -1,16 +1,16 @@
 /**
- * snapshot.ts -- the work of a source agent whose sandbox is not stopped on a snapshot, pushed or not, copied to a new branch for an agent continued or forked from it.
+ * snapshot.ts -- the work of a source agent whose sandbox still runs, pushed or not, copied to a new branch for an agent continued or forked from it.
  *
- * A source whose sandbox stands stopped on a snapshot hands that sandbox
- * instead, whose latest snapshot the new agent's is created from
- * (`takeover.ts`'s `sourceWorkOf`), so this copy serves a source still
- * running, or one opened before sandboxes were named for their session.
+ * A source whose sandbox stands stopped hands the drive it owns instead,
+ * which the new agent's own is forked from (`takeover.ts`'s `sourceWorkOf`),
+ * so this copy serves a source still running, whose drive another sandbox
+ * holds read-write, which Vercel does not document forking.
  *
  * Each agent runs in a sandbox of its own, so what the source never
  * committed and pushed would be lost to the agent started from it. As that
  * Start is made, the service reaches the source's sandbox by its
- * session's name (`../agent-sandbox-open.ts`), wakes it where it stopped, as
- * the Terminal tab's resume does, and records its checkout whole: what it
+ * session's name (`../agent-sandbox-open.ts`), where it runs, and records
+ * its checkout whole: what it
  * committed, what it changed, and every file it made that git does not
  * ignore, as one commit on top of its `HEAD`, or `HEAD` itself where
  * nothing changed. The commit is built on an index of its own in a
@@ -21,8 +21,7 @@
  * own session and the Terminal tab set it, beside the swaps of the launch
  * running there (`../sandbox-firewall.ts`), so no token
  * enters the sandbox's files or a command's words; the credential stays
- * there until the sandbox stops or the next write replaces it. A sandbox this step woke stops
- * `SANDBOX_IDLE` after its last touch (`@repo/sandbox`), as every idle sandbox does. A copy that fails logs the tail of what
+ * there until the sandbox stops or the next write replaces it. A copy that fails logs the tail of what
  * it printed on stderr, credential-shaped runs redacted.
  * Files named the way credentials are kept are never copied. No copy is
  * made where the task moved to another repository since the source
@@ -36,31 +35,24 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { type Agent, hasRepository, readAgentByKey } from "@repo/database/models/agent-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { redactCredentials } from "@repo/features/credential-redaction";
-import {
-  type ListedSandbox,
-  resumedRunning,
-  SANDBOX_STATUS,
-  Sandbox,
-  type SandboxRunning,
-  UP_STATUSES,
-} from "@repo/sandbox";
+import { type ListedSandbox, SANDBOX_STATUS, Sandbox, type SandboxRunning } from "@repo/sandbox";
 import { Duration, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import type { GitHubApp } from "../../github/github-app.js";
-import { agentSandboxName, agentSandboxOf } from "../agent-sandbox-open.js";
+import { agentSandboxOf } from "../agent-sandbox-open.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { type RepositoryCredential, sandboxFirewall } from "../sandbox-firewall.js";
 import { CODER } from "./bounds.js";
 import { agentRepositoryToken, repositoryCredentialOf } from "./checkout.js";
 
 export const SNAPSHOT = {
-  /** The most a Start waits on the copy, the source's sandbox woken and the push included. */
+  /** The most a Start waits on the copy, the push included. */
   TIMEOUT: Duration.seconds(30),
   /** How many characters of a failed copy's stderr are logged, from its end. */
   STDERR_TAIL: 600,
 } as const;
 
-/** Why the source's work was not copied: the Start already made its agent, the task moved repository since the source started, the source never opened a sandbox, it runs on a Mac, whose checkout a Start never reads, the copy failed, or it ran past its bound. */
+/** Why the source's work was not copied: the Start already made its agent, the task moved repository since the source started, the source never opened a sandbox, it runs on a Mac, whose checkout a Start never reads, the copy failed or found its sandbox not running, or it ran past its bound. */
 export const SNAPSHOT_MISS = {
   STARTED: "started",
   MOVED: "moved",
@@ -168,7 +160,7 @@ function stderrTail(stderr: string): string {
   return line.slice(-SNAPSHOT.STDERR_TAIL);
 }
 
-/** The copy in the source's sandbox, woken where it stopped. */
+/** The copy in the source's sandbox, where it runs: one not running kept nothing but its drive, which a stopped one hands instead (`takeover.ts`'s `sourceWorkOf`). */
 const copyIn = <R>(ask: SnapshotAsk<R>) =>
   Effect.gen(function* () {
     const sandboxes = yield* Sandbox;
@@ -178,14 +170,16 @@ const copyIn = <R>(ask: SnapshotAsk<R>) =>
       return { copied: false, miss: SNAPSHOT_MISS.NO_SANDBOX } as const;
     }
 
-    // MIGRATION: a legacy sandbox (`agentSandboxOf`) is never woken in place; a stopped one with a
-    // snapshot is handed by it instead (`takeover.ts`'s `sourceWorkOf`), and one in any other
-    // state is a miss.
-    if (!UP_STATUSES.has(sandbox.status) && sandbox.name !== agentSandboxName(ask.sessionId)) {
+    const running = runningOf(sandbox);
+
+    if (running === undefined) {
+      yield* Effect.logWarning(
+        `the source's work was not copied: its sandbox was ${sandbox.status ?? "unread"}`,
+      );
+
       return { copied: false, miss: SNAPSHOT_MISS.FAILED } as const;
     }
 
-    const running = runningOf(sandbox) ?? (yield* resumedRunning(sandbox.name));
     const owner = { userId: ask.userId, name: sandbox.name, sandboxSessionId: running.running };
     const credential = yield* ask.credential;
     yield* sandboxFirewall(sandboxes).write(owner, { github: credential });
