@@ -47,6 +47,7 @@ import {
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
   WriteNoteRow,
+  wordsHandedBack,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
@@ -458,8 +459,11 @@ export function PullRequestLineCommentScreen() {
   const { name } = folderAndName(path);
   const headSha = changes.headSha;
 
-  const send = () => {
-    if (headSha === undefined || words.trim() === "") return;
+  // Note that Send hands the words it took out of the field, and they go back in it where GitHub refused them, as a thread's reply does.
+  const send = (typed: string) => {
+    const body = typed.trim();
+
+    if (headSha === undefined || body === "" || writes.pending !== undefined) return false;
 
     void writes
       .write({
@@ -468,12 +472,15 @@ export function PullRequestLineCommentScreen() {
         path,
         line: lineNumber,
         side: COMMENT_SIDE_OF[diffSide],
-        body: words,
+        body,
         headSha,
       })
       .then((went) => {
         if (went) router.back();
+        else setWords((now) => wordsHandedBack(typed, now));
       });
+
+    return true;
   };
 
   const modeChip = (
