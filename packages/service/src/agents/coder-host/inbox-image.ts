@@ -541,7 +541,7 @@ export function storePhoneCopy(
     if (selfUpload !== undefined) {
       const resolved = posix.resolve(sandbox.checkout, path);
 
-      return yield* storeSandboxPhoneCopy(copyType, reserved.phoneBlobKey, (presigned) =>
+      return yield* storeSandboxPhoneCopy(copyType, reserved, (presigned) =>
         Effect.tryPromise(() => selfUpload.uploadPhoneCopy(resolved, kind, presigned)),
       );
     }
@@ -550,6 +550,7 @@ export function storePhoneCopy(
 
     if (bytes === undefined) return undefined;
     const store = yield* BlobStore;
+    yield* reserved.recordPhone;
     yield* store.put(reserved.phoneBlobKey, bytes, copyType);
 
     return { blobKey: reserved.phoneBlobKey, byteCount: bytes.byteLength };

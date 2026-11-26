@@ -161,7 +161,7 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
   );
 
   it.effect(
-    "a phone copy an upload reserved and its standing row does not name is tombstoned, and the row's own key is not",
+    "a phone copy a stored row does not name is tombstoned and purged within the minute, and a key the row names is never purged",
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
@@ -180,7 +180,6 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
 
         yield* tombstoneUnwrittenUploads([{ id: kept.id, keys: [blobKey, phoneKey] }]);
 
-        // Note that the table is read whole, because the sweep reads no tombstone of a row that stands until the row goes.
         const tombstoned = yield* db
           .select({ key: attachmentBlobTombstone.key })
           .from(attachmentBlobTombstone)
@@ -190,6 +189,15 @@ it.layer(getTestDB())("a stored attachment's tombstones", (it) => {
           tombstoned.map((row) => row.key),
           [phoneKey],
         );
+
+        // A tombstone that stood on the row's own key anyway, as no writer leaves one, is still never read.
+        yield* db.insert(attachmentBlobTombstone).values({ key: blobKey });
+
+        const purgeable = (yield* readAttachmentBlobTombstones(100_000))
+          .map((tombstone) => tombstone.key)
+          .filter((key) => key === blobKey || key === phoneKey);
+
+        assert.deepEqual(purgeable, [phoneKey]);
       }),
   );
 });
