@@ -1,0 +1,9 @@
+pinned to f0ccb266a0
+== bundle PJjp11060 base f0ccb266a0
+  built f0ccb266a0 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-pull-request: fails 1 shots 20 Assert that "Convert to draft" is visible... FAILED
+  iphone-light-pull-request around the failure: Take screenshot pull-request-new-comment... COMPLETED|Tap on id: BackButton... COMPLETED|Scrolling UP until "Expire an invite after seven days.*" is visible with speed 40, visibility percentage 100%,|Tap on "Pull request, Open"... COMPLETED|Assert that "Convert to draft" is visible... FAILED||
