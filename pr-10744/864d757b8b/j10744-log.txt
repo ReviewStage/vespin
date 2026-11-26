@@ -1,0 +1,12 @@
+EXCEPTION (the Manager 23:16 UTC Nov 25): flow-only PR over Vmain14 (natives from 938bbc656d), missing #10759 AgentsLiveActivity.swift and #10966 ClaudeMark/OpenAIMark assets
+pinned to d02e29bcad
+== bundle PJj10744 base d02e29bcad
+  built d02e29bcad base app Vmain16.app (main 421be4a154 + #10993 936942335d natives (vjnatsend2's build, rig 630bfe41ae); natively equal to main 89a3ff78f0 (natguard 03:23 UTC Nov 26))
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-description-edit: fails 0 shots 11 
+iphone-dark-description-edit: fails 0 shots 11 
+ipad27-light-description-edit: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+ipad27-dark-description-edit: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
