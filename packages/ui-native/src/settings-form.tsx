@@ -1210,8 +1210,10 @@ function RowActs({ acts }: { readonly acts: readonly MenuRowAct[] }) {
 
 type MenuRowProps = {
   readonly label: string;
-  /** The glyph leading it, in the muted ink. */
+  /** The glyph leading it, in the muted ink, where no `lead` stands in its place. */
   readonly symbol: Glyph;
+  /** An entity's mark leading it in the glyph's place, as `PickRows` leads a row with one, such as a repository's owner's picture; none for the glyph. */
+  readonly lead?: ChoiceMark | undefined;
   /** The line under its name in the muted ink, such as what serves a port; none for none. */
   readonly detail?: string | undefined;
   /** What stands at its end in the muted ink, such as Sharing; none for none. */
@@ -1221,19 +1223,24 @@ type MenuRowProps = {
 };
 
 /**
- * A thing a sheet lists, such as one of an agent's ports: its glyph, its
+ * A thing a sheet lists, such as one of an agent's ports or a Manager's
+ * repositories: its glyph, or the entity's own mark where it has one, its
  * name with a line under it, and a value at its end, each but the name in
  * the muted ink. Where it offers anything, a press opens the system's menu
  * of what it offers, as a contact's row opens one; VoiceOver hears it by its name,
  * then its line and its value.
  */
-export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
+export function MenuRow({ label, symbol, lead, detail, value, acts }: MenuRowProps) {
   const colors = useColors();
   const glyphSize = useScaledSize(GLYPH_SIZE);
 
   const face = (
     <HStack spacing={SPACE.ROW}>
-      <Image {...glyphImage(symbol)} size={glyphSize} color={colors.TEXT_MUTED} />
+      {lead === undefined ? (
+        <Image {...glyphImage(symbol)} size={glyphSize} color={colors.TEXT_MUTED} />
+      ) : (
+        <LeadMark lead={lead} />
+      )}
       <WordsAndEnd
         words={
           <VStack alignment="leading" spacing={1}>

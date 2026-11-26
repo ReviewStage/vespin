@@ -173,6 +173,65 @@ export function useShownAgent(agentId: string): FollowedAgent | undefined {
   return listed ?? page;
 }
 
+/** The key the repositories an agent's own read names are held under, by its id, apart from the read's other uses, since this one retries. */
+const AGENT_REPOSITORIES_QUERY = "agent-repositories";
+
+/** How many times a failed read of an agent's repositories is tried again, with react-query's backoff, before the checkout alone stands. */
+const REPOSITORIES_RETRIES = 3;
+
+/** A read of an agent's repositories that did not land: the host's failure, or its refusal's kind. */
+class RepositoriesUnread extends Error {}
+
+/**
+ * Every repository the agent's own read names, its checkout first. Note
+ * that a refusal is thrown, unlike the one-off reads', so a read that fails
+ * once is tried again rather than leaving the row on the checkout alone.
+ */
+async function readRepositories(
+  acts: ReturnType<typeof useHostActs>,
+  agentId: string,
+): Promise<readonly string[]> {
+  const answer = await acts[ACT_KIND.AGENTS_PAGE]({ agentId });
+
+  if ("failure" in answer) throw new RepositoriesUnread(answer.failure);
+  const { repositories, repository } = answer.agent;
+
+  // Note that a service from before the read named them all names the checkout alone.
+  return repositories ?? (repository === null ? [] : [repository]);
+}
+
+/**
+ * Every repository the agent works in, its checkout first, as its own read
+ * names them, as the panel's Manager settings read them; `checkout` alone,
+ * the one the list holds, until that read answers or where it failed every
+ * try, and none for an agent with none. A read that failed is said on the
+ * console each time.
+ */
+export function useAgentRepositories(
+  agentId: string,
+  checkout: string | null | undefined,
+): readonly string[] {
+  const acts = useHostActs();
+  const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
+
+  const read = useQuery({
+    queryKey: [AGENT_REPOSITORIES_QUERY, accountId ?? "", agentId],
+    queryFn: () => readRepositories(acts, agentId),
+    enabled: agentId !== "" && accountId !== undefined,
+    retry: REPOSITORIES_RETRIES,
+  });
+
+  const named = read.data;
+  const failures = read.failureCount;
+  const reason = read.failureReason;
+
+  useEffect(() => {
+    if (failures > 0) refused("An agent's repositories")(reason);
+  }, [failures, reason]);
+
+  return useMemo(() => named ?? (checkout == null ? [] : [checkout]), [named, checkout]);
+}
+
 /** Reads one agent afresh by its id, whether the list holds it or not; none where it could not be read. */
 export function useReadAgent(): (agentId: string) => Promise<ListedAgent | undefined> {
   const acts = useHostActs();
