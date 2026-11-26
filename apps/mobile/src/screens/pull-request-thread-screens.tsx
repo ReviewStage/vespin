@@ -9,7 +9,11 @@ import {
   THREAD_STATE_WORDS,
   threadLineSpan,
 } from "@repo/features/pull-request-model";
-import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
+import {
+  PULL_REQUEST_ACTION,
+  REVIEW_EVENT,
+  type ReviewEvent,
+} from "@repo/features/pull-request-write-wire";
 import { answerFailed, landedAnswer } from "@repo/host/app-state-reads";
 import {
   AskNote,
@@ -22,6 +26,7 @@ import {
   glyphSymbol,
   PATH_PART,
   Screen,
+  ScopePicker,
   type ThreadMessage,
   ThreadPage,
   useColors,
@@ -30,6 +35,7 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { useOpenLink } from "../open-link.js";
+import { PR_MOCKUP, prMockup } from "../rig-pr-mockup.js";
 import { reactionMenu } from "../pull-requests/reaction-menu.js";
 import {
   type PullRequestKey,
@@ -254,6 +260,8 @@ export function PullRequestCommentScreen() {
     writes.pending !== undefined,
   );
 
+  if (prMockup() === PR_MOCKUP.REVIEW) return <RigReviewScreen />;
+
   return (
     <>
       <Stack.Screen
@@ -279,6 +287,95 @@ export function PullRequestCommentScreen() {
             repository={key.repository}
             onOpenLink={openLink}
           />
+        </Screen>
+      </GlassDock>
+    </>
+  );
+}
+
+/** RIG ONLY: what the review page says, the panel's own words (`pull-request-review.tsx`). */
+const RIG_REVIEW_WORDS = {
+  TITLE: "Finish your review",
+  LEGEND: "What the review says",
+  LEAD: "Submitted on GitHub as you.",
+} as const;
+
+/** RIG ONLY: the review's choices, in the order GitHub's own review box and the panel's offer them. */
+const RIG_REVIEW_EVENTS: readonly { readonly event: ReviewEvent; readonly label: string }[] = [
+  { event: REVIEW_EVENT.COMMENT, label: "Comment" },
+  { event: REVIEW_EVENT.APPROVE, label: "Approve" },
+  { event: REVIEW_EVENT.REQUEST_CHANGES, label: "Request changes" },
+];
+
+/** RIG ONLY: the field's prompt by what the review says, as the panel's. */
+function rigReviewPlaceholder(event: ReviewEvent): string {
+  return event === REVIEW_EVENT.REQUEST_CHANGES
+    ? "Summarize the requested changes"
+    : "Leave a summary comment (optional)";
+}
+
+/**
+ * RIG ONLY, proposal "Review": the panel's Finish your review on its own
+ * page, pushed from the bar's Review: what the review says as the system's
+ * segmented control over the pull request's title, and its summary in the
+ * comment field docked at the foot, which may go empty for an approval.
+ */
+function RigReviewScreen() {
+  const key = useRouteKey();
+  const colors = useColors();
+  const router = useRouter();
+  const openLink = useOpenLink(key.workspaceId);
+  const parts = usePullRequestParts(key, THREAD_PARTS);
+  const writes = usePullRequestWrites(key);
+  const [event, setEvent] = useState<ReviewEvent>(REVIEW_EVENT.APPROVE);
+  const title = landedAnswer(parts.pullRequest)?.pullRequest?.title ?? `#${key.number}`;
+
+  const field = useField(
+    (body) =>
+      writes.write({ action: PULL_REQUEST_ACTION.SUBMIT_REVIEW, event, body }).then((went) => {
+        if (went) router.back();
+
+        return went;
+      }),
+    writes.pending !== undefined,
+  );
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          title: RIG_REVIEW_WORDS.TITLE,
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+        }}
+      />
+      <GlassDock
+        bar={
+          <Composer
+            placeholder={rigReviewPlaceholder(event)}
+            {...field}
+            sendable={writes.pending === undefined && (event === REVIEW_EVENT.APPROVE || field.sendable)}
+            head={writes.note === undefined ? undefined : <AskNote words={writes.note.words} />}
+          />
+        }
+      >
+        <Screen>
+          <ScopePicker
+            label={RIG_REVIEW_WORDS.LEGEND}
+            scopes={RIG_REVIEW_EVENTS.map((each) => ({
+              label: each.label,
+              selected: each.event === event,
+              onPress: () => setEvent(each.event),
+            }))}
+          >
+            <ThreadPage
+              path={[key.repository, `#${key.number}`]}
+              title={title}
+              messages={[]}
+              repository={key.repository}
+              onOpenLink={openLink}
+              standing={RIG_REVIEW_WORDS.LEAD}
+            />
+          </ScopePicker>
         </Screen>
       </GlassDock>
     </>

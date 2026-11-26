@@ -138,6 +138,10 @@ type PullRequestHeadProps = {
   readonly reviewers?: readonly HeadReviewer[] | undefined;
   /** The lines it adds and removes, after its branches as the panel's header counts them; none until any is known. */
   readonly lines?: { readonly additions: number; readonly deletions: number } | undefined;
+  /** RIG ONLY: chips standing after the state chip, such as a stack's, each a field's chip. */
+  readonly chips?: readonly RigHeadChip[] | undefined;
+  /** RIG ONLY: chips on a row of their own after the labels, such as + Reviewer and + Label. */
+  readonly pickers?: readonly RigHeadChip[] | undefined;
 };
 
 /** A reviewer as a pull request's heading draws them: by their face, and where their reviews leave them. */
@@ -374,7 +378,17 @@ function HeadReviewers({ reviewers }: { readonly reviewers: readonly HeadReviewe
  * who opened it wraps rather than cuts, and the branches stand on two
  * lines, the one it merges from under the arrow, each wrapping.
  */
+/** RIG ONLY: one chip a design proposal adds to the heading. */
+export interface RigHeadChip {
+  readonly label: string;
+  readonly symbol?: Glyph | undefined;
+  readonly mark?: { readonly glyph: Glyph; readonly tone: StatusTone } | undefined;
+  readonly menu?: FieldMenu | undefined;
+}
+
 export function PullRequestHead({
+  chips = [],
+  pickers = [],
   title,
   titleEdit,
   number,
@@ -440,6 +454,15 @@ export function PullRequestHead({
           mark={{ glyph: look.symbol, tone: look.tone }}
           menu={stateMenu}
         />
+        {chips.map((chip) => (
+          <FieldChip
+            key={chip.label}
+            label={chip.label}
+            symbol={chip.symbol}
+            mark={chip.mark}
+            menu={chip.menu}
+          />
+        ))}
       </HStack>
       {/* Note that the reviewers' faces stand after who opened it, as the panel's people line names them, on a line of their own past the accessibility sizes, where who opened it wraps. */}
       {reviewers.length === 0 ? (
@@ -465,6 +488,19 @@ export function PullRequestHead({
             ))}
           </HStack>
         </ScrollView>
+      )}
+      {pickers.length === 0 ? null : (
+        <HStack spacing={SPACE.TIGHT + 2}>
+          {pickers.map((chip) => (
+            <FieldChip
+              key={chip.label}
+              label={chip.label}
+              symbol={chip.symbol}
+              mark={chip.mark}
+              menu={chip.menu}
+            />
+          ))}
+        </HStack>
       )}
       {branches === undefined ? null : large ? (
         <VStack alignment="leading" spacing={SPACE.TIGHT}>

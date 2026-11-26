@@ -1,0 +1,94 @@
+# rig-pr-proposals.yaml -- RIG ONLY, never merged: stills of the pull request page's design proposals, each drawn by `-mockup <id>` (`src/rig-pr-mockup.ts`), on the Inbox fixture's #127, whose check failed and whose changes were requested, with today's page first for comparison.
+appId: dev.vespin.ios
+---
+# Today's page, for comparison.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: "127"
+- extendedWaitUntil:
+    visible: "Expire an invite after seven days.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: proposal-0-today
+# 1. Review: the bar's Review opens Finish your review.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: "127"
+      mockup: review
+- extendedWaitUntil:
+    visible: "Expire an invite after seven days.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: proposal-1-review-page
+- tapOn:
+    text: "Review"
+    index: 0
+- extendedWaitUntil:
+    visible: "Finish your review"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: proposal-1-review-sheet
+# 2. Stack: the heading's Stack 2/3 chip and its menu.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: "127"
+      mockup: stack
+- extendedWaitUntil:
+    visible: "Stack 2/3"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: proposal-2-stack-page
+- tapOn: "Stack 2/3"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: proposal-2-stack-menu
+# 3. People: + Reviewer and + Label, and the reviewer menu.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: "127"
+      mockup: people
+- extendedWaitUntil:
+    visible: "Reviewer"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: proposal-3-people-page
+- tapOn: "Reviewer"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: proposal-3-people-menu
+# 4. Fix checks: the row under a failing Checks row.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: "127"
+      mockup: checks
+- extendedWaitUntil:
+    visible: "Expire an invite after seven days.*"
+    timeout: 30000
+- scrollUntilVisible:
+    element: "Ask the agent to fix.*"
+    direction: DOWN
+    timeout: 15000
+    centerElement: true
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: proposal-4-fix-checks

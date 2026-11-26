@@ -2,6 +2,7 @@
 
 import {
   type AgentOverviewPullRequest,
+  CHECK_SUMMARY,
   type CheckSummary,
   PULL_REQUEST_STATE,
   type PullRequestCheck,
@@ -77,12 +78,14 @@ import {
   buzz,
   CHECK_SUMMARY_LOOK,
   ConfirmAsk,
+  Composer,
   ConversationEntryRow,
   EmptyState,
   type FieldAct,
   type FieldMenu,
   GLYPH,
   type Glyph,
+  GlassDock,
   githubFace,
   glyphSymbol,
   LIST_LOOK,
@@ -127,6 +130,7 @@ import {
 import { usePullRequestChapters } from "../pull-requests/use-pull-request-chapters.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { PR_MOCKUP, prMockup } from "../rig-pr-mockup.js";
 import { useOnOwnTab } from "../tab-route.js";
 
 /** What the bar's ⋯ menu and the state chip are named, in the panel's words. */
@@ -431,6 +435,70 @@ interface StateChange {
 /** The heading of a pull request's description, as the task page heads its own. */
 const DESCRIPTION_WORDS = "Description";
 
+/** RIG ONLY, proposal "Fix checks": what the row under a failing Checks row says, sending the pull request's agent the failed checks to fix. */
+function rigFixWords(failed: number): string {
+  return `Ask the agent to fix ${failed === 1 ? "the failing check" : `${failed} failing checks`}`;
+}
+
+/** RIG ONLY, proposal "Stack": the stack a pull request stands in, tip first, as the panel's Stack chip lists it; synthetic, since the fixture holds none. */
+const RIG_STACK = [
+  { number: 129, title: "Remind an invitee a day before their invite expires", state: "Draft" },
+  { number: 127, title: "Expire an invite after seven days", state: "Open" },
+  { number: 128, title: "Invite a teammate by email", state: "Open" },
+] as const;
+
+/** RIG ONLY: the heading's Stack chip, "Stack 2/3", whose menu lists the stack tip first, this one checked, as the panel's does. */
+function rigStackChips(number: number) {
+  const at = [...RIG_STACK].reverse().findIndex((entry) => entry.number === number);
+
+  return [
+    {
+      label: `Stack ${at + 1}/${RIG_STACK.length}`,
+      symbol: GLYPH.BRANCH,
+      menu: {
+        label: "Pull requests in the stack",
+        choices: RIG_STACK.map((entry) => ({
+          label: `#${entry.number} ${entry.title}`,
+          detail: entry.state,
+          on: entry.number === number,
+          onPress: () => undefined,
+        })),
+      },
+    },
+  ];
+}
+
+/** RIG ONLY, proposal "People": the panel's + Reviewer and + Label pickers, each a menu of what may be asked for or put on, what stands now checked. */
+function rigPickers(reviewers: readonly string[], labels: readonly string[]) {
+  return [
+    {
+      label: "Reviewer",
+      symbol: GLYPH.ADD,
+      menu: {
+        label: "Request a review",
+        choices: ["ada", "grace", "linus", "web-team"].map((login) => ({
+          label: login,
+          detail: login === "web-team" ? "Team" : undefined,
+          on: reviewers.includes(login),
+          onPress: () => undefined,
+        })),
+      },
+    },
+    {
+      label: "Label",
+      symbol: GLYPH.ADD,
+      menu: {
+        label: "Labels",
+        choices: ["bug", "enhancement", "invites", "needs design"].map((name) => ({
+          label: name,
+          on: labels.includes(name),
+          onPress: () => undefined,
+        })),
+      },
+    },
+  ];
+}
+
 /**
  * The bar's one act, the ⋯ menu, as the panel's toolbar ⋯ offers it on the
  * pull request: Copy GitHub link and Open on GitHub. Its title is edited
@@ -442,9 +510,21 @@ const DESCRIPTION_WORDS = "Description";
  * heading, where the panel's head stands it, so the bar's title keeps its
  * place.
  */
-function PullRequestToolbar({ url }: { readonly url: string | undefined }) {
+function PullRequestToolbar({
+  url,
+  review,
+}: {
+  readonly url: string | undefined;
+  /** RIG ONLY: the bar's Review, proposal "Review". */
+  readonly review?: (() => void) | undefined;
+}) {
   return (
     <Stack.Toolbar placement="right">
+      {review === undefined ? null : (
+        <Stack.Toolbar.Button variant="plain" onPress={review}>
+          Review
+        </Stack.Toolbar.Button>
+      )}
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
         <Stack.Toolbar.Label>{MENU_WORDS.MORE}</Stack.Toolbar.Label>
         {url === undefined ? null : (
@@ -564,6 +644,9 @@ function PullRequestPage({
   readonly agentId?: string | undefined;
 }) {
   const id = agentId;
+  const mockup = prMockup();
+  // RIG ONLY: the docked comment field's words, proposal "Dock".
+  const [dockWords, setDockWords] = useState("");
   useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, String(key.number));
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -754,7 +837,31 @@ function PullRequestPage({
   const page = (view: ReactNode, asks?: ReactNode) => (
     <>
       {bar}
-      <Screen>{view}</Screen>
+      {mockup === PR_MOCKUP.DOCK ? (
+        <GlassDock
+          bar={
+            <Composer
+              placeholder={`Comment on #${key.number}`}
+              words={dockWords}
+              onWords={setDockWords}
+              sendable={dockWords.trim() !== "" && writes.pending === undefined}
+              onSend={(typed) => {
+                const body = typed.trim();
+
+                if (body === "") return false;
+                void writes.write({ action: PULL_REQUEST_ACTION.COMMENT, body });
+                setDockWords("");
+
+                return true;
+              }}
+            />
+          }
+        >
+          <Screen>{view}</Screen>
+        </GlassDock>
+      ) : (
+        <Screen>{view}</Screen>
+      )}
       {asks}
     </>
   );
@@ -767,7 +874,14 @@ function PullRequestPage({
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      <PullRequestToolbar url={url} />
+      <PullRequestToolbar
+        url={url}
+        review={
+          mockup === PR_MOCKUP.REVIEW
+            ? () => router.push(onOwnTab(iosPullRequestCommentRoute(key)))
+            : undefined
+        }
+      />
     </>
   );
 
@@ -903,6 +1017,15 @@ function PullRequestPage({
               ? undefined
               : { additions: listed.additions, deletions: listed.deletions }
           }
+          chips={mockup === PR_MOCKUP.STACK ? rigStackChips(key.number) : undefined}
+          pickers={
+            mockup === PR_MOCKUP.PEOPLE
+              ? rigPickers(
+                  reviewers.map((reviewer) => reviewer.by.login),
+                  (pullRequest?.labels ?? []).map((label) => label.name),
+                )
+              : undefined
+          }
           reviewers={reviewers.map((reviewer) => ({
             by: githubFace(reviewer.by),
             state: reviewer.state,
@@ -973,6 +1096,13 @@ function PullRequestPage({
           count={checksRowCount(summary, checks)}
           pushes
         />
+        {mockup === PR_MOCKUP.CHECKS && checks !== undefined && summary === CHECK_SUMMARY.FAILING ? (
+          <LinkRow
+            symbol={GLYPH.STEER}
+            label={rigFixWords(checksCountOf(checks, summary))}
+            onPress={() => undefined}
+          />
+        ) : null}
         <MarkRow
           id={PAGE_ROW.CHAPTERS}
           mark={{ symbol: GLYPH.CHAPTERS, tone: STATUS_TONE.NEUTRAL }}
@@ -1076,7 +1206,7 @@ function PullRequestPage({
             ])}
           </>
         )}
-        {conversation === undefined ? null : (
+        {conversation === undefined || mockup === PR_MOCKUP.DOCK ? null : (
           <MarkRow
             id={PAGE_ROW.COMMENT}
             mark={{ symbol: GLYPH.COMMENT, tone: STATUS_TONE.NEUTRAL }}
