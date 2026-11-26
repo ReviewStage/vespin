@@ -98,8 +98,9 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-agent
-# A pull request's page: who opened it wrapping rather than cut, and its
-# branches on two lines, the one it merges into, then the arrow and the one
+# A pull request's page: who opened it wrapping rather than cut, its
+# reviewers' faces on a line of their own under it, and its branches on two
+# lines, the one it merges into, then the arrow and the one
 # it merges from.
 - launchApp:
     arguments:

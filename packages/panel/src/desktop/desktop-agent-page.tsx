@@ -25,7 +25,12 @@
  * There the line over its box, and Overview's rows, open a thread in the
  * Inbox tab rather than in the window's Inbox. A phone's head has no row
  * for views, so a phone's Manager stands on its chat alone, each thread
- * pushed over it as the panel's Thread tab, whose Back returns to the chat. While Messages shows, the page marks itself a chat (`data-chat`), so
+ * pushed over it as the panel's Thread tab, whose Back returns to the chat.
+ * A wider page opens a thread inside Messages instead, in a pane beside
+ * the chat parted by an edge it is dragged by, as Slack opens one beside
+ * its channel (`SideSplit`), headed by its own bar with its close; where
+ * Messages is too narrow for both, the chat hides and the thread fills it
+ * under ‹ Messages, which closes it, as its × and Escape do. While Messages shows, the page marks itself a chat (`data-chat`), so
  * both sides' bubbles stand at one width, and take the column in a phone's
  * room, as desktop.css says. The agent is read from the task list where
  * it carries it, and else once by its id.
@@ -54,6 +59,9 @@ import { TRANSCRIPT_COPY } from "@repo/features/transcript-copy";
 import { readingWords } from "@repo/features/words";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
+  BACK_BUTTON_LOOK,
+  BackButton,
+  BUTTON_SIZE,
   CHOICE_BAR_LOOK,
   ChoiceBar,
   type ChoiceItem,
@@ -63,16 +71,21 @@ import {
   FILL_ELEMENT,
   Fill,
   IconButton,
+  type InlineEditHandle,
   moreLabel,
+  NO_BACK_KEY,
   NOT_FOUND_THING,
   NotFound,
   PaneBar,
+  SideSplit,
   Toolbar,
   type ToolbarTitleEdit,
   Tooltip,
   useMenu,
+  useSideSplit,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
+import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
 import {
   agentTab,
   pageTab,
@@ -85,7 +98,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Predicate } from "effect";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
 import { FindScope } from "../find-in-tab.js";
@@ -112,9 +125,10 @@ import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { type TaskInboxControl, useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu } from "./action-menu.js";
-import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
+import { agentMenuGroups, FACE_IN, useAgentActions } from "./agent-actions.js";
 import { AgentThreads as AgentThreadsView } from "./agent-threads.js";
 import { AgentPane } from "./main-tabs.js";
+import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
 import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
@@ -171,6 +185,28 @@ function managerViews(open: number): readonly ChoiceItem<ManagerView>[] {
     { value: MANAGER_VIEW.OVERVIEW, label: "Overview" },
   ];
 }
+
+/**
+ * A thread's pane beside a Manager's chat, in CSS pixels, as Slack's
+ * thread pane stands beside a channel: opened at `DEFAULT`, dragged
+ * between `MIN` and `MAX`, and never so wide the chat beside it drops under
+ * `CHAT_MIN`. Narrower than `CHAT_MIN` and `MIN` together (720), the chat
+ * hides and the thread fills the Messages tab under a way back.
+ */
+const THREAD_PANE = {
+  MIN: 320,
+  MAX: 720,
+  DEFAULT: 420,
+  CHAT_MIN: 400,
+} as const;
+
+/** What a thread's pane calls its edge and its presses, and the place its way back leads to. */
+const THREAD_PANE_WORDS = {
+  RESIZE: "Resize thread",
+  CLOSE: "Close thread",
+  BACK: "Messages",
+  BACK_PLACE: "messages",
+} as const;
 
 /** What a Manager's page's tab row is called to a reader. */
 const MANAGER_VIEWS_LABEL = "Manager views";
@@ -304,11 +340,15 @@ function useOwnAgentThreads(
 /**
  * The head of an agent on no task: a Manager's face leading it, as a
  * task's status leads a task's (`ManagerGlyph`), then its name, a right-click on which opens
- * its one menu and whose Rename turns it into the name's field, a Manager's
+ * its one menu and whose Rename turns it into the name's field, the face
+ * before it then the well its face is picked in, which a Manager's Change
+ * face opens with its picker standing (`FACE_IN.EDITOR`), a pick changing
+ * the face at once and handing the focus back to the name, a Manager's
  * Settings as a button of its own, which opens its card, and ⋯ holding the
  * same menu, Settings left out of both menus there since its button stands
- * beside them; on a phone, its way back before them, and Settings back in
- * the ⋯, since a phone's bar holds one control a corner.
+ * beside them; on a phone, its way back before them, Settings back in the
+ * ⋯, since a phone's bar holds one control a corner, and Change face's
+ * picker in the menu's panel, since no face stands beside its name.
  */
 function OwnAgentHead({
   tasks,
@@ -332,7 +372,11 @@ function OwnAgentHead({
     // Note that no side panel stands beside the page, so it opens no terminal.
     terminals: { onOpenTerminal: undefined },
     onDeleted: away?.onPress,
+    // Note that a phone's head draws no face beside the name, so its Change face picks one in the menu's panel.
+    faceIn: away === undefined ? FACE_IN.EDITOR : FACE_IN.PANEL,
   });
+
+  const editor = useRef<InlineEditHandle | null>(null);
 
   // The agent's ⌥⌘C, ⇧⌥⌘C, and ⌘⌫ while its page stands, as its tab's on a task, so its menu prints them.
   const { onCopy, deletion } = actions.doors;
@@ -364,16 +408,39 @@ function OwnAgentHead({
     subject: actions.subject,
   });
 
-  const { rename } = actions;
+  const { rename, face } = actions;
   const editing = rename?.editing === true;
 
   const titleEdit: ToolbarTitleEdit | undefined = editing
     ? {
         label: "Agent name",
         maxLength: AGENT_BOUNDS.MAX_TITLE_CHARS,
+        holding: face?.picking,
+        ref: editor,
         onEnd: (end) => rename.end(end.value),
       }
     : undefined;
+
+  // Note that while the name is edited, a Manager's face before it is the well its Change face picks it in, its picker open from the start there.
+  const lead =
+    editing && face !== undefined ? (
+      <ManagerFaceWell
+        face={agent.face}
+        recent={RECENT_MANAGER_FACES}
+        open={face.picking}
+        onOpenChange={(open, pressedAway) => {
+          face.onPicking(open);
+
+          // Note that a press away from the picker took the focus before it put the picker away, so it ends the edit here.
+          if (pressedAway) editor.current?.leave();
+        }}
+        onChange={face.onPick}
+        finalFocus={() => editor.current?.field()}
+        size={BUTTON_SIZE.COMPACT}
+      />
+    ) : agent.face === undefined ? undefined : (
+      <ManagerGlyph face={agent.face} status={agent.status} />
+    );
 
   // A phone's ⋯ also stands in for ⌘F, which it has no keyboard for.
   const more = (
@@ -395,11 +462,7 @@ function OwnAgentHead({
     <>
       {away === undefined ? (
         <Toolbar
-          lead={
-            agent.face === undefined ? undefined : (
-              <ManagerGlyph face={agent.face} status={agent.status} />
-            )
-          }
+          lead={lead}
           title={editing ? (rename.asked ?? label) : label}
           titleMenu={{ contextMenu: titleMenu.contextMenu(), keyMenu: titleMenu.keyMenu }}
           titleEdit={titleEdit}
@@ -518,9 +581,6 @@ function OwnAgentPage({
   // A link to one of the Manager's messages goes back to its chat, where the message is landed on.
   const messageAsked = useMessageAsked(agent.id);
 
-  useEffect(() => {
-    if (messageAsked !== undefined) setView(MANAGER_VIEW.MESSAGES);
-  }, [messageAsked]);
   // The thread the Inbox tab shows beside its list; none while the list stands alone.
   const [chosenThread, setChosenThread] = useState<string | undefined>(undefined);
 
@@ -587,7 +647,7 @@ function OwnAgentPage({
     else tasks.onShowAgent(target.task, target.agent);
   };
 
-  // A Manager's chat opens each thread in a tab of the panel beside its page, as the panel opens anything beside a page.
+  // Note that a phone's chat pushes each thread over it as a tab of the panel, as the panel opens anything beside a page.
   const shownThread =
     sidePanel.open &&
     sidePanel.tab !== undefined &&
@@ -598,14 +658,94 @@ function OwnAgentPage({
 
   const openThread = useSteadyDoor((root: string) => openPanelTab(threadTab(root, agent.id)));
 
+  // The thread open beside a wider page's chat, by the message it stands on, and the width its pane was last dragged to.
+  const [besideThread, setBesideThread] = useState<string | undefined>(undefined);
+  const [threadWidth, setThreadWidth] = useState<number>(THREAD_PANE.DEFAULT);
+
   const threadDoors = useMemo(
-    () => ({ open: shownThread, onOpen: openThread }),
-    [shownThread, openThread],
+    () =>
+      tabbed
+        ? { open: besideThread, onOpen: setBesideThread }
+        : { open: shownThread, onOpen: openThread },
+    [tabbed, besideThread, shownThread, openThread],
   );
 
   const summary =
     agents.agents?.find((each) => each.id === agent.id) ??
     agents.archived?.find((each) => each.id === agent.id);
+
+  const split = useSideSplit({
+    open: chat && tabbed && summary !== undefined && besideThread !== undefined,
+    width: threadWidth,
+    bounds: THREAD_PANE,
+    mainMin: THREAD_PANE.CHAT_MIN,
+    label: THREAD_PANE_WORDS.RESIZE,
+    onResize: setThreadWidth,
+  });
+
+  const closeThread = () => setBesideThread(undefined);
+  // Whether the thread stands alone over the chat, as last drawn, which a link's ask reads without waiting on it.
+  const threadAlone = useRef(false);
+  useLayoutEffect(() => {
+    threadAlone.current = split.alone;
+  });
+
+  // Note that a link to one of the Manager's messages goes back to its chat, closing a thread that stands alone over it, so the chat, shown again, lands on the message itself: in its own rows, or in the thread a reply stands in, which it opens.
+  useEffect(() => {
+    if (messageAsked === undefined) return;
+    setView(MANAGER_VIEW.MESSAGES);
+
+    if (threadAlone.current) setBesideThread(undefined);
+  }, [messageAsked]);
+  // Note that Escape closes the thread while it stands, the page shown and its keys not the panel's, as the window's Escape closes the nearest thing open.
+  useAppCommand(
+    APP_COMMAND.CLOSE_THREAD,
+    split.open && tasks.shown && !sideFocused ? closeThread : undefined,
+  );
+
+  const threadPane =
+    summary === undefined || besideThread === undefined ? null : (
+      // Note that the thread finds in its own words, apart from the chat's, while the reader is in it.
+      <FindScope
+        className="manager-thread-pane flex min-h-0 min-w-0 flex-1 flex-col"
+        active={tasks.shown && !sideFocused && split.sideHeld}
+        subject={{ task: "", tab: threadTab(besideThread, agent.id) }}
+      >
+        <PaneBar
+          start={
+            split.alone ? (
+              <BackButton
+                look={BACK_BUTTON_LOOK.GLYPH}
+                label={THREAD_PANE_WORDS.BACK}
+                place={THREAD_PANE_WORDS.BACK_PLACE}
+                command={NO_BACK_KEY}
+                onBack={closeThread}
+              />
+            ) : undefined
+          }
+          title={TAB_WORDS.THREAD}
+          titleReplayUnmasked
+          end={
+            <Tooltip label={THREAD_PANE_WORDS.CLOSE} command={APP_COMMAND.CLOSE_THREAD}>
+              <IconButton
+                icon={<GLYPH.CLOSE />}
+                label={THREAD_PANE_WORDS.CLOSE}
+                onClick={closeThread}
+              />
+            </Tooltip>
+          }
+        />
+        <ManagerThreadTab
+          key={besideThread}
+          agent={summary}
+          control={agents}
+          shown={tasks.shown}
+          root={besideThread}
+          onOpenTarget={openTarget}
+          cards={cards.agent(agent.id)}
+        />
+      </FindScope>
+    );
 
   const thread =
     summary === undefined || !manager
@@ -674,35 +814,46 @@ function OwnAgentPage({
                 />
               </Fill>
             ) : (
-              // Note that the scope stands as the column's own box, as its fill did, and is the panel of the tab shown on a Manager's page.
-              <FindScope
-                className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
-                active={tasks.shown && !sideFocused}
-                subject={findSubject}
+              // Note that the chat and the thread beside it are the panel of the tab shown on a Manager's page, each finding in its own words.
+              <Fill
                 id={tabbed ? panels(view).panel : undefined}
                 role={tabbed ? "tabpanel" : undefined}
                 aria-labelledby={tabbed ? panels(view).tab : undefined}
               >
-                <ThreadDoorsProvider value={manager ? threadDoors : undefined}>
-                  <AgentPane
-                    label={label}
-                    tabbed={false}
-                    tab={agentTab(agent.id)}
-                    agents={agents}
-                    shown={tasks.shown && !sidePanel.fullScreen}
-                    views={views}
-                    // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
-                    onOpenDelegation={(_agent, callId, _task, status) =>
-                      views.onWorkerStatus(callId, status)
-                    }
-                    onOpenPullRequest={openPullRequest}
-                    onOpenTarget={openTarget}
-                    cards={cards}
-                    threads={threads}
-                    chat={chat}
-                  />
-                </ThreadDoorsProvider>
-              </FindScope>
+                <SideSplit
+                  split={split}
+                  side={threadPane}
+                  main={
+                    // Note that the scope stands as the column's own box, as its fill did.
+                    <FindScope
+                      className="desktop-task-column flex min-h-0 min-w-0 flex-1 flex-col"
+                      active={tasks.shown && !sideFocused && !split.sideHeld}
+                      subject={findSubject}
+                    >
+                      <ThreadDoorsProvider value={manager ? threadDoors : undefined}>
+                        <AgentPane
+                          label={label}
+                          tabbed={false}
+                          tab={agentTab(agent.id)}
+                          agents={agents}
+                          // Note that a chat hidden under its thread is not shown, so nothing lands in it unseen.
+                          shown={tasks.shown && !sidePanel.fullScreen && !split.alone}
+                          views={views}
+                          // Note that a worker's tab stands on a task's strip alone, so its row only follows its standing.
+                          onOpenDelegation={(_agent, callId, _task, status) =>
+                            views.onWorkerStatus(callId, status)
+                          }
+                          onOpenPullRequest={openPullRequest}
+                          onOpenTarget={openTarget}
+                          cards={cards}
+                          threads={threads}
+                          chat={chat}
+                        />
+                      </ThreadDoorsProvider>
+                    </FindScope>
+                  }
+                />
+              </Fill>
             )}
           </Fill>
           {/* Note that the panel stands while its toggle asks for its "+" with nothing to show, drawing the menu alone. */}

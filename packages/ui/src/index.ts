@@ -400,6 +400,8 @@ export * from "./components/shortcut/shortcut.js";
 
 export * from "./components/show-more-row/show-more-row.js";
 
+export * from "./components/side-split/side-split.js";
+
 export * from "./components/sidebar/sidebar.js";
 
 export * from "./components/skeleton/skeleton.js";

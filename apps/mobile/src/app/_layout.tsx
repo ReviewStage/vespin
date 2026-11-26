@@ -8,6 +8,7 @@ import {
   ChipMarkProvider,
   FailureNoticeProvider,
   KeepingProvider,
+  RowPickContext,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -15,10 +16,12 @@ import { DarkTheme, DefaultTheme, Slot, ThemeProvider } from "expo-router";
 import { SplitView } from "expo-router/unstable-split-view";
 import { useMemo } from "react";
 import { useColorScheme } from "react-native";
+import { withTapTraces } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useKeeping } from "../keeping.js";
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
+import { notePick } from "../row-picks.js";
 import { AppSidebarPane } from "../screens/app-sidebar.js";
 import { PlaceListColumn, PlacesHeldProvider } from "../screens/place-columns.js";
 import { SidebarTasksProvider } from "../screens/task-screens.js";
@@ -121,12 +124,14 @@ const COLUMN_WIDTHS = {
   maximumSupplementaryColumnWidth: 480,
 } as const;
 
-/** The screens, under what their pictures', recordings', files', and messages' menus do, which says its failures in the notice above them. */
+/** The screens, under what their pictures', recordings', files', and messages' menus do, which says its failures in the notice above them, each row pick kept for the open it leads to (`row-picks.ts`), an iPad's sidebar and list columns' rows as much as its pages'. */
 function KeptScreens() {
   return (
     <KeepingProvider keeping={useKeeping()}>
       <ChipMarkProvider markOf={useChipMarks()}>
-        <AppFrame />
+        <RowPickContext value={notePick}>
+          <AppFrame />
+        </RowPickContext>
       </ChipMarkProvider>
     </KeepingProvider>
   );
@@ -139,9 +144,10 @@ function KeptScreens() {
  * color scheme, because expo-router's stack sets every navigation bar's
  * style from it, and with no theme given it read the light default, so in
  * dark every bar's buttons, its search field and the keyboard it raised
- * drew light beside the dark tab bar.
+ * drew light beside the dark tab bar. Every tap on it is traced
+ * (`withTapTraces`).
  */
-export default function RootLayout() {
+function RootLayout() {
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
@@ -158,3 +164,5 @@ export default function RootLayout() {
     </ThemeProvider>
   );
 }
+
+export default withTapTraces(RootLayout);

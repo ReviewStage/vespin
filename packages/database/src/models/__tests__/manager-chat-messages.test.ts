@@ -7,9 +7,10 @@ import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { MESSAGE_SENDER } from "../../storage-vocabulary.js";
-import { getTestDB, openManagerAgent } from "../../testing/index.js";
+import { getTestDB, joinWorkspace, openManagerAgent } from "../../testing/index.js";
 import {
   deleteDroppedManagerChat,
+  editManagerChatMessage,
   MANAGER_CHAT_OUTCOME,
   type ManagerChatOutcome,
   type ManagerChatWrite,
@@ -26,8 +27,9 @@ import { storeWriter } from "../writer.js";
  * a reply stands in its root's thread, half a character is kept as the
  * replacement character, a clashing id and a reply to no message are
  * refused, the chat reads by page and by words, a rewind's drop takes its
- * messages and their threads, a call's line grows in place, and no other
- * account reads or writes any of it. Synthetic accounts.
+ * messages and their threads, a call's line grows in place, a person edits
+ * their own message alone, and no other account reads or writes any of it.
+ * Synthetic accounts.
  */
 
 const SENT_AT = new Date("2026-11-24T12:00:00Z");
@@ -334,5 +336,66 @@ it.layer(getTestDB())("a Manager's chat", (it) => {
       });
       assert.equal(Option.isSome(yield* readManagerChatMessage(owner, agentId, root.id)), true);
     }),
+  );
+
+  it.effect(
+    "a member edits their own message in place, and neither a teammate's message nor the Manager's",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAccount;
+        const teammate = yield* openAccount;
+        const manager = yield* openManagerAgent(owner);
+        const agentId = manager.id;
+        yield* joinWorkspace(manager.organizationId, teammate);
+        const editedAt = new Date("2026-11-24T12:05:00Z");
+
+        const own = landed(
+          yield* writeManagerChatMessage(owner, personSays(agentId, owner, "Shp it")),
+        );
+
+        const theirs = landed(
+          yield* writeManagerChatMessage(teammate, personSays(agentId, teammate, "Hold off")),
+        );
+
+        const managers = landed(
+          yield* writeManagerChatMessage(
+            owner,
+            personSays(agentId, owner, "On it", {
+              authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+              authorUserId: null,
+              authorName: "Manager",
+            }),
+          ),
+        );
+
+        const edit = (userId: string, messageId: string, text: string) =>
+          editManagerChatMessage(userId, { agentId, messageId, text, now: editedAt });
+
+        const edited = yield* edit(owner, own.id, "Ship it");
+
+        assert.deepEqual(
+          [
+            Option.isNone(yield* edit(owner, theirs.id, "Ship it now")),
+            Option.isNone(yield* edit(teammate, own.id, "Never mind")),
+            Option.isNone(yield* edit(owner, managers.id, "Done")),
+          ],
+          [true, true, true],
+        );
+        assert.deepEqual(
+          Option.map(edited, (message) => [message.text, message.editedAt]),
+          Option.some(["Ship it", editedAt]),
+        );
+        assert.deepEqual(
+          (yield* readManagerChatPage(owner, agentId, { limit: 10 })).map((message) => [
+            message.text,
+            message.editedAt,
+          ]),
+          [
+            ["On it", null],
+            ["Hold off", null],
+            ["Ship it", editedAt],
+          ],
+        );
+      }),
   );
 });

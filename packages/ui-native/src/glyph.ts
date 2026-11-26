@@ -124,6 +124,8 @@ export const GLYPH = {
   BLOCKS: lucide(LUCIDE_SYMBOL.HAND),
   HEADING: lucide(LUCIDE_SYMBOL.HEADING),
   CHANGES: lucide(LUCIDE_SYMBOL.FILE_DIFF),
+  /** A pull request's checks, as the panel's Checks tab leads with them. */
+  CHECKS: catalogLucide("ClipboardCheck"),
   ISSUE: lucide(LUCIDE_SYMBOL.CIRCLE_DOT),
   FILE: lucide(LUCIDE_SYMBOL.FILE),
   FILE_TEXT: lucide(LUCIDE_SYMBOL.FILE_TEXT),

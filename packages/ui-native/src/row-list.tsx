@@ -70,6 +70,7 @@ import { menuPressAt, menuTree } from "./row-menu-model.js";
 import {
   RowChoosingContext,
   RowOpenContext,
+  RowPickContext,
   RowSearchedContext,
   RowSelectedContext,
   RowSystemLookContext,
@@ -292,6 +293,7 @@ export function RowList({
   const dragged = useRef(false);
   const chooses = choosing !== undefined;
   const sidebar = look === LIST_LOOK.SIDEBAR;
+  const picked = useContext(RowPickContext);
 
   useEffect(() => {
     if (!chooses) dragged.current = false;
@@ -339,7 +341,9 @@ export function RowList({
 
         const id = selectedId(selection);
 
-        if (id !== undefined) onSelect?.(id);
+        if (id === undefined || onSelect === undefined) return;
+        picked?.();
+        onSelect(id);
       }}
       modifiers={[
         listStyle(look),

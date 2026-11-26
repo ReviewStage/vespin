@@ -4,6 +4,17 @@ export { causeKind, failureCode, failureDetail, failureKind } from "./failure-ki
 
 export { catchAllButInterrupt, unlessInterrupted } from "./fallback.js";
 
+export {
+  atForeground,
+  everyForeground,
+  ForegroundClock,
+  type ForegroundMillis,
+  foregroundAfter,
+  foregroundClockOver,
+  foregroundPassed,
+  type StoppingForegroundClock,
+} from "./foreground-clock.js";
+
 export { onOwnFiber } from "./own-fiber.js";
 
 export { type ReportedAttributes, reportUnexpected } from "./reported-failure.js";

@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent, latestTurnsOfReached } from "@repo/database/models/agent-store";
+import { approveHostPairing } from "@repo/database/models/host-pairing-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
@@ -31,7 +32,7 @@ import {
   MACHINE_OWNER,
 } from "@repo/features/device-agent-wire";
 import { HOST_RELEASE } from "@repo/features/host-release";
-import { HOST_VERSION_FOR, HOST_WIRE } from "@repo/features/host-wire";
+import { HOST_VERSION_FOR, HOST_WIRE, hostUserCodeOf } from "@repo/features/host-wire";
 import { RUN_EVENT, RUN_TURN_ORIGIN, TURN_TRIGGER } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
@@ -307,7 +308,7 @@ const startedWorkspaceBox = (
     return { pollSecret, userCode };
   });
 
-/** A member's approve of a pairing by its code for the workspace given, on their bearer, its agents kept to the open internet. */
+/** A member's approve of a pairing by its code naming the workspace given, on their bearer, as a released build may still send it, its agents kept to the open internet. */
 function approveToWorkspace(bearer: string, code: string, workspaceId: string) {
   return answerOf(
     request(bearer, PATH.PAIRING_APPROVE, {
@@ -322,6 +323,25 @@ function approveToWorkspace(bearer: string, code: string, workspaceId: string) {
     }),
   );
 }
+
+/**
+ * A box connected to the workspace by its admin through the store, as a
+ * machine connected before the approve stopped taking a workspace stands,
+ * its agents kept to the open internet: its poll secret, once approved.
+ */
+const connectedWorkspaceBox = (adminId: string, workspaceId: string, machineId: string) =>
+  Effect.gen(function* () {
+    const { pollSecret, userCode } = yield* startedWorkspaceBox({ machineId });
+    const code = hostUserCodeOf(userCode);
+    assert.ok(code !== undefined);
+    yield* approveHostPairing(adminId, code, randomUUID(), {
+      kind: MACHINE_OWNER.WORKSPACE,
+      workspaceId,
+      network: MACHINE_NETWORK.PUBLIC_ONLY,
+    });
+
+    return pollSecret;
+  });
 
 /** A pairing box's poll on its poll secret, at the floor's version. */
 function pollPairing(pollSecret: string) {
@@ -1039,14 +1059,13 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
       }),
   );
   it.effect(
-    "an admin connects a box to the workspace: its poll names the workspace, its secret registers, beats, and reads its live agents, its members list it, and an admin renames and removes it, its secret refused from then on",
+    "a box connected to the workspace before: its poll names the workspace, its secret registers, beats, and reads its live agents, its members list it, and an admin renames and removes it, its secret refused from then on",
     () =>
       Effect.gen(function* () {
         const admin = yield* account();
         const workspace = yield* openWorkspace(admin);
-        const { pollSecret, userCode } = yield* startedWorkspaceBox();
+        const pollSecret = yield* connectedWorkspaceBox(admin, workspace, "f".repeat(64));
 
-        const approved = yield* approveToWorkspace(admin, userCode, workspace);
         const handed = yield* pollPairing(pollSecret);
 
         const { deviceId, deviceSecret: secret }: { deviceId: string; deviceSecret: string } =
@@ -1080,7 +1099,6 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
           }),
         );
 
-        assert.equal(approved.status, HOSTED_HTTP_STATUS.OK);
         assert.deepEqual(handed.body.owner, {
           kind: MACHINE_OWNER.WORKSPACE,
           workspaceId: workspace,
@@ -1105,20 +1123,42 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
   );
 
   it.effect(
-    "a member who is no owner or admin is never offered the workspace, cannot approve a box to it, and cannot rename or remove its machine",
+    "an approve naming a workspace is refused as not permitted, its admin's too, and the pairing still waits, offered no workspace, for Just me",
+    () =>
+      Effect.gen(function* () {
+        const admin = yield* account();
+        const workspace = yield* openWorkspace(admin);
+        const { pollSecret, userCode } = yield* startedWorkspaceBox();
+
+        const offered = yield* byCode(admin, PATH.PAIRING, userCode);
+        const refused = yield* approveToWorkspace(admin, userCode, workspace);
+        const waiting = yield* pollPairing(pollSecret);
+        const justMe = yield* byCode(admin, PATH.PAIRING_APPROVE, userCode);
+        yield* TestClock.adjust("5 seconds");
+        const handed = yield* pollPairing(pollSecret);
+
+        assert.equal(offered.status, HOSTED_HTTP_STATUS.OK);
+        assert.deepEqual(offered.body.workspaces, []);
+        assert.deepEqual(refused, {
+          status: HOSTED_HTTP_STATUS.FORBIDDEN,
+          body: { error: "not-permitted" },
+        });
+        assert.deepEqual(waiting.body, { status: "pending" });
+        assert.equal(justMe.status, HOSTED_HTTP_STATUS.OK);
+        assert.deepEqual(handed.body.owner, { kind: MACHINE_OWNER.USER });
+      }),
+  );
+
+  it.effect(
+    "a member who is no owner or admin cannot rename or remove the workspace's machine",
     () =>
       Effect.gen(function* () {
         const admin = yield* account();
         const member = yield* account();
         const workspace = yield* openWorkspace(admin);
         yield* joinWorkspace(workspace, member, WORKSPACE_ROLE.MEMBER);
-        const connected = yield* startedWorkspaceBox({ machineId: "1".repeat(64) });
-        yield* approveToWorkspace(admin, connected.userCode, workspace);
-        const { deviceId } = (yield* pollPairing(connected.pollSecret)).body;
-        const pending = yield* startedWorkspaceBox({ machineId: "2".repeat(64) });
-
-        const offered = yield* byCode(member, PATH.PAIRING, pending.userCode);
-        const approve = yield* approveToWorkspace(member, pending.userCode, workspace);
+        const pollSecret = yield* connectedWorkspaceBox(admin, workspace, "1".repeat(64));
+        const { deviceId } = (yield* pollPairing(pollSecret)).body;
 
         const rename = yield* answerOf(
           request(member, PATH.WORKSPACE_MACHINE_RENAME, {
@@ -1137,13 +1177,7 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
           body: { error: "not-permitted" },
         };
 
-        assert.deepEqual(offered.body.workspaces, []);
-        assert.deepEqual([approve, rename, remove], [notPermitted, notPermitted, notPermitted]);
-        assert.deepEqual(
-          (yield* byCode(admin, PATH.PAIRING, pending.userCode)).body.workspaces,
-          [{ id: workspace, name: "Test Workspace" }],
-          "the pairing still waits, offered to its admin",
-        );
+        assert.deepEqual([rename, remove], [notPermitted, notPermitted]);
       }),
   );
 
@@ -1155,9 +1189,8 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         const outsider = yield* account();
         const workspace = yield* openWorkspace(admin);
         const theirs = yield* openWorkspace(outsider);
-        const connected = yield* startedWorkspaceBox({ machineId: "5".repeat(64) });
-        yield* approveToWorkspace(admin, connected.userCode, workspace);
-        const { deviceId } = (yield* pollPairing(connected.pollSecret)).body;
+        const pollSecret = yield* connectedWorkspaceBox(admin, workspace, "5".repeat(64));
+        const { deviceId } = (yield* pollPairing(pollSecret)).body;
 
         const asked = yield* Effect.forEach([workspace, theirs], (workspaceId) =>
           Effect.all([
@@ -1192,44 +1225,6 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
           [[deviceId, "fra-01"]],
           "the machine still stands under its own name",
         );
-      }),
-  );
-
-  it.effect(
-    "a box whose daemon is older than workspace machines is never offered a workspace",
-    () =>
-      Effect.gen(function* () {
-        const admin = yield* account();
-        yield* openWorkspace(admin);
-
-        const started = yield* answerOf(
-          startPairing({ version: "0.13.0", machineId: "3".repeat(64) }),
-        );
-
-        const read = yield* byCode(admin, PATH.PAIRING, started.body.userCode);
-
-        assert.equal(read.status, HOSTED_HTTP_STATUS.OK);
-        assert.deepEqual(read.body.workspaces, []);
-      }),
-  );
-
-  it.effect(
-    "a Mac that stands as a member's own host is refused as the workspace's, as owned elsewhere",
-    () =>
-      Effect.gen(function* () {
-        const admin = yield* account();
-        const workspace = yield* openWorkspace(admin);
-        const machineId = "4".repeat(64);
-        const mine = yield* startedWorkspaceBox({ platform: DEVICE_PLATFORM.DARWIN, machineId });
-        yield* byCode(admin, PATH.PAIRING_APPROVE, mine.userCode);
-        const shared = yield* startedWorkspaceBox({ platform: DEVICE_PLATFORM.DARWIN, machineId });
-
-        const refused = yield* approveToWorkspace(admin, shared.userCode, workspace);
-
-        assert.deepEqual(refused, {
-          status: HOSTED_HTTP_STATUS.CONFLICT,
-          body: { error: "machine-owned-elsewhere" },
-        });
       }),
   );
 });

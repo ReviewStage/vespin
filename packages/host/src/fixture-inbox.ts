@@ -131,7 +131,9 @@ import type { MachineLine } from "@repo/features/machine-live";
 import {
   MANAGER_CHAT_AUTHOR,
   MANAGER_CHAT_REACTION,
+  type ManagerChatEditPress,
   type ManagerChatReactionPress,
+  withEditPress,
   withReactionPress,
 } from "@repo/features/manager-chat-live";
 import {
@@ -2255,7 +2257,8 @@ const MANAGER_THREAD_ROOT = "7b2d40e8";
  * of all stands a picture the account sent with no words with its ask,
  * whose own long press opens its thread. The Manager gave the account's
  * ask its 👍, the account and Grace gave its first answer theirs, and the
- * account gave its 👍 to the answer in the thread.
+ * account gave its 👍 to the answer in the thread. The account edited its
+ * ask a minute after sending it, which it says after its words.
  */
 const MANAGER_CHAT: AppManagerChat = {
   messages: [
@@ -2339,7 +2342,7 @@ const MANAGER_CHAT: AppManagerChat = {
       turnId: MANAGER_TURN,
       lineId: "fixture-manager-ask",
       createdAt: MANAGER_STARTED,
-      editedAt: null,
+      editedAt: MANAGER_STARTED + MINUTE,
       reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 1, reacted: false }],
     },
     {
@@ -2370,9 +2373,14 @@ const MANAGER_CHAT: AppManagerChat = {
 /** The account's reactions given the release Manager's chat or taken off it in this run, oldest pressed first, which the chat stands with, as the service would. */
 let managerChatPresses: readonly ManagerChatReactionPress[] = [];
 
-/** The release Manager's chat with the account's reactions in this run drawn on it. */
+/** The account's edits of its own messages of the release Manager's chat in this run, oldest saved first, which the chat stands with, as the service would. */
+let managerChatEdits: readonly ManagerChatEditPress[] = [];
+
+/** The release Manager's chat with the account's edits and reactions in this run drawn on it. */
 function reactedManagerChat(): AppManagerChat {
-  return { messages: managerChatPresses.reduce(withReactionPress, MANAGER_CHAT.messages) };
+  const edited = managerChatEdits.reduce(withEditPress, MANAGER_CHAT.messages);
+
+  return { messages: managerChatPresses.reduce(withReactionPress, edited) };
 }
 
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
@@ -3933,6 +3941,20 @@ const ANSWERS: StagedAnswers = {
     managerChatPresses = [...others, { messageId, kind, reacted }];
 
     return { changed: message !== undefined && mine !== reacted };
+  },
+  // Note that an edit of one of the account's own messages of the release Manager's chat is kept for the run, as a reaction is, so the chat stands with its words as edited.
+  [ACT_KIND.AGENTS_CHAT_EDIT]: ({ agentId, messageId, text }) => {
+    if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const message = reactedManagerChat().messages.find((each) => each.id === messageId);
+
+    if (message === undefined || message.authorUserId !== ADA.userId) {
+      return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    }
+
+    if (message.text === text) return { changed: false };
+    managerChatEdits = [...managerChatEdits, { messageId, text, editedAt: MANAGER_STARTED + HOUR }];
+
+    return { changed: true };
   },
   [ACT_KIND.AGENTS_QUEUE]: ({ agentId }) => {
     if (stagedAgent(agentId) === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };

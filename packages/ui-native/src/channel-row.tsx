@@ -250,6 +250,20 @@ export function ThreadReplies({
   );
 }
 
+/** The rule over the first message after the reader's mark of the chat, in copper, saying New at its end, as the panel's chat draws it. */
+export function NewRule({ words }: { readonly words: string }) {
+  const colors = useColors();
+
+  return (
+    <View style={styles.rule}>
+      <View style={[styles.ruleLine, { backgroundColor: colors.ACCENT }]} />
+      <Text style={{ fontSize: ROLE_SIZE.TIME, fontWeight: "600", color: colors.ACCENT_TEXT }}>
+        {words}
+      </Text>
+    </View>
+  );
+}
+
 /** The rule under a thread's message on its own page, counting the replies after it, as the panel's thread tab draws it. */
 export function ThreadRule({ words }: { readonly words: string }) {
   const colors = useColors();

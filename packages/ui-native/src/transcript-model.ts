@@ -72,6 +72,7 @@ import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integ
 import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
 import {
+  CHAT_NEW_WORDS,
   CHAT_RUN_ALONE,
   type ChatRunPlace,
   chatWorkWords,
@@ -173,6 +174,14 @@ export const TRANSCRIPT_PIECE = {
 } as const;
 
 type TranscriptPiece = (typeof TRANSCRIPT_PIECE)[keyof typeof TRANSCRIPT_PIECE];
+
+/** Which rule a rule item draws: a thread's count of its replies, or New over the first message of a Manager's chat after the reader's mark. */
+export const RULE_LOOK = {
+  REPLIES: "replies",
+  NEW: "new",
+} as const;
+
+export type RuleLook = (typeof RULE_LOOK)[keyof typeof RULE_LOOK];
 
 /** Where an item stands among the list's: its turn's message, its row in that turn, the block within a group where it is one, and the piece of it drawn. */
 export interface TranscriptPlace {
@@ -302,6 +311,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly channel?: ChatSender | undefined;
       /** In a Manager's chat's channel, the thread it stands in, which Reply in thread opens, its replies summed under it; none in a thread's own page, or outside a chat. */
       readonly thread?: ChatThreadMark | undefined;
+      /** In a Manager's chat, whether its sender edited its words since it was sent, which a mark after them says; none outside one. */
+      readonly edited?: boolean | undefined;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
@@ -374,8 +385,10 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.RULE;
-      /** How the thread's replies are counted ("2 replies"). */
+      /** How the thread's replies are counted ("2 replies"), or New over the first message after the reader's mark. */
       readonly words: string;
+      /** Which rule it is: a thread's count of its replies, or New; a thread's where none is named. */
+      readonly look?: RuleLook | undefined;
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.PAGE;
@@ -452,6 +465,10 @@ interface ChatReading extends Omit<TranscriptReading, "origin"> {
   readonly managerName?: string | undefined;
   /** The reader's own name, which heads their messages on their way, as their rows will name them. */
   readonly readerName?: string | undefined;
+  /** The instant New stands after, over the first message after it the reader did not send (`useManagerChatLooks`); none where New stands nowhere. */
+  readonly newAfter?: number | undefined;
+  /** Whether New may stand over the reader's own message too, as where they marked the chat unread from it. */
+  readonly newOverOwn?: boolean | undefined;
 }
 
 /** What the items are read with: the page's reading, and the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`). */
@@ -1575,6 +1592,7 @@ function chatLineItems(
     joinsBelow: false,
     channel: chatSenderOf(message, reading),
     thread: threads ? threadMarkOf(line, view) : undefined,
+    edited: message.editedAt !== null,
   } as const;
 
   if (message.authorKind === MANAGER_CHAT_AUTHOR.PERSON) {
@@ -1659,6 +1677,32 @@ function sendingTo(
   return (sending ?? []).filter((line) => line.threadRoot === root);
 }
 
+/** The first message of the chat's top after `newAfter`, skipping the reader's own where `readerId` names them, which New stands over; none where New stands nowhere. */
+function newLineOf(
+  top: readonly ManagerChatLine[],
+  newAfter: number | undefined,
+  readerId: string | undefined,
+): ManagerChatLine | undefined {
+  if (newAfter === undefined) return undefined;
+
+  return top.find(
+    (line) =>
+      line.message.createdAt > newAfter &&
+      (readerId === undefined || line.message.authorUserId !== readerId),
+  );
+}
+
+/** The New rule over a message of the chat, by its id. */
+function newRuleItem(id: string): TranscriptItem {
+  return {
+    place: { ...linePlace(id, id), piece: TRANSCRIPT_PIECE.RULE },
+    depth: 0,
+    kind: TRANSCRIPT_ITEM.RULE,
+    words: CHAT_NEW_WORDS,
+    look: RULE_LOOK.NEW,
+  };
+}
+
 /**
  * A Manager's chat as the list's items, oldest first, as the panel's chat
  * draws it from its rows (`managerChatView`), a team channel: the greeting
@@ -1667,8 +1711,9 @@ function sendingTo(
  * offering its thread with its replies summed under it, with no turn's
  * foot; the reader's messages on their way to it after them; and while the
  * Manager may still write, its working line, the turn under way's work under
- * it once the reader opens it. The transcript is read only for the work its
- * turns did. A thread's replies stand on its own page
+ * it once the reader opens it; and New over the first message after the
+ * reader's mark where one is handed (`newAfter`). The transcript is read
+ * only for the work its turns did. A thread's replies stand on its own page
  * (`managerThreadItems`).
  */
 export function managerChatItems(
@@ -1679,13 +1724,28 @@ export function managerChatItems(
   const read: ItemsReading = { ...reading, computerApps: computerAppsOf(transcript) };
   // Note that a turn's journal message stands under the turn's id, which a message's work names.
   const turns = new Map(transcript.map((message) => [message.id, message]));
-  const items = view.top.flatMap((line) => chatLineItems(line, view, turns, read, true));
+
+  const fresh = newLineOf(
+    view.top,
+    reading.newAfter,
+    reading.newOverOwn === true ? undefined : reading.readerId,
+  );
+
+  const items = view.top.flatMap((line) => [
+    ...(line === fresh ? [newRuleItem(line.message.id)] : []),
+    ...chatLineItems(line, view, turns, read, true),
+  ]);
+
   const newest = view.top.at(-1)?.message;
   const going = sendingTo(reading.sending, undefined);
   const sending = chatSendingItems(going, view.sending.channel, reading);
 
+  // Note that the message under New opens a run of its own, under its sender's name, as the panel heads it.
   const runs = new Map<string, ChatRunPlace>([
-    ...view.top.map((line) => [line.message.id, line.place] as const),
+    ...view.top.map(
+      (line) =>
+        [line.message.id, line === fresh ? { ...line.place, opens: true } : line.place] as const,
+    ),
     ...sending.map(({ item, place }) => [item.place.message, place] as const),
   ]);
 

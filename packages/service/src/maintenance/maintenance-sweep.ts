@@ -50,7 +50,7 @@ interface MaintenanceSweeps {
   moveAttachmentsToBlob: (now: number) => SweepRead<number>;
   /** Moves the images the journal's rows still keep as `data:` URLs into Blob-backed pictures, a sweep's worth of the rows its migration queued, answering how many parts it rewrote (`storage/journal-image-move.ts`). */
   moveJournalImages: (now: number) => SweepRead<number>;
-  /** Marks the agents' stored CLI transcripts from before the resume marks, a sweep's worth of rows, answering how many it read (`@repo/database`'s `markSessionsForResume`). */
+  /** Marks the agents' stored CLI transcripts from before the resume marks, a sweep's worth of sessions found and rows marked, answering how many it read (`@repo/database`'s `markSessionsForResume`). */
   markTranscriptsForResume: (now: number) => SweepRead<number>;
 }
 
@@ -100,7 +100,7 @@ interface MaintenanceSweepAnswer {
   attachmentsMoved: Swept<number>;
   /** Journal parts rewritten from a `data:` URL to the Blob-backed picture they were kept as. */
   journalImages: Swept<number>;
-  /** Stored CLI transcript rows from before the resume marks, read and marked. */
+  /** Stored CLI transcript sessions scanned, and rows from before the resume marks read and marked. */
   transcriptMarks: Swept<number>;
 }
 

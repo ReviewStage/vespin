@@ -7,9 +7,9 @@
  * where the service refused it, its Retry sending it again under its key
  * and its Edit and Delete letting it go (`AGENTS_CHAT_UNSEND`); it never
  * queues, since the Manager takes each line as it stands, and a sent
- * message's Edit takes the Manager back to just before its line
- * (`AGENTS_REWIND`), which drops its row and every row after it, and sends
- * the words as a message of the chat's own. To any other
+ * message's Edit saves its words in place, as a channel's edit does
+ * (`AGENTS_CHAT_EDIT`): the message is marked edited and the Manager told,
+ * and nothing is rewound or dropped. To any other
  * agent, while no turn runs, Send opens one (`AGENTS_MESSAGE`); while one runs, it steers
  * that turn, or, where the member's Follow-up behavior is Queue, waits
  * behind it (`AGENTS_QUEUE`'s `add`), as the panel's Enter does. The queue
@@ -172,11 +172,12 @@ export interface AgentComposer {
   readonly send: ComposerSend;
   /** Whether Send queues the message behind the turn rather than sending it to the agent now. */
   readonly sendQueues: boolean;
-  readonly attach: () => void;
-  /** Attaches pictures dropped on the composer, on an iPad, by the files the drop kept. */
-  readonly dropPictures: (uris: readonly string[], unreadable: number) => void;
-  /** Takes a long paste as a text file beside the pictures, answering whether it did. */
-  readonly pasteText: (words: string) => boolean;
+  /** Opens Photos to attach pictures; none while the field holds a Manager chat message's words to save, since an edit writes words alone. */
+  readonly attach: (() => void) | undefined;
+  /** Attaches pictures dropped on the composer, on an iPad, by the files the drop kept; none while an edit writes words alone. */
+  readonly dropPictures: ((uris: readonly string[], unreadable: number) => void) | undefined;
+  /** Takes a long paste as a text file beside the pictures, answering whether it did; none while an edit writes words alone, so a long paste stays words. */
+  readonly pasteText: ((words: string) => boolean) | undefined;
   /** Stops the turn under way; none while the agent rests. */
   readonly stop: (() => void) | undefined;
   readonly stopping: boolean;
@@ -550,15 +551,52 @@ export function useAgentComposer(
   };
 
   /**
+   * The words in the field saved in place of a Manager chat message's, as
+   * the panel's Edit saves them, the field given back what it held; words as
+   * they stand change nothing, and an edit refused says so over the field,
+   * the message standing as it was for Edit to open again.
+   */
+  const saveChatEdit = (stash: Rewriting, text: string): boolean => {
+    giveBackRewritten(stash);
+    setNote(undefined);
+
+    if (text === stash.line.words.trim()) return true;
+
+    write(
+      () =>
+        acts[ACT_KIND.AGENTS_CHAT_EDIT]({
+          agentId,
+          messageId: stash.line.messageId,
+          text,
+          clientKey: randomUUID(),
+        }),
+      {
+        went: BUZZ.SUCCESS,
+        inPlace: (refusal: string) => {
+          if (mounted.current) setNote(refusal);
+        },
+        refused: (answer) =>
+          "failure" in answer ? messageFailureWords(answer.failure) : undefined,
+        unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+      },
+    );
+
+    return true;
+  };
+
+  /**
    * The words in the field sent in place of the sent line, the agent taken
    * back to just before it first, as the panel's Edit sends them; the field
    * given back what it held, and the words handed back where it was refused.
-   * Note that it stops the turn under way rather than steering it.
+   * Note that it stops the turn under way rather than steering it. A
+   * Manager's chat message is saved in place instead (`saveChatEdit`).
    */
   const sendRewritten = (stash: Rewriting, typed: string): boolean => {
     const text = typed.trim();
 
     if (text === "") return false;
+
+    if (chat) return saveChatEdit(stash, text);
 
     // Note that pictures attached while the line was written again go with it, as the panel's Edit takes files.
     const held = pictures.take();
@@ -569,21 +607,6 @@ export function useAgentComposer(
     const sent: Sent = { id: randomUUID(), words: text, pictures: held };
     setNote(undefined);
     giveBackRewritten(stash);
-
-    // Note that a Manager's chat is taken back to just before the line first, which drops the line's row and every row after it, and the words then go as a message of the chat's own; a rewind refused hands them back to the field, since nothing went.
-    if (chat) {
-      write(() => acts[ACT_KIND.AGENTS_REWIND]({ agentId, messageId: stash.line.messageId }), {
-        inPlace: (refusal: string) => {
-          if (mounted.current) handBack(sent, refusal);
-        },
-        refused: (answer) =>
-          "failure" in answer ? messageFailureWords(answer.failure) : undefined,
-        unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
-        done: () => sendChat(sent, attachments?.attachments),
-      });
-
-      return true;
-    }
 
     heldSends.set(sentLineId(sent.id), sent);
     write(
@@ -913,6 +936,9 @@ export function useAgentComposer(
     editable: (message.files ?? []).length === 0,
   }));
 
+  // Note that an edit of a Manager chat message saves its words alone, so the field takes no file while it holds them.
+  const takesFiles = !(chat && rewriting !== undefined);
+
   return {
     placeholder: thread === undefined ? PLACEHOLDER : CHAT_THREAD_WORDS.BOX,
     sendQueues,
@@ -923,9 +949,9 @@ export function useAgentComposer(
     },
     sendable: pictures.files !== undefined,
     send,
-    attach: pictures.attach,
-    dropPictures: pictures.drop,
-    pasteText: pictures.pasteText,
+    attach: takesFiles ? pictures.attach : undefined,
+    dropPictures: takesFiles ? pictures.drop : undefined,
+    pasteText: takesFiles ? pictures.pasteText : undefined,
     // Note that a thread's reply is no turn of its own, so its box offers no Stop, as the panel's thread box stands none.
     stop: writing && thread === undefined ? stop : undefined,
     stopping,

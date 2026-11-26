@@ -3,8 +3,9 @@
  *
  * Which agents are kept warm and how often are the panel's
  * (`@repo/features/agent-warm`): the page says its chat is shown through
- * the host (`AGENTS_WARM`) at once and then every minute while it is the
- * screen in focus and the app is in the foreground, as one holder
+ * the host (`AGENTS_WARM`) at once and then every minute of the app's
+ * foreground clock (`launch-state.ts`) while it is the screen in focus and
+ * the app is in the foreground, as one holder
  * (`HOLDER`, this launch of the app's own id), and says it is hidden at
  * once as the page loses focus or the app goes behind, which lets go of
  * this holder's hold so the sandbox stops where nothing else keeps it up.
@@ -16,11 +17,13 @@
 import { AGENT_WARM_EVERY_MS, agentWarmable } from "@repo/features/agent-warm";
 import { AGENT_CHAT, type AgentChat } from "@repo/features/agent-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { everyForeground } from "@repo/runtime/effect";
 import { randomUUID } from "expo-crypto";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useSyncExternalStore } from "react";
 import { AppState } from "react-native";
 import { useHostActs } from "../host/host-provider.js";
+import { foregroundClock } from "../launch-state.js";
 import { useFollowedAgent } from "./use-agent.js";
 
 /** This launch of the app's own id as a chat's holder. */
@@ -68,10 +71,13 @@ export function useWarmAgent(agentId: string): void {
       };
 
       said(AGENT_CHAT.SHOWN);
-      const every = setInterval(() => said(AGENT_CHAT.SHOWN), AGENT_WARM_EVERY_MS);
+
+      const beating = everyForeground(foregroundClock, AGENT_WARM_EVERY_MS, () =>
+        said(AGENT_CHAT.SHOWN),
+      );
 
       return () => {
-        clearInterval(every);
+        beating();
         said(AGENT_CHAT.HIDDEN);
       };
     }, [warmId, acts]),

@@ -25,6 +25,7 @@ import {
   MessageFrame,
   MessageHead,
   MessageLine,
+  NewMessagesRule,
   RetryIcon,
   SUBJECT_FIT,
   SubjectLine,
@@ -223,7 +224,7 @@ function Messages(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection
         id="message-channel"
-        title="A channel: rows under their sender, and a thread's replies under its message"
+        title="A channel: rows under their sender, a thread's replies under its message, and New over the first message after the reader's mark"
       >
         <div className="catalog-frame">
           <ChannelMessage
@@ -251,6 +252,7 @@ function Messages(): React.JSX.Element {
           >
             <Text>Wanna do standup now?</Text>
           </ChannelMessage>
+          <NewMessagesRule />
           {RUN.map((words, index) => (
             <ChannelMessage
               key={words}
