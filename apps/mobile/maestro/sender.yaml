@@ -1,0 +1,89 @@
+# sender.yaml -- a sender's name, pressed, opens their page, as the panel's sender opens it: a teammate's and another agent's over their lines in an agent's transcript, and the agent's over its message on a thread.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that `FLOATING_TABS` names a regular window, whose transcript is
+# scrolled inside its detail column (`scroll-to.yaml`'s `BESIDE`).
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# The invitations agent's page, opened by `-agent <id>` as `agent.yaml` opens
+# it, whose transcript holds a teammate's line and another agent's message,
+# each under its sender's name (`@repo/host/fixture-agent-transcript`).
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 30000
+# Note that the line is scrolled to in short steps until it stands clear
+# under the agent's name in the bar, as `agent.yaml` reaches its cards, since
+# a centered scroll may leave it under the held call's banner.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "The digest should count pending invites separately from members."
+      BELOW: "Build teammate invitations"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: sender-transcript
+# The teammate's line names her over it, Grace Hopper: pressed, her page.
+- tapOn: "Grace Hopper"
+- extendedWaitUntil:
+    notVisible: "The digest should count pending invites separately from members."
+    timeout: 10000
+- assertVisible: "Grace Hopper"
+- assertNotVisible: "Not in this workspace"
+- waitForAnimationToEnd
+- takeScreenshot: sender-person
+- runFlow:
+    when:
+      visible:
+        id: "BackButton"
+    commands:
+      - tapOn:
+          id: "BackButton"
+- extendedWaitUntil:
+    visible: "The digest should count pending invites separately from members."
+    timeout: 10000
+# Another agent's message names it over its line, Weekly digest email: pressed, its page.
+- tapOn: "Weekly digest email"
+- extendedWaitUntil:
+    visible: ".*post it to the team's digest.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: sender-agent
+# A thread's message names the agent that wrote it, its face and name heading
+# its run: pressed, the agent's page, pushed over the thread.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- tapOn: "Recorded the invite flow"
+# Note that the writer's press is found by its id with its words, since a
+# message after its run's head is a container heard by the same words, which
+# a search by words alone may stop on and tap, opening nothing.
+- scrollUntilVisible:
+    element:
+      id: "thread-writer"
+      text: "Build teammate invitations, .*"
+    direction: UP
+    centerElement: true
+    timeout: 60000
+- waitForAnimationToEnd
+- takeScreenshot: sender-thread
+- tapOn:
+    id: "thread-writer"
+    text: "Build teammate invitations, .*"
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: sender-thread-agent

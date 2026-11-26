@@ -171,7 +171,7 @@ import { useMessageActs } from "../agents/use-message-acts.js";
 import {
   type OpenedSuggestion,
   useOpenedSuggestion,
-  useSuggestionAddress,
+  usePlaceAddress,
   useSuggestionLooks,
   useSuggestionSender,
 } from "../agents/use-suggestions.js";
@@ -848,7 +848,7 @@ const AgentConversation = memo(function AgentConversation({
   const automated = shown?.automationId !== undefined || shown?.automationName !== undefined;
   const run = useAgentOrigin(id, automated);
   const automationAddress = useAutomationAddress(shown?.automationId, shown?.workspaceId);
-  const suggestionAddress = useSuggestionAddress(shown?.workspaceId);
+  const placeAddress = usePlaceAddress(shown?.workspaceId);
 
   // Note that the run's card stands on the transcript's first line, so it waits until no older page is left to read.
   const origin = useMemo(
@@ -910,7 +910,7 @@ const AgentConversation = memo(function AgentConversation({
               now: Date.now(),
               pullRequests,
               wholePart: whole.read,
-              suggestionAddress,
+              placeAddress,
               waitingCalls,
               sending: chatPage.sending,
               managerName: chatFaces?.managerName,
@@ -933,7 +933,7 @@ const AgentConversation = memo(function AgentConversation({
       toggles,
       pullRequests,
       whole.read,
-      suggestionAddress,
+      placeAddress,
       waitingCalls,
       shown,
       chatFaces,
@@ -953,7 +953,7 @@ const AgentConversation = memo(function AgentConversation({
             pullRequests,
             wholePart: whole.read,
             origin,
-            suggestionAddress,
+            placeAddress,
             waitingCalls,
           }),
     [
@@ -967,7 +967,7 @@ const AgentConversation = memo(function AgentConversation({
       pullRequests,
       whole.read,
       origin,
-      suggestionAddress,
+      placeAddress,
     ],
   );
 
