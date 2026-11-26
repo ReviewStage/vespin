@@ -1170,6 +1170,8 @@ export function SearchableMenu(
   // standing beside its row, as `Menu`'s submenus do, so crossing rows on
   // the way into it leaves it standing; a sheet stands nothing beside.
   const aim = useSubmenuAim(panel, !sheet && open !== undefined);
+  // Whether the pointer last stood on the menu off every row it lights, which a clear put off asks as it is taken.
+  const offRows = useRef(false);
 
   // The pointer over a listed row highlights it, and opens its submenu where
   // it has one, or closes the one standing beside another row. Note that in
@@ -1200,17 +1202,21 @@ export function SearchableMenu(
   // menu clears it with no handler of its own. Note that the submenu itself,
   // and a row's card hung in a layer of its own outside the menu, are passed
   // over; and that the move waits while the pointer heads for the submenu
-  // standing, as a move onto another row does.
+  // standing, as a move onto another row does. The clear asks again where
+  // the pointer stands as it is taken, because a pointer back on the row
+  // already highlighted moves nothing that would call it off.
   const hoverOff = (event: React.MouseEvent<HTMLElement>) => {
     const target = event.target;
 
     if (!(target instanceof Element) || !event.currentTarget.contains(target)) return;
 
-    if (panel.current?.contains(target) === true || target.closest(LIT_BY_POINTER) !== null) {
-      return;
-    }
+    offRows.current =
+      panel.current?.contains(target) !== true && target.closest(LIT_BY_POINTER) === null;
 
-    if (at !== NOWHERE || open !== undefined) aim(() => moveTo(NOWHERE));
+    if (!offRows.current || (at === NOWHERE && open === undefined)) return;
+    aim(() => {
+      if (offRows.current) moveTo(NOWHERE);
+    });
   };
 
   // A submenu's rows and its note, beside its row, or in a sheet's place,

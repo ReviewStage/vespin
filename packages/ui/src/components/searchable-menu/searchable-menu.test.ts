@@ -666,6 +666,45 @@ test("the pointer moving off the rows onto the menu's last line highlights nothi
   }
 });
 
+test("the pointer brushing the list's inset and back onto the row whose submenu stands leaves that submenu standing", () => {
+  // Note that the tab's submenu stands right of its row, from x=330 and y=100 down to y=200.
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return this.classList.contains("ui-searchable-menu-submenu")
+      ? new DOMRect(330, 100, 200, 100)
+      : new DOMRect(0, 0, 0, 0);
+  });
+  mount({ placeholder: "Search tabs", rows: browserRows([]) });
+
+  const submenuOpen = () =>
+    document.querySelector('[aria-label="Open the tab in"][role="listbox"]') !== null;
+
+  const row =
+    [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (option) => option.textContent === "New Browser tab",
+    ) ?? assert.fail("the tab's row");
+
+  const list =
+    document.querySelector<HTMLElement>('[role="listbox"][aria-label="Model"]') ??
+    assert.fail("the list");
+
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+
+  try {
+    mouseOver(row, 300, 116);
+    // Right, toward the submenu, onto the list's own inset, and on back onto the row.
+    mouseOver(list, 305, 117);
+    mouseOver(row, 310, 117);
+    act(() => {
+      vi.advanceTimersByTime(MOTION_DELAY_MS.SETTLE);
+    });
+    assert.deepEqual([submenuOpen(), announced()], [true, "Invite expiry"]);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("a row's own end marks stand at its end, after why it cannot be picked now, and a row with none ends in nothing", () => {
   mount({
     placeholder: "Search agents",
