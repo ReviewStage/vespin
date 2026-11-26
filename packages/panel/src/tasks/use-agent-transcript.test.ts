@@ -383,7 +383,7 @@ test("a hold whose transcript the host already held is timed as a cache hit, cau
   );
 });
 
-test("a hold on a transcript a follow already stands on, read to its end, is caught up at its first paint", async () => {
+test("a tab shown on a transcript a follow already stands on, read to its end, is caught up at its first paint", async () => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(1_000_000);
 
@@ -393,6 +393,8 @@ test("a hold on a transcript a follow already stands on, read to its end, is cau
   const uninstall = installPanelSpanRecorder((span) => spans.push(span));
   const { draw } = drawn();
 
+  // The tab stands hidden first, drawing what is held, and is then shown over the very same transcript.
+  await draw(false);
   await draw(true);
   vi.setSystemTime(1_016_000);
   uninstall();

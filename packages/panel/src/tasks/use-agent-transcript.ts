@@ -340,7 +340,8 @@ export function useAgentTranscript(input: {
       timed.caughtUp = true;
       endHoldSpan(PANEL_SPAN.TRANSCRIPT_CAUGHT_UP, timed, held);
     }
-  }, [held]);
+    // Note that a tab shown again over the very transcript it drew hidden is checked as it is shown, since nothing it holds moves to say so.
+  }, [held, shown]);
 
   // A worker's tab hears where the worker stands from its own page, which no list holds.
   useEffect(() => {
