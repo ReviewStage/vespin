@@ -26,7 +26,7 @@ import type { InboxRow } from "@repo/features/inbox-digest";
 import { inboxInOrder } from "@repo/features/inbox-live";
 import { INBOX_STATUS } from "@repo/features/inbox-wire";
 import { ROW_GONE, type RowCollection, type RowKind, rowOf, type StandingRows } from "@repo/sync";
-import { eq, type IR, isUndefined, not, or, type Ref } from "@tanstack/db";
+import { eq, type IR, ilike, isUndefined, not, or, type Ref } from "@tanstack/db";
 import type { InboxHoldings } from "./app-state-reads.js";
 import { INBOX_THREAD, type PlacedInboxRow, threadRowOf } from "./inbox-collections.js";
 import { INBOX_MESSAGE, type ThreadMessage } from "./inbox-messages.js";
@@ -84,6 +84,31 @@ export function inboxRowsSource(pool: {
     messages: () => pool.standing(INBOX_MESSAGE)?.collection,
     watch: pool.watch,
   };
+}
+
+/** A word typed as a `LIKE` pattern that finds it anywhere in a message's words. Note that a `%` or `_` it holds only widens what the pattern finds, and a row is judged on every word typed in full (`matchesTokens`), so the pattern needs no escape. */
+function likeWord(token: string): string {
+  return `%${token}%`;
+}
+
+/**
+ * The filter a search's query reads the kept messages by: those whose words
+ * hold any word typed, as a search's `ilike` runs in SQLite, so only the
+ * messages that may answer it are read. Note that a row answers a search
+ * only where every word typed is among its words (`InboxSearch`), so a
+ * message holding any of them is all a row's words need, and none where
+ * nothing is typed.
+ */
+export function threadMessagesSearched(
+  message: Ref<ThreadMessage>,
+  tokens: readonly [string, ...string[]],
+): IR.BasicExpression<boolean> {
+  const [first, ...rest] = tokens;
+
+  return rest.reduce(
+    (any, token) => or(any, ilike(message.words, likeWord(token))),
+    ilike(message.words, likeWord(first)),
+  );
 }
 
 /** The filter a thread's query reads its messages by: those on the thread `threadId` names, run in SQLite. */

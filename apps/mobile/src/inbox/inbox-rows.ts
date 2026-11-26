@@ -18,6 +18,7 @@ import {
   inboxRowsMerged,
   inboxRowsWhere,
   type PlacedInboxRow,
+  threadMessagesSearched,
   threadMessagesWhere,
   threadOfRows,
 } from "@repo/host/inbox-rows";
@@ -139,4 +140,50 @@ export function useThreadMessages(
   const rows = kept.isReady ? kept.data : undefined;
 
   return useMemo(() => (rows === undefined ? undefined : threadOfRows(rows)), [rows]);
+}
+
+/** No kept message answers a search: what one reads before its query loads, or where nothing is typed. */
+const NONE_SEARCHED: ReadonlyMap<string, readonly string[]> = new Map();
+
+/**
+ * Every line of words the kept messages say that may answer a search for
+ * `tokens`, by the thread each stands on: those whose words hold any word
+ * typed, as a live query whose filter runs in SQLite on expo-sqlite's own
+ * thread finds them (`threadMessagesSearched`), so a search reads the
+ * messages that may answer it rather than every thread's. A search typed
+ * anew is a query anew, the one it replaces let go unread. None where
+ * nothing is typed or nothing keeps the messages, and none found before
+ * the query has loaded.
+ */
+export function useSearchedWords(
+  tokens: readonly string[],
+): ReadonlyMap<string, readonly string[]> {
+  const source = useInboxRowsSource();
+  const standing = useStanding(source);
+  const messages = standing === undefined ? undefined : source.messages();
+  const [first, ...rest] = tokens;
+
+  const searched = useLiveQuery((q) =>
+    first === undefined || messages === undefined
+      ? undefined
+      : q
+          .from({ message: messages })
+          .where(({ message }) => threadMessagesSearched(message, [first, ...rest]))
+          .select(({ message }) => ({ threadId: message.threadId, words: message.words })),
+  );
+
+  const found = searched.isReady ? searched.data : undefined;
+
+  return useMemo(() => {
+    if (found === undefined || found.length === 0) return NONE_SEARCHED;
+    const byThread = new Map<string, string[]>();
+
+    for (const { threadId, words } of found) {
+      const lines = byThread.get(threadId) ?? [];
+      lines.push(...words.split("\n"));
+      byThread.set(threadId, lines);
+    }
+
+    return byThread;
+  }, [found]);
 }

@@ -60,6 +60,7 @@ import { TestClock } from "effect/testing";
 import type { AppManagerChats, AppTranscript } from "./app-state.js";
 import { INBOX_CHANGE, INBOX_KEEPING, INBOX_THREAD } from "./inbox-collections.js";
 import { INBOX_MESSAGE } from "./inbox-messages.js";
+import { threadMessagesSearched } from "./inbox-rows.js";
 import { localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
@@ -2595,6 +2596,29 @@ function keptMessageIds(pool: EntityPool) {
   );
 }
 
+/** The threads whose kept messages a search for `tokens` finds, as a screen's search query reads them from the account's database. */
+function searchedThreads(pool: EntityPool, tokens: readonly [string, ...string[]]) {
+  return Effect.flatMap(pool.collection(INBOX_MESSAGE), (collection) =>
+    Effect.promise(async () => {
+      const query = createLiveQueryCollection({
+        query: (q) =>
+          q
+            .from({ message: collection })
+            .where(({ message }) => threadMessagesSearched(message, tokens))
+            .select(({ message }) => ({ threadId: message.threadId })),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      await query.preload();
+      const ids = [...new Set(query.toArray.map((row) => row.threadId))].sort();
+      await query.cleanup();
+
+      return ids;
+    }),
+  );
+}
+
 /** A message on `item`'s thread as its row carries it, the agent's, at `createdAt`. */
 function messageRowOf(item: InboxItem, id: string, createdAt: number) {
   return {
@@ -2656,6 +2680,14 @@ it.effect(
 
       assert.deepEqual(kept, [first, second].sort());
       assert.deepEqual(yield* keptMessageIds(next.pool), [second, third].sort());
+      assert.deepEqual(
+        {
+          kept: yield* searchedThreads(next.pool, ["said"]),
+          dropped: yield* searchedThreads(next.pool, ["nowhere"]),
+        },
+        { kept: [HELD_ITEM.id], dropped: [] },
+        "a search finds a thread by the words its kept messages say, in SQLite",
+      );
     }).pipe(Effect.provide(keptPlatform)),
 );
 

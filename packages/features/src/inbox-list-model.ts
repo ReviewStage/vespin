@@ -745,6 +745,23 @@ function askWords(ask: InboxReadAsk | undefined): readonly string[] {
   return fieldWords(ask.fields ?? []);
 }
 
+/**
+ * Every line of words one message says, as a search reads it: its words,
+ * each file it names read as its name, and what it asks, picks, or fills in;
+ * those of an item's thread are its words after its title
+ * (`inboxItemWords`), and a thread kept apart from its messages keeps each
+ * message's beside it, so a search finds them where they are kept.
+ */
+export function inboxMessageWords(message: InboxMessage): readonly string[] {
+  // Note that each file a message names reads as its name, so a search finds it by name and a snippet of it reads no marker.
+  return [
+    plainWords(markersAsNames(message.text)),
+    ...askWords(message.ask),
+    ...(message.answers?.choices ?? []),
+    ...valueWords(message.answers?.values),
+  ].filter((each) => each.length > 0);
+}
+
 /** Each item's words as `inboxItemWords` last read them, kept for as long as the item stands. */
 const itemWords = new WeakMap<InboxItem, readonly string[]>();
 
@@ -762,14 +779,7 @@ export function inboxItemWords(item: InboxItem): readonly string[] {
 
   if (kept !== undefined) return kept;
 
-  // Note that each file a message names reads as its name, so a search finds it by name and a snippet of it reads no marker.
-  const said = (item.thread ?? []).flatMap((message) => [
-    plainWords(markersAsNames(message.text)),
-    ...askWords(message.ask),
-    ...(message.answers?.choices ?? []),
-    ...valueWords(message.answers?.values),
-  ]);
-
+  const said = (item.thread ?? []).flatMap(inboxMessageWords);
   const words = [item.title, ...said].filter((each) => each.length > 0);
   itemWords.set(item, words);
 

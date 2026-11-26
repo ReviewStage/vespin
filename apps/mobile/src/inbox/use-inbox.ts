@@ -102,7 +102,7 @@ import { dismissThreadNotifications } from "../notification-task.js";
 import { usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useInboxGroupsIn, useInboxWholeGroupsIn } from "./inbox-groups.js";
-import { useThreadMessages } from "./inbox-rows.js";
+import { useSearchedWords, useThreadMessages } from "./inbox-rows.js";
 import { useInboxRunFolds } from "./inbox-runs.js";
 import { useInboxShown } from "./inbox-shown.js";
 import {
@@ -245,14 +245,20 @@ export function useInboxListing(view: {
     select: selectInboxFeed,
   });
 
-  // Note that the search reads every word of each thread from its whole item, by the row's id, as the panel's Inbox searches it.
+  const { show, search, chosen, pinnedFirst = false } = view;
+  const tokens = useMemo(() => searchTokens(search), [search]);
+  const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
+  const stored = told?.stored === true;
+  const searched = useSearchedWords(stored ? tokens : NO_TOKENS);
+
+  // Note that the search reads every word of each thread: where the phone keeps them on disk, its title and those of its messages the search's query found, and otherwise its whole item's, by the row's id, as the panel's Inbox searches it.
   const wordsOf = useMemo(() => {
+    if (stored) return (row: InboxRow) => [row.title, ...(searched.get(row.id) ?? NO_WORDS)];
     const byId = new Map(whole.flatMap(({ items }) => items.map((item) => [item.id, item])));
 
     return inboxSearchWordsOf((itemId) => byId.get(itemId));
-  }, [whole]);
+  }, [stored, searched, whole]);
 
-  const { show, search, chosen, pinnedFirst = false } = view;
   const folds = useInboxRunFolds();
   const folded = pinnedFirst ? folds.folded : NO_FOLDS;
   // Note that the last listing is kept where the new one lists the same rows, because a new array resets every row its list holds (`RowForEach`), as a pick in a split view's list would on each press.
@@ -266,7 +272,7 @@ export function useInboxListing(view: {
       chosen,
       readerId,
       whose: MINE,
-      search: { tokens: searchTokens(search), wordsOf },
+      search: { tokens, wordsOf },
       pinnedFirst,
       folded,
     });
@@ -495,6 +501,12 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 
   return { listed, readerId, feed, retry };
 }
+
+/** No word typed. */
+const NO_TOKENS: readonly string[] = [];
+
+/** No word a thread's kept messages say that a search found. */
+const NO_WORDS: readonly string[] = [];
 
 /** No message read yet of a thread kept on disk. */
 const NO_MESSAGES: readonly InboxMessage[] = [];
