@@ -54,3 +54,17 @@ export const ATTACHMENT_BLOB_PURGE = {
   /** How many pathnames one delete request names. */
   PATHNAMES_PER_DELETE: 100,
 } as const;
+
+/**
+ * The one-off move of the journal's images kept as `data:` URLs into Blob
+ * (`storage/journal-image-move.ts`). Note that a row is read whole, up to a
+ * few MB of base64, and each new picture is written and read back, so a few
+ * rows a sweep keep well inside its minute; the 73 rows production queued
+ * move in about a quarter of an hour.
+ */
+export const JOURNAL_IMAGE_MOVE = {
+  /** How many queued rows one sweep takes at most. */
+  ROWS_PER_SWEEP: 5,
+  /** How long a sweep holds the rows it takes: past the longest any sweep may run, so a row is only taken again from one that ended. */
+  CLAIM_MILLIS: 2 * MAINTENANCE_SWEEP.MAX_DURATION_SECONDS * 1000,
+} as const;

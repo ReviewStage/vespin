@@ -38,6 +38,7 @@ interface Recorded {
   machineAsks: number[];
   sandboxReleases: number[];
   attachmentBlobs: number[];
+  journalImages: number[];
 }
 
 function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
@@ -54,6 +55,7 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     machineAsks: [],
     sandboxReleases: [],
     attachmentBlobs: [],
+    journalImages: [],
   };
 
   const options: MaintenanceSweepOptions = {
@@ -132,6 +134,12 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
 
         return 0;
       }),
+    moveJournalImages: (now) =>
+      Effect.sync(() => {
+        recorded.journalImages.push(now);
+
+        return 0;
+      }),
     ...overrides,
   };
 
@@ -167,6 +175,7 @@ it.effect("a deployment without CRON_SECRET answers unavailable and sweeps nothi
       machineAsks: [],
       sandboxReleases: [],
       attachmentBlobs: [],
+      journalImages: [],
     });
   }),
 );
@@ -194,6 +203,7 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       machineAsks: [],
       sandboxReleases: [],
       attachmentBlobs: [],
+      journalImages: [],
     });
     assert.deepEqual(missing.recorded, {
       syncLog: [],
@@ -208,6 +218,7 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       machineAsks: [],
       sandboxReleases: [],
       attachmentBlobs: [],
+      journalImages: [],
     });
   }),
 );
@@ -236,6 +247,7 @@ it.effect(
         machineAsks: [instant],
         sandboxReleases: [instant],
         attachmentBlobs: [instant],
+        journalImages: [instant],
       });
     }),
 );
