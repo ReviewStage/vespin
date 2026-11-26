@@ -54,6 +54,7 @@ import { TRANSCRIPT_COPY } from "@repo/features/transcript-copy";
 import { readingWords } from "@repo/features/words";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
+  BUTTON_SIZE,
   CHOICE_BAR_LOOK,
   ChoiceBar,
   type ChoiceItem,
@@ -63,6 +64,7 @@ import {
   FILL_ELEMENT,
   Fill,
   IconButton,
+  type InlineEditHandle,
   moreLabel,
   NOT_FOUND_THING,
   NotFound,
@@ -73,6 +75,7 @@ import {
   useMenu,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
+import { ManagerFaceWell } from "@repo/ui/manager-face-picker";
 import {
   agentTab,
   pageTab,
@@ -85,7 +88,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { Predicate } from "effect";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
 import { FindScope } from "../find-in-tab.js";
@@ -112,9 +115,10 @@ import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import { type TaskInboxControl, useTaskInbox } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu } from "./action-menu.js";
-import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
+import { agentMenuGroups, FACE_IN, useAgentActions } from "./agent-actions.js";
 import { AgentThreads as AgentThreadsView } from "./agent-threads.js";
 import { AgentPane } from "./main-tabs.js";
+import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
 import { ManagerOverview } from "./manager-overview.js";
 import { type OwnAgentPlace, OwnAgentPlaceProvider, useOwnAgentPlace } from "./own-agent-place.js";
 import type { TaskHeadBack } from "./phone-head.js";
@@ -304,11 +308,15 @@ function useOwnAgentThreads(
 /**
  * The head of an agent on no task: a Manager's face leading it, as a
  * task's status leads a task's (`ManagerGlyph`), then its name, a right-click on which opens
- * its one menu and whose Rename turns it into the name's field, a Manager's
+ * its one menu and whose Rename turns it into the name's field, the face
+ * before it then the well its face is picked in, which a Manager's Change
+ * face opens with its picker standing (`FACE_IN.EDITOR`), a pick changing
+ * the face at once and handing the focus back to the name, a Manager's
  * Settings as a button of its own, which opens its card, and ⋯ holding the
  * same menu, Settings left out of both menus there since its button stands
- * beside them; on a phone, its way back before them, and Settings back in
- * the ⋯, since a phone's bar holds one control a corner.
+ * beside them; on a phone, its way back before them, Settings back in the
+ * ⋯, since a phone's bar holds one control a corner, and Change face's
+ * picker in the menu's panel, since no face stands beside its name.
  */
 function OwnAgentHead({
   tasks,
@@ -332,7 +340,11 @@ function OwnAgentHead({
     // Note that no side panel stands beside the page, so it opens no terminal.
     terminals: { onOpenTerminal: undefined },
     onDeleted: away?.onPress,
+    // Note that a phone's head draws no face beside the name, so its Change face picks one in the menu's panel.
+    faceIn: away === undefined ? FACE_IN.EDITOR : FACE_IN.PANEL,
   });
+
+  const editor = useRef<InlineEditHandle | null>(null);
 
   // The agent's ⌥⌘C, ⇧⌥⌘C, and ⌘⌫ while its page stands, as its tab's on a task, so its menu prints them.
   const { onCopy, deletion } = actions.doors;
@@ -364,16 +376,39 @@ function OwnAgentHead({
     subject: actions.subject,
   });
 
-  const { rename } = actions;
+  const { rename, face } = actions;
   const editing = rename?.editing === true;
 
   const titleEdit: ToolbarTitleEdit | undefined = editing
     ? {
         label: "Agent name",
         maxLength: AGENT_BOUNDS.MAX_TITLE_CHARS,
+        holding: face?.picking,
+        ref: editor,
         onEnd: (end) => rename.end(end.value),
       }
     : undefined;
+
+  // Note that while the name is edited, a Manager's face before it is the well its Change face picks it in, its picker open from the start there.
+  const lead =
+    editing && face !== undefined ? (
+      <ManagerFaceWell
+        face={agent.face}
+        recent={RECENT_MANAGER_FACES}
+        open={face.picking}
+        onOpenChange={(open, pressedAway) => {
+          face.onPicking(open);
+
+          // Note that a press away from the picker took the focus before it put the picker away, so it ends the edit here.
+          if (pressedAway) editor.current?.leave();
+        }}
+        onChange={face.onPick}
+        finalFocus={() => editor.current?.field()}
+        size={BUTTON_SIZE.COMPACT}
+      />
+    ) : agent.face === undefined ? undefined : (
+      <ManagerGlyph face={agent.face} status={agent.status} />
+    );
 
   // A phone's ⋯ also stands in for ⌘F, which it has no keyboard for.
   const more = (
@@ -395,11 +430,7 @@ function OwnAgentHead({
     <>
       {away === undefined ? (
         <Toolbar
-          lead={
-            agent.face === undefined ? undefined : (
-              <ManagerGlyph face={agent.face} status={agent.status} />
-            )
-          }
+          lead={lead}
           title={editing ? (rename.asked ?? label) : label}
           titleMenu={{ contextMenu: titleMenu.contextMenu(), keyMenu: titleMenu.keyMenu }}
           titleEdit={titleEdit}
