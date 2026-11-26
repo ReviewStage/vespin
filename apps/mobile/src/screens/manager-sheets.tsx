@@ -8,6 +8,7 @@ import { agentRunsOnWords } from "@repo/features/task-agents-model";
 import { ACT_UNREACHED_WORDS, readingWords } from "@repo/features/words";
 import {
   BAR_TITLE,
+  CHOICE_MARK,
   FOOTER_TONE,
   GLYPH,
   glyphSymbol,
@@ -447,8 +448,8 @@ export function ManagerSettingsScreen() {
 
 /**
  * Every repository a Manager works in, named by the route's `agent`, on a page
- * pushed in its Settings sheet, its checkout first, one to a row, as the
- * desktop's chip lists them on its card; the page scrolls as a form does, and
+ * pushed in its Settings sheet, its checkout first, one to a row led by its
+ * owner's picture, as the desktop's chip lists them on its card; the page scrolls as a form does, and
  * says under them that they stand as the Manager was made.
  */
 export function ManagerRepositoriesScreen() {
@@ -463,7 +464,13 @@ export function ManagerRepositoriesScreen() {
         <SettingsForm>
           <ListSection footer={WORDS.FIXED_AFTER_CREATE}>
             {repositories.map((repository) => (
-              <MenuRow key={repository} label={repository} symbol={GLYPH.REPOSITORY} acts={[]} />
+              <MenuRow
+                key={repository}
+                label={repository}
+                symbol={GLYPH.REPOSITORY}
+                lead={{ kind: CHOICE_MARK.REPOSITORY, repository, picture: undefined }}
+                acts={[]}
+              />
             ))}
           </ListSection>
         </SettingsForm>
