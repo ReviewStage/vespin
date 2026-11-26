@@ -97,12 +97,7 @@ import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
-import {
-  heldTaskMentions,
-  TaskMentions,
-  type TaskMentionsValue,
-  useMentionAgentsReader,
-} from "../tasks/task-mentions.js";
+import { TaskMentions, useHeldTaskMentions } from "../tasks/task-mentions.js";
 import { taskLinkDestination, useOfferTaskRename } from "../tasks/task-menu-items.js";
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
@@ -688,12 +683,8 @@ function DescriptionDocument({
 
   const stranded = useStrandedTaskBanner(tasks, listedOpen);
 
-  // The workspace's agents an `@` offers after the task's own, named by the tasks the window lists.
-  const readMentionAgents = useMentionAgentsReader(
-    opened?.workspaceId,
-    useTaskNames(tasks.typedNames),
-    tasks.agents.models,
-  );
+  // The tasks the window lists, which name the workspace's agents an `@` offers after the task's own.
+  const taskNames = useTaskNames(tasks.typedNames);
 
   const openMention = tasks.onShowMention;
   const revealed = tasks.sectionReveal;
@@ -1371,35 +1362,20 @@ function DescriptionDocument({
   );
 
   // What every place on the page that picks or draws a mention reads (`task-mentions.tsx`).
-  const mentions = useMemo<TaskMentionsValue | undefined>(() => {
-    if (opened === undefined || workspace === undefined) return undefined;
-
-    return heldTaskMentions(
-      opened,
-      workspace,
-      read?.description.body,
-      { pages, agents, readAgents: readMentionAgents },
-      {
-        onOpenTask: openMention,
-        onOpenFile: openMentionedFileDoor,
-        onOpenTurnChanges: openTurnChangesDoor,
-        agentOf: agentLookDoor,
-        pullRequestOf: pullRequestCardDoor,
-      },
-    );
-  }, [
+  const mentions = useHeldTaskMentions(
     opened,
-    read,
     workspace,
-    pages,
-    agents,
-    readMentionAgents,
-    openMention,
-    openMentionedFileDoor,
-    openTurnChangesDoor,
-    agentLookDoor,
-    pullRequestCardDoor,
-  ]);
+    read?.description.body,
+    { pages, agents },
+    { tasks: taskNames, models: tasks.agents.models },
+    {
+      onOpenTask: openMention,
+      onOpenFile: openMentionedFileDoor,
+      onOpenTurnChanges: openTurnChangesDoor,
+      agentOf: agentLookDoor,
+      pullRequestOf: pullRequestCardDoor,
+    },
+  );
 
   // Note that a task the list does not hold, as a link may open, waits on its description, which alone names it.
   if (region.kind === TASK_REGION.READING && opened === undefined) {

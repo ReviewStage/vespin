@@ -32,6 +32,7 @@ import { AGENT_PART, type AgentPart, agentParts, isShownSet } from "./agent-part
 import { isChatSendTool } from "./agent-tools.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 import {
+  isOfferedReaction,
   MANAGER_CHAT_AUTHOR,
   MANAGER_CHAT_REACTION,
   type ManagerChatLiveMessage,
@@ -216,7 +217,7 @@ export function repliesWords(count: number): string {
   return countWords(count, REPLY_NOUN);
 }
 
-/** Each reaction a message of the chat is given: its emoji, its name as a reaction's words say it, and the name of the press that gives it. */
+/** Each reaction offered first: its emoji, its name as a reaction's words say it, and the name of the press that gives it. */
 export const MANAGER_CHAT_REACTION_FACES = {
   [MANAGER_CHAT_REACTION.THUMBS_UP]: { emoji: "👍", name: "thumbs up", press: "Thumbs up" },
   [MANAGER_CHAT_REACTION.THUMBS_DOWN]: { emoji: "👎", name: "thumbs down", press: "Thumbs down" },
@@ -231,14 +232,34 @@ export const CHAT_REACTION_REFUSED_WORDS = "Could not react to the message.";
 /** Who else gave a reaction beside the reader. */
 const OTHER_NOUN = { one: "other", many: "others" } as const;
 
+/** A kind as Slack writes it in words, which a kind with no emoji to draw is drawn as too: `:tada:`. */
+function slackName(kind: string): string {
+  return `:${kind}:`;
+}
+
+/**
+ * What a reaction's chip draws: an offered one's own emoji, any other's as
+ * the service sent it, and a kind sent with none by its name as Slack
+ * writes it, so a kind a later service gives always draws.
+ */
+export function chatReactionEmoji({
+  kind,
+  emoji,
+}: Pick<ManagerChatReactionCount, "kind" | "emoji">): string {
+  if (isOfferedReaction(kind)) return MANAGER_CHAT_REACTION_FACES[kind].emoji;
+
+  return emoji ?? slackName(kind);
+}
+
 /**
  * Who gave a reaction, as its chip says it to a reader: the reader as
  * "You" where they gave it, the rest counted, since the chat's read counts
- * who gave it without naming them. "You reacted with thumbs up", "You and 1
- * other reacted with thumbs up", "2 reacted with thumbs down".
+ * who gave it without naming them, and an offered kind by its name, any
+ * other as Slack writes it. "You reacted with thumbs up", "You and 1 other
+ * reacted with thumbs up", "2 reacted with :tada:".
  */
 export function chatReactionWords({ kind, count, reacted }: ManagerChatReactionCount): string {
-  const { name } = MANAGER_CHAT_REACTION_FACES[kind];
+  const name = isOfferedReaction(kind) ? MANAGER_CHAT_REACTION_FACES[kind].name : slackName(kind);
 
   if (!reacted) return `${count} reacted with ${name}`;
   const others = count - 1;

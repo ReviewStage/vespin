@@ -48,6 +48,7 @@ import {
 import { useAgentComposer } from "../agents/use-agent-composer.js";
 import { useChatFaces } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
+import { usePlaceAddress } from "../agents/use-suggestions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useNewestNote } from "../newest-note.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -169,6 +170,7 @@ export function ManagerThreadScreen() {
   const whole = useWholeParts(id);
   const openLink = useOpenLink(shown?.workspaceId);
   const messageLink = useMessageLink(id, shown?.workspaceId);
+  const placeAddress = usePlaceAddress(shown?.workspaceId);
   const retry = useManagerChatRetry(id);
   const older = useOlderChatPages(id, chatPage?.before);
   const composer = useAgentComposer(id, agent, transcript, status, undefined, undefined, root);
@@ -194,9 +196,10 @@ export function ManagerThreadScreen() {
               sending: chatPage.sending,
               managerName: chatFaces?.managerName,
               readerName: chatFaces?.readerName,
+              placeAddress,
             },
           ),
-    [chatPage, messages, running, root, readerId, toggles, whole.read, chatFaces],
+    [chatPage, messages, running, root, readerId, toggles, whole.read, chatFaces, placeAddress],
   );
 
   // Note that a root older than the pages read is read for, a page at a time, until it stands or the chat's start is read, as the panel's thread tab reads for it.

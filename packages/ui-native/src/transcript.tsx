@@ -32,6 +32,7 @@ import {
   CHANNEL_SEAT,
   type ChannelFaces,
   ChannelMessage,
+  SenderPress,
   ThreadReplies,
   ThreadRule,
 } from "./channel-row.js";
@@ -324,7 +325,13 @@ function ChannelSaid({
         ];
 
   const message = (
-    <ChannelMessage sender={sender} faces={faces} opens={!item.joinsAbove} stamp={item.stamp}>
+    <ChannelMessage
+      sender={sender}
+      faces={faces}
+      opens={!item.joinsAbove}
+      stamp={item.stamp}
+      onOpenLink={drawing.onOpenLink}
+    >
       {/* Note that a message's pictures name who sent it and when in their viewer's bar, and each of them and its files leads its long press with Reply in thread, as Messages leads a photo's with Reply, so a message of files alone opens its thread too. */}
       <HeldLeadProvider acts={threadAct}>
         <PictureOriginProvider origin={{ by: sender.name, at: item.at }}>
@@ -760,23 +767,11 @@ function OriginFrom({
   );
 }
 
-/** What a press on a line's sender is heard to do. */
-const SENDER_HINT = "Opens their page";
-
-/** How far a sender's name takes a press past its line, above and below, so a name of one short line takes a press across the system's least target. */
-const NAME_REACH = { top: 10, bottom: 10 } as const;
-
-/** What a hold on a sender's name does: nothing, so only a tap opens their page, and a finger resting on the name opens nothing on its lift. */
-const HOLD_OPENS_NOTHING = () => undefined;
-
 /**
  * Who sent a line, over its bubble: their name in semibold, heard as the
  * line's heading, and where it names a page (`address`), a tap that opens
- * it, as a press on the panel's sender opens their page, an agent's, or a
- * GitHub account's. Note that a scroll begun on the name cancels the tap,
- * as the list's own scroll cancels a press on its rows, and that a hold
- * opens nothing, as a right-click on the panel's name hangs no menu of its
- * own.
+ * it (`SenderPress`), as a press on the panel's sender opens their page, an
+ * agent's, or a GitHub account's.
  */
 function SenderName({
   name,
@@ -789,28 +784,15 @@ function SenderName({
 }) {
   const colors = useColors();
 
-  const words = (
-    <Text
-      accessibilityRole="header"
-      style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "600", color: colors.TEXT }}
-    >
-      {name}
-    </Text>
-  );
-
-  if (address === undefined) return words;
-
   return (
-    <Press
-      accessibilityRole="header"
-      accessibilityLabel={name}
-      accessibilityHint={SENDER_HINT}
-      hitSlop={NAME_REACH}
-      onPress={() => onOpenLink(address)}
-      onLongPress={HOLD_OPENS_NOTHING}
-    >
-      {words}
-    </Press>
+    <SenderPress name={name} address={address} onOpenLink={onOpenLink}>
+      <Text
+        accessibilityRole="header"
+        style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "600", color: colors.TEXT }}
+      >
+        {name}
+      </Text>
+    </SenderPress>
   );
 }
 

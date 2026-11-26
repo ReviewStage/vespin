@@ -172,7 +172,6 @@ import { InboxStamp } from "./inbox-stamp.js";
 import { REPLY_SCOPE, ReplyDoorProvider } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
 import { TAB_KIND, tabLook } from "./tab-look.js";
-import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
 import { INERT_LINK_CLASS, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
 import { opensAsLink } from "./use-open-link.js";
@@ -224,7 +223,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
  *
  * The draft reply is the reader's chip, "You" and nothing after it, over
  * the agent composer's box, its card and its field, with its `@` mentions,
- * its skills, and its microphone (`inbox-answer-box.tsx`), flowing at the
+ * which the page holding the pane hands it as it hands every box there
+ * (`task-mentions.tsx`), its skills, and its microphone (`inbox-answer-box.tsx`), flowing at the
  * thread's end as its last row rather than docked under it, and a notice's
  * Send reads "Got it" until a word is written. The draft reply ends a
  * settled item's thread too. The board is a log, as an agent's transcript
@@ -1366,17 +1366,6 @@ function useHeadingAway(
   return away.itemId === itemId && away.away;
 }
 
-/** The box's mentions where the pane is handed them; the page's own where it is not. */
-function AnswerMentions({
-  value,
-  children,
-}: {
-  value: TaskMentionsValue | undefined;
-  children: React.ReactNode;
-}): React.ReactNode {
-  return value === undefined ? children : <TaskMentions value={value}>{children}</TaskMentions>;
-}
-
 /** The words a dictation into an item's box is likely to say: its task's repository's, its title's, and its thread's. */
 function answerKeywords(holder: InboxAnyHolder, item: InboxItem): readonly string[] {
   const repository = holderRepository(holder);
@@ -1597,7 +1586,6 @@ export function InboxPane({
   hidden,
   onBack,
   pager,
-  mentions,
   phone,
   newThread,
   within,
@@ -1616,8 +1604,6 @@ export function InboxPane({
   onBack: (() => void) | undefined;
   /** Where the item stands in the list and the steps either side, drawn at the bar's end where the item stands alone among others. */
   pager: InboxPager | undefined;
-  /** What the box's `@` offers where the page around the pane hands nothing, as the window's Inbox does; the page's own otherwise. */
-  mentions?: TaskMentionsValue | undefined;
   /**
    * A phone's head (`phone-head.tsx`), where the item stands alone on a
    * phone: the way back's glyph, what holds the item centered (`PhoneHolder`), and one ⋯
@@ -1775,26 +1761,24 @@ export function InboxPane({
   };
 
   const answerBox = (
-    <AnswerMentions value={mentions}>
-      <InboxAnswerBox
-        item={item}
-        readerId={readerId}
-        control={control}
-        agent={by.subject.agent}
-        agents={agents}
-        thread={thread}
-        controls={question}
-        skills={agents.readSkills}
-        keywords={answerKeywords(holder, item)}
-        replyScope={board}
-        onQuoteDoor={onQuoteDoor}
-        onQuoted={onQuoted}
-        onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
-        newThread={
-          newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
-        }
-      />
-    </AnswerMentions>
+    <InboxAnswerBox
+      item={item}
+      readerId={readerId}
+      control={control}
+      agent={by.subject.agent}
+      agents={agents}
+      thread={thread}
+      controls={question}
+      skills={agents.readSkills}
+      keywords={answerKeywords(holder, item)}
+      replyScope={board}
+      onQuoteDoor={onQuoteDoor}
+      onQuoted={onQuoted}
+      onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
+      newThread={
+        newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
+      }
+    />
   );
 
   const draftReply = (place: VirtualRowPlace) => (

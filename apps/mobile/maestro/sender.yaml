@@ -1,4 +1,4 @@
-# sender.yaml -- a sender's name, pressed, opens their page, as the panel's sender opens it: a teammate's and another agent's over their lines in an agent's transcript, and the agent's over its message on a thread.
+# sender.yaml -- a sender's name, pressed, opens their page, as the panel's sender opens it: a teammate's and another agent's over their lines in an agent's transcript, the agent's over its message on a thread, and a person's over their run in a Manager's chat.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -87,3 +87,22 @@ env:
     timeout: 10000
 - waitForAnimationToEnd
 - takeScreenshot: sender-thread-agent
+# A Manager's chat heads each run with its sender's face and name: a
+# person's, pressed, opens their page, here the account's own, which leads
+# with the Managers it started; the Manager's own open nothing.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 81e2a425-6d3f-4a07-92df-9eafb0c1d2e8
+- extendedWaitUntil:
+    visible: ".*Get the invitations work ready to ship this week.*"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: sender-chat
+- tapOn: "Ada Lovelace"
+- extendedWaitUntil:
+    visible: "Managers.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: sender-chat-person

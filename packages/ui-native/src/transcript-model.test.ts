@@ -5,7 +5,7 @@ import {
   PART_CUT_FIELD,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { managerChatView } from "@repo/features/manager-chat-view";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
@@ -1028,6 +1028,7 @@ describe("managerChatItems", () => {
       pullRequests: [],
       sending,
       readerName: "Ada",
+      placeAddress: (place: LinkDestination) => JSON.stringify(place),
     };
 
     const channel = managerChatItems(view, [], reading);
@@ -1051,15 +1052,21 @@ describe("managerChatItems", () => {
     expect(
       thread?.map((item) =>
         item.kind === TRANSCRIPT_ITEM.SAID
-          ? [item.words, item.channel?.name, item.thread]
+          ? [item.words, item.channel?.name, item.channel?.address, item.thread]
           : [item.kind, item.kind === TRANSCRIPT_ITEM.RULE && item.words],
       ),
     ).toEqual([
-      ["Shipped.", "Pat", undefined],
+      // Note that a person's face and name open their page, and the Manager's, whose chat this is, open nothing.
+      ["Shipped.", "Pat", undefined, undefined],
       [TRANSCRIPT_ITEM.RULE, "2 replies"],
-      ["Which branch?", "Grace", undefined],
-      ["Done.", "Pat", undefined],
-      ["Thanks!", "Ada", undefined],
+      [
+        "Which branch?",
+        "Grace",
+        JSON.stringify({ kind: LINK_DESTINATION.PERSON, userId: "u2" }),
+        undefined,
+      ],
+      ["Done.", "Pat", undefined, undefined],
+      ["Thanks!", "Ada", undefined, undefined],
     ]);
     expect(managerThreadItems(view, "gone", [], reading)).toBeUndefined();
   });
