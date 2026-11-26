@@ -567,6 +567,8 @@ export function useThreadAnswer(
   const store = useHeldValue(threads);
   const { draft, note, asNew = false, nodding } = store.get(itemId) ?? NOTHING_HELD;
   const thread = item.thread ?? [];
+  // Note that a thread whose kept messages are still being read stands with none, so nothing that answers among them goes until they load.
+  const reading = listed.reading === true;
 
   const onDraft = useCallback(
     (next: InboxDraft | ((now: InboxDraft) => InboxDraft)) =>
@@ -666,6 +668,8 @@ export function useThreadAnswer(
   };
 
   const send = (pressed?: InboxDraft) => {
+    // Note that a send pressed before the thread's messages load holds the box as it stands, since its ask, and what an answer to it must fill, stand among them.
+    if (reading) return false;
     const sending = pressed ?? draft;
     const unreadable = unreadableNumber(thread, sending);
 
@@ -947,7 +951,6 @@ export function useThreadAnswer(
 
   // A notification's action held for this thread, taken once and sent as though pressed here, once its messages are read, since the ask it answers stands among them.
   const pressed = store.get(itemId)?.pressed;
-  const reading = listed.reading === true;
   useEffect(() => {
     if (pressed === undefined || reading) return;
     hold(itemId, ({ pressed: _taken, ...was }) => was);

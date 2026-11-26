@@ -330,8 +330,15 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
     /** Deletes every item kept that settled before the read's window now, but one a write stands over, which draws over it until it lands. */
     const agedOut = Effect.gen(function* () {
       const found = yield* agedIds(pool, yield* Clock.currentTimeMillis);
-      const pending = pool.standing(INBOX_THREAD)?.pending;
-      const aged = found.filter((id) => pending?.has(id) !== true);
+
+      /** The aged items no write stands over now, read again after each wait, since a write asked meanwhile draws over its item until it lands. */
+      const unwritten = (ids: readonly string[]) => {
+        const pending = pool.standing(INBOX_THREAD)?.pending;
+
+        return ids.filter((id) => pending?.has(id) !== true);
+      };
+
+      const aged = unwritten(found);
 
       if (aged.length === 0) return;
       // Note that an item's words and messages go before it, so a launch never finds an item kept whose thread is gone, and one cut short deletes the rest again.
@@ -339,7 +346,9 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
       const left = yield* threadMessageIds(pool, aged);
 
       if (left.size > 0) yield* follow.messages.answer([], { gone: [...left] });
-      yield* items.answer([], { gone: aged });
+      const gone = unwritten(aged);
+
+      if (gone.length > 0) yield* items.answer([], { gone });
     });
 
     // Note that a database that kept the items is told at once, so a launch draws the kept Inbox before the read answers.

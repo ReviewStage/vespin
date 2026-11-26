@@ -92,7 +92,7 @@ export function useInboxGroupsIn(
     [told, rows],
   );
 
-  const kept = useHoldersListed(holdings);
+  const { listed, listedAgents } = useHoldersListed(holdings);
   const whole = useInboxWholeGroupsIn(workspaceId);
   const read = told?.stored === true ? holdings !== undefined : told !== undefined;
 
@@ -106,8 +106,8 @@ export function useInboxGroupsIn(
 
     return holdings === undefined
       ? NO_GROUPS
-      : inboxGroupsIn(holdings, kept.listed, workspaceId, kept.listedAgents);
-  }, [told?.stored, whole, holdings, kept, workspaceId]);
+      : inboxGroupsIn(holdings, listed, workspaceId, listedAgents);
+  }, [told?.stored, whole, holdings, listed, listedAgents, workspaceId]);
 }
 
 /**

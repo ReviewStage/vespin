@@ -55,7 +55,10 @@ export function messageOf(row: ThreadMessage): InboxMessage {
 /** A thread's messages from its rows, oldest first, as an item read carries them. */
 export function threadOfRows(rows: readonly ThreadMessage[]): readonly InboxMessage[] {
   return [...rows]
-    .sort((one, other) => one.createdAt - other.createdAt || one.id.localeCompare(other.id))
+    .sort(
+      (one, other) =>
+        one.createdAt - other.createdAt || (one.id < other.id ? -1 : one.id > other.id ? 1 : 0),
+    )
     .map(messageOf);
 }
 
