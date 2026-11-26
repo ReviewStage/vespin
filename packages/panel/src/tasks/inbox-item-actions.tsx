@@ -1,5 +1,5 @@
+import type { InboxFields } from "@repo/features/inbox-digest";
 import { isUnread } from "@repo/features/inbox-list-model";
-import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { useLinkItems, useOpenInTab } from "../copy-link-item.js";
@@ -40,9 +40,9 @@ export function inboxItemSubject(itemId: string): ShortcutSubject {
 }
 
 /** What an item's acts are offered with: the doors the surface hands down. */
-interface InboxItemDoors {
+interface InboxItemDoors<Item extends InboxFields> {
   /** Marks the item read or unread; none where the surface offers no mark. */
-  readonly onMark: ((item: InboxItem, unread: boolean) => void) | undefined;
+  readonly onMark: ((item: Item, unread: boolean) => void) | undefined;
   /** Resolves open items without an answer; none where the surface offers no resolve. */
   readonly onResolve: InboxResolver | undefined;
   /** Sets the item's reminder, and opens the date picker for a time of the reader's own where the surface holds one; none where it offers no reminder. */
@@ -61,11 +61,14 @@ interface InboxItemActions {
 }
 
 /** The place an item is linked by: its id alone, whose agent and task its reader asks the service for. */
-function inboxItemPlace(item: InboxItem): LinkDestination {
+function inboxItemPlace(item: InboxFields): LinkDestination {
   return { kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id };
 }
 
-export function useInboxItemActions(item: InboxItem, doors: InboxItemDoors): InboxItemActions {
+export function useInboxItemActions<Item extends InboxFields>(
+  item: Item,
+  doors: InboxItemDoors<Item>,
+): InboxItemActions {
   const { onMark, onResolve, remind } = doors;
   const subject = inboxItemSubject(item.id);
   // Note that a row builds its menu on its draw, so it is drawn again as the keys acting on its item change.

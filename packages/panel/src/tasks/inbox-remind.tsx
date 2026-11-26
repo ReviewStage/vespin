@@ -1,3 +1,4 @@
+import type { InboxFields } from "@repo/features/inbox-digest";
 import { hasReminder } from "@repo/features/inbox-list-model";
 import {
   REMIND_TIMES,
@@ -6,7 +7,6 @@ import {
   remindPickOpensAt,
   remindWords,
 } from "@repo/features/inbox-remind-times";
-import type { InboxItem } from "@repo/features/inbox-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { dropBelowStart, STATUS_TONE, useMenu } from "@repo/ui";
 import { GLYPH, InboxIcon } from "@repo/ui/icons";
@@ -83,7 +83,7 @@ const QUIET: RemindSaying = { quiet: true };
 
 /** How an item's reminder is set: for an instant, or cleared where it is null; answers whether the service took it. */
 export type InboxReminder = (
-  item: InboxItem,
+  item: InboxFields,
   until: number | null,
   saying?: RemindSaying,
 ) => Promise<Kept>;
@@ -91,7 +91,7 @@ export type InboxReminder = (
 /** What a Remind me menu acts through: the reminder, and the date picker for a time of the reader's own, where the menu's surface holds one. */
 export interface RemindDoors {
   readonly onRemind: InboxReminder;
-  readonly onPick?: ((item: InboxItem) => void) | undefined;
+  readonly onPick?: ((item: InboxFields) => void) | undefined;
 }
 
 /** The times a menu offers, each saying when it comes due, set through `onAt` as it is chosen. */
@@ -106,7 +106,7 @@ function timeActions(onAt: (at: number) => void): MenuAction[] {
 }
 
 /** Clear reminder, on an item with a reminder already; nothing on one without. */
-function clearReminderActions(item: InboxItem, onRemind: InboxReminder): MenuAction[] {
+function clearReminderActions(item: InboxFields, onRemind: InboxReminder): MenuAction[] {
   return hasReminder(item)
     ? [{ label: REMIND_WORDS.CLEAR, icon: <InboxIcon />, onSelect: () => onRemind(item, null) }]
     : [];
@@ -120,7 +120,7 @@ function clearReminderActions(item: InboxItem, onRemind: InboxReminder): MenuAct
  * reminder already, whose time its row says (`InboxItemMarks`).
  */
 export function remindEntries(
-  item: InboxItem,
+  item: InboxFields,
   doors: RemindDoors,
   subject: ShortcutSubject,
 ): MenuEntry[] {
@@ -147,7 +147,7 @@ export function remindEntries(
 }
 
 /** Sets or clears the reminder of several items chosen together. */
-export type InboxRemindMany = (items: readonly InboxItem[], until: number | null) => void;
+export type InboxRemindMany = (items: readonly InboxFields[], until: number | null) => void;
 
 /**
  * The Remind me menu of several items chosen together: the times, set on
@@ -155,7 +155,7 @@ export type InboxRemindMany = (items: readonly InboxItem[], until: number | null
  * and Clear reminders where any of them holds one.
  */
 export function remindManyGroups(
-  items: readonly InboxItem[],
+  items: readonly InboxFields[],
   onRemindMany: InboxRemindMany,
   onPick: (() => void) | undefined,
 ): MenuAction[][] {
@@ -222,7 +222,7 @@ export function useRemindMany(onRemind: InboxReminder | undefined): InboxRemindM
 
 type UseInboxRemindingResult = {
   readonly popover: React.ReactNode;
-  readonly onPick: (item: InboxItem, onAt?: (at: number) => void) => void;
+  readonly onPick: (item: InboxFields, onAt?: (at: number) => void) => void;
 };
 
 /**
@@ -241,7 +241,7 @@ export function useInboxReminding({
 }: {
   room: RefObject<HTMLElement | null>;
   rowOf: (itemId: string) => HTMLElement | undefined;
-  chosen: InboxItem | undefined;
+  chosen: InboxFields | undefined;
   active: boolean;
   onRemind: InboxReminder | undefined;
 }): UseInboxRemindingResult {
@@ -252,7 +252,7 @@ export function useInboxReminding({
 
   // Note that the picker opens on the row of `item`, setting its reminder unless `onAt` takes the time picked, as several items chosen together do.
   const onPick = useCallback(
-    (item: InboxItem, onAt?: (at: number) => void) => {
+    (item: InboxFields, onAt?: (at: number) => void) => {
       // Note that a time for several items chosen hangs from the list's room where none of their rows is drawn.
       const row = rowOf(item.id) ?? (onAt === undefined ? undefined : (room.current ?? undefined));
 

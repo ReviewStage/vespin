@@ -8,7 +8,7 @@ import { cn } from "../cn.js";
  * The component is shadcn's own source, kept as close to it as the window
  * allows, so a later `shadcn add button` reads as a small diff. Our
  * changes: the sizes are the control's roles (`control`, `compact`, `icon`,
- * `icon-compact`, a player's Play's `icon-large`, and a menu's `row`) and a `corners` that rounds them; the
+ * `icon-compact`, a player's Play's `icon-large`, an icon picker's cell's `icon-picker`, and a menu's `row`) and a `corners` that rounds them; the
  * looks are not here, because a look is a set of `--ui-button-*` inks a
  * container's sheet may restyle (`components/button/button.css`), so the
  * fill and ink are drawn there and only the edge is read here; none of
@@ -31,6 +31,8 @@ const buttonVariants = cva(
         icon: "inline-flex size-control p-0 rounded-control text-label font-label",
         "icon-compact": "inline-flex size-6 p-0 rounded-ui-6 text-label font-label",
         "icon-large": "inline-flex size-control-large p-0 rounded-control text-label font-label",
+        "icon-picker":
+          "inline-flex size-icon-picker-cell p-0 rounded-control text-icon-picker font-label",
         row: "flex w-full justify-start h-menu-row px-2 rounded-menu-row text-body font-text",
       },
       corners: {

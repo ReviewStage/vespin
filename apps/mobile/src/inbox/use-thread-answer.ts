@@ -39,6 +39,7 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { missingWords } from "@repo/features/inbox-ask-words";
+import { type InboxFields, inboxRowOf } from "@repo/features/inbox-digest";
 import {
   EMPTY_INBOX_DRAFT,
   fieldValueOf,
@@ -52,7 +53,6 @@ import {
   awaitsNod,
   holderTask,
   type InboxAnyHolder,
-  type InboxListed,
   knownAsk,
 } from "@repo/features/inbox-list-model";
 import { INBOX_PUSH_PRESS, type InboxPushPress } from "@repo/features/inbox-push-wire";
@@ -383,7 +383,7 @@ export function useUndeliveredShown(item: InboxItem): UndeliveredShown {
 
 /** A thread a settle went on, and the key it went under, by which its Undo takes it back. */
 export interface SettledThread {
-  readonly item: InboxItem;
+  readonly item: InboxFields;
   readonly key: string;
 }
 
@@ -505,7 +505,7 @@ const starting = new Set<string>();
  * to send.
  */
 export function useThreadAnswer(
-  listed: InboxListed<InboxAnyHolder>,
+  listed: { readonly holder: InboxAnyHolder; readonly item: InboxItem },
   readerId: string | undefined,
   onStarted?: (itemId: string) => void,
 ): ThreadAnswer {
@@ -639,7 +639,7 @@ export function useThreadAnswer(
       return false;
     }
 
-    const sent = { ...message, revision: awaitsNod(item) ? item.revision : undefined };
+    const sent = { ...message, revision: awaitsNod(inboxRowOf(item)) ? item.revision : undefined };
     // Note that the reply Edit took back, sent again as it was, goes under the key it went under, so one that landed unheard is taken once.
     const edited = threads.read().get(itemId)?.edited;
     const key = edited?.words === sentWords(sent) ? edited.key : randomUUID();
@@ -719,7 +719,7 @@ export function useThreadAnswer(
   };
 
   const acknowledge = () => nod(false);
-  const settlesOnOpen = acknowledgedOnOpen(item, readerId);
+  const settlesOnOpen = acknowledgedOnOpen(inboxRowOf(item), readerId);
   const empty = draft.note.trim() === "" && draft.attachments.length === 0;
 
   // Opening the reader's own notice acknowledges it, once for each revision shown, as the panel's open does.
@@ -834,7 +834,7 @@ export function useThreadAnswer(
   const nodsOn = (held: InboxDraft) =>
     !asNew &&
     nodding === undefined &&
-    awaitsNod(item) &&
+    awaitsNod(inboxRowOf(item)) &&
     !settlesOnOpen &&
     held.note.trim() === "" &&
     held.attachments.length === 0;

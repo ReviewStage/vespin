@@ -1,4 +1,12 @@
-import { IconPicker, IconPickerChoice, IconPickerGroup, NOTE_LINE_LOOK, NoteLine } from "@repo/ui";
+import {
+  IconButton,
+  IconPicker,
+  IconPickerChoice,
+  type IconPickerFlyout,
+  IconPickerGroup,
+  NOTE_LINE_LOOK,
+  NoteLine,
+} from "@repo/ui";
 import {
   BookmarkIcon,
   BugIcon,
@@ -17,8 +25,15 @@ import { CatalogSection } from "../section";
  * icon-picker.tsx -- the app's one icon picker, its frame alone: a search
  * over named groups of choices in rows of ten, the one chosen pressed, the
  * arrows walking the grid, and Enter in the search picking the first found;
- * a section's icon picker and a Manager's face picker are drawn in it.
+ * Flag floats a flyout of inks, as a section glyph's colors float; a
+ * section's icon picker and a Manager's face picker are drawn in it.
  */
+
+/** The inks the flyout offers a flag in, as a section glyph's colors are offered. */
+const FLAG_INKS = [
+  { label: "Flag in the text's ink", ink: "text-foreground" },
+  { label: "Flag in the quiet ink", ink: "text-muted-foreground" },
+] as const;
 
 /** The glyphs the example offers, under the group each stands in. */
 const GROUPS: readonly { name: string; glyphs: readonly { label: string; Glyph: LucideIcon }[] }[] =
@@ -42,9 +57,33 @@ const GROUPS: readonly { name: string; glyphs: readonly { label: string; Glyph: 
     },
   ];
 
+/** Flag's flyout while it stands open: the flag in each ink, a press choosing it. */
+function flagFlyout(
+  open: boolean,
+  onChoose: () => void,
+  onClose: () => void,
+): IconPickerFlyout | undefined {
+  if (!open) return undefined;
+
+  return {
+    label: "Flag ink",
+    content: FLAG_INKS.map(({ label, ink }) => (
+      <IconButton
+        key={label}
+        icon={<FlagIcon className={ink} />}
+        label={label}
+        roving
+        onClick={onChoose}
+      />
+    )),
+    onClose,
+  };
+}
+
 function IconPickers(): React.JSX.Element {
   const [query, setQuery] = useState("");
   const [chosen, setChosen] = useState("Star");
+  const [flagOpen, setFlagOpen] = useState(false);
   const words = query.trim().toLowerCase();
 
   const shown = GROUPS.flatMap((group) => {
@@ -58,7 +97,15 @@ function IconPickers(): React.JSX.Element {
 
   return (
     <CatalogSection id="icon-picker" title="Picking">
-      <IconPicker searchLabel="Search icons" query={query} onQuery={setQuery} legend="Icons">
+      <IconPicker
+        searchLabel="Search icons"
+        query={query}
+        onQuery={(next) => {
+          setFlagOpen(false);
+          setQuery(next);
+        }}
+        legend="Icons"
+      >
         {shown.length === 0 ? (
           <NoteLine look={NOTE_LINE_LOOK.LIST}>No icons match.</NoteLine>
         ) : (
@@ -71,7 +118,20 @@ function IconPickers(): React.JSX.Element {
                   pressed={label === chosen}
                   stop={label === stop}
                   face={<Glyph />}
-                  onPress={() => setChosen(label)}
+                  popup={label === "Flag"}
+                  flyout={
+                    label === "Flag"
+                      ? flagFlyout(
+                          flagOpen,
+                          () => {
+                            setChosen("Flag");
+                            setFlagOpen(false);
+                          },
+                          () => setFlagOpen(false),
+                        )
+                      : undefined
+                  }
+                  onPress={() => (label === "Flag" ? setFlagOpen((was) => !was) : setChosen(label))}
                 />
               ))}
             </IconPickerGroup>
