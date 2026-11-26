@@ -428,9 +428,9 @@ export function RunsOnPlace({
       <GlyphSlot size={ICON_SIZE.SMALL}>
         {cloud ? <GLYPH.CLOUD /> : <DeviceGlyph device={device} />}
       </GlyphSlot>
-      {/* Note that a device is named as its owner named it, so only Cloud and a removed device show. */}
+      {/* Note that a device is named as its owner named it, so only Cloud and a removed device show, a teammate's device among the masked though the member's own list names it not. */}
       <span>
-        <ReplayWords unmasked={device === undefined}>{words}</ReplayWords>
+        <ReplayWords unmasked={cloud || mac === undefined}>{words}</ReplayWords>
       </span>
     </Inline>
   );
