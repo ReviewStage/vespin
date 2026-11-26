@@ -80,7 +80,8 @@ builds a control of its own.
   holds the model, effort, Fast and the permission mode, each once, a
   popover from the chip in a regular window, `ModelChoicePopover`),
   Dictate, and Send, a dictation under way standing its strip in the row's
-  place (✕, how long it has run, ✓, then Transcribing), as the desktop's;
+  place (✕, how long it has run, the voice's wave as it is heard, ✓, then
+  Transcribing), as the desktop's;
   and over it stands one row of capsules (`DockChips`, the
   developer's pick, Nov 21, 2026), each the system's glass button with a
   count and a noun, copper only on a count that waits on the reader: an

@@ -1,4 +1,4 @@
-# dictate.yaml -- a message dictated into an agent's composer, as the desktop's: Dictate before Send, the strip while it records (Cancel, how long it has run, Done), a recording dropped, and one sent, its words landing in the field.
+# dictate.yaml -- a message dictated into an agent's composer, as the desktop's: Dictate before Send, the strip while it records (Cancel, how long it has run, the voice's wave, Done), a recording dropped, and one sent, its words landing in the field.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -11,7 +11,8 @@ appId: dev.vespin.ios
 # page, the microphone allowed up front, so iOS's prompt never stands over the
 # composer. The fixture hears any clip as fixed words (`@repo/host/fixture-inbox`),
 # so the simulator's silent microphone still dictates, and nothing reaches a
-# server.
+# server; and it meters a canned voice (`rig-dictation-power.ts`), so the
+# strip's wave moves as speech moves it.
 - launchApp:
     clearState: true
     permissions:
@@ -19,6 +20,7 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      dictationPower: "canned"
 - extendedWaitUntil:
     visible: "2 queued"
     timeout: 30000

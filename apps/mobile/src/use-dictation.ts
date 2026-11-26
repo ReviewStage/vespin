@@ -5,7 +5,10 @@
  * through the same act (`DICTATION_TRANSCRIBE`): Dictate asks iOS for the
  * microphone where it has not been asked, and records it as AAC in an
  * MPEG-4 file (`expo-audio`), mono at the wire's bitrate, which the service
- * takes beside the desktop's WebM (`DICTATION_AUDIO.MP4`). ✓ stops the
+ * takes beside the desktop's WebM (`DICTATION_AUDIO.MP4`), its power
+ * metered, which the strip's wave reads while it records, as the desktop's
+ * wave reads its analyzer (a fixture run may meter a canned voice in its
+ * place, `rig-dictation-power.ts`). ✓ stops the
  * recording and hands the clip to the service in one act, which has OpenAI
  * hear it on the account's own key and answers the words; the phone never
  * reaches OpenAI. The words go after what the field holds, a space between,
@@ -36,6 +39,7 @@ import { File } from "expo-file-system";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useHostActs } from "./host/host-provider.js";
+import { rigDictationPower } from "./rig-dictation-power.js";
 
 /** Why a dictation left nothing, in the desktop's words, the microphone's said where iOS keeps its switch. */
 const DICTATION_NOTE = {
@@ -50,12 +54,13 @@ const DICTATION_NOTE = {
 /** The sample rate a clip is recorded at: speech-clear, and the rate the transcription model hears at. */
 const SAMPLE_RATE = 16_000;
 
-/** How a clip is recorded: AAC in an MPEG-4 file, mono at the wire's bitrate, so two minutes stand well inside its byte bound. */
+/** How a clip is recorded: AAC in an MPEG-4 file, mono at the wire's bitrate, so two minutes stand well inside its byte bound, its power metered for the strip's wave. */
 const RECORDING = {
   ...RecordingPresets.HIGH_QUALITY,
   sampleRate: SAMPLE_RATE,
   numberOfChannels: 1,
   bitRate: DICTATION_BOUNDS.AUDIO_BITS_PER_SECOND,
+  isMeteringEnabled: true,
 } as const;
 
 /** The length a recording stops itself at: a second short of the bound, so the clip lands inside it. */
@@ -95,6 +100,13 @@ export interface Dictation {
 export function useDictation(words: string, onWords: (words: string) => void): Dictation {
   const acts = useHostActs();
   const recorder = useAudioRecorder(RECORDING);
+
+  // Note that the strip's wave reads the recorder's meter on its own beat, as the desktop's reads its analyzer, so a reading renders the wave alone and never the screen.
+  const readPower = useCallback(
+    () => (rigDictationPower === undefined ? recorder.getStatus().metering : rigDictationPower()),
+    [recorder],
+  );
+
   const [phase, setPhase] = useState<DictationPhase>(DICTATION_PHASE.IDLE);
   const [startedAt, setStartedAt] = useState<number | undefined>(undefined);
   const [note, setNote] = useState<string | undefined>(undefined);
@@ -294,6 +306,7 @@ export function useDictation(words: string, onWords: (words: string) => void): D
       onFinish: () => {
         if (startedAt !== undefined) void finish(recording.current, startedAt);
       },
+      readPower,
     },
     note,
   };
