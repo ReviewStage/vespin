@@ -15,6 +15,7 @@ import {
   type AccessibilityActionEvent,
   AccessibilityInfo,
   ActivityIndicator,
+  Animated,
   type HostInstance,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -163,6 +164,16 @@ const styles = StyleSheet.create({
   // Note that while there are no rows the content fills the list, so the empty state has room to center in.
   emptyContent: { flexGrow: 1 },
   emptyHost: { flex: 1 },
+  // Note that a landed row's wash stands a step in from the row's sides, rounded as a card, as the panel's stands a step around the place it lights.
+  landed: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    marginHorizontal: SPACE.EDGE / 2,
+    borderRadius: RADIUS.CARD,
+  },
   row: { paddingHorizontal: SPACE.EDGE, paddingVertical: SPACE.TIGHT },
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
@@ -346,8 +357,8 @@ function ChannelSaid({
         <MessageMenu
           words={item.words}
           at={item.at}
-          // Note that the Manager's message offers no link or rewind, as the panel's offers none; every message leads with Reply in thread, then what the page offers every chat message, such as Edit.
-          link={sender.manager ? undefined : drawing.messageLink?.(item.place.row)}
+          // Note that every message offers its link, the Manager's as much as a person's, as the panel's menu offers Copy link; every message leads with Reply in thread, then what the page offers every chat message, such as Edit.
+          link={drawing.messageLink?.(item.place.row)}
           more={[...threadAct, ...(drawing.messageMore?.(item) ?? [])]}
           width={width}
         >
@@ -1486,14 +1497,83 @@ type AgentTranscriptProps = Omit<RowDrawing, "now" | "column"> & {
   readonly now?: number | undefined;
   /** The pages older than the oldest row, read as the reader scrolls up to it; none where nothing older stands. */
   readonly older?: OlderPages | undefined;
-  /** A call's row to scroll into view, such as the one a held approval waits on, each ask a serial of its own so the same call is shown again. */
+  /** A row to scroll into view, such as the call a held approval waits on or the message a link names, each ask a serial of its own so the same row is shown again. */
   readonly reveal?: TranscriptReveal | undefined;
   /** Told the rows on screen each time they change, so a page reads only what it shows, such as a pull request card's state or a picture's bytes. */
   readonly onRowsShown?: ((items: readonly TranscriptItem[]) => void) | undefined;
 };
 
-/** A call's row the transcript is asked to bring into view, the ask told apart by its serial. */
-export type TranscriptReveal = { readonly callId: string; readonly serial: number };
+/** A row the transcript is asked to bring into view, the ask told apart by its serial: a call's, which then takes VoiceOver's focus, or a message's, by its row's id, which is lit once as it lands (`LandedWash`). */
+export type TranscriptReveal =
+  | { readonly callId: string; readonly serial: number }
+  | { readonly messageId: string; readonly serial: number };
+
+/** The row a message the transcript was asked to bring into view stands in, by its key (`itemKey`), lit once as it lands, each ask its own. */
+type LandedRow = { readonly key: string; readonly serial: number };
+
+/**
+ * The index of the row a reveal names, below 0 where no row is it: its
+ * call's line, or its message's: the line someone said, by its row's id,
+ * as a Manager's chat names each message, else the first row of the turn
+ * a transcript's message is.
+ */
+function revealedIndex(items: readonly TranscriptItem[], reveal: TranscriptReveal): number {
+  if ("callId" in reveal) {
+    return items.findIndex(
+      (item) => item.kind === TRANSCRIPT_ITEM.CALL && item.callId === reveal.callId,
+    );
+  }
+
+  const said = items.findIndex(
+    (item) => item.kind === TRANSCRIPT_ITEM.SAID && item.place.row === reveal.messageId,
+  );
+
+  return said >= 0 ? said : items.findIndex((item) => item.place.message === reveal.messageId);
+}
+
+/** How long a landed row's wash stands, then fades, in milliseconds: the panel's (`landed.css`'s `--ui-confirm-delay` and `--ui-duration-shape`). */
+const LANDED_MS = { HOLD: 1200, FADE: 460 } as const;
+
+/** The accent's share in a landed row's wash, as a hex color's alpha: the panel's 18%. */
+const LANDED_ALPHA = "2e";
+
+/**
+ * "You landed here", as the panel lights a place a link brought the eye to
+ * (`@repo/ui/landed`): a wash of the accent behind the row, standing for a
+ * moment and then fading. Reduce Motion drops the fade alone, so the wash
+ * still stands, still, for as long.
+ */
+function LandedWash({ children }: { readonly children: ReactNode }) {
+  const colors = useColors();
+  const reduceMotion = useReduceMotion();
+  const [light] = useState(() => new Animated.Value(1));
+
+  useEffect(() => {
+    const fade = Animated.timing(light, {
+      toValue: 0,
+      delay: LANDED_MS.HOLD,
+      duration: reduceMotion ? 0 : LANDED_MS.FADE,
+      useNativeDriver: true,
+    });
+
+    fade.start();
+
+    return () => fade.stop();
+  }, [light, reduceMotion]);
+
+  return (
+    <View>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.landed,
+          { backgroundColor: `${colors.ACCENT}${LANDED_ALPHA}`, opacity: light },
+        ]}
+      />
+      {children}
+    </View>
+  );
+}
 
 /** How long a revealed row's scroll takes to settle at most, in milliseconds, after which its row takes VoiceOver's focus where the scroll's own end did not send it: the system's scroll animation, with room. */
 const REVEAL_SETTLE_MS = 600;
@@ -1649,6 +1729,9 @@ export function AgentTranscript({
     [onScrollSettled],
   );
 
+  // The message a link brought into view, whose row is lit once.
+  const [landed, setLanded] = useState<LandedRow | undefined>(undefined);
+
   // The rows as they stand now, which a reveal reads without being asked anew as each lands.
   const itemsNow = useRef(items);
   useEffect(() => {
@@ -1659,14 +1742,17 @@ export function AgentTranscript({
   useEffect(() => {
     if (reveal === undefined) return;
 
-    const index = itemsNow.current.findIndex(
-      (item) => item.kind === TRANSCRIPT_ITEM.CALL && item.callId === reveal.callId,
-    );
+    const index = revealedIndex(itemsNow.current, reveal);
+    const row = itemsNow.current[index];
 
-    if (index < 0) return;
+    if (row === undefined) return;
     anchored.current = false;
-    sentTo.current = reveal.callId;
-    settled.current = false;
+
+    if ("callId" in reveal) {
+      sentTo.current = reveal.callId;
+      settled.current = false;
+    } else setLanded({ key: itemKey(row), serial: reveal.serial });
+
     void list.current?.scrollToIndex({
       index,
       viewPosition: REVEAL_POSITION,
@@ -1703,9 +1789,17 @@ export function AgentTranscript({
           // Note that each row's pictures are one set its viewer swipes through, a message's or a showing's own, since rows scrolled away are drawn no longer.
           renderItem={({ item }) => (
             <PictureSetProvider key={itemKey(item)}>
-              <TranscriptRow item={item} drawing={rowDrawing} />
+              {landed !== undefined && itemKey(item) === landed.key ? (
+                <LandedWash key={landed.serial}>
+                  <TranscriptRow item={item} drawing={rowDrawing} />
+                </LandedWash>
+              ) : (
+                <TranscriptRow item={item} drawing={rowDrawing} />
+              )}
             </PictureSetProvider>
           )}
+          // Note that a row lit as it lands is drawn again, since FlashList draws a row again only as its data or this moves.
+          extraData={landed}
           ListHeaderComponent={
             <>
               {head}
