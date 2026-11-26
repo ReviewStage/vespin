@@ -30,4 +30,9 @@ test("a window reads as reading until its first answer, then holds its last rows
   assert.deepEqual(readWindow({ ...loading, failed: true }, ["a"]), {
     status: WINDOW_READ.FAILED,
   });
+
+  // A read nobody asks any longer, as one waiting on an id it lost, holds none of the rows it answered for another.
+  assert.deepEqual(readWindow({ ...loading, enabled: false }, ["a"]), {
+    status: WINDOW_READ.READING,
+  });
 });

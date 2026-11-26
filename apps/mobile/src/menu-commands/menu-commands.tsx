@@ -314,7 +314,9 @@ function useWorkingAgents(taskId: string | undefined): number {
     ),
   );
 
-  return onTask.filter((agent) => agentStillWriting(agent.status)).length;
+  // Note that the rows are matched to the task again, since a read rebuilt for another task holds the last task's rows until it answers.
+  return onTask.filter((agent) => agent.taskId === taskId && agentStillWriting(agent.status))
+    .length;
 }
 
 /** The question a command asks before it acts. */

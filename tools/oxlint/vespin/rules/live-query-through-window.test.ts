@@ -24,6 +24,11 @@ const tester = new RuleTester();
 
 tester.run("live-query-through-window", liveQueryThroughWindowRule, {
   valid: [
+    // The library imported whole may name anything else of it.
+    {
+      code: 'import * as db from "@tanstack/react-db"; export const where = db.eq;',
+      filename: SCREEN,
+    },
     // The hook every window is read through calls the live query itself.
     { code: 'import { useLiveQuery } from "@tanstack/react-db";', filename: WINDOW },
     // The panel reads live queries its own way, outside the iOS app.
@@ -33,6 +38,12 @@ tester.run("live-query-through-window", liveQueryThroughWindowRule, {
     },
   ],
   invalid: [
+    // The library imported whole is no way past it.
+    {
+      code: 'import * as db from "@tanstack/react-db"; export const read = db.useLiveQuery;',
+      filename: SCREEN,
+      errors: [{ messageId: "direct" }],
+    },
     // A screen's hook, renamed or not, never reads a live query directly.
     {
       code: 'import { eq, useLiveQuery as live } from "@tanstack/react-db";',

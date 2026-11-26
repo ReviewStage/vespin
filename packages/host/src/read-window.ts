@@ -55,8 +55,8 @@ const FAILED: ReadWindow<never> = { status: WINDOW_READ.FAILED };
  * The window a live query's read stands as, given `last`, the rows the
  * screen's last settled read answered, or none where none has: the read's
  * own rows once it answered; `last`, not settled, while it is still loading
- * after an earlier read answered; reading before any has; refused where it
- * failed.
+ * after an earlier read answered; reading before any has, and while nobody
+ * asks it; refused where it failed.
  */
 export function readWindow<Row>(
   read: QueryRead<Row>,
@@ -64,7 +64,10 @@ export function readWindow<Row>(
 ): ReadWindow<Row> {
   if (read.failed) return FAILED;
 
-  if (read.enabled && read.ready && read.rows !== undefined) {
+  // Note that a read nobody asks holds no rows over, since what it held was another's, as the last workspace's or the last number's.
+  if (!read.enabled) return READING;
+
+  if (read.ready && read.rows !== undefined) {
     return { status: WINDOW_READ.ROWS, rows: read.rows, settled: true };
   }
 

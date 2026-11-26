@@ -25,9 +25,13 @@ export const liveQueryThroughWindowRule = defineRule({
     },
   },
   createOnce(context) {
+    /** The names this file imports the library whole under, whose `useLiveQuery` is as direct as one imported by name. */
+    let namespaces = new Set<string>();
+
     return {
       before() {
         const file = repositoryPathOf(context.filename);
+        namespaces = new Set();
 
         return TYPESCRIPT_SOURCE.test(file) && isWindowedSource(file);
       },
@@ -35,12 +39,31 @@ export const liveQueryThroughWindowRule = defineRule({
         if (node.source.value !== LIVE_QUERY_MODULE) return;
 
         for (const specifier of node.specifiers) {
+          if (specifier.type === "ImportNamespaceSpecifier") {
+            namespaces.add(specifier.local.name);
+
+            continue;
+          }
+
           if (specifier.type !== "ImportSpecifier") continue;
           const imported = specifier.imported;
           const name = imported.type === "Identifier" ? imported.name : imported.value;
 
           if (name === LIVE_QUERY_HOOK) context.report({ node: specifier, messageId: "direct" });
         }
+      },
+      MemberExpression(node) {
+        const { object, property } = node;
+
+        if (object.type !== "Identifier" || !namespaces.has(object.name)) return;
+        const name =
+          property.type === "Identifier"
+            ? property.name
+            : property.type === "Literal"
+              ? property.value
+              : undefined;
+
+        if (name === LIVE_QUERY_HOOK) context.report({ node, messageId: "direct" });
       },
     };
   },

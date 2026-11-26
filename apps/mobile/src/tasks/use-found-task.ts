@@ -21,7 +21,7 @@ import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
-import { windowRows } from "@repo/host/read-window";
+import { WINDOW_READ } from "@repo/host/read-window";
 import { eq } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -101,18 +101,19 @@ export function useHeldTasksNamed(named: string | undefined): readonly HeldTaskN
     [byIdId, byIdWorkspace],
   );
 
-  const data = windowRows(
-    useWindow((q) =>
-      number === undefined
-        ? undefined
-        : q
-            .from({ task: tasks })
-            .where(({ task }) => eq(task.number, number))
-            .orderBy(({ task }) => task.createdAt, "desc")
-            .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
-            .select(({ task }) => ({ id: task.id, workspaceId: task.workspaceId })),
-    ),
+  const read = useWindow((q) =>
+    number === undefined
+      ? undefined
+      : q
+          .from({ task: tasks })
+          .where(({ task }) => eq(task.number, number))
+          .orderBy(({ task }) => task.createdAt, "desc")
+          .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
+          .select(({ task }) => ({ id: task.id, workspaceId: task.workspaceId })),
   );
+
+  // Note that only a settled read names a number's tasks, since one rebuilt for another number holds the last number's rows until it answers, and a route must never open one of those.
+  const data = read.status === WINDOW_READ.ROWS && read.settled ? read.rows : NONE_NAMED;
 
   return number === undefined ? heldById : data;
 }
