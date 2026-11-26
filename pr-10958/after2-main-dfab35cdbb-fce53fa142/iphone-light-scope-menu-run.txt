@@ -1,0 +1,19 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane C) - iOS 27.2 - D479E601-B915-45AA-99C5-5295A84F641E
+ > Flow .kbd-fscope10958
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on id: search-tab... COMPLETED
+Assert that "Search Vespin" is visible... COMPLETED
+Tap on "Search Vespin"... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text deploy... COMPLETED
+Assert that "Check each deploy" is visible... COMPLETED
+Tap on "All"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Tasks" is visible... COMPLETED
+Take screenshot search-scope-menu... COMPLETED
