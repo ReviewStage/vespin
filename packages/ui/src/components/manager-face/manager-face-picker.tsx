@@ -492,7 +492,8 @@ export function ManagerFacePicker({
  * A Manager's face well: a button wearing the face, or the add-icon glyph
  * where none is picked yet, hanging the picker while `open`, as a section's
  * icon well hangs its own; `compact` in an editor. A pick hands the face on
- * and puts the picker away.
+ * and puts the picker away, the focus going back to the well, or where
+ * `finalFocus` says, as an editor hands it back to the name's field.
  */
 export function ManagerFaceWell({
   face,
@@ -502,6 +503,8 @@ export function ManagerFaceWell({
   onChange,
   size = BUTTON_SIZE.CONTROL,
   disabled,
+  finalFocus,
+  ref,
 }: {
   face: ManagerFaceValue | undefined;
   /** Where the faces picked last are kept. */
@@ -513,6 +516,10 @@ export function ManagerFaceWell({
   /** The well's size: a field's, or `compact` in an editor. */
   size?: ButtonSize | undefined;
   disabled?: boolean | undefined;
+  /** Where the focus goes as the picker is put away; the well where none is given or it answers none. */
+  finalFocus?: (() => HTMLElement | null | undefined) | undefined;
+  /** The well's button, which an editor counts as its own. */
+  ref?: RefObject<HTMLButtonElement | null> | undefined;
 }): React.JSX.Element {
   const search = useRef<HTMLInputElement | null>(null);
 
@@ -532,6 +539,8 @@ export function ManagerFaceWell({
       size={size}
       disabled={disabled}
       initialFocus={search}
+      finalFocus={finalFocus}
+      ref={ref}
     >
       <ManagerFacePicker
         face={face}

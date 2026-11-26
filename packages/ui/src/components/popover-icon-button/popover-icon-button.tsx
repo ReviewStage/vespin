@@ -58,7 +58,7 @@ function pressOnButton(
 /**
  * A glyph button named `label` and the panel named `title` it hangs while
  * `open`, holding `children`; the focus lands on `initialFocus` as it opens,
- * or the panel itself.
+ * or the panel itself, and on `finalFocus` as it is put away, or the button.
  */
 export function PopoverIconButton({
   icon,
@@ -71,6 +71,7 @@ export function PopoverIconButton({
   disabled,
   hint,
   initialFocus,
+  finalFocus,
   ref,
   children,
 }: {
@@ -88,6 +89,8 @@ export function PopoverIconButton({
   /** The hover pill the button raises, which says why where it is unavailable; none where its glyph says enough. */
   hint?: string | undefined;
   initialFocus?: RefObject<HTMLElement | null> | undefined;
+  /** Where the focus goes as the panel is put away, as a name's field beside a face well takes it back; the button where none is given or it answers none. */
+  finalFocus?: (() => HTMLElement | null | undefined) | undefined;
   ref?: RefObject<HTMLButtonElement | null> | undefined;
   children: ReactNode;
 }): React.JSX.Element {
@@ -124,7 +127,7 @@ export function PopoverIconButton({
           layer={layerOf(button.current)}
           aria-label={title}
           initialFocus={initialFocus ?? true}
-          finalFocus={button}
+          finalFocus={finalFocus === undefined ? button : () => finalFocus() ?? button.current}
         >
           {children}
         </PopoverContent>
