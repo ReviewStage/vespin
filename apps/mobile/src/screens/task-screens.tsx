@@ -120,6 +120,7 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  type BarMenuEntry,
   BUTTON_LOOK,
   BUZZ,
   buzz,
@@ -1603,30 +1604,57 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
     : [{ label: TASK_MOVE_WORDS.TITLE, symbol: GLYPH.MOVE, onPress: open }];
 }
 
-/** Copy description as a task's ⋯ offers it, as the panel's open task's menu does: none where the workspace's descriptions stand off or the description is not read yet. */
-function copyDescriptionActions(
+/**
+ * Where the task is, as a task's ⋯ leads with it: Copy, a menu of Copy
+ * description and Copy link, where the workspace's descriptions stand on
+ * and the description is read, else Copy link alone; then Open in browser.
+ * Note that the two copies share one row, at the developer's word (Nov 26),
+ * because Copy description standing as a row of its own pushed Permanently
+ * delete past the ⋯'s height on an iPhone 18 Pro.
+ */
+function whereEntries(
   overview: TaskOverview,
   descriptions: boolean,
   copyWords: TaskMenuDoors["copyWords"],
-): BarMenu["actions"] {
-  const { document } = overview;
+): readonly BarMenuEntry[] {
+  const { task, document } = overview;
 
-  if (!descriptions || document === undefined) return [];
+  const copyLink = {
+    label: WORDS.COPY_LINK,
+    symbol: GLYPH.LINK,
+    onPress: () => copyTaskLink(task, overview.workspace),
+  };
 
-  return [
-    {
-      label: COPY_DESCRIPTION,
-      symbol: GLYPH.COPY,
-      onPress: () => copyWords(descriptionMarkdown(document)),
-    },
-  ];
+  const openInBrowser = {
+    label: VERB.OPEN_IN_BROWSER,
+    symbol: GLYPH.OPEN_EXTERNALLY,
+    onPress: () => openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, overview.workspace),
+  };
+
+  if (!descriptions || document === undefined) return [copyLink, openInBrowser];
+
+  const copy: BarMenu = {
+    label: VERB.COPY,
+    symbol: GLYPH.COPY,
+    choices: [],
+    actions: [
+      {
+        label: COPY_DESCRIPTION,
+        symbol: GLYPH.COPY,
+        onPress: () => copyWords(descriptionMarkdown(document)),
+      },
+      copyLink,
+    ],
+  };
+
+  return [copy, openInBrowser];
 }
 
 /**
  * What a task's ⋯ holds, the panel's acts in four groups set apart by the
  * system's rule, as Reminders and Mail group a list's ⋯: where the task is
- * (Copy description where the workspace's descriptions stand on, as the
- * panel's open task's menu leads with it, Copy link, Open in browser); the task itself (Rename, Edit description and
+ * (Copy, holding Copy description and Copy link, then Open in browser,
+ * `whereEntries`); the task itself (Rename, Edit description and
  * Version history where the workspace's descriptions stand on, Move to workspace where the
  * reader may move it); where it stands among tasks (New sub-task, Remove
  * parent where it has one, Task relation, its section and its repository);
@@ -1639,22 +1667,10 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   return {
     ...WORDS.MORE,
     choices: [],
-    actions: [
-      // Note that the edit door stands where the workspace's descriptions stand on, as Copy description does.
-      ...copyDescriptionActions(overview, doors.editDescription !== undefined, doors.copyWords),
-      {
-        label: WORDS.COPY_LINK,
-        symbol: GLYPH.LINK,
-        onPress: () => copyTaskLink(task, overview.workspace),
-      },
-      {
-        label: VERB.OPEN_IN_BROWSER,
-        symbol: GLYPH.OPEN_EXTERNALLY,
-        onPress: () =>
-          openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, overview.workspace),
-      },
-    ],
+    actions: [],
     groups: [
+      // Note that the edit door stands where the workspace's descriptions stand on, as Copy description does.
+      { items: whereEntries(overview, doors.editDescription !== undefined, doors.copyWords) },
       {
         items: [
           {
