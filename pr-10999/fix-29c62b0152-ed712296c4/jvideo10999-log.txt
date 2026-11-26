@@ -1,0 +1,23 @@
+pinned to 29c62b0152
+== bundle PJjvideo10999 base 29c62b0152
+  built 29c62b0152 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+fixture MP4: 9520 bytes
+main-iphone-light-video-file: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+main-iphone-light-video-http: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+== bundle PJjvideo10999F base 35f9dd89e8
+  built 35f9dd89e8 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+p10999-iphone-light-video-file: fails 0 shots 2 
+p10999-iphone-light-video-http: fails 3 shots 3     Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, wi
+  p10999-iphone-light-video-http around the failure: WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release|Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-|Run subflows/scroll-in.yaml...|  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...|    Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, wi|  Run flow when true is true... FAILED|
+p10999-iphone-light-agent: fails 0 shots 32 
+p10999-iphone-light-inbox: fails 1 shots 6 Assert that "invite-flow.*, \d+:\d\d" is not visible... FAILED
+  p10999-iphone-light-inbox around the failure: Assert that ".*can't play here.*" is not visible... COMPLETED|Assert that "invite-flow.*, \d+:\d\d" is visible... COMPLETED|Take screenshot inbox-video... COMPLETED|Tap on "invite-flow.*, \d+:\d\d"... COMPLETED|Assert that "invite-flow.*, \d+:\d\d" is not visible... FAILED||
+range server requests: 2: 2026-11-26T20:00:55.987Z GET /fixture-recording.mp4 - 200;2026-11-26T20:00:56.095Z GET /fixture-recording.mp4 bytes=0- 206;
