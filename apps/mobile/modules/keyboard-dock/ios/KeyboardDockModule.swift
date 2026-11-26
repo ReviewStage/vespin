@@ -17,6 +17,16 @@
 // window, which it does before it goes. JavaScript
 // hears the same overlap, so the content under the bar leaves room for it.
 //
+// The guide read is the window's own, never this view's. UIKit moves a view's
+// keyboard layout guide only as the keyboard's notices post, and only for a
+// view standing in a window then, so a dock out of its window as the keyboard
+// fell kept the risen keyboard in its own guide: a Manager's chat come back to
+// from a thread whose keyboard stood held its composer a keyboard's height up
+// the screen, over its newest messages, until the keyboard next moved. The
+// window never leaves itself, so its guide always stands where the keyboard
+// does, as react-native-keyboard-controller reads it on iOS 26 from the top
+// view controller's view.
+//
 // The bar is lifted over the typing field's input accessory too, such as the
 // Done bar SwiftUI stands over a number pad (`ToolbarItem(placement:
 // .keyboard)`), which iOS 26 stands over the keyboard but outside the
@@ -63,9 +73,6 @@ private let edgeLookPause: TimeInterval = 0.5
 /// How deep under the dock's content its scroll view is looked for, so a screen still reading, with no list yet, costs a layout pass little.
 private let scrollViewDepth = 8
 
-/// Whether the system's keyboard stands, as its own notices last said, kept for every dock and read and written only on the main thread, where UIKit posts them, since a dock that comes into its window after the keyboard rose, as a start page whose field takes the keyboard as it opens, heard none of them while it stood out of a window.
-nonisolated(unsafe) private var keyboardStands = false
-
 final class KeyboardDockView: ExpoView {
   let onOverlap = EventDispatcher()
 
@@ -99,9 +106,6 @@ final class KeyboardDockView: ExpoView {
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
-    keyboardLayoutGuide.followsUndockedKeyboard = false
-    // Note that the guide's top then stands at this view's foot while the keyboard is down, rather than at the safe area's, so no keyboard reads as no overlap.
-    keyboardLayoutGuide.usesBottomSafeArea = false
     let center = NotificationCenter.default
     center.addObserver(self, selector: #selector(keyboardWillMove), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
     center.addObserver(self, selector: #selector(keyboardDidMove), name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
@@ -114,11 +118,11 @@ final class KeyboardDockView: ExpoView {
     frames?.invalidate()
   }
 
-  /// Lays the view out inside the keyboard's announced move, so the bar's lift rides the keyboard's own curve rather than landing after it.
+  /// Lays the window out inside the keyboard's announced move, so its guide stands where the keyboard ends and the bar's lift rides the keyboard's own curve rather than landing after it.
   @objc private func keyboardWillMove() {
     typing = FirstResponder.current()
-    setNeedsLayout()
-    layoutIfNeeded()
+    window?.layoutIfNeeded()
+    follow()
   }
 
   /// Reads the overlap again once the keyboard has settled, since a form sheet lifts itself after the keyboard's announced move, which only moves this view's place, not its size.
@@ -129,7 +133,6 @@ final class KeyboardDockView: ExpoView {
 
   /// Follows the keyboard frame by frame while it stands.
   @objc private func keyboardDidShow() {
-    keyboardStands = true
     typing = FirstResponder.current()
     followFrames()
   }
@@ -143,16 +146,15 @@ final class KeyboardDockView: ExpoView {
   }
 
   @objc private func keyboardDidHide() {
-    keyboardStands = false
     frames?.invalidate()
     frames = nil
     follow()
   }
 
-  /// Reads the keyboard on each frame drawn, moving the bar alone. Note that the view is laid out first, so the guide's frame is the keyboard's of this frame rather than the last layout pass's, and that JavaScript is not told each frame's overlap, since every frame of a drag drew the whole transcript anew; it hears the overlap where the keyboard settles.
+  /// Reads the keyboard on each frame drawn, moving the bar alone. Note that the window is laid out first, so its guide's frame is the keyboard's of this frame rather than the last layout pass's, and that JavaScript is not told each frame's overlap, since every frame of a drag drew the whole transcript anew; it hears the overlap where the keyboard settles.
   @objc private func frameDrawn() {
     framing = true
-    layoutIfNeeded()
+    window?.layoutIfNeeded()
     follow()
     framing = false
   }
@@ -160,17 +162,20 @@ final class KeyboardDockView: ExpoView {
   /// Follows the keyboard as the dock comes into a window with the keyboard already standing, as a page does when the one over it goes back, or a start page whose field took the keyboard as it opened; stops following as it leaves.
   override func didMoveToWindow() {
     super.didMoveToWindow()
-    guard window == nil else {
-      looksLeft = edgeLooks
-      // Note that the keyboard is followed frame by frame wherever it stands as the dock comes in, whether the dock lifted for it before or never heard it rise, so the suggestion strip growing over a start page's field lifts the bar with it.
-      if keyboardStands { typing = FirstResponder.current() }
-      follow()
-      if keyboardStands || (told ?? 0) > 0 { followFrames() }
+    guard let window else {
+      frames?.invalidate()
+      frames = nil
+      setDown()
       return
     }
-    frames?.invalidate()
-    frames = nil
-    setDown()
+    looksLeft = edgeLooks
+    // Note that the window's guide follows a keyboard docked at its foot alone, a floating or undocked iPad keyboard standing over nothing, and its top stands at the window's foot while the keyboard is down, rather than at the safe area's, so no keyboard reads as no overlap.
+    window.keyboardLayoutGuide.followsUndockedKeyboard = false
+    window.keyboardLayoutGuide.usesBottomSafeArea = false
+    typing = FirstResponder.current()
+    follow()
+    // Note that the keyboard is followed frame by frame wherever it stands over the dock as it comes in, as one falling under a page come back to, or the suggestion strip growing over a start page's field.
+    if (told ?? 0) > 0 { followFrames() }
   }
 
   override func mountChildComponentView(_ childComponentView: UIView, index: Int) {
@@ -302,9 +307,10 @@ final class KeyboardDockView: ExpoView {
 }
 
 extension KeyboardDockView {
-  /// Where the keyboard's top stands in this view: the layout guide's, or the typing field's input accessory's where one stands docked on it. Note that an accessory standing clear of the guide's top, over a keyboard floating on an iPad, is passed over, as the guide passes the keyboard over.
+  /// Where the keyboard's top stands in this view: the window's layout guide's, or the typing field's input accessory's where one stands docked on it; this view's foot where it stands in no window. Note that an accessory standing clear of the guide's top, over a keyboard floating on an iPad, is passed over, as the guide passes the keyboard over.
   fileprivate func keyboardTop() -> CGFloat {
-    let guideTop = keyboardLayoutGuide.layoutFrame.minY
+    guard let window else { return bounds.maxY }
+    let guideTop = convert(window.keyboardLayoutGuide.layoutFrame, from: window).minY
     guard let accessory = typing?.inputAccessoryView, accessory.window != nil, !accessory.isHidden else {
       return guideTop
     }
