@@ -165,9 +165,9 @@ function managerViews(open: number): readonly ChoiceItem<ManagerView>[] {
   const count: readonly CountPart[] | undefined = open === 0 ? undefined : [{ text: String(open) }];
 
   return [
-    { value: MANAGER_VIEW.OVERVIEW, label: "Overview" },
     { value: MANAGER_VIEW.MESSAGES, label: "Messages" },
     { value: MANAGER_VIEW.INBOX, label: TAB_WORDS.INBOX, count },
+    { value: MANAGER_VIEW.OVERVIEW, label: "Overview" },
   ];
 }
 
