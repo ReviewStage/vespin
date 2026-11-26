@@ -62,19 +62,21 @@ appId: dev.vespin.ios
       POINT: "94%, 60%"
 - assertNotVisible: "Copy message"
 - assertVisible: "The recording is under this.*"
-# The task's chip held, leading its own line in the same message: its own
-# menu, UIKit's, never the message's beside it, as a link held in a Messages
-# bubble opens its own. Note that the chip stands in its line's words, where
-# it is no element of its own, so it is held a little in from the line's
-# leading edge, as `person.yaml` holds a person's; and that its menu is put
-# away by its own Copy link, which copies the chip's address alone.
+# The task's chip held, leading the message's first line: its own menu,
+# UIKit's, never the message's beside it, as a link held in a Messages bubble
+# opens its own. Note that the chip stands in its line's words, where it is no
+# element of its own, so it is held a little in from the line's leading edge
+# and in its first fifth, which stands on the line's first row whether its
+# words wrap to two rows or three; and that its menu is put away by its own
+# Copy link, which copies the chip's address alone.
 - runFlow:
     file: subflows/scroll-to.yaml
     env:
-      ELEMENT: ".*holds the rest of the work.*"
+      ELEMENT: ".*walked the invite flow.*"
+      DIRECTION: UP
 - longPressOn:
-    text: ".*holds the rest of the work.*"
-    point: "6%, 50%"
+    text: ".*walked the invite flow.*"
+    point: "4%, 20%"
 - assertVisible: "Copy link"
 - assertNotVisible: "Copy message"
 - waitForAnimationToEnd
@@ -84,16 +86,16 @@ appId: dev.vespin.ios
 # The hold opened no link as the finger lifted: the thread still stands in
 # front, with no task page over it and no browser.
 - assertNotVisible: "Copy link"
-- assertVisible: ".*holds the rest of the work.*"
+- assertVisible: ".*walked the invite flow.*"
 - assertNotVisible: "Agents"
 # The picture opens full screen in the app's viewer, whose share sheet copies
 # and saves it as the system's own wording names those acts. Note that it is
-# scrolled back to first, since the chip's line stood under it.
+# scrolled to first, since the chip's hold left the message's first line in
+# the window's middle, the picture under it.
 - runFlow:
     file: subflows/scroll-to.yaml
     env:
       ELEMENT: "The invite page"
-      DIRECTION: UP
 - tapOn: "The invite page"
 - assertVisible:
     id: "picture-viewer-close"
@@ -126,10 +128,11 @@ appId: dev.vespin.ios
 - runFlow:
     file: subflows/scroll-to.yaml
     env:
-      ELEMENT: ".*holds the rest of the work.*"
+      ELEMENT: ".*walked the invite flow.*"
+      DIRECTION: UP
 - tapOn:
-    text: ".*holds the rest of the work.*"
-    point: "6%, 50%"
+    text: ".*walked the invite flow.*"
+    point: "4%, 20%"
 - extendedWaitUntil:
     visible: "Agents"
     timeout: 10000
@@ -142,4 +145,4 @@ appId: dev.vespin.ios
     commands:
       - tapOn:
           id: "BackButton"
-      - assertVisible: ".*holds the rest of the work.*"
+      - assertVisible: ".*walked the invite flow.*"
