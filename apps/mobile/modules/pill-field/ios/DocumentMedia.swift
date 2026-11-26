@@ -141,6 +141,11 @@ final class MediaShelf {
     views.add(view)
   }
 
+  /// The views drawing the media, which VoiceOver reaches as elements of their own beside the words.
+  func shownViews() -> [UIView] {
+    views.allObjects
+  }
+
   /// Takes what each address holds: an address whose file changed reads its size, off the main thread, and draws its views again.
   func take(_ records: [MediaRecord]) {
     for record in records {

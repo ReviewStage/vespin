@@ -934,6 +934,20 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     redraw(lines)
   }
 
+  /// What VoiceOver and the flows reach in the field, in reading order: the text view, which iOS hears as one element of its words, and each view standing in its words, which that element would hide, such as a picture or a video under its play button.
+  override var accessibilityElements: [Any]? {
+    get {
+      let standing: [UIView] = standingViews().filter { $0.window != nil }
+      return [textView] + standing.sorted { $0.convert($0.bounds, to: nil).minY < $1.convert($1.bounds, to: nil).minY }
+    }
+    set {}
+  }
+
+  /// The views standing in the words that VoiceOver reaches beside them.
+  private func standingViews() -> [UIView] {
+    media.shownViews()
+  }
+
   /// Takes what each picture the lines name holds, drawing again only the pictures that changed.
   func takeMedia(_ records: [MediaRecord]) {
     media.take(records)
