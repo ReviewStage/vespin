@@ -76,6 +76,7 @@ export function useInboxRows(
   const pending = standing?.pending ?? NONE_PENDING;
 
   // Note that the drawn rows stand in a collection only while any does, so a screen with no write standing runs one query.
+  // Note that nothing cleans it up by hand: its live query still reads it when an effect here would run, and `cleanup()` rejects while one does, so TanStack DB's garbage collection cleans it up once no query has read it for its `gcTime`.
   const drawnSource = useMemo(() => {
     const rows = inboxRowsDrawn(pending);
 
@@ -88,13 +89,6 @@ export function useInboxRows(
           }),
         );
   }, [pending, reach === undefined]);
-
-  useEffect(
-    () => () => {
-      void drawnSource?.cleanup();
-    },
-    [drawnSource],
-  );
 
   const kept = useLiveQuery((q) =>
     reach === undefined || collection === undefined ? undefined : rowsQuery(q, collection, reach),
