@@ -33,16 +33,13 @@
  * lapsed (`@repo/database/models/host-pairing-store`). The read answers
  * what the approve screen shows: the box as it named itself and the
  * address its start came from, so a member sees whose box they would let
- * run their agents, and the workspaces the member owns or admins that it
- * may connect the box to instead, none where the box's daemon cannot be a
- * workspace's machine. An approve makes the host under an id minted here,
- * never one the box named, listed from that moment and keyed with a secret
- * on its box's next poll: the account's own, or, where it names a
- * workspace, that workspace's machine, which only its owners and admins
- * may connect, refused as not found for a workspace the account is not in
- * and not permitted for one it does not manage. A Mac is one owner's: an
- * approve that would make it both a member's own and a workspace's is
- * refused as owned elsewhere, and its pairing waits for another answer. Each of the three is a guess: one that
+ * run their agents, and no workspace to connect it to, since a box is no
+ * longer connected to a workspace. An approve makes the host under an id
+ * minted here, never one the box named, listed from that moment and keyed
+ * with a secret on its box's next poll, as the account's own. An approve
+ * that still names a workspace, as a released desktop or iPhone build may
+ * send, is refused as not permitted before it guesses, and its pairing
+ * waits for another answer. Each of the three is a guess: one that
  * finds no pending pairing is answered not found and counts against the
  * account, and an account past the limit is refused as held, with when its
  * window ends, until it does.
@@ -90,7 +87,6 @@ import {
 import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_CHANNEL } from "@repo/wire";
 import { Clock, Effect, Option } from "effect";
-import { managedWorkspace, managedWorkspacesOf } from "../accounts/workspace-access.js";
 import { HOST_VERSION } from "../auth/device-secret.js";
 import {
   recordServerEvent,
@@ -338,21 +334,20 @@ export function hostsProcedures(seams: HostsProcedureSeams) {
     readPairing: hosts.readPairing.effect(function* ({ context, input }) {
       const code = yield* codeOf(input.code);
 
-      const { workspaceFit, ...pending } = yield* foundOrRefused(
+      const { workspaceFit: _workspaceFit, ...pending } = yield* foundOrRefused(
         yield* hostedStoreOrUnavailable(readHostPairing(context.userId, code)),
       );
 
-      const workspaces = workspaceFit ? yield* managedWorkspacesOf(context.userId) : [];
-
-      return { ...pending, expiresAt: pending.expiresAt.getTime(), workspaces };
+      // Note that no workspace is offered, so a released build that draws the picker for a box fit to be a workspace's offers Just me alone.
+      return { ...pending, expiresAt: pending.expiresAt.getTime(), workspaces: [] };
     }),
     approvePairing: hosts.approvePairing.effect(function* ({ context, input }) {
       const code = yield* codeOf(input.code);
       const target = input.target ?? JUST_ME;
 
-      // Note that only a workspace's owners and admins connect a machine to it, judged before the guess, which a refusal never spends.
+      // Note that a workspace target is refused before the guess, which a refusal never spends, so no machine is ever connected to a workspace.
       if (target.kind === MACHINE_OWNER.WORKSPACE) {
-        yield* managedWorkspace(context.userId, target.workspaceId);
+        return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
       }
 
       // Note that the host's id is minted here, so a pairing never names a device that stands.
