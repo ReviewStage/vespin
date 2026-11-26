@@ -3,11 +3,14 @@
 import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  defaultScrollAnchorForRole,
+  fixedSize,
   frame,
   glassEffect,
   type ModifierConfig,
   onGeometryChange,
   padding,
+  scrollDisabled,
 } from "@expo/ui/swift-ui/modifiers";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
@@ -165,7 +168,8 @@ export const BAR_GLASS: readonly ModifierConfig[] = [
  * What heads a bar inside its glass, such as a composer's held call and
  * queued messages, inset as the row's marks are. Note that it scrolls in
  * place once it would stand taller than a share of the window the keyboard
- * leaves (`HEAD_SHARE`), because at the largest text sizes a held call's
+ * leaves (`HEAD_SHARE`), one scroll view throughout so what it holds is
+ * never drawn anew as it crosses the share, because at the largest text sizes a held call's
  * words and its Deny and Allow alone grew the bar over the whole screen it
  * docks on, and with the keyboard up on the folded iPhone Duo a share of the
  * whole window left the transcript a line or two.
@@ -191,24 +195,25 @@ export function BarHead({
 
   const scrolls = tall > most;
 
-  const stack = (
-    <VStack
-      alignment="leading"
+  // Note that the head is always the same scroll view, its height its words' own up to the share and no taller, scrolling only past it, because swapping a plain stack for a scroll view as the head crossed the share remounted what it holds: a field in it, such as an ask's, lost the keyboard the moment the keyboard's rise shrank the share.
+  return (
+    <ScrollView
       modifiers={[
-        padding(BAR_HEAD_INSET),
-        onGeometryChange(({ height }) => setTall(height)),
-        ...(scrolls ? [] : fill),
+        // Note that while its words fit, the scroll view hugs them, as SwiftUI sizes a scroll view fixed to its content's height, and past the share it stands at the share.
+        scrolls ? frame({ height: most }) : fixedSize({ horizontal: false, vertical: true }),
+        scrollDisabled(!scrolls),
+        // Note that a head that scrolls keeps to its foot as it grows or the keyboard shrinks it, so a note under what it holds, such as why an ask's answer did not go, and the field it is about stand in sight.
+        defaultScrollAnchorForRole("bottom", "sizeChanges"),
+        ...fill,
       ]}
     >
-      {children}
-    </VStack>
-  );
-
-  // Note that a head that scrolls takes its ground on the scroll's frame, so the fill stands still while its words scroll over it.
-  return scrolls ? (
-    <ScrollView modifiers={[frame({ height: most }), ...fill]}>{stack}</ScrollView>
-  ) : (
-    stack
+      <VStack
+        alignment="leading"
+        modifiers={[padding(BAR_HEAD_INSET), onGeometryChange(({ height }) => setTall(height))]}
+      >
+        {children}
+      </VStack>
+    </ScrollView>
   );
 }
 
