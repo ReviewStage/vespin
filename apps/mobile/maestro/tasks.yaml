@@ -351,29 +351,17 @@ env:
 # Its status chip opens the menu of statuses, the one it stands at checked,
 # and a pick says at once on the chip. Its priority and assignee chips open
 # theirs the same way; a tap off a menu closes it.
-# Note that the page is scrolled up to the status chip itself, and on an
-# iPad a step further, because a scroll up stops once its element peeks in,
-# and there "Created by" peeked in under the floating bar with the chips
-# above it, out of sight.
+# Note that the page is scrolled up to the status chip itself by the
+# subflow that centers and settles it, on every device, because a scroll up
+# stops once its element peeks in, where on an iPad "Created by" peeked in
+# under the floating bar with the chips above it, out of sight, and a tap
+# on a list still gliding only stops it and opens no menu.
 - runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - runFlow:
-          file: subflows/scroll-in.yaml
-          env:
-            ELEMENT: "Status, .*"
-            DIRECTION: UP
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - runFlow:
-          file: subflows/scroll-to.yaml
-          env:
-            ELEMENT: "Status, .*"
-            DIRECTION: UP
-            BESIDE: "true"
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Status, .*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
 - tapOn: "Status, .*"
 - takeScreenshot: task-status-menu
 - tapOn: "Todo"
