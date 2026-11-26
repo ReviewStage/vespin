@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { CHIP_MARK, type ChipMarkOf } from "./chip-mark-model.js";
 import { GLYPH } from "./glyph.js";
 import { pillLook } from "./pill-look.js";
+import { STATUS_TONE } from "./tokens/status-tone.js";
 
 const READING = { repository: "ReviewStage/vespin", now: Date.UTC(2026, 10, 20, 16), zone: "UTC" };
 
@@ -74,7 +75,7 @@ describe("pillLook", () => {
       asked === page ? merged : undefined,
     );
 
-    expect(look).toMatchObject({ words: "#128", glyph: GLYPH.MERGED });
+    expect(look).toMatchObject({ words: "#128", glyph: GLYPH.MERGED, tone: STATUS_TONE.MERGED });
     expect(look.heard).toContain("Merged");
   });
 });

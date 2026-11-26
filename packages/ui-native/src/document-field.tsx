@@ -80,7 +80,7 @@ import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import type { MarkdownReading } from "./markdown-model.js";
 import { pillLook } from "./pill-look.js";
 import { askForWords, WORDS_KIND, type WordsAct } from "./system-asks.js";
-import { useColors } from "./tokens/colors.js";
+import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
 
 /** What a card says a locked block is, as the description page names it. */
 const CARD_TITLE: Readonly<Record<LockedKind, string>> = {
@@ -416,13 +416,16 @@ function nativeRun(
   markOf: ChipMarkOf,
   drawn: DrawnBlocks | undefined,
   linkStanding: ((page: string) => LinkStanding | undefined) | undefined,
+  colors: BrandColors,
 ): NativeDocumentRun {
   if (run.kind === INLINE_RUN.WORDS) return { text: run.text, marks: run.marks, link: run.link };
 
   if (run.kind === INLINE_RUN.PILL) {
-    const look = pillLook(run.pill, reading, markOf, linkStanding);
+    const { tone, ...look } = pillLook(run.pill, reading, markOf, linkStanding);
+    // Note that a GitHub page's glyph stands in its state's color, as the read rows' chip stands it.
+    const tint = tone === undefined ? undefined : toneColor(colors, tone);
 
-    return { pill: { markdown: run.pill.markdown, ...look } };
+    return { pill: { markdown: run.pill.markdown, ...look, tint } };
   }
 
   if (line.kind === BLOCK_KIND.LOCKED) {
@@ -574,12 +577,14 @@ function FieldWords({
     const lines = laid.map(
       (line): NativeDocumentLine => ({
         ...line,
-        runs: line.runs.map((run) => nativeRun(run, line, reading, markOf, drawn, linkStanding)),
+        runs: line.runs.map((run) =>
+          nativeRun(run, line, reading, markOf, drawn, linkStanding, colors),
+        ),
       }),
     );
 
     return { markdown: base, value: { lines, seen } };
-  }, [own, told, read, base, repository, seen, markOf, drawn, linkStanding]);
+  }, [own, told, read, base, repository, seen, markOf, drawn, linkStanding, colors]);
 
   // What each picture and diagram the document draws holds, handed apart from the words, so one landing draws only it again.
   const held = useMemo(

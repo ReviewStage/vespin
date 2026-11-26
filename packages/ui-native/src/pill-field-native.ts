@@ -11,6 +11,8 @@ export interface NativePill {
   readonly glyph: string;
   readonly heard: string;
   readonly thumbnail?: string | undefined;
+  /** The ink its glyph stands in, a GitHub page's state's, as its chip draws it; none stands it in the look's glyph ink. */
+  readonly tint?: ColorValue | undefined;
 }
 
 /** A run of the words as the view takes it: plain words, or one pill. */

@@ -194,6 +194,8 @@ struct PillRecord: Record {
   @Field var heard: String = ""
   /// The file a picture's pill draws its thumbnail from in its glyph's place; none for every other pill.
   @Field var thumbnail: String? = nil
+  /// The ink its glyph stands in, a GitHub page's state's, as its chip draws it; none stands it in the look's glyph ink.
+  @Field var tint: UIColor? = nil
 }
 
 struct RunRecord: Record {
@@ -254,13 +256,16 @@ struct Pill: Equatable {
   let heard: String
   /// The file a picture's pill draws its thumbnail from, where JavaScript has written one.
   let thumbnail: String?
+  /// The ink its glyph stands in, where its state names one.
+  let tint: UIColor?
 
-  init(markdown: String, words: String, glyph: String, heard: String, thumbnail: String? = nil) {
+  init(markdown: String, words: String, glyph: String, heard: String, thumbnail: String? = nil, tint: UIColor? = nil) {
     self.markdown = markdown
     self.words = words
     self.glyph = glyph
     self.heard = heard
     self.thumbnail = thumbnail
+    self.tint = tint
   }
 
   init(_ record: PillRecord) {
@@ -269,6 +274,7 @@ struct Pill: Equatable {
     glyph = record.glyph
     heard = record.heard
     thumbnail = record.thumbnail
+    tint = record.tint
   }
 }
 
@@ -491,7 +497,8 @@ final class PillView: UIView {
     isUserInteractionEnabled = pill.thumbnail != nil && onPress != nil
     isAccessibilityElement = false
     glyph.image = Self.image(named: pill.glyph)
-    glyph.tintColor = look.pillGlyph
+    // Note that a GitHub page's glyph stands in its state's ink, as the read rows' chip stands it, merged in purple and closed in red.
+    glyph.tintColor = pill.tint ?? look.pillGlyph
     // Note that a picture, such as a Manager's face, is fit to the glyph's square, where a symbol stands at its font's own size.
     glyph.contentMode = glyph.image?.isSymbolImage == false ? .scaleAspectFit : .center
     label.text = pill.words

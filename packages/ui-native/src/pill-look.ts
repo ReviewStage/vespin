@@ -15,9 +15,12 @@ import {
   type MarkdownReading,
   markdownBlocks,
 } from "./markdown-model.js";
+import type { StatusTone } from "./tokens/status-tone.js";
 
 /** A pill's glyph and words, and what VoiceOver hears for it. */
 interface PillLook {
+  /** The tone its glyph stands in, a GitHub page's state's; none stands it in the pill's own glyph ink. */
+  readonly tone?: StatusTone | undefined;
   readonly words: string;
   /** The asset catalog's name of what leads its words: its kind's glyph, or a Manager's face (`managerFaceAsset`). */
   readonly glyph: Glyph | string;
@@ -58,7 +61,12 @@ function mentionLook(
   const standing = linkStanding === undefined ? undefined : chipStanding(run.chip, linkStanding);
 
   if (standing !== undefined)
-    return { words: standing.name, glyph: standing.glyph, heard: standing.heard };
+    return {
+      words: standing.name,
+      glyph: standing.glyph,
+      heard: standing.heard,
+      tone: standing.tone,
+    };
 
   return { words: run.chip.name, glyph: chipGlyph(run.chip, markOf), heard: run.chip.heard };
 }
