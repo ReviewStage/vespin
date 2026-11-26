@@ -37,7 +37,7 @@ import {
 import { labelFill } from "@repo/features/label-fill";
 import { TASK_PRIORITY_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
-import { Fragment, type ReactElement, type ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useColorScheme } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { type Glyph, glyphImage } from "./glyph.js";
@@ -163,10 +163,8 @@ function capsuleModifiers(colors: BrandColors, filled: boolean) {
 /**
  * A capsule's words, in the row line's style, medium, in the ink its fill reads in, its count
  * after them in its own ink. Note that the words are the text itself where
- * no count follows, and the joined text is drawn anew whenever its words or
- * count change, because `@expo/ui`'s native text joins the texts nested in
- * it as it draws and is never told one of them changed, so it would keep
- * saying what they first said, such as Open after a merge.
+ * no count follows; where one does, the package's Text draws the two anew as
+ * either changes (`text.tsx`), so a chip never keeps saying Open after a merge.
  */
 function CapsuleWords({
   label,
@@ -192,12 +190,10 @@ function CapsuleWords({
   if (count === undefined) return <Text modifiers={modifiers}>{label}</Text>;
 
   return (
-    <Fragment key={label}>
-      <Text key={count} modifiers={modifiers}>
-        <Text>{label}</Text>
-        <Text modifiers={[foregroundStyle(countInk)]}>{` ${count}`}</Text>
-      </Text>
-    </Fragment>
+    <Text modifiers={modifiers}>
+      <Text>{label}</Text>
+      <Text modifiers={[foregroundStyle(countInk)]}>{` ${count}`}</Text>
+    </Text>
   );
 }
 
