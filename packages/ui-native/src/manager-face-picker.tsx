@@ -124,6 +124,15 @@ export function ManagerFaceSheet({
   const dark = useColorScheme() === "dark";
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<FaceTab>(() => openingTab(face));
+  const [shown, setShown] = useState(presented);
+
+  // Note that a sheet a screen keeps for its rows opens over one Manager after another, so each opening starts on the tab its face wears, as React keeps what an earlier render saw.
+  if (presented !== shown) {
+    setShown(presented);
+
+    if (presented) setTab(openingTab(face));
+  }
+
   const searching = query.trim() !== "";
   const emoji = useEmoji(presented && (searching || tab === FACE_TAB.EMOJI));
 

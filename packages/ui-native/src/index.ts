@@ -238,8 +238,6 @@ export {
 
 export { MachineAskSheet } from "./machine-ask-sheet.js";
 
-export { managerFaceMenu } from "./manager-face-menu.js";
-
 export { ManagerFaceRow, ManagerFaceSheet } from "./manager-face-picker.js";
 
 export { recentFaces } from "./manager-face-picker-model.js";

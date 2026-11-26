@@ -51,6 +51,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
+import { FaceAsking } from "../agents/face-ask.js";
 import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { AUTOMATIONS_ROUTE } from "../automations/automation-routes.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
@@ -681,5 +682,9 @@ export function SearchScreen() {
   // Note that the Inbox's scope, chosen before the member turned the Inbox off, stands as All for the field and the results alike, since no scope offers it then.
   const scope = inboxShown || chosen !== SEARCH_SCOPE.INBOX ? chosen : SEARCH_SCOPE.ALL;
 
-  return <SearchStackScreen query={query} setQuery={setQuery} scope={scope} setScope={setScope} />;
+  return (
+    <FaceAsking>
+      <SearchStackScreen query={query} setQuery={setQuery} scope={scope} setScope={setScope} />
+    </FaceAsking>
+  );
 }

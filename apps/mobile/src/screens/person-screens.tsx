@@ -51,6 +51,7 @@ import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
+import { FaceAsking } from "../agents/face-ask.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -180,7 +181,11 @@ export function PersonScreen() {
     );
   }
 
-  return <PersonPage key={workspace.id} read={read} workspace={workspace} userId={id} />;
+  return (
+    <FaceAsking>
+      <PersonPage key={workspace.id} read={read} workspace={workspace} userId={id} />
+    </FaceAsking>
+  );
 }
 
 /**

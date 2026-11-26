@@ -139,6 +139,7 @@ import {
   appsDockMediaIds,
   useAgentDock,
 } from "../agents/agent-dock.js";
+import { CHANGE_FACE, FaceSheet } from "../agents/face-ask.js";
 import {
   useAgentMedia,
   useAgentPullRequests,
@@ -1149,6 +1150,7 @@ const AgentConversation = memo(function AgentConversation({
   // Whether Archive's or Permanently delete's question stands over the page.
   const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [facePicking, setFacePicking] = useState(false);
   const deleteQuestion = actions.deleteQuestion(title);
 
   // An agent archived or deleted gives way to where its own stack opened it from, or to the Tasks list it stands in where it was opened first, as from a launch or a notification; nothing moves once the reader has left its page.
@@ -1388,6 +1390,12 @@ const AgentConversation = memo(function AgentConversation({
         }}
         onDismiss={() => setDeleting(false)}
       />
+      <FaceSheet
+        face={agent?.face}
+        presented={facePicking}
+        onDismiss={() => setFacePicking(false)}
+        onPick={actions.changeFace}
+      />
     </>
   );
 
@@ -1447,6 +1455,16 @@ const AgentConversation = memo(function AgentConversation({
                     chat
                       ? { label: MENU_WORDS.SETTINGS, symbol: GLYPH.OPTIONS, onPress: openSettings }
                       : { label: MENU_WORDS.RENAME, symbol: GLYPH.RENAME, onPress: askRename },
+                    // Note that a Manager's face is changed beside its Settings, as the panel's menu offers Change face, its picker over the page; none while it is archived.
+                    ...(chat && !archived && agent.face !== undefined
+                      ? [
+                          {
+                            label: CHANGE_FACE,
+                            symbol: GLYPH.CHANGE_FACE,
+                            onPress: () => setFacePicking(true),
+                          },
+                        ]
+                      : []),
                     ...(barActs
                       ? []
                       : [

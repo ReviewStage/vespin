@@ -145,7 +145,6 @@ import {
   MentionFoot,
   type MenuChoice,
   type MenuPhotoFile,
-  managerFaceMenu,
   menuWithout,
   NoSelection,
   PATH_PART,
@@ -199,6 +198,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { CHANGE_FACE, type FaceAsk, FaceAsking, useFaceAsk } from "../agents/face-ask.js";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { useAgentPlaceGlyph } from "../agents/use-agent-place.js";
@@ -2238,6 +2238,7 @@ function agentMenu({
   name,
   link,
   acts,
+  askFace,
   asking,
   onCopyLink,
 }: {
@@ -2245,6 +2246,8 @@ function agentMenu({
   readonly name: string;
   readonly link: string | undefined;
   readonly acts: ReturnType<typeof useAgentRowActs>;
+  /** Opens the screen's face picker over a Manager; none on a screen that stands none. */
+  readonly askFace: FaceAsk | undefined;
   /** Archive and Permanently delete, each asked first by the row; neither stands where none is given. */
   readonly asking: { readonly archive: () => void; readonly remove: () => void } | undefined;
   readonly onCopyLink: (link: string) => void;
@@ -2295,14 +2298,21 @@ function agentMenu({
 
   const archived = agent.archivedAt !== undefined;
 
-  // Note that a Manager offers Change face › beside Rename, as the panel's Manager menu does, its face changed at once as picked; none while it is archived, as Rename's place stands for a live agent.
+  // Note that a Manager offers Change face… beside Rename, as the panel's Manager menu offers Change face, opening the face picker its screen stands (`useFaceAsk`), its face changed at once as picked; none while it is archived, as Rename's place stands for a live agent, or on a screen that stands no picker.
   const face = agent.face;
 
   const named: LongPressGroup = [
     rename,
-    ...(face === undefined || archived
+    ...(face === undefined || archived || askFace === undefined
       ? []
-      : [managerFaceMenu(face, (picked) => acts.changeFace(agent.id, picked))]),
+      : [
+          {
+            label: CHANGE_FACE,
+            symbol: GLYPH.CHANGE_FACE,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => askFace(agent.id, face),
+          },
+        ]),
   ];
 
   if (asking === undefined) return [links, named, archived ? [unarchiveAct(agent, acts)] : stop];
@@ -2448,6 +2458,7 @@ export function useAgentRowAsk(): AgentAsking {
  */
 function useAgentRowParts(agent: ListedAgent, name: string, asking: AgentAsking | undefined) {
   const agentActs = useAgentRowActs();
+  const askFace = useFaceAsk();
   const asker = useRowAsker();
   const keeping = useKeeping();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
@@ -2479,6 +2490,7 @@ function useAgentRowParts(agent: ListedAgent, name: string, asking: AgentAsking 
         name,
         link,
         acts: agentActs,
+        askFace,
         asking:
           asking === undefined
             ? undefined
@@ -3653,7 +3665,8 @@ function TasksSplitScreen({
  * class. Note that what the reader set is held here, above the two layouts,
  * so a rotation or a fold of the iPhone Duo, which swaps one layout for the
  * other, keeps it: the search, the parents opened and the groups folded
- * (`TreeHold`), and a status or a delete question standing open.
+ * (`TreeHold`), and a status or a delete question standing open. It stands
+ * the face picker its Managers' rows open (`FaceAsking`).
  */
 export function TasksListScreen() {
   const sizeClass = useWindowSizeClass();
@@ -3663,7 +3676,7 @@ export function TasksListScreen() {
   const hold = useTreeHoldState();
 
   return (
-    <>
+    <FaceAsking>
       {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
         <TasksSplitScreen selected={selected} select={select} screen={screen} hold={hold} />
       ) : (
@@ -3671,7 +3684,7 @@ export function TasksListScreen() {
       )}
       <StatusQuestionAsk question={screen.status} />
       <StatusQuestionAsk question={screen.deletion} />
-    </>
+    </FaceAsking>
   );
 }
 
