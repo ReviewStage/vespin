@@ -2165,6 +2165,45 @@ it.effect(
 );
 
 it.effect(
+  "a reaction the service takes stands in the Manager's chat held from its answer, before a read carries it, and one refused leaves the chat as it stood",
+  () =>
+    Effect.gen(function* () {
+      const { acts, live, managerChats, answerReact } = yield* subject();
+
+      const reactionsOf = (id: string) =>
+        managerChats()
+          .at(-1)
+          ?.[AGENT_ID]?.rows?.messages.find((message) => message.id === id)?.reactions;
+
+      // The Manager gave its own 👍 to m2 before the reader pressed anything.
+      const managers = {
+        reactionKinds: ["thumbsup"],
+        reactionCounts: [1],
+        reactionsReacted: [false],
+      };
+
+      live.managerChat.set({ messages: [chatRow(3), { ...chatRow(2), ...managers }, chatRow(1)] });
+      yield* acts.AGENTS_MANAGER_CHAT_FOLLOW.hold({ agentId: AGENT_ID });
+      yield* settled;
+      answerReact({ changed: true });
+
+      const press = {
+        agentId: AGENT_ID,
+        messageId: "m2",
+        kind: "thumbsup",
+        reacted: true,
+      } as const;
+
+      yield* acts.AGENTS_CHAT_REACT(press);
+      assert.deepEqual(reactionsOf("m2"), [{ kind: "thumbsup", count: 2, reacted: true }]);
+
+      answerReact({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      yield* acts.AGENTS_CHAT_REACT({ ...press, messageId: "m3", kind: "thumbsdown" });
+      assert.equal(reactionsOf("m3"), undefined);
+    }),
+);
+
+it.effect(
   "a sign-out lets every held inbox go and tells none held, and the gate opening again reads what the windows still hold",
   () =>
     Effect.gen(function* () {

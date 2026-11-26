@@ -2,7 +2,11 @@
 
 import assert from "node:assert/strict";
 import type { ApprovalAnswerRequest } from "@repo/features/agent-approval-wire";
-import { AGENT_CALL_FAILURE, type ManagerChatSending } from "@repo/features/agent-view";
+import {
+  AGENT_CALL_FAILURE,
+  type ManagerChatReactParams,
+  type ManagerChatSending,
+} from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
   AGENT_KIND,
@@ -12,6 +16,7 @@ import {
 } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
+import { CHAT_REACTION_REFUSED_WORDS } from "@repo/features/manager-chat-view";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -24,7 +29,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { FindScope } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
-import { FAKE_ANSWER, fakeActs } from "../testing/app-bridge.js";
+import { FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
 import { handMembers, handState } from "../testing/app-state.js";
 import {
   editorBundleLanded,
@@ -37,6 +42,8 @@ import { menuItem } from "../testing/desktop-inbox.js";
 import { pointerCross } from "../testing/pointer-cross.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
+import { standingToastWords } from "../testing/toast.js";
+import { ToastHost } from "../toast.js";
 import { ManagerChatTab, ManagerThreadTab } from "./manager-chat-tab.js";
 import { ThreadDoorsProvider } from "./manager-chat-threads.js";
 
@@ -46,7 +53,7 @@ import { ThreadDoorsProvider } from "./manager-chat-threads.js";
  * the left, each sender named over their run; an ended turn's work a press
  * away from the Manager's first message of the turn, and found by ⌘F; a call the Manager holds for an answer standing at the chat's
  * foot with its answers; Retry sending a refused message again with its
- * files; and a thread opening beside the chat, as the page's side panel
+ * files; a 👍 drawn under its message from its press until its ask settles; and a thread opening beside the chat, as the page's side panel
  * opens it, its box the chat's own composer replying in it. Synthetic words.
  */
 
@@ -161,6 +168,8 @@ async function drawChat(
     readonly alone?: boolean;
     /** Whether a find may open over the chat, as the page's scope lets ⌘F open one. */
     readonly findable?: boolean;
+    /** What a reaction pressed is answered with, once it settles; refused at once where none is named. */
+    readonly reactAnswer?: Promise<FakeActAnswer>;
   } = {},
 ) {
   const manager = held.manager ?? MANAGER;
@@ -174,6 +183,8 @@ async function drawChat(
   const keys: (readonly [string, boolean])[] = [];
   // Each older page asked for, by the `seq` it stands before.
   const older: number[] = [];
+  // Each reaction pressed, as the window asked it.
+  const reacted: ManagerChatReactParams[] = [];
 
   fakeActs({
     act: (request) => {
@@ -185,6 +196,12 @@ async function drawChat(
       }
 
       if (request.kind === ACT_KIND.AGENTS_MANAGER_CHAT_OLDER) older.push(request.payload.before);
+
+      if (request.kind === ACT_KIND.AGENTS_CHAT_REACT) {
+        reacted.push(request.payload);
+
+        if (held.reactAnswer !== undefined) return held.reactAnswer;
+      }
 
       return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." });
     },
@@ -244,6 +261,7 @@ async function drawChat(
               opened: held.opened,
               alone: held.alone === true,
             }),
+            createElement(ToastHost),
           ),
         }),
       ),
@@ -254,7 +272,7 @@ async function drawChat(
   });
   await settleQueries();
 
-  return { container, sent, carried, answered, threads, keys, older };
+  return { container, sent, carried, answered, threads, keys, older, reacted };
 }
 
 /** Each row a scope draws, the greeting aside: its sender's name where its run opens, and its words. */
@@ -616,6 +634,44 @@ test("⌘F finds words in an ended turn's work while it stands closed, deep in a
     told.querySelector('button[aria-label="Hide work"]'),
     "its press now folds the work away, as once Show work opened it",
   );
+});
+
+test("a 👍 pressed beside a message stands under it at once as the reader's, and goes once the service refuses it, saying so", async () => {
+  const { promise: reactAnswer, resolve: answer } = Promise.withResolvers<FakeActAnswer>();
+
+  const { container, reacted } = await drawChat(
+    [row("ask", 1, "What first?", DEAN), row("told", 2, "The invite flow.")],
+    { reactAnswer },
+  );
+
+  const message = container.querySelector('[data-message-id="told"]');
+  assert.ok(message, "the message is drawn");
+
+  /** The reactions under the message, by what each says to a reader. */
+  const reactions = () =>
+    [...message.querySelectorAll(".ui-reactions button")].map((chip) =>
+      chip.getAttribute("aria-label"),
+    );
+
+  assert.deepEqual(reactions(), []);
+  pointerCross(document.body, message);
+  const thumbsUp = message.querySelector<HTMLButtonElement>('button[aria-label="Thumbs up"]');
+  assert.ok(thumbsUp, "Thumbs up stands beside the message");
+  await act(async () => thumbsUp.click());
+
+  assert.deepEqual(reacted, [
+    { agentId: MANAGER.id, messageId: "told", kind: "thumbsup", reacted: true },
+  ]);
+  assert.deepEqual(reactions(), ["You reacted with thumbs up"]);
+  assert.equal(thumbsUp.getAttribute("aria-pressed"), "true");
+
+  // The service refuses it, which the host answers rather than fails, and the chat it holds never carried it.
+  await act(async () =>
+    answer({ status: FAKE_ANSWER.DONE, value: { failure: AGENT_CALL_FAILURE.UNANSWERED } }),
+  );
+  await settleQueries();
+  assert.deepEqual(reactions(), []);
+  assert.deepEqual(standingToastWords(), [CHAT_REACTION_REFUSED_WORDS]);
 });
 
 test("a chat longer than its first page asks once for the page before it as it opens, and one that did not answer offers Retry", async () => {

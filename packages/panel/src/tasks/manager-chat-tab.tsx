@@ -22,7 +22,9 @@
  * message the reader sends goes to the chat (`agents.chat.send`) and stands
  * drawn at its end from the moment it is sent, as the host draws it on its
  * way, until its row lands; one refused stands marked, with Retry, Edit, and
- * Delete, as any of the agent box's lines does.
+ * Delete, as any of the agent box's lines does. Each message may be given
+ * the reader's 👍 or 👎 from its actions, and wears the reactions it was
+ * given under its words (`manager-chat-reactions.tsx`).
  */
 
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
@@ -117,6 +119,12 @@ import { CopyMessageAction } from "./copy-message.js";
 import { EditComposer } from "./edit-composer.js";
 import { useManagerChatLooks } from "./manager-chat-looks.js";
 import {
+  type ChatReact,
+  ChatReactions,
+  ReactMessageActions,
+  useChatReact,
+} from "./manager-chat-reactions.js";
+import {
   THREAD_WORDS,
   ThreadReplyAction,
   ThreadSummary,
@@ -156,6 +164,8 @@ interface ChatDoors {
   readonly lines: ReadonlyMap<string, AgentTranscriptMessage>;
   /** The chat's threads, which its rows open; none in a thread's own tab, whose rows open no thread, nor where nothing beside the chat shows a thread. */
   readonly thread?: ChatThreadDoors | undefined;
+  /** Gives a message the reader's 👍 or 👎, or takes it off. */
+  readonly react: ChatReact;
 }
 
 /** The chat's threads as its rows read them: each root's replies by the root's id, the thread its page's side panel shows, and the press that opens one there. */
@@ -308,6 +318,7 @@ function ManagerMessage({
   // Note that the Manager's pictures kept with their size stand as the set it showed, as the transcript draws a shown set.
   const shown = shownOf(message);
   const files = fileChipsOf(message, shown);
+  const reactions = <ReactMessageActions message={message} react={doors.react} />;
 
   return (
     <>
@@ -319,9 +330,10 @@ function ManagerMessage({
         continues={!place.opens}
         contextMenu={menu.contextMenu}
         actions={
-          // Note that a message of files alone has no words to copy, so it offers its thread and its work alone.
+          // Note that a message of files alone has no words to copy, so it offers its reactions, its thread, and its work alone.
           message.text === "" ? (
             <>
+              {reactions}
               {thread.action}
               {workAction}
             </>
@@ -333,6 +345,7 @@ function ManagerMessage({
               rewind={place.closes && message.turnId !== null ? REWIND_ACTION.REVERT : undefined}
               lead={
                 <>
+                  {reactions}
                   {thread.action}
                   {workAction}
                 </>
@@ -348,6 +361,7 @@ function ManagerMessage({
                 {files.length === 0 ? null : <KeptFileChips files={files} />}
               </div>
             )}
+            <ChatReactions message={message} react={doors.react} />
             {/* Note that the turn's work opens under its first message, in the order it was done, as the working line opens the turn's under way. */}
             {workDrawn ? (
               <div ref={workRest} data-turn-work="">
@@ -388,6 +402,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   const editor = useMessageEdit(lineId ?? "");
   const thread = threadOf(message, doors);
   const menu = useChatMessageMenu(message.text, thread.onOpen, undefined);
+  const reactions = <ReactMessageActions message={message} react={doors.react} />;
 
   if (ownLine !== undefined && editor !== undefined) {
     return <EditComposer message={ownLine} words={message.text} edit={editor} />;
@@ -405,19 +420,32 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
             continues={!place.opens}
             contextMenu={menu.contextMenu}
             actions={
-              // Note that a message of files alone has no words to copy, so it offers its thread alone.
+              // Note that a message of files alone has no words to copy, so it offers its reactions and its thread alone.
               message.text === "" ? (
-                thread.action
+                <>
+                  {reactions}
+                  {thread.action}
+                </>
               ) : (
                 <CopyMessageAction
                   words={message.text}
                   messageId={ownLine === undefined ? undefined : lineId}
                   rewind={ownLine === undefined ? undefined : REWIND_ACTION.EDIT}
-                  lead={thread.action}
+                  lead={
+                    <>
+                      {reactions}
+                      {thread.action}
+                    </>
+                  }
                 />
               )
             }
-            under={thread.summary}
+            under={
+              <>
+                <ChatReactions message={message} react={doors.react} />
+                {thread.summary}
+              </>
+            }
           >
             {body.files}
             {body.words}
@@ -862,10 +890,12 @@ function useManagerChatBox({
     [transcript.messages],
   );
 
+  const react = useChatReact(agent.id);
+
   // Note that these doors open no thread; the chat's own rows add theirs.
   const doors: ChatDoors = useMemo(
-    () => ({ manager, readerId: control.me, delegation, lines }),
-    [manager, control.me, delegation, lines],
+    () => ({ manager, readerId: control.me, delegation, lines, react }),
+    [manager, control.me, delegation, lines, react],
   );
 
   /** The rows of one turn's work, by the transcript line that opened it, which Show work opens under the Manager's first message of the turn. */
