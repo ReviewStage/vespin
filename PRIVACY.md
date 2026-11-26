@@ -383,9 +383,15 @@ account. Each time you open the app, it sends Sentry a performance
 trace of its start: how long each of its startup steps took, from iOS
 starting it to your Inbox's first rows, and a processor profile of which of
 the app's own functions ran and for how long, never the values they handled.
-It sends no other performance traces, and no screenshots or recordings of the
-screen. It sends Sentry nothing while Settings › Account › "Share usage data"
-is off on that iPhone or iPad, a crash as the app starts included, and starts
+After that, it sends a performance trace of each screen you open, naming the
+screen by its kind (such as an agent's page) and saying how long it took to
+show, and of each tap, naming the screen it landed on and how long the app
+took to draw its next frame. Reports may also list your last taps and screens
+before an error, by the screen and the app's own component names. None of
+this names a task, an agent, or anything else by its id, or carries the words
+on your screen, and the app's requests are not traced. It sends no
+screenshots or recordings of the screen. It sends Sentry nothing while
+Settings › Account › "Share usage data" is off on that iPhone or iPad, a crash as the app starts included, and starts
 again when you turn it back on. Once, on the first launch after the update
 that brought this, it may start Sentry for a moment before it has read the
 switch, so a crash or error in that moment can still be reported.

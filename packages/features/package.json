@@ -63,6 +63,7 @@
     "./sentry-early-reports": "./src/sentry-early-reports.js",
     "./sentry-long-frames": "./src/sentry-long-frames.js",
     "./sentry-reporting": "./src/sentry-reporting.js",
+    "./sentry-screens": "./src/sentry-screens.js",
     "./sentry-tracing": "./src/sentry-tracing.js",
     "./sentry-tunnel": "./src/sentry-tunnel.js",
     "./sentry-usage-data": "./src/sentry-usage-data.js",
