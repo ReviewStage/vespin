@@ -40,6 +40,7 @@ export function TaskMissing({
       <EmptyState
         title={TASKS_UNREAD}
         symbol={GLYPH.TASK}
+        readFailed
         action={{
           label: TRY_AGAIN,
           onPress: () => {

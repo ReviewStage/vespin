@@ -90,7 +90,11 @@ function InvitationPage({
         <Stack.Screen options={{ title: NO_BAR_TITLE }} />
         <Screen ground={SCREEN_GROUND.GROUPED}>
           {invitations !== undefined ? null : held?.invitations?.failed === true ? (
-            <EmptyState title={WORKSPACE_READ_FAILED.INVITATIONS} symbol={GLYPH.FAILED} />
+            <EmptyState
+              title={WORKSPACE_READ_FAILED.INVITATIONS}
+              symbol={GLYPH.FAILED}
+              readFailed
+            />
           ) : (
             <EmptyState title={readingWords("the invitations")} symbol={GLYPH.PERSON} loading />
           )}

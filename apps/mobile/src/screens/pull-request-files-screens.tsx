@@ -117,6 +117,7 @@ export function PullRequestFilesScreen() {
         <EmptyState
           title={CHANGES_WORDS.FAILED}
           symbol={GLYPH.FAILED}
+          readFailed
           retry={() => void changes.refresh()}
         />
       ) : (

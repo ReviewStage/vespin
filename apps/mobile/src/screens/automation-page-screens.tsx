@@ -247,6 +247,7 @@ function AutomationPage({
             <EmptyState
               title={AUTOMATION_PHONE_WORDS.FAILED}
               symbol={GLYPH.FAILED}
+              readFailed
               retry={read.retry}
             />
           ) : (
@@ -508,6 +509,7 @@ export function AutomationRunsScreen({ automationId }: { readonly automationId: 
             <EmptyState
               title={AUTOMATION_PHONE_WORDS.RUNS_FAILED}
               symbol={GLYPH.FAILED}
+              readFailed
               retry={read.retry}
             />
           ) : (
@@ -581,6 +583,7 @@ export function WorkspaceRunsScreen() {
         <EmptyState
           title={AUTOMATION_PHONE_WORDS.RUNS_FAILED}
           symbol={GLYPH.FAILED}
+          readFailed
           retry={read.retry}
         />
       ) : (

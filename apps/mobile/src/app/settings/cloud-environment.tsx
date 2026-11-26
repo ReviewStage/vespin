@@ -32,21 +32,19 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
-  ActionRow,
   askForWords,
   BUZZ,
   ConfirmAsk,
-  FOOTER_TONE,
   GLYPH,
   ListSection,
   LoadingRow,
   MenuPickRow,
   NoteRow,
+  ReadFailedSection,
   SCREEN_GROUND,
   Screen,
   ScriptRow,
   SettingsForm,
-  TRY_AGAIN_WORDS,
   ValueRow,
   WORDS_KIND,
 } from "@repo/ui-native";
@@ -134,11 +132,7 @@ function ReadSection<Answer>({
   readonly rows: (answer: Answer) => ReactNode;
 }) {
   if (read.isError) {
-    return (
-      <ListSection title={title} footer={failed} footerTone={FOOTER_TONE.FAILURE}>
-        <ActionRow label={TRY_AGAIN_WORDS} onPress={() => void read.refetch()} />
-      </ListSection>
-    );
+    return <ReadFailedSection title={title} words={failed} onRetry={() => void read.refetch()} />;
   }
 
   if (read.data === undefined) {

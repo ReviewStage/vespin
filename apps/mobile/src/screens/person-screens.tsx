@@ -372,6 +372,7 @@ function PersonPage({
             <EmptyState
               title={personWords(PERSON_SECTION_WORDS.UNREAD, you)}
               symbol={GLYPH.FAILED}
+              readFailed
             />
           ) : (
             <EmptyState title={readingWords("their profile")} symbol={GLYPH.PERSON} loading />

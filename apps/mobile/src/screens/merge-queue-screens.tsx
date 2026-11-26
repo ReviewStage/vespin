@@ -162,6 +162,7 @@ export function MergeQueueScreen() {
       <EmptyState
         title={MERGE_QUEUE_PAGE_WORDS.UNREAD}
         symbol={GLYPH.FAILED}
+        readFailed
         retry={() => void read.refetch()}
       />
     ) : repositories === undefined ? (

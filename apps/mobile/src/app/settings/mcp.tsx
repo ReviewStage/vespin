@@ -21,10 +21,10 @@ import {
   buzz,
   ConfirmAsk,
   ConnectionRow,
-  FOOTER_TONE,
   GLYPH,
   ListSection,
   LoadingRow,
+  ReadFailedSection,
   SCREEN_GROUND,
   Screen,
   SettingsForm,
@@ -58,9 +58,6 @@ function cliFooter(signedIn: boolean): string {
     ? `${CLI_WORDS.CAPTION} ${install}`
     : `${CLI_WORDS.NOT_SIGNED_IN} ${install} Then run ${CLI_COMMAND.LOGIN}. ${CLI_WORDS.SIGN_IN_WORDS}`;
 }
-
-/** What a Try again under a read that failed says. */
-const TRY_AGAIN = "Try again";
 
 /** Copies a command, with the system's tap of success, or says why it did not go. */
 function copyCommand(command: string) {
@@ -206,13 +203,11 @@ function McpPage({ accountId }: { readonly accountId: string }) {
   const mcpSection =
     clients === undefined ? (
       held?.failed === true ? (
-        <ListSection
+        <ReadFailedSection
           title={MCP_CLIENTS_WORDS.TITLE}
-          footer={MCP_CLIENTS_WORDS.READ_FAILED}
-          footerTone={FOOTER_TONE.FAILURE}
-        >
-          <ActionRow label={TRY_AGAIN} onPress={retryRead} />
-        </ListSection>
+          words={MCP_CLIENTS_WORDS.READ_FAILED}
+          onRetry={retryRead}
+        />
       ) : (
         <ListSection title={MCP_CLIENTS_WORDS.TITLE}>
           <LoadingRow words={READING} />

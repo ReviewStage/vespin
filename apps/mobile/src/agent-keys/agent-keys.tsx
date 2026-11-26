@@ -279,7 +279,12 @@ export function AgentKeySections({ onRemove }: { readonly onRemove: (removal: Re
   if (answer === undefined) {
     return failed ? (
       <ListSection>
-        <EmptyState title={CREDENTIAL_WORDS.READ_FAILED} symbol={GLYPH.FAILED} retry={retry} />
+        <EmptyState
+          title={CREDENTIAL_WORDS.READ_FAILED}
+          symbol={GLYPH.FAILED}
+          readFailed
+          retry={retry}
+        />
       </ListSection>
     ) : (
       <ListSection>

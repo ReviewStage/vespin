@@ -132,18 +132,21 @@ function stillNewest(subject: WriteSubject, sent: number): boolean {
 }
 
 /** The marks that say the service cannot be reached now. */
-const OFFLINE_MARKS: ReadonlySet<LiveMark | undefined> = new Set([
+export const OFFLINE_MARKS: ReadonlySet<LiveMark | undefined> = new Set([
   LIVE_MARK.MAC_OFFLINE,
   LIVE_MARK.SERVICE_OFFLINE,
 ]);
 
 /**
- * Lets the offline notice go once the service answers again, so the next
- * stretch offline is said anew, and says how many changes made offline the
+ * Says the phone is offline once, as a stretch offline begins, as the
+ * panel's Offline mark says it, and lets the notice go once the service
+ * answers again, so the next stretch is said anew; it is the one place the
+ * app says so, since no screen says a read that failed meanwhile
+ * (`service-reached.tsx`). It also says how many changes made offline the
  * service refused once they were sent again, as the panel's toast does,
  * each taken back where it was drawn; the count is cleared as it is said,
  * since this phone's host keeps its own. The root mounts it once, over
- * every screen.
+ * every screen, after `useNoticeForAccount`, whose clear must come first.
  */
 export function useOfflineNotice(): void {
   const notices = useFailureNotices();
@@ -155,10 +158,17 @@ export function useOfflineNotice(): void {
     select: (state) => state.network.offlineRefused ?? 0,
   });
 
-  const offline = OFFLINE_MARKS.has(mark);
+  const { data: accountId } = useQuery({
+    ...appStateQuery,
+    select: (state) => signedInAccountId(state.account),
+  });
+
+  // Note that it is said anew for each account, after `useNoticeForAccount` let the last one's notices go, so a launch offline or a sign-in while offline still says it.
   useEffect(() => {
-    if (!offline) notices.online();
-  }, [offline, notices]);
+    if (mark !== undefined && OFFLINE_MARKS.has(mark)) {
+      notices.say({ kind: NOTICE_KIND.OFFLINE, words: LIVE_MARK_WORDS[mark].hint });
+    } else notices.online();
+  }, [mark, accountId, notices]);
   useEffect(() => {
     if (refused === 0) return;
     buzz(BUZZ.ERROR);

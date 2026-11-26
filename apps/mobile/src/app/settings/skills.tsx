@@ -135,6 +135,7 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
         <EmptyState
           title={SKILLS_LINE.READ_FAILED}
           symbol={GLYPH.FAILED}
+          readFailed
           retry={() =>
             void acts[ACT_KIND.INSTALLED_SKILLS_RETRY]({ workspaceId }).catch((cause: unknown) =>
               console.error("Reading the skills again did not go.", cause),

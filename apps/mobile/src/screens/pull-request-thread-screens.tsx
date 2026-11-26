@@ -162,6 +162,7 @@ export function PullRequestThreadScreen() {
         <EmptyState
           title={PULL_REQUEST_READ_WORDS.CONVERSATION_FAILED}
           symbol={GLYPH.FAILED}
+          readFailed
           retry={() => void retry()}
         />
       ) : (

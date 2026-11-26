@@ -76,6 +76,7 @@ import {
 } from "./list-row.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import { AgentTile, Avatar, type Face, FailedMark, ToneGlyph, WorkingMark } from "./marks.js";
+import { useServiceReached } from "./offline-read-model.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
@@ -808,10 +809,16 @@ type FailedReadRowProps = {
  * the row's end as the system's small bordered capsule in the ink, as Mail
  * says a message could not be loaded. Note that only the capsule takes a
  * press, so the row reads as a line that says, with the act beside it.
+ * While the phone does not reach the service (`ServiceReached`), it draws
+ * nothing, so the page keeps what it holds and the app's one offline
+ * notice says why, as the panel's line among rows says nothing offline.
  */
 export function FailedReadRow({ label, act, onPress }: FailedReadRowProps) {
   const colors = useColors();
   const inset = useRowInset();
+  const reached = useServiceReached();
+
+  if (!reached) return null;
 
   return (
     <HStack spacing={SPACE.ROW} modifiers={rowPlacement(colors, inset)}>

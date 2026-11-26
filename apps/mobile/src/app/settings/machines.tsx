@@ -181,6 +181,7 @@ function MachinesPage({
         <EmptyState
           title={READ_WORDS.FAILED}
           symbol={GLYPH.FAILED}
+          readFailed
           retry={() =>
             void acts[ACT_KIND.HOSTS_RETRY]().catch((cause: unknown) =>
               console.error("Reading the machines again did not go.", cause),

@@ -96,7 +96,7 @@ export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
     task === undefined ? (
       <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : failed ? (
-      <EmptyState title={WORDS.READ_FAILED} symbol={GLYPH.PEOPLE} retry={offer.retry} />
+      <EmptyState title={WORDS.READ_FAILED} symbol={GLYPH.PEOPLE} readFailed retry={offer.retry} />
     ) : people === undefined ? (
       <EmptyState title={WORDS.READING} symbol={GLYPH.PEOPLE} loading />
     ) : people.length === 0 ? (

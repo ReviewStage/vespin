@@ -64,6 +64,7 @@ import { dropLink, headerMenu, rowHeard, sideMargins, stackScrollEdge } from "./
 import { useRowInset } from "./layout-margin.js";
 import type { LongPressGroup } from "./list-row.js";
 import { RepositoryPicture, ToneGlyph } from "./marks.js";
+import { OFFLINE_READ, useServiceReached } from "./offline-read-model.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
 import { menuPressAt, menuTree } from "./row-menu-model.js";
@@ -642,10 +643,17 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
   );
 }
 
-/** What a section's footer says: a note on it, or a failure, as a form says a send that did not go under its field. */
+/**
+ * What a section's footer says: a note on it, a failure, as a form says a
+ * send that did not go under its field, or a read that failed, said as a
+ * failure while the phone reaches the service and, while it does not, as
+ * the quiet note that the section is there once back online, since the
+ * app's one offline notice already said why (`ServiceReached`).
+ */
 export const FOOTER_TONE = {
   NOTE: "note",
   FAILURE: "failure",
+  READ_FAILED: "read-failed",
 } as const;
 
 export type FooterTone = (typeof FOOTER_TONE)[keyof typeof FOOTER_TONE];
@@ -661,7 +669,7 @@ export function footerToneOf(refusal: string | undefined): FooterTone {
   return refusal === undefined ? FOOTER_TONE.NOTE : FOOTER_TONE.FAILURE;
 }
 
-/** A section's footer: a note in the system's footnote ink, or a failure as every refusal reads, muted words led by the alert glyph in the attention ink rather than red words (`ProblemLine`), told to VoiceOver as it stands since it stands because something did not go. */
+/** A section's footer: a note in the system's footnote ink, a read that failed while offline as that note (`FOOTER_TONE.READ_FAILED`), or a failure as every refusal reads, muted words led by the alert glyph in the attention ink rather than red words (`ProblemLine`), told to VoiceOver as it stands since it stands because something did not go. */
 export function SectionFooter({
   words,
   tone,
@@ -672,8 +680,12 @@ export function SectionFooter({
   readonly link?: FooterLink | undefined;
 }) {
   const colors = useColors();
-  const failure = tone === FOOTER_TONE.FAILURE;
+  const reached = useServiceReached();
+  const offline = tone === FOOTER_TONE.READ_FAILED && !reached;
+  const failure = tone === FOOTER_TONE.FAILURE || (tone === FOOTER_TONE.READ_FAILED && reached);
   useAnnounced(failure ? words : undefined, true);
+
+  if (offline) return <Text>{OFFLINE_READ.title}</Text>;
 
   if (failure) return <ProblemLine text={words} />;
 

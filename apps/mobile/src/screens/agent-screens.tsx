@@ -1311,6 +1311,7 @@ const AgentConversation = memo(function AgentConversation({
           title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
           symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
           loading: !failed,
+          readFailed: failed,
           action: failed
             ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
             : undefined,

@@ -98,7 +98,7 @@ function MemberPage({
         <Stack.Screen options={{ title: NO_BAR_TITLE }} />
         <Screen ground={SCREEN_GROUND.GROUPED}>
           {members !== undefined ? null : held?.members?.failed === true ? (
-            <EmptyState title={WORKSPACE_READ_FAILED.MEMBERS} symbol={GLYPH.FAILED} />
+            <EmptyState title={WORKSPACE_READ_FAILED.MEMBERS} symbol={GLYPH.FAILED} readFailed />
           ) : (
             <EmptyState title={readingWords("the members")} symbol={GLYPH.PERSON} loading />
           )}

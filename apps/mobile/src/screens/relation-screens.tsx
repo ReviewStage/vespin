@@ -206,6 +206,7 @@ export function TaskRelationScreen({
             <EmptyState
               title={TASK_UNREAD}
               symbol={GLYPH.TASK}
+              readFailed
               action={{ label: TRY_AGAIN, onPress: retry, look: BUTTON_LOOK.BORDERED }}
             />
           )}

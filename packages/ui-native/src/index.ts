@@ -276,6 +276,8 @@ export {
   type ModelOption,
 } from "./model-choice-sheet.js";
 
+export { ServiceReached, useServiceReached } from "./offline-read-model.js";
+
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
 export { PermissionAsk, type PermissionAskProps } from "./permission-ask.js";
@@ -420,6 +422,7 @@ export {
   PUSH_ROW_GOES,
   PushRow,
   type PushRowGoes,
+  ReadFailedSection,
   ScriptRow,
   SettingsForm,
   ToggleRow,

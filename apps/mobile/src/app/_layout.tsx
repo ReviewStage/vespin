@@ -38,6 +38,7 @@ import { useNewTaskDraftsSignOut } from "../new-task-draft.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useRecentOpenedSignOut } from "../search/recent-opened.js";
+import { ServiceReachedByPhone } from "../service-reached.js";
 import { useSetupGate } from "../setup/use-setup-gate.js";
 import { useShareSheet } from "../share-sheet.js";
 import { SHORT_SHEET_DETENTS } from "../sheet-stack.js";
@@ -177,7 +178,8 @@ function screenLayout({
  * and a machine's pairing link opens Settings › Machines on its code
  * (`host-connect-link.ts`).
  * Over every screen stands the one notice of a write that did not go
- * (`use-write.ts`), which lets its offline word go once the service answers,
+ * (`use-write.ts`), which says once that the phone is offline as a stretch
+ * offline begins and lets that word go once the service answers,
  * and every word with its Try again once the account it was said for is gone;
  * while a sheet stands, it stands in the sheet on top (`screenLayout`).
  */
@@ -203,8 +205,9 @@ function GuardedScreens() {
   useComposerDraftsSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
   useCrashReports();
-  useOfflineNotice();
+  // Note that the account's clear runs before the offline notice is said, since effects run in order and a clear after it would take a launch's offline notice away.
   useNoticeForAccount();
+  useOfflineNotice();
   useShareSheet(updateNeeded);
   useHostConnectLink(signedIn && !updateNeeded);
   const app = signedIn && !updateNeeded;
@@ -346,8 +349,10 @@ function KeptScreens() {
 }
 
 /**
- * The root: the host, the one notice of a write that did not go, the voice
- * call, which outlives every screen, and the screens under them, in the
+ * The root: the host, the one notice of a write that did not go, whether
+ * the phone reaches the service, which every read that failed asks before it
+ * says so, the voice call, which outlives every screen, and the screens
+ * under them, in the
  * navigators' theme. Note that the theme's `dark` flag follows the system's
  * color scheme, because expo-router's stack sets every navigation bar's
  * style from it, and with no theme given it read the light default, so in
@@ -363,9 +368,11 @@ export default function RootLayout() {
     <ThemeProvider value={theme}>
       <HostProvider>
         <FailureNoticeProvider>
-          <VoiceCallProvider>
-            <KeptScreens />
-          </VoiceCallProvider>
+          <ServiceReachedByPhone>
+            <VoiceCallProvider>
+              <KeptScreens />
+            </VoiceCallProvider>
+          </ServiceReachedByPhone>
         </FailureNoticeProvider>
       </HostProvider>
     </ThemeProvider>

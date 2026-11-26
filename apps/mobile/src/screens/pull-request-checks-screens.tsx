@@ -108,6 +108,7 @@ export function PullRequestChecksScreen() {
         <EmptyState
           title={PULL_REQUEST_READ_WORDS.CHECKS_FAILED}
           symbol={GLYPH.FAILED}
+          readFailed
           retry={() => void retry()}
         />
       ) : (
