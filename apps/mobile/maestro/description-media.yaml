@@ -63,6 +63,12 @@ env:
 - pressKey: Enter
 - inputText: "And another."
 - waitForAnimationToEnd
+# The words stay one element of their own beside the pictures, cells and
+# counts the field lists, which reads them and takes keys: the lines just
+# typed through it stand in its words.
+- assertVisible:
+    id: "description-words"
+    text: "(?s).*A line typed above.*And another.*"
 # The count of the open thread on Context, the description's first block,
 # stands at its line's trailing edge in the field, as the read rows stand it,
 # heard as its count of comments.

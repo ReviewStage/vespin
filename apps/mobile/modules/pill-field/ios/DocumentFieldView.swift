@@ -960,6 +960,11 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     set {}
   }
 
+  /// The name a flow finds the field by, which the text view carries too, so a find of the words by it reaches the element that reads and types them.
+  override var accessibilityIdentifier: String? {
+    didSet { textView.accessibilityIdentifier = accessibilityIdentifier }
+  }
+
   /// The views standing in the words that VoiceOver reaches beside them.
   private func standingViews() -> [UIView] {
     media.shownViews() + tables.allObjects + comments.shown
