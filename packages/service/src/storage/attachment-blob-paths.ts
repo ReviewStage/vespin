@@ -41,6 +41,7 @@ export function attachmentBlobPath(
   if (!isWireUuid(attachmentId)) {
     throw new Error("attachmentBlobPath: an attachment id must be a lowercase UUID.");
   }
+
   const segment = VARIANT_SEGMENT[variant];
 
   return segment === undefined

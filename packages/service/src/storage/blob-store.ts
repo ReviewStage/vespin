@@ -165,6 +165,7 @@ async function readUpTo(stream: ReadableStream<Uint8Array>, limit: number): Prom
     chunks.push(value);
     length += value.length;
   }
+
   // Note that we cancel rather than drain, because Blob may ignore a range and send the whole object.
   await reader.cancel();
   const bytes = new Uint8Array(Math.min(length, limit));
@@ -219,6 +220,7 @@ function vercelBlobStore(storeId: string): BlobStoreValues {
   const validUntil = (validForSeconds: number) =>
     Effect.map(Clock.currentTimeMillis, (now) => {
       assertPresignLifetime(validForSeconds);
+
       return now + validForSeconds * 1000;
     });
 
@@ -255,12 +257,14 @@ function vercelBlobStore(storeId: string): BlobStoreValues {
         const found = await get(pathname, { access: ACCESS, storeId, abortSignal });
 
         if (found === null || found.statusCode !== 200) return Option.none();
+
         return Option.some(new Uint8Array(await new Response(found.stream).arrayBuffer()));
       }),
 
     getFirstBytes: (pathname, byteCount) =>
       Effect.suspend(() => {
         assertByteCount(byteCount);
+
         return call(BLOB_STORE_OPERATION.GET, [pathname], async (abortSignal) => {
           try {
             const found = await get(pathname, {
@@ -271,6 +275,7 @@ function vercelBlobStore(storeId: string): BlobStoreValues {
             });
 
             if (found === null || found.statusCode !== 200) return Option.none();
+
             return Option.some(await readUpTo(found.stream, byteCount));
           } catch (cause) {
             if (isRangeNotSatisfiable(cause)) return Option.some(new Uint8Array(0));
@@ -289,6 +294,7 @@ function vercelBlobStore(storeId: string): BlobStoreValues {
             storeId,
             abortSignal,
           });
+
           const signed = await presignUrl(token, {
             operation: "get",
             pathname,
@@ -307,6 +313,7 @@ function vercelBlobStore(storeId: string): BlobStoreValues {
             allowedContentTypes: [options.contentType],
             maximumSizeInBytes: options.maxBytes,
           };
+
           const token = await issueSignedToken({
             pathname,
             operations: ["put"],
@@ -315,6 +322,7 @@ function vercelBlobStore(storeId: string): BlobStoreValues {
             storeId,
             abortSignal,
           });
+
           const signed = await presignUrl(token, {
             operation: "put",
             pathname,
@@ -348,12 +356,14 @@ export const blobStoreFromEnvironment: Layer.Layer<BlobStore> = Layer.effect(
     const read = yield* Config.option(Config.String(BLOB_STORE_ENVIRONMENT.STORE_ID)).pipe(
       Effect.orElseSucceed(() => Option.none<string>()),
     );
+
     const storeId = present(read);
 
     if (storeId === undefined) {
       yield* Effect.logWarning(
         `${BLOB_STORE_ENVIRONMENT.STORE_ID} is unset, so attachment storage is unavailable.`,
       );
+
       return unconfiguredStore();
     }
 

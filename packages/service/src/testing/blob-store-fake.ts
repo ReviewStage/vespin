@@ -49,6 +49,7 @@ export function memoryBlobStore(): MemoryBlobStore {
       presigned.push(record);
       url.searchParams.set("operation", minted.operation);
       url.searchParams.set("valid-until", String(record.validUntil));
+
       return url.toString();
     });
 
