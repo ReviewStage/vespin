@@ -620,12 +620,18 @@ export function PullRequestReviewScreen() {
   // Note that asking for changes wants its summary, as GitHub's own box does; every other review may go with none.
   const sendable = !busy && (event !== REVIEW_EVENT.REQUEST_CHANGES || body.trim() !== "");
 
-  const submit = () => {
-    if (!sendable) return;
+  // Note that Send hands the summary it took out of the field, which may stand empty but for a request for changes, and it goes back in the field where GitHub refused the review.
+  const submit = (typed: string) => {
+    if (busy || (event === REVIEW_EVENT.REQUEST_CHANGES && typed.trim() === "")) return false;
 
-    void writes.write({ action: PULL_REQUEST_ACTION.SUBMIT_REVIEW, event, body }).then((went) => {
-      if (went) router.back();
-    });
+    void writes
+      .write({ action: PULL_REQUEST_ACTION.SUBMIT_REVIEW, event, body: typed })
+      .then((went) => {
+        if (went) router.back();
+        else setBody((now) => wordsHandedBack(typed, now));
+      });
+
+    return true;
   };
 
   const discard = () => {
