@@ -67,7 +67,8 @@ import { INLINE_REF_FIT, type InlineRefFit, useInlineRefFit } from "./inline-ref
  * baseline is its bottom edge), and a pill stands proud of the name on
  * padding its margins take back. A wash bleeds by a ring of its own color
  * rather than padding, so the words around it keep their spacing, which a
- * box cutting the words right around it leaves room for (`inline-ref.css`)
+ * box cutting the words right around it leaves room for
+ * (`overflow-clip-margin: var(--ui-inline-ref-bleed)`, as `Text`'s cut does)
  * rather than cutting it square, and hands the wash on
  * (`--ui-inline-ref-wash`) for a mark inside that rings itself in the
  * ground.
