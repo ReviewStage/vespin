@@ -37,7 +37,8 @@ import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { taskSummaryOf } from "@repo/features/task-list-live";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { GATEWAY_METHOD } from "@repo/gateway";
-import { temporaryDirectoryScoped } from "@repo/runtime/testing";
+import { ForegroundClock } from "@repo/runtime/effect";
+import { temporaryDirectoryScoped, testForegroundClock } from "@repo/runtime/testing";
 import { type EntityPool, entityPool } from "@repo/sync";
 import { nodeKeptCollections } from "@repo/sync/testing";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
@@ -2802,7 +2803,7 @@ it.effect(
         asked.filter((each) => each.startsWith("account-items-whole:")),
         ["account-items-whole:user-dana"],
       );
-    }),
+    }).pipe(Effect.provideServiceEffect(ForegroundClock, testForegroundClock)),
 );
 
 it.effect(

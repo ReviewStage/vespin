@@ -98,6 +98,7 @@ import type { InboxRowsSource } from "@repo/host/inbox-rows";
 import { LocalDatabaseDriver, type LocalDatabaseDriverSeam } from "@repo/host/local-database";
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
+import { ForegroundClock } from "@repo/runtime/effect";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
 import * as HttpClient from "effect/http/HttpClient";
@@ -151,6 +152,8 @@ export interface DeviceSeams {
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */
   readonly onAppActiveChanged: (listener: (active: boolean) => void) => () => void;
+  /** The clock the host's deadlines run on, stopped while the app is in the background (`launch-state.ts`); a device whose process is never suspended, as a test's, hands none, and the host runs on its monotonic time. */
+  readonly foregroundClock?: ForegroundClock;
   /** Whether the device has a network: its reading now, then each change, for as long as the subscription stands. */
   readonly onNetworkChanged: (listener: (online: boolean) => void) => () => void;
   /** Where the Keychain keeps the account's tokens (`keychain-tokens.ts`). */
@@ -262,6 +265,9 @@ function seamLayers(options: MobileHostOptions) {
       : Layer.succeed(PlatformFileDownload, device.fileDownload),
     // Note that the screens run in this process, so a picture's source may carry the account's header to their image loader (`ACCOUNT_PICTURE_SOURCE`).
     Layer.succeed(PlatformScreensInProcess, true),
+    device.foregroundClock === undefined
+      ? Layer.empty
+      : Layer.succeed(ForegroundClock, device.foregroundClock),
   );
 }
 
