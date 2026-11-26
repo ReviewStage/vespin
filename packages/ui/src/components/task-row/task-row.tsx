@@ -16,6 +16,7 @@ import { ReplayMask } from "../../session-replay-marks.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { CardPress, SELECT_BOX_PLACE } from "../card-press/card-press.js";
+import { GLYPH_PLACE_CONTROL } from "../glyph-slot/glyph-slot.js";
 import { type ListRowFold, type ListRowNest, nestedItem } from "../list-row/list-row.js";
 import type { ListRowHint } from "../list-row/list-row-hint.js";
 import { OneLine } from "../one-line/one-line.js";
@@ -664,9 +665,8 @@ export function taskRowColumns(cells: readonly TaskRowCell[], more = true): stri
   return [...before, "minmax(0, 1fr)", ...after, ...moreColumn].join(" ");
 }
 
-/** A mark in the status column at a status chip's size, centered in it. */
-const GLYPH =
-  "ui-task-row-glyph inline-flex size-chip-compact flex-none items-center justify-center";
+/** A mark in the status column at a status chip's size, centered in it, and a control that takes its place while the row is edited in the mark's own footprint (`GLYPH_PLACE_CONTROL`). */
+const GLYPH = `ui-task-row-glyph inline-flex size-chip-compact flex-none items-center justify-center ${GLYPH_PLACE_CONTROL}`;
 
 /**
  * A mark standing in a row's status column where the row's thing wears no

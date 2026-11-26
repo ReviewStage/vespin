@@ -1171,6 +1171,7 @@ export function SidebarSections({
 
   const drag = useRowDrag(move, { handle: SECTION_HANDLE });
   const keys = useRowMoveKeys(move);
+  const phone = usePhoneRoom();
   const { edits } = context;
 
   const creating =
@@ -1217,7 +1218,14 @@ export function SidebarSections({
         {creating === undefined ? null : (
           <li className="sidebar-sections-item sidebar-sections-new">
             <div className="sidebar-repository sidebar-own-section">
-              <SectionEditor title="" icon={undefined} picking={false} onEnd={created} />
+              {/* Note that the new section's field stands in a head of its own, so it holds the place a section's head holds. */}
+              <GroupHeader
+                {...sidebarHead(undefined, phone)}
+                label=""
+                editing={
+                  <SectionEditor title="" icon={undefined} picking={false} onEnd={created} />
+                }
+              />
             </div>
           </li>
         )}

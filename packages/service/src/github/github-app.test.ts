@@ -34,6 +34,7 @@ import {
   GITHUB_FIXTURE_MEMBER,
   GITHUB_FIXTURE_REFUSED_CODE,
   githubReaching,
+  handedRepositoryMint,
   type InstallationFixture,
   listingTokenOf,
   memberRepositoryJson,
@@ -164,9 +165,7 @@ const relayInstallation = (id: number): InstallationFixture => ({
 /** The permissions of every token GitHub was asked to mint for a repository, in the order asked. */
 function repositoryMints(sent: readonly SentToGitHub[]): readonly unknown[] {
   return sent.flatMap((one) =>
-    one.url.endsWith("/access_tokens") && "repositories" in JSON.parse(one.body)
-      ? [JSON.parse(one.body).permissions]
-      : [],
+    handedRepositoryMint(one) ? [JSON.parse(one.body).permissions] : [],
   );
 }
 
@@ -239,9 +238,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         assert.ok(Option.isNone(elsewhere));
 
         // The repository's mint is the App's own request, under its JWT, naming the one repository and contents read.
-        const mints = fake.sent.filter(
-          (sent) => sent.url.endsWith("/access_tokens") && "repositories" in JSON.parse(sent.body),
-        );
+        const mints = fake.sent.filter((sent) => handedRepositoryMint(sent));
 
         assert.equal(mints.length, 1);
         const [mint] = mints;
@@ -264,7 +261,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
       const relay = relayInstallation(6);
 
       const refusing = githubReaching([relay], undefined, {}, (sent) =>
-        sent.url.endsWith("/access_tokens") && "repositories" in JSON.parse(sent.body)
+        handedRepositoryMint(sent)
           ? Response.json({ message: "Resource not accessible by integration" }, { status: 403 })
           : undefined,
       );
@@ -755,10 +752,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         );
         assert.deepEqual(
           fake.sent
-            .filter(
-              (sent) =>
-                sent.url.endsWith("/access_tokens") && "repositories" in JSON.parse(sent.body),
-            )
+            .filter((sent) => handedRepositoryMint(sent))
             .map((sent) => sent.url.split("/").at(-2)),
           ["154", "152"],
         );
@@ -843,9 +837,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         assert.ok(Option.isSome(first) && Option.isSome(reinstalled));
         assert.deepEqual(
           fake.sent
-            .filter(
-              (one) => one.url.endsWith("/access_tokens") && "repositories" in JSON.parse(one.body),
-            )
+            .filter((one) => handedRepositoryMint(one))
             .map((one) => new URL(one.url).pathname),
           ["/app/installations/210/access_tokens", "/app/installations/211/access_tokens"],
         );
@@ -887,7 +879,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         let refusing = true;
 
         const fake = githubReaching([{ ...relay, repositories }], undefined, {}, (sent) => {
-          if (!sent.url.endsWith("/access_tokens") || !("repositories" in JSON.parse(sent.body))) {
+          if (!handedRepositoryMint(sent)) {
             return undefined;
           }
 
@@ -949,10 +941,9 @@ const MEMBER_FORBIDDEN = new Map<string, Record<string, string>>([
 const memberToken =
   (refused: () => boolean = () => false) =>
   (sent: SentToGitHub): Response | undefined => {
+    // Note that a read on any other token is GitHub's own, which answers only what the installation was given.
     if (sent.headers.get("authorization") !== `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}`) {
-      return sent.url.startsWith("https://api.github.com/repos/")
-        ? Response.json({ message: "Not Found" }, { status: 404 })
-        : undefined;
+      return undefined;
     }
 
     if (refused()) return Response.json({ message: "Bad credentials" }, { status: 401 });

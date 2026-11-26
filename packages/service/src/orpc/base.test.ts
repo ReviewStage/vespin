@@ -15,7 +15,8 @@
  * Every procedure's span and log lines carry the trace id and sampling of the
  * caller's `sentry-trace`, or of its `traceparent` where it sent none,
  * through Sentry's tracer as the deployment runs it, every request traced,
- * even where the caller did not sample the call.
+ * even where the caller did not sample the call; and a call to the hosted
+ * router opens its procedure's server span once.
  *
  * Synthetic accounts, bearers, and sessions throughout.
  */
@@ -32,7 +33,7 @@ import { user } from "@repo/database/schemas/auth";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
 import { HOSTED_ERRORS } from "@repo/features/contract";
 import { HTTP_METHOD } from "@repo/wire";
-import { Cause, Context, Effect, Layer, Logger, Option, References, Schema } from "effect";
+import { Cause, Context, Effect, Layer, Logger, Option, References, Schema, Tracer } from "effect";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import type { SessionUserIdResolver, UserIdResolver } from "../http/http-effect.js";
 import type { WebServices } from "../runtime.js";
@@ -40,6 +41,7 @@ import { recordingSentry } from "../testing/sentry-transport.js";
 import { openWorkspacePlugin } from "../testing/workspace-plugin.js";
 import { bearerOnlyMiddleware, type HostedContext, hosted, sessionMiddleware } from "./base.js";
 import { hostedFetch } from "./handler.js";
+import { type HostedRouterSeams, hostedRouter } from "./router.js";
 
 const ORIGIN = "https://app.test";
 const BEARER_PATH = "/api/test/bearer";
@@ -309,4 +311,34 @@ it.effect.each(CALLER_TRACES)(
         [traceId],
       );
     }),
+);
+
+it.effect("a call to a procedure of the hosted router opens its server span once", () =>
+  Effect.gen(function* () {
+    const opened: string[] = [];
+
+    const tracer = Tracer.make({
+      span: (options) => {
+        if (options.kind === "server") opened.push(options.name);
+
+        return new Tracer.NativeSpan(options);
+      },
+    });
+
+    const refusing: UserIdResolver = () => Effect.succeed(Option.none());
+    // SAFETY: a caller naming no account is refused before any procedure reads the deployment, so its resolver is the one seam reached.
+    const seams = { resolveUserId: refusing } as HostedRouterSeams;
+    // SAFETY: the refused call yields no service but the tracer, which stands in for the web runtime's.
+    const services = Context.make(Tracer.Tracer, tracer) as Context.Context<WebServices>;
+
+    const response = yield* Effect.promise(() =>
+      hostedFetch(hostedRouter(seams))(
+        new Request(`${ORIGIN}${HOSTED_SERVICE_PATH.ACCOUNT_PROVIDER_KEYS}`),
+        services,
+      ),
+    );
+
+    assert.equal(response.status, HOSTED_HTTP_STATUS.UNAUTHORIZED);
+    assert.deepEqual(opened, ["account.providerKeys"]);
+  }),
 );

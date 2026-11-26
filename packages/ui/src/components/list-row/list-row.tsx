@@ -27,6 +27,7 @@ import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { CARD_CORNER, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
+import { GLYPH_PLACE_CONTROL } from "../glyph-slot/glyph-slot.js";
 import { withContextMenu } from "../menu/context-menu.js";
 import { useLinkAddress } from "../menu/link-address.js";
 import { rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
@@ -416,14 +417,14 @@ const MAIN_BUTTON_CLASS = `${MAIN_CLASS} cursor-press disabled:cursor-default`;
 /**
  * The leading mark, muted, a glyph at a control's glyph size and an avatar
  * at its own; a provider's mark keeps the text's color, a brand mark being
- * the provider's identity, not a muted glyph.
+ * the provider's identity, not a muted glyph. A control that takes the
+ * glyph's place while the row is edited stands in the glyph's own footprint
+ * (`GLYPH_PLACE_CONTROL`), so the row's words stay where they stood.
  */
-const LEADING_CLASS =
-  "ui-list-row-leading col-[leading] me-icon-gap inline-flex text-muted-foreground [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon";
+const LEADING_CLASS = `ui-list-row-leading col-[leading] me-icon-gap inline-flex text-muted-foreground [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon ${GLYPH_PLACE_CONTROL}`;
 
 /** The leading mark of a row in a tone (`tone`), in the tone's ink rather than muted. */
-const LEADING_TONED_CLASS =
-  "ui-list-row-leading col-[leading] me-icon-gap inline-flex text-tone-ink [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon";
+const LEADING_TONED_CLASS = `ui-list-row-leading col-[leading] me-icon-gap inline-flex text-tone-ink [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon ${GLYPH_PLACE_CONTROL}`;
 
 /** The row's end, its metadata and its chevron, at the end of its track, so it lines up with the acts that share it. */
 const END_CLASS =

@@ -105,6 +105,7 @@ import {
   connectWorkspaceGitHub,
   type FakeGitHub,
   githubReaching,
+  handedRepositoryMint,
   type InstallationFixture,
   openGithubUser,
   type RepositoryScript,
@@ -977,18 +978,20 @@ export const publishedPullRequestDrafted =
 
 export const publishedPullRequest = publishedPullRequestDrafted(() => false);
 
-/** What GitHub was asked on the way to a repository token: the installation read, its listing and the token minted for it, and the repository's own token. */
+/** What GitHub was asked on the way to a repository token: the installation read, the reach's read of the one repository and the token minted for it, the listing (which a reach never pages), and the repository's own token. */
 export function reachRequests(sent: readonly SentToGitHub[], installationId: number) {
   const app = `https://api.github.com/app/installations/${installationId}`;
   const mints = sent.filter((one) => one.url === `${app}/access_tokens`);
-  const forRepository = (one: SentToGitHub) => "repositories" in JSON.parse(one.body);
 
   return {
     installationReads: sent.filter((one) => one.url === app).length,
+    repositoryReads: sent.filter((one) =>
+      /^\/repos\/[^/]+\/[^/]+$/u.test(new URL(one.url).pathname),
+    ).length,
+    reachMints: mints.filter((one) => !handedRepositoryMint(one)).length,
     listings: sent.filter((one) => new URL(one.url).pathname === "/installation/repositories")
       .length,
-    listingMints: mints.filter((one) => !forRepository(one)).length,
-    repositoryMints: mints.filter(forRepository).length,
+    repositoryMints: mints.filter(handedRepositoryMint).length,
   };
 }
 

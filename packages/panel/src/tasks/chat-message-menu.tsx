@@ -2,7 +2,7 @@ import type { LinkDestination } from "@repo/features/link-grammar";
 import { chatWorkWords } from "@repo/features/manager-chat-view";
 import type { ContextMenuProps } from "@repo/ui";
 import { CopyIcon, useMenu } from "@repo/ui";
-import { ListTreeIcon, MessageSquareReplyIcon } from "@repo/ui/icons";
+import { ListTreeIcon, MessageSquareTextIcon } from "@repo/ui/icons";
 import type { ReactNode } from "react";
 import { useCopyToast } from "../copy-feedback.js";
 import { useLinkItems } from "../copy-link-item.js";
@@ -58,7 +58,7 @@ export function useChatMessageMenu(
       : [
           {
             label: THREAD_WORDS.REPLY,
-            icon: <MessageSquareReplyIcon aria-hidden="true" />,
+            icon: <MessageSquareTextIcon aria-hidden="true" />,
             onSelect: onThread,
           },
         ]),

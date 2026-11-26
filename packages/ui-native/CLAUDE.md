@@ -459,7 +459,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
   its checks and reviewers as rows, each glyph the panel's own
-  (`pull-request-look.ts`); the merge's press under the heading in every
+  (`pull-request-look.ts`); its Description and Conversation folding under
+  their headings (`ListSection`'s `foldable`), as the panel's do; the merge's press under the heading in every
   window, as the panel's head stands Merge under the title, a large button
   as wide as its words (`MergeActRow`), and a split button where the
   repository merges more than one way, its chevron choosing the way as the
