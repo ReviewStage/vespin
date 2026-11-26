@@ -6,7 +6,6 @@ import {
   Menu,
   Picker,
   Button as SwiftUIButton,
-  Text,
   Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
@@ -52,6 +51,7 @@ import {
   ToneGlyph,
   UnassignedMark,
 } from "./marks.js";
+import { Text } from "./text.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

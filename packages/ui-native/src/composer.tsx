@@ -12,7 +12,6 @@ import {
   RNHostView,
   ScrollView,
   Spacer,
-  Text,
   TextField,
   type TextFieldRef,
   type TextFieldSelection,
@@ -62,6 +61,7 @@ import { actContent } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";
 import { PillField, type PillFieldHandle } from "./pill-field.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

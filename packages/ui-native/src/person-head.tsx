@@ -1,6 +1,6 @@
 // person-head.tsx -- a person's page's head: their photo or monogram large and centered, their name, and who they are to the workspace, as Contacts heads a card.
 
-import { Text, VStack } from "@expo/ui/swift-ui";
+import { VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
   accessibilityElement,
@@ -14,6 +14,7 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import { Avatar } from "./marks.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

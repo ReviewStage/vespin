@@ -1,6 +1,6 @@
 // pull-request-page.tsx -- a pull request's page: its heading with where it stands, who opened it and its branches, the rows of its checks and reviews, each with its face, the line a change GitHub refused leaves, and the question an act asks first.
 
-import { HStack, Menu, ScrollView, Text, Toggle, VStack } from "@expo/ui/swift-ui";
+import { HStack, Menu, ScrollView, Toggle, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
@@ -35,6 +35,7 @@ import { useRowInset } from "./layout-margin.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
 import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
+import { Text } from "./text.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
