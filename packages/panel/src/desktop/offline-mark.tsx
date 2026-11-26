@@ -15,9 +15,12 @@ import { appStateQuery } from "../use-app-state.js";
 /**
  * offline-mark.tsx -- the pill that says what the window shows may be behind: this Mac offline, the service not answering, or live updates catching up; in the sidebar's foot or, while the sidebar is folded or the sign-in stands, in the title bar, and as a strip under a phone's header.
  *
- * Every surface still fails on its own while the network is gone, each as
- * its read could not be done; the pill says once why, where the window keeps
- * its own state, beside a release on its way in (`sidebar-foot.tsx`). It
+ * It is the window's one word that the network is gone: every surface keeps
+ * drawing what it holds and says no read failure of its own while it stands,
+ * since `ErrorState` goes quiet under the same answer (`ServiceReachedByWindow`),
+ * and each read starts again by itself once the service answers. The pill
+ * says once why, where the window keeps its own state, beside a release on
+ * its way in (`sidebar-foot.tsx`). It
  * reads the document's `network` slice, which main keeps from the
  * platform's answer and from whether the service answers its calls,
  * and the host's live state beside the task list (`HOST_LIVE`), which its
