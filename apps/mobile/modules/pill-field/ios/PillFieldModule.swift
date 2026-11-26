@@ -867,6 +867,8 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     }
 
     quiet = false
+    // Note that the emptied field stands no `@` word, though it tells no change of its own, so the list a send took the words from under goes with them.
+    followOffer(before: "", selected: false)
     return ["runs": held.map(\.told), "changes": changes]
   }
 
