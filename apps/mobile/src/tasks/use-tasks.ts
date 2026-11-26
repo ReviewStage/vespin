@@ -411,28 +411,28 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
       });
     };
 
-    const renameSection = (section: TaskSection, title: string) => {
-      // Note that a name left blank keeps the one it had, as the panel's rename never leaves a section nameless.
-      const named = title.trim() === "" ? section.title : title.trim();
+    // Note that an edit reads the section as it stands when the write goes, not as the menu or alert that asked found it, because an edit writes its name and its icon together, and a change landing meanwhile from another device would be written back over.
+    const standing = (section: TaskSection) =>
+      current.current.sections.find((each) => each.id === section.id) ?? section;
 
-      if (named === section.title) return;
+    const renameSection = (section: TaskSection, title: string) => {
+      const now = standing(section);
+      // Note that a name left blank keeps the one it had, as the panel's rename never leaves a section nameless.
+      const named = title.trim() === "" ? now.title : title.trim();
+
+      if (named === now.title) return;
       void sendSections(
-        [
-          {
-            kind: TASK_SECTION_WRITE.EDIT,
-            id: section.id,
-            title: named,
-            icon: section.icon ?? null,
-          },
-        ],
-        section.id,
+        [{ kind: TASK_SECTION_WRITE.EDIT, id: now.id, title: named, icon: now.icon ?? null }],
+        now.id,
       );
     };
 
     const setSectionIcon = (section: TaskSection, icon: TaskSectionIcon | null) => {
+      const now = standing(section);
+
       void sendSections(
-        [{ kind: TASK_SECTION_WRITE.EDIT, id: section.id, title: section.title, icon }],
-        section.id,
+        [{ kind: TASK_SECTION_WRITE.EDIT, id: now.id, title: now.title, icon }],
+        now.id,
       );
     };
 
