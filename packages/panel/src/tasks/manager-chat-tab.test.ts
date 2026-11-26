@@ -658,6 +658,8 @@ test("a 👍 pressed beside a message stands under it at once as the reader's, a
   const thumbsUp = message.querySelector<HTMLButtonElement>('button[aria-label="Thumbs up"]');
   assert.ok(thumbsUp, "Thumbs up stands beside the message");
   await act(async () => thumbsUp.click());
+  // Note that the press is written to the document at once but drawn one notify tick later, which a loaded runner can stretch.
+  await settleQueries();
 
   assert.deepEqual(reacted, [
     { agentId: MANAGER.id, messageId: "told", kind: "thumbsup", reacted: true },
