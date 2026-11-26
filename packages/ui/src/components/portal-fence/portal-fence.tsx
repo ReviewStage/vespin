@@ -7,7 +7,7 @@ import type { ReactNode, SyntheticEvent } from "react";
  * page's, so a viewer opened over the window from inside a section that
  * opens to be edited at a press, or steps its blocks at an arrow, would do
  * both. The fence stops each press and key at itself. It takes nothing of
- * its own, lays nothing out (`contents`), and plays no pulse: the
+ * its own, lays nothing out (`contents`): the
  * controls inside it are the presses.
  */
 

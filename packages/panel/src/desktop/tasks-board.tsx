@@ -155,6 +155,7 @@ import { groupCount } from "./sidebar-fold.js";
 import {
   type OpenedTask,
   openedTaskOf,
+  TASK_MENU_KIND,
   type TaskRowTab,
   useTaskMenuItems,
   useTaskRowTab,
@@ -424,6 +425,7 @@ const TaskBoardCard = memo(function TaskBoardCard({
   const actions = useTaskMenuItems(tasks, task.id, task.name, {
     rename: rename.begin,
     drawn: true,
+    kind: TASK_MENU_KIND.ROW,
     unread,
     chips: {
       status: drawn(TASK_PROPERTY.STATUS),

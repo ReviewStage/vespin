@@ -253,6 +253,13 @@ export const MANAGER_FACE = {
   PINK: ["#f78fcb", "#fda7dc"],
   PURPLE: ["#b08cff", "#c5a6ff"],
   PEACH: ["#ff9a6c", "#ffb08a"],
+  // Note that these are FILE_ICON's inks of the same words mixed toward
+  // white, as color-mix(in oklab, <ink> 58%, white) mixes them, so a face
+  // wears a section icon's color soft enough to hold the features.
+  RED: ["#f08f89", "#ffaba3"],
+  ORANGE: ["#eab08a", "#ffcba3"],
+  TEAL: ["#8ecbd0", "#ace5ea"],
+  GRAY: ["#b6b6ba", "#cfcfd1"],
 };
 
 // A file's type icon in the file tree's own palette (`@pierre/trees`), which

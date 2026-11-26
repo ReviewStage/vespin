@@ -237,6 +237,40 @@ function PlusMenu(): React.JSX.Element {
   );
 }
 
+/** A phone's row menu: Rename, then Pin and More, a page of the rest that a phone's sheet opens in its place and a floating menu draws where it stands. */
+function MoreMenu(): React.JSX.Element {
+  const menu = useMenu(true);
+
+  const groups: readonly (readonly MenuEntry[])[] = [
+    [{ label: "Rename", icon: <PencilIcon />, onSelect: ignore }],
+    [
+      { label: "Pin", onSelect: ignore },
+      {
+        label: "More",
+        groups: [
+          [
+            { label: "Move to", items: [{ label: "Launch", onSelect: ignore }] },
+            { label: "Copy link", icon: <CopyIcon />, onSelect: ignore },
+          ],
+          [{ label: "Version history", onSelect: ignore }],
+        ],
+      },
+    ],
+    [{ label: "Permanently delete", icon: <TrashIcon />, danger: true, onSelect: ignore }],
+  ];
+
+  return (
+    <>
+      <Button variant={BUTTON_VARIANT.OUTLINE} {...menu.trigger(dropBelowStart)}>
+        Row menu
+      </Button>
+      {menu.drawn && (
+        <Menu label="Task actions" menu={menu.drawn} groups={groups} onClose={menu.close} />
+      )}
+    </>
+  );
+}
+
 /** The account's menu: whose it is over its items, long words cut short, and who shares it under them. */
 function AccountMenu(): React.JSX.Element {
   const menu = useMenu(true);
@@ -466,6 +500,9 @@ function MenuExample(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="menu-panel" title="A panel as a submenu">
         <PlusMenu />
+      </CatalogSection>
+      <CatalogSection id="menu-page" title="A page of more, drawn in place where there is room">
+        <MoreMenu />
       </CatalogSection>
       <CatalogSection id="menu-pointer" title="At the pointer">
         <RightClickRow />

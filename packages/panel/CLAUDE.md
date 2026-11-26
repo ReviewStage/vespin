@@ -45,10 +45,8 @@ transform-and-opacity rule, and how the window's panes open, close, and fill it.
 Read it first. What it does not cover is how the panel's own layout keeps to
 it (the window under it is the shell's: `apps/desktop/src/renderer/AGENTS.md`):
 
-- **A pane never animates a width.** It lands in the layout at once, and
-  `pane-motion.tsx` replays what it displaced, FLIP-style, on `transform` and
-  `clip-path` from a snapshot taken in `getSnapshotBeforeUpdate`. Content a pane
-  change moves joins its `GLIDERS`, or it jumps while the rest glides.
+- **A pane never animates.** It lands in the layout at once, and so does
+  whatever it displaced: nothing replays the journey.
 - **The shell never scrolls sideways.** Whatever slides past its edges is clipped
   with `overflow: clip`, never `hidden`: `hidden` makes a scroll container, and
   `scrollIntoView` or a focus then scrolls the whole window into the room a
@@ -60,7 +58,7 @@ it (the window under it is the shell's: `apps/desktop/src/renderer/AGENTS.md`):
   their fills over an opaque `--title-bar-ground`, because a translucent fill
   shows the pane passing under it.
 - Reduced motion and a capture run hold motion still at the tokens (`base.css`),
-  and `pane-motion.tsx` reads its timing from those same tokens, so a pane
+  so a pane that slides over the work (a floating sidebar, an `OverPane`)
   answers both without a check of its own.
 
 ## Confirms

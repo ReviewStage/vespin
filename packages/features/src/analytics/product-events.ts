@@ -68,6 +68,9 @@ export const PRODUCT_EVENT = {
   PAGE_SHOWN: "page:shown",
   /** A picture an agent showed, drawn on the iOS app, counted once a read by how long it took from the page asking for it to its file in hand, on a rung of `productOpenMilliseconds`, whether it came from the phone's own copy or was read through the service, its kind, and its size on a rung. */
   PICTURE_SHOWN: "picture:shown",
+  STANDING_DRAWN: "standing:drawn",
+  /** A file refused for being over the size its kind may be, counted once a file by its kind and its size on a rung: never its name, its type, or where it was handed. */
+  ATTACHMENT_TOO_LARGE: "attachment:too_large",
 } as const;
 
 export type ProductEventName = (typeof PRODUCT_EVENT)[keyof typeof PRODUCT_EVENT];
@@ -96,6 +99,8 @@ export const PRODUCT_SURFACE_EVENT = {
   LAUNCH_LOAD: PRODUCT_EVENT.LAUNCH_LOAD,
   PAGE_SHOWN: PRODUCT_EVENT.PAGE_SHOWN,
   PICTURE_SHOWN: PRODUCT_EVENT.PICTURE_SHOWN,
+  STANDING_DRAWN: PRODUCT_EVENT.STANDING_DRAWN,
+  ATTACHMENT_TOO_LARGE: PRODUCT_EVENT.ATTACHMENT_TOO_LARGE,
 } as const;
 
 export type ProductSurfaceEventName =
@@ -135,6 +140,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   LAUNCH_SECONDS: "launch_seconds",
   DRAWN_MS: "drawn_ms",
   REPLY_KIND: "reply_kind",
+  STANDING_FIELD: "standing_field",
   STANDING_SECONDS: "standing_seconds",
   EVALUATED_SECONDS: "evaluated_seconds",
   ACCOUNT_SECONDS: "account_seconds",
@@ -169,6 +175,8 @@ export const PRODUCT_EVENT_PROPERTY = {
   COLD_READS: "cold_reads",
   COLD_READ_MS: "cold_read_ms",
   LOAD_WINDOW: "load_window",
+  KIND: "kind",
+  SIZE_BUCKET: "size_bucket",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -820,6 +828,59 @@ export function productPictureBytes(bytes: number): ProductPictureBytes {
   );
 }
 
+/** Which of a task's standing chips a press changed: its status, its priority, or who it is assigned to; never the value it took. */
+export const PRODUCT_STANDING_FIELD = {
+  STATUS: "status",
+  PRIORITY: "priority",
+  ASSIGNEE: "assignee",
+} as const;
+
+export type ProductStandingField =
+  (typeof PRODUCT_STANDING_FIELD)[keyof typeof PRODUCT_STANDING_FIELD];
+
+/** What kind of file was refused for its size, by what it is and never what it was called. */
+export const PRODUCT_ATTACHMENT_KIND = {
+  IMAGE: "image",
+  PDF: "pdf",
+  TEXT: "text",
+  VIDEO: "video",
+  AUDIO: "audio",
+  OTHER: "other",
+} as const;
+
+export type ProductAttachmentKind =
+  (typeof PRODUCT_ATTACHMENT_KIND)[keyof typeof PRODUCT_ATTACHMENT_KIND];
+
+/** The rungs a refused file's size travels on, set at the limits a larger upload may take (7 MB an image, 25 MB and 100 MB a file, 250 MB a video), so no size itself travels. */
+export const PRODUCT_ATTACHMENT_SIZE = {
+  UNDER_3MB: "under_3mb",
+  FROM_3_TO_7MB: "3_to_7mb",
+  FROM_7_TO_25MB: "7_to_25mb",
+  FROM_25_TO_100MB: "25_to_100mb",
+  FROM_100_TO_250MB: "100_to_250mb",
+  OVER_250MB: "over_250mb",
+} as const;
+
+export type ProductAttachmentSize =
+  (typeof PRODUCT_ATTACHMENT_SIZE)[keyof typeof PRODUCT_ATTACHMENT_SIZE];
+
+/** Each rung under its bound in bytes, the smallest first; a megabyte is a million bytes, as the bounds are stated. */
+const PRODUCT_ATTACHMENT_SIZE_LADDER: readonly (readonly [number, ProductAttachmentSize])[] = [
+  [3_000_000, PRODUCT_ATTACHMENT_SIZE.UNDER_3MB],
+  [7_000_000, PRODUCT_ATTACHMENT_SIZE.FROM_3_TO_7MB],
+  [25_000_000, PRODUCT_ATTACHMENT_SIZE.FROM_7_TO_25MB],
+  [100_000_000, PRODUCT_ATTACHMENT_SIZE.FROM_25_TO_100MB],
+  [250_000_000, PRODUCT_ATTACHMENT_SIZE.FROM_100_TO_250MB],
+];
+
+/** The rung a file of `bytes` stands on; one past the last bound, or a size that is no number, the last. */
+export function productAttachmentSize(bytes: number): ProductAttachmentSize {
+  return (
+    PRODUCT_ATTACHMENT_SIZE_LADDER.find(([bound]) => bytes < bound)?.[1] ??
+    PRODUCT_ATTACHMENT_SIZE.OVER_250MB
+  );
+}
+
 interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: string;
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: ProductSessionCountBucket;
@@ -843,6 +904,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.LAUNCH_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.DRAWN_MS]: ProductDrawnMilliseconds;
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: ProductReplyKind;
+  [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: ProductStandingField;
   [PRODUCT_EVENT_PROPERTY.STANDING_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.EVALUATED_SECONDS]: ProductLaunchSeconds;
   [PRODUCT_EVENT_PROPERTY.ACCOUNT_SECONDS]: ProductLaunchSeconds;
@@ -877,6 +939,8 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.COLD_READS]: ProductLoadCount;
   [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: ProductLoadMilliseconds;
   [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: ProductLoadWindow;
+  [PRODUCT_EVENT_PROPERTY.KIND]: ProductAttachmentKind;
+  [PRODUCT_EVENT_PROPERTY.SIZE_BUCKET]: ProductAttachmentSize;
 }
 
 /**
@@ -933,6 +997,7 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.MIRROR_STEP]: Object.values(MIRROR_STEP),
   [PRODUCT_EVENT_PROPERTY.MIRROR_FAILURE]: Object.values(MIRROR_FAILURE),
   [PRODUCT_EVENT_PROPERTY.REPLY_KIND]: Object.values(PRODUCT_REPLY_KIND),
+  [PRODUCT_EVENT_PROPERTY.STANDING_FIELD]: Object.values(PRODUCT_STANDING_FIELD),
   [PRODUCT_EVENT_PROPERTY.FIRST_ROWS]: Object.values(PRODUCT_FIRST_ROWS),
   [PRODUCT_EVENT_PROPERTY.READY_AFTER]: Object.values(PRODUCT_READY_AFTER),
   [PRODUCT_EVENT_PROPERTY.LAUNCHED_IN]: Object.values(PRODUCT_LAUNCHED_IN),
@@ -947,6 +1012,8 @@ const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.PICTURE_KIND]: Object.values(PRODUCT_PICTURE_KIND),
   [PRODUCT_EVENT_PROPERTY.PICTURE_BYTES]: Object.values(PRODUCT_PICTURE_BYTES),
   [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: Object.values(PRODUCT_LOAD_WINDOW),
+  [PRODUCT_EVENT_PROPERTY.KIND]: Object.values(PRODUCT_ATTACHMENT_KIND),
+  [PRODUCT_EVENT_PROPERTY.SIZE_BUCKET]: Object.values(PRODUCT_ATTACHMENT_SIZE),
 } as const satisfies Record<EnumeratedProductEventProperty, readonly string[]>;
 
 /**
@@ -1029,6 +1096,14 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.READ_MS,
     PRODUCT_EVENT_PROPERTY.PICTURE_FROM,
     PRODUCT_EVENT_PROPERTY.PICTURE_KIND,
+  ],
+  [PRODUCT_EVENT.STANDING_DRAWN]: [
+    PRODUCT_EVENT_PROPERTY.DRAWN_MS,
+    PRODUCT_EVENT_PROPERTY.STANDING_FIELD,
+  ],
+  [PRODUCT_EVENT.ATTACHMENT_TOO_LARGE]: [
+    PRODUCT_EVENT_PROPERTY.KIND,
+    PRODUCT_EVENT_PROPERTY.SIZE_BUCKET,
   ],
 } as const satisfies { [Name in ProductEventName]: readonly ProductEventProperty[] };
 

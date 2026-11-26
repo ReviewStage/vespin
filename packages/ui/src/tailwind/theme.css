@@ -1275,6 +1275,10 @@
   --color-manager-face-pink: var(--ui-color-manager-face-pink);
   --color-manager-face-purple: var(--ui-color-manager-face-purple);
   --color-manager-face-peach: var(--ui-color-manager-face-peach);
+  --color-manager-face-red: var(--ui-color-manager-face-red);
+  --color-manager-face-orange: var(--ui-color-manager-face-orange);
+  --color-manager-face-teal: var(--ui-color-manager-face-teal);
+  --color-manager-face-gray: var(--ui-color-manager-face-gray);
   /* A file opened over the window (`attachment-viewer.tsx`): a text file's
      reading width, centered in the card, never wider than the room the card
      leaves it. */

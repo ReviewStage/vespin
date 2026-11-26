@@ -6,8 +6,10 @@
 // hears. Nothing here reads Markdown. The view holds a pill as one
 // attachment character, so it selects and deletes as one unit, and writes
 // the words back by putting each pill's Markdown in its place. It tells
-// JavaScript the Markdown, and the caret's line around it, each pill read as
-// the object character, so an `@` word is found as the panel's box finds it
+// JavaScript its runs, words as typed and pills by their Markdown, from which
+// JavaScript writes the Markdown, a marker typed as words escaped so it names
+// no file; and the caret's line around it, each pill read as the object
+// character, so an `@` word is found as the panel's box finds it
 // (`@repo/features/at-word`); a pick replaces that word with a pill.
 //
 // The view is handed runs on every change JavaScript makes, its own echoed
@@ -86,6 +88,14 @@ public final class PillFieldModule: Module {
 
       AsyncFunction("rewriteWord") { (view: PillFieldView, text: String, word: WordRecord?) in
         view.rewriteWord(text, over: word.map(Word.init))
+      }
+
+      AsyncFunction("take") { (view: PillFieldView) -> [String: Any] in
+        view.takeWords()
+      }
+
+      AsyncFunction("putBack") { (view: PillFieldView, runs: [RunRecord]) in
+        view.putBack(StyledRuns(runs).runs)
       }
 
       AsyncFunction("focus") { (view: PillFieldView) in
@@ -288,6 +298,14 @@ enum Run: Equatable {
     switch self {
     case .words(let text): return text
     case .pill(let pill): return pill.markdown
+    }
+  }
+
+  /// The run as JavaScript reads it: words as typed, a pill by its Markdown.
+  var told: [String: Any] {
+    switch self {
+    case .words(let text): return ["text": text]
+    case .pill(let pill): return ["pill": ["markdown": pill.markdown]]
     }
   }
 }
@@ -821,6 +839,53 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     changed()
   }
 
+  /**
+   * Takes the words out of the field for a send, in one step on the main
+   * thread, where every key lands: answers its runs as it tells them, words
+   * as typed and pills by their Markdown, from which JavaScript writes the
+   * Markdown as it does for a telling, and the count of changes the emptying
+   * stands at. Note that a second
+   * send finds the field empty, so one press, or two that reach JavaScript
+   * together, sends the words once, and a handing made before the take,
+   * which has not heard it, is refused rather than laying the words back.
+   * The emptying is told to JavaScript only through the answer, never as the
+   * field's own telling, so JavaScript hears it once the send has taken the
+   * words, and never where they go back (`putBack`), which would let go of
+   * the files their markers hold.
+   */
+  func takeWords() -> [String: Any] {
+    quiet = true
+
+    // Note that words being composed, as dictation or a keyboard of marks holds them, are committed first, so they go with the rest.
+    if textView.markedTextRange != nil { textView.unmarkText() }
+
+    let held = heldRuns()
+
+    if !held.isEmpty {
+      redraw([], force: false)
+      changes += 1
+    }
+
+    quiet = false
+    return ["runs": held.map(\.told), "changes": changes]
+  }
+
+  /// Lays words a send did not take back in the field, ahead of anything typed since, with the caret after everything.
+  func putBack(_ runs: [Run]) {
+    guard editable, !runs.isEmpty else { return }
+
+    if textView.markedTextRange != nil {
+      quiet = true
+      textView.unmarkText()
+      quiet = false
+    }
+
+    let held = heldRuns()
+    redraw(held.isEmpty ? runs : runs + [.words("\n")] + held, force: false)
+    textView.selectedRange = NSRange(location: textView.textStorage.length, length: 0)
+    changed()
+  }
+
   func focus() {
     textView.becomeFirstResponder()
   }
@@ -983,7 +1048,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     tell()
   }
 
-  /// Tells JavaScript the Markdown, and the caret's line before and after it with each pill as the object character.
+  /// Tells JavaScript the runs, so it writes the Markdown with a marker typed as words escaped, and the caret's line before and after it with each pill as the object character.
   private func tell() {
     let string = textView.textStorage.string as NSString
     let selected = textView.selectedRange
@@ -996,7 +1061,7 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     let lineEnd = nextBreak.location == NSNotFound ? string.length : nextBreak.location
 
     onWords([
-      "markdown": markdown(of: heldRuns()),
+      "runs": heldRuns().map(\.told),
       "before": string.substring(with: NSRange(location: lineStart, length: caret - lineStart)),
       "after": string.substring(with: NSRange(location: selectionEnd, length: lineEnd - selectionEnd)),
       "caret": caret,

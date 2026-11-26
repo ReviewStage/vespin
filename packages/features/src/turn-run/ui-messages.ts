@@ -17,6 +17,7 @@ import type {
   UIMessage,
   UITools,
 } from "ai";
+import { withKeptPictures } from "../conversation-picture-wire.js";
 import { outOfMemoryMetadata } from "../out-of-memory-wire.js";
 import { TOOL_CALL_SETTLEMENT, type ToolCallSettlement } from "./run-events.js";
 import { TURN_TRIGGER, type TurnTrigger } from "./turn.js";
@@ -112,14 +113,22 @@ function reasoningPart(reasoning: ReasoningSummary): ReasoningUIPart {
   };
 }
 
-/** A tool part in the state its call settled in: the answer's output, or the error's own text, and for a command killed out of memory its mark (`out-of-memory-wire.ts`). */
+/** What a settled part keeps beside its answer: a command's out-of-memory mark, and the pictures its runner kept apart, each where the settlement carries it. */
+function resultMetadataOf(settlement: ToolCallSettlement) {
+  const marked =
+    settlement.outOfMemory === undefined ? undefined : outOfMemoryMetadata(settlement.outOfMemory);
+
+  return settlement.pictures === undefined ? marked : withKeptPictures(marked, settlement.pictures);
+}
+
+/** A tool part in the state its call settled in: the answer's output, or the error's own text, with what it keeps beside them (`resultMetadataOf`). */
 export function settledToolPart(part: ToolPart, settlement: ToolCallSettlement): ToolPart {
+  const resultProviderMetadata = resultMetadataOf(settlement);
+
   const call = {
     type: part.type,
     toolCallId: part.toolCallId,
-    ...(settlement.outOfMemory === undefined
-      ? undefined
-      : { resultProviderMetadata: outOfMemoryMetadata(settlement.outOfMemory) }),
+    ...(resultProviderMetadata === undefined ? undefined : { resultProviderMetadata }),
   };
 
   return settlement.state === TOOL_CALL_SETTLEMENT.OUTPUT_ERROR

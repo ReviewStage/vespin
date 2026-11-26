@@ -8,7 +8,6 @@ import {
   ScrollView,
   Section,
   Spacer,
-  Text,
   useNativeState,
   VStack,
   ZStack,
@@ -34,6 +33,7 @@ import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar, AvatarPhoto, HarnessMark, MANAGER_FACE_SEAT, ManagerFace } from "./marks.js";
 import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
 import { useSuggestionKeys } from "./suggestion-keys.js";
+import { Text } from "./text.js";
 import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

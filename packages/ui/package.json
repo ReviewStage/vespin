@@ -56,10 +56,10 @@
     "./use-async-action": "./src/use-async-action.js",
     "./description-comments": "./src/description-comments.js",
     "./use-disclosure": "./src/use-disclosure.js",
+    "./use-until-found": "./src/use-until-found.js",
     "./testing/frames": "./src/testing/frames.js",
     "./testing/held-exits": "./src/testing/held-exits.js",
     "./testing/point-at-turns": "./src/testing/point-at-turns.js",
-    "./testing/leaving-place": "./src/testing/leaving-place.js",
     "./testing/reported-failure": "./src/testing/reported-failure.js",
     "./testing/selectable-list": "./src/testing/selectable-list.js",
     "./use-clipped": "./src/use-clipped.js",
@@ -104,12 +104,15 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
+    "@fontsource-variable/geist": "catalog:",
+    "@tailwindcss/node": "catalog:",
     "@types/hast": "catalog:",
     "@types/mdast": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "jsdom": "catalog:",
+    "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

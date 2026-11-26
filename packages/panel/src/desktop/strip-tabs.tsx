@@ -301,6 +301,9 @@ function sameAction(one: TabAction, other: TabAction | undefined): boolean {
 
   if ("panel" in one || "panel" in other) return "panel" in one && "panel" in other;
 
+  // Note that a page of groups is never taken as alike, since what it holds is drawn only once it opens.
+  if ("groups" in one || "groups" in other) return false;
+
   if ("items" in one || "items" in other) {
     return (
       "items" in one &&
@@ -349,7 +352,7 @@ function throughLatest(
     group.map((action, place) => {
       const now = () => latest.current?.[at]?.[place];
 
-      if ("items" in action || "panel" in action) return action;
+      if ("items" in action || "panel" in action || "groups" in action) return action;
 
       if ("onAsk" in action) {
         return {

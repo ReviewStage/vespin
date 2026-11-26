@@ -5,15 +5,11 @@ import {
   type PointerEvent,
   type ReactNode,
   type SyntheticEvent,
-  useCallback,
   useContext,
-  useLayoutEffect,
-  useRef,
   useState,
 } from "react";
 import { cn } from "../../cn.js";
 import { FoldChevronDownIcon, FoldChevronIcon } from "../../icons/lucide-glyphs.js";
-import { type DisclosureMotion, disclosureMotion, useDisclosure } from "../../use-disclosure.js";
 import { CARD_CORNER, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
 
 /**
@@ -30,17 +26,10 @@ import { CARD_CORNER, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
  * folded, is controlled: it is handed `open` and hears `onOpenChange`, a
  * press and a find's toggle alike, and is open as its holder says.
  *
- * A press moves the fold, and nothing else does: the chevron turns, and the
- * summary's words stand still under the pointer, with no pulse. The layout
- * lands at once either way; a press that opens marks the element `data-disclosure` as
- * opening, which unrolls the body as it fades in (disclosure.css), and a
- * press that closes holds the body drawn through its exit
- * (`use-disclosure.ts`). For the moment it moves, the body's height is
- * published on the element and the body as `--disclosure-rise`, which is how
- * a fold whose line travels as it opens tells its stylesheet how far. A fold
- * drawn open from the start, or drawn again, replays nothing. What stands
- * below the fold moves at once: a closing body fades where it stands and
- * the layout lands once it has.
+ * A press opens or closes the fold at once, and nothing moves: the body is
+ * drawn or taken out on the commit the press lands in, the chevron stands
+ * turned while open with no turn between, what stands under the fold jumps
+ * to its new place, and the summary's words stand still under the pointer.
  *
  * While an app's find looks through what holds the fold (`DisclosureFind`),
  * a closed body is drawn after all, still hidden inside its closed `details`
@@ -55,7 +44,7 @@ import { CARD_CORNER, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
  * shows (`DISCLOSURE_SUMMARY.HEAD`) and its body under a hairline
  * (`DISCLOSURE_BODY.CARD`). A surface that skins its fold its own way
  * builds on `useDisclosureFold` and `DisclosureScope` instead, so the state
- * and the motion live here once.
+ * lives here once.
  *
  * No control stands inside a summary, because a summary is the button that
  * opens its fold, and what it holds is that button's name: a ⋯ inside it
@@ -78,22 +67,14 @@ export type DisclosureBodyInset = (typeof DISCLOSURE_BODY)[keyof typeof DISCLOSU
 
 /** A fold's state, as its summary, chevron, and body read it. */
 export interface DisclosureState {
-  /** Whether it is open, as its line says. */
+  /** Whether it is open, as its line says, and its body drawn. */
   readonly open: boolean;
-  /** Whether its body is drawn: open, or closed and still fading. */
-  readonly drawn: boolean;
-  /** Whether its body is fading out, out of reach of the keys and the pointer. */
-  readonly leaving: boolean;
   readonly toggle: () => void;
-  /** The ref for the body, whose fade the fold waits on. */
-  readonly body: (element: HTMLElement | null) => void;
 }
 
 /** What `useDisclosureFold` hands the `details` element it is drawn on. */
 export interface DisclosureDetailsProps {
-  readonly ref: (element: HTMLDetailsElement | null) => void;
   readonly open: boolean;
-  readonly "data-disclosure": DisclosureMotion | undefined;
   readonly onToggle: (event: SyntheticEvent<HTMLDetailsElement>) => void;
 }
 
@@ -140,17 +121,17 @@ export function useDisclosureState(): DisclosureState {
 }
 
 /**
- * Whether the fold around the caller draws its body: open, on its way out,
- * or a find looking through it. Note that a summary previewing its body asks
+ * Whether the fold around the caller draws its body: open, or a find
+ * looking through it. Note that a summary previewing its body asks
  * this rather than whether the fold is open, because the body a find draws
  * hidden says the same words, and a find counting both would open the fold
  * onto a match in the preview that opening it takes away.
  */
 export function useDisclosureBodyDrawn(): boolean {
-  const { drawn } = useDisclosureState();
+  const { open } = useDisclosureState();
   const finding = useContext(FindContext);
 
-  return drawn || finding;
+  return open || finding;
 }
 
 /**
@@ -169,7 +150,8 @@ export function useDisclosurePreviewShown(inBody: boolean): boolean {
 /**
  * A fold's state and the props for the `details` it is drawn on, for a
  * surface that draws its own summary and body inside `DisclosureScope`;
- * open as `control` says where its holder keeps it.
+ * open as `control` says where its holder keeps it. It opens and closes at
+ * once: its body is drawn or taken out on the commit that changes it.
  */
 export function useDisclosureFold(
   defaultOpen: boolean,
@@ -183,69 +165,13 @@ export function useDisclosureFold(
     else control.onOpenChange(next);
   };
 
-  // The state a press last asked for, which alone plays its motion; none once the state changed otherwise.
-  const [asked, setAsked] = useState<boolean | undefined>(undefined);
-  const [seen, setSeen] = useState(open);
-
-  if (open !== seen) {
-    setSeen(open);
-
-    if (asked !== open) setAsked(undefined);
-  }
-
-  const shown = useDisclosure(open);
-  const root = useRef<HTMLDetailsElement | null>(null);
-  const held = useRef<HTMLElement | null>(null);
-  const shownRef = shown.ref;
-
-  const body = useCallback(
-    (element: HTMLElement | null) => {
-      held.current = element;
-      shownRef(element);
-    },
-    [shownRef],
-  );
-
-  const details = useCallback((element: HTMLDetailsElement | null) => {
-    root.current = element;
-  }, []);
-
-  // Note that no motion plays while a find looks through, because a body
-  // held open through its fade would be closed over the match a find showed
-  // there, which opens only a `details` that is closed.
-  const finding = useContext(FindContext);
-
-  const motion = finding ? undefined : disclosureMotion(open && asked === true, shown.leaving);
-
-  // Note that this runs before the frame the press is drawn on, so the rise
-  // is there for the first frame of any motion that reads it. The body wears
-  // it too, since a root its caller draws, a group's head, takes no ref.
-  useLayoutEffect(() => {
-    if (motion === undefined || held.current === null) return;
-    const rise = `${held.current.offsetHeight}px`;
-    root.current?.style.setProperty("--disclosure-rise", rise);
-    held.current.style.setProperty("--disclosure-rise", rise);
-  }, [motion]);
-
   return {
-    state: {
-      open,
-      drawn: shown.mounted,
-      leaving: shown.leaving,
-      toggle: () => {
-        setAsked(!open);
-        setOpen(!open);
-      },
-      body,
-    },
+    state: { open, toggle: () => setOpen(!open) },
     details: {
-      ref: details,
-      open: shown.mounted,
-      "data-disclosure": motion,
+      open,
       onToggle: (event) => {
-        // Note that the element's own toggle, a find's among them, lands at once.
-        if (event.currentTarget.open === shown.mounted) return;
-        setAsked(undefined);
+        // Note that the element's own toggle, a find's among them, is taken as the fold's state.
+        if (event.currentTarget.open === open) return;
         setOpen(event.currentTarget.open);
       },
     },
@@ -292,9 +218,7 @@ export function useDisclosureFinding(): boolean {
 
 /**
  * The summary's click, routed to the fold's state. Note that the element's
- * own toggle is stopped, because the open state is React's, and that the
- * press plays no pulse: a fold answers it with its chevron's turn alone, as
- * a scale on a line of words would move them under the pointer.
+ * own toggle is stopped, because the open state is React's.
  */
 export function useDisclosureSummaryClick(): (event: MouseEvent<HTMLElement>) => void {
   const { toggle } = useDisclosureState();
@@ -661,7 +585,7 @@ export const DISCLOSURE_TURN = {
 
 export type DisclosureTurn = (typeof DISCLOSURE_TURN)[keyof typeof DISCLOSURE_TURN];
 
-/** Each turn's glyph, which `disclosure.css` turns as its fold opens. */
+/** Each turn's glyph, which `disclosure.css` turns, at once, while its fold is open. */
 const TURN_GLYPH = {
   [DISCLOSURE_TURN.SIDE]: FoldChevronIcon,
   [DISCLOSURE_TURN.DOWN]: FoldChevronDownIcon,
@@ -698,8 +622,7 @@ export function DisclosureChevron({
  * Where each inset stands an open body: past the chevron, at the
  * transcript's own indent, a row's own glyph and inset carrying its words the
  * rest of the way under the summary's; flush with the row; or under a card's
- * head, past the hairline under it, at the head's inset. Its landing and
- * leaving stay in `disclosure.css`, keyframes being what a utility cannot say.
+ * head, past the hairline under it, at the head's inset.
  */
 const BODY_INSET = {
   [DISCLOSURE_BODY.INDENTED]: "flex flex-col gap-ui-4 pt-ui-4 ml-ui-24",
@@ -708,7 +631,7 @@ const BODY_INSET = {
   [DISCLOSURE_BODY.NONE]: undefined,
 } as const satisfies Record<DisclosureBodyInset, string | undefined>;
 
-/** What the fold holds, drawn only while it is open, on its way out, or a find is looking through it. */
+/** What the fold holds, drawn only while it is open or a find is looking through it. */
 export function DisclosureBody({
   inset = DISCLOSURE_BODY.INDENTED,
   children,
@@ -716,18 +639,12 @@ export function DisclosureBody({
   inset?: DisclosureBodyInset;
   children: ReactNode;
 }): React.JSX.Element | null {
-  const { body, leaving } = useDisclosureState();
   const drawn = useDisclosureBodyDrawn();
 
   if (!drawn) return null;
 
   return (
-    <div
-      ref={body}
-      className={cn("ui-disclosure-body", BODY_INSET[inset])}
-      data-inset={inset}
-      inert={leaving}
-    >
+    <div className={cn("ui-disclosure-body", BODY_INSET[inset])} data-inset={inset}>
       {children}
     </div>
   );

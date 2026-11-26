@@ -83,6 +83,7 @@ import {
   type MachineAllowedAppsAnswerView,
   type MachineAskAnsweredView,
   type MachineChangeParams,
+  type ManagerChatReactAnswerView,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type MemorySaveAnswerView,
@@ -199,6 +200,10 @@ import {
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
 import type { MachineAskAnswerRequest } from "./machine-ask-wire.js";
+import {
+  type ManagerChatReactRequest,
+  managerChatReactRequestSchema,
+} from "./manager-chat-live.js";
 import { type ManagerCreateRequest, managerCreateRequestSchema } from "./manager-wire.js";
 import { MEMORY_QUERY } from "./memory-wire.js";
 import {
@@ -1208,6 +1213,28 @@ export class HostedAgentClient {
     return hostedCall(
       this.#hosted.messages.chatSend,
       { params: { id: agentId }, body: admitted },
+      { deadline: HOSTED_DEADLINE.STEER },
+    );
+  }
+
+  /**
+   * Gives a message of a Manager's chat the account's reaction, or takes it
+   * off, as `reacted` asks, answering whether it changed what stood; a
+   * reaction the service would refuse by shape is refused here without
+   * traveling.
+   */
+  chatReact(
+    agentId: string,
+    messageId: string,
+    request: ManagerChatReactRequest,
+  ): Effect.Effect<ManagerChatReactAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(managerChatReactRequestSchema)(request));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(
+      this.#hosted.messages.chatReact,
+      { params: { id: agentId, message: messageId }, body: admitted },
       { deadline: HOSTED_DEADLINE.STEER },
     );
   }

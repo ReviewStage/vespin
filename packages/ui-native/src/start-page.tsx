@@ -10,7 +10,6 @@ import {
   ScrollView,
   Section,
   Button as SwiftUIButton,
-  Text,
   VStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -48,6 +47,7 @@ import {
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
+import type { ComposerSend } from "./composer-press.js";
 import { GlassDock } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, PickOption } from "./glyph-label.js";
@@ -55,6 +55,7 @@ import type { MenuChoice } from "./list-row.js";
 import { RepositoryPicture } from "./marks.js";
 import { choiceLook } from "./row-menu-model.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
+import { Text } from "./text.js";
 import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -320,12 +321,13 @@ type StartPageProps = {
   readonly dictation?: ComposerDictation | undefined;
   /** Whether Start may be pressed now: there is something to start on, and no start is out. */
   readonly ready: boolean;
-  readonly onStart: () => void;
+  /** Starts on the words Start took out of the field (`ComposerSend`). */
+  readonly onStart: ComposerSend;
   /** Talk in Start's place while the field holds nothing, as an agent's composer offers it; none where the page offers no Talk. */
   readonly onTalk?: (() => void) | undefined;
   /** The names a flow finds the field and the + by. */
   readonly testIds: { readonly field: string; readonly add: string };
-  /** Draws the words with their mentions and files as pills (`ComposerPills`), the files then standing in the words rather than in a row over them; the system's plain field where none is given. */
+  /** Draws the words with their mentions and files as pills (`ComposerPills`), the files then standing in the words rather than in a row over them; the same field, with no holder of its own, where none is given. */
   readonly pills?: ComposerPills | undefined;
 };
 

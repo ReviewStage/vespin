@@ -1,7 +1,6 @@
 import type { ComponentPropsWithRef, MouseEvent, ReactNode } from "react";
 import { ChevronDownIcon, RemoveIcon } from "../../icons/lucide-glyphs.js";
 import { middlePressOf } from "../../middle-press.js";
-import { PRESS_FACE, PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import type { StatusTone } from "../../status-tone.js";
 import { TEXT_ELEMENT, TEXT_FONT, TEXT_VARIANT, Text } from "../text/text.js";
 import { Tooltip } from "../tooltip/hint.js";
@@ -386,12 +385,7 @@ function RemovableChip({
     onOpen === undefined ? (
       <span className={faceClasses(face, false)}>{children}</span>
     ) : (
-      <button
-        type="button"
-        className={`${faceClasses(face, false)} ${OPEN_FACE}`}
-        onClick={pulseOnPress(onOpen, PRESS_PULSE.FACE)}
-        {...PRESS_FACE}
-      >
+      <button type="button" className={`${faceClasses(face, false)} ${OPEN_FACE}`} onClick={onOpen}>
         {children}
       </button>
     );
@@ -403,12 +397,7 @@ function RemovableChip({
       {...faceAttributes(face)}
     >
       {hint === undefined ? words : <Tooltip label={hint}>{words}</Tooltip>}
-      <button
-        type="button"
-        className={REMOVE}
-        aria-label={removeLabel}
-        onClick={pulseOnPress(onRemove)}
-      >
+      <button type="button" className={REMOVE} aria-label={removeLabel} onClick={onRemove}>
         <RemoveIcon />
       </button>
     </span>
@@ -427,20 +416,16 @@ function LinkChip({
   children,
   ...anchor
 }: LinkChipProps): React.JSX.Element {
-  const press = pulseOnPress(onClick, PRESS_PULSE.FACE);
-
   return (
     <a
       {...anchor}
       className={chipClasses({ look, tone, width, size, iconOnly }, false, false)}
       {...faceAttributes({ look, tone, width, size, iconOnly })}
       href={href}
-      onClick={press}
-      onAuxClick={onClick === undefined ? undefined : middlePressOf(press)}
+      onClick={onClick}
+      onAuxClick={onClick === undefined ? undefined : middlePressOf(onClick)}
     >
-      <span className={faceClasses({ look, size, iconOnly }, false)} {...PRESS_FACE}>
-        {children}
-      </span>
+      <span className={faceClasses({ look, size, iconOnly }, false)}>{children}</span>
     </a>
   );
 }
@@ -459,10 +444,8 @@ export function Chip(props: ChipProps): React.JSX.Element {
       className={chipClasses({ look, tone, width, size, iconOnly }, false, busy === true)}
       aria-busy={busy === true ? true : undefined}
       {...faceAttributes({ look, tone, width, size, iconOnly })}
-      // Note that a busy chip's face is already moving, as its wait, so a press plays nothing over it.
-      onClick={busy === true ? button.onClick : pulseOnPress(button.onClick, PRESS_PULSE.FACE)}
     >
-      <span className={faceClasses({ look, size, iconOnly }, busy === true)} {...PRESS_FACE}>
+      <span className={faceClasses({ look, size, iconOnly }, busy === true)}>
         {children}
         {chevron ? <ChevronDownIcon /> : null}
       </span>

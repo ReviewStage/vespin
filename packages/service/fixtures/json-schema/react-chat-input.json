@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "message_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The id of the message."
+    },
+    "name": {
+      "type": "string",
+      "enum": [
+        "thumbsup",
+        "thumbsdown"
+      ],
+      "description": "The reaction: `thumbsup` or `thumbsdown`."
+    },
+    "remove": {
+      "type": "boolean",
+      "description": "true to take your reaction off instead."
+    }
+  },
+  "required": [
+    "message_id",
+    "name"
+  ],
+  "additionalProperties": false
+}

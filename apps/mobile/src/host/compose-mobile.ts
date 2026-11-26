@@ -94,6 +94,7 @@ import {
   StateRoot,
   TerminalSocket,
 } from "@repo/host/effect";
+import type { InboxRowsSource } from "@repo/host/inbox-rows";
 import { LocalDatabaseDriver, type LocalDatabaseDriverSeam } from "@repo/host/local-database";
 import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
@@ -126,6 +127,8 @@ export interface MobileHost {
   readonly bridge: AppBridge;
   /** The screens' client of the act port, for the acts that ride oRPC (`@repo/host/contract`). */
   readonly acts: ActPortClient;
+  /** The pool's Inbox kind, which the screens read through live queries where its items are kept on disk (`@repo/host/inbox-rows`). */
+  readonly inboxRows: InboxRowsSource;
 }
 
 export class MobileHostTag extends Context.Service<MobileHostTag, MobileHost>()(
@@ -505,7 +508,7 @@ const composedMobile = (options: MobileHostOptions) =>
         yield* HttpClient.HttpClient,
       );
 
-      return { bridge: made.bridge, acts, operator, state };
+      return { bridge: made.bridge, acts, operator, state, inboxRows: assembly.inboxRows };
     }),
   );
 
@@ -555,6 +558,7 @@ export function composeMobile(
       const standing = Layer.mergeAll(
         Layer.succeed(MobileHostTag, {
           bridge: mobile.bridge,
+          inboxRows: mobile.inboxRows,
           acts:
             fixture === undefined || fixtureHost === undefined
               ? mobile.acts

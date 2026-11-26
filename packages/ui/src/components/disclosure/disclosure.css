@@ -2,9 +2,9 @@
    summary in each look, the body at each inset, a card's frame drawn by
    `Card`) leave here: a card's type and focus ring, which a frame wears as a fold does; a
    head with controls of its own, laid out by subgrid and filled under the
-   pointer through `:has()`; the chevron turned down while open, which the
-   tests read here; and the motion a press plays as the body lands or
-   leaves, which any fold built on `useDisclosureFold` shares. */
+   pointer through `:has()`; and the chevron turned down while open, which
+   the tests read here. A fold has no motion: its body, the chevron's turn,
+   and what stands under it all land on the press. */
 
 @layer components {
   /* A card's fold stands in a `Card` (`disclosure.tsx`), which draws its edge,
@@ -162,11 +162,6 @@
     display: inline-flex;
     flex: none;
     color: var(--ui-color-text-muted);
-    /* The chevron turns on the beat the body moves on, so the fold reads as
-       one gesture rather than two that settle apart: back on the exit's
-       tokens as the body goes, and open on the spring the body unrolls on
-       (below). */
-    transition: transform var(--ui-duration-exit) var(--ui-motion-exit);
   }
 
   .ui-disclosure-turn > svg {
@@ -177,62 +172,11 @@
 
   .ui-disclosure-turn[data-open="true"] {
     transform: rotate(90deg);
-    transition: transform var(--ui-duration-shape) var(--ui-spring);
   }
 
-  /* A chevron pointing down while closed (`DISCLOSURE_TURN.DOWN`) turns to
-     point up while open, on the same beats. */
+  /* A chevron pointing down while closed (`DISCLOSURE_TURN.DOWN`) points up
+     while open. */
   .ui-disclosure-turn[data-turn="down"][data-open="true"] {
     transform: rotate(180deg);
-  }
-
-  /* A fold a press opens or closes (`use-disclosure.ts`), on the beats a
-     setting's revealed rows ride (`reveal.tsx`), so every fold in the app,
-     a sidebar group's or a pull request's section, moves alike whatever it
-     holds. Its body lands in the layout at once and rides in on the pair an
-     arriving element rides: a fade, and a clip unrolling it from its top
-     edge on the spring.
-     Nothing moves a height, so the words never re-wrap mid-motion, and a
-     body still growing as it streams is unrolled by a fraction of its own
-     box rather than a size it was measured at. Only the press marks the
-     root, so a find opening a fold onto a match, or a row drawn again,
-     appears at once. */
-  [data-disclosure="opening"] > .ui-disclosure-body {
-    animation:
-      ui-disclosure-fade var(--ui-duration-quick) var(--ui-motion-pane) backwards,
-      ui-disclosure-unroll var(--ui-duration-shape) var(--ui-spring) backwards;
-  }
-
-  /* Closing, the body fades out where it stands and
-     the layout lands once the fade is done. */
-  [data-disclosure="closing"] > .ui-disclosure-body {
-    animation: ui-disclosure-leave var(--ui-duration-exit) var(--ui-motion-exit) forwards;
-    /* Note that the hold waits on every motion the body runs, and a body that
-       held focus would start the scrollbar's own fade as it lost it, so the
-       exit is the one motion it has. */
-    transition: none;
-  }
-
-  @keyframes ui-disclosure-fade {
-    from {
-      opacity: 0;
-    }
-  }
-
-  /* Note that the clip names both ends, because a clip cannot be interpolated
-     from none: it would flip halfway through instead. */
-  @keyframes ui-disclosure-unroll {
-    from {
-      clip-path: inset(0 0 100% 0);
-    }
-    to {
-      clip-path: inset(0);
-    }
-  }
-
-  @keyframes ui-disclosure-leave {
-    to {
-      opacity: 0;
-    }
   }
 }

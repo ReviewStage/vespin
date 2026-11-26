@@ -364,7 +364,6 @@ export function FileTreePane({
   over,
   narrow = false,
   pane,
-  leaving = false,
   width,
   edge,
   ...tree
@@ -375,10 +374,8 @@ export function FileTreePane({
   over?: PaneOver | undefined;
   /** Whether the tab has no room for the pane beside it, which floats it as a sheet rather than a column. */
   narrow?: boolean;
-  /** The pane's own box beside the tab, which its slide in and out plays on (`file-view.tsx`). */
+  /** The pane's own box beside the tab (`file-view.tsx`). */
   pane?: React.Ref<HTMLElement> | undefined;
-  /** Whether it is on its way out beside the tab: drawn over the file's edge rather than beside it, and out of reach. */
-  leaving?: boolean;
   /** How wide it stands beside the tab, as the panel keeps it for every tree; none stands at its default width. */
   width?: number | undefined;
   /** The edge on its left it is dragged wider or narrower by; none draws none. */
@@ -409,10 +406,8 @@ export function FileTreePane({
   return (
     <PanePin
       ref={pane}
-      className="file-tree-pane relative flex w-file-tree min-w-0 flex-none flex-col border-l border-border data-leaving:absolute data-leaving:inset-y-0 data-leaving:right-0 data-leaving:bg-ground"
+      className="file-tree-pane relative flex w-file-tree min-w-0 flex-none flex-col border-l border-border"
       aria-label={label}
-      data-leaving={leaving ? "" : undefined}
-      inert={leaving}
       style={
         width === undefined ? undefined : cssCustomProperties({ "--file-tree-width": `${width}px` })
       }

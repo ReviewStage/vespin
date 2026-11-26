@@ -126,6 +126,36 @@
       }
     },
     {
+      "files": ["packages/ui-native/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@expo/ui/swift-ui",
+                "importNames": ["Text"],
+                "message": "Draw words with `./text.js`'s Text: `@expo/ui`'s own never redraws when the words or looks nested in it change."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@repo/ui/icons", "lucide-react", "lucide-react/**"],
+                "importNamePattern": "Sparkle",
+                "message": "Never draw a sparkle, in any of its glyphs: draw the act's own glyph from `GLYPH`, such as `GLYPH.RETRY` for an act that runs again."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/ui-native/src/text.tsx"],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
+    {
       "files": ["**/*.test.ts", "**/*.test.mjs", "**/*.test.tsx"],
       "rules": {
         "vespin/enforce-delete-with-where": "off"

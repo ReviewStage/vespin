@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
-import { ServiceReach } from "@repo/features";
+import { CALL_FAULT, ServiceReach } from "@repo/features";
 import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
@@ -26,16 +28,22 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { LIVE_SIGNED_OUT, type TranscriptNowAnswer } from "@repo/features/live-wire";
+import {
+  ACCOUNT_INBOX_ITEMS,
+  LIVE_SIGNED_OUT,
+  type TranscriptNowAnswer,
+} from "@repo/features/live-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { taskSummaryOf } from "@repo/features/task-list-live";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
-import { entityPool } from "@repo/sync";
+import { type EntityPool, entityPool } from "@repo/sync";
+import { nodeKeptCollections } from "@repo/sync/testing";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { fakeHttpClient } from "@repo/wire/testing";
+import { createLiveQueryCollection } from "@tanstack/db";
 import {
   Deferred,
   Duration,
@@ -50,7 +58,9 @@ import {
 } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppManagerChats, AppTranscript } from "./app-state.js";
+import { INBOX_CHANGE, INBOX_ITEM } from "./inbox-collections.js";
 import { localCopy } from "./local-copy.js";
+import { LocalDatabaseDriver } from "./local-database.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { taskListCollections } from "./task-list-collections.js";
 import {
@@ -2120,6 +2130,20 @@ it.effect(
 );
 
 it.effect(
+  "a Manager's chat whose first read got no answer is told failed with what failed beneath it, so the window reports the network's failure rather than the app's",
+  () =>
+    Effect.gen(function* () {
+      const { acts, live, managerChats } = yield* subject();
+      const cause = { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: CALL_FAULT.NETWORK };
+
+      live.managerChat.refuse({ failure: AGENT_CALL_FAILURE.UNANSWERED, cause });
+      yield* acts.AGENTS_MANAGER_CHAT_FOLLOW.hold({ agentId: AGENT_ID });
+      yield* settled;
+      assert.deepEqual(managerChats().at(-1)?.[AGENT_ID], { failed: true, cause });
+    }),
+);
+
+it.effect(
   "a message sent to a Manager's chat stands drawn on it from its send until a row written under its key lands, the row landing before the send answers included, and one refused stands marked until it is let go",
   () =>
     Effect.gen(function* () {
@@ -2161,6 +2185,45 @@ it.effect(
 
       yield* acts.AGENTS_CHAT_UNSEND({ agentId: AGENT_ID, clientKey: "send-2" });
       assert.equal(sendingOf(managerChats().at(-1)), undefined);
+    }),
+);
+
+it.effect(
+  "a reaction the service takes stands in the Manager's chat held from its answer, before a read carries it, and one refused leaves the chat as it stood",
+  () =>
+    Effect.gen(function* () {
+      const { acts, live, managerChats, answerReact } = yield* subject();
+
+      const reactionsOf = (id: string) =>
+        managerChats()
+          .at(-1)
+          ?.[AGENT_ID]?.rows?.messages.find((message) => message.id === id)?.reactions;
+
+      // The Manager gave its own 👍 to m2 before the reader pressed anything.
+      const managers = {
+        reactionKinds: ["thumbsup"],
+        reactionCounts: [1],
+        reactionsReacted: [false],
+      };
+
+      live.managerChat.set({ messages: [chatRow(3), { ...chatRow(2), ...managers }, chatRow(1)] });
+      yield* acts.AGENTS_MANAGER_CHAT_FOLLOW.hold({ agentId: AGENT_ID });
+      yield* settled;
+      answerReact({ changed: true });
+
+      const press = {
+        agentId: AGENT_ID,
+        messageId: "m2",
+        kind: "thumbsup",
+        reacted: true,
+      } as const;
+
+      yield* acts.AGENTS_CHAT_REACT(press);
+      assert.deepEqual(reactionsOf("m2"), [{ kind: "thumbsup", count: 2, reacted: true }]);
+
+      answerReact({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      yield* acts.AGENTS_CHAT_REACT({ ...press, messageId: "m3", kind: "thumbsdown" });
+      assert.equal(reactionsOf("m3"), undefined);
     }),
 );
 
@@ -2426,6 +2489,254 @@ it.effect(
         keptHolders: [holder],
       });
     }).pipe(Effect.provide(localPlatform)),
+);
+
+/** The platform a local database stands on with its collections kept on disk whole, as the iPhone's are: Node's SQLite under both. */
+const keptPlatform = Layer.mergeAll(
+  NodeFileSystem.layer,
+  NodePath.layer,
+  Layer.effect(
+    LocalDatabaseDriver,
+    Effect.gen(function* () {
+      const driver = yield* LocalDatabaseDriver;
+
+      return { ...driver, collections: async (file: string) => nodeKeptCollections(file) };
+    }),
+  ).pipe(Layer.provide(nodeSqliteDriverLayer)),
+);
+
+/** The ids of every item the Inbox kind's collection keeps now, as a live query loads them from the account's database. */
+function keptItemIds(pool: EntityPool) {
+  return Effect.flatMap(pool.collection(INBOX_ITEM), (collection) =>
+    Effect.promise(async () => {
+      const query = createLiveQueryCollection({
+        query: (q) => q.from({ item: collection }),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      await query.preload();
+      const ids = query.toArray.map((item) => item.id).sort();
+      await query.cleanup();
+
+      return ids;
+    }),
+  );
+}
+
+/** One launch as the host makes it where the Inbox kind is kept on disk: the pool on the local copy, the agents on the pool, then `account`'s database opened. */
+function keptLaunch(root: string, account = "user-dana") {
+  return Effect.gen(function* () {
+    const local = yield* localCopy(root);
+
+    const pool = yield* entityPool({
+      mintKey: () => "key",
+      replayRefused: Effect.void,
+      store: local.store,
+    });
+
+    const launch = yield* subject({ pool, keepsInbox: true });
+    yield* local.open(account, {
+      kept: () => [],
+      moves: Stream.empty,
+      restored: () => Effect.void,
+    });
+
+    return { ...launch, local, pool };
+  });
+}
+
+it.effect(
+  "where the account's database keeps the Inbox kind, its items outlast the launch there and the next reads past the sync id kept beside them, the window told no item",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-inbox-");
+      const quit = yield* Scope.make();
+      const first = yield* Scope.provide(quit)(keptLaunch(root));
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+      deliverItems(first.live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* toldTimes(first.accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      const next = yield* keptLaunch(root);
+      next.sealItems(LIVE_ANSWERED);
+      yield* next.open;
+      yield* settled;
+
+      assert.deepEqual(next.accountItems()[0], { rows: byPlan({}).rows, stored: true, kept: true });
+      assert.deepEqual(yield* keptItemIds(next.pool), [HELD_ITEM.id]);
+      assert.deepEqual(
+        next.asked.filter((each) => each.startsWith("account-items-")),
+        [],
+        "the next launch reads past the sync id kept, never whole",
+      );
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "where the account's database keeps the Inbox kind, a plan's inbox read never adds its items to the kept Inbox the list reads, so a thread opened from outside the feed stays out of it",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-scope-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      launch.sealScope(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+      yield* holding(launch.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE));
+      yield* settled;
+      launch.live.scope.set({ messages: [], files: [], items: [ITEM_ROW] });
+      yield* toldTimes(launch.told, 1);
+      assert.deepEqual(heldOf(launch.told, PLAN_SCOPE), { rows: [LIVE_ITEM] });
+
+      // Note that the kept rows are read through the database, which answers on its own time, so the case reads them a few times before it judges.
+      const kept = yield* Effect.repeat(keptItemIds(launch.pool), {
+        until: (ids) => ids.length > 0,
+        times: 20,
+      });
+
+      assert.deepEqual(kept, []);
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "where the account's database keeps the Inbox kind, a close on a thread a plan's read alone holds, sent while the service answers nothing, is answered as taken over the thread as that read draws it",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-scope-close-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      launch.sealScope(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+      yield* holding(launch.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE));
+      yield* settled;
+      launch.live.scope.set({ messages: [], files: [], items: [ITEM_ROW] });
+      yield* toldTimes(launch.told, 1);
+      launch.leaveClosesUnanswered(true);
+
+      const answer = yield* launch.acts.AGENTS_INBOX_CLOSE({
+        itemId: ITEM.id,
+        revision: ITEM.revision,
+        clientKey: "close-1",
+      });
+
+      assert.ok("item" in answer, "a close that waits is answered as taken, not unanswered");
+      assert.deepEqual({ id: answer.item.id, taken: answer.taken }, { id: ITEM.id, taken: true });
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "an item kept on disk that settled before the read's window is deleted from the account's database as the next launch stands, which no answer says",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-aged-");
+
+      const settledItem = {
+        ...HELD_ITEM,
+        status: INBOX_STATUS.ANSWERED,
+        settledAt: HELD_ITEM.updatedAt,
+      };
+
+      yield* TestClock.adjust(Duration.millis(HELD_ITEM.updatedAt));
+      const quit = yield* Scope.make();
+      const first = yield* Scope.provide(quit)(keptLaunch(root));
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+
+      deliverItems(
+        first.live,
+        [stampOf(settledItem, TASK_ID), stampOf(OTHER_ITEM, OTHER_TASK_ID)],
+        [settledItem, OTHER_ITEM],
+      );
+
+      yield* toldTimes(first.accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      yield* TestClock.adjust(Duration.millis(ACCOUNT_INBOX_ITEMS.SETTLED_WINDOW_MILLIS + 1));
+      const next = yield* keptLaunch(root);
+      yield* next.open;
+      yield* settled;
+
+      assert.deepEqual(yield* keptItemIds(next.pool), [OTHER_ITEM.id]);
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "an aged item kept on disk that a write still stands over stays there, so the write goes on drawing over it",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-aged-written-");
+
+      const settledItem = {
+        ...HELD_ITEM,
+        status: INBOX_STATUS.ANSWERED,
+        settledAt: HELD_ITEM.updatedAt,
+      };
+
+      yield* TestClock.adjust(Duration.millis(HELD_ITEM.updatedAt));
+      const quit = yield* Scope.make();
+      const first = yield* Scope.provide(quit)(keptLaunch(root));
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+      deliverItems(first.live, [stampOf(settledItem, TASK_ID)], [settledItem]);
+      yield* toldTimes(first.accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      yield* TestClock.adjust(Duration.millis(ACCOUNT_INBOX_ITEMS.SETTLED_WINDOW_MILLIS + 1));
+      const next = yield* keptLaunch(root);
+
+      // Note that the reopen is sent to a service that never answers, so it stands over the item as a write waiting offline does.
+      yield* Effect.forkChild(
+        next.pool.write(
+          {
+            kind: INBOX_ITEM,
+            keys: () => [settledItem.id],
+            change: () => ({
+              kind: INBOX_CHANGE.REOPENED,
+              itemId: settledItem.id,
+              item: (item) => ({ ...item, status: INBOX_STATUS.OPEN }),
+            }),
+            send: () => Effect.never,
+          },
+          undefined,
+        ),
+      );
+
+      yield* settled;
+      yield* next.open;
+      yield* settled;
+
+      assert.deepEqual(yield* keptItemIds(next.pool), [settledItem.id]);
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "a sign-out deletes the account's kept Inbox with its folder, and the next account signed in on the same host reads none of the first's items",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-isolated-");
+      const first = yield* keptLaunch(root);
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+      deliverItems(first.live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* toldTimes(first.accountItems, 1);
+      yield* first.local.forget;
+
+      yield* first.local.open("user-sam", {
+        kept: () => [],
+        moves: Stream.empty,
+        restored: () => Effect.void,
+      });
+
+      assert.equal(existsSync(join(root, "accounts", "user-dana")), false);
+      assert.deepEqual(yield* keptItemIds(first.pool), []);
+    }).pipe(Effect.provide(keptPlatform)),
 );
 
 it.effect(

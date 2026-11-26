@@ -884,6 +884,8 @@ function deviceMachineOver(
     phoneVideo: () => Effect.succeed(undefined),
     // Note that a Mac is asked for no M4A of an Ogg clip either, for the same reason.
     phoneAudio: () => Effect.succeed(undefined),
+    // Note that a Mac uploads nothing itself in this phase: its files are read and put by the service.
+    selfUpload: () => Effect.succeed(undefined),
   };
 }
 

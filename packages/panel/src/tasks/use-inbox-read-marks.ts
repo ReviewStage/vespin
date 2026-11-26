@@ -1,4 +1,5 @@
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import type { InboxFields, InboxRow } from "@repo/features/inbox-digest";
 import {
   acknowledgedOnOpen,
   type InboxAnyHolder,
@@ -7,7 +8,6 @@ import {
   settledOnRead,
 } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS, remindWords } from "@repo/features/inbox-remind-times";
-import type { InboxItem } from "@repo/features/inbox-wire";
 import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE, type FailureAbout } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
@@ -73,13 +73,13 @@ export interface MarkSaying {
 /** What the Inbox's read marks offer: the presses that mark. */
 export interface InboxReadMarks {
   /** Marks one item read or unread, a notice marked read acknowledged too (`settledOnRead`); answers, once the mark went, whether the service took it, with what refused it where it did not, as a batch of marks counts what it refused. A refusal is toasted unless `saying` is quiet. */
-  readonly onMark: (item: InboxItem, unread: boolean, saying?: MarkSaying) => Promise<Kept>;
+  readonly onMark: (item: InboxRow, unread: boolean, saying?: MarkSaying) => Promise<Kept>;
   /** Marks an item read as opening it does, acknowledging nothing, since opening acknowledges a notice on its own (`useNodOnOpen`). */
-  readonly onOpenRead: (item: InboxItem, unread: boolean) => Promise<Kept>;
+  readonly onOpenRead: (item: InboxFields, unread: boolean) => Promise<Kept>;
   /** Marks every item given that is unread as read, as the service marks the listed workspace's, and acknowledges the notices among them (`settledOnRead`). */
-  readonly onMarkAll: (items: readonly InboxItem[]) => void;
+  readonly onMarkAll: (items: readonly InboxRow[]) => void;
   /** Marks every item given that is unread as read, each on its own, as a task's are marked, the rest of the workspace's left as they are, and acknowledges the notices among them (`settledOnRead`). */
-  readonly onMarkEach: (items: readonly InboxItem[]) => void;
+  readonly onMarkEach: (items: readonly InboxRow[]) => void;
   /** Sets one item's reminder for an instant, offering Undo, or cancels it where none is given, leaving whether it is read alone; answers whether the service took it, and a refusal is toasted. */
   readonly onRemind: InboxReminder;
 }
@@ -121,7 +121,7 @@ export function useInboxReadMarks({
   const acknowledge = useInboxAcknowledger();
 
   const nodAll = useCallback(
-    (items: readonly InboxItem[]) => {
+    (items: readonly InboxRow[]) => {
       const now = Date.now();
       const nodding = items.filter((item) => settledOnRead(item, readerId, now));
 
@@ -131,7 +131,7 @@ export function useInboxReadMarks({
   );
 
   const sendMark = useCallback(
-    (item: InboxItem, unread: boolean, saying?: MarkSaying): Promise<Kept> =>
+    (item: InboxFields, unread: boolean, saying?: MarkSaying): Promise<Kept> =>
       sendReadState({ itemId: item.id, unread })
         .catch(unreached)
         .then((answer) => {
@@ -147,7 +147,7 @@ export function useInboxReadMarks({
   );
 
   const onMark = useCallback(
-    (item: InboxItem, unread: boolean, saying?: MarkSaying): Promise<Kept> => {
+    (item: InboxRow, unread: boolean, saying?: MarkSaying): Promise<Kept> => {
       if (!unread) nodAll([item]);
 
       return sendMark(item, unread, saying);
@@ -156,7 +156,7 @@ export function useInboxReadMarks({
   );
 
   const onMarkAll = useCallback(
-    (items: readonly InboxItem[]) => {
+    (items: readonly InboxRow[]) => {
       nodAll(items);
       const itemIds = items.flatMap((item) => (isUnread(item) ? [item.id] : []));
 
@@ -176,7 +176,7 @@ export function useInboxReadMarks({
 
   // Note that each item's mark goes on its own, there being no act marking several but the workspace's whole, and one toast answers them all.
   const onMarkEach = useCallback(
-    (items: readonly InboxItem[]) => {
+    (items: readonly InboxRow[]) => {
       nodAll(items);
       const marking = items.filter(isUnread);
 
@@ -199,7 +199,7 @@ export function useInboxReadMarks({
 
   // Note that a reminder reaches the reader alone and is undone by putting back what it replaced, so it asks nothing and offers Undo through the undo stack, as the panel's other such acts do.
   const onRemind = useCallback(
-    (item: InboxItem, until: number | null, saying?: RemindSaying): Promise<Kept> => {
+    (item: InboxFields, until: number | null, saying?: RemindSaying): Promise<Kept> => {
       const pressed = until === null || saying?.quiet === true ? undefined : remind([item], until);
 
       return sendRemind({ itemId: item.id, until })
@@ -249,8 +249,8 @@ export function useReadOnOpen({
   active,
   marks,
 }: {
-  shown: InboxItem | undefined;
-  chosen: InboxItem | undefined;
+  shown: InboxFields | undefined;
+  chosen: InboxRow | undefined;
   active: boolean;
   marks: Pick<InboxReadMarks, "onMark" | "onOpenRead">;
 }): void {

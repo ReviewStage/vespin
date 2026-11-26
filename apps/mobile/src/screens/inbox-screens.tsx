@@ -6,6 +6,11 @@ import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
+  type InboxFields,
+  inboxRowOf,
+  type InboxRow as ListedRow,
+} from "@repo/features/inbox-digest";
+import {
   ANSWER_TONE,
   holderName,
   holderRepository,
@@ -14,6 +19,7 @@ import {
   INBOX_MEDIA,
   INBOX_NOT_READ,
   INBOX_READ_MARK,
+  INBOX_RUN_LABEL,
   INBOX_SCOPES,
   INBOX_SHOW,
   INBOX_SHOW_EMPTY,
@@ -22,6 +28,7 @@ import {
   type InboxAnyHolder,
   type InboxCounts,
   type InboxListed,
+  type InboxPinnedRun,
   type InboxShow,
   inboxLineKind,
   inboxMemberName,
@@ -41,7 +48,7 @@ import {
   UNDELIVERED_FILES_LOST,
   type UndeliveredReply,
 } from "@repo/features/inbox-undelivered";
-import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, inboxWaitsOn } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
@@ -80,6 +87,7 @@ import {
   type ListLook,
   ListRow,
   type ListScopes,
+  ListSection,
   type MarkdownVideo,
   menuWithout,
   NoSelection,
@@ -114,7 +122,9 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
+import { useInboxRunFolds } from "../inbox/inbox-runs.js";
 import {
+  type InboxThreadHeld,
   useInboxActs,
   useInboxListing,
   useInboxScope,
@@ -211,9 +221,6 @@ const handedOrders = new Map<string, readonly string[]>();
 /** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
 
-/** How many of a thread's newest messages its row reads for its preview: more than the preview draws, since a file sent alone says nothing there. */
-const PREVIEW_TAIL = 6;
-
 /** How an open ask's option file is read beside the thread's own: a recording, a sound clip, or a picture. */
 function askFileKind(mediaType: string) {
   if (isVideoType(mediaType)) return INBOX_MEDIA.VIDEO;
@@ -223,14 +230,17 @@ function askFileKind(mediaType: string) {
 
 type InboxRowsProps = {
   readonly look: ListLook;
+  /** The rows drawn, in one run where `runs` is none. */
   readonly listed: readonly InboxListed<InboxAnyHolder>[];
+  /** Pinned and Everything else, each under its heading, where the pinned tasks' threads stand first (`inboxPinnedRuns`). */
+  readonly runs: readonly InboxPinnedRun<InboxAnyHolder>[] | undefined;
   readonly readerId: string | undefined;
   readonly selected?: string | undefined;
   readonly onSelect: (id: string) => void;
   readonly onRefresh: () => Promise<void>;
-  readonly onMark: (item: InboxItem, unread: boolean) => void;
-  readonly remindMenu: (item: InboxItem) => RowSubmenu;
-  readonly onResolve: (item: InboxItem) => void;
+  readonly onMark: (item: ListedRow, unread: boolean) => void;
+  readonly remindMenu: (item: InboxFields) => RowSubmenu;
+  readonly onResolve: (item: InboxFields) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
   /** The Inbox's scopes, standing as the list's first row. */
@@ -247,11 +257,14 @@ type InboxRowsProps = {
  * teammate it waits on before the time, or when its reminder comes back in
  * the time's place; a swipe from the leading edge marks it read or unread, a
  * swipe from the trailing edge resolves it or opens Remind me's times, and a long
- * press lifts its preview over the same acts.
+ * press lifts its preview over the same acts. Where a pinned task's thread is
+ * listed, the rows stand in the panel's runs, Pinned then Everything else,
+ * each folding under its header and count (`InboxRunSections`).
  */
 function InboxRows({
   look,
   listed,
+  runs,
   readerId,
   selected,
   onSelect,
@@ -279,16 +292,53 @@ function InboxRows({
       empty={empty}
       onChooseStart={onChooseStart}
     >
-      <InboxItemRows
-        listed={listed}
-        readerId={readerId}
-        pictureOf={pictureOf}
-        onMark={onMark}
-        remindMenu={remindMenu}
-        onResolve={onResolve}
-      />
+      {runs === undefined ? (
+        <InboxItemRows
+          listed={listed}
+          readerId={readerId}
+          pictureOf={pictureOf}
+          onMark={onMark}
+          remindMenu={remindMenu}
+          onResolve={onResolve}
+        />
+      ) : (
+        <InboxRunSections
+          runs={runs}
+          readerId={readerId}
+          pictureOf={pictureOf}
+          onMark={onMark}
+          remindMenu={remindMenu}
+          onResolve={onResolve}
+        />
+      )}
     </RowList>
   );
+}
+
+/**
+ * The Inbox's runs where the pinned tasks' threads stand first, as the
+ * panel's Inbox stands them: Pinned, then Everything else, each a section
+ * under its header and how many threads it holds, folding in place on a
+ * press of its header, the folds kept across launches (`useInboxRunFolds`).
+ */
+function InboxRunSections({
+  runs,
+  ...acts
+}: InboxRowActs & { readonly runs: readonly InboxPinnedRun<InboxAnyHolder>[] }) {
+  const { onFold } = useInboxRunFolds();
+
+  return runs.map(({ run, items, count, folded }) => (
+    <ListSection
+      key={run}
+      title={INBOX_RUN_LABEL[run]}
+      count={count}
+      foldable
+      folded={folded}
+      onFold={(shut) => onFold(run, shut)}
+    >
+      <InboxItemRows listed={items} {...acts} />
+    </ListSection>
+  ));
 }
 
 /**
@@ -300,7 +350,7 @@ function InboxRows({
  * words that stood as they were.
  */
 type InboxRowThread = {
-  readonly item: InboxItem;
+  readonly item: ListedRow;
   /** Its task, which its link names; none for a thread on no task, a Manager's, whose link names the thread alone. */
   readonly taskId: string | undefined;
   readonly workspaceId: TaskSummary["workspaceId"];
@@ -316,11 +366,11 @@ type InboxRowActs = {
   readonly readerId: string | undefined;
   /** Each member's picture by their id, read once by the list the row stands in. */
   readonly pictureOf: PictureOf;
-  readonly onMark: (item: InboxItem, unread: boolean) => void;
+  readonly onMark: (item: ListedRow, unread: boolean) => void;
   /** Remind me's times on the thread, a menu a swipe from the trailing edge opens. */
-  readonly remindMenu: (item: InboxItem) => RowSubmenu;
+  readonly remindMenu: (item: InboxFields) => RowSubmenu;
   /** Resolves the open thread, which a full swipe from the trailing edge runs. */
-  readonly onResolve: (item: InboxItem) => void;
+  readonly onResolve: (item: InboxFields) => void;
 };
 
 /**
@@ -400,11 +450,7 @@ function InboxRowView({
   const messages = useMemo(
     () =>
       previewMessages(
-        inboxThreadMessages(
-          item.thread === undefined ? item : { ...item, thread: item.thread.slice(-PREVIEW_TAIL) },
-          agentName,
-          readerId,
-        ),
+        inboxThreadMessages({ ...item, thread: item.digest.tail }, agentName, readerId),
         pictureOf,
         harness,
       ),
@@ -572,7 +618,7 @@ function scopeChoices(scopes: readonly Scope[]): BarMenu["choices"] {
 function moreMenu(
   scopes: readonly Scope[],
   listed: readonly InboxListed<InboxAnyHolder>[],
-  markAll: (items: readonly InboxItem[]) => void,
+  markAll: (items: readonly ListedRow[]) => void,
   select: { readonly listed: boolean; readonly onSelect: () => void },
 ): BarMenu {
   return {
@@ -611,7 +657,7 @@ function dimmedWhile(dim: boolean, menu: BarMenu): BarMenu {
  * tick nor shifts as Resolve comes and goes.
  */
 function chosenActs(
-  chosen: readonly InboxItem[],
+  chosen: readonly ListedRow[],
   acts: ReturnType<typeof useInboxActs>,
   remind: ReturnType<typeof useRemind>,
   stop: () => void,
@@ -718,7 +764,7 @@ type ThreadPlace =
   | {
       readonly inStack: false;
       /** Remind me's times on a thread, from its screen, which draws the picker sheet outside the split view. */
-      readonly remindMenu: (item: InboxItem) => BarMenu;
+      readonly remindMenu: (item: InboxFields) => BarMenu;
       /** Selects another thread in the split view, such as one the box just started. */
       readonly onOpen: (id: string) => void;
     };
@@ -741,7 +787,7 @@ function ThreadDetail({
   readerId,
   place,
 }: {
-  readonly listed: InboxListed<InboxAnyHolder>;
+  readonly listed: InboxThreadHeld;
   readonly readerId: string | undefined;
   readonly place: ThreadPlace;
 }) {
@@ -894,7 +940,7 @@ function ThreadDetail({
   const remindMenu = place.inStack ? remind.itemMenu : place.remindMenu;
 
   const doors = {
-    onMark: (unread: boolean) => inboxActs.mark(item, unread),
+    onMark: (unread: boolean) => inboxActs.mark(inboxRowOf(item), unread),
     remind: remindMenu(item),
     onCopyLink: () =>
       keeping.copyWords(
@@ -1063,7 +1109,9 @@ function ThreadDetail({
       onRetryPicture={retryPicture}
       videoAt={videoAt}
       linkStanding={linkStanding}
-      standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
+      standing={
+        item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(inboxRowOf(item))
+      }
       ask={
         <OpenAskCard
           item={item}
@@ -1206,7 +1254,7 @@ function ThreadColumn({
   onOpen,
 }: {
   readonly id: string;
-  readonly remindMenu: (item: InboxItem) => BarMenu;
+  readonly remindMenu: (item: InboxFields) => BarMenu;
   readonly onOpen: (id: string) => void;
 }) {
   const { listed, readerId, feed, retry } = useInboxThread(id);
@@ -1232,7 +1280,7 @@ type InboxHeld = {
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
 function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
-  const listing = useInboxListing({ show, search, chosen });
+  const listing = useInboxListing({ show, search, chosen, pinnedFirst: true });
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
@@ -1246,10 +1294,10 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
 
   // Note that only the threads still listed stand chosen, so a thread a scope, a search, or the service took away is never acted on unseen.
   const picked = selecting.choosing.on ? selecting.choosing.chosen : [];
+  // Note that Select mode reaches only the rows drawn, so the thread the split view shows, kept among the steps though its run is folded (`inboxShownItems`), is never chosen without a row.
+  const rows = listing.runs?.flatMap(({ items }) => items) ?? listing.shown;
 
-  const pickedItems = listing.listed
-    .filter(({ item }) => picked.includes(item.id))
-    .map(({ item }) => item);
+  const pickedItems = rows.filter(({ item }) => picked.includes(item.id)).map(({ item }) => item);
 
   const choosing = selecting.choosing.on
     ? {
@@ -1263,13 +1311,13 @@ function useInboxScreen({ search, setSearch, remind }: InboxHeld, chosen?: strin
             : selectedWords(pickedItems.length),
         acts: chosenActs(pickedItems, acts, remind, selecting.stop),
         // Note that Select all takes every thread listed, and Deselect all lets them go once all are chosen, as Mail's edit bar leads with them.
-        all: (pickedItems.length === listing.listed.length && pickedItems.length > 0
+        all: (pickedItems.length === rows.length && pickedItems.length > 0
           ? { label: SELECTION_WORDS.DESELECT_ALL, onPress: () => selecting.choose([]) }
           : {
               label: SELECTION_WORDS.SELECT_ALL,
               // Note that with nothing listed, such as under a search that finds nothing, Select all stands dimmed, so its press never lets go of the threads chosen before.
-              disabled: listing.listed.length === 0,
-              onPress: () => selecting.choose(listing.listed.map(({ item }) => item.id)),
+              disabled: rows.length === 0,
+              onPress: () => selecting.choose(rows.map(({ item }) => item.id)),
             }) satisfies BarAction,
         done: { label: SELECT_DONE, onPress: selecting.stop } satisfies BarAction,
       }
@@ -1383,12 +1431,13 @@ function InboxStackList(held: InboxHeld) {
         {/* Note that the list stands even with no thread, its empty state its one row, so a pull still reads the Inbox again. */}
         <InboxRows
           look={LIST_LOOK.PLAIN}
-          listed={listing.listed}
+          listed={listing.shown}
+          runs={listing.runs}
           readerId={listing.readerId}
           onSelect={(id) => {
             handedOrders.set(
               id,
-              listing.listed.map(({ item }) => item.id),
+              listing.shown.map(({ item }) => item.id),
             );
             router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })));
           }}
@@ -1438,7 +1487,7 @@ function InboxSplitScreen({
 
   // Note that the iPad's K and J step through the rows the list column shows now, its scope and its search as they stand, from the thread beside it, as the panel's step through the list on screen; only while the Inbox's root is focused, never under a page pushed over it on the tab's stack.
   const focused = useIsFocused();
-  const shownIds = listing.listed.map(({ item }) => item.id);
+  const shownIds = listing.shown.map(({ item }) => item.id);
   const at = selected === undefined ? -1 : shownIds.indexOf(selected);
   useStandFrontSteps(
     at < 0 ? {} : { previous: shownIds[at - 1], next: shownIds[at + 1] },
@@ -1449,7 +1498,8 @@ function InboxSplitScreen({
   const rows = (
     <InboxRows
       look={LIST_LOOK.PLAIN}
-      listed={listing.listed}
+      listed={listing.shown}
+      runs={listing.runs}
       readerId={listing.readerId}
       selected={selected}
       onSelect={select}
@@ -1526,7 +1576,7 @@ function InboxSplitScreen({
  */
 function useThreadSteps(id: string): ThreadSteps {
   const { show } = useInboxScope();
-  const listing = useInboxListing({ show, search: "", chosen: id });
+  const listing = useInboxListing({ show, search: "", chosen: id, pinnedFirst: true });
   const [handed] = useState(() => handedOrders.get(id));
 
   // Note that the hand-off is taken once, so a later open of this thread with none handed, such as from a notification, never finds a stale one.
@@ -1534,7 +1584,7 @@ function useThreadSteps(id: string): ThreadSteps {
     handedOrders.delete(id);
   }, [id]);
 
-  const order = handed?.includes(id) ? handed : listing.listed.map(({ item }) => item.id);
+  const order = handed?.includes(id) ? handed : listing.shown.map(({ item }) => item.id);
 
   const at = order.indexOf(id);
 

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, INBOX_WIRE_VERSION } from "@repo/features/inbox-wire";
 import { Predicate } from "effect";
 import { test } from "vitest";
-import { INBOX_CHANGE, INBOX_ITEM } from "./inbox-collections.js";
+import { INBOX_CHANGE, INBOX_ITEM, type PlacedInboxItem } from "./inbox-collections.js";
 
-const ITEM: InboxItem = {
+const ITEM: PlacedInboxItem = {
   id: "5e2d7c3a-1b4f-4e6a-8c9d-0f1e2d3c4b5a",
   agentId: "0b7c2f4e-3a1d-4c5e-9f8a-6d7e8f9a0b1c",
   key: "push-access",
@@ -16,10 +16,11 @@ const ITEM: InboxItem = {
   postedAt: 1_000,
   updatedAt: 2_000,
   unread: true,
+  taskId: "8f3e2a1b-4c5d-4e6f-9a0b-1c2d3e4f5a6b",
 };
 
 /** The item as a reminder change draws it over `item`. */
-function reminded(item: InboxItem, until: number | null): InboxItem | undefined {
+function reminded(item: PlacedInboxItem, until: number | null): PlacedInboxItem | undefined {
   const drawn = INBOX_ITEM.drawn({ kind: INBOX_CHANGE.REMINDED, itemId: item.id, until }, item);
 
   return Predicate.isObjectOrArray(drawn) ? drawn : undefined;

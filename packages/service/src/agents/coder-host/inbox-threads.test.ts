@@ -22,7 +22,7 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import { eq, sql } from "drizzle-orm";
-import { DateTime, Duration, Effect, Option, Result } from "effect";
+import { DateTime, Duration, Effect, Layer, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
 import {
   accountWaitingItems,
@@ -42,6 +42,7 @@ import {
   withdrawInboxClose,
   withdrawInboxMessage,
 } from "../../inbox/inbox-store.js";
+import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 
 /**
  * An inbox item as a thread of messages, through the store's public
@@ -173,7 +174,10 @@ function answersOf(item: InboxItem) {
 /** One second on, so each write after it is the latest. */
 const later = TestClock.adjust(Duration.seconds(1));
 
-it.layer(getTestDB())("an inbox item's thread", (it) => {
+/** The Blob store every attachment the suite keeps stands in. */
+const blobs = memoryBlobStore();
+
+it.layer(Layer.merge(getTestDB(), blobs.layer))("an inbox item's thread", (it) => {
   it.effect(
     "a post writes the agent's message with its words and the ask it ends with held open, and a post under the same key replaces the ask held open, moving the title and the revision",
     () =>
@@ -357,7 +361,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         const [file] = answer?.files ?? [];
         assert.ok(file);
         const served = yield* readInboxAttachment(teammate, id, file.attachmentId);
-        assert.deepEqual(new Uint8Array(Option.getOrThrow(served).bytes), TRACE);
+        assert.deepEqual(new Uint8Array(blobs.bytesOf(Option.getOrThrow(served).body)), TRACE);
         assert.deepEqual(
           [answered.status, answered.revision, answered.answeredBy?.userId],
           [INBOX_STATUS.ANSWERED, 1, teammate],
@@ -692,7 +696,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         ]);
         assert.ok(question?.text.endsWith("`![x](shots/before.png)`"));
         const served = yield* readInboxAttachment(other.userId, asked.id, kept.attachmentId);
-        assert.deepEqual(new Uint8Array(Option.getOrThrow(served).bytes), SHOT);
+        assert.deepEqual(new Uint8Array(blobs.bytesOf(Option.getOrThrow(served).body)), SHOT);
 
         yield* later;
 

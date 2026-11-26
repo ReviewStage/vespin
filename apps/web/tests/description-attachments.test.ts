@@ -2,10 +2,8 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import {
-  DESCRIPTION_COMMENT_OUTCOME,
-  startDescriptionCommentThread,
-} from "@repo/database/models/description-comments";
+import { DESCRIPTION_ATTACHMENT_KEEP } from "@repo/database/models/description-attachments";
+import { DESCRIPTION_COMMENT_OUTCOME } from "@repo/database/models/description-comments";
 import { createTask, saveDescriptionText } from "@repo/database/models/task-store";
 import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
@@ -14,6 +12,8 @@ import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
 import {
   DESCRIPTION_ATTACHMENT_BOUNDS,
   DESCRIPTION_ATTACHMENT_REFUSAL,
+  DESCRIPTION_FILE_TYPE,
+  type DescriptionFile,
   descriptionAttachmentAnswerSchema,
 } from "@repo/features/description-attachment-wire";
 import {
@@ -26,8 +26,12 @@ import type { UserIdResolver } from "@repo/service/http/http-effect";
 import { hostedFetch } from "@repo/service/orpc/handler";
 import { modelCatalogOf } from "@repo/service/providers/model-catalog";
 import type { WebServices } from "@repo/service/runtime";
+import { attachmentBlobPath } from "@repo/service/storage/attachment-blob-paths";
+import { keepDescriptionFileBytes } from "@repo/service/storage/attachment-keeps";
+import { startDescriptionCommentThread } from "@repo/service/tasks/description-comment-writes";
 import { taskFilesProcedures } from "@repo/service/tasks/task-files-procedures";
 import { tasksApp } from "@repo/service/tasks/tasks-app";
+import { type MemoryBlobStore, memoryBlobStore } from "@repo/service/testing/blob-store-fake";
 import {
   type OpenedPagePolicy,
   openedPagePolicy,
@@ -75,6 +79,8 @@ interface Answered {
   readonly cache: string | null;
   readonly policy: OpenedPagePolicy;
   readonly bytes: Uint8Array;
+  /** Where a redirect sends the reader; none for any other answer. */
+  readonly location: string | null;
 }
 
 const openAccount = Effect.gen(function* () {
@@ -85,10 +91,14 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-/** The plan routes over the test's own database, every bearer `Bearer <account>`, answering one request. */
-const ask = (request: Request) =>
+/** The Blob store the suite's requests keep files in and read them from, where a test names none of its own. */
+const SUITE_BLOBS = memoryBlobStore();
+
+/** The plan routes over the test's own database and the Blob store given, every bearer `Bearer <account>`, answering one request. */
+const ask = (request: Request, blobs: MemoryBlobStore = SUITE_BLOBS) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
+      blobs.layer,
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -127,6 +137,7 @@ const ask = (request: Request) =>
       cache: response.headers.get("cache-control"),
       policy: openedPagePolicy(response.headers),
       bytes,
+      location: response.headers.get("location"),
     } satisfies Answered;
   });
 
@@ -153,12 +164,18 @@ function pictureBody(picture: string): string {
   return JSON.stringify({ picture });
 }
 
-function read(taskId: string, attachmentId: string, userId: string): Request {
+/** A read as a native client sends it, or as a browser does where it names its Fetch Metadata mode. */
+function read(taskId: string, attachmentId: string, userId: string, fetchMode?: string): Request {
   const url = new URL(ATTACHMENT, ORIGIN);
   url.searchParams.set("id", taskId);
   url.searchParams.set("attachment", attachmentId);
 
-  return new Request(url, { headers: { authorization: `Bearer ${userId}` } });
+  return new Request(url, {
+    headers: {
+      authorization: `Bearer ${userId}`,
+      ...(fetchMode === undefined ? undefined : { "sec-fetch-mode": fetchMode }),
+    },
+  });
 }
 
 /** An answer's JSON body as the upload's wire reads it, failing the test where it does not. */
@@ -213,7 +230,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
               },
             ],
           },
-        );
+        ).pipe(Effect.provide(SUITE_BLOBS.layer));
 
         assert.ok(
           started.status === DESCRIPTION_COMMENT_OUTCOME.DONE && "thread" in started.answer,
@@ -245,7 +262,8 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
         assert.equal(kept.status, HOSTED_HTTP_STATUS.CREATED);
         const answer = uploaded(kept);
         assert.ok("id" in answer);
-        const served = yield* ask(read(taskId, answer.id, owner));
+        // Note that the read is a browser tab's, which is piped the bytes, since a native reader is sent to the store.
+        const served = yield* ask(read(taskId, answer.id, owner, "navigate"));
         assert.equal(served.status, HOSTED_HTTP_STATUS.OK);
         assert.equal(served.contentType, PICTURE_TYPE.PNG);
         assert.equal(served.cache, "private, no-store");
@@ -260,6 +278,52 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
           (yield* ask(upload(taskId, outsider, pictureBody(PNG_URL)))).status,
           HOSTED_HTTP_STATUS.NOT_FOUND,
         );
+      }),
+  );
+
+  it.effect(
+    "a picture whose bytes stand in the Blob store sends a native reader to them and pipes them to a browser's tab, a PDF there is piped to every reader under its own type, and neither is served to an outsider",
+    () =>
+      Effect.gen(function* () {
+        const { owner, outsider, taskId } = yield* openSharedTask;
+        const blobs = memoryBlobStore();
+        const pdf = new TextEncoder().encode("%PDF-1.4\n");
+
+        const stored = (file: DescriptionFile) =>
+          Effect.gen(function* () {
+            const kept = yield* keepDescriptionFileBytes(owner, taskId, file).pipe(
+              Effect.provide(blobs.layer),
+            );
+
+            assert.ok(kept.status === DESCRIPTION_ATTACHMENT_KEEP.KEPT);
+            const blobKey = attachmentBlobPath(kept.id);
+
+            return { id: kept.id, blobKey };
+          });
+
+        const picture = yield* stored({ contentType: PICTURE_TYPE.PNG, bytes: PNG_BYTES });
+        const native = yield* ask(read(taskId, picture.id, owner), blobs);
+        assert.equal(native.status, HOSTED_HTTP_STATUS.FOUND);
+        assert.equal(new URL(native.location ?? "").pathname, `/${picture.blobKey}`);
+
+        const tab = yield* ask(read(taskId, picture.id, owner, "navigate"), blobs);
+        assert.equal(tab.status, HOSTED_HTTP_STATUS.OK);
+        assert.equal(tab.contentType, PICTURE_TYPE.PNG);
+        assert.deepEqual(tab.policy, SANDBOXED_PAGE);
+        assert.deepEqual([...tab.bytes], [...PNG_BYTES]);
+
+        const spec = yield* stored({ contentType: DESCRIPTION_FILE_TYPE.PDF, bytes: pdf });
+        const piped = yield* ask(read(taskId, spec.id, owner), blobs);
+        assert.equal(piped.status, HOSTED_HTTP_STATUS.OK);
+        assert.equal(piped.contentType, DESCRIPTION_FILE_TYPE.PDF);
+        assert.deepEqual([...piped.bytes], [...pdf]);
+
+        for (const id of [picture.id, spec.id]) {
+          assert.equal(
+            (yield* ask(read(taskId, id, outsider), blobs)).status,
+            HOSTED_HTTP_STATUS.NOT_FOUND,
+          );
+        }
       }),
   );
 
@@ -368,7 +432,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
 
         const kept = uploaded(yield* ask(upload(taskId, owner, pictureBody(videoUrl(recording)))));
         assert.ok("id" in kept);
-        const served = yield* ask(read(taskId, kept.id, teammate));
+        const served = yield* ask(read(taskId, kept.id, teammate, "navigate"));
         const long = paddedTo(recording, PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES + 1);
         const tooLong = yield* ask(upload(taskId, owner, pictureBody(videoUrl(long))));
 
@@ -394,7 +458,7 @@ it.layer(getTestDB())("a description's picture routes", (it) => {
         );
 
         assert.ok("id" in kept);
-        const served = yield* ask(read(taskId, kept.id, teammate));
+        const served = yield* ask(read(taskId, kept.id, teammate, "navigate"));
 
         const mislabeled = yield* ask(
           upload(taskId, owner, pictureBody(`data:${PICTURE_MEDIA_TYPE.MP4};base64,${base64}`)),

@@ -45,11 +45,14 @@ export const BEARER_CALLER_TTL = Duration.seconds(60);
  * asked of the auth service, alone or joined to an ask already under way,
  * both of which wait on it.
  * Note that the attribute names the cache's state alone, never the bearer
- * or the account, so no credential reaches a trace.
+ * or the account, so no credential reaches a trace. Note too that no
+ * attribute's key holds `auth`, because Sentry's server-side scrubber drops
+ * every attribute whose key does, which is how the first keys were lost.
  */
 export const CALLER_SPAN = {
   NAME: "auth.resolveCaller",
-  CACHE: "auth.cache",
+  CACHE: "caller.cache",
+  CREDENTIAL: "caller.credential",
 } as const;
 
 /** What `CALLER_SPAN.CACHE` says of a bearer's resolution. */

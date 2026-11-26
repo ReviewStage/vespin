@@ -1,6 +1,5 @@
 import { type ReactNode, useState } from "react";
 import { AlertIcon, CheckIcon, RemoveIcon, RetryIcon } from "../../icons/lucide-glyphs.js";
-import { pulseOnPress } from "../../press-pulse.js";
 import { isReported, type ReportedFailure, type Unreported } from "../../reported-failure.js";
 import { useFailureDetails } from "../failure-copy/failure-copy.js";
 import { FILE_TEXT_EXTENT, FileText } from "../file-text/file-text.js";
@@ -355,7 +354,7 @@ export function AttachmentChip({
           type="button"
           className={`${FACE} ${FACE_PRESS}`}
           aria-label={`Retry ${name}`}
-          onClick={pulseOnPress(onRetry)}
+          onClick={onRetry}
         >
           {face}
         </button>
@@ -366,7 +365,7 @@ export function AttachmentChip({
           type="button"
           className={`${FACE} ${FACE_PRESS}`}
           aria-label={`Open ${name}`}
-          onClick={pulseOnPress(onOpen)}
+          onClick={onOpen}
         >
           {face}
         </button>
@@ -385,7 +384,7 @@ export function AttachmentChip({
           className={REMOVE}
           aria-label={`Remove ${name}`}
           disabled={removeDisabled === true}
-          onClick={pulseOnPress(onRemove)}
+          onClick={onRemove}
         >
           <RemoveIcon />
         </button>

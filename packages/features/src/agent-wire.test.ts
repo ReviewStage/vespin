@@ -7,6 +7,7 @@ import {
   AGENT_FAILURE,
   AGENT_STATUS,
   type AgentTranscriptMessage,
+  agentAttachmentsSchema,
   agentMessagesAnswerSchema,
   applyMessagesPage,
   DEVICE_STANDING,
@@ -79,4 +80,50 @@ test("a device reads as there until it has missed four beats, as offline only on
       DEVICE_STANDING.UNKNOWN,
     ],
   );
+});
+
+/** A 1×1 GIF89a's parts, laid out by hand from the GIF spec: its header and screen with a two-color table, one frame with its control extension, and its trailer. */
+const GIF_HEAD = [
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00,
+  0xff, 0xff, 0xff,
+];
+
+const GIF_FRAME = [
+  0x21, 0xf9, 0x04, 0x01, 0x00, 0x00, 0x00, 0x00, 0x2c, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0x02, 0x01, 0x44, 0x00,
+];
+
+const GIF_TRAILER = [0x3b];
+
+function gifAttachment(frames: number) {
+  const bytes = [
+    ...GIF_HEAD,
+    ...Array.from({ length: frames }, () => GIF_FRAME).flat(),
+    ...GIF_TRAILER,
+  ];
+
+  return { name: "loop.gif", mediaType: "image/gif", data: btoa(String.fromCharCode(...bytes)) };
+}
+
+test("a message carries a still GIF and refuses an animated one, which no model takes as an image", () => {
+  const decode = Schema.decodeUnknownOption(agentAttachmentsSchema);
+
+  assert.equal(decode([gifAttachment(1)])._tag, "Some");
+  assert.equal(decode([gifAttachment(2)])._tag, "None");
+
+  // A GIF cut off inside its one frame is no still a model can read.
+  const cut = btoa(String.fromCharCode(...GIF_HEAD, 0x2c));
+  assert.equal(decode([{ name: "cut.gif", mediaType: "image/gif", data: cut }])._tag, "None");
+});
+
+test("a message carries a binary file as a file of any other kind, never as a text file, which must spell UTF-8", () => {
+  const decode = Schema.decodeUnknownOption(agentAttachmentsSchema);
+  // A zip's local file header: its signature, then a NUL and a byte no UTF-8 text holds.
+  const zip = btoa(String.fromCharCode(0x50, 0x4b, 0x03, 0x04, 0x00, 0xff));
+
+  assert.equal(
+    decode([{ name: "notes.zip", mediaType: "application/octet-stream", data: zip }])._tag,
+    "Some",
+  );
+  assert.equal(decode([{ name: "notes.zip", mediaType: "text/plain", data: zip }])._tag, "None");
 });

@@ -1,5 +1,6 @@
 import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentInboxMessagedView } from "@repo/features/agent-view";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import {
   holderRepository,
   holderTask,
@@ -231,6 +232,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     steps,
     onPointing,
     chosen,
+    chosenItem,
     filteredOut,
     search,
     searched,
@@ -546,7 +548,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   }, [taskId, taskAgents, heldIds, onTaskAgents]);
 
   // The chosen item's thread, beside the list or in its place.
-  const itemPane = (listed: InboxListed<InboxAnyHolder>) => (
+  const itemPane = (listed: InboxListed<InboxAnyHolder>, item: InboxItem) => (
     <OpenAddressesHere value={openHere}>
       <SkillFiles
         source={agents.readSkills}
@@ -561,7 +563,7 @@ export const DesktopInbox = memo(function DesktopInbox({
           <TaskMentions value={mentions}>
             <DraftedInboxPane
               holder={listed.holder}
-              item={listed.item}
+              item={item}
               control={live}
               scope={liveScope}
               opened={opened}
@@ -583,7 +585,7 @@ export const DesktopInbox = memo(function DesktopInbox({
               }
               doors={{
                 ...paneDoors(tasks, listed.holder, { panelFor: taskId, openPlace: openPlaceHere }),
-                onMark: markItem,
+                onMark: (each, unread) => markItem(inboxRowOf(each), unread),
                 onClose: resolveItems,
                 onRemind: marks.onRemind,
                 // The thread hands its crumbs the keys only while it is the item shown and the panel beside it does not hold them.
@@ -700,7 +702,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                   onRemind={marks.onRemind}
                   onPointing={onPointing}
                 />
-                {chosen === undefined ? (
+                {chosen === undefined || chosenItem === undefined ? (
                   <section
                     className={INBOX_VIEW_ITEMS}
                     hidden={
@@ -737,7 +739,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                     )}
                   </section>
                 ) : (
-                  itemPane(chosen)
+                  itemPane(chosen, chosenItem)
                 )}
               </div>
             </PageFind>

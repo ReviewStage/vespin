@@ -72,6 +72,10 @@ const FILL_CLASS = {
   [MANAGER_FACE_COLOR.PINK]: "text-manager-face-pink",
   [MANAGER_FACE_COLOR.PURPLE]: "text-manager-face-purple",
   [MANAGER_FACE_COLOR.PEACH]: "text-manager-face-peach",
+  [MANAGER_FACE_COLOR.RED]: "text-manager-face-red",
+  [MANAGER_FACE_COLOR.ORANGE]: "text-manager-face-orange",
+  [MANAGER_FACE_COLOR.TEAL]: "text-manager-face-teal",
+  [MANAGER_FACE_COLOR.GRAY]: "text-manager-face-gray",
 } as const satisfies Record<ManagerFaceColor, string>;
 
 /** Each seat's box. */

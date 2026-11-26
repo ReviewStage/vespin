@@ -94,6 +94,7 @@ import {
   ArrowDownAZIcon,
   CalendarClockIcon,
   CalendarPlusIcon,
+  ClockIcon,
   GLYPH,
   HistoryIcon,
   PowerIcon,
@@ -169,8 +170,8 @@ import { resetViewAction, VIEW_OPTIONS, ViewOptions } from "./view-options.js";
  * building for the workspace and a lock for Only you. A row's glyph wears
  * where its newest run stands, a failure keeps its mark at the row's end,
  * and an automation turned off reads "Off" where its next run would.
- * View options orders each owner's automations, by when each was made,
- * its name, its latest run, or its next, the newest made first until the
+ * View options orders each owner's automations, by when each was made or
+ * last changed, its name, its latest run, or its next, the newest made first until the
  * reader chooses, and keeps the choice on this Mac, as the Tasks page keeps
  * its view; the owners' groups and Finished stand whatever the order.
  * Under the list, or under the line saying there is none yet, stand the
@@ -216,6 +217,7 @@ const NO_WORKSPACE_HINT = "Choose a workspace first";
 /** Each order's glyph on View options' Order by, the Tasks page's own where it orders alike. */
 const ORDER_ICON = {
   [AUTOMATIONS_ORDER.CREATED]: <CalendarPlusIcon />,
+  [AUTOMATIONS_ORDER.UPDATED]: <ClockIcon />,
   [AUTOMATIONS_ORDER.NAME]: <ArrowDownAZIcon />,
   [AUTOMATIONS_ORDER.LAST_RUN]: <HistoryIcon />,
   [AUTOMATIONS_ORDER.NEXT_RUN]: <CalendarClockIcon />,

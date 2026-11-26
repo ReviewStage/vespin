@@ -1,6 +1,6 @@
 // auth-page.tsx -- a page a person signs in on: the Keel mark, the page's title, then its ways in at the foot and what went wrong, as Apple's own first screens lay them out.
 
-import { ScrollView, Text, VStack } from "@expo/ui/swift-ui";
+import { ScrollView, VStack } from "@expo/ui/swift-ui";
 import {
   accessibilityAddTraits,
   font,
@@ -14,6 +14,7 @@ import { useWindowDimensions } from "react-native";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BrandMark } from "./brand-mark.js";
 import { Spacer } from "./screen.js";
+import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";

@@ -1,5 +1,4 @@
 import type { KeyboardEventHandler, ReactNode } from "react";
-import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { useTouchHold } from "../menu/touch-hold.js";
 
 /**
@@ -50,15 +49,7 @@ export function HoldPress({
       data-long-press=""
       onPointerDown={(event) => {
         if (disabled) return;
-        // Note that the release of a held press is no press of the control, so the hold is what its pulse answers.
-        const control = event.currentTarget.firstElementChild;
-
-        const held = () => {
-          if (control instanceof HTMLElement) pulsePress(control, PRESS_PULSE.FACE);
-          onHold();
-        };
-
-        hold.start(event, held, { mouse });
+        hold.start(event, onHold, { mouse });
       }}
       onTouchEnd={hold.touchEnd}
       onKeyDown={onKeyDown}

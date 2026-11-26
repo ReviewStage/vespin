@@ -1,6 +1,12 @@
+export * from "./attachment-bodies.js";
+
+export * from "./conversation-picture-budget.js";
+
 export * from "./devices.js";
 
 export * from "./hosted-store-database.js";
+
+export * from "./journal-image-rows.js";
 
 export * from "./live-immutability.js";
 

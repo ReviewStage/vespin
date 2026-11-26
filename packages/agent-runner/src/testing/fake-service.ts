@@ -1,11 +1,15 @@
 /**
- * fake-service.ts -- a fake of the service's events route for the runner's tests: it applies each sequence at most once, as the real route does, and answers each post as the test scripted.
+ * fake-service.ts -- a fake of the service's events route for the runner's tests: it applies each sequence at most once, as the real route does, and answers each post as the test scripted; and of its pictures route, which keeps every picture posted to it.
  */
 
 import assert from "node:assert/strict";
 import { type FakeResponder, fakeHttpClientLayer } from "@repo/wire/testing";
 import { Deferred, Exit } from "effect";
-import { RUNNER_EVENTS_MAX_BYTES, type RunnerEvent } from "../protocol.js";
+import {
+  RUNNER_EVENTS_MAX_BYTES,
+  type RunnerEvent,
+  type RunnerPictureAnswer,
+} from "../protocol.js";
 
 /** How a fake events route answers one post: take it, fail as a server, or fail before answering. */
 export const ANSWER = {
@@ -23,22 +27,34 @@ export type Answer = (typeof ANSWER)[keyof typeof ANSWER];
  * posted again changes nothing; each post is answered as the next of
  * `answers` says, then every later one is taken; `seen` settles once an
  * applied message holds `watchFor`. `bodies` keeps every post's body as it
- * crossed the wire, for a test of what the runner never sends.
+ * crossed the wire, for a test of what the runner never sends. A picture
+ * posted to `picturesUrl` is kept, in order, in `pictures`, and answered as
+ * the real route answers what it kept, named by its place there.
  */
 export function makeFakeService(options: {
   readonly url: string;
   readonly firstSequence: number;
   readonly answers?: readonly Answer[] | undefined;
   readonly watchFor?: string | undefined;
+  readonly picturesUrl?: string | undefined;
 }) {
   const answers = options.answers ?? [];
   const applied: RunnerEvent[] = [];
   const bearers: (string | null)[] = [];
   const bodies: string[] = [];
+  const pictures: Uint8Array[] = [];
   let posts = 0;
   const seen = Deferred.makeUnsafe<void>();
 
   const respond: FakeResponder = async (url, init) => {
+    if (url === options.picturesUrl) {
+      const bytes = new Uint8Array(await new Response(init.body).arrayBuffer());
+      pictures.push(bytes);
+      const picture = { id: `picture-${pictures.length}`, byteCount: bytes.byteLength };
+
+      return Response.json({ picture } satisfies RunnerPictureAnswer);
+    }
+
     assert.equal(url, options.url);
     bearers.push(new Headers(init.headers).get("authorization"));
     const answer = answers[posts] ?? ANSWER.TAKE;
@@ -79,6 +95,7 @@ export function makeFakeService(options: {
     applied,
     bearers,
     bodies,
+    pictures,
     posts: () => posts,
     seen: Deferred.await(seen),
   };

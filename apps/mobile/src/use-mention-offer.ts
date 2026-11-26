@@ -22,6 +22,7 @@ import { automationTriggerText } from "@repo/features/automation-list-model";
 import { readerZone } from "@repo/features/date-mention";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { entityOfDestination } from "@repo/features/entity-kind";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import { inboxLineKind } from "@repo/features/inbox-list-model";
 import {
   LINK_DESTINATION,
@@ -59,7 +60,8 @@ import { sinceText } from "@repo/features/time-format";
 import { taskKey } from "@repo/features/workspace-key";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectInboxHoldings, selectWorkspaces } from "@repo/host/app-state-reads";
+import { INBOX_WHOLE, inboxHoldingsOfRows } from "@repo/host/inbox-rows";
 import {
   BUZZ,
   buzz,
@@ -86,6 +88,7 @@ import {
   useTaskListRow,
 } from "./host/host-provider.js";
 import { useLiveFollow } from "./host/live-follow.js";
+import { useInboxRows } from "./inbox/inbox-rows.js";
 import { useListedMembers } from "./member-pictures.js";
 import { useModelCatalog } from "./tasks/use-start.js";
 import { useWorkspaceMachines } from "./workspace-machines.js";
@@ -259,7 +262,19 @@ function useMentionState(
     acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }),
   );
   const held = useQuery({ ...appStateQuery, select: useMemo(() => heldOf(taskId), [taskId]) }).data;
+  const told = useQuery({ ...appStateQuery, select: selectInboxHoldings }).data;
+  // Note that where the account's database keeps the Inbox, its threads are read from there, every one, only while an `@` is typed.
+  const keptRows = useInboxRows(reading && told?.stored === true ? INBOX_WHOLE : undefined);
+
+  const heldThreads = useMemo(
+    () =>
+      told?.stored === true
+        ? Object.fromEntries(inboxHoldingsOfRows(keptRows ?? [], told).read)
+        : held?.threads,
+    [told, keptRows, held],
+  );
   // Note that the task's repository's paths are read once and held while the app runs, as the panel holds them, since a repository's files rarely move while a word is typed.
+
   const current = tasks.find((task) => task.id === taskId);
   const repository = current?.repository ?? null;
   const readsPaths = reading && taskId !== undefined && repository !== null;
@@ -353,7 +368,7 @@ function useMentionState(
     );
 
     // Note that the task's own threads come first, then the newest changed, as the panel's list orders them.
-    const threads = Object.entries(held?.threads ?? {})
+    const threads = Object.entries(heldThreads ?? {})
       .flatMap(([threadTaskId, items]) => {
         const holder = taskNamed.get(threadTaskId);
 
@@ -370,7 +385,7 @@ function useMentionState(
         const target = linkOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id }, step);
 
         // Note that a thread wears what its last line asks, as its Inbox row does, and a plain message keeps the thread's glyph.
-        const look = INBOX_LINE_LOOK[inboxLineKind(item)];
+        const look = INBOX_LINE_LOOK[inboxLineKind(inboxRowOf(item))];
 
         if (look !== undefined) {
           marks.set(target, { kind: CHIP_MARK.GLYPH, glyph: look.symbol, tone: look.tone });
@@ -476,6 +491,7 @@ function useMentionState(
     description,
     workspace,
     held,
+    heldThreads,
     taskPullRequests,
     pending,
   ]);

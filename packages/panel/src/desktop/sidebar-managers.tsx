@@ -57,6 +57,7 @@ import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQuery } from "@tanstack/react-query";
 import { type RefObject, useMemo, useRef } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
+import { usePhoneRoom } from "../stage-room.js";
 import { type ManagerSortControl, useManagerSort } from "../tasks/manager-sort.js";
 import {
   type PinnedManager,
@@ -340,6 +341,7 @@ export function SidebarManagers({
   const askNewManager = useRef<() => void>(() => undefined);
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const sorting = useManagerSort(tasks.workspace?.id, staged);
+  const phone = usePhoneRoom();
 
   // Note that a pinned Manager stands under Pinned alone, as a pinned task does, and returns here on Unpin; and one in a section stands there alone, as a task leaves Tasks for one.
   const sorted = useMemo(() => {
@@ -372,12 +374,15 @@ export function SidebarManagers({
       data-row-drop={drops === undefined ? undefined : MANAGERS_DROP_ZONE}
     >
       <GroupHeader
-        {...sidebarHead({
-          folded,
-          onToggle: folds.toggleManagers,
-          count: listedManagers.length,
-          noun: TERM.MANAGER,
-        })}
+        {...sidebarHead(
+          {
+            folded,
+            onToggle: folds.toggleManagers,
+            count: listedManagers.length,
+            noun: TERM.MANAGER,
+          },
+          phone,
+        )}
         glyph={<GLYPH.MANAGER />}
         label={MANAGERS_HEAD}
         standing={standing.length === 0 ? undefined : rows(standing)}

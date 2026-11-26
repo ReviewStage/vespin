@@ -662,13 +662,17 @@ const writeSpent = SqlSchema.void({
 });
 
 const writeLeaverPaused = SqlSchema.findAll({
-  Request: Schema.Struct({ organizationId: Schema.String, userId: Schema.String }),
+  Request: Schema.Struct({
+    organizationId: Schema.String,
+    userId: Schema.String,
+    now: Schema.Date,
+  }),
   Result: AutomationRowSchema,
-  execute: ({ organizationId, userId }) =>
+  execute: ({ organizationId, userId, now }) =>
     Database.use((db) =>
       db
         .update(automation)
-        .set({ enabled: false })
+        .set({ enabled: false, updatedAt: now })
         .where(
           and(
             eq(automation.organizationId, organizationId),
@@ -890,14 +894,14 @@ const writeAgentAdopted = SqlSchema.findAll({
     id: Schema.String,
     held: Schema.NullOr(Schema.String),
     agentId: Schema.String,
-    now: Schema.Date,
   }),
   Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ id, held, agentId, now }) =>
+  // Note that a run adopts the agent, and no run moves `updatedAt`, which the list orders Last updated by.
+  execute: ({ id, held, agentId }) =>
     Database.use((db) =>
       db
         .update(automation)
-        .set({ targetAgentId: agentId, updatedAt: now })
+        .set({ targetAgentId: agentId })
         .where(
           and(
             eq(automation.id, id),
@@ -1358,7 +1362,9 @@ export function pauseAutomationsOfLeaver(
   organizationId: string,
   userId: string,
 ): TaskStoreEffect<readonly Automation[]> {
-  return writeLeaverPaused({ organizationId, userId });
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    writeLeaverPaused({ organizationId, userId, now }),
+  );
 }
 
 /** The archivable agents of the run the agent belongs to, each read with how many agents the run has, so its reader can tell the run read whole. */
@@ -1577,11 +1583,9 @@ export function adoptAutomationAgent(
   held: string | null,
   agentId: string,
 ): TaskStoreEffect<boolean> {
-  return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    Effect.map(
-      writeAgentAdopted({ id: automationId, held, agentId, now }),
-      (rows) => rows.length > 0,
-    ),
+  return Effect.map(
+    writeAgentAdopted({ id: automationId, held, agentId }),
+    (rows) => rows.length > 0,
   );
 }
 

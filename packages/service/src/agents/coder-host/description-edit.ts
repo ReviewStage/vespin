@@ -2,6 +2,7 @@ import { posix } from "node:path";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   DESCRIPTION_ATTACHMENT_KEEP,
+  type DescriptionAttachmentToKeep,
   keepDescriptionAttachment,
 } from "@repo/database/models/description-attachments";
 import type { DescriptionWriter } from "@repo/database/models/description-revisions";
@@ -15,7 +16,6 @@ import {
 } from "@repo/features/description-attachment-link";
 import {
   DESCRIPTION_ATTACHMENT_BOUNDS,
-  type DescriptionFile,
   isPdfFile,
 } from "@repo/features/description-attachment-wire";
 import {
@@ -36,6 +36,8 @@ import { Data, Effect, Option, Result, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { ACTION_RESULT_STATUS, EXCESS_KEYS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
+import { type AttachmentUploads, withAttachmentUploads } from "../../storage/attachment-uploads.js";
+import type { BlobStoreFailure } from "../../storage/blob-store.js";
 import {
   DESCRIPTION_SAVE_REFUSAL,
   DESCRIPTION_SAVE_STATUS,
@@ -46,7 +48,7 @@ import {
 import { placeholderLinksWords } from "../link-rule.js";
 import { TASK_REF_INPUT, TASK_REF_WORDS } from "../task-ref.js";
 
-import { type InboxSandboxDoor, readSandboxBodyFile } from "./inbox-image.js";
+import { type InboxSandboxDoor, storeSandboxBodyFile } from "./inbox-image.js";
 
 /**
  * description-edit.ts -- the coding agent's `edit_description` tool: the notetaker's own notes, taken into the description of the task it names, and pictures from its sandbox added to it.
@@ -282,35 +284,41 @@ function missedNote(note: DescriptionNote): string {
   return `${note.kind} ${find}`;
 }
 
-/** A picture the call adds, with its file as read from the sandbox and the name a PDF is written under. */
+/** A picture the call adds, with its file as read from the sandbox and kept in the Blob store, and the name a PDF is written under. */
 interface PictureRead {
   readonly picture: TaskPicture;
-  readonly file: DescriptionFile;
+  readonly file: DescriptionAttachmentToKeep;
   readonly name: string;
 }
 
 /**
- * Every picture's file read from the sandbox, in order, or the refusal of
- * the first that is not, naming its path. Note that a file is read under an
- * inbox post's bounds, because a description holds an image, a recording,
- * and a PDF to the same three (`PICTURE_BOUNDS`, `AGENT_BOUNDS.MAX_PDF_BYTES`).
+ * Every picture's file read from the sandbox and kept in the Blob store, a
+ * recording or a clip with its copy for a phone, in order, or the refusal
+ * of the first that is not, naming its path. Note that a file is read under
+ * an inbox post's bounds, because a description holds an image, a
+ * recording, and a PDF to the same three (`PICTURE_BOUNDS`,
+ * `AGENT_BOUNDS.MAX_PDF_BYTES`).
  */
 function readPictureFiles(
   pictures: readonly TaskPicture[],
   sandbox: InboxSandboxDoor,
-): Effect.Effect<Result.Result<readonly PictureRead[], string>> {
+): Effect.Effect<
+  Result.Result<readonly PictureRead[], string>,
+  BlobStoreFailure,
+  AttachmentUploads
+> {
   return Effect.gen(function* () {
     const read: PictureRead[] = [];
 
     for (const picture of pictures) {
       const { path } = picture;
 
-      const file = yield* readSandboxBodyFile(sandbox, path, TASK_PICTURE_FILE_REFUSAL);
+      const file = yield* storeSandboxBodyFile(sandbox, path, TASK_PICTURE_FILE_REFUSAL);
 
       if (Result.isFailure(file)) return Result.fail(file.failure);
-      const { contentType, bytes } = file.success;
+      const { contentType, stored } = file.success;
 
-      read.push({ picture, file: { contentType, bytes }, name: posix.basename(path) || path });
+      read.push({ picture, file: { contentType, stored }, name: posix.basename(path) || path });
     }
 
     return Result.succeed(read);
@@ -345,7 +353,11 @@ function picturesInSandbox(
   binding: DescriptionBinding,
   pictures: readonly TaskPicture[],
   sandbox: InboxSandboxDoor,
-): Effect.Effect<Result.Result<PicturesRead, string>, StoreFailure, DatabaseServices> {
+): Effect.Effect<
+  Result.Result<PicturesRead, string>,
+  StoreFailure | BlobStoreFailure,
+  DatabaseServices | AttachmentUploads
+> {
   if (pictures.length === 0) return Effect.succeed(Result.succeed(NO_PICTURES));
 
   return Effect.gen(function* () {
@@ -490,6 +502,7 @@ export function recordDescriptionEdit(
 
     return yield* savedEdit(binding, writer, notes, read.success);
   }).pipe(
+    withAttachmentUploads,
     Effect.tapError(logStoreFailure),
     Effect.catch(() =>
       Effect.succeed(descriptionEditRejected(DESCRIPTION_EDIT_REFUSAL.UNAVAILABLE)),

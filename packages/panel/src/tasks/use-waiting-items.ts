@@ -1,3 +1,4 @@
+import { inboxReadRows } from "@repo/features/inbox-digest";
 import {
   type InboxAnyHolder,
   type InboxGroup,
@@ -77,7 +78,7 @@ export function useListedInboxGroups(
 
   // Note that the groups stand while their reads do, so a place counting them counts again only as they move.
   const groups = useMemo(
-    () => inboxGroups(read.items, { tasks: holdings, listed }),
+    () => inboxGroups(inboxReadRows(read.items), { tasks: holdings, listed }),
     [read.items, holdings, listed],
   );
 

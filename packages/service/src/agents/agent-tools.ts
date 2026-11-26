@@ -134,6 +134,7 @@ import {
   type OfferedModel,
   validateModelChoice,
 } from "../providers/model-catalog.js";
+import type { BlobStoreFailure } from "../storage/blob-store.js";
 import { taskChangeAsked, taskChangeSettled, taskChangeWritten } from "../tasks/task-change.js";
 import { followerReadingsOf } from "../tasks/task-following.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
@@ -1947,7 +1948,7 @@ const startedReading = (agent: Agent, offered: readonly OfferedModel[], ownTask:
 
 /** A store that could not be read is the one refusal, logged for the operator and said to the model. */
 export const orStoreRefusal = <R>(
-  effect: Effect.Effect<WireRecord, StoreFailure, R>,
+  effect: Effect.Effect<WireRecord, StoreFailure | BlobStoreFailure, R>,
 ): Effect.Effect<WireRecord, never, R> =>
   Effect.catch(effect, (failure) =>
     Effect.as(logStoreFailure(failure), agentToolRejected(AGENT_TOOL_REFUSAL.STORE)),

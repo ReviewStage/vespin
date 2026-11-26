@@ -85,10 +85,11 @@ function actionAs(
   });
 }
 
-/** How the published pull request may be merged, as GitHub's GraphQL answers the merge box's read. */
+/** How the published pull request may be merged, as GitHub's GraphQL answers the merge box's fields, which ride in the stack's listing of the repository's open pull requests, here none but it. */
 const MERGING_ANSWER = {
   data: {
     repository: {
+      pullRequests: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
       mergeCommitAllowed: false,
       squashMergeAllowed: true,
       rebaseMergeAllowed: true,

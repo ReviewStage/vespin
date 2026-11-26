@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { pulseOnPress } from "../../press-pulse.js";
 import type { SortDirection } from "../../sort-direction.js";
 import { SORT_DIRECTION } from "../../sort-direction.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
@@ -28,7 +27,7 @@ export function SortHeading({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <button type="button" className={SORT_BUTTON} onClick={pulseOnPress(onPress)}>
+    <button type="button" className={SORT_BUTTON} onClick={onPress}>
       <Text
         as={TEXT_ELEMENT.SPAN}
         variant={TEXT_VARIANT.LABEL}

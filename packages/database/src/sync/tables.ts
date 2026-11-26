@@ -55,6 +55,7 @@ import { integrationInstallation } from "../schemas/integration-installation.js"
 import { machineCommand } from "../schemas/machine-command.js";
 import { machineCommandAsk } from "../schemas/machine-command-ask.js";
 import { managerChatMessage } from "../schemas/manager-chat-message.js";
+import { managerChatReaction } from "../schemas/manager-chat-reaction.js";
 import { memory, memoryRecall } from "../schemas/memory.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { accountPreference } from "../schemas/preferences.js";
@@ -268,6 +269,14 @@ export const voiceCallSync = defineSyncTable(voiceCallTable, {
  */
 export const managerChatMessageSync = defineSyncTable(managerChatMessage, {
   topics: [{ kind: TOPIC.AGENT, column: managerChatMessage.agentId }],
+});
+
+/**
+ * A reaction given a message of a Manager's chat, on the Manager's topic,
+ * so the chat's live read (`managerChat`) hears one given or taken off.
+ */
+export const managerChatReactionSync = defineSyncTable(managerChatReaction, {
+  topics: [{ kind: TOPIC.AGENT, column: managerChatReaction.agentId }],
 });
 
 /** An account's membership of a workspace, on the workspace's topic and the account's. */
@@ -679,7 +688,8 @@ export const inboxItemReadSync = defineSyncTable(inboxItemRead, {
  * A file or a picture, on its task's topic and, for an inbox item's, the
  * item's agent's. Note that its bytes, and a recording's MP4 copy, are
  * ignored, because only what the row says of them is read live, and an
- * update comparing them would weigh every row's bytes.
+ * update comparing them would weigh every row's bytes; so are their
+ * pathnames in the Blob store, which only the service reads.
  */
 export const attachmentSync = defineSyncTable(attachment, {
   topics: [
@@ -691,7 +701,7 @@ export const attachmentSync = defineSyncTable(attachment, {
       topics: [{ kind: TOPIC.AGENT, column: inboxItem.agentId }],
     },
   ],
-  ignore: [attachment.bytes, attachment.mp4Bytes],
+  ignore: [attachment.bytes, attachment.blobKey, attachment.mp4Bytes, attachment.phoneBlobKey],
   log: LOG.EVERY,
 });
 
@@ -992,6 +1002,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentBootSync,
   voiceCallSync,
   managerChatMessageSync,
+  managerChatReactionSync,
   agentFollowerSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,

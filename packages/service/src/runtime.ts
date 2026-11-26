@@ -43,6 +43,7 @@ import { apnsSenderFromEnvironment } from "./push/apns.js";
 import { apnsHttp2Transport } from "./push/apns-http2.js";
 import { slackAppFromEnvironment } from "./slack/slack-app.js";
 import { slackBotFromEnvironment } from "./slack/slack-bot.js";
+import { blobStoreFromEnvironment } from "./storage/blob-store.js";
 import { syncFromEnvironment } from "./sync/hub.js";
 import { sentryAppFromEnvironment } from "./triggers/sentry/sentry-app-config.js";
 import { voiceCallLeasesFromEnvironment } from "./voice/voice-call-lease.js";
@@ -177,6 +178,10 @@ const usageQueues = usageQueuesFromEnvironment.pipe(
  * instance keeps for its life (`push/apns-http2.ts`), so every push an
  * instance sends shares it, as Apple asks.
  *
+ * `BlobStore` is the one place the deployment's private Blob store is named
+ * (`storage/blob-store.ts`), by the `BLOB_STORE_ID` the project's storage
+ * connection sets, reached under the function's own OIDC token.
+ *
  * `BearerCallers` keeps the caller each bearer resolved to for a minute
  * (`auth/bearer-callers.ts`), so a held read and the polls inside it ask the
  * auth service once a minute per bearer rather than on every request.
@@ -213,7 +218,14 @@ export const webServices = Layer.mergeAll(
   signInRevocationFromEnvironment.pipe(Layer.provide(githubApp)),
   settledTurnListener.pipe(
     Layer.provide(
-      Layer.mergeAll(FetchHttpClient.layer, githubApp, hostedEnvironment, slackBot, apnsSender),
+      Layer.mergeAll(
+        FetchHttpClient.layer,
+        githubApp,
+        hostedEnvironment,
+        slackBot,
+        apnsSender,
+        blobStoreFromEnvironment,
+      ),
     ),
   ),
   sentryAppFromEnvironment,
@@ -245,6 +257,7 @@ export const webServices = Layer.mergeAll(
   welcomeMailFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer)),
   onboardingEventsFromEnvironment.pipe(Layer.provide(FetchHttpClient.layer)),
   apnsSender,
+  blobStoreFromEnvironment,
 ).pipe(Layer.provide(webConfigProvider));
 
 /** What an effect run on a runtime over these services may require. */
