@@ -152,6 +152,7 @@ export function PullRequestFilesScreen() {
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={FILES_WORDS.MORE}>
+          <Stack.Toolbar.Label>{FILES_WORDS.MORE}</Stack.Toolbar.Label>
           <Stack.Toolbar.MenuAction isOn={hideViewed} onPress={() => setHideViewed(!hideViewed)}>
             {FILES_WORDS.HIDE_VIEWED}
           </Stack.Toolbar.MenuAction>
