@@ -353,6 +353,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.THIS_MAC_HOST,
   LIVE_READ.AGENT_ORIGINS,
   LIVE_READ.INBOX_ITEMS,
+  LIVE_READ.INBOX_OLDER,
   LIVE_READ.HOLDER_INBOX,
   LIVE_READ.LINK_STANDINGS,
   LIVE_READ.PAGES,
@@ -591,6 +592,9 @@ export const agentOriginQuery = (agentId: string | undefined) =>
 
 /** The feed of every item the account reaches, which the host holds for the session. */
 export const inboxItemsQuery = () => liveReadQuery(LIVE_READ.INBOX_ITEMS, []);
+
+/** The account's settled items older than the feed holds, as All read them a page at a time past it, which the host holds for the session; none before a page is read. */
+export const inboxOlderQuery = () => liveReadQuery(LIVE_READ.INBOX_OLDER, []);
 
 /** One holder's own inbox, by its kind and its id. */
 export const holderInboxQuery = (holder: InboxHolderKey | undefined) =>

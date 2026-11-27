@@ -438,6 +438,8 @@ export const AGENT_INBOX_ACT_KIND = {
   AGENTS_INBOX_REMIND: "agents.inboxRemind",
   /** Where one item stands, its agent, task, and workspace, as a link by its id alone is opened; it reads, and changes nothing. */
   AGENTS_INBOX_ITEM_HOME: "agents.inboxItemHome",
+  /** A page of the account's settled items older than its feed holds read into the host, past the cursor named, as All asks at its end; the items reach the panel on app state (`LIVE_READ.INBOX_OLDER`), the answer only the cursor after them. */
+  AGENTS_INBOX_OLDER_PAGE: "agents.inboxOlderPage",
   /** Every item of the account's Inbox marked read, in one workspace or in all; the dots alone. */
   AGENTS_INBOX_READ_ALL: "agents.inboxReadAll",
   /** One image of an inbox item, fetched by the host under the account, so the window holds no bearer and no address. */
@@ -1260,6 +1262,7 @@ export const PORT_ACT_USE = {
   AGENTS_INBOX_READ_STATE: ACT_USE.WRITE,
   AGENTS_INBOX_REMIND: ACT_USE.WRITE,
   AGENTS_INBOX_ITEM_HOME: ACT_USE.FETCH,
+  AGENTS_INBOX_OLDER_PAGE: ACT_USE.FETCH,
   AGENTS_INBOX_READ_ALL: ACT_USE.WRITE,
   AGENTS_INBOX_ATTACHMENT: ACT_USE.FETCH,
   AGENTS_PICTURE: ACT_USE.FETCH,

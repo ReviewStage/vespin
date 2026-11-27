@@ -178,6 +178,8 @@ export const GATEWAY_EVENT = {
   ACCOUNT_INBOX_CHANGED: "accountInbox.changed",
   /** Every inbox item the account reaches, whole, as the host's read of them for the session stands, each time it moves. */
   INBOX_ITEMS_CHANGED: "inboxItems.changed",
+  /** The account's settled inbox items older than its feed holds, as the pages an Inbox read of them stand for the session with every write drawn over them, whole, each time they move. */
+  INBOX_OLDER_CHANGED: "inboxOlder.changed",
   /** The account's preferences row, whole, as the host's read of it for the session stands with every write drawn over it, each time it moves. */
   ACCOUNT_PREFERENCES_CHANGED: "accountPreferences.changed",
   /** Which machine This Mac is and the device its host's record names, under the account signed in, whole, as the host reads it at its start and every few seconds after, each time it moves. */

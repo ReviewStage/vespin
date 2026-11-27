@@ -32,6 +32,7 @@ import {
   NEEDS_YOU,
   narrowedByWhose,
   READING_INBOX,
+  READING_OLDER_INBOX,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, inboxAddressedTo } from "@repo/features/inbox-wire";
@@ -919,12 +920,15 @@ function ShowEmpty({
  */
 export function InboxListSkeleton({
   rows = SKELETON_ROWS.length,
+  label = READING_INBOX,
 }: {
   /** How many placeholder rows stand, at most five. */
   rows?: number;
+  /** What the region says is being read: the Inbox, or the older items under All's rows. */
+  label?: string;
 }): React.JSX.Element {
   return (
-    <SkeletonRegion label={READING_INBOX}>
+    <SkeletonRegion label={label}>
       <List label={TAB_WORDS.INBOX}>
         {SKELETON_ROWS.slice(0, rows).map(({ task, title, preview }) => (
           <ListRow
@@ -1279,6 +1283,7 @@ export function InboxPaneEmpty({
 export function InboxListNote({
   failed,
   reading,
+  readingOlder = false,
   empty,
   alone,
   filteredOut,
@@ -1291,6 +1296,8 @@ export function InboxListNote({
 }: {
   failed: boolean;
   reading: boolean;
+  /** Whether All reads its next page of older items, which a placeholder row under its rows stands for. */
+  readingOlder?: boolean | undefined;
   empty: boolean;
   /** Whether the list stands alone, the Inbox too narrow for the pane beside it. */
   alone: boolean;
@@ -1322,9 +1329,10 @@ export function InboxListNote({
     );
   }
 
-  if (!empty) return null;
+  if (!empty)
+    return readingOlder ? <InboxListSkeleton rows={1} label={READING_OLDER_INBOX} /> : null;
 
-  if (reading) return <InboxListSkeleton />;
+  if (reading || readingOlder) return <InboxListSkeleton />;
 
   if (searched !== undefined) return <SearchEmpty searched={searched} />;
 
@@ -1502,10 +1510,13 @@ function InboxRows({
   items,
   place,
   row,
+  onAtEnd,
 }: {
   items: readonly InboxListed<InboxAnyHolder>[];
   place: RowsPlace;
   row: (listed: InboxListed<InboxAnyHolder>, at: VirtualRowPlace) => React.ReactNode;
+  /** Told whether the run's last row is in view as it scrolls and grows; none where nothing reads past the rows. */
+  onAtEnd?: ((atEnd: boolean) => void) | undefined;
 }): React.JSX.Element {
   const keys = useMemo(() => items.map(({ item }) => item.id), [items]);
   const handle = useRef<VirtualRowsHandle>(null);
@@ -1525,6 +1536,7 @@ function InboxRows({
       holdsFocus
       className="sidebar-tasks"
       handle={handle}
+      onAtEnd={onAtEnd}
     >
       {(index, at) => {
         const listed = items[index];
@@ -1558,12 +1570,15 @@ function InboxRuns({
   place,
   row,
   onFold,
+  onAtEnd,
 }: {
   view: InboxListView<InboxAnyHolder>;
   place: RowsPlace;
   row: (listed: InboxListed<InboxAnyHolder>, at: VirtualRowPlace) => React.ReactNode;
   /** Folds a run or opens it; none where the runs never fold. */
   onFold: ((run: InboxRun, folded: boolean) => void) | undefined;
+  /** Told whether the last run's last row is in view, as All reads its older items there; none where nothing reads past the rows. */
+  onAtEnd: ((atEnd: boolean) => void) | undefined;
 }): React.JSX.Element {
   // Note that the runs are made once for the view they are made from, so a draw that moved nothing hands the rows the same runs.
   const headed = view.runs !== undefined;
@@ -1571,7 +1586,7 @@ function InboxRuns({
 
   return (
     <>
-      {runs.map(({ run, items, count, folded }) => (
+      {runs.map(({ run, items, count, folded }, at) => (
         <div key={run}>
           <GroupHeader
             look={GROUP_LOOK.SECTION}
@@ -1585,7 +1600,14 @@ function InboxRuns({
                 : { open: !folded, onOpenChange: (open) => onFold(run, !open) }
             }
           >
-            {folded ? null : <InboxRows items={items} place={place} row={row} />}
+            {folded ? null : (
+              <InboxRows
+                items={items}
+                place={place}
+                row={row}
+                onAtEnd={at === runs.length - 1 ? onAtEnd : undefined}
+              />
+            )}
           </GroupHeader>
         </div>
       ))}
@@ -1608,6 +1630,7 @@ export function InboxList({
   onClose,
   onRemind,
   onPointing,
+  onAtEnd,
 }: {
   view: InboxListView<InboxAnyHolder>;
   /** The id of the item the pane shows. */
@@ -1630,6 +1653,8 @@ export function InboxList({
   onRemind?: InboxReminder | undefined;
   /** Told as the pointer comes onto the list and leaves it, while which its rows hold their places (`use-held-inbox-list.ts`); none where nothing holds them. */
   onPointing?: ((pointing: boolean) => void) | undefined;
+  /** Told whether the list's last row is in view, as All reads its older items at its end; none where nothing reads past the rows. */
+  onAtEnd?: ((atEnd: boolean) => void) | undefined;
 }): React.JSX.Element {
   const regionId = useId();
   const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
@@ -1778,7 +1803,13 @@ export function InboxList({
     >
       {/* Note that the Inbox's intro stands on the Inbox itself, not on a task's own Inbox tab. */}
       {head.tab === true ? null : <PageIntro intro={INTRO.INBOX} />}
-      <InboxRuns view={view} place={rowsPlace} row={row} onFold={head.order?.onFold} />
+      <InboxRuns
+        view={view}
+        place={rowsPlace}
+        row={row}
+        onFold={head.order?.onFold}
+        onAtEnd={onAtEnd}
+      />
       {note}
     </div>
   );

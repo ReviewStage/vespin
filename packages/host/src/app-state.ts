@@ -788,6 +788,7 @@ export interface AppHostReads {
   [LIVE_READ.ACCOUNT_PREFERENCES]: AccountPreferencesLive;
   [LIVE_READ.AGENT_ORIGINS]: AgentOrigin | null;
   [LIVE_READ.INBOX_ITEMS]: AppInboxItems;
+  [LIVE_READ.INBOX_OLDER]: AppInboxItems;
   [LIVE_READ.HOLDER_INBOX]: readonly InboxItem[];
   [LIVE_READ.INSTALLED_SKILLS]: readonly InstalledSkillSummary[];
   [LIVE_READ.INTEGRATIONS]: IntegrationStatusesAnswer;
@@ -944,6 +945,14 @@ export interface AppState {
   [LIVE_READ.ACCOUNT_PREFERENCES]: AppAccountPreferences;
   /** Every inbox item the account reaches, held for the signed-in session: what the window's Inbox, its search, and a person's page list. */
   [LIVE_READ.INBOX_ITEMS]: AppInboxRead;
+  /**
+   * The account's settled items older than the feed holds, held for the
+   * signed-in session as an Inbox listing every item read them a page at a
+   * time (`AGENTS_INBOX_OLDER_PAGE`), by the plan each is on and those on no
+   * task by their agent, the member's own writes drawn over them; none the
+   * feed holds. What All lists past the feed, and nothing counts.
+   */
+  [LIVE_READ.INBOX_OLDER]: AppHostRead<AppInboxItems>;
   /** Each plan's inbox the windows chose, held while a window holds it and a while after: what a chosen item's pane and a task's Inbox tab read past the feed. */
   [LIVE_READ.HOLDER_INBOX]: AppHolderInboxes;
   /** The skills the account sees in each workspace the windows chose, by the workspace, held while Settings › Skills shows them and a while after: what that page draws. */
@@ -1158,6 +1167,11 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.ACCOUNT_PREFERENCES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.AGENT_ORIGINS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.INBOX_ITEMS]: {
+    keys: READ_KEYS.TWO,
+    on: KEYS_ON.ROWS,
+    rowId: "id" satisfies keyof InboxItem,
+  },
+  [LIVE_READ.INBOX_OLDER]: {
     keys: READ_KEYS.TWO,
     on: KEYS_ON.ROWS,
     rowId: "id" satisfies keyof InboxItem,

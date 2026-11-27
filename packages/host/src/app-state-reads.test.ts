@@ -14,6 +14,7 @@ import {
   INBOX_FEED,
   inboxFeedHolds,
   inboxGroupsIn,
+  inboxHoldingsWithOlder,
   selectInboxFeed,
   selectInboxHoldings,
   shareAppState,
@@ -241,5 +242,33 @@ describe("selectInboxHoldings", () => {
 
     expect(inboxFeedHolds(document, "cut-the-release")).toBe(true);
     expect(inboxFeedHolds(document, "elsewhere")).toBe(false);
+  });
+
+  it("lays the older items All read beside the feed's, the feed's copy of an item standing for it, and the tasks only older items stand on after the feed's, the latest changed first", () => {
+    const live = selectInboxHoldings(documentWith(byTask, false, [{ taskId: "newer" }]));
+
+    const settled = (id: string, updatedAt: number) => ({
+      ...thread(id, updatedAt),
+      status: INBOX_STATUS.CLOSED,
+    });
+
+    const merged = inboxHoldingsWithOlder(live, {
+      [INBOX_SCOPE_KIND.TASK]: {
+        newer: [settled("c", 10), settled("d", 20)],
+        archived: [settled("e", 5)],
+        finished: [settled("f", 30)],
+      },
+      agents: { "manager-1": [settled("g", 1)] },
+    });
+
+    expect(merged.tasks.map(({ taskId }) => taskId)).toEqual(["newer", "finished", "archived"]);
+    expect([...merged.read].map(([taskId, items]) => [taskId, items.map(({ id }) => id)])).toEqual([
+      ["older", ["a"]],
+      ["newer", ["c", "b", "d"]],
+      ["archived", ["e"]],
+      ["finished", ["f"]],
+    ]);
+    expect(merged.read.get("newer")?.find(({ id }) => id === "c")?.status).toBe(INBOX_STATUS.OPEN);
+    expect(merged.agents).toEqual({ "manager-1": [settled("g", 1)] });
   });
 });
