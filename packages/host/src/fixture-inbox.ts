@@ -3472,7 +3472,7 @@ const AUTOMATION_COMMON = {
   mine: true,
 } as const;
 
-/** The fixture workspace's automations, newest made first, as its list reads them: two the workspace shares, and one of Ada's own, turned off. */
+/** The fixture workspace's automations, newest made first, as its list reads them: two the workspace shares, the digest handing its runs to the Release manager, and one of Ada's own, turned off. */
 const AUTOMATIONS: readonly AutomationSummary[] = [
   {
     ...AUTOMATION_COMMON,
@@ -3521,6 +3521,8 @@ const AUTOMATIONS: readonly AutomationSummary[] = [
     },
     nextRunAt: DIGEST_DUE.NEXT,
     lastRun: newestRun(AUTOMATION.DIGEST),
+    // Note that the digest hands every run to the Release manager, so its row names the Manager its runs land on.
+    target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: AGENT.MANAGER },
     createdAt: LANDED - 30 * DAY,
     scope: AUTOMATION_SCOPE.WORKSPACE,
     repositories: ["ada/relay"],

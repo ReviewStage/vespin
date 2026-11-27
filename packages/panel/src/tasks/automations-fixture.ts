@@ -5,13 +5,20 @@
  * signed in (`settings-fixture.ts`) holds three automations in the listed
  * workspace, one on a schedule, one on its pull requests, and one called by
  * a webhook, each with a history of runs, the webhook's newest run failed. The window opens on their list, on the first one's editor, or on
- * the failed one's with that run marked. Each read their pages hold is
+ * the failed one's with that run marked. The sweep and the reviews hand
+ * every run to one of the workspace's two Managers, which the list carries
+ * as the live task list would, Managers turned on for the workspace. Each read their pages hold is
  * laid here on main's document (`use-app-state.ts`), the list and the runs
  * as they stand, as the host lays them; nothing moves after. Every name,
  * repository, and prompt here is invented; nothing is read from an account.
  */
 
-import { AGENT_STATUS } from "@repo/features/agent-wire";
+import {
+  AGENT_KIND,
+  AGENT_RUNTIME,
+  AGENT_STATUS,
+  type ListedAgent,
+} from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
@@ -27,7 +34,14 @@ import {
   GITHUB_TRIGGER_EVENT,
 } from "@repo/features/automation-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import {
+  MANAGER_FACE_CHARACTER,
+  MANAGER_FACE_COLOR,
+  type ManagerFace,
+} from "@repo/features/manager-face";
+import type { ListedTasksView } from "@repo/features/tasks-view";
 import { type AppAutomationReads, type AppStateSnapshot, RUN_PROFILE } from "@repo/host/app-state";
+import { EXPERIMENT } from "@repo/settings";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./automations-place.js";
 
 /** When the fixture stands, from which every instant here is counted: a fixed one, never the clock. */
@@ -48,6 +62,40 @@ const AUTOMATION_ID = {
   REVIEW: uuid("3f0e6f5c-7d1a-4f6e-9a55", 2),
   DEPLOY: uuid("3f0e6f5c-7d1a-4f6e-9a55", 3),
 } as const;
+
+/** The workspace's two Managers, whose ids the automations aimed at them name. */
+const MANAGER_ID = {
+  RELEASE: uuid("6b1f0c2d-4e3a-4b5c-9d6e", 1),
+  REVIEW: uuid("6b1f0c2d-4e3a-4b5c-9d6e", 2),
+} as const;
+
+/** A Manager of `workspaceId`, started `agoDays` before the fixture stands, its face picked as the service picks one. */
+function manager(
+  id: string,
+  title: string,
+  face: ManagerFace,
+  workspaceId: string,
+  agoDays: number,
+): ListedAgent {
+  return {
+    id,
+    taskId: null,
+    workspaceId,
+    kind: AGENT_KIND.MANAGER,
+    face,
+    model: "anthropic/claude-opus-5.5",
+    effort: "high",
+    title,
+    createdAt: NOW - agoDays * DAY,
+    status: AGENT_STATUS.COMPLETED,
+    turnId: null,
+    runStartedAt: NOW - agoDays * DAY,
+    startedBy: { userId: ACCOUNT_ID, name: "Ada Lovelace" },
+    runtime: AGENT_RUNTIME.CLAUDE_CODE,
+    repository: "ada/relay",
+    settledAt: NOW - agoDays * DAY,
+  };
+}
 
 /** One run, fired `agoHours` before the fixture stands and settled a few minutes after. */
 function run(
@@ -245,6 +293,7 @@ function automations(workspaceId: string): readonly AutomationSummary[] {
       },
       nextRunAt: null,
       lastRun: REVIEW_RUNS[0] ?? null,
+      target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: MANAGER_ID.REVIEW },
       createdAt: NOW - 16 * DAY,
       scope: AUTOMATION_SCOPE.WORKSPACE,
       repositories: ["ada/relay", "ada/ledger"],
@@ -267,6 +316,7 @@ function automations(workspaceId: string): readonly AutomationSummary[] {
       },
       nextRunAt: NOW + 17 * HOUR,
       lastRun: SWEEP_RUNS[0] ?? null,
+      target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: MANAGER_ID.RELEASE },
       createdAt: NOW - 30 * DAY,
       scope: AUTOMATION_SCOPE.WORKSPACE,
       repositories: ["ada/relay"],
@@ -302,6 +352,65 @@ const AUTOMATIONS_PLACES: ReadonlyMap<string, AutomationsPlace> = new Map<string
     ],
   ],
 );
+
+/** The staged lists, one for each list the tasks fixture hands, so a list handed again draws nothing again. */
+const MANAGED_LISTS = new WeakMap<ListedTasksView, ListedTasksView>();
+
+/**
+ * The list as an Automations profile draws it: `list` with Managers turned
+ * on in its first workspace, the one the page opens on, and that
+ * workspace's two Managers among the agents it carries, as the live list
+ * carries a Manager on no task. The same list under any other profile.
+ */
+export function automationsTasksView(profile: string, list: ListedTasksView): ListedTasksView {
+  if (!AUTOMATIONS_PLACES.has(profile)) return list;
+  const kept = MANAGED_LISTS.get(list);
+
+  if (kept !== undefined) return kept;
+  const [first, ...rest] = list.workspaces;
+
+  if (first === undefined) return list;
+
+  const managed = {
+    ...first,
+    experiments: [
+      ...(first.experiments ?? []).filter((each) => each.experiment !== EXPERIMENT.MANAGERS),
+      {
+        experiment: EXPERIMENT.MANAGERS,
+        on: true,
+        changedBy: { id: ACCOUNT_ID, name: "Ada Lovelace" },
+        changedAt: NOW - 30 * DAY,
+      },
+    ],
+  };
+
+  const managers = [
+    manager(
+      MANAGER_ID.RELEASE,
+      "Release manager",
+      { character: MANAGER_FACE_CHARACTER.MUG, color: MANAGER_FACE_COLOR.ORANGE },
+      first.id,
+      20,
+    ),
+    manager(
+      MANAGER_ID.REVIEW,
+      "Review manager",
+      { character: MANAGER_FACE_CHARACTER.GHOST, color: MANAGER_FACE_COLOR.PURPLE },
+      first.id,
+      12,
+    ),
+  ];
+
+  const staged = {
+    ...list,
+    workspaces: [managed, ...rest],
+    taskAgents: [...(list.taskAgents ?? []), ...managers],
+  };
+
+  MANAGED_LISTS.set(list, staged);
+
+  return staged;
+}
 
 /** The page an Automations profile opens at launch; none under any other. */
 export function automationsLaunchPlace(profile: string): AutomationsPlace | undefined {

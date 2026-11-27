@@ -1,3 +1,4 @@
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
 import {
   AUTOMATION_NEXT,
@@ -7,6 +8,7 @@ import {
   type AutomationGroup,
   type AutomationsOrder,
   automationGroups,
+  automationManager,
   automationNext,
   automationOwner,
   automationRunStanding,
@@ -43,6 +45,7 @@ import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { agentName } from "@repo/features/model-label";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TRIGGER_PROVIDER, type TriggerProvider } from "@repo/features/trigger-catalog";
 import { managesWorkspace } from "@repo/features/workspace-role";
@@ -122,11 +125,13 @@ import { useAutomationsDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { useTaskListCollections } from "../task-list-collections.js";
+import { agentActor } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
+import { useWorkspaceManagers } from "../tasks/workspace-managers.js";
 import { useToast } from "../toast.js";
 import { keptKey, useKept } from "../use-kept.js";
-import { useExperimentsIn } from "../workspace-experiments.js";
+import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
 import { useWorkspacesRead } from "../workspaces-read.js";
 import { type MenuAction, type MenuEntry, rowMenu } from "./action-menu.js";
 import { openRunAgent } from "./automation-agent-run.js";
@@ -186,6 +191,9 @@ import { resetViewAction, VIEW_OPTIONS, ViewOptions } from "./view-options.js";
  * repository and the model, then Start agent, a new task's agent handed the
  * brief to make it (`new-task-composer.tsx`).
  */
+
+/** No Manager read yet, or none listed, the same array every render. */
+const NO_MANAGERS: readonly ListedAgent[] = [];
 
 /** What an automation's row is, which names its ⋯ and its menu. */
 const ROW_THING = "Automation";
@@ -332,6 +340,22 @@ function MakerCell({
   );
 }
 
+/** The Manager an automation's runs land on, as its row draws it: its face and its name, its whole name on hover where the column cuts it short. */
+function ManagerMark({ manager }: { manager: ListedAgent }): React.JSX.Element {
+  const name = agentName(manager);
+
+  return (
+    <Tooltip label={name}>
+      <span className="automation-manager inline-flex min-w-0 items-center gap-item-gap">
+        <ActorMark actor={agentActor(manager, name)} size={ACTOR_SIZE.INLINE} />
+        <OneLine className="automation-manager-name" words={name}>
+          <ReplayMask>{name}</ReplayMask>
+        </OneLine>
+      </span>
+    </Tooltip>
+  );
+}
+
 type UseRunNowResult = { readonly running: boolean; readonly run: () => void };
 
 /**
@@ -416,6 +440,8 @@ function useTakeOver(
 interface AutomationRowProps {
   automation: AutomationSummary;
   workspace: Workspace | undefined;
+  /** The workspace's Managers, whose face and name a row draws where its runs land on one; none where the list names no Manager, as a Manager's own Settings lists its automations. */
+  managers: readonly ListedAgent[] | undefined;
   now: number;
   onOpen: () => void;
   onToggle: (enabled: boolean) => Promise<AutomationWriteAnswer>;
@@ -427,8 +453,8 @@ interface AutomationRowProps {
 
 /**
  * One automation's row: its tile, the glyph of what fires it wearing where its newest run
- * stands, its name over what fires it, who made it, when it runs next with a
- * failure's mark before it, and its switch, hanging the automation's card. The maker and the next run each keep a column of their
+ * stands, its name over what fires it, the Manager its runs land on, who made it, when it runs next with a
+ * failure's mark before it, and its switch, hanging the automation's card. The Manager, the maker, and the next run each keep a column of their
  * own, so they line up down the list whatever each row says. Everything but the switch is one press
  * that opens its page, as a sidebar task's row is, so the row opens wherever
  * it is pressed and the switch beside the press only switches. Its ⋯,
@@ -449,6 +475,7 @@ function AutomationRow({
 function WideAutomationRow({
   automation,
   workspace,
+  managers,
   now,
   onOpen,
   onToggle,
@@ -487,6 +514,7 @@ function WideAutomationRow({
         meta={
           <AutomationRowMeta
             lead={hiddenWorking}
+            manager={managerColumn(automation, managers)}
             owner={<MakerCell automation={automation} workspace={workspace} />}
             next={
               <>
@@ -527,6 +555,17 @@ function WideAutomationRow({
   );
 }
 
+/** A wide row's Manager column: the Manager's face and name, empty for one that hands its runs to none, and no column where the list names none. */
+function managerColumn(
+  automation: AutomationSummary,
+  managers: readonly ListedAgent[] | undefined,
+): React.ReactNode {
+  if (managers === undefined) return undefined;
+  const manager = automationManager(automation, managers);
+
+  return manager === undefined ? null : <ManagerMark manager={manager} />;
+}
+
 /** The mark a phone's row leads with: its newest run's while that works or failed, else the mark of what fires it (`FiringGlyph`). */
 function PhoneRowMark({ automation }: { automation: AutomationSummary }): React.JSX.Element {
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
@@ -545,7 +584,7 @@ function PhoneRowMark({ automation }: { automation: AutomationSummary }): React.
  * A narrow room's row, a phone's, as the iOS app's list draws it: the mark of
  * what fires it, which its newest run's mark takes the place of while that
  * works or failed; its name; when it runs next and what fires it, or "Off"
- * and what fires it; how its newest run went; and at its end when that run
+ * and what fires it; the Manager its runs land on, where one is, and how its newest run went; and at its end when that run
  * fired and a chevron, faded while it is off. It draws no switch: its menu,
  * a long press or its ⋯, turns it on or off beside Run now, then Copy link,
  * Take over where it may, and Delete.
@@ -553,6 +592,7 @@ function PhoneRowMark({ automation }: { automation: AutomationSummary }): React.
 function PhoneAutomationRow({
   automation,
   workspace,
+  managers,
   now,
   onOpen,
   onToggle,
@@ -566,6 +606,7 @@ function PhoneAutomationRow({
   const coarse = useCoarsePointer();
   const run = automation.lastRun;
   const working = run !== null && automationRunStanding(run) === AUTOMATION_RUN_STANDING.WORKING;
+  const manager = managers === undefined ? undefined : automationManager(automation, managers);
 
   return (
     <RowHintOptions
@@ -578,7 +619,16 @@ function PhoneAutomationRow({
         titleReplayMasked
         description={automationPhoneLine(automation, now)}
         descriptionReplayMasked
-        foot={<ReplayUnmask>{automationLastRunWords(automation)}</ReplayUnmask>}
+        foot={
+          manager === undefined ? (
+            <ReplayUnmask>{automationLastRunWords(automation)}</ReplayUnmask>
+          ) : (
+            <Inline gap={GAP.TIGHT}>
+              <ManagerMark manager={manager} />
+              <ReplayUnmask>· {automationLastRunWords(automation)}</ReplayUnmask>
+            </Inline>
+          )
+        }
         // Note that a run at work says so by its mark, so it is timed only once it settled.
         meta={
           run === null || working ? undefined : (
@@ -617,6 +667,7 @@ function PhoneAutomationRow({
 /** What every row of the list is handed: the room it stands in, and the presses on it. */
 interface AutomationRowsShown {
   workspace: Workspace | undefined;
+  managers: readonly ListedAgent[] | undefined;
   now: number;
   narrow: boolean;
   onOpen: (automation: AutomationSummary) => void;
@@ -640,6 +691,7 @@ function AutomationGroupRows({
           key={automation.id}
           automation={automation}
           workspace={shown.workspace}
+          managers={shown.managers}
           now={shown.now}
           narrow={shown.narrow}
           onOpen={() => shown.onOpen(automation)}
@@ -1003,6 +1055,7 @@ export function AutomationRows({
   listed,
   order,
   workspace,
+  managers,
   narrow,
   automations,
   onOpen,
@@ -1011,6 +1064,8 @@ export function AutomationRows({
   listed: readonly AutomationSummary[];
   order: AutomationsOrder;
   workspace: Workspace | undefined;
+  /** The workspace's Managers, which each row names where its runs land on one; none where the list names no Manager. */
+  managers?: readonly ListedAgent[] | undefined;
   narrow: boolean;
   automations: Pick<ReturnType<typeof useAutomations>, "toggle" | "change">;
   onOpen: (automation: AutomationSummary) => void;
@@ -1026,6 +1081,7 @@ export function AutomationRows({
         groups={automationGroups(listed, order)}
         finished={finishedAutomations(listed, order)}
         workspace={workspace}
+        managers={managers}
         now={now}
         narrow={narrow}
         onOpen={onOpen}
@@ -1062,6 +1118,16 @@ function ListPage({
   const { read, reload } = automations;
   const listed = read !== undefined && "automations" in read ? read.automations : [];
   const [order, onOrder] = useKept(KEPT_ORDER, DEFAULT_AUTOMATIONS_ORDER);
+
+  const managersListed =
+    useWorkspaceExperiment(workspace?.id, EXPERIMENT.MANAGERS) && tasks.signedIn;
+
+  // Note that the column stands whether or not the Managers are read yet, so the rows do not move as they land.
+  const { managers = NO_MANAGERS } = useWorkspaceManagers(
+    workspace?.id,
+    managersListed,
+    tasks.agentsCarried,
+  );
 
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
 
@@ -1113,6 +1179,7 @@ function ListPage({
           listed={listed}
           order={order}
           workspace={workspace}
+          managers={managers}
           narrow={room === SHELL_ROOM.NARROW}
           automations={automations}
           onOpen={(automation) =>
