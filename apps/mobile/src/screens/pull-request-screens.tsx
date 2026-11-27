@@ -739,7 +739,7 @@ function PullRequestPage({
   // Note that the review threads still unresolved are said beside GitHub's sentence, as a branch that requires them resolved holds the merge for them, so the reader sees why before scrolling to them.
   const unresolvedCount = conversation === undefined ? 0 : unresolvedThreadCount(conversation);
   const unresolved = unresolvedCount === 0 ? undefined : unresolvedWords(unresolvedCount);
-  const described = markdownShows(description, { hidesHtml: true });
+  const described = markdownShows(description, { githubHtml: true });
   // Note that a long description stands folded to its first lines, faded at its foot, until Show more, so the rows and the conversation under it stay a short scroll away, as GitHub's app folds a long body.
   const folds = descriptionFolds(description);
   const folded = folds && !unfolded;
@@ -881,7 +881,7 @@ function PullRequestPage({
             words={description}
             repository={agent?.repository}
             onOpenLink={openLink}
-            hidesHtml
+            githubHtml
             edge={WORDS_EDGE.ROWS}
             folded={folded}
             reactions={reactionsLine(conversation?.descriptionReactions ?? [])}

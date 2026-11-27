@@ -35,6 +35,7 @@ import { Match } from "effect";
 import type {
   Code,
   Definition,
+  Html,
   ImageReference,
   LinkReference,
   List,
@@ -46,6 +47,7 @@ import type {
   Table,
   Text,
 } from "mdast";
+import { HTML_TOKEN, type HtmlToken, htmlTokens } from "./html-tokens.js";
 
 /**
  * The tree `@repo/features/markdown-tree` reads is the panel's own, so the
@@ -57,7 +59,9 @@ import type {
  * reads (`@repo/features/mention-link`'s `linkChipOf`): a mention's target
  * as its chip, a link to a place in the app as that place's chip, and any
  * other link as underlined words. Raw HTML is drawn as
- * the words it was written with, as a note draws it.
+ * the words it was written with, as a note draws it, but in GitHub's words,
+ * where it is read as GitHub's page reads it (`MarkdownReading`'s
+ * `githubHtml`).
  */
 
 /** What a block is. */
@@ -72,6 +76,8 @@ export const MARKDOWN_BLOCK = {
   DIAGRAM: "diagram",
   RULE: "rule",
   PICTURE: "picture",
+  /** A folded section of GitHub's words (`<details>`), its summary standing over what it folds. */
+  DETAILS: "details",
 } as const;
 
 /** What a run inside a block is. */
@@ -193,7 +199,13 @@ export type MarkdownBlock =
   /** A Mermaid fence, drawn as its diagram where the words are read for diagrams (`MarkdownReading`'s `diagrams`). */
   | { readonly kind: typeof MARKDOWN_BLOCK.DIAGRAM; readonly code: string }
   | { readonly kind: typeof MARKDOWN_BLOCK.RULE }
-  | { readonly kind: typeof MARKDOWN_BLOCK.PICTURE; readonly source: string; readonly alt: string };
+  | { readonly kind: typeof MARKDOWN_BLOCK.PICTURE; readonly source: string; readonly alt: string }
+  | {
+      readonly kind: typeof MARKDOWN_BLOCK.DETAILS;
+      /** What its summary says, standing while it is folded. */
+      readonly summary: readonly MarkdownRun[];
+      readonly blocks: readonly MarkdownBlock[];
+    };
 
 /** What the words are read against: the repository a GitHub page is a file of, and the moment and zone a date's chip counts from. */
 export interface MarkdownReading {
@@ -209,11 +221,14 @@ export interface MarkdownReading {
    */
   readonly typed?: boolean | undefined;
   /**
-   * Whether raw HTML in the words stays unseen, as GitHub's own page hides a
-   * pull request body's comments, templates and tags; elsewhere it is drawn
-   * as the words it was written with.
+   * Whether the words are GitHub's, a pull request's or a comment's, whose
+   * raw HTML is read as GitHub's own page draws it: a picture, a table, a
+   * folded section, a list, a heading, a line break, and words marked bold,
+   * italic, struck, as code or as a link drawn as they would be written in
+   * Markdown, and every other tag, comment and template left unseen, never
+   * printed. Elsewhere raw HTML is drawn as the words it was written with.
    */
-  readonly hidesHtml?: boolean | undefined;
+  readonly githubHtml?: boolean | undefined;
   /**
    * Whether a Mermaid fence is drawn as its diagram, as a description's are;
    * elsewhere, such as a transcript still being written, it stays its code,
@@ -436,6 +451,17 @@ function linkRun(
   reader: Reader,
 ): MarkdownRun {
   const words = children.map(wordsOf).join("");
+
+  return linkRunOf(href, words, () => phrasingRuns(children, marks, reader), reader);
+}
+
+/** A link to `href` whose words are `words`: a suggestion, a chip, or a link around its own runs, read only where it stays a link. */
+function linkRunOf(
+  href: string,
+  words: string,
+  runs: () => MarkdownRun[],
+  reader: Reader,
+): MarkdownRun {
   const button = readReplyButtonLink(href);
 
   if (button !== undefined) {
@@ -454,11 +480,7 @@ function linkRun(
 
   if (chip !== undefined) return { kind: MARKDOWN_RUN.CHIP, chip };
 
-  return {
-    kind: MARKDOWN_RUN.LINK,
-    target: linkTarget(href),
-    runs: children.flatMap((child) => runsOf(child, marks, reader)),
-  };
+  return { kind: MARKDOWN_RUN.LINK, target: linkTarget(href), runs: runs() };
 }
 
 /** A reference's definition, or nothing where none is written. */
@@ -533,12 +555,15 @@ function wordsWithPictures(
 /** The runs an inline node draws, under the marks of the nodes around it. */
 function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): MarkdownRun[] {
   const inside = (children: readonly PhrasingContent[], more: Partial<WordMarks>) =>
-    children.flatMap((child) => runsOf(child, { ...marks, ...more }, reader));
+    phrasingRuns(children, { ...marks, ...more }, reader);
 
   switch (node.type) {
     case "text":
     case "html": {
-      if (node.type === "html" && reader.reading.hidesHtml === true) return [];
+      if (node.type === "html" && reader.reading.githubHtml === true) {
+        return runsOnly(inlinesOf(piecesOf([node]), marks, reader));
+      }
+
       const text = reader.reading.typed === true ? node.value : node.value.replace(SOFT_BREAK, " ");
 
       return node.type === "html"
@@ -595,6 +620,15 @@ function blank(run: MarkdownRun): boolean {
 
 /** A paragraph's words, each picture of its own standing as a block between them. */
 function paragraphBlocks(node: Paragraph, reader: Reader): MarkdownBlock[] {
+  const inlines = readsHtmlIn(node.children, reader)
+    ? inlinesOf(piecesOf(node.children), PLAIN, reader)
+    : node.children.flatMap((child) => nodeInlines(child, PLAIN, reader));
+
+  return inlineBlocks(inlines);
+}
+
+/** A paragraph's runs and pictures as blocks: its words, each picture standing as a block between them. */
+function inlineBlocks(inlines: readonly Inline[]): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
   let runs: MarkdownRun[] = [];
 
@@ -603,21 +637,40 @@ function paragraphBlocks(node: Paragraph, reader: Reader): MarkdownBlock[] {
     runs = [];
   };
 
-  for (const child of node.children) {
-    const source = pictureSource(child, reader);
-
-    if (source === undefined) {
-      runs.push(...runsOf(child, PLAIN, reader));
+  for (const inline of inlines) {
+    if (inline.picture === undefined) {
+      runs.push(inline.run);
       continue;
     }
 
     close();
-    blocks.push({ kind: MARKDOWN_BLOCK.PICTURE, source, alt: wordsOf(child) });
+    blocks.push({ kind: MARKDOWN_BLOCK.PICTURE, ...inline.picture });
   }
 
   close();
 
   return blocks;
+}
+
+/** An inline node as what it draws: a picture of its own, or its runs. */
+function nodeInlines(node: PhrasingContent, marks: WordMarks, reader: Reader): Inline[] {
+  const source = pictureSource(node, reader);
+
+  if (source !== undefined) return [{ picture: { source, alt: wordsOf(node) } }];
+
+  return runsOf(node, marks, reader).map((run) => ({ run }));
+}
+
+/** The runs inline nodes draw side by side, their raw HTML read as GitHub's where the words are GitHub's. */
+function phrasingRuns(
+  children: readonly PhrasingContent[],
+  marks: WordMarks,
+  reader: Reader,
+): MarkdownRun[] {
+  if (!readsHtmlIn(children, reader))
+    return children.flatMap((child) => runsOf(child, marks, reader));
+
+  return runsOnly(inlinesOf(piecesOf(children), marks, reader));
 }
 
 function listBlock(node: List, reader: Reader): MarkdownBlock {
@@ -647,9 +700,7 @@ function tableBlock(node: Table, reader: Reader): MarkdownBlock {
       columns.map((at) => {
         const cell = row.children[at];
 
-        return cell === undefined
-          ? []
-          : cell.children.flatMap((child) => runsOf(child, PLAIN, reader));
+        return cell === undefined ? [] : phrasingRuns(cell.children, PLAIN, reader);
       }),
     ),
   };
@@ -675,7 +726,7 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
         {
           kind: MARKDOWN_BLOCK.HEADING,
           level: node.depth,
-          runs: node.children.flatMap((child) => runsOf(child, PLAIN, reader)),
+          runs: phrasingRuns(node.children, PLAIN, reader),
         },
       ];
     case "paragraph":
@@ -691,8 +742,8 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
     case "thematicBreak":
       return [{ kind: MARKDOWN_BLOCK.RULE }];
     case "html":
-      return reader.reading.hidesHtml === true
-        ? []
+      return reader.reading.githubHtml === true
+        ? htmlBlocksOf(piecesOf([node]), reader)
         : [{ kind: MARKDOWN_BLOCK.PARAGRAPH, runs: wordsRun(node.value, PLAIN) }];
     case "footnoteDefinition":
       return blocksOf(node.children, reader);
@@ -720,7 +771,430 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
 }
 
 function blocksOf(nodes: readonly RootContent[], reader: Reader): MarkdownBlock[] {
+  // Note that GitHub's raw HTML is read across the nodes it stands between, since a folded section opens in one node and closes nodes later, with Markdown between.
+  if (readsHtmlIn(nodes, reader)) return htmlBlocksOf(piecesOf(nodes), reader);
+
   return nodes.flatMap((node) => blockOf(node, reader));
+}
+
+/** A piece of words read in order: a node of the tree, or a tag or words of raw HTML written among its nodes. */
+type Piece<Node> =
+  | { readonly node: Node; readonly token?: undefined }
+  | { readonly token: HtmlToken; readonly node?: undefined };
+
+/** What an inline piece draws: a run, or a picture, which a paragraph stands as a block of its own. */
+type Inline =
+  | { readonly run: MarkdownRun; readonly picture?: undefined }
+  | {
+      readonly picture: { readonly source: string; readonly alt: string };
+      readonly run?: undefined;
+    };
+
+/** The tags whose words GitHub marks, and how. */
+const MARK_TAGS: ReadonlyMap<string, Partial<WordMarks>> = new Map([
+  ["b", { strong: true }],
+  ["strong", { strong: true }],
+  ["i", { emphasis: true }],
+  ["em", { emphasis: true }],
+  ["s", { struck: true }],
+  ["del", { struck: true }],
+  ["strike", { struck: true }],
+]);
+
+/** The tags that end a paragraph's words where they open or close, their own words standing in the next. */
+const BOUNDARY_TAGS: ReadonlySet<string> = new Set([
+  "p",
+  "div",
+  "center",
+  "section",
+  "article",
+  "header",
+  "footer",
+  "figure",
+  "figcaption",
+  "dl",
+  "dt",
+  "dd",
+  "li",
+  "summary",
+  "tr",
+  "th",
+  "td",
+]);
+
+/** The tags whose words are never drawn, as a browser shows none of them. */
+const UNSEEN_TAGS: ReadonlySet<string> = new Set(["script", "style", "template", "head", "title"]);
+
+/** The heading tags, by the level each heads. */
+const HEADING_TAGS: ReadonlyMap<string, 1 | 2 | 3 | 4 | 5 | 6> = new Map([
+  ["h1", 1],
+  ["h2", 2],
+  ["h3", 3],
+  ["h4", 4],
+  ["h5", 5],
+  ["h6", 6],
+]);
+
+/** What a `<details>` says where it holds no summary, as GitHub's page says. */
+const DETAILS_WORDS = "Details";
+
+/** Space as HTML folds it: a run of it is one space. Note that a no-break space is no such space. */
+const HTML_SPACE = /[ \t\n\r\f]+/gu;
+
+function isHtml(node: { readonly type: string }): node is Html {
+  return node.type === "html";
+}
+
+/** Whether `nodes` hold raw HTML to read as GitHub's, which only GitHub's words do. */
+function readsHtmlIn(nodes: readonly { readonly type: string }[], reader: Reader): boolean {
+  return reader.reading.githubHtml === true && nodes.some(isHtml);
+}
+
+/** Nodes as pieces, each raw HTML node read as its tags and words. */
+function piecesOf<Node extends { readonly type: string }>(nodes: readonly Node[]): Piece<Node>[] {
+  return nodes.flatMap((node): Piece<Node>[] =>
+    isHtml(node) ? htmlTokens(node.value).map((token) => ({ token })) : [{ node }],
+  );
+}
+
+/** Where the tag opened at `from` closes among `pieces`, the same tags opened inside it counted; their end where it never closes. */
+function closeAt<Node>(pieces: readonly Piece<Node>[], from: number, name: string): number {
+  let depth = 0;
+
+  for (let at = from + 1; at < pieces.length; at += 1) {
+    const token = pieces[at]?.token;
+
+    if (token?.kind === HTML_TOKEN.OPEN && token.name === name && !token.alone) depth += 1;
+
+    if (token?.kind === HTML_TOKEN.CLOSE && token.name === name) {
+      if (depth === 0) return at;
+      depth -= 1;
+    }
+  }
+
+  return pieces.length;
+}
+
+/** Block pieces read inline, as a heading's or a cell's words: a paragraph's nodes as its own, and any other node as its words. */
+function asInline(pieces: readonly Piece<RootContent>[]): Piece<PhrasingContent>[] {
+  return pieces.flatMap((piece): Piece<PhrasingContent>[] => {
+    if (piece.token !== undefined) return [{ token: piece.token }];
+
+    if (piece.node.type === "paragraph") return piecesOf(piece.node.children);
+
+    return [{ token: { kind: HTML_TOKEN.TEXT, text: wordsOf(piece.node) } }];
+  });
+}
+
+/** The words pieces hold as written, tags dropped, as code's are. */
+function piecesWords(pieces: readonly Piece<PhrasingContent>[]): string {
+  return pieces
+    .map((piece) => {
+      if (piece.node !== undefined) return wordsOf(piece.node);
+
+      return piece.token.kind === HTML_TOKEN.TEXT ? piece.token.text : "";
+    })
+    .join("");
+}
+
+/** Inlines as runs alone, each picture as its words, where no picture can stand, as in a heading, a cell, or a link. */
+function runsOnly(inlines: readonly Inline[]): MarkdownRun[] {
+  return inlines.flatMap((inline) =>
+    inline.picture === undefined ? [inline.run] : wordsRun(inline.picture.alt, PLAIN),
+  );
+}
+
+/** Runs with the space at their ends cut, as HTML lays a block's words, and none left that holds nothing. */
+function trimmedRuns(runs: readonly MarkdownRun[]): MarkdownRun[] {
+  const last = runs.length - 1;
+
+  return runs.flatMap((run, at): MarkdownRun[] => {
+    if (run.kind !== MARKDOWN_RUN.WORDS) return [run];
+    const start = at === 0 ? run.text.trimStart() : run.text;
+    const text = at === last ? start.trimEnd() : start;
+
+    return text === "" ? [] : [{ ...run, text }];
+  });
+}
+
+/** A tag of GitHub's that stands alone in a line's words: a picture, drawn where its address is one the app draws and said by its words otherwise, and a line break. */
+function tagInlines(token: Extract<HtmlToken, { kind: "open" }>, marks: WordMarks): Inline[] {
+  if (token.name === "br") return [{ run: { kind: MARKDOWN_RUN.BREAK } }];
+
+  if (token.name !== "img") return [];
+  const source = token.attributes.get("src") ?? "";
+  const alt = token.attributes.get("alt") ?? "";
+
+  if (PICTURE_SOURCE.test(source)) return [{ picture: { source, alt } }];
+
+  return wordsRun(alt, marks).map((run) => ({ run }));
+}
+
+/** A tag of GitHub's that wraps words in a line: code, as its words written, or a link around its words, as a Markdown link reads. */
+function spanInlines(
+  token: Extract<HtmlToken, { kind: "open" }>,
+  inner: readonly Piece<PhrasingContent>[],
+  marks: WordMarks,
+  reader: Reader,
+): Inline[] {
+  if (token.name === "code") {
+    return [
+      { run: { kind: MARKDOWN_RUN.CODE, text: piecesWords(inner).replace(HTML_SPACE, " ") } },
+    ];
+  }
+
+  const runs = () => runsOnly(inlinesOf(inner, marks, reader));
+  const href = token.attributes.get("href");
+
+  if (href === undefined) return runs().map((run) => ({ run }));
+
+  return [{ run: linkRunOf(href, piecesWords(inner).trim(), runs, reader) }];
+}
+
+/**
+ * A line's pieces as what they draw, its raw HTML read as GitHub's page
+ * reads it: each node as it draws, words as they read with HTML's space
+ * folded, a bold, italic or struck tag marking the words it wraps until it
+ * closes, code and a link around the words they wrap, a picture and a line
+ * break where they stand, and every other tag unseen, its words kept.
+ */
+function inlinesOf(
+  pieces: readonly Piece<PhrasingContent>[],
+  marks: WordMarks,
+  reader: Reader,
+): Inline[] {
+  const inlines: Inline[] = [];
+  const open: { readonly name: string; readonly marks: Partial<WordMarks> }[] = [];
+  const marked = (): WordMarks => Object.assign({}, marks, ...open.map((each) => each.marks));
+
+  for (let at = 0; at < pieces.length; at += 1) {
+    const piece = pieces[at];
+
+    if (piece === undefined) continue;
+
+    if (piece.node !== undefined) {
+      inlines.push(...nodeInlines(piece.node, marked(), reader));
+      continue;
+    }
+
+    const { token } = piece;
+
+    if (token.kind === HTML_TOKEN.TEXT) {
+      inlines.push(
+        ...wordsRun(token.text.replace(HTML_SPACE, " "), marked()).map((run) => ({ run })),
+      );
+    } else if (token.kind === HTML_TOKEN.CLOSE) {
+      const last = open.findLastIndex((each) => each.name === token.name);
+
+      if (last !== -1) open.splice(last, 1);
+    } else if (MARK_TAGS.has(token.name)) {
+      if (!token.alone) open.push({ name: token.name, marks: MARK_TAGS.get(token.name) ?? {} });
+    } else if ((token.name === "a" || token.name === "code") && !token.alone) {
+      const end = closeAt(pieces, at, token.name);
+      inlines.push(...spanInlines(token, pieces.slice(at + 1, end), marked(), reader));
+      at = end;
+    } else if (UNSEEN_TAGS.has(token.name) && !token.alone) {
+      at = closeAt(pieces, at, token.name);
+    } else {
+      inlines.push(...tagInlines(token, marked()));
+    }
+  }
+
+  return inlines;
+}
+
+/** A line's pieces as the blocks they draw: one paragraph, its words' ends trimmed, each picture a block of its own between them. */
+function lineBlocks(pieces: readonly Piece<PhrasingContent>[], reader: Reader): MarkdownBlock[] {
+  return inlineBlocks(inlinesOf(pieces, PLAIN, reader)).map((block) =>
+    block.kind === MARKDOWN_BLOCK.PARAGRAPH ? { ...block, runs: trimmedRuns(block.runs) } : block,
+  );
+}
+
+/** A heading tag's or a cell's words, read inline, trimmed. */
+function htmlLine(inner: readonly Piece<RootContent>[], reader: Reader): MarkdownRun[] {
+  return trimmedRuns(runsOnly(inlinesOf(asInline(inner), PLAIN, reader)));
+}
+
+/** Each run of pieces a tag named `name` wraps among `pieces`, the tags of that name nested in one left inside it. */
+function wrapped<Node>(
+  pieces: readonly Piece<Node>[],
+  name: string,
+): readonly (readonly Piece<Node>[])[] {
+  const found: Piece<Node>[][] = [];
+
+  for (let at = 0; at < pieces.length; at += 1) {
+    const token = pieces[at]?.token;
+
+    if (token?.kind !== HTML_TOKEN.OPEN || token.name !== name || token.alone) continue;
+    const end = closeAt(pieces, at, name);
+    found.push(pieces.slice(at + 1, end));
+    at = end;
+  }
+
+  return found;
+}
+
+/** A `<details>` as its folded section: what its summary says, GitHub's word for it where it holds none, over the blocks it folds. */
+function detailsBlock(inner: readonly Piece<RootContent>[], reader: Reader): MarkdownBlock {
+  const at = inner.findIndex(
+    (piece) => piece.token?.kind === HTML_TOKEN.OPEN && piece.token.name === "summary",
+  );
+
+  if (at === -1) {
+    return {
+      kind: MARKDOWN_BLOCK.DETAILS,
+      summary: wordsRun(DETAILS_WORDS, PLAIN),
+      blocks: htmlBlocksOf(inner, reader),
+    };
+  }
+
+  const end = closeAt(inner, at, "summary");
+  const folded = [...inner.slice(0, at), ...inner.slice(end + 1)];
+  const summary = htmlLine(inner.slice(at + 1, end), reader);
+
+  return { kind: MARKDOWN_BLOCK.DETAILS, summary, blocks: htmlBlocksOf(folded, reader) };
+}
+
+/** A `<table>` as a table: each row's cells read inline, the first row its header, as the panel draws a table, every row as wide as the widest. */
+function htmlTableBlocks(inner: readonly Piece<RootContent>[], reader: Reader): MarkdownBlock[] {
+  const rows = wrapped(inner, "tr").map((row) =>
+    cellsOf(row).map((cell) => htmlLine(cell, reader)),
+  );
+
+  const width = Math.max(0, ...rows.map((row) => row.length));
+
+  if (width === 0) return [];
+  const columns = Array.from({ length: width }, (_, at) => at);
+
+  return [
+    {
+      kind: MARKDOWN_BLOCK.TABLE,
+      align: columns.map(() => COLUMN_ALIGN.START),
+      rows: rows.map((row) => columns.map((at) => row[at] ?? [])),
+    },
+  ];
+}
+
+/** A row's cells in the order they stand, a header's and a body's alike. */
+function cellsOf(row: readonly Piece<RootContent>[]): readonly (readonly Piece<RootContent>[])[] {
+  const cells: Piece<RootContent>[][] = [];
+
+  for (let at = 0; at < row.length; at += 1) {
+    const token = row[at]?.token;
+
+    if (token?.kind !== HTML_TOKEN.OPEN || (token.name !== "th" && token.name !== "td")) continue;
+    const end = closeAt(row, at, token.name);
+    cells.push(row.slice(at + 1, end));
+    at = end;
+  }
+
+  return cells;
+}
+
+/** A `<ul>` or an `<ol>` as a list, each `<li>` an item of its own blocks, a numbered one counting from its `start`. */
+function htmlListBlock(
+  token: Extract<HtmlToken, { kind: "open" }>,
+  inner: readonly Piece<RootContent>[],
+  reader: Reader,
+): MarkdownBlock {
+  const start = Number.parseInt(token.attributes.get("start") ?? "1", 10);
+
+  return {
+    kind: MARKDOWN_BLOCK.LIST,
+    start: token.name === "ol" ? (Number.isNaN(start) ? 1 : start) : undefined,
+    items: wrapped(inner, "li").map((item) => ({
+      checked: undefined,
+      blocks: htmlBlocksOf(item, reader),
+    })),
+  };
+}
+
+/** What a block tag of GitHub's draws from the pieces it wraps; none for a tag that is no block's. */
+function htmlTagBlocks(
+  token: Extract<HtmlToken, { kind: "open" }>,
+  inner: readonly Piece<RootContent>[],
+  reader: Reader,
+): MarkdownBlock[] | undefined {
+  const level = HEADING_TAGS.get(token.name);
+
+  if (level !== undefined) {
+    return [{ kind: MARKDOWN_BLOCK.HEADING, level, runs: htmlLine(inner, reader) }];
+  }
+
+  switch (token.name) {
+    case "details":
+      return [detailsBlock(inner, reader)];
+    case "table":
+      return htmlTableBlocks(inner, reader);
+    case "ul":
+    case "ol":
+      return [htmlListBlock(token, inner, reader)];
+    case "blockquote":
+      return [{ kind: MARKDOWN_BLOCK.QUOTE, blocks: htmlBlocksOf(inner, reader) }];
+    case "pre":
+      return [
+        { kind: MARKDOWN_BLOCK.CODE, text: piecesWords(asInline(inner)).replace(/^\n/u, "") },
+      ];
+    case "hr":
+      return [{ kind: MARKDOWN_BLOCK.RULE }];
+    default:
+      return UNSEEN_TAGS.has(token.name) ? [] : undefined;
+  }
+}
+
+/**
+ * Blocks of GitHub's words, read across the raw HTML among them as
+ * GitHub's page reads it: each Markdown node as it draws; a folded
+ * section, a table, a list, a quote, preformatted words, a heading and a
+ * rule from their tags; a paragraph's tag ending the words before it; and
+ * every other tag and its words read into the line around them
+ * (`inlinesOf`), so a tag the app draws nothing for is unseen, never
+ * printed.
+ */
+function htmlBlocksOf(pieces: readonly Piece<RootContent>[], reader: Reader): MarkdownBlock[] {
+  const blocks: MarkdownBlock[] = [];
+  let line: Piece<PhrasingContent>[] = [];
+
+  const close = () => {
+    blocks.push(...lineBlocks(line, reader));
+    line = [];
+  };
+
+  for (let at = 0; at < pieces.length; at += 1) {
+    const piece = pieces[at];
+
+    if (piece === undefined) continue;
+
+    if (piece.node !== undefined) {
+      close();
+      blocks.push(...blockOf(piece.node, reader));
+      continue;
+    }
+
+    const { token } = piece;
+
+    const end =
+      token.kind === HTML_TOKEN.OPEN && !token.alone ? closeAt(pieces, at, token.name) : at;
+
+    const drawn =
+      token.kind === HTML_TOKEN.OPEN
+        ? htmlTagBlocks(token, pieces.slice(at + 1, end), reader)
+        : undefined;
+
+    if (drawn !== undefined) {
+      close();
+      blocks.push(...drawn);
+      at = end;
+    } else if (token.kind !== HTML_TOKEN.TEXT && BOUNDARY_TAGS.has(token.name)) {
+      close();
+    } else {
+      line.push({ token });
+    }
+  }
+
+  close();
+
+  return blocks;
 }
 
 /** A chip as VoiceOver hears it where nothing more is known of it: by its kind and name. */
@@ -795,9 +1269,9 @@ export function heardLine(
  */
 export function markdownShows(
   words: string,
-  { hidesHtml }: Pick<MarkdownReading, "hidesHtml">,
+  { githubHtml }: Pick<MarkdownReading, "githubHtml">,
 ): boolean {
-  return markdownBlocks(words, { repository: null, now: 0, zone: "UTC", hidesHtml }).length > 0;
+  return markdownBlocks(words, { repository: null, now: 0, zone: "UTC", githubHtml }).length > 0;
 }
 
 /** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */

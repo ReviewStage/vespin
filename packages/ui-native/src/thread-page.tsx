@@ -198,6 +198,8 @@ type ThreadPageProps = {
   readonly opening?: readonly ThreadEvent[] | undefined;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
+  /** Whether its messages are GitHub's, a review thread's comments, whose raw HTML is read as GitHub's page draws it, every other tag unseen. */
+  readonly githubHtml?: boolean | undefined;
   /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
   readonly onOpenLink: (address: string) => void;
   /** The address a picture its words draw is drawn from, by the address they name it by; none while it is on its way, and `null` where it could not be read. */
@@ -462,6 +464,7 @@ function MessageView({
   message,
   head,
   repository,
+  githubHtml,
   onOpenLink,
   pictureSource,
   onRetryPicture,
@@ -595,6 +598,7 @@ function MessageView({
                 <Markdown
                   words={message.words}
                   repository={repository}
+                  githubHtml={githubHtml}
                   onOpenLink={onOpenLink}
                   typed={message.typed}
                   pictureSource={pictureSource}
