@@ -1,0 +1,12 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPad Pro 11 M5 (lane C) - iOS 27.2 - BB0F23AB-3D97-4DED-AF5D-40A183B41894
+ > Flow fhdr-p
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Set orientation PORTRAIT... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that "invite-test-plan\.pdf.*" is visible... COMPLETED
+Wait for animation to end within 3000 ms... COMPLETED
+Take screenshot hdr-portrait... COMPLETED

@@ -1,0 +1,50 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2805c96b (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPad Pro 11 M5 (lane C) - iOS 27.2 - BB0F23AB-3D97-4DED-AF5D-40A183B41894
+ > Flow .kbd-manager-thread
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=81e2a425-6d3f-4a07-92df-9eafb0c1d2e8})... COMPLETED
+Assert that "Left before it ships.*" is visible... COMPLETED
+Assert that "On it. The invitations agent has its pull request open.*" is visible... COMPLETED
+Assert that "2 replies" is visible... COMPLETED
+Assert that "Which pull request is it?" is not visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot manager-chat-channel... COMPLETED
+Tap on "2 replies"... COMPLETED
+Assert that "Which pull request is it?" is visible... COMPLETED
+Assert that "Thread" is visible... COMPLETED
+Assert that "#128, Invite a teammate by email.*" is visible... COMPLETED
+Assert that "On it. The invitations agent has its pull request open.*" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot manager-thread-open... COMPLETED
+Tap on id: composer-field... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text Thanks, reviewing it now.... COMPLETED
+Assert that "Send", enabled is visible... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Thanks, reviewing it now." is visible... COMPLETED
+Assert that "3 replies" is visible... COMPLETED
+Run subflows/lower-keyboard.yaml...
+  Swipe from (50%, 50%) to (50%, 40%) in 400 ms... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/lower-keyboard.yaml... COMPLETED
+Take screenshot manager-thread-replied... COMPLETED
+Tap on "Back"... COMPLETED
+Assert that "3 replies" is visible... COMPLETED
+Assert that "Thanks, reviewing it now." is not visible... COMPLETED
+Long press on "Left before it ships.*"... COMPLETED
+Tap on "Reply in thread"... COMPLETED
+Assert that "Thread" is visible... COMPLETED
+Assert that "Left before it ships.*" is visible... COMPLETED
+Assert that "2 replies" is not visible... COMPLETED
+Take screenshot manager-thread-empty... COMPLETED
+Tap on "Back"...
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjipadmain/p10743-ipad27-light-manager-thread/2026-11-26_165404
