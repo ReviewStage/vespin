@@ -110,6 +110,8 @@ export interface OptionMediaDoors {
   readonly openPage: (page: InboxOptionPage) => void;
   readonly openLink: (address: string) => void;
   readonly openVideoElsewhere: () => void;
+  /** The repository of what holds the thread, `owner/name`, whose GitHub pages a step's words draw as its files' chips. */
+  readonly repository: string | null | undefined;
 }
 
 /** What a picture's, a recording's, and a sound clip's tile is called where its agent gave it no caption, as the CLI names each. */
@@ -253,6 +255,8 @@ export function OpenAskCard({
         steps={ask.steps.length === 0 ? [item.title] : ask.steps}
         ticked={ticked}
         onToggle={(at) => onDraft(withStep(ask, draft, at))}
+        repository={doors.repository}
+        onOpenLink={doors.openLink}
         acts={[
           { label: ASK_PRESS.DONE, symbol: GLYPH.CHECK, onPress: () => press(INBOX_REPLY.DONE) },
           {
