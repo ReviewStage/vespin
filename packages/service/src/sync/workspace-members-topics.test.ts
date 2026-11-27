@@ -122,13 +122,16 @@ it.effect(
           [TOPIC.ACCOUNT, teammate],
         ];
 
+        // Note that a membership also wakes what waits on the teammate, which their account's own row does not.
+        const membership: readonly SyncTopic[] = [...moved, [TOPIC.ACCOUNT_INBOX, teammate]];
+
         yield* wakesTheWorkspace(
           Effect.promise(() =>
             plugin.api.addMember({
               body: { userId: teammate, organizationId: workspaceId, role: WORKSPACE_ROLE.MEMBER },
             }),
           ),
-          moved,
+          membership,
           reader,
         );
         yield* wakesTheWorkspace(
@@ -146,10 +149,10 @@ it.effect(
         );
         yield* wakesTheWorkspace(
           setWorkspaceMemberRole(workspaceId, teammate, WORKSPACE_ROLE.ADMIN),
-          moved,
+          membership,
           reader,
         );
-        yield* wakesTheWorkspace(removeWorkspaceMember(workspaceId, teammate), moved, reader);
+        yield* wakesTheWorkspace(removeWorkspaceMember(workspaceId, teammate), membership, reader);
       }).pipe(Effect.provide(plugin.database));
     }),
 );
@@ -244,7 +247,7 @@ it.effect(
             nextRunAt: null,
             webhookSecretHash: null,
           }),
-          [workspace, [TOPIC.ACCOUNT, teammate]],
+          [workspace, [TOPIC.ACCOUNT, teammate], [TOPIC.ACCOUNT_INBOX, teammate]],
           reader,
           [workspaceInvitationsRead],
         );
@@ -256,7 +259,14 @@ it.effect(
             ),
             Result.getOrThrow,
           ),
-          [[TOPIC.AGENT, agentId], ...onTheTask, [TOPIC.ACCOUNT, owner], [TOPIC.ACCOUNT, teammate]],
+          [
+            [TOPIC.AGENT, agentId],
+            ...onTheTask,
+            [TOPIC.ACCOUNT, owner],
+            [TOPIC.ACCOUNT, teammate],
+            [TOPIC.ACCOUNT_INBOX, owner],
+            [TOPIC.ACCOUNT_INBOX, teammate],
+          ],
           reader,
           [workspaceInvitationsRead],
         );

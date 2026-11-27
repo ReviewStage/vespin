@@ -168,12 +168,23 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
       Effect.gen(function* () {
         const world = yield* openAutomationWorld;
         const workspace: SyncTopic = [TOPIC.WORKSPACE, world.workspaceId];
-        const owners: readonly SyncTopic[] = [workspace, [TOPIC.ACCOUNT, world.owner]];
+
+        const owners: readonly SyncTopic[] = [
+          workspace,
+          [TOPIC.ACCOUNT, world.owner],
+          [TOPIC.ACCOUNT_INBOX, world.owner],
+        ];
+
         const newcomer = yield* openAccount;
 
         yield* wakesTheTeammate(
           joinWorkspace(world.workspaceId, newcomer),
-          [workspace, [TOPIC.WORKSPACE_PEOPLE, world.workspaceId], [TOPIC.ACCOUNT, newcomer]],
+          [
+            workspace,
+            [TOPIC.WORKSPACE_PEOPLE, world.workspaceId],
+            [TOPIC.ACCOUNT, newcomer],
+            [TOPIC.ACCOUNT_INBOX, newcomer],
+          ],
           world,
         );
         const made = yield* wakesTheTeammate(makeAutomation(world), owners, world);
