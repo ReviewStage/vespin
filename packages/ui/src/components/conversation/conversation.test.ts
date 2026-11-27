@@ -185,6 +185,7 @@ test("a log's room at its end is the one its block's class says, and follows the
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (className?: string) =>
     root.render(
       createElement(
@@ -202,6 +203,7 @@ test("a log's room at its end is the one its block's class says, and follows the
         ),
       ),
     );
+
   // One line of 100px, and the room past it the class says.
   const rowsHeight = () =>
     container.querySelector<HTMLElement>(".ui-virtual-rows")?.style.height ??
