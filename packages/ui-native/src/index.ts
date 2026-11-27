@@ -47,6 +47,8 @@ export {
   type ListScopes,
   PriorityChip,
   SCOPE_LOOK,
+  SCOPE_PLACE,
+  ScopeControl,
   type Scope,
   type ScopeLook,
   ScopePicker,

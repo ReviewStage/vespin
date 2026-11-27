@@ -1,0 +1,33 @@
+# search-scope-shot.yaml -- RIG ONLY (STAG-5203): one launch of Search under the scope variant `${VARIANT}`, "rounding" typed with the keyboard up, shot as `scope-${VARIANT}`.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      scopeVariant: ${VARIANT}
+      scopeLift: ${LIFT}
+- extendedWaitUntil:
+    visible: "Inbox"
+    timeout: 30000
+- runFlow:
+    when:
+      visible:
+        id: "search-tab"
+    commands:
+      - tapOn:
+          id: "search-tab"
+- runFlow:
+    when:
+      notVisible: "Search Vespin"
+    commands:
+      - tapOn:
+          text: "Search"
+          rightOf: "Tasks"
+- tapOn: "Search Vespin"
+- inputText: "rounding"
+- extendedWaitUntil:
+    visible: "Ledger rounding"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: scope-${VARIANT}

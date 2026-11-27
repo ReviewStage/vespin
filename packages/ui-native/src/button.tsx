@@ -5,6 +5,7 @@ import {
   Image,
   Menu,
   Picker,
+  ScrollView,
   Button as SwiftUIButton,
   Toggle,
   VStack,
@@ -238,7 +239,63 @@ export type Scope = {
 export const SCOPE_LOOK = {
   SEGMENTED: "segmented",
   MENU: "menu",
+  CHIPS: "chips",
 } as const;
+
+/** Where a `ScopePicker` stands its scopes: over what they scope, or under it, at the foot by a bottom search field. */
+export const SCOPE_PLACE = {
+  TOP: "top",
+  FOOT: "foot",
+} as const;
+
+export type ScopePlace = (typeof SCOPE_PLACE)[keyof typeof SCOPE_PLACE];
+
+/** What VoiceOver hears a chosen scope chip stand as. */
+const CHOSEN_HEARD = "Selected";
+
+/**
+ * A list's scopes as a row of the system's glass capsules, scrolling sideways
+ * where they outrun the width, as Photos' and Slack's search stand theirs:
+ * the chosen one filled in the accent, the rest clear glass in the ink.
+ */
+function ScopeChips({ label, scopes }: ListScopes) {
+  const colors = useColors();
+
+  return (
+    <ScrollView
+      axes="horizontal"
+      showsIndicators={false}
+      modifiers={[accessibilityLabel(label)]}
+    >
+      <HStack
+        spacing={SPACE.TIGHT * 2}
+        modifiers={[padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT, bottom: SPACE.TIGHT * 2 })]}
+      >
+        {scopes.map((scope) => (
+          <SwiftUIButton
+            key={scope.label}
+            onPress={scope.onPress}
+            modifiers={[
+              buttonStyle(scope.selected ? "glassProminent" : "glass"),
+              tint(scope.selected ? colors.ACCENT : colors.TEXT),
+              ...(scope.selected ? [accessibilityValue(CHOSEN_HEARD)] : []),
+            ]}
+          >
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE, weight: scope.selected ? "semibold" : "medium" }),
+                foregroundStyle(scope.selected ? colors.ON_ACCENT : colors.TEXT_BODY),
+                lineLimit(1),
+              ]}
+            >
+              {segmentWords(scope)}
+            </Text>
+          </SwiftUIButton>
+        ))}
+      </HStack>
+    </ScrollView>
+  );
+}
 
 export type ScopeLook = (typeof SCOPE_LOOK)[keyof typeof SCOPE_LOOK];
 
@@ -266,6 +323,8 @@ export type ListScopes = {
  * chosen and opening the others.
  */
 export function ScopeControl({ label, scopes, look = SCOPE_LOOK.SEGMENTED }: ListScopes) {
+  if (look === SCOPE_LOOK.CHIPS) return <ScopeChips label={label} scopes={scopes} />;
+
   const chosen = scopes.find((scope) => scope.selected);
 
   return (
@@ -300,15 +359,19 @@ export function ScopeControl({ label, scopes, look = SCOPE_LOOK.SEGMENTED }: Lis
  */
 export function ScopePicker({
   children,
+  place = SCOPE_PLACE.TOP,
   ...control
 }: ListScopes & {
   /** What the control scopes: what stands in a list's place while it lists nothing, or a form. */
   readonly children: ReactNode;
+  /** Where the scopes stand: over it, or under it by a bottom search field. */
+  readonly place?: ScopePlace | undefined;
 }) {
   return (
     <VStack spacing={0}>
-      <ScopeControl {...control} />
+      {place === SCOPE_PLACE.TOP ? <ScopeControl {...control} /> : null}
       {children}
+      {place === SCOPE_PLACE.FOOT ? <ScopeControl {...control} /> : null}
     </VStack>
   );
 }

@@ -1,0 +1,28 @@
+# search-scope.yaml -- RIG ONLY (STAG-5203): Search's scope control in each mockup variant, on the Inbox fixture's synthetic data, each shot with "rounding" typed and the keyboard up: the current menu picker, a scope bar at the top, chips at the top, chips at the foot over the field (SwiftUI's own safe area), and chips lifted over the keyboard by a measured offset.
+appId: dev.vespin.ios
+---
+- runFlow:
+    file: search-scope-shot.yaml
+    env:
+      VARIANT: menu
+      LIFT: "64"
+- runFlow:
+    file: search-scope-shot.yaml
+    env:
+      VARIANT: bar-top
+      LIFT: "64"
+- runFlow:
+    file: search-scope-shot.yaml
+    env:
+      VARIANT: chips-top
+      LIFT: "64"
+- runFlow:
+    file: search-scope-shot.yaml
+    env:
+      VARIANT: chips-foot
+      LIFT: "64"
+- runFlow:
+    file: search-scope-shot.yaml
+    env:
+      VARIANT: chips-lift
+      LIFT: "64"

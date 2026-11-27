@@ -59,13 +59,18 @@ import {
   RowForEach,
   RowList,
   type RowSubmenu,
+  InlineHost,
   SCOPE_LOOK,
+  SCOPE_PLACE,
+  ScopeControl,
+  ScopePicker,
   Screen,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
+import { Dimensions, Keyboard, Settings, View } from "react-native";
 import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { AUTOMATIONS_ROUTE, automationRoute } from "../automations/automation-routes.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
@@ -446,8 +451,8 @@ function FoundList({
   readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Archive and Permanently delete on an agent found, each asked first by its row, as a task's Agents ask. */
   readonly asking: AgentAsking;
-  /** The scopes the results list under, standing as the list's first row. */
-  readonly scopes: ListScopes;
+  /** The scopes the results list under, standing as the list's first row; none where they stand apart from it. */
+  readonly scopes: ListScopes | undefined;
   /** What stands over the list while the scope found nothing. */
   readonly empty?: ReactNode | undefined;
   /** What stands under the rows found: the places Go to names and the row that starts a task. */
@@ -697,6 +702,48 @@ function useSearchTabShown(): boolean {
  * every listing on each delivery with nothing typed cost every tap in the
  * app.
  */
+/** RIG ONLY: which scope placement a rig launch draws (`-scopeVariant`), for STAG-5203's mockups. */
+const SCOPE_VARIANT = {
+  MENU: "menu",
+  BAR_TOP: "bar-top",
+  CHIPS_TOP: "chips-top",
+  CHIPS_FOOT: "chips-foot",
+  CHIPS_LIFT: "chips-lift",
+} as const;
+
+type ScopeVariant = (typeof SCOPE_VARIANT)[keyof typeof SCOPE_VARIANT];
+
+/** RIG ONLY: the variant a launch names, the current menu where none is named. */
+function scopeVariant(): ScopeVariant {
+  const named: unknown = Settings.get("scopeVariant");
+  const known: readonly unknown[] = Object.values(SCOPE_VARIANT);
+  return known.includes(named) ? (named as ScopeVariant) : SCOPE_VARIANT.MENU;
+}
+
+/** RIG ONLY: how far over the keyboard's top the lifted chips stand (`-scopeLift`), clearing the system's bottom search field. */
+function scopeLift(): number {
+  const named = Number(Settings.get("scopeLift"));
+  return Number.isFinite(named) && named > 0 ? named : 64;
+}
+
+/** RIG ONLY: the keyboard's height while it stands, none while it is down. */
+function useKeyboardHeight(): number {
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    const shown = Keyboard.addListener("keyboardWillChangeFrame", (event) =>
+      setHeight(Math.max(0, Dimensions.get("window").height - event.endCoordinates.screenY)),
+    );
+    const hidden = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
+    return () => {
+      shown.remove();
+      hidden.remove();
+    };
+  }, []);
+
+  return height;
+}
+
 function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => void) {
   const found = useSearchFound(query);
   const compact = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
@@ -727,14 +774,17 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   const empty = none && (reading !== undefined || unread !== undefined || found.current);
 
   // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away, a miss saying it in Apple's own words under the query. The list stands even where the scope found nothing, its words its one row, so a pull still reads the workspace again.
-  const results = (
+  const variant = scopeVariant();
+  const menuScopes: ListScopes = {
+    label: SCOPE_LABEL,
+    scopes,
+    look: compact ? SCOPE_LOOK.MENU : SCOPE_LOOK.SEGMENTED,
+  };
+  const chipScopes: ListScopes = { label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.CHIPS };
+  const list = (
     <FoundList
       // Note that a compact window stands the scopes as the system's menu picker, since five segments across an iPhone cut "Automations" short (seen on the iPhone 18 Pro).
-      scopes={{
-        label: SCOPE_LABEL,
-        scopes,
-        look: compact ? SCOPE_LOOK.MENU : SCOPE_LOOK.SEGMENTED,
-      }}
+      scopes={variant === SCOPE_VARIANT.MENU ? menuScopes : undefined}
       found={found}
       query={query}
       scope={scope}
@@ -764,8 +814,23 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
       }
     />
   );
+  const results =
+    variant === SCOPE_VARIANT.BAR_TOP ? (
+      <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.SEGMENTED}>
+        {list}
+      </ScopePicker>
+    ) : variant === SCOPE_VARIANT.CHIPS_TOP ? (
+      <ScopePicker {...chipScopes}>{list}</ScopePicker>
+    ) : variant === SCOPE_VARIANT.CHIPS_FOOT ? (
+      <ScopePicker {...chipScopes} place={SCOPE_PLACE.FOOT}>
+        {list}
+      </ScopePicker>
+    ) : (
+      list
+    );
+  const lifted = variant === SCOPE_VARIANT.CHIPS_LIFT ? chipScopes : undefined;
 
-  return { listing, results, status, deletion, remind };
+  return { listing, results, lifted, status, deletion, remind };
 }
 
 /** What a typed query finds under the Stack's bar, with the questions and sheets its rows' acts raise beside it. */
@@ -773,11 +838,22 @@ function SearchStackFound({
   leave,
   ...words
 }: SearchWords & { readonly leave: (() => void) | undefined }) {
-  const { results, status, deletion, remind } = useSearchScreen(words, leave);
+  const { results, lifted, status, deletion, remind } = useSearchScreen(words, leave);
+  const keyboard = useKeyboardHeight();
 
   return (
     <>
       <Screen>{results}</Screen>
+      {lifted === undefined ? null : (
+        <View
+          style={{ position: "absolute", left: 0, right: 0, bottom: keyboard + scopeLift() }}
+          testID="scope-chips-lifted"
+        >
+          <InlineHost matchContents={{ vertical: true }}>
+            <ScopeControl {...lifted} />
+          </InlineHost>
+        </View>
+      )}
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
       {remind.sheet}
