@@ -63,6 +63,7 @@ import {
   AGENT_INBOX_READ,
   INBOX_ITEMS_READ,
   INBOX_OLDER_READ,
+  INBOX_SEARCH_READ,
   TASK_INBOX_READ,
 } from "../inbox-live.js";
 import { INSTALLED_SKILLS_READ } from "../installed-skill-live.js";
@@ -103,6 +104,7 @@ export const liveContract = {
   [ACCOUNT_INBOX_READ.name]: liveProcedure(ACCOUNT_INBOX_READ),
   [INBOX_ITEMS_READ.name]: liveProcedure(INBOX_ITEMS_READ),
   [INBOX_OLDER_READ.name]: liveProcedure(INBOX_OLDER_READ),
+  [INBOX_SEARCH_READ.name]: liveProcedure(INBOX_SEARCH_READ),
   [TASK_RECORD_READ.name]: liveProcedure(TASK_RECORD_READ),
   [TASK_PAGES_READ.name]: liveProcedure(TASK_PAGES_READ),
   [AGENT_PAGES_READ.name]: liveProcedure(AGENT_PAGES_READ),

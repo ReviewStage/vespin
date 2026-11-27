@@ -20,6 +20,7 @@ import { agentBrowserTabsRead, taskBrowserTabsRead } from "../live/reads/browser
 import { hostsRead } from "../live/reads/hosts.js";
 import { inboxItemsRead } from "../live/reads/inbox-items.js";
 import { inboxOlderRead } from "../live/reads/inbox-older.js";
+import { inboxSearchRead } from "../live/reads/inbox-search.js";
 import { installedSkillsRead } from "../live/reads/installed-skills.js";
 import { integrationStatusesRead } from "../live/reads/integration-statuses.js";
 import { machineAsksRead } from "../live/reads/machine-asks.js";
@@ -64,6 +65,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   accountInboxRead,
   inboxItemsRead,
   inboxOlderRead,
+  inboxSearchRead,
   taskInboxRead,
   agentInboxRead,
   agentTranscriptRead,

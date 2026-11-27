@@ -36,6 +36,11 @@
  * by their name or key, the latest changed first, and every agent of them,
  * the same way (`taskSearchRead`), for a window searching tasks the list may
  * not hold.
+ * `GET /api/live/inbox-search?query=` answers the inbox items the query
+ * finds by their title, their threads' words, or their holder's name, of
+ * any age, the latest changed first and at most 50, each as the account's
+ * inbox items carry one (`inboxSearchRead`), for a client searching past
+ * the items it holds.
  * `GET /api/live/task-page?workspaceId=` answers one page of a workspace's
  * settled tasks and every agent of them, the newest finished first, past
  * `beforeAt` and `beforeId` where named (`taskPageRead`), for a list that
@@ -270,6 +275,7 @@ import { agentBrowserTabsRead, taskBrowserTabsRead } from "./reads/browser-tabs.
 import { hostsRead } from "./reads/hosts.js";
 import { inboxItemsRead } from "./reads/inbox-items.js";
 import { inboxOlderRead } from "./reads/inbox-older.js";
+import { inboxSearchRead } from "./reads/inbox-search.js";
 import { installedSkillsRead } from "./reads/installed-skills.js";
 import { integrationStatusesRead } from "./reads/integration-statuses.js";
 import { machineAsksRead } from "./reads/machine-asks.js";
@@ -1133,6 +1139,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     inbox: signedIn.inbox.effect(answerBoundRead(accountInboxRead)),
     inboxItems: signedIn.inboxItems.effect(answerBoundRead(inboxItemsRead)),
     inboxOlder: signedIn.inboxOlder.effect(answerBoundRead(inboxOlderRead)),
+    inboxSearch: signedIn.inboxSearch.effect(answerBoundRead(inboxSearchRead)),
     tasks: signedIn.tasks.effect(answerBoundRead(tasksRead)),
     taskRows: signedIn.taskRows.effect(answerBoundRead(taskRowsRead)),
     taskSearch: signedIn.taskSearch.effect(answerBoundRead(taskSearchRead)),

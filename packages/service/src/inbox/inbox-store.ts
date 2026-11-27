@@ -1,4 +1,4 @@
-import { LIVE_COUNT, liveKeysIn } from "@repo/database/core/live-statement";
+import { LIVE_COUNT, liveKeysBound, liveKeysIn } from "@repo/database/core/live-statement";
 import {
   Database,
   type DatabaseServices,
@@ -6,6 +6,7 @@ import {
   type StoreFailure,
 } from "@repo/database/core/query";
 import { CURRENT_TXID } from "@repo/database/core/txid";
+import { AGENT_SHOWN_NAME, containing } from "@repo/database/models/agent-store";
 import {
   type AttachmentBody,
   attachmentBodyFields,
@@ -56,9 +57,12 @@ import {
   ACCOUNT_INBOX_READ,
   INBOX_ITEMS_READ,
   INBOX_OLDER_PAGE_SIZE,
+  INBOX_SEARCH_LIMIT,
   SCOPE_INBOX_PARTS,
 } from "@repo/features/inbox-live";
 import {
+  fieldValueWords,
+  INBOX_ASK,
   INBOX_ASK_STATUS,
   INBOX_ASK_STATUS_MOVES,
   INBOX_BOUNDS,
@@ -85,6 +89,7 @@ import {
 } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { insideCode } from "@repo/features/mention-link";
+import { searchTokens } from "@repo/features/search-tokens";
 import {
   MP4_TYPE,
   PLAYABLE_VIDEO_TYPE,
@@ -99,6 +104,7 @@ import {
   exists,
   getTableName,
   gte,
+  ilike,
   inArray,
   isNotNull,
   isNull,
@@ -2000,16 +2006,6 @@ export function accountOlderItemsPage(
 }
 
 /**
- * Whether an item is one `keys` names, the keys bound as one JSON value
- * whatever their count. Note that it does not fold no keys into `false` as
- * `liveKeysIn` does, so a page's statements plan alike for every page, an
- * empty one included, and read every table they declare on each.
- */
-function itemKeyedBy(keys: readonly string[]): SQL {
-  return sql`${inboxItem.id} in (select jsonb_array_elements_text(${JSON.stringify(keys)}::jsonb)::uuid)`;
-}
-
-/**
  * The older items among `keys` the account may read, as a statement
  * selects their ids. Note that the keys are a bookmark, never a grant: an
  * item stands only where the rule that found it still keeps it.
@@ -2018,7 +2014,7 @@ export function accountOlderItemsKeyed(reader: AccountItemsReader, keys: readonl
   return sql`${queryBuilder
     .select({ id: inboxItem.id })
     .from(inboxItem)
-    .where(and(itemKeyedBy(keys), accountOlderItems(reader)))}`;
+    .where(and(liveKeysBound(inboxItem.id, keys), accountOlderItems(reader)))}`;
 }
 
 /**
@@ -2032,7 +2028,10 @@ export function accountOlderItemsPageStatements(
   reader: AccountItemsReader,
   keys: readonly string[],
 ) {
-  return stampsAndItemsOf(reader.userId, and(itemKeyedBy(keys), accountOlderItems(reader)));
+  return stampsAndItemsOf(
+    reader.userId,
+    and(liveKeysBound(inboxItem.id, keys), accountOlderItems(reader)),
+  );
 }
 
 /** The account's items `narrowed` keeps, as `accountItemsLiveStatements` reads them, those `changed` keeps among them whole. */
@@ -2134,6 +2133,201 @@ export function accountItemsPageStatements(
   keys: readonly string[],
 ) {
   return accountItemsOf(reader, liveKeysIn(inboxItem.id, keys), gte(inboxItem.updatedAt, since));
+}
+
+/** A jsonb value as an array of its elements, none where it is no array, so a message of another shape reads as offering no words rather than failing the statement. */
+function jsonArray(value: SQL): SQL {
+  return sql`(case when jsonb_typeof(${value}) = 'array' then ${value} else '[]'::jsonb end)`;
+}
+
+/** Whether any text element of a jsonb array holds `pattern`. */
+function anyTextHolding(array: SQL, pattern: string): SQL {
+  return sql`exists (select 1 from jsonb_array_elements_text(${jsonArray(array)}) as said(words) where said.words ilike ${pattern})`;
+}
+
+/** Whether any object of a jsonb array holds `pattern` in what `words` reads of it, which names the object `each`. */
+function anyObjectHolding(array: SQL, words: (each: SQL) => SQL): SQL {
+  return sql`exists (select 1 from jsonb_array_elements(${jsonArray(array)}) as listed(each) where ${words(sql`listed.each`)})`;
+}
+
+/** The words a boolean form value reads as, as `fieldValueWords` writes them, which no jsonb text of it holds. */
+const BOOLEAN_WORDS = { TRUE: fieldValueWords(true), FALSE: fieldValueWords(false) } as const;
+
+/** Whether a form value that is a boolean reads as words holding `pattern` (`BOOLEAN_WORDS`). */
+function booleanValueHolding(value: SQL, pattern: string): SQL {
+  return sql`(jsonb_typeof(${value}) = 'boolean' and (case when ${value} = 'true'::jsonb then ${BOOLEAN_WORDS.TRUE} else ${BOOLEAN_WORDS.FALSE} end) ilike ${pattern})`;
+}
+
+/**
+ * Characters jsonb's text may write escaped, a quote, a backslash, or a
+ * control character, so a word holding one is found in a path but not in the text.
+ */
+const JSON_ESCAPED = /["\\\p{Cc}]/u;
+
+/**
+ * Whether a jsonb value's whole text holds `pattern`, which it does wherever
+ * any path of it does: a cheap guard before its arrays are unpacked. Note
+ * that a token holding a character the text escapes (`JSON_ESCAPED`) takes
+ * no guard, since its text would hold the escape rather than the character.
+ */
+function jsonTextMayHold(value: SQL, token: string, pattern: string): SQL {
+  return JSON_ESCAPED.test(token) ? sql`true` : sql`(${value}::text ilike ${pattern})`;
+}
+
+/**
+ * The condition that the message a statement reads holds `pattern` in what
+ * it says, as the client's search reads a message (`inboxItemWords`): its
+ * text; its ask's words, a decision's options and the trade-off under each,
+ * a to-do's steps, and a form's field labels and a select's options, for an
+ * ask of a type this build knows; and its answer's choices and each value's
+ * label and words. Each is read from its own path in the jsonb, never the
+ * whole of it, so a key, an id, or a type matches nothing.
+ *
+ * Note that each jsonb path is read only once the whole of its jsonb's
+ * text holds the pattern (`jsonTextMayHold`), because a word any path
+ * holds its text holds too, but for a boolean value's words, read apart, and the text is read in a scan where unpacking
+ * every message's arrays is not: some four times as slow on the account
+ * measured.
+ *
+ * Note too that the text and the steps are matched as stored, their markdown
+ * and files' markers included, where the client reads the plain words they
+ * draw (`plainWords`, `markersAsNames`), since SQL cannot read markdown as
+ * the client does and no column keeps the plain words. So a word only a
+ * link's address, a fence's language, or a marker's lead holds is found
+ * too, which costs one of the search's hits and no more, because a client
+ * runs its own search (`searchedItem`) over the hits it joins, and a word a
+ * mark or an escape breaks (`foo**bar**` searched as "foobar") is not.
+ */
+function messageHolding(token: string, pattern: string): SQL {
+  const ask = sql`${inboxMessage.ask}`;
+  const answers = sql`${inboxMessage.answers}`;
+  const askType = sql`(${ask} ->> 'type')`;
+
+  const asked = sql`(
+    (${askType} = ${INBOX_ASK.DECIDE} and ${anyObjectHolding(sql`(${ask} -> 'options')`, (each) => sql`(${each} ->> 'label' ilike ${pattern} or ${each} ->> 'detail' ilike ${pattern})`)})
+    or (${askType} = ${INBOX_ASK.DO} and ${anyTextHolding(sql`(${ask} -> 'steps')`, pattern)})
+    or (${askType} = ${INBOX_ASK.ANSWER} and ${anyObjectHolding(sql`(${ask} -> 'fields')`, (each) => sql`(${each} ->> 'label' ilike ${pattern} or ${anyTextHolding(sql`(${each} -> 'options')`, pattern)})`)})
+  )`;
+
+  const values = sql`(${answers} -> 'values')`;
+
+  // A value that is no boolean is read as its own text, as `fieldValueWords` reads it.
+  const answered = sql`(
+    ${anyTextHolding(sql`(${answers} -> 'choices')`, pattern)}
+    or ${anyObjectHolding(values, (each) => sql`(${each} ->> 'label' ilike ${pattern} or (jsonb_typeof(${each} -> 'value') <> 'boolean' and ${each} -> 'value' #>> '{}' ilike ${pattern}))`)}
+  )`;
+
+  // Note that a boolean's words stand in no jsonb text, so they are read past the guard, and only for a word they can hold.
+  const yesOrNo = Object.values(BOOLEAN_WORDS).some((words) => words.includes(token))
+    ? anyObjectHolding(values, (each) => booleanValueHolding(sql`(${each} -> 'value')`, pattern))
+    : sql`false`;
+
+  return sql`(${inboxMessage.text} ilike ${pattern} or (${jsonTextMayHold(ask, token, pattern)} and ${asked}) or (${jsonTextMayHold(answers, token, pattern)} and ${answered}) or ${yesOrNo})`;
+}
+
+/**
+ * The condition that the item a statement reads holds `token` in its
+ * title, in a message of its thread (`messageHolding`), or in its holder's
+ * name: its task's, or, for an item on no task, the name its agent is shown
+ * by, as the client's search reads an item's words beside its holder's
+ * (`inboxItemWords`, `holderName`). Note that every message of the thread is
+ * read, where a client holds only the messages its thread draws.
+ */
+function itemHolding(token: string): SQL | undefined {
+  const pattern = containing(token);
+
+  const inThread = exists(
+    queryBuilder
+      .select({ one: inboxMessage.id })
+      .from(inboxMessage)
+      .where(and(eq(inboxMessage.itemId, inboxItem.id), messageHolding(token, pattern))),
+  );
+
+  const inTaskName = exists(
+    queryBuilder
+      .select({ one: task.id })
+      .from(task)
+      .where(and(eq(task.id, inboxItem.taskId), ilike(task.name, pattern))),
+  );
+
+  const inAgentName = and(
+    isNull(inboxItem.taskId),
+    exists(
+      queryBuilder
+        .select({ one: agentTable.id })
+        .from(agentTable)
+        .where(and(eq(agentTable.id, inboxItem.agentId), ilike(AGENT_SHOWN_NAME, pattern))),
+    ),
+  );
+
+  return or(ilike(inboxItem.title, pattern), inThread, inTaskName, inAgentName);
+}
+
+/** Whose items an Inbox search finds: the reader's, those on no task only where `taskless`, as `AccountItemsReader` names them, of any age. */
+export interface InboxSearchReader {
+  readonly userId: string;
+  readonly taskless: boolean;
+}
+
+/**
+ * The inbox items a search's `query` finds, by id, the latest changed first:
+ * every item the account may read (`itemVisibleTo`), those on no task only
+ * where `taskless`, of any age, every word of the query (`searchTokens`, as
+ * the client splits one) held by its title, its thread, or its holder's name
+ * (`itemHolding`), each word by any of them, at most `INBOX_SEARCH_LIMIT`. A
+ * query of no words finds none, and reads nothing. Note that the words are
+ * bound as parameters, never written into the statement's text, so a span
+ * naming the statement names no word searched; and that the text is matched
+ * by a scan of the reader's items' messages, with no index of its own, which
+ * is why it is read once, by the read's `serve`, rather than within each of
+ * its parts' statements.
+ */
+export function findInboxSearchHits(
+  { userId, taskless }: InboxSearchReader,
+  query: string,
+): InboxStoreEffect<readonly string[]> {
+  const tokens = searchTokens(query);
+
+  if (tokens.length === 0) return Effect.succeed([]);
+
+  return Effect.map(findSearchHits({ userId, taskless, tokens }), (rows) =>
+    rows.map((row) => row.id),
+  );
+}
+
+const findSearchHits = SqlSchema.findAll({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    taskless: Schema.Boolean,
+    tokens: Schema.Array(Schema.String),
+  }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, taskless, tokens }) =>
+    Database.use((db) =>
+      db
+        .select({ id: inboxItem.id })
+        .from(inboxItem)
+        .where(
+          and(
+            itemVisibleTo(userId),
+            taskless ? undefined : isNotNull(inboxItem.taskId),
+            ...tokens.map(itemHolding),
+          ),
+        )
+        .orderBy(...LATEST_FIRST)
+        .limit(INBOX_SEARCH_LIMIT),
+    ),
+});
+
+/**
+ * The inbox items a search found (`findInboxSearchHits`), written for a
+ * live read as the account's inbox items are (`accountItemsLiveStatements`):
+ * each with its stamp, and whole, with its thread and files, read again on
+ * the rule of who may read an item, so an id the account does not reach is
+ * never answered.
+ */
+export function inboxSearchStatements(userId: string, found: readonly string[]) {
+  return stampsAndItemsOf(userId, and(itemVisibleTo(userId), liveKeysBound(inboxItem.id, found)));
 }
 
 /** One plan's inbox written for Neon Realtime, as `taskInboxItems` reads it. */
