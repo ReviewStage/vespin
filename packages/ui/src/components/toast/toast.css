@@ -118,14 +118,23 @@
 
   /* A toast tucked behind a newer one shows its card alone, its words and
      controls faded out of sight and out of the pointer's way, until the
-     deck fans out. */
+     deck fans out. They come back once the deck has fanned out, never while
+     it does: a tap on the strip a card peeks by is what fans it out on a
+     touch screen, and the click that ends that tap must find the card
+     moved from under the finger, not its ×, which a touch screen shows at
+     rest, or a toast would be dismissed unread. They go once faded. */
   .ui-toast-row {
-    transition: opacity var(--ui-duration-quick) var(--ui-motion-exit);
+    transition:
+      opacity var(--ui-duration-quick) var(--ui-motion-exit) var(--ui-duration-fast),
+      visibility 0s linear var(--ui-duration-fast);
   }
 
   .ui-toast-row[data-behind]:not([data-expanded]) {
     opacity: 0;
-    pointer-events: none;
+    visibility: hidden;
+    transition:
+      opacity var(--ui-duration-quick) var(--ui-motion-exit),
+      visibility 0s linear var(--ui-duration-quick);
   }
 
   /* It rises in from a step below where it stands, fading in. */
