@@ -118,6 +118,16 @@ export const ACCOUNT_ASK_ACT_KIND = {
   SOUND_REMOVE: "sound.remove",
   SOUND_CHOOSE: "sound.choose",
   /**
+   * The account's view choices (a sort, a filter, a fold): held for the
+   * window while it holds the stream open and a while after, read again at
+   * once as Try again asks, and one kept or forgotten, drawn over them the
+   * moment it is asked. What it holds reaches the panel on app state
+   * (`LIVE_READ.VIEW_CHOICES`).
+   */
+  VIEW_CHOICES_FOLLOW: "viewChoices.follow",
+  VIEW_CHOICES_RETRY: "viewChoices.retry",
+  VIEW_CHOICE_WRITE: "viewChoices.write",
+  /**
    * A clip dictated into a message box, carried once from the panel that
    * recorded it to the service and answered with its words. Nothing on the
    * way keeps it.
@@ -1169,6 +1179,9 @@ export const PORT_ACT_USE = {
   MACHINES_REMOVE: ACT_USE.WRITE,
   MACHINE_ASKS_FOLLOW: ACT_USE.READ,
   MACHINE_ASKS_RETRY: ACT_USE.READ,
+  VIEW_CHOICES_FOLLOW: ACT_USE.READ,
+  VIEW_CHOICES_RETRY: ACT_USE.READ,
+  VIEW_CHOICE_WRITE: ACT_USE.WRITE,
   MACHINE_ASK_ANSWER: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
