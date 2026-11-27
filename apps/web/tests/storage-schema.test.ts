@@ -42,6 +42,7 @@ const DECLARED_TABLES = [
   "account_provider_key",
   "account_sound",
   "account_sound_choice",
+  "account_view_choice",
   "admin_favorite",
   "agent",
   "agent_approval",

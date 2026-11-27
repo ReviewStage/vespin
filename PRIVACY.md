@@ -430,6 +430,12 @@ start from, and a sound is sent only to apps signed in to your account.
 You can rename or remove each one in the same place, and all of them are
 deleted with your account.
 
+How you choose to read your own lists, such as how a workspace's Managers
+are sorted, is kept with your account, so each of your signed-in apps shows
+them the same way: **which choice you made, and for which workspace**. A
+choice is read only by apps signed in to your account, never by a teammate,
+and it is deleted with the workspace it was made for or with your account.
+
 If you sign in to the Vespin iOS app and allow notifications, the app
 registers your iPhone's Apple push token with the Service, with which of
 Apple's gateways the token belongs to and the app it was issued to, and we
@@ -716,7 +722,7 @@ delete fails or does not finish in time, it may remain. A repository snapshot
 made before default-branch drives expires thirty days after its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
-  preferences, your sounds, integration records, your phones' push
+  preferences, your sounds, your view choices, integration records, your phones' push
   tokens, when you were last active at a client, and the notifications held
   for you) is deleted at once.
 - **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,

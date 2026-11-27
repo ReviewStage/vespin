@@ -111,6 +111,9 @@
  * `GET /api/live/machine-asks` answers the asks the account's machines hold
  * for its answer, each with the answer that stands on it, the account's own
  * alone; woken by an ask posted, answered, or taken down (`machineAsksRead`).
+ * `GET /api/live/view-choices` answers the account's view choices, its own
+ * and each of a workspace it is still a member of, the account's own alone;
+ * woken by a choice made, changed, or forgotten (`viewChoicesRead`).
  * `GET /api/live/installed-skills?workspaceId=` answers the skills the
  * account sees there, the workspace's and its own, each with whether it may
  * manage it, on the same membership check; woken by one of them installed,
@@ -286,6 +289,7 @@ import {
   taskSearchRead,
   tasksRead,
 } from "./reads/tasks.js";
+import { viewChoicesRead } from "./reads/view-choices.js";
 import { workspaceIntegrationsRead } from "./reads/workspace-integrations.js";
 import { workspaceInvitationsRead } from "./reads/workspace-invitations.js";
 import { workspaceMachinesRead } from "./reads/workspace-machines.js";
@@ -1169,6 +1173,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     machines: signedIn.machines.effect(answerBoundRead(machinesRead)),
     workspaceMachines: signedIn.workspaceMachines.effect(answerBoundRead(workspaceMachinesRead)),
     machineAsks: signedIn.machineAsks.effect(answerBoundRead(machineAsksRead)),
+    viewChoices: signedIn.viewChoices.effect(answerBoundRead(viewChoicesRead)),
     workspaceMemories: signedIn.workspaceMemories.effect(answerBoundRead(workspaceMemoriesRead)),
     installedSkills: signedIn.installedSkills.effect(answerBoundRead(installedSkillsRead)),
 

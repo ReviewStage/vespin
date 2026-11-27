@@ -44,6 +44,7 @@ import {
   taskSearchRead,
   tasksRead,
 } from "../live/reads/tasks.js";
+import { viewChoicesRead } from "../live/reads/view-choices.js";
 import { workspaceIntegrationsRead } from "../live/reads/workspace-integrations.js";
 import { workspaceInvitationsRead } from "../live/reads/workspace-invitations.js";
 import { workspaceMachinesRead } from "../live/reads/workspace-machines.js";
@@ -68,6 +69,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   machinesRead,
   workspaceMachinesRead,
   machineAsksRead,
+  viewChoicesRead,
   agentOriginRead,
   taskPagesRead,
   agentPagesRead,

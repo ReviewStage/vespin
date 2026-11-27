@@ -24,6 +24,7 @@
  */
 
 import { accountSound, accountSoundChoice } from "../schemas/account-sound.js";
+import { accountViewChoice } from "../schemas/account-view-choice.js";
 import { agentDelegationTable, agentTable } from "../schemas/agent.js";
 import { agentApproval } from "../schemas/agent-approval.js";
 import { agentBootTable } from "../schemas/agent-boot.js";
@@ -543,6 +544,17 @@ export const accountSoundChoiceSync = defineSyncTable(accountSoundChoice, {
 });
 
 /**
+ * One view choice the account keeps, on the account's topic, which its read
+ * of its view choices is woken on: a choice made, changed, or forgotten.
+ * Its instant is ignored, since no read carries it, so a choice made again
+ * as it stood wakes nothing.
+ */
+export const accountViewChoiceSync = defineSyncTable(accountViewChoice, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: accountViewChoice.userId }],
+  ignore: [accountViewChoice.updatedAt],
+});
+
+/**
  * One account's connection to an account at an integration, on the
  * account's integrations topic, which only its open integration reads are
  * woken on: the account's own topic would wake its task list and its inbox
@@ -995,6 +1007,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   accountPreferenceSync,
   accountSoundSync,
   accountSoundChoiceSync,
+  accountViewChoiceSync,
   integrationConnectionSync,
   runnerLineSync,
   agentQueueSync,

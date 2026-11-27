@@ -20,6 +20,7 @@
     "./models/account-store": "./src/models/account-store.js",
     "./models/account-allowed-commands": "./src/models/account-allowed-commands.js",
     "./models/account-sounds": "./src/models/account-sounds.js",
+    "./models/account-view-choices": "./src/models/account-view-choices.js",
     "./models/account-time-zone": "./src/models/account-time-zone.js",
     "./models/agent-name": "./src/models/agent-name.js",
     "./models/claude-session-entries": "./src/models/claude-session-entries.js",
