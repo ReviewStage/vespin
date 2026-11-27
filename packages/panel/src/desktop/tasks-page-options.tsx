@@ -131,6 +131,8 @@ export interface TasksViewFrame {
   readonly onDisplay: (display: TasksDisplay) => void;
   /** What the view tells the paging of settled tasks past those the list holds, while it shows them in full: a run that may hold them at its end, and whether it draws any (`use-settled-pages.ts`); none pages none. */
   readonly settledPages?: SettledPages | undefined;
+  /** Whether the run is a fixture's, whose choices the view keeps nothing of. */
+  readonly staged: boolean;
   /** Where the view's chosen tasks are held across the page's visits; the view's own while nothing outlives it. */
   readonly chosen?: ChosenTasksStore | undefined;
   /** What each run of the view's rows measured, by the run's key, held across the page's visits; none while nothing outlives the view. */

@@ -21,7 +21,20 @@
 import { type WireValue, WireValueSchema } from "@repo/wire";
 import { Option, Schema } from "effect";
 import { wireUuidSchema } from "./service-wire.js";
-import { workspaceIdSchema } from "./task-wire.js";
+import {
+  TASK_PRIORITY_ORDER,
+  TASK_STATUS,
+  TASK_STATUS_ORDER,
+  workspaceIdSchema,
+} from "./task-wire.js";
+import {
+  COMPLETED_WINDOW,
+  TASK_MAKER_ORDER,
+  TASK_PROPERTY_ORDER,
+  TASKS_GROUPING,
+  TASKS_ORDER,
+  TASKS_PAGE_VIEW,
+} from "./tasks-page-model.js";
 import { MANAGER_SORT } from "./workspace-managers-model.js";
 
 /** Whether a choice is the account's once, or one workspace's, kept for each apart. */
@@ -36,6 +49,16 @@ export type ViewChoiceScope = (typeof VIEW_CHOICE_SCOPE)[keyof typeof VIEW_CHOIC
 export const VIEW_CHOICE_KEY = {
   /** How a workspace's Managers are sorted in the sidebar (`MANAGER_SORT`). */
   MANAGER_SORT: "managerSort",
+  /** Which tasks a workspace's Tasks page holds: its Filter (`TasksFilter`). */
+  TASKS_FILTER: "tasksFilter",
+  /** Whether the Tasks page shows its List or its Board (`TASKS_PAGE_VIEW`). */
+  TASKS_PAGE_VIEW: "tasksPageView",
+  /** How the Tasks page's List lays its tasks out: its View options (`KeptTasksDisplay`). */
+  TASKS_LIST_DISPLAY: "tasksListDisplay",
+  /** How the Tasks page's Board lays its tasks out: its View options (`KeptTasksDisplay`). */
+  TASKS_BOARD_DISPLAY: "tasksBoardDisplay",
+  /** The Tasks page List's folded groups, each kind by the values its groups stand for. */
+  TASKS_LIST_FOLDS: "tasksListFolds",
 } as const;
 
 export type ViewChoiceKey = (typeof VIEW_CHOICE_KEY)[keyof typeof VIEW_CHOICE_KEY];
@@ -59,12 +82,71 @@ function viewChoice<S extends ViewChoiceSchema>(
   return { key, scope, schema };
 }
 
+/** A Tasks page's filter as kept (`TasksFilter`): for each field, the values a task must hold one of. */
+export const keptTasksFilterSchema = Schema.Struct({
+  status: Schema.optionalKey(Schema.Array(Schema.Literals(Object.values(TASK_STATUS)))),
+  priority: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PRIORITY_ORDER))),
+  assignee: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
+  creator: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
+  madeBy: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_MAKER_ORDER))),
+  repository: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
+});
+
+/** A Tasks page view's display as kept (`KeptTasksDisplay`): each choice optional, and the properties its view offered. */
+export const keptTasksDisplaySchema = Schema.Struct({
+  grouping: Schema.optionalKey(Schema.Literals(Object.values(TASKS_GROUPING))),
+  order: Schema.optionalKey(Schema.Literals(Object.values(TASKS_ORDER))),
+  emptyGroups: Schema.optionalKey(Schema.Boolean),
+  completed: Schema.optionalKey(Schema.Literals(Object.values(COMPLETED_WINDOW))),
+  pinnedFirst: Schema.optionalKey(Schema.Boolean),
+  subTasks: Schema.optionalKey(Schema.Boolean),
+  properties: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PROPERTY_ORDER))),
+  /** The properties the view offered when it was kept. */
+  offered: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PROPERTY_ORDER))),
+});
+
+/** The Tasks page List's folded groups, each kind by the values its groups stand for; absent where none is. */
+export const tasksListFoldsSchema = Schema.Struct({
+  pinned: Schema.optionalKey(Schema.Boolean),
+  sections: Schema.optionalKey(Schema.Array(Schema.String)),
+  status: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_STATUS_ORDER))),
+  priority: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PRIORITY_ORDER))),
+  repository: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
+  assignee: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
+  creator: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
+});
+
 /** Every view choice, by its key. */
 export const VIEW_CHOICE = {
   [VIEW_CHOICE_KEY.MANAGER_SORT]: viewChoice(
     VIEW_CHOICE_KEY.MANAGER_SORT,
     VIEW_CHOICE_SCOPE.WORKSPACE,
     Schema.Literals(Object.values(MANAGER_SORT)),
+  ),
+  [VIEW_CHOICE_KEY.TASKS_FILTER]: viewChoice(
+    VIEW_CHOICE_KEY.TASKS_FILTER,
+    VIEW_CHOICE_SCOPE.WORKSPACE,
+    keptTasksFilterSchema,
+  ),
+  [VIEW_CHOICE_KEY.TASKS_PAGE_VIEW]: viewChoice(
+    VIEW_CHOICE_KEY.TASKS_PAGE_VIEW,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Literals(Object.values(TASKS_PAGE_VIEW)),
+  ),
+  [VIEW_CHOICE_KEY.TASKS_LIST_DISPLAY]: viewChoice(
+    VIEW_CHOICE_KEY.TASKS_LIST_DISPLAY,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    keptTasksDisplaySchema,
+  ),
+  [VIEW_CHOICE_KEY.TASKS_BOARD_DISPLAY]: viewChoice(
+    VIEW_CHOICE_KEY.TASKS_BOARD_DISPLAY,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    keptTasksDisplaySchema,
+  ),
+  [VIEW_CHOICE_KEY.TASKS_LIST_FOLDS]: viewChoice(
+    VIEW_CHOICE_KEY.TASKS_LIST_FOLDS,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    tasksListFoldsSchema,
   ),
 } as const satisfies { readonly [Key in ViewChoiceKey]: ViewChoice<ViewChoiceSchema> };
 
