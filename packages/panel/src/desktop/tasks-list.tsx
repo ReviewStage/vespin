@@ -28,6 +28,7 @@ import type { TaskStanding, TaskSummary } from "@repo/features/task-wire";
 import { TASK_MARK } from "@repo/features/tasks-model";
 import {
   COMPLETED_WINDOW,
+  foldedIn,
   LIST_COLUMN,
   type ListColumn,
   mayHoldSettled,
@@ -40,6 +41,7 @@ import {
   type TasksSection,
   taskIdOf,
   tasksListGroups,
+  toggledFold,
 } from "@repo/features/tasks-page-model";
 import {
   noneYetWords,
@@ -132,7 +134,7 @@ import { groupCount, sidebarFold } from "./sidebar-fold.js";
 import { type OpenedTask, openedTaskOf, type TaskRowTab, useTaskRowTab } from "./task-actions.js";
 import { TaskListRow } from "./task-list-row.js";
 import { CreatorFace, useStandingDoor, WaitingCount } from "./task-row-parts.js";
-import { type ListFolds, useListFoldsChoice } from "./tasks-page-choices.js";
+import { useListFoldsChoice } from "./tasks-page-choices.js";
 import {
   assigneeFor,
   assigneeWords,
@@ -241,57 +243,6 @@ const DROP_ZONE = {
   NO_ASSIGNEE: "no-assignee",
 } as const;
 
-/** A set of folded values with one folded or opened. */
-function flipped<T>(held: readonly T[] | undefined, value: T): readonly T[] {
-  const kept = held ?? [];
-
-  return kept.includes(value) ? kept.filter((each) => each !== value) : [...kept, value];
-}
-
-/** Whether a group is folded; the run of every task has no head to fold it by. */
-function foldedIn(folds: ListFolds, head: TasksGroupHead): boolean {
-  switch (head.kind) {
-    case TASKS_GROUP.PINNED:
-      return folds.pinned === true;
-    case TASKS_GROUP.SECTION:
-      return folds.sections?.includes(head.sectionId) === true;
-    case TASKS_GROUP.STATUS:
-      return folds.status?.includes(head.status) === true;
-    case TASKS_GROUP.PRIORITY:
-      return folds.priority?.includes(head.priority) === true;
-    case TASKS_GROUP.REPOSITORY:
-      return folds.repository?.includes(head.repository) === true;
-    case TASKS_GROUP.ASSIGNEE:
-      return folds.assignee?.includes(head.assigneeId) === true;
-    case TASKS_GROUP.CREATOR:
-      return folds.creator?.includes(head.creatorId) === true;
-    case TASKS_GROUP.ALL:
-      return false;
-  }
-}
-
-/** The folds with a group folded or opened. */
-function toggledIn(folds: ListFolds, head: TasksGroupHead): ListFolds {
-  switch (head.kind) {
-    case TASKS_GROUP.PINNED:
-      return { ...folds, pinned: folds.pinned !== true };
-    case TASKS_GROUP.SECTION:
-      return { ...folds, sections: flipped(folds.sections, head.sectionId) };
-    case TASKS_GROUP.STATUS:
-      return { ...folds, status: flipped(folds.status, head.status) };
-    case TASKS_GROUP.PRIORITY:
-      return { ...folds, priority: flipped(folds.priority, head.priority) };
-    case TASKS_GROUP.REPOSITORY:
-      return { ...folds, repository: flipped(folds.repository, head.repository) };
-    case TASKS_GROUP.ASSIGNEE:
-      return { ...folds, assignee: flipped(folds.assignee, head.assigneeId) };
-    case TASKS_GROUP.CREATOR:
-      return { ...folds, creator: flipped(folds.creator, head.creatorId) };
-    case TASKS_GROUP.ALL:
-      return folds;
-  }
-}
-
 type UseListFoldsResult = {
   folded: (head: TasksGroupHead) => boolean;
   toggle: (head: TasksGroupHead) => void;
@@ -303,7 +254,7 @@ function useListFolds(staged: boolean): UseListFoldsResult {
 
   return {
     folded: (head) => foldedIn(folds, head),
-    toggle: (head) => change((standing) => toggledIn(standing, head)),
+    toggle: (head) => change((standing) => toggledFold(standing, head)),
   };
 }
 

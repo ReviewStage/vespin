@@ -3,18 +3,19 @@
  *
  * Every piece is the sidebar's own (`task-list-model.ts`,
  * `task-sections-model.ts`, `pin-order.ts`) or the Tasks page's
- * (`tasks-page-model.ts`). The tasks no pin or section holds stand under the
- * view the reader chose on the Tasks tab (`TaskTreeView`): whose they are,
- * as the sidebar's Assigned to says, which statuses, how they are grouped
- * and ordered, which finished ones stand, and whether a sub-task stands
- * beside its parent, as the Tasks page's Filter and View options say. It
- * starts as the sidebar starts: the reader's own tasks, to do and in
- * progress, grouped by repository, the pinned repositories' groups first. A
- * pin or a section is the reader's own choice, which the view never thins,
- * as the sidebar's never does.
+ * (`tasks-page-model.ts`). The tasks no pin or section holds stand as the
+ * Tasks page's List stands them, the page's own filter and display, which
+ * the phone reads and changes on the account: the filter whole, the fields
+ * the phone offers no control for among it, and the display's grouping,
+ * order, finished window, and sub-tasks (`TaskTreeView`, the phone's View
+ * options' reading of them). It starts as the page starts, every task by
+ * status, the most pressing first, the repositories' groups in the
+ * sidebar's order where it groups by repository. A pin or a section is the
+ * reader's own choice, which the view never thins, as the sidebar's never
+ * does.
  */
 
-import { Option, Schema } from "effect";
+import { Schema } from "effect";
 import { inPinOrder } from "./pin-order.js";
 import { readsUnread } from "./read-mark.js";
 import { matchesTokens } from "./search-tokens.js";
@@ -34,8 +35,6 @@ import {
   repositoryHeadingsDrawn,
   repositoryLabel,
   TASK_ORDER,
-  taskListed,
-  tasksAssignedTo,
   tasksById,
   taskTime,
   withSubTasks,
@@ -47,12 +46,14 @@ import {
   TASK_PRIORITY_WORDS,
   TASK_STATUS_WORDS,
 } from "./task-standing-words.js";
-import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
+import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 import {
   COMPLETED_WINDOW,
   type CompletedWindow,
+  DEFAULT_LIST_DISPLAY,
+  filteredFields,
+  type KeptTasksDisplay,
   standsCompleted,
-  statusOf,
   TASKS_GROUP,
   TASKS_GROUPING,
   TASKS_ORDER,
@@ -114,15 +115,15 @@ export interface TaskTree {
 }
 
 /**
- * How the reader's tasks under the Tasks tab stand, as the sidebar's View
- * options and the Tasks page's Filter and View options say it: whose they
- * are, which statuses, how they are grouped and ordered, which finished ones
- * stand, and whether a sub-task stands beside its parent rather than only
- * under it.
+ * The Tasks page's filter and List display as the phone's View options read
+ * them: whose tasks, which statuses, how they are grouped and ordered, which
+ * finished ones stand, and whether a sub-task stands beside its parent
+ * rather than only under it.
  */
 export interface TaskTreeView {
-  readonly assignedTo: AssignedTo;
-  /** The statuses kept; none keeps the work to do and under way, as the sidebar does, with the finished the completed window keeps. */
+  /** Whose tasks, as Assigned to names them; none where the page's filter names people the phone cannot, several of them. */
+  readonly assignedTo: AssignedTo | undefined;
+  /** The statuses kept; none keeps every status, as the page's filter reads it. */
   readonly statuses: readonly TaskStatus[];
   readonly grouping: TaskTreeGrouping;
   readonly order: TasksOrder;
@@ -157,15 +158,132 @@ export const TASK_TREE_COMPLETED = [
 
 type TaskTreeCompleted = (typeof TASK_TREE_COMPLETED)[number];
 
-/** The view until the reader changes it, the sidebar's own: their tasks, to do and in progress, by repository, the latest active first, nothing finished, each sub-task under its parent. */
+/** The grouping the phone stands a page's grouping it does not offer at: the page's own first one. */
+const TREE_GROUPING_FALLBACK = TASKS_GROUPING.STATUS satisfies TaskTreeGrouping;
+
+/** The view until the reader changes it, the Tasks page's own: everyone's tasks, every status, by status, the most pressing first, nothing finished, each sub-task under its parent. */
 export const DEFAULT_TASK_TREE_VIEW: TaskTreeView = {
-  assignedTo: { kind: ASSIGNED_TO.ME },
+  assignedTo: { kind: ASSIGNED_TO.ANYONE },
   statuses: [],
-  grouping: TASKS_GROUPING.REPOSITORY,
-  order: TASKS_ORDER.UPDATED,
+  grouping: TREE_GROUPING_FALLBACK,
+  order: DEFAULT_LIST_DISPLAY.order,
   completed: COMPLETED_WINDOW.NONE,
-  subTasks: false,
+  subTasks: DEFAULT_LIST_DISPLAY.subTasks,
 };
+
+/** The display's fields the phone's View options change, which Reset view puts back. */
+const TREE_DISPLAY_FIELDS = ["grouping", "order", "completed", "subTasks"] as const;
+
+/** A grouping as the phone stands it: its own where it offers it, else the page's first. */
+function treeGrouping(grouping: TasksGrouping | undefined): TaskTreeGrouping {
+  return TASK_TREE_GROUPINGS.find((each) => each === grouping) ?? TREE_GROUPING_FALLBACK;
+}
+
+/** A finished window as the phone stands it: All as the past month, the most the phone's list holds, and none where none is kept. */
+function treeCompleted(completed: CompletedWindow | undefined): TaskTreeCompleted {
+  if (completed === COMPLETED_WINDOW.ALL) return COMPLETED_WINDOW.PAST_MONTH;
+
+  return TASK_TREE_COMPLETED.find((each) => each === completed) ?? COMPLETED_WINDOW.NONE;
+}
+
+/** Whose tasks the page's filter names as Assigned to would: the reader followed, one person on them, or anyone; none for any other pick. */
+function assignedToOf(filter: TasksFilter, readerId: string | undefined): AssignedTo | undefined {
+  const assignees = filter.assignee ?? [];
+  const followers = filter.follower ?? [];
+  const [assignee] = assignees;
+
+  if (assignees.length === 0 && followers.length === 0) return { kind: ASSIGNED_TO.ANYONE };
+
+  if (assignees.length === 0 && followers.length === 1 && followers[0] === readerId)
+    return { kind: ASSIGNED_TO.FOLLOWING };
+
+  if (followers.length > 0 || assignees.length !== 1 || assignee === undefined || assignee === null)
+    return undefined;
+
+  return assignee === readerId
+    ? { kind: ASSIGNED_TO.ME }
+    : { kind: ASSIGNED_TO.MEMBER, userId: assignee };
+}
+
+/** The phone's View options' reading of the page's filter and List display, a value it does not offer standing at its nearest. */
+export function treeViewOf(
+  filter: TasksFilter,
+  display: KeptTasksDisplay,
+  readerId: string | undefined,
+): TaskTreeView {
+  return {
+    assignedTo: assignedToOf(filter, readerId),
+    statuses: filter.status ?? [],
+    grouping: treeGrouping(display.grouping),
+    order: display.order ?? DEFAULT_TASK_TREE_VIEW.order,
+    completed: treeCompleted(display.completed),
+    subTasks: display.subTasks ?? DEFAULT_TASK_TREE_VIEW.subTasks,
+  };
+}
+
+/** The filter's Assignee and Followed by as Assigned to sets them, the reader by their account. */
+function assignedFilter(assignedTo: AssignedTo, readerId: string): TasksFilter {
+  switch (assignedTo.kind) {
+    case ASSIGNED_TO.ME:
+      return { assignee: [readerId] };
+    case ASSIGNED_TO.FOLLOWING:
+      return { follower: [readerId] };
+    case ASSIGNED_TO.MEMBER:
+      return { assignee: [assignedTo.userId] };
+    case ASSIGNED_TO.ANYONE:
+      return {};
+  }
+}
+
+/**
+ * The page's filter with the phone's change made to it: the statuses where
+ * they changed, and Assignee and Followed by where Assigned to did; every
+ * other field the page keeps stands as it was.
+ */
+export function filterWithTreeView(
+  filter: TasksFilter,
+  change: Partial<TaskTreeView>,
+  readerId: string,
+): TasksFilter {
+  const { status: _status, ...unstatused } = filter;
+  const statused = change.statuses === undefined ? filter : unstatused;
+
+  const withStatuses =
+    change.statuses === undefined || change.statuses.length === 0
+      ? statused
+      : { ...statused, status: change.statuses };
+
+  if (change.assignedTo === undefined) return withStatuses;
+  const { assignee: _assignee, follower: _follower, ...unassigned } = withStatuses;
+
+  return { ...unassigned, ...assignedFilter(change.assignedTo, readerId) };
+}
+
+/** The page's List display with the phone's change made to it; every other choice the page keeps stands as it was. */
+export function displayWithTreeView(
+  display: KeptTasksDisplay,
+  change: Partial<TaskTreeView>,
+): KeptTasksDisplay {
+  const { assignedTo: _assignedTo, statuses: _statuses, ...shown } = change;
+
+  return { ...display, ...shown };
+}
+
+/** The page's List display with the phone's choices put back to the page's own; every other choice stands. */
+export function displayReset(display: KeptTasksDisplay): KeptTasksDisplay {
+  const { grouping: _grouping, order: _order, completed: _completed, ...rest } = display;
+  const { subTasks: _subTasks, ...kept } = rest;
+
+  return kept;
+}
+
+/** Whether the page's filter or the phone's reading of its display stands apart from the page's own, so Reset view offers itself only where it would change the list. */
+export function treeViewChanged(filter: TasksFilter, view: TaskTreeView): boolean {
+  return (
+    filteredFields(filter).length > 0 ||
+    TREE_DISPLAY_FIELDS.some((field) => view[field] !== DEFAULT_TASK_TREE_VIEW[field])
+  );
+}
 
 /** A kept Assigned to, as the sidebar keeps its own. */
 const keptAssignedTo = Schema.Union([
@@ -185,56 +303,38 @@ const keptTreeView = Schema.Struct({
   subTasks: Schema.optionalKey(Schema.Boolean),
 });
 
-/** Each workspace's view as a device keeps it, by the workspace's id. */
-export type KeptTreeViews = Readonly<Record<string, typeof keptTreeView.Type>>;
-
-const readKept = Schema.decodeUnknownOption(
-  Schema.fromJsonString(Schema.Record(Schema.String, keptTreeView)),
+/** Each workspace's view as an earlier build kept it on a device, by the workspace's id, as the words `NSUserDefaults` holds; a record naming a choice this build lacks reads as none. */
+export const keptTreeViewsSchema = Schema.fromJsonString(
+  Schema.Record(Schema.String, keptTreeView),
 );
 
-/**
- * Each workspace's view from the words a device kept them as, none where
- * it kept none or they read as nothing. Note that a record kept by a later build, naming a
- * choice this one lacks, reads as none, so every workspace opens on the
- * default rather than half a view.
- */
-export function readTreeViews(words: string | undefined): KeptTreeViews {
-  if (words === undefined) return {};
-  const read = readKept(words);
+/** Each workspace's view as an earlier build kept it on a device, by the workspace's id. */
+export type KeptTreeViews = typeof keptTreeViewsSchema.Type;
 
-  return Option.isSome(read) ? read.value : {};
+/** The view an earlier build stood a workspace at until its reader changed it, which a view it kept reads for whatever it lacks: their tasks, by repository, the latest active first, nothing finished. */
+const EARLIER_TREE_VIEW: TaskTreeView = {
+  assignedTo: { kind: ASSIGNED_TO.ME },
+  statuses: [],
+  grouping: TASKS_GROUPING.REPOSITORY,
+  order: TASKS_ORDER.UPDATED,
+  completed: COMPLETED_WINDOW.NONE,
+  subTasks: false,
+};
+
+/** The page's filter and List display a view an earlier build kept stands for. */
+export interface TreeViewMoved {
+  readonly filter: TasksFilter;
+  readonly display: KeptTasksDisplay;
 }
 
-/** A workspace's view among those kept, the default for whatever it lacks. */
-export function treeViewIn(views: KeptTreeViews, workspaceId: string): TaskTreeView {
-  return { ...DEFAULT_TASK_TREE_VIEW, ...views[workspaceId] };
-}
+/** The page's filter and List display a view an earlier build kept on a device stands for, to move up to the account, the reader by their account. */
+export function keptTreeViewMoved(kept: KeptTreeViews[string], readerId: string): TreeViewMoved {
+  const view = { ...EARLIER_TREE_VIEW, ...kept };
 
-/** The words the views are kept as, with one workspace's changed. */
-export function keptTreeViews(
-  views: KeptTreeViews,
-  workspaceId: string,
-  view: TaskTreeView,
-): string {
-  return JSON.stringify({ ...views, [workspaceId]: view });
-}
-
-/** Whether two views stand the list alike, so Reset view offers itself only where it would change it. */
-export function sameTreeView(a: TaskTreeView, b: TaskTreeView): boolean {
-  const sameAssignee =
-    a.assignedTo.kind === b.assignedTo.kind &&
-    (a.assignedTo.kind !== ASSIGNED_TO.MEMBER ||
-      (b.assignedTo.kind === ASSIGNED_TO.MEMBER && a.assignedTo.userId === b.assignedTo.userId));
-
-  return (
-    sameAssignee &&
-    a.statuses.length === b.statuses.length &&
-    a.statuses.every((status) => b.statuses.includes(status)) &&
-    a.grouping === b.grouping &&
-    a.order === b.order &&
-    a.completed === b.completed &&
-    a.subTasks === b.subTasks
-  );
+  return {
+    filter: filterWithTreeView({}, view, readerId),
+    display: displayWithTreeView({}, view),
+  };
 }
 
 /** What the tree is read from: the host's task list, the workspace it is narrowed to, the reader, and what the group headings say of no repository. */
@@ -251,7 +351,9 @@ export interface TaskTreeInput {
   readonly noRepository: string;
   /** What heads the tasks no pin or section holds: "My tasks". */
   readonly tasksHead: string;
-  /** How the tasks no pin or section holds stand. */
+  /** Which tasks no pin or section holds stand: the Tasks page's filter, whole. */
+  readonly filter: TasksFilter;
+  /** How the tasks no pin or section holds are laid out: the phone's reading of the page's List display. */
   readonly treeView: TaskTreeView;
   /** A person's name, which an assignee's group is headed and ordered by. */
   readonly personName: (userId: string) => string;
@@ -272,13 +374,6 @@ const ALL_OPEN = () => true;
 
 /** No row is held standing under a fold, since none is folded. */
 const NONE_STANDING = () => false;
-
-/** The tasks the view keeps by status before the Tasks page's filter reads them: with no status named, the work to do and under way and the finished, as the sidebar holds them, Backlog left out; every one where a status is named, which the filter then keeps. */
-function inViewStatuses(tasks: readonly TaskSummary[], view: TaskTreeView): readonly TaskSummary[] {
-  if (view.statuses.length > 0) return tasks;
-
-  return tasks.filter((task) => taskListed(task) || isTaskSettled(statusOf(task)));
-}
 
 /** The latest a group's tasks saw activity, which the sidebar orders its repositories' groups by. */
 function latestIn(group: TasksGroup): number {
@@ -316,32 +411,28 @@ function inSidebarOrder(
   ];
 }
 
-/** The reader's tasks no pin or section holds as the view groups, orders, and keeps them, through the Tasks page's own List (`tasksListGroups`), the repositories' groups in the sidebar's order. */
+/** The tasks no pin or section holds as the page's filter keeps them and the view groups and orders them, through the Tasks page's own List (`tasksListGroups`), the repositories' groups in the sidebar's order. */
 function viewGroups(unplaced: readonly TaskSummary[], input: TaskTreeInput): readonly TasksGroup[] {
-  const { treeView, readerId } = input;
-  const filter: TasksFilter = treeView.statuses.length === 0 ? {} : { status: treeView.statuses };
+  const { treeView, readerId, filter } = input;
 
-  const groups = tasksListGroups(
-    inViewStatuses(tasksAssignedTo(unplaced, treeView.assignedTo, readerId), treeView),
-    {
-      filter,
-      display: {
-        grouping: treeView.grouping,
-        order: treeView.order,
-        emptyGroups: false,
-        completed: treeView.completed,
-        pinnedFirst: false,
-        subTasks: treeView.subTasks,
-        properties: [],
-      },
-      pinned: [],
-      sections: [],
-      readerId,
-      personName: input.personName,
-      members: [],
-      now: input.now,
+  const groups = tasksListGroups(unplaced, {
+    filter,
+    display: {
+      grouping: treeView.grouping,
+      order: treeView.order,
+      emptyGroups: false,
+      completed: treeView.completed,
+      pinnedFirst: false,
+      subTasks: treeView.subTasks,
+      properties: [],
     },
-  ).filter((group) => group.tasks.length > 0);
+    pinned: [],
+    sections: [],
+    readerId,
+    personName: input.personName,
+    members: [],
+    now: input.now,
+  }).filter((group) => group.tasks.length > 0);
 
   if (treeView.grouping !== TASKS_GROUPING.REPOSITORY) return groups;
 

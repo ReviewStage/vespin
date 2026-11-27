@@ -10,8 +10,9 @@
  * by the parent's id wherever it stands, as the sidebar opens them, the
  * latest `MAX_OPENED_TASKS` kept (`openedTasksBounded`). A press on a list
  * made before the account's list is read waits for it (`../fold-list.ts`). The groups only
- * the Tasks page's groupings draw (a status, a priority, an assignee) have
- * no fold on the sidebar, so the phone holds theirs in memory alone.
+ * the Tasks page's groupings draw (a status, a priority, an assignee) fold
+ * as the Tasks page's List folds them (`tasksListFolds`, `./tree-view.ts`'s
+ * `useTreeFolds`), since the Tasks tab follows the page's view.
  */
 
 import {
@@ -19,7 +20,6 @@ import {
   TASK_TREE_GROUP,
   type TaskTreeGroup,
 } from "@repo/features/task-tree-model";
-import { foldsPressed } from "@repo/features/view-choice-folds";
 import {
   openedTasksBounded,
   VIEW_CHOICE_KEY,
@@ -27,15 +27,13 @@ import {
   type ViewChoiceValue,
 } from "@repo/features/view-choice-wire";
 import { Option } from "effect";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useFoldList } from "../fold-list.js";
 import { useViewChoice } from "../view-choices.js";
+import { useTreeFolds } from "./tree-view.js";
 
 /** What a fold that did not keep says in the failure notice. */
 const FOLD_REFUSED = "Couldn't keep that fold.";
-
-/** No group folded, and no parent opened. */
-const NONE: readonly never[] = [];
 
 /** How the sidebar's folded groups and sections are read and written. */
 const FOLDS = { refused: FOLD_REFUSED } as const;
@@ -71,7 +69,8 @@ function repositoryOf(group: TaskTreeGroup): string | null {
 
 /**
  * The tree's hold, the account's sidebar folds and the parents it opened,
- * and the groups only the Tasks page's groupings draw folded in memory.
+ * and the groups only the Tasks page's groupings draw folded as the page's
+ * List folds them.
  * Note that it is held above the rows, since a recycled row draws another
  * task once scrolled past and a folded section drops its rows, and above
  * the Tasks tab's two layouts, since a fold or an unfold of the iPhone Duo,
@@ -86,7 +85,7 @@ export function useTreeHold(): TreeHold {
   const [sections, foldSection] = useFoldList(KEY.SIDEBAR_FOLDED_SECTIONS, FOLDS);
   const [groups, foldGroup] = useFoldList(KEY.SIDEBAR_FOLDED_GROUPS, FOLDS);
   const [opened, openTask] = useFoldList(KEY.SIDEBAR_OPENED_TASKS, OPENED);
-  const [inMemory, setInMemory] = useState<readonly string[]>(NONE);
+  const pageFolds = useTreeFolds();
   const openedSet = useMemo(() => new Set(opened), [opened]);
 
   const folded = (group: TaskTreeGroup): boolean => {
@@ -102,7 +101,7 @@ export function useTreeHold(): TreeHold {
       case TASK_TREE_GROUP.REPOSITORY:
         return groups.includes(repositoryOf(group));
       default:
-        return inMemory.includes(group.key);
+        return group.head !== undefined && pageFolds.folded(group.head);
     }
   };
 
@@ -127,7 +126,7 @@ export function useTreeHold(): TreeHold {
         foldGroup(repositoryOf(group), shut);
         break;
       default:
-        setInMemory((was) => foldsPressed(was, [{ id: group.key, on: shut }]));
+        if (group.head !== undefined) pageFolds.setFolded(group.head, shut);
     }
   };
 

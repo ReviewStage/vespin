@@ -1,4 +1,4 @@
-# tasks-view.yaml -- the Tasks tab's View options: its menu, the list grouped by status, the finished tasks of the past month shown, and Reset view putting the sidebar's view back.
+# tasks-view.yaml -- the Tasks tab's View options, the Tasks page's own view: the list opening on the page's default, every status by status, Backlog among them; its menu; the finished tasks of the past month shown; grouped by repository; and Reset view putting the page's view back.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -8,8 +8,9 @@ env:
 ---
 # Launched on the host's Inbox fixture, as `tasks.yaml` is, so the list holds
 # the fixture's tasks, in two repositories and of every status, and no server
-# is reached. Note that the state is cleared, so the view starts as the
-# sidebar's whatever an earlier run chose.
+# is reached; the fixture keeps the view choices a run makes for the run, as
+# the account keeps them. Note that the state is cleared, so the view starts
+# as the Tasks page's whatever an earlier run chose.
 - launchApp:
     clearState: true
     arguments:
@@ -19,29 +20,21 @@ env:
     env:
       TAB: Tasks
 - assertVisible: "Pinned"
-- assertVisible: "ledger"
+# The page's default stands every status by status, Backlog among them, as
+# no status chosen keeps every one. Note that a group's header is found by
+# its title and count, "Todo, 1", because a row's status mark is heard as
+# "Todo" too.
+- assertVisible: "Todo, [0-9]+"
+- scrollUntilVisible:
+    element: "Backlog, [0-9]+"
+    direction: DOWN
+- takeScreenshot: tasks-view-default
 - tapOn: "View options"
 - assertVisible: "Group by"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-view-menu
-# Group by stands its choices as a submenu over the menu. Note that its
-# Status is tapped as the last in the tree, because the menu's own Status
-# filter, under which the submenu opens, shares the name.
-- tapOn: "Group by"
-- waitForAnimationToEnd
-- tapOn:
-    text: "Status"
-    index: -1
-- waitForAnimationToEnd
-# Note that a group's header is found by its title and count, "Todo, 1",
-# because a row's status mark is heard as "Todo" too.
-- assertVisible: "Todo, [0-9]+"
-- assertNotVisible: "ledger"
-# Show completed's Past month stands the reader's finished tasks by their
-# status. Note that the fixture's only Done task of the reader's is a
-# sub-task, which stands under its open parent, so its Canceled task heads
-# a group of its own, which an iPhone stands below the fold.
-- tapOn: "View options"
+# Show completed's Past month stands the finished tasks by their status, a
+# Canceled group among them, which an iPhone stands below the fold.
 - tapOn: "Show completed"
 - waitForAnimationToEnd
 - tapOn: "Past month"
@@ -50,11 +43,24 @@ env:
     element: "Canceled, [0-9]+"
     direction: DOWN
 - takeScreenshot: tasks-view-status
-# Reset view puts the sidebar's view back: the reader's open tasks by repository.
+# Group by stands its choices as a submenu over the menu; Repository heads
+# each repository's tasks.
+- tapOn: "View options"
+- tapOn: "Group by"
+- waitForAnimationToEnd
+- tapOn: "Repository"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "ledger"
+    direction: UP
+- assertNotVisible: "Todo, [0-9]+"
+- takeScreenshot: tasks-view-repository
+# Reset view puts the page's view back: every status by status, the finished
+# left out.
 - tapOn: "View options"
 - tapOn: "Reset view"
 - waitForAnimationToEnd
 - scrollUntilVisible:
-    element: "ledger"
+    element: "Backlog, [0-9]+"
     direction: DOWN
-- assertNotVisible: "Todo, [0-9]+"
+- assertNotVisible: "Canceled, [0-9]+"
