@@ -272,6 +272,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     renameSound: SCREEN_ONLY,
     removeSound: SCREEN_ONLY,
     chooseSound: SCREEN_ONLY,
+    writeViewChoice: SCREEN_ONLY,
     allowedCommands: NOT_YET_BUILT,
     // Note that an agent never widens what its member's agents run unasked; only the member does, in the app.
     addAllowedCommand: SECURITY,
@@ -400,6 +401,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     workspaceMachines: SCREEN_ONLY,
     machines: SCREEN_ONLY,
     machineAsks: SCREEN_ONLY,
+    viewChoices: SCREEN_ONLY,
     workspaceMemories: SCREEN_ONLY,
     installedSkills: SCREEN_ONLY,
     workspaceIntegrations: SCREEN_ONLY,
@@ -478,7 +480,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
   workspaceMergeQueue: { read: NOT_YET_BUILT },
   // Note that a size is a cost the workspace pays for every agent, so it is chosen in Settings until a member asks an agent to.
   workspaceSandboxSize: { read: NOT_YET_BUILT, put: NOT_YET_BUILT },
-  // A workspace's machines are connected, named, and removed by its admins in the app, as a member's own are.
+  // A workspace owns no machine; these answer only a released build's Settings, until the floor reaches 11.
   workspaceMachines: { list: INTERNAL, rename: INTERNAL, remove: INTERNAL },
   workspaceSentry: { install: NEEDS_BROWSER },
   // A call's session is the panel's own, which holds the microphone and the WebRTC peer.

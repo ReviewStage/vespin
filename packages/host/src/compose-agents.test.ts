@@ -542,7 +542,7 @@ function newestPage(cursor: string, text: string, before?: string): AgentNewestA
 }
 
 it.effect(
-  "a held transcript opens on its newest page, read once beside the live read and laid on the held transcripts, and reads on from its cursor at once, caught up before the live read stands; once its first rows land it reads on again, so a message written while the live read was sealed is laid, once; a short page is caught up, and the next is read only as the statements move or at the edge the service names; letting it go stops the following",
+  "a held transcript opens on its newest page, read once beside the live read and laid on the held transcripts, and reads on from its cursor once, as the live read's first rows land, so a message written while the live read was sealed is laid, once, and the page caught up; a short page is caught up, and the next is read only as the statements move or at the edge the service names; letting it go stops the following",
   () =>
     Effect.gen(function* () {
       const {
@@ -559,17 +559,18 @@ it.effect(
       const newest = newestPage("1:0", "Reading the invites.", "40");
       pageNewest(newest);
 
-      // The first read past the newest page finds nothing new; a message is written after it, while the live read is sealed.
+      // A message is written after the newest page is read, while the live read is sealed.
       const between = {
         ...pageNow("2:0", { holds: true, text: "Writing the expiry." }),
         wakeIn: 3_000,
       };
 
-      script(pageNow("1:0", { holds: true }), between);
+      script(between);
       const letGo = yield* holding(acts.AGENTS_TRANSCRIPT.hold(FOLLOWED));
       yield* settled;
       const word = { status: AGENT_STATUS.RUNNING, title: "Invites" };
 
+      // Note that nothing is read past the newest page before the live read's first rows land, since it was read just now up to its cursor.
       assert.deepEqual(held(), [
         {
           messages: newest.messages,
@@ -580,47 +581,34 @@ it.effect(
           // The clock stands at the start, so every time of the read is its start; the fake service answers at once.
           read: UNMOVED_READ,
         },
-        {
-          messages: newest.messages,
-          before: "40",
-          cursor: "1:0",
-          word: { ...word, caughtUp: true },
-          pages: 2,
-          read: UNMOVED_READ,
-        },
       ]);
       assert.deepEqual(asked.toSorted(), [
         `messages-newest:${AGENT_ID}:cut`,
-        `messages-now:${AGENT_ID}:1:0`,
         `transcript-live:${AGENT_ID}`,
       ]);
 
-      // The live read's first rows read on from the newest page's cursor again, never from the start, and the message written between is laid once.
+      // The live read's first rows read on from the newest page's cursor, never from the start, and the message written between is laid once.
       transcriptRows(live, 2);
       yield* settled;
-      assert.deepEqual(held()[2], {
+      assert.deepEqual(held()[1], {
         messages: [...newest.messages, ...between.messages],
         before: "40",
         cursor: "2:0",
         word: { ...word, caughtUp: true },
-        pages: 3,
+        pages: 2,
         read: UNMOVED_READ,
       });
       const reads = asked.filter((ask) => ask.startsWith("messages-"));
 
-      assert.deepEqual(reads, [
-        `messages-newest:${AGENT_ID}:cut`,
-        `messages-now:${AGENT_ID}:1:0`,
-        `messages-now:${AGENT_ID}:1:0`,
-      ]);
+      assert.deepEqual(reads, [`messages-newest:${AGENT_ID}:cut`, `messages-now:${AGENT_ID}:1:0`]);
 
       // Note that a short page is caught up, so nothing is read again until the clock reaches the edge the service named.
       yield* TestClock.adjust("2 seconds");
       yield* settled;
-      assert.equal(held().length, 3);
+      assert.equal(held().length, 2);
       yield* TestClock.adjust("1 second");
       yield* settled;
-      assert.equal(held().length, 4);
+      assert.equal(held().length, 3);
       assert.equal(asked.at(-1), `messages-now:${AGENT_ID}:2:0`);
       assert.deepEqual(ids(held().at(-1)), ["m-1:0", "m-2:0"]);
 
@@ -2441,42 +2429,45 @@ it.effect(
     }),
 );
 
+/** One launch as the host makes it on `root`'s local database: the pool on the local copy, the agents on the pool, then the database opened. */
+function localLaunch(
+  root: string,
+  tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[],
+) {
+  return Effect.gen(function* () {
+    const local = yield* localCopy(root);
+
+    const pool = yield* entityPool({
+      mintKey: () => "key",
+      replayRefused: Effect.void,
+      store: local.store,
+    });
+
+    const launch = yield* subject({
+      pool,
+      ...(tasksListed === undefined ? undefined : { tasksListed }),
+    });
+
+    yield* local.open("user-dana", {
+      kept: () => [],
+      moves: Stream.empty,
+      restored: () => Effect.void,
+    });
+
+    return launch;
+  });
+}
+
 it.effect(
   "the Inbox kept on the local database is told at the next launch beside the tasks its items stand on, as the task list summed them up when they were kept, before the service answers",
   () =>
     Effect.gen(function* () {
       const root = yield* temporaryDirectoryScoped("compose-agents-kept-inbox-");
       const holder = taskSummaryOf(planListRow(TASK_ID, "Teammate invitations"), undefined);
-
-      /** One launch as the host makes it: the pool on the local copy, the agents on the pool, then the database opened. */
-      const launched = (tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[]) =>
-        Effect.gen(function* () {
-          const local = yield* localCopy(root);
-
-          const pool = yield* entityPool({
-            mintKey: () => "key",
-            replayRefused: Effect.void,
-            store: local.store,
-          });
-
-          const launch = yield* subject({
-            pool,
-            ...(tasksListed === undefined ? undefined : { tasksListed }),
-          });
-
-          yield* local.open("user-dana", {
-            kept: () => [],
-            moves: Stream.empty,
-            restored: () => Effect.void,
-          });
-
-          return launch;
-        });
-
       const quit = yield* Scope.make();
 
       const first = yield* Scope.provide(quit)(
-        launched((taskIds) => (taskIds.includes(TASK_ID) ? [holder] : [])),
+        localLaunch(root, (taskIds) => (taskIds.includes(TASK_ID) ? [holder] : [])),
       );
 
       first.sealItems(LIVE_ANSWERED);
@@ -2486,7 +2477,7 @@ it.effect(
       yield* toldTimes(first.accountItems, 1);
       yield* Scope.close(quit, Exit.void);
 
-      const next = yield* launched();
+      const next = yield* localLaunch(root);
       yield* next.open;
       yield* settled;
 
@@ -2495,6 +2486,35 @@ it.effect(
         kept: true,
         keptHolders: [holder],
       });
+    }).pipe(Effect.provide(localPlatform)),
+);
+
+it.effect(
+  "an Inbox kept on the local database however large is kept whole, so the next launch reads past the sync id kept rather than whole",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-kept-large-inbox-");
+      // Note that its JSON runs past a megabyte, as a busy account's Inbox does.
+      const large: InboxItem = { ...HELD_ITEM, title: "Review ".repeat(200_000) };
+      const quit = yield* Scope.make();
+      const first = yield* Scope.provide(quit)(localLaunch(root));
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+      deliverItems(first.live, [stampOf(large, TASK_ID)], [large]);
+      yield* toldTimes(first.accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      const next = yield* localLaunch(root);
+      next.sealItems(LIVE_ANSWERED);
+      yield* next.open;
+      yield* settled;
+
+      assert.deepEqual(
+        next.asked.filter((each) => each.startsWith("account-items-")),
+        [],
+        "the next launch reads past the sync id kept, never whole",
+      );
     }).pipe(Effect.provide(localPlatform)),
 );
 

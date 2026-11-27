@@ -17,6 +17,7 @@ import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, type SendingMessage } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { markedAs, type ReadMark, type ReadMarked } from "@repo/features/read-mark";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
@@ -48,6 +49,7 @@ import {
   agentChangeOf,
   automationSwitchOf,
   chosenTasksView,
+  FIXTURE_RECORDING_ID,
   type InboxReadMarks,
   type InboxReminders,
   type InboxSentReplies,
@@ -566,6 +568,34 @@ function keepCommentThread(
   if (Predicate.isObject(answer) && "thread" in answer) stageFixture(state);
 }
 
+/** The path a rig serves the fixture's recording at, under `-mediaOrigin`. */
+const REMOTE_RECORDING_PATH = "/fixture-recording.mp4";
+
+/**
+ * The source of the agent's recording where the rig serves it over HTTP
+ * (`-mediaOrigin`), with a header as the service's source carries one, so
+ * the player takes the remote path a device's does, its own cache among
+ * it; none for any other act or picture, or where no origin is named.
+ */
+function remoteRecording(
+  mediaOrigin: string | undefined,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): PortActResult<typeof ACT_KIND.ACCOUNT_PICTURE_SOURCE> | undefined {
+  if (mediaOrigin === undefined || kind !== ACT_KIND.ACCOUNT_PICTURE_SOURCE) return undefined;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const picture = payload as PortActPayload<typeof ACT_KIND.ACCOUNT_PICTURE_SOURCE>;
+
+  if (picture.owner !== PICTURE_OWNER.AGENT || picture.pictureId !== FIXTURE_RECORDING_ID) {
+    return undefined;
+  }
+
+  return {
+    uri: `${mediaOrigin}${REMOTE_RECORDING_PATH}`,
+    headers: { authorization: "Bearer fixture" },
+  };
+}
+
 /** A picture a reply of this run carried, read back as the service answers one; none for any other act or attachment. */
 function sentFileRead(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
@@ -876,6 +906,7 @@ export function fixtureActs(
   profile: RunProfile,
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   refusesWrites = false,
+  mediaOrigin?: string,
 ): ActPortClient {
   return new Proxy(acts, {
     get(target, kind) {
@@ -913,6 +944,11 @@ export function fixtureActs(
 
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         if (keepReadMark(state, kind as PortActKind, payload)) return Promise.resolve(true);
+
+        // SAFETY: as above.
+        const remote = remoteRecording(mediaOrigin, kind as PortActKind, payload);
+
+        if (remote !== undefined) return Promise.resolve(remote);
 
         // SAFETY: as above.
         const sentFile = sentFileRead(state, kind as PortActKind, payload);

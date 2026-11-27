@@ -49,6 +49,7 @@ export const VERB = {
   RECONNECT: "Reconnect",
   OPEN: "Open",
   OPEN_IN_BROWSER: "Open in browser",
+  COPY: "Copy",
   RESET_TO_DEFAULTS: "Reset to defaults",
 } as const;
 

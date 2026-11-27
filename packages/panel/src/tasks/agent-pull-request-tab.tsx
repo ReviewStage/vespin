@@ -34,6 +34,7 @@ import {
 } from "@repo/features/link-grammar";
 import { type LinkStanding, PULL_REQUEST_MOMENT } from "@repo/features/link-standing-model";
 import { formatCount } from "@repo/features/number-format";
+import { CHAPTERS_SHOWN, chaptersShown } from "@repo/features/pull-request-chapters-shown";
 import {
   CHECK_WORDS,
   checksCountOf,
@@ -103,8 +104,6 @@ import {
   OutsideLink,
   PAGE_FRAME,
   PaneBar,
-  SCROLL_FADE,
-  SCROLL_FADE_INSET,
   SCROLL_GUTTER,
   ScrollArea,
   SKELETON_KIND,
@@ -218,7 +217,7 @@ import {
   type AnnotationReply,
 } from "./annotation-card.js";
 import { threadPreview } from "./changes-model.js";
-import { CHAPTERS_SHOWN, chapterPaths, chaptersShown, chapterViewed } from "./chapters-model.js";
+import { chapterPaths, chapterViewed } from "./chapters-model.js";
 import { type ChaptersRead, useChaptersRead } from "./chapters-read.js";
 import { CommentTools } from "./comment-menu.js";
 import {
@@ -358,9 +357,9 @@ const chaptersTabLoaded = (): boolean => chaptersTabLanded;
 /**
  * A view of the tab, filling the room under the header and the tabs, the
  * others kept drawn but hidden, so switching back draws what each last read.
- * Note that it hands the tab's band down as its scroller's own, so the fade
- * begins beneath a section's heading at whatever height it stands
- * (`SCROLL_FADE_INSET.BAND`).
+ * Note that it hands the tab's band down as its scroller's own, so a
+ * section's heading stands, and the scroller's scroll padding clears it, at
+ * whatever height the band stands.
  */
 const VIEW_CLASS =
   "pull-request-view [--ui-scroll-band:var(--pull-request-band)] [&[hidden]]:hidden";
@@ -2730,10 +2729,8 @@ function ConversationViewOptions({
  * comment is written in at its foot. Each of the two sections folds under
  * its heading, the choice kept for every pull request
  * (`conversation-filters.ts`), and its heading sticks to the scroller's top
- * while it is in view, what scrolls under it fading beneath it
- * (`SCROLL_FADE_INSET.BAND`) rather than cut at its edge. A thread or an
- * entry brought into view opens a folded Conversation, so its card is drawn
- * to land on.
+ * while it is in view. A thread or an entry brought into view opens a folded
+ * Conversation, so its card is drawn to land on.
  */
 function ConversationView({
   pictures,
@@ -2798,8 +2795,6 @@ function ConversationView({
       role="region"
       aria-label="Pull request conversation"
       tabIndex={0}
-      fade={SCROLL_FADE.START}
-      fadeInset={SCROLL_FADE_INSET.BAND}
       gutter={SCROLL_GUTTER.STABLE}
     >
       {/* Its words at the measure, as far in from the sides as a `DetailPage` at a column's inset
@@ -2868,8 +2863,7 @@ interface ThreadJump {
  * A card brought into sight in the Conversation's own scroller, never by
  * `scrollIntoView`, which would scroll every box around it (panel
  * AGENTS.md): centered in the room under the heading stuck at the scroller's
- * top and the fade beneath it, which the scroller's own scroll padding
- * clears, and, where it is taller than that room, its top standing just
+ * top, which the scroller's own scroll padding clears, and, where it is taller than that room, its top standing just
  * under them rather than behind the heading.
  */
 function centerCard(card: HTMLElement): void {

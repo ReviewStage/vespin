@@ -62,7 +62,6 @@ Every token is a `--ui-*` custom property under `src/tokens/`.
   | `--ui-row-inset`, `--ui-list-inset` | 8 / 12px | 8 / 12px | 8 / 12px |
   | `--ui-menu-row-height` | 32px | 44px | 32px |
   | `--ui-touch-target` | 44px | 44px | 44px |
-  | `--ui-scroll-fade` | 26px | 24px | 24px |
   | `--ui-scroll-band` | 32px | 32px | 32px |
 
   A compact site's roles hold only with a fine pointer: on a coarse one
@@ -263,7 +262,7 @@ sheets and tests read. What stays in their sheets is what a utility would
 get wrong: what a `Stack` asks of the items it holds, which the held
 component's own sheet must still outrank; the narrow-room container
 queries, and the properties those queries undo, since a sheet's rule cannot
-undo a utility; the `:has()` rules; the settings page's scroll fade; and a
+undo a utility; the `:has()` rules; and a
 skeleton's boxes, whose classes name themselves a skeleton's.
 
 ## Icons

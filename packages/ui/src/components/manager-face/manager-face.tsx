@@ -22,7 +22,9 @@ import { Backpack, Cat, Ghost, type KawaiiProps, Mug, Planet, SpeechBubble } fro
  * Its body takes the color's fill from the theme (`text-manager-face-*`
  * through `currentColor`), and its own features stay Kawaii's near black,
  * which each fill is light enough to hold. An emoji stands centered on a
- * disc of that fill, sized to its seat (`manager-face.css`).
+ * disc of that fill, sized to its seat (`manager-face.css`). In the light
+ * theme the body's edge and the disc's wear a hairline, since the soft fills
+ * nearly vanish on white.
  *
  * At rest a character smiles (`happy`). While the Manager works the same
  * character turns `excited`, and in a row's or a message's seat a small
@@ -122,7 +124,7 @@ export function ManagerFace({
     >
       {face.emoji === undefined ? (
         <Drawing
-          className={`block size-full ${fill}`}
+          className={`ui-manager-face-body block size-full ${fill}`}
           mood={working ? MOOD.WORKING : MOOD.RESTING}
           color="currentColor"
           size="100%"
@@ -132,7 +134,7 @@ export function ManagerFace({
         />
       ) : (
         <span
-          className={`flex size-full items-center justify-center rounded-disc bg-current ${fill}`}
+          className={`ui-manager-face-disc flex size-full items-center justify-center rounded-disc bg-current ${fill}`}
         >
           <span className="ui-manager-face-emoji">{face.emoji}</span>
         </span>

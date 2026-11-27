@@ -12,7 +12,8 @@
  * part was written and a pick is no part of it.
  */
 
-import { AGENT_MACHINE, type PersonalRunsOn } from "@repo/features/agent-wire";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import type { TaskRunsOnRequest } from "@repo/features/task-wire";
 import { eq } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
@@ -71,7 +72,7 @@ const upsertPick = SqlSchema.void({
 });
 
 /** The pick a row holds; none where it holds none, or a device row lost its id. */
-function pickOf(row: typeof PickRowSchema.Type): Option.Option<PersonalRunsOn> {
+function pickOf(row: typeof PickRowSchema.Type): Option.Option<TaskRunsOnRequest> {
   if (row.machine === AGENT_MACHINE.VERCEL) {
     return Option.some({ machine: AGENT_MACHINE.VERCEL });
   }
@@ -86,14 +87,14 @@ function pickOf(row: typeof PickRowSchema.Type): Option.Option<PersonalRunsOn> {
 /** Where the account last chose to run an agent; none where no start has named one. */
 export function readRunsOnPick(
   userId: string,
-): Effect.Effect<Option.Option<PersonalRunsOn>, StoreFailure, DatabaseServices> {
+): Effect.Effect<Option.Option<TaskRunsOnRequest>, StoreFailure, DatabaseServices> {
   return Effect.map(findPick(userId), Option.flatMap(pickOf));
 }
 
 /** Keeps where the account chose to run an agent as its last pick, over what stood. */
 export function keepRunsOnPick(
   userId: string,
-  pick: PersonalRunsOn,
+  pick: TaskRunsOnRequest,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return upsertPick({
     userId,

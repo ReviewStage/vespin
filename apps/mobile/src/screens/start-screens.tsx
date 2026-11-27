@@ -1,12 +1,7 @@
 // start-screens.tsx -- the two pages that start work, each a new conversation's page over the agent page's composer: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus under the composer's field; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules.
 
 import { type AgentFork, FORK_WORDS, forkChoice } from "@repo/features/agent-fork-model";
-import {
-  AGENT_BOUNDS,
-  type AgentAttachment,
-  type AgentRunsOnRequest,
-  hasWordsOrFiles,
-} from "@repo/features/agent-wire";
+import { AGENT_BOUNDS, type AgentAttachment, hasWordsOrFiles } from "@repo/features/agent-wire";
 import {
   automationAgentBrief,
   CREATE_WITH_AGENT_WORDS,
@@ -18,16 +13,7 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { agentName, providerOf } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
-import {
-  gonePlaceWords,
-  IN_THE_CLOUD,
-  placeIdOf,
-  placeOfId,
-  type RunsOnPlace,
-  type RunsOnPlaces,
-} from "@repo/features/runs-on-places";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
-import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { REMOVE_RELATION, TASK_RELATION_MENU } from "@repo/features/task-relation-model";
 import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -82,15 +68,15 @@ import { useWindow } from "../host/use-window.js";
 import { forgetNewTaskDraft, savedNewTaskDraft, saveNewTaskDraft } from "../new-task-draft.js";
 import { useOnTab } from "../tab-route.js";
 import {
+  CLOUD,
   inTree,
   type ModelPick,
-  placeGlyph,
   type RepositoryPick,
+  runsOnOptions,
   type StartAnswer,
   startRefusalWords,
   useModelPick,
   useRepositoryPick,
-  useRunsOnPlaces,
   useStartAgent,
   useStartFork,
   useStartTask,
@@ -405,46 +391,42 @@ function StartModelChip({
   );
 }
 
-/**
- * Where the agent runs, as a capsule: Cloud or one of the account's
- * devices, then, under Workspace machines, each machine the workspace owns
- * that takes an agent now, as the panel's Machine picker groups them; none
- * where there is nowhere but the cloud to pick. A place picked that is no
- * longer offered, such as a machine removed meanwhile, is said as gone and
- * stays picked, so the start names it and the service says why not.
- */
+/** Where the agent runs, Cloud or one of the account's devices, as a capsule; none where the account may run an agent on no device of its own. */
 function RunsOnChip({
-  places,
+  pick,
   runsOn,
   onRunsOn,
 }: {
-  readonly places: RunsOnPlaces;
-  readonly runsOn: AgentRunsOnRequest;
-  readonly onRunsOn: (place: AgentRunsOnRequest) => void;
+  readonly pick: ModelPick;
+  readonly runsOn: string;
+  readonly onRunsOn: (place: string) => void;
 }) {
-  if (places.own.length + places.shared.length <= 1) return null;
-  const picked = placeOfId(places, placeIdOf(runsOn));
+  if (pick.devices.length === 0) return null;
+  const options = runsOnOptions(pick.devices);
 
-  const choices = (offered: readonly RunsOnPlace[]) =>
-    offered.map((place) => ({
-      label: place.label,
-      id: place.id,
-      symbol: placeGlyph(place),
-      on: place.id === picked?.id,
-      onPress: () => onRunsOn(place.runsOn),
-    }));
+  // Note that each place leads with the panel's runs-on mark: the cloud's, or its device's by its platform.
+  const glyphOf = (place: string) =>
+    runsOnGlyph({
+      cloud: place === CLOUD,
+      platform: pick.devices.find((device) => device.deviceId === place)?.platform,
+    });
 
   return (
     <MenuChip
       look={MENU_CHIP_LOOK.COMPOSER}
-      label={picked?.label ?? gonePlaceWords(runsOn)}
-      symbol={picked === undefined ? runsOnGlyph({ cloud: false }) : placeGlyph(picked)}
+      label={labelOf(options, runsOn) ?? WORDS.RUNS_ON}
+      symbol={glyphOf(runsOn)}
       menu={{
         groups: [
-          { title: WORDS.RUNS_ON, choices: choices(places.own) },
-          ...(places.shared.length === 0
-            ? []
-            : [{ title: RUNS_ON_WORDS.WORKSPACE_MACHINES, choices: choices(places.shared) }]),
+          {
+            title: WORDS.RUNS_ON,
+            choices: options.map((option) => ({
+              label: option.label,
+              symbol: glyphOf(option.id),
+              on: option.id === runsOn,
+              onPress: () => onRunsOn(option.id),
+            })),
+          },
         ],
       }}
     />
@@ -808,7 +790,7 @@ export function NewAgentScreen({
   const brief = action?.kind === REPLY_BUTTON_ACTION.START ? action.prompt : "";
   const [prompt, setPrompt] = useState(brief);
   const dictated = useDictation(prompt, setPrompt);
-  const [runsOn, setRunsOn] = useState(IN_THE_CLOUD);
+  const [runsOn, setRunsOn] = useState(CLOUD);
   const source = useShownAgent(fork?.agentId ?? "");
 
   const pick = useModelPick(
@@ -829,8 +811,6 @@ export function NewAgentScreen({
   const placed = opened === undefined || suggestedTask !== undefined;
   // Note that the task it starts on is read by its id alone, so the page isn't drawn again as any other of the account's tasks moves while words are typed.
   const startsOn = useTaskListRow(useTaskListCollections().tasks, suggestedTask ?? taskId);
-  // Note that the machines its task's workspace owns are offered after the member's devices.
-  const places = useRunsOnPlaces(pick, startsOn?.workspaceId);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
@@ -999,7 +979,7 @@ export function NewAgentScreen({
             {/* Note that a suggestion's agent runs where the member's agents on the task run, so it offers no Runs on, as the panel's draft hides it. */}
             {/* Note that a fork runs where its source runs, as the panel's forked draft starts it unless another place is picked. */}
             {opened === undefined && fork === undefined ? (
-              <RunsOnChip places={places} runsOn={runsOn} onRunsOn={setRunsOn} />
+              <RunsOnChip pick={pick} runsOn={runsOn} onRunsOn={setRunsOn} />
             ) : null}
           </>
         }
@@ -1266,7 +1246,8 @@ function useSavedDraft(
  * pictures that go with it, the task it is related to, picked from the +
  * and shown at the page's head once picked, and, as capsules under the
  * composer's field, the repository it works in, the newest one the account's tasks
- * were about until another is picked, or its parent's in another's tree,
+ * were about until another is picked, the one a repository header's + opened it
+ * on, or its parent's in another's tree,
  * its agent's model and effort, and where its agent runs. Start makes the
  * task and starts its agent in one act, as Home does, in the workspace the
  * app works in, or the one a share draft it opens on was kept for. A task's New sub-task opens it as a sub-task of `parent`, in the
@@ -1276,6 +1257,7 @@ function useSavedDraft(
 export function NewTaskScreen({
   parent,
   section,
+  repository: opensIn,
   draft,
   forAutomation = false,
 }: {
@@ -1284,11 +1266,13 @@ export function NewTaskScreen({
   readonly forAutomation?: boolean | undefined;
   /** The member's section the task is filed in once it starts, as the panel's section header's + files it. */
   readonly section?: string | undefined;
+  /** The repository it opens on, chosen already, as the panel's repository header's + opens New task; a draft's own where it opens on one. */
+  readonly repository?: string | undefined;
   readonly draft?: NewTaskDraft | undefined;
 }) {
   const [prompt, setPrompt] = useState(draft?.prompt ?? "");
   const dictated = useDictation(prompt, setPrompt);
-  const [runsOn, setRunsOn] = useState(IN_THE_CLOUD);
+  const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const chosen = useChosenWorkspace(workspaces).chosen;
   const own = workspaces.find(({ id }) => id === draft?.workspaceId) ?? chosen;
@@ -1298,10 +1282,9 @@ export function NewTaskScreen({
   const placed = workspaceId !== undefined || parent === undefined;
   // Note that a sub-task's repositories are its parent's workspace's alone, never the chosen one's, so none is offered until that workspace is read.
   const workspace = parent === undefined ? own : workspaces.find((each) => each.id === workspaceId);
-  const repository = useRepositoryPick(workspace, draft?.repository);
+  const repository = useRepositoryPick(workspace, draft?.repository ?? opensIn);
   const relation = useRelationPick(workspaceId, parent);
   const pick = useModelPick();
-  const places = useRunsOnPlaces(pick, workspaceId);
   const [modelsShown, setModelsShown] = useState(false);
   const startTask = useStartedIn(useStartTask(workspaceId), workspaceId, section);
   const [note, setNote] = useState<string | undefined>(undefined);
@@ -1463,7 +1446,7 @@ export function NewTaskScreen({
         chips={
           <>
             <RepositoryChip repository={repository} tree={tree} />
-            <RunsOnChip places={places} runsOn={runsOn} onRunsOn={setRunsOn} />
+            <RunsOnChip pick={pick} runsOn={runsOn} onRunsOn={setRunsOn} />
           </>
         }
       />

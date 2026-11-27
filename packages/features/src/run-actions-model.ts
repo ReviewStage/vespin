@@ -14,7 +14,7 @@
  * Nothing here draws.
  */
 
-import { AGENT_MACHINE, type AgentMachineKind, agentMachineOf } from "./agent-wire.js";
+import { AGENT_MACHINE, type AgentMachineKind } from "./agent-wire.js";
 import { SANDBOX_STATE, type TerminalsAnswer } from "./terminal-wire.js";
 import type { RepositoryRunActions, RunAction } from "./workspace-sandbox-setup-wire.js";
 
@@ -32,13 +32,13 @@ export const RUN_ACTION_WORDS = {
 /** How often a shown list of an agent's shells is read again, as the Terminal tab's own list goes. */
 export const SHELLS_LOOK_EVERY_MS = 5_000;
 
-/** Whether a client that reaches no Mac's shells, such as a phone, asks for an agent's run actions: the agent in the cloud (no `machine`, as a sandbox's row says none), since a workspace's machine opens no shell either, and its repository known. */
+/** Whether a client that reaches no Mac's shells, such as a phone, asks for an agent's run actions: the agent in the cloud (no `machine`, as a sandbox's row says none), and its repository known. */
 export function runActionsAsked(input: {
   readonly machine: AgentMachineKind | undefined;
   readonly repository: string | null | undefined;
 }): boolean {
   return (
-    agentMachineOf(input) === AGENT_MACHINE.VERCEL &&
+    input.machine !== AGENT_MACHINE.DEVICE &&
     input.repository !== null &&
     input.repository !== undefined
   );

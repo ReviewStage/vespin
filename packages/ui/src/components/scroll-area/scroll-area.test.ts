@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { act, createElement, createRef, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
-import { SCROLL_FADE, SCROLL_SIZE, ScrollArea } from "../../index.js";
+import { SCROLL_SIZE, ScrollArea } from "../../index.js";
 
 /**
  * scroll-area.test.ts -- an area is the scroller its caller reaches: the
@@ -41,7 +41,6 @@ test("the caller's ref, scroll handler, and keys reach the area that scrolls", (
     createElement(ScrollArea, {
       ref: area,
       tabIndex: -1,
-      fade: SCROLL_FADE.START,
       onScroll: (event) => scrolledTo.push(event.currentTarget.scrollTop),
       onKeyDown: (event) => keys.push(event.key),
       children: createElement("p", null, "A long description."),

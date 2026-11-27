@@ -4,13 +4,8 @@
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * account, so no account queues for, claims, settles, or reads another's
  * agent. A row is queued only for an agent of the account that runs on a
- * host's machine, and goes to the machine the agent is pinned to, by the
- * agent's kind of machine (`AGENT_MACHINE`): a local agent's device must be
- * the account's own, and a workspace-machine agent's machine must be one
- * its own workspace owns. A host reads, claims, settles, and answers by its
- * principal (`HostPrincipal`): only the rows on its own device, while its
- * owner owns that device, which on a member's own device are that member's
- * alone and on a workspace's machine are every member's. A row is
+ * Mac, and goes to the Mac the agent is pinned to, which must be the
+ * account's too; a Mac reads and claims only the rows naming it. A row is
  * claimed once, by the first claim that finds it waiting, and settled or
  * answered once, after it was claimed. A line's claim may carry a token its
  * Mac minted for it, and the same claim asked again under that token, as
@@ -58,9 +53,6 @@ import {
   deviceAgentAnswerSchema,
   deviceAgentObjectSchema,
   HOST_UPDATE,
-  MACHINE_OWNER,
-  type MachineOwner,
-  machineOwnerSchema,
 } from "@repo/features/device-agent-wire";
 import {
   and,
@@ -68,7 +60,6 @@ import {
   asc,
   desc,
   eq,
-  exists,
   gt,
   inArray,
   isNotNull,
@@ -76,13 +67,12 @@ import {
   lt,
   lte,
   or,
-  type SQL,
   sql,
 } from "drizzle-orm";
-import { type AnyPgColumn, alias } from "drizzle-orm/pg-core";
+import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import { device } from "../schemas/device.js";
 import { deviceAgentLine, deviceAgentRequest } from "../schemas/device-agent.js";
@@ -94,89 +84,11 @@ const LineKindSchema = Schema.Literals(Object.values(DEVICE_AGENT_LINE_KIND));
 
 const RequestKindSchema = Schema.Literals(Object.values(DEVICE_AGENT_REQUEST_KIND));
 
-/**
- * Who a host's call acts for: the device its secret names and that
- * device's owner (`../schemas/device.ts`), a member's own or a workspace's.
- */
-const HostPrincipalSchema = Schema.Struct({
+const DeviceRowKeySchema = Schema.Struct({
+  userId: Schema.String,
   deviceId: Schema.String,
-  owner: machineOwnerSchema,
+  id: Schema.String,
 });
-
-export type HostPrincipal = typeof HostPrincipalSchema.Type;
-
-/** The host of a member's own device. */
-export function ownDeviceHost(userId: string, deviceId: string): HostPrincipal {
-  return { deviceId, owner: { kind: MACHINE_OWNER.USER, userId } };
-}
-
-/** One row of a host's, by its id. */
-const HostRowKeySchema = Schema.Struct({ host: HostPrincipalSchema, id: Schema.String });
-
-/** The owner's column matched on the rows given: the member's account, or the workspace. */
-function ownedBy(
-  owner: MachineOwner,
-  columns: { readonly userId: AnyPgColumn; readonly organizationId: AnyPgColumn },
-): SQL {
-  switch (owner.kind) {
-    case MACHINE_OWNER.USER:
-      return eq(columns.userId, owner.userId);
-    case MACHINE_OWNER.WORKSPACE:
-      return eq(columns.organizationId, owner.workspaceId);
-  }
-}
-
-/** The host's device as its owner holds it: a member's own, or one the workspace owns. */
-function hostOwnsDevice(host: HostPrincipal): SQL {
-  return exists(
-    queryBuilder
-      .select({ one: sql`1` })
-      .from(device)
-      .where(and(eq(device.id, host.deviceId), ownedBy(host.owner, device))),
-  );
-}
-
-/**
- * A line or request the host holds: one on its own device, while its owner
- * still owns that device. Note that the row's account is not read, because
- * a workspace's machine holds the rows of every member whose agent runs on
- * it, and a member's own device holds only theirs, as only theirs are
- * queued to it.
- */
-function heldByHost(table: { readonly deviceId: AnyPgColumn }, host: HostPrincipal) {
-  return and(eq(table.deviceId, host.deviceId), hostOwnsDevice(host));
-}
-
-/** An agent pinned to the host's device, while its owner owns it: the member's own agent, or any of the workspace's. */
-function agentOnHost(host: HostPrincipal) {
-  return and(
-    eq(agentTable.deviceId, host.deviceId),
-    ownedBy(host.owner, agentTable),
-    hostOwnsDevice(host),
-  );
-}
-
-/**
- * The lines or requests the owner holds, on whichever device: the member's
- * own, queued for their agents, or those on the workspace's machines,
- * whichever member queued them.
- */
-function rowsOfOwner(
-  table: { readonly userId: AnyPgColumn; readonly deviceId: AnyPgColumn },
-  owner: MachineOwner,
-): SQL {
-  switch (owner.kind) {
-    case MACHINE_OWNER.USER:
-      return eq(table.userId, owner.userId);
-    case MACHINE_OWNER.WORKSPACE:
-      return exists(
-        queryBuilder
-          .select({ one: sql`1` })
-          .from(device)
-          .where(and(eq(device.id, table.deviceId), ownedBy(owner, device))),
-      );
-  }
-}
 
 /** A line as a Mac lists it: everything but its secrets. */
 const WaitingLineSchema = Schema.Struct({
@@ -260,24 +172,16 @@ function answerOf(row: typeof AnswerRowSchema.Type): typeof AnswerRowSchema.Type
 const lineBefore = alias(deviceAgentLine, "line_before");
 
 /**
- * The agent of the account, joined to the machine it is pinned to where
- * that machine's owner is the one its kind names: a local agent on a device
- * the account owns, or a workspace-machine agent on a machine the agent's
- * own workspace owns. What a queue's insert selects from, so it writes
- * nothing for anyone else's agent, onto anyone else's device, or onto
- * another workspace's machine.
+ * The agent of the account, running on a Mac, joined to the Mac it is
+ * pinned to where the account holds that Mac too: what a queue's insert
+ * selects from, so it writes nothing for anyone else's agent or Mac.
  */
 function pinnedAgent(userId: string, agentId: string) {
   return and(
     eq(agentTable.id, agentId),
     eq(agentTable.userId, userId),
-    or(
-      and(eq(agentTable.machine, AGENT_MACHINE.DEVICE), eq(device.userId, userId)),
-      and(
-        eq(agentTable.machine, AGENT_MACHINE.WORKSPACE),
-        eq(device.organizationId, agentTable.organizationId),
-      ),
-    ),
+    eq(agentTable.machine, AGENT_MACHINE.DEVICE),
+    eq(device.userId, userId),
   );
 }
 
@@ -369,12 +273,7 @@ const findPin = SqlSchema.findOneOption({
       db
         .select(PIN_COLUMNS)
         .from(agentTable)
-        .where(
-          and(
-            eq(agentTable.id, agentId),
-            inArray(agentTable.machine, [AGENT_MACHINE.DEVICE, AGENT_MACHINE.WORKSPACE]),
-          ),
-        ),
+        .where(and(eq(agentTable.id, agentId), eq(agentTable.machine, AGENT_MACHINE.DEVICE))),
     ),
 });
 
@@ -489,25 +388,6 @@ const findLineStanding = SqlSchema.findOneOption({
     ),
 });
 
-/** A line the host settled, by its id. */
-const findSettledOnHost = SqlSchema.findOneOption({
-  Request: HostRowKeySchema,
-  Result: DeviceAgentSettledLineSchema,
-  execute: ({ host, id }) =>
-    Database.use((db) =>
-      db
-        .select({ agentId: deviceAgentLine.agentId, kind: deviceAgentLine.kind })
-        .from(deviceAgentLine)
-        .where(
-          and(
-            eq(deviceAgentLine.id, id),
-            heldByHost(deviceAgentLine, host),
-            isNotNull(deviceAgentLine.settledAt),
-          ),
-        ),
-    ),
-});
-
 const insertLine = SqlSchema.findAll({
   Request: Schema.Struct({
     id: Schema.UndefinedOr(Schema.String),
@@ -598,9 +478,9 @@ const insertGoneDiscard = SqlSchema.findAll({
  * the rest once it has claimed these.
  */
 const findWaitingLines = SqlSchema.findAll({
-  Request: Schema.Struct({ host: HostPrincipalSchema }),
+  Request: Schema.Struct({ userId: Schema.String, deviceId: Schema.String }),
   Result: WaitingLineSchema,
-  execute: ({ host }) =>
+  execute: ({ userId, deviceId }) =>
     Database.use((db) => {
       const inOrder = sql`over (order by ${deviceAgentLine.seq})`;
 
@@ -619,7 +499,12 @@ const findWaitingLines = SqlSchema.findAll({
         })
         .from(deviceAgentLine)
         .where(
-          and(heldByHost(deviceAgentLine, host), isNull(deviceAgentLine.claimedAt), lineTakeable),
+          and(
+            eq(deviceAgentLine.userId, userId),
+            eq(deviceAgentLine.deviceId, deviceId),
+            isNull(deviceAgentLine.claimedAt),
+            lineTakeable,
+          ),
         )
         .as("waiting");
 
@@ -641,12 +526,12 @@ const findWaitingLines = SqlSchema.findAll({
 
 const claimLine = SqlSchema.findOneOption({
   Request: Schema.Struct({
-    ...HostRowKeySchema.fields,
+    ...DeviceRowKeySchema.fields,
     claimToken: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
   Result: ClaimedLineSchema,
-  execute: ({ host, id, claimToken, now }) =>
+  execute: ({ userId, deviceId, id, claimToken, now }) =>
     Database.use((db) =>
       db
         .update(deviceAgentLine)
@@ -656,7 +541,8 @@ const claimLine = SqlSchema.findOneOption({
           and(
             eq(lineBefore.id, deviceAgentLine.id),
             eq(deviceAgentLine.id, id),
-            heldByHost(deviceAgentLine, host),
+            eq(deviceAgentLine.userId, userId),
+            eq(deviceAgentLine.deviceId, deviceId),
             isNull(deviceAgentLine.claimedAt),
             lineTakeable,
           ),
@@ -676,9 +562,9 @@ const claimLine = SqlSchema.findOneOption({
 
 /** A line the Mac claimed under the token given and has not settled, without its secrets, which its claim took. */
 const findClaimedUnder = SqlSchema.findOneOption({
-  Request: Schema.Struct({ ...HostRowKeySchema.fields, claimToken: Schema.String }),
+  Request: Schema.Struct({ ...DeviceRowKeySchema.fields, claimToken: Schema.String }),
   Result: WaitingLineSchema,
-  execute: ({ host, id, claimToken }) =>
+  execute: ({ userId, deviceId, id, claimToken }) =>
     Database.use((db) =>
       db
         .select({
@@ -692,7 +578,8 @@ const findClaimedUnder = SqlSchema.findOneOption({
         .where(
           and(
             eq(deviceAgentLine.id, id),
-            heldByHost(deviceAgentLine, host),
+            eq(deviceAgentLine.userId, userId),
+            eq(deviceAgentLine.deviceId, deviceId),
             eq(deviceAgentLine.claimToken, claimToken),
             isNotNull(deviceAgentLine.claimedAt),
             isNull(deviceAgentLine.settledAt),
@@ -709,11 +596,11 @@ const LAUNCH_STEP_ORDER = sql`array[${sql.join(
 
 const writeLaunchStep = SqlSchema.findAll({
   Request: Schema.Struct({
-    ...HostRowKeySchema.fields,
+    ...DeviceRowKeySchema.fields,
     step: Schema.Literals(DEVICE_LAUNCH_STEPS),
   }),
   Result: Schema.Struct({ agentId: Schema.String }),
-  execute: ({ host, id, step }) =>
+  execute: ({ userId, deviceId, id, step }) =>
     Database.use((db) =>
       db
         .update(deviceAgentLine)
@@ -733,7 +620,8 @@ const writeLaunchStep = SqlSchema.findAll({
         .where(
           and(
             eq(deviceAgentLine.id, id),
-            heldByHost(deviceAgentLine, host),
+            eq(deviceAgentLine.userId, userId),
+            eq(deviceAgentLine.deviceId, deviceId),
             eq(deviceAgentLine.kind, DEVICE_AGENT_LINE_KIND.LAUNCH),
             isNotNull(deviceAgentLine.claimedAt),
             isNull(deviceAgentLine.settledAt),
@@ -745,12 +633,12 @@ const writeLaunchStep = SqlSchema.findAll({
 
 const writeLineSettled = SqlSchema.findAll({
   Request: Schema.Struct({
-    ...HostRowKeySchema.fields,
+    ...DeviceRowKeySchema.fields,
     exitCode: Schema.NullOr(Schema.Number),
     now: Schema.Date,
   }),
   Result: DeviceAgentSettledLineSchema,
-  execute: ({ host, id, exitCode, now }) =>
+  execute: ({ userId, deviceId, id, exitCode, now }) =>
     Database.use((db) =>
       db
         .update(deviceAgentLine)
@@ -758,7 +646,8 @@ const writeLineSettled = SqlSchema.findAll({
         .where(
           and(
             eq(deviceAgentLine.id, id),
-            heldByHost(deviceAgentLine, host),
+            eq(deviceAgentLine.userId, userId),
+            eq(deviceAgentLine.deviceId, deviceId),
             isNotNull(deviceAgentLine.claimedAt),
             isNull(deviceAgentLine.settledAt),
           ),
@@ -819,23 +708,24 @@ const insertRequest = SqlSchema.findAll({
 });
 
 /**
- * A request waiting for the host, of a kind this build
+ * A request waiting for the account's Mac given, of a kind this build
  * knows. Note that a row of a kind an earlier build queued and never
  * withdrew is passed over rather than read, because one row the decode
  * refuses would fail the Mac's whole read until the expiry took it.
  */
-function requestWaiting(host: HostPrincipal) {
+function requestWaiting(userId: string, deviceId: string) {
   return and(
-    heldByHost(deviceAgentRequest, host),
+    eq(deviceAgentRequest.userId, userId),
+    eq(deviceAgentRequest.deviceId, deviceId),
     isNull(deviceAgentRequest.claimedAt),
     inArray(deviceAgentRequest.kind, Object.values(DEVICE_AGENT_REQUEST_KIND)),
   );
 }
 
 const findWaitingRequests = SqlSchema.findAll({
-  Request: Schema.Struct({ host: HostPrincipalSchema }),
+  Request: Schema.Struct({ userId: Schema.String, deviceId: Schema.String }),
   Result: WaitingRequestSchema,
-  execute: ({ host }) =>
+  execute: ({ userId, deviceId }) =>
     Database.use((db) =>
       db
         .select({
@@ -845,20 +735,20 @@ const findWaitingRequests = SqlSchema.findAll({
           args: deviceAgentRequest.args,
         })
         .from(deviceAgentRequest)
-        .where(requestWaiting(host))
+        .where(requestWaiting(userId, deviceId))
         .orderBy(asc(deviceAgentRequest.createdAt)),
     ),
 });
 
 const claimRequest = SqlSchema.findOneOption({
-  Request: Schema.Struct({ ...HostRowKeySchema.fields, now: Schema.Date }),
+  Request: Schema.Struct({ ...DeviceRowKeySchema.fields, now: Schema.Date }),
   Result: WaitingRequestSchema,
-  execute: ({ host, id, now }) =>
+  execute: ({ userId, deviceId, id, now }) =>
     Database.use((db) =>
       db
         .update(deviceAgentRequest)
         .set({ claimedAt: now })
-        .where(and(eq(deviceAgentRequest.id, id), requestWaiting(host)))
+        .where(and(eq(deviceAgentRequest.id, id), requestWaiting(userId, deviceId)))
         .returning({
           id: deviceAgentRequest.id,
           agentId: deviceAgentRequest.agentId,
@@ -870,12 +760,12 @@ const claimRequest = SqlSchema.findOneOption({
 
 const writeAnswer = SqlSchema.findAll({
   Request: Schema.Struct({
-    ...HostRowKeySchema.fields,
+    ...DeviceRowKeySchema.fields,
     answer: deviceAgentAnswerSchema,
     now: Schema.Date,
   }),
   Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ host, id, answer, now }) =>
+  execute: ({ userId, deviceId, id, answer, now }) =>
     Database.use((db) =>
       db
         .update(deviceAgentRequest)
@@ -883,7 +773,8 @@ const writeAnswer = SqlSchema.findAll({
         .where(
           and(
             eq(deviceAgentRequest.id, id),
-            heldByHost(deviceAgentRequest, host),
+            eq(deviceAgentRequest.userId, userId),
+            eq(deviceAgentRequest.deviceId, deviceId),
             isNotNull(deviceAgentRequest.claimedAt),
             isNull(deviceAgentRequest.settledAt),
           ),
@@ -939,12 +830,12 @@ const deleteUnclaimedLine = SqlSchema.void({
 });
 
 const deleteExpiredLines = SqlSchema.void({
-  Request: Schema.Struct({ owner: machineOwnerSchema, before: Schema.Date }),
-  execute: ({ owner, before }) =>
+  Request: Schema.Struct({ userId: Schema.String, before: Schema.Date }),
+  execute: ({ userId, before }) =>
     Database.use((db) =>
       db.delete(deviceAgentLine).where(
         and(
-          rowsOfOwner(deviceAgentLine, owner),
+          eq(deviceAgentLine.userId, userId),
           lt(deviceAgentLine.createdAt, before),
           // A line claimed and not yet settled is a runner still at work, whose exit is still to come.
           or(isNull(deviceAgentLine.claimedAt), isNotNull(deviceAgentLine.settledAt)),
@@ -954,16 +845,17 @@ const deleteExpiredLines = SqlSchema.void({
 });
 
 const findOpenLaunches = SqlSchema.findAll({
-  Request: Schema.Struct({ host: HostPrincipalSchema }),
+  Request: Schema.Struct({ userId: Schema.String, deviceId: Schema.String }),
   Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ host }) =>
+  execute: ({ userId, deviceId }) =>
     Database.use((db) =>
       db
         .select({ id: deviceAgentLine.id })
         .from(deviceAgentLine)
         .where(
           and(
-            heldByHost(deviceAgentLine, host),
+            eq(deviceAgentLine.userId, userId),
+            eq(deviceAgentLine.deviceId, deviceId),
             eq(deviceAgentLine.kind, DEVICE_AGENT_LINE_KIND.LAUNCH),
             isNull(deviceAgentLine.settledAt),
             lineAgentStands,
@@ -984,14 +876,20 @@ const findOpenLaunches = SqlSchema.findAll({
 });
 
 const findLiveAgents = SqlSchema.findAll({
-  Request: Schema.Struct({ host: HostPrincipalSchema }),
+  Request: Schema.Struct({ userId: Schema.String, deviceId: Schema.String }),
   Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ host }) =>
+  execute: ({ userId, deviceId }) =>
     Database.use((db) =>
       db
         .select({ id: agentTable.id })
         .from(agentTable)
-        .where(and(agentOnHost(host), isNull(agentTable.archivedAt)))
+        .where(
+          and(
+            eq(agentTable.userId, userId),
+            eq(agentTable.deviceId, deviceId),
+            isNull(agentTable.archivedAt),
+          ),
+        )
         .orderBy(asc(agentTable.createdAt), asc(agentTable.id)),
     ),
 });
@@ -1089,13 +987,13 @@ const writeAgentLaunchesSettled = SqlSchema.void({
 });
 
 const deleteExpiredRequests = SqlSchema.void({
-  Request: Schema.Struct({ owner: machineOwnerSchema, before: Schema.Date }),
-  execute: ({ owner, before }) =>
+  Request: Schema.Struct({ userId: Schema.String, before: Schema.Date }),
+  execute: ({ userId, before }) =>
     Database.use((db) =>
       db
         .delete(deviceAgentRequest)
         .where(
-          and(rowsOfOwner(deviceAgentRequest, owner), lt(deviceAgentRequest.createdAt, before)),
+          and(eq(deviceAgentRequest.userId, userId), lt(deviceAgentRequest.createdAt, before)),
         ),
     ),
 });
@@ -1105,8 +1003,8 @@ const deleteExpiredRequests = SqlSchema.void({
  * the next place in the order every line is queued in, with the sealed
  * secrets a launch line carries, its caller holding the agent's runner
  * lease; its id and place, or none where the account holds no such agent
- * pinned to a machine its kind admits (`pinnedAgent`), or the machine never
- * registered the capability the line's kind needs.
+ * running on a Mac of its own, or the Mac never registered the capability
+ * the line's kind needs.
  */
 export function queueDeviceAgentLine(
   userId: string,
@@ -1169,16 +1067,15 @@ export function deviceAgentOfSession(
   return findPinOfSession({ runtimeSessionId });
 }
 
-/** The agent under the id that runs on a host's machine, a member's own device or a workspace's, its starter and that machine; nothing for an agent in a sandbox. Read with no account in hand, as above, only for an id a machine's place or a host's line carries. */
+/** The local agent under the id, its starter and its Mac; nothing for an agent in a sandbox. Read with no account in hand, as above, only for an id a machine's place carries. */
 export function deviceAgentPin(agentId: string): DeviceAgentEffect<Option.Option<DeviceAgentPin>> {
   return findPin({ agentId });
 }
 
 /**
- * Whether the machine the account's agent is pinned to last beat that it
- * waits to switch release (`HOST_UPDATE.WAITING`); false for an agent in a
- * sandbox, one pinned to no machine its kind admits (`pinnedAgent`), and
- * another account's agent.
+ * Whether the account's local agent's device last beat that it waits to
+ * switch release (`HOST_UPDATE.WAITING`); false for an agent in a sandbox,
+ * one pinned to no device of the account's, and another account's agent.
  */
 export function deviceAgentAwaitsUpdate(
   userId: string,
@@ -1220,15 +1117,16 @@ export function deviceAgentLineStanding(
   return findLineStanding({ userId, id });
 }
 
-/** The lines waiting for the host, in the order they were queued, without their secrets, as far as one read's budget goes; none of an agent gone but a discard. */
+/** The lines waiting for the account's Mac, in the order they were queued, without their secrets, as far as one read's budget goes; none of an agent gone but a discard. */
 export function deviceAgentLinesWaiting(
-  host: HostPrincipal,
+  userId: string,
+  deviceId: string,
 ): DeviceAgentEffect<readonly DeviceAgentWaitingLine[]> {
-  return findWaitingLines({ host });
+  return findWaitingLines({ userId, deviceId });
 }
 
 /**
- * Claims one line for the host under the token it minted for
+ * Claims one line for the account's Mac under the token its Mac minted for
  * it, where it names one, handing over its sealed secrets and clearing them
  * in the same statement. The same claim asked again under the same token is
  * answered the line again, without its secrets, until the line is settled.
@@ -1240,19 +1138,20 @@ export function deviceAgentLinesWaiting(
  * reads its secrets, so no two answers can both carry them.
  */
 export function claimDeviceAgentLine(
-  host: HostPrincipal,
+  userId: string,
+  deviceId: string,
   id: string,
   claimToken?: string,
 ): DeviceAgentEffect<Option.Option<DeviceAgentClaimedLine>> {
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
-    const claimed = yield* claimLine({ host, id, claimToken: claimToken ?? null, now });
+    const claimed = yield* claimLine({ userId, deviceId, id, claimToken: claimToken ?? null, now });
 
     if (Option.isSome(claimed) || claimToken === undefined) {
       return Option.map(claimed, (line) => ({ ...line, secretsGone: false }));
     }
 
-    const again = yield* findClaimedUnder({ host, id, claimToken });
+    const again = yield* findClaimedUnder({ userId, deviceId, id, claimToken });
 
     return Option.map(again, (line) => ({
       ...line,
@@ -1271,38 +1170,33 @@ export function claimDeviceAgentLine(
  * account's line, a line of any other kind, one waiting, and one settled.
  */
 export function stepDeviceAgentLaunch(
-  host: HostPrincipal,
+  userId: string,
+  deviceId: string,
   id: string,
   step: DeviceLaunchStep,
 ): DeviceAgentEffect<Option.Option<string>> {
-  return Effect.map(writeLaunchStep({ host, id, step }), ([row]) =>
+  return Effect.map(writeLaunchStep({ userId, deviceId, id, step }), ([row]) =>
     Option.fromNullishOr(row?.agentId),
   );
 }
 
 /**
- * Settles a line the host claimed, with its runner's exit code
+ * Settles a line the account's Mac claimed, with its runner's exit code
  * where it is a launch line whose runner exited, answering the line's agent
  * and kind; none where that Mac holds no such line claimed and unsettled.
  */
 export function settleDeviceAgentLine(
-  host: HostPrincipal,
+  userId: string,
+  deviceId: string,
   id: string,
   exitCode?: number,
 ): DeviceAgentEffect<Option.Option<DeviceAgentSettledLine>> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    Effect.map(writeLineSettled({ host, id, exitCode: exitCode ?? null, now }), (rows) =>
-      Option.fromNullishOr(rows[0]),
+    Effect.map(
+      writeLineSettled({ userId, deviceId, id, exitCode: exitCode ?? null, now }),
+      (rows) => Option.fromNullishOr(rows[0]),
     ),
   );
-}
-
-/** A line the host already settled, its agent and kind, as its settle answered them; none for one it has not, or another device's. */
-export function deviceAgentLineSettledOn(
-  host: HostPrincipal,
-  id: string,
-): DeviceAgentEffect<Option.Option<DeviceAgentSettledLine>> {
-  return findSettledOnHost({ host, id });
 }
 
 /** A line's exit code once its Mac settled it, null for one settled with none; nothing while it waits or runs. */
@@ -1314,25 +1208,30 @@ export function deviceAgentLineSettlement(
 }
 
 /**
- * The ids of the host's launch lines that are still
+ * The ids of the account's launch lines to the device given that are still
  * open, claimed or not, with no stop queued after them and their agent still
  * standing, oldest first: the runs the service holds the device to, which
  * its beat answers so it stops what it holds no longer and settles what it
  * runs nothing for.
  */
-export function openDeviceAgentLaunches(host: HostPrincipal): DeviceAgentEffect<readonly string[]> {
-  return Effect.map(findOpenLaunches({ host }), (rows) => rows.map((row) => row.id));
+export function openDeviceAgentLaunches(
+  userId: string,
+  deviceId: string,
+): DeviceAgentEffect<readonly string[]> {
+  return Effect.map(findOpenLaunches({ userId, deviceId }), (rows) => rows.map((row) => row.id));
 }
 
 /**
- * The ids of the agents pinned to the host's device and not archived,
- * oldest first, the owner's own for a member's device and any of the
- * workspace's for a workspace's machine: what should still stand on that
- * device, whatever its task's status. A deleted task's agents are gone with
- * it, so none is named; none for another owner's device.
+ * The ids of the account's agents pinned to its device given and not
+ * archived, oldest first: what should still stand on that device, whatever
+ * its task's status. A deleted task's agents are gone with it, so none is
+ * named; none for another account's device.
  */
-export function liveDeviceAgents(host: HostPrincipal): DeviceAgentEffect<readonly string[]> {
-  return Effect.map(findLiveAgents({ host }), (rows) => rows.map((row) => row.id));
+export function liveDeviceAgents(
+  userId: string,
+  deviceId: string,
+): DeviceAgentEffect<readonly string[]> {
+  return Effect.map(findLiveAgents({ userId, deviceId }), (rows) => rows.map((row) => row.id));
 }
 
 /**
@@ -1387,7 +1286,7 @@ export function settleMovedDeviceAgentLaunches(
 /**
  * Queues one request for the account's agent, to the Mac it is pinned to,
  * under the id its caller minted; false where the account holds no such
- * agent pinned to a machine its kind admits (`pinnedAgent`).
+ * agent running on a Mac of its own.
  */
 export function queueDeviceAgentRequest(
   userId: string,
@@ -1403,33 +1302,36 @@ export function queueDeviceAgentRequest(
   );
 }
 
-/** The requests waiting for the host, oldest first. */
+/** The requests waiting for the account's Mac, oldest first. */
 export function deviceAgentRequestsWaiting(
-  host: HostPrincipal,
+  userId: string,
+  deviceId: string,
 ): DeviceAgentEffect<readonly DeviceAgentWaitingRequest[]> {
-  return findWaitingRequests({ host });
+  return findWaitingRequests({ userId, deviceId });
 }
 
-/** Claims one request for the host; none where it is not the host's, another claim took it first, or it was withdrawn. */
+/** Claims one request for the account's Mac; none where it is not that Mac's, another claim took it first, or it was withdrawn. */
 export function claimDeviceAgentRequest(
-  host: HostPrincipal,
+  userId: string,
+  deviceId: string,
   id: string,
 ): DeviceAgentEffect<Option.Option<DeviceAgentWaitingRequest>> {
-  return Effect.flatMap(DateTime.nowAsDate, (now) => claimRequest({ host, id, now }));
+  return Effect.flatMap(DateTime.nowAsDate, (now) => claimRequest({ userId, deviceId, id, now }));
 }
 
 /**
- * Keeps the answer to a request the host claimed; false where the host
- * holds no such request claimed and unanswered. An answer past the
+ * Keeps the answer to a request the account's Mac claimed; false where that
+ * Mac holds no such request claimed and unanswered. An answer past the
  * bound fails its decode and writes nothing.
  */
 export function answerDeviceAgentRequest(
-  host: HostPrincipal,
+  userId: string,
+  deviceId: string,
   id: string,
   answer: DeviceAgentAnswer,
 ): DeviceAgentEffect<boolean> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    Effect.map(writeAnswer({ host, id, answer, now }), (rows) => rows.length > 0),
+    Effect.map(writeAnswer({ userId, deviceId, id, answer, now }), (rows) => rows.length > 0),
   );
 }
 
@@ -1464,17 +1366,16 @@ export function withdrawUnclaimedDeviceAgentLine(
 }
 
 /**
- * Withdraws the owner's lines and requests queued before the instant
- * given (`rowsOfOwner`): every request, and every line but one claimed and
- * not yet settled, whose runner is still at work and whose exit is still to
- * come.
+ * Withdraws the account's lines and requests queued before the instant
+ * given: every request, and every line but one claimed and not yet
+ * settled, whose runner is still at work and whose exit is still to come.
  */
 export function withdrawExpiredDeviceAgentRows(
-  owner: MachineOwner,
+  userId: string,
   before: Date,
 ): DeviceAgentEffect<void> {
   return Effect.andThen(
-    deleteExpiredLines({ owner, before }),
-    deleteExpiredRequests({ owner, before }),
+    deleteExpiredLines({ userId, before }),
+    deleteExpiredRequests({ userId, before }),
   );
 }

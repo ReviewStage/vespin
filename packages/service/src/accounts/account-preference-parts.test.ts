@@ -15,7 +15,8 @@ import { LINK_OPEN } from "@repo/features/link-open";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { LIVE_VOICE } from "@repo/features/voices";
-import { EXPERIMENT, INTROS_SHIPPED_AT, SOUND_WHEN } from "@repo/settings";
+import { DIFF_DISPLAY_FIELDS, EXPERIMENT, INTROS_SHIPPED_AT, SOUND_WHEN } from "@repo/settings";
+import { DIFF_FONT, DIFF_INDICATORS, DIFF_LAYOUT, INLINE_DIFF } from "@repo/settings/diff-view";
 import {
   HTTP_METHOD,
   isRecord,
@@ -337,6 +338,69 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
       assert.equal(partOf(kept, "askSound"), COMPLETION_SOUND.QUESTION);
       assert.equal(partOf(kept, "voice"), LIVE_VOICE.CEDAR);
       assert.equal(partOf(kept, "turnNotifications"), true);
+    }),
+  );
+});
+
+/** A choice of every diff display setting, each away from its default, as a reader who picked a review tool's look writes them. */
+const DIFF_DISPLAY_CHOSEN = {
+  lineNumbers: false,
+  wordWrap: false,
+  diffLayout: DIFF_LAYOUT.SPLIT,
+  diffIndicators: DIFF_INDICATORS.CLASSIC,
+  inlineDiff: INLINE_DIFF.CHAR,
+  diffBackgrounds: false,
+  diffDarkTheme: "github-dark",
+  diffLightTheme: "github-light",
+  diffFont: DIFF_FONT.MENLO,
+  diffLigatures: true,
+  diffMinimizeComments: true,
+} as const;
+
+it.layer(getTestDB())("the preferences snapshot's diff display parts", (it) => {
+  it.effect(
+    "are absent until the account chooses, and each choice written is the one read back",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, ask } = yield* openAccounts;
+        const before = yield* ask(request(owner));
+
+        assert.deepEqual(
+          DIFF_DISPLAY_FIELDS.map((field) => partOf(before, field)),
+          DIFF_DISPLAY_FIELDS.map(() => undefined),
+        );
+
+        const chosen = yield* ask(request(owner, DIFF_DISPLAY_CHOSEN));
+        const read = yield* ask(request(owner));
+        const theirs = yield* ask(request(other));
+
+        assert.deepEqual(
+          Object.fromEntries(DIFF_DISPLAY_FIELDS.map((field) => [field, partOf(read, field)])),
+          DIFF_DISPLAY_CHOSEN,
+        );
+        assert.equal(partOf(chosen, "updatedAt"), undefined);
+        assert.deepEqual(
+          DIFF_DISPLAY_FIELDS.map((field) => partOf(theirs, field)),
+          DIFF_DISPLAY_FIELDS.map(() => undefined),
+        );
+      }),
+  );
+
+  it.effect("refuses a part naming no choice, and keeps what stood", () =>
+    Effect.gen(function* () {
+      const { owner, ask } = yield* openAccounts;
+      yield* ask(request(owner, DIFF_DISPLAY_CHOSEN));
+
+      for (const refused of [{ diffLayout: "sideways" }, { lineNumbers: "yes" }]) {
+        assert.deepEqual(yield* ask(request(owner, refused)), {
+          status: HOSTED_HTTP_STATUS.BAD_REQUEST,
+          body: { error: HOSTED_API_ERROR.INVALID_REQUEST },
+        });
+      }
+
+      const kept = yield* ask(request(owner));
+      assert.equal(partOf(kept, "diffLayout"), DIFF_LAYOUT.SPLIT);
+      assert.equal(partOf(kept, "lineNumbers"), false);
     }),
   );
 });

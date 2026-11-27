@@ -180,6 +180,11 @@ pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-provider-marks.t
 # --check fails if one drifted.
 pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-manager-faces.ts --check
 
+# The emoji every picker offers are emojibase's English data trimmed to what
+# @repo/features' emoji model reads; --check fails if an upgrade of
+# emojibase-data was not written through.
+pnpm --dir "$APP_REPO_ROOT/packages/features" exec tsx scripts/emoji-data.ts --check
+
 # The loopback sign-in page the desktop and the CLI serve is @repo/ui's
 # AuthPage, rendered with its sheet, face, and favicon into
 # @repo/credentials' generated module; --check fails if it drifted.
@@ -532,8 +537,9 @@ fi
 # name belongs to an outside spec or API (ARIA's `labelledby`, the Web Audio
 # `AnalyserNode`, Foundation's `NSUserCancelledError`, Swift's `Task.isCancelled`) or the value is already stored or on the wire (a `"cancelled"`
 # status, the `tasks.colourCode` kind), which keeps the spelling it shipped with.
-# Migrations, the generated Codex protocol, and patches against other source
-# are written as they must apply, so they are left out.
+# Migrations, the generated Codex protocol, the emoji data generated from
+# CLDR's keywords (whose "grey" a search must still find), and patches against
+# other source are written as they must apply, so they are left out.
 node --input-type=module -e '
   import { execFileSync } from "node:child_process";
   import { readFileSync } from "node:fs";
@@ -562,7 +568,7 @@ node --input-type=module -e '
       .join("|"),
   );
   const kept = /labelledBy|AnalyserNode|createAnalyser|NSUserCancelledError|Task\.isCancelled|tasks\.colourCode|["\x27`]cancelled["\x27`]|cancelled\??:|"cancelled" in/g;
-  const skipped = /^(pnpm-lock\.yaml|patches\/|packages\/database\/migrations\/|packages\/agent-runner\/src\/codex-protocol\/|scripts\/repository-checks\.sh$)|\.patch$/;
+  const skipped = /^(pnpm-lock\.yaml|patches\/|packages\/database\/migrations\/|packages\/agent-runner\/src\/codex-protocol\/|packages\/features\/src\/generated\/emoji-data\.ts$|scripts\/repository-checks\.sh$)|\.patch$/;
   const repository = process.argv[1];
   const files = execFileSync("git", ["-C", repository, "ls-files"], { encoding: "utf8" }).split("\n");
   const offenders = [];

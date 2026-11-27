@@ -8,7 +8,7 @@ import { Badge } from "../badge/badge.js";
 import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { HoverCard, HoverCardHead } from "../hover-card/hover-card.js";
 import { OneLine } from "../one-line/one-line.js";
-import { SCROLL_FADE, SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
+import { SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
 import type { MenuRow } from "../searchable-menu/searchable-menu.js";
 import { Tooltip } from "../tooltip/hint.js";
 import {
@@ -260,7 +260,7 @@ export function RepositoryLines({
 
   return (
     <div className="ui-repository-lines flex min-w-0 max-h-repository-lines flex-col">
-      <ScrollArea ref={scroller} size={SCROLL_SIZE.CONTENT} fade={SCROLL_FADE.BOTH}>
+      <ScrollArea ref={scroller} size={SCROLL_SIZE.CONTENT}>
         <div className="min-w-0">
           <VirtualRows
             scroller={scroller}

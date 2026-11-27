@@ -2,20 +2,15 @@
  * device-agent.ts -- what a local agent's Mac takes from the service: its lines and its requests, held for while none waits, and a launch line's secrets opened once as it is claimed.
  *
  * Every function is the Mac's side of `machine/device-machine.ts`, under the
- * host its device secret names (`HostPrincipal`): its device and that
- * device's owner, a member's own Mac or box or a workspace's machine, and
- * answers nothing where the owner holds no such device
- * (`deviceAgentDeviceOf`). A held read counts as the device's beat,
- * withdraws the owner's work queued too long ago for any device to take
+ * account its sign-in token names and the device it names, and answers
+ * nothing where the account holds no such Mac (`deviceAgentDeviceOf`). A held read counts as the Mac's beat,
+ * withdraws the account's work queued too long ago for any Mac to take
  * (`DEVICE_AGENT_SERVICE.EXPIRY`, past the longest a coding agent's turn may
- * run), and answers what waits for that device as soon as anything does, or
- * nothing once the hold ends, woken by a write to its own lines and requests
- * (`TOPIC.DEVICE`); it claims nothing, since the device claims each row by
- * its id. What a line's agent needs of its own account, a launch's secrets
- * opened and its turns settled, is read under the account the agent was
- * started by (`deviceAgentPin`), since a workspace's machine runs every
- * member's. A launch line's claim hands its secrets over opened from the
- * row's seal, which the same claim cleared, so the device is handed them
+ * run), and answers what waits for that Mac as soon as anything does, or
+ * nothing once the hold ends, woken by a write to its own lines and
+ * requests (`TOPIC.DEVICE`); it claims nothing, since the Mac claims each
+ * row by its id. A launch line's claim hands its secrets over opened from
+ * the row's seal, which the same claim cleared, so the Mac is handed them
  * once and the row never holds them again.
  */
 
@@ -25,16 +20,15 @@ import { failAgentBoot } from "@repo/database/models/agent-boot-store";
 import { latestTurnsOf, readAgent } from "@repo/database/models/agent-store";
 import {
   claimDeviceAgentLine,
-  deviceAgentLineSettledOn,
+  deviceAgentLineStanding,
   deviceAgentLinesWaiting,
   deviceAgentPin,
   deviceAgentRequestsWaiting,
-  type HostPrincipal,
   latestDeviceAgentLaunch,
   settleDeviceAgentLine,
   withdrawExpiredDeviceAgentRows,
 } from "@repo/database/models/device-agent-store";
-import { beatDevice, hostLayout } from "@repo/database/models/device-store";
+import { beatDevice, deviceLayout } from "@repo/database/models/device-store";
 import { openMacLaunchSecrets, parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { storeWriter } from "@repo/database/models/writer";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
@@ -72,32 +66,33 @@ const decodeSecrets = Schema.decodeUnknownResult(
 );
 
 /**
- * Whether the host may follow the device it names: its owner holds it, and
- * it registered. Every procedure of the device's asks this first, and
- * answers not found where it is false.
+ * Whether the account may follow the Mac it names: the Mac is its own.
+ * Every procedure of the Mac's asks this first, and answers not found where
+ * it is false.
  */
-export function deviceAgentDeviceOf(host: HostPrincipal): DeviceAgentEffect<boolean> {
-  return Effect.map(hostLayout(host), Option.isSome);
+export function deviceAgentDeviceOf(userId: string, deviceId: string): DeviceAgentEffect<boolean> {
+  return Effect.map(deviceLayout(userId, deviceId), Option.isSome);
 }
 
 /**
  * What a held read answers: the rows waiting, read again as each write to
  * the device's lines and requests lands, which notifies its topic
  * (`deviceAgentLineSync`, `deviceAgentRequestSync`), until any is or the
- * hold ends; the device beaten and its owner's expired rows withdrawn first.
+ * hold ends; the Mac beaten and the expired rows withdrawn first.
  */
 function heldRead<A>(
-  host: HostPrincipal,
+  userId: string,
+  deviceId: string,
   waiting: DeviceAgentEffect<readonly A[]>,
 ): DeviceAgentEffect<readonly A[]> {
   return Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
-    yield* beatDevice(host);
+    yield* beatDevice(userId, deviceId);
     yield* withdrawExpiredDeviceAgentRows(
-      host.owner,
+      userId,
       new Date(now - Duration.toMillis(DEVICE_AGENT_SERVICE.EXPIRY)),
     );
-    const topics: readonly SyncTopic[] = [[TOPIC.DEVICE, host.deviceId]];
+    const topics: readonly SyncTopic[] = [[TOPIC.DEVICE, deviceId]];
 
     const found = yield* heldUntil(
       waiting,
@@ -111,14 +106,14 @@ function heldRead<A>(
   });
 }
 
-/** The device's held read of its agents' lines, in their order. */
-export function deviceAgentLinesFor(host: HostPrincipal) {
-  return heldRead(host, deviceAgentLinesWaiting(host));
+/** The Mac's held read of its agents' lines, in their order. */
+export function deviceAgentLinesFor(userId: string, deviceId: string) {
+  return heldRead(userId, deviceId, deviceAgentLinesWaiting(userId, deviceId));
 }
 
-/** The device's held read of its agents' tools' requests, oldest first. */
-export function deviceAgentRequestsFor(host: HostPrincipal) {
-  return heldRead(host, deviceAgentRequestsWaiting(host));
+/** The Mac's held read of its agents' tools' requests, oldest first. */
+export function deviceAgentRequestsFor(userId: string, deviceId: string) {
+  return heldRead(userId, deviceId, deviceAgentRequestsWaiting(userId, deviceId));
 }
 
 /**
@@ -154,17 +149,22 @@ const openedSecrets = (userId: string, agentId: string, sealed: string) =>
   });
 
 /**
- * One line claimed for the host's device under the token it minted for the
- * line, where it names one, with a launch line's secrets opened once, under
- * the account of the agent it is for; none where it is not that device's,
- * another claim took it, it was settled, or it was withdrawn. The same claim asked again under the same token is
+ * One line claimed for the account's Mac under the token it minted for the
+ * line, where it names one, with a launch line's secrets opened once; none
+ * where it is not that Mac's, another claim took it, it was settled, or it
+ * was withdrawn. The same claim asked again under the same token is
  * answered the line again, and a launch line's secrets as gone, since the
  * first claim took them. A launch line whose secrets do not open is handed
  * over without them, for the Mac to settle as a runner that never started.
  */
-export function claimedDeviceAgentLine(host: HostPrincipal, id: string, claimToken?: string) {
+export function claimedDeviceAgentLine(
+  userId: string,
+  deviceId: string,
+  id: string,
+  claimToken?: string,
+) {
   return Effect.gen(function* () {
-    const claimed = yield* claimDeviceAgentLine(host, id, claimToken);
+    const claimed = yield* claimDeviceAgentLine(userId, deviceId, id, claimToken);
 
     if (Option.isNone(claimed)) return Option.none();
     const { sealedSecrets, secretsGone, ...line } = claimed.value;
@@ -175,19 +175,16 @@ export function claimedDeviceAgentLine(host: HostPrincipal, id: string, claimTok
       return Option.some({ line });
     }
 
-    const pin = yield* deviceAgentPin(line.agentId);
-
-    // Note that a launch whose agent is gone is handed over without its secrets, for the device to settle as a runner that never started.
-    if (Option.isNone(pin)) return Option.some({ line });
-    const secrets = yield* openedSecrets(pin.value.userId, line.agentId, sealedSecrets);
+    // Note that a launch whose agent is gone or no longer on a Mac is handed over without its secrets, for the device to settle as a runner that never started.
+    if (Option.isNone(yield* deviceAgentPin(line.agentId))) return Option.some({ line });
+    const secrets = yield* openedSecrets(userId, line.agentId, sealedSecrets);
 
     return Option.some(Option.isSome(secrets) ? { line, secrets: secrets.value } : { line });
   });
 }
 
 /**
- * One line the host's device claimed, settled; whether it was, its agent's
- * turns read under the account the agent was started by. A launch
+ * One line the account's Mac claimed, settled; whether it was. A launch
  * line that was the agent's newest settles its runner as gone, so a turn
  * of the agent's still under way, whose runner posted no END before it
  * ended, as when the app quit or the Mac's switch went off mid-turn, is
@@ -199,7 +196,9 @@ export function claimedDeviceAgentLine(host: HostPrincipal, id: string, claimTok
  * last reported where it reported one, and by the reason the Mac said where
  * it said one (`launchStoppedDetail`). A turn the runner ended itself
  * is already settled, and is left as it stands. An older launch a newer one
- * replaced settles nothing of the newer one's turn.
+ * replaced settles nothing of the newer one's turn, and nor does any
+ * launch of an agent no longer on a Mac (`deviceAgentPin`), as one moved to
+ * the cloud, whose turns since run in a sandbox.
  *
  * Note that a line this Mac already settled is answered as settled again,
  * and its runner's turn settled again, which settles nothing a second time,
@@ -208,23 +207,29 @@ export function claimedDeviceAgentLine(host: HostPrincipal, id: string, claimTok
  * must still reach the turn.
  */
 export function settledDeviceAgentLine(
-  host: HostPrincipal,
+  userId: string,
+  deviceId: string,
   id: string,
   exitCode?: number,
   unstarted?: DeviceLaunchUnstarted,
 ) {
   return Effect.gen(function* () {
-    const fresh = yield* settleDeviceAgentLine(host, id, exitCode);
-    const settled = Option.isSome(fresh) ? fresh : yield* deviceAgentLineSettledOn(host, id);
+    const fresh = yield* settleDeviceAgentLine(userId, deviceId, id, exitCode);
+
+    const settled = Option.isSome(fresh)
+      ? fresh
+      : Option.filter(
+          yield* deviceAgentLineStanding(userId, id),
+          (standing) => standing.settled && standing.deviceId === deviceId,
+        );
 
     if (Option.isNone(settled)) return false;
     const { agentId, kind } = settled.value;
 
     if (kind !== DEVICE_AGENT_LINE_KIND.LAUNCH) return true;
-    const pin = yield* deviceAgentPin(agentId);
 
-    if (Option.isNone(pin)) return true;
-    const { userId } = pin.value;
+    // Note that an agent moved off its Mac keeps that Mac's launches settled, so a late settle of one names its newest launch still, and must leave its turns in the cloud alone.
+    if (Option.isNone(yield* deviceAgentPin(agentId))) return true;
     const newest = yield* latestDeviceAgentLaunch(userId, agentId);
 
     if (Option.isNone(newest) || newest.value.id !== id) return true;

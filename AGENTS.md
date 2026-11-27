@@ -238,6 +238,14 @@ component, or add the component or variant there.
   what leaves the machine is layout and the app's own words, not a person's;
   an unmasked attribute or a new way of drawing words is what would change
   that.
+- The iOS app's session replay is Sentry's mobile replay
+  (`apps/mobile/src/crash-reports.ts`), recorded every session with everything
+  masked (`REPLAY_MASKING`: every word, field, symbol, vector, and picture the
+  app did not ship with drawn as a box, and web views, video, PDFs and Safari
+  sheets always), filed under no account, and stopped with the SDK by Share
+  usage data; nothing is unmasked, since `@repo/ui-native` has no mark for the
+  app's own words, and an unmask option, a network detail allowed for an
+  address, or a way of drawing the SDK cannot mask is what would change that.
 - Never push PR media to a branch but `pr-assets`, under `pr-<number>/`, if
   you add any. PR media is not required.
 - Never add to this file (`AGENTS.md`, which `CLAUDE.md` links to) unless the

@@ -1,5 +1,5 @@
 /**
- * move.ts -- a coding agent moved between the cloud, one of its starter's Macs, and a machine its workspace owns, in the same agent: its row pointed at the new place, its work handed on, and a mark in its transcript.
+ * move.ts -- a coding agent moved between the cloud and one of its starter's Macs in the same agent: its row pointed at the new place, its work handed on, and a mark in its transcript.
  *
  * A move keeps the agent: its id, its tab, its transcript, its branch and
  * pull request. Only where it runs changes. An agent at work is refused
@@ -13,9 +13,8 @@
  * The runner at the old place is halted first, its sandbox or its Mac's
  * folder kept. Work an agent left in the cloud is copied whole, what it had
  * not committed or pushed included, to a branch of its own (`snapshot.ts`);
- * an agent leaving a Mac or a workspace's machine brings only what it
- * pushed, since its folder is read by nothing but that machine, and the
- * folder stays there. The row then
+ * an agent leaving a Mac brings only what it pushed, since its folder is
+ * read by nothing but that Mac, and the folder stays there. The row then
  * names the new place (`moveAgentPlace`), its runner's bearer retired and
  * the sandbox and session a Start handed it let go, any launch still open
  * on a Mac is settled, and the conversation keeps the move for the next
@@ -38,16 +37,12 @@ import {
 } from "@repo/database/models/agent-store";
 import { cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
 import { settleMovedDeviceAgentLaunches } from "@repo/database/models/device-agent-store";
-import { machinesNamed } from "@repo/database/models/device-store";
+import { devicesNamed } from "@repo/database/models/device-store";
 import { DispatchClaimHeld, underDispatchClaim } from "@repo/database/models/dispatch-claim";
 import { latestTurnsOf } from "@repo/database/models/message-reads";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import type { StoreWriter } from "@repo/database/models/writer";
-import {
-  AGENT_MACHINE,
-  type AgentMachineKind,
-  type AgentRunsOnRequest,
-} from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentRunsOnRequest } from "@repo/features/agent-wire";
 import type { MovedPlace } from "@repo/wire/ui-messages";
 import { Effect, Option, Result } from "effect";
 import { SqlClient } from "effect/sql";
@@ -57,72 +52,46 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
-import { harnessOf, type NativeRuntime } from "./native-runtime.js";
+import { harnessOf } from "./native-runtime.js";
 import { runnerHalted } from "./runtime-sessions.js";
 import { copySourceWork, SNAPSHOT_MISS, type SourceCopyServices } from "./snapshot.js";
-import { ownDeviceOf, startMachineOf } from "./start.js";
+import { ownDeviceOf } from "./start.js";
 import { checkoutsOn } from "./takeover.js";
 import type { AgentMoved } from "./turn-context.js";
 import { heldNativeTurnHanded, keptNativeTurnHanded } from "./turn-message.js";
 
-/** A place as the move reads it: the cloud, or one of the starter's Macs or a machine of the agent's workspace, by its id and name. */
+/** A place as the move reads it: the cloud, or one of the starter's Macs by its id and name. */
 interface MovePlace {
-  readonly machine: AgentMachineKind;
+  readonly machine: typeof AGENT_MACHINE.VERCEL | typeof AGENT_MACHINE.DEVICE;
   readonly deviceId: string | null;
   readonly name: string | undefined;
 }
 
 const THE_CLOUD: MovePlace = { machine: AGENT_MACHINE.VERCEL, deviceId: null, name: undefined };
 
-/** The place the agent runs at now, its machine named as its row holds it, unnamed where that row is gone. */
+/** The place the agent runs at now, its Mac named as the account holds it, unnamed where its row is gone. */
 const placeOf = Effect.fnUntraced(function* (
   agent: Agent,
 ): Effect.fn.Return<MovePlace, HostedRefusal, DatabaseServices> {
-  const machine = agent.machine ?? AGENT_MACHINE.VERCEL;
-
-  if (machine === AGENT_MACHINE.VERCEL) return THE_CLOUD;
+  if (agent.machine !== AGENT_MACHINE.DEVICE) return THE_CLOUD;
   const deviceId = agent.deviceId ?? null;
 
-  if (deviceId === null) return { machine, deviceId, name: undefined };
-  const named = yield* hostedStoreOrUnavailable(machinesNamed([deviceId]));
+  if (deviceId === null) return { machine: AGENT_MACHINE.DEVICE, deviceId, name: undefined };
+  const named = yield* hostedStoreOrUnavailable(devicesNamed([deviceId]));
 
-  return { machine, deviceId, name: named.get(deviceId)?.name };
+  return { machine: AGENT_MACHINE.DEVICE, deviceId, name: named.get(deviceId)?.name };
 });
 
-/**
- * The place asked for, admitted as a Start's is: a Mac as the starter's
- * own, standing, and not removed (`ownDeviceOf`); a workspace's machine as
- * one the agent's own workspace owns, there, and ready to run agents in
- * VMs (`startMachineOf`), whoever of its members moves it.
- */
-const askedPlaceOf = Effect.fnUntraced(function* (
-  agent: Agent,
-  runsOn: AgentRunsOnRequest,
-  runtime: NativeRuntime,
-): Effect.fn.Return<MovePlace, HostedRefusal, DatabaseServices> {
-  switch (runsOn.machine) {
-    case AGENT_MACHINE.VERCEL:
-      return THE_CLOUD;
-    case AGENT_MACHINE.DEVICE: {
-      const device = yield* ownDeviceOf(agent.userId, runsOn.deviceId);
+/** The place asked for, a Mac admitted as a Start's is (`ownDeviceOf`): the starter's own, standing, and not removed. */
+const askedPlaceOf = Effect.fnUntraced(function* (agent: Agent, runsOn: AgentRunsOnRequest) {
+  if (runsOn.machine === AGENT_MACHINE.VERCEL) return THE_CLOUD;
+  const device = yield* ownDeviceOf(agent.userId, runsOn.deviceId);
 
-      return { machine: device.machine, deviceId: device.deviceId, name: device.name };
-    }
-
-    case AGENT_MACHINE.WORKSPACE: {
-      const asked = {
-        machine: AGENT_MACHINE.WORKSPACE,
-        deviceId: runsOn.deviceId,
-        workspaceId: agent.organizationId,
-      } as const;
-
-      const placed = yield* startMachineOf(agent.userId, asked, runtime, hasRepository(agent));
-      const deviceId = placed.deviceId ?? runsOn.deviceId;
-      const named = yield* hostedStoreOrUnavailable(machinesNamed([deviceId]));
-
-      return { machine: AGENT_MACHINE.WORKSPACE, deviceId, name: named.get(deviceId)?.name };
-    }
-  }
+  return {
+    machine: device.machine,
+    deviceId: device.deviceId,
+    name: device.name,
+  } satisfies MovePlace;
 });
 
 /** A place as the transcript's mark keeps it: a Mac by its id and name, the cloud as neither. */
@@ -136,8 +105,7 @@ function markedPlace(place: MovePlace): MovedPlace {
 /** A place as the agent's next turn is told it (`movedWords`). */
 function toldSide(place: MovePlace): AgentMoved["from"] {
   return {
-    onMac: place.machine !== AGENT_MACHINE.VERCEL,
-    ...(place.machine === AGENT_MACHINE.WORKSPACE ? { workspace: true } : undefined),
+    onMac: place.machine === AGENT_MACHINE.DEVICE,
     ...(place.name === undefined ? undefined : { name: place.name }),
   };
 }
@@ -186,9 +154,8 @@ const copiedBranchOf = Effect.fnUntraced(function* (
 /**
  * The agent moved to the place asked, as the header says; refused where the
  * caller may not write to it, where it is archived, where it works, where
- * it runs on no harness, where it already runs there, where the Mac
- * asked is not the starter's own, standing, and where the workspace's
- * machine asked is not its workspace's, there, and ready.
+ * it runs on no harness, where it already runs there, and where the Mac
+ * asked is not the starter's own, standing.
  */
 export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* (
   writer: Effect.Effect<StoreWriter>,
@@ -221,11 +188,7 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
 
     // Note that control is asked again of the agent as it stands, since a move just before may have put it on its starter's Mac.
     if (!controlsAgent(account, standing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-
-    const [from, to] = yield* Effect.all([
-      placeOf(standing),
-      askedPlaceOf(standing, runsOn, runtime),
-    ]);
+    const [from, to] = yield* Effect.all([placeOf(standing), askedPlaceOf(standing, runsOn)]);
 
     if (from.machine === to.machine && from.deviceId === to.deviceId) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
@@ -274,7 +237,7 @@ export const movedAgent = /* @__PURE__ */ Effect.fn("web/movedAgent")(function* 
       yield* cancelAgentWakeup(agent.id);
       yield* moveAgentPlace(agent.userId, standing, { machine: to.machine, deviceId: to.deviceId });
 
-      if (from.machine !== AGENT_MACHINE.VERCEL) {
+      if (from.machine === AGENT_MACHINE.DEVICE) {
         yield* settleMovedDeviceAgentLaunches(agent.userId, agent.id);
       }
 

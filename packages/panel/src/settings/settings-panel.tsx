@@ -182,12 +182,7 @@ export function SettingsPanel({
 
       {view === SETTINGS_VIEW.AGENTS ? <AgentsPage signedIn={signedIn} view={panelView} /> : null}
 
-      {view === SETTINGS_VIEW.HOSTS ? (
-        <HostsSection
-          signedIn={signedIn}
-          workspace={workspace ? shownWorkspace(workspace) : undefined}
-        />
-      ) : null}
+      {view === SETTINGS_VIEW.HOSTS ? <HostsSection signedIn={signedIn} /> : null}
 
       {view === SETTINGS_VIEW.INTEGRATIONS ? (
         <IntegrationsSection

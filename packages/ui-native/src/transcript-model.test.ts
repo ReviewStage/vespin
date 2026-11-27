@@ -1,5 +1,6 @@
 import { agentParts, WHOLE_PART } from "@repo/features/agent-parts";
 import {
+  AGENT_ATTACHMENT_TYPE,
   AGENT_SENDER,
   CHECK_SUMMARY,
   PART_CUT_FIELD,
@@ -22,9 +23,11 @@ import {
   shownFiles,
   shownMediaIds,
   TRANSCRIPT_ITEM,
+  type TranscriptToggles,
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  withSending,
   withWaitingLine,
 } from "./transcript-model.js";
 
@@ -238,7 +241,7 @@ describe("transcriptItems", () => {
     ]);
   });
 
-  it("opens an automation's transcript on its run's prompt, from the automation and its pull request, with the pictures and files it carried, leaving later lines as sent", () => {
+  it("opens an automation's transcript on its run's prompt, folded in its card under its first line until opened, from the automation and its pull request, with the pictures and files it carried, leaving later lines as sent", () => {
     const origin = transcriptOriginOf({
       automationId: undefined,
       automationName: "Morning triage",
@@ -254,33 +257,29 @@ describe("transcriptItems", () => {
       },
     });
 
-    const items = transcriptItems(
-      [
-        {
-          id: "fired",
-          role: MESSAGE_ROLE.USER,
-          parts: [
-            { type: "text", text: "Triage the new issues.\n\nFired by pull request #42." },
-            { type: "file", mediaType: "image/png", filename: "crash.png", url: SHOT },
-            {
-              type: "file",
-              mediaType: "text/plain",
-              filename: "crash.log",
-              url: "data:text/plain;base64,YQ==",
-            },
-          ],
-        },
-        { id: "later", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Thanks." }] },
-      ],
-      {
-        writing: false,
-        readerId: undefined,
-        toggles: NO_TOGGLES,
-        now: 2,
-        pullRequests: [],
-        origin,
-      },
-    );
+    const read = (toggles: TranscriptToggles) =>
+      transcriptItems(
+        [
+          {
+            id: "fired",
+            role: MESSAGE_ROLE.USER,
+            parts: [
+              { type: "text", text: "Triage the new issues.\n\nFired by pull request #42." },
+              { type: "file", mediaType: "image/png", filename: "crash.png", url: SHOT },
+              {
+                type: "file",
+                mediaType: "text/plain",
+                filename: "crash.log",
+                url: "data:text/plain;base64,YQ==",
+              },
+            ],
+          },
+          { id: "later", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Thanks." }] },
+        ],
+        { writing: false, readerId: undefined, toggles, now: 2, pullRequests: [], origin },
+      );
+
+    const items = read(NO_TOGGLES);
 
     expect(items).toMatchObject([
       {
@@ -293,9 +292,15 @@ describe("transcriptItems", () => {
         body: '{"event":"opened"}',
         pictures: [{ name: "crash.png", url: SHOT, pictureId: undefined }],
         files: [{ name: "crash.log", base64: "YQ==" }],
+        card: { title: "Triage the new issues.", open: false },
       },
       { kind: TRANSCRIPT_ITEM.SAID, words: "Thanks.", sender: undefined },
     ]);
+
+    const prompt = items[0];
+    const opened = read(prompt === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, prompt));
+
+    expect(opened[0]).toMatchObject({ card: { title: "Triage the new issues.", open: true } });
   });
 
   it("stands one sender's lines sent close together in a run, and the day and time only over talk that picks up again, never joining the reader to an app, and stands every line but the reader's own received", () => {
@@ -704,6 +709,49 @@ describe("transcriptItems", () => {
     const foot = items.find((item) => item.kind === TRANSCRIPT_ITEM.FOOT);
 
     expect(foot?.kind === TRANSCRIPT_ITEM.FOOT ? foot.copy : undefined).toBe(copy);
+  });
+});
+
+describe("withSending", () => {
+  it("draws a line on its way with the pictures this phone holds of it, each its words name as its chip where they name it", () => {
+    const line = {
+      id: "line",
+      clientKey: "key",
+      text: "The button is cut off in [Picture 1].",
+      files: [{ name: "Picture 1", mediaType: "image/png" }],
+      sentAt: 1,
+      steers: false,
+    };
+
+    const held = (lineId: string) =>
+      lineId === "line"
+        ? [{ name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: "iVBORw0KGgo=" }]
+        : [];
+
+    const items = transcriptItems(withSending([], [line], held), {
+      writing: false,
+      readerId: undefined,
+      toggles: NO_TOGGLES,
+      now: 2,
+      pullRequests: [],
+    });
+
+    expect(items[0]).toMatchObject({
+      kind: TRANSCRIPT_ITEM.SAID,
+      words: "The button is cut off in [Picture 1].",
+      pictures: [],
+      wordPictures: new Map([
+        [
+          "Picture 1",
+          {
+            key: "0",
+            name: "Picture 1",
+            url: "data:image/png;base64,iVBORw0KGgo=",
+            pictureId: undefined,
+          },
+        ],
+      ]),
+    });
   });
 });
 

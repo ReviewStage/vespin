@@ -38,6 +38,7 @@ import { type ShownFailureSentry, sendShownFailure } from "@repo/features/shown-
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { Clock, Context, Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { act, createElement } from "react";
@@ -103,7 +104,6 @@ import { fakeAppBridge, fakeAppBridgeCalls } from "../testing/app-bridge.js";
 import { copyingInto, DESKTOP_LINKS, fakeAppPlatform } from "../testing/app-platform.js";
 import { testQueryClientNow } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
-import { relayout } from "../testing/resize-observer.js";
 import { viewerPlace } from "../testing/viewer-place.js";
 import { RepositoryRemedyProvider } from "./repository-remedy.js";
 import { PULL_REQUEST_VIEW } from "./task-tab-model.js";

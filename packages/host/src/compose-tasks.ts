@@ -2959,9 +2959,19 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_FIND: (read) =>
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
-        const taskId = yield* served(client.find(read.workspace, read.number));
+        const found = yield* served(client.find(read.workspace, read.number));
 
-        if (taskId === undefined) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+        // Note that a number no task of the account's answers to is told apart from a service that did not answer, so a screen says the task is missing only where it is.
+        if (!found.ok) {
+          return {
+            failure:
+              found.failure === TASK_CALL_FAILURE.NOT_FOUND
+                ? TASK_CALL_FAILURE.NOT_FOUND
+                : TASK_CALL_FAILURE.UNANSWERED,
+          };
+        }
+
+        const taskId = found.answer;
         // A chip names a task the list may not hold, which is read beside it so the chip draws its name.
         yield* openedOutside(taskId);
 

@@ -508,6 +508,32 @@ function heardByProps(control: ReactElement<AnchorProps>, label: string | undefi
     : HEARD.DESCRIBED;
 }
 
+/**
+ * The tooltips of the commit under way that look for the control they
+ * describe, by the id of their words, each handed what it finds, or null.
+ */
+const seeking = new Map<string, (element: HTMLElement | null) => void>();
+
+/**
+ * Hands every tooltip seeking its control the one its words describe, in
+ * one walk of the page however many a commit drew, and null to any it finds
+ * none for. Note that a control the tooltip hands no ref is found only by
+ * the description it was drawn with, and that the whole page is walked
+ * once a commit rather than once a tooltip, because a page of rows drawn at
+ * once draws a tooltip in many of them.
+ */
+function findSought(): void {
+  for (const element of document.querySelectorAll<HTMLElement>("[aria-describedby]")) {
+    for (const id of element.getAttribute("aria-describedby")?.split(SPACING) ?? []) {
+      seeking.get(id)?.(element);
+      seeking.delete(id);
+    }
+  }
+
+  for (const found of seeking.values()) found(null);
+  seeking.clear();
+}
+
 /** The one element at the window body's end that every hint's words stand in, made with the first. */
 let wordsHome: HTMLElement | undefined;
 
@@ -907,20 +933,30 @@ export function Tooltip({
   // again as it draws anew, ahead of any focus landing on it.
   const wordsId = useId();
   const [heard, setHeard] = useState<Heard>(() => heardByProps(children, label));
+  // A control the tooltip hands no ref is sought once as it is first drawn,
+  // and again only once the element it was found as has left the page,
+  // never on every draw, since one found as none stays none until the
+  // pointer or focus lands on it. It is sought only while described, because
+  // one its props name carries no description to be found by. Note that it
+  // asks as the commit writes the page, so the first layout effect of the
+  // commit finds every tooltip the commit drew at once.
+  const sought = useRef(false);
+  useInsertionEffect(() => {
+    const known = control.current;
+
+    if (label === undefined || heard !== HEARD.DESCRIBED || known?.isConnected === true) return;
+
+    if (known === null && sought.current) return;
+    sought.current = true;
+    seeking.set(wordsId, learn);
+  });
   useLayoutEffect(() => {
     if (label === undefined) return;
-    // Note that a control the tooltip hands no ref is found by the
-    // description it was drawn with, so the window is searched only while it
-    // is described, because one its props name carries no such description
-    // and a search for it would walk the whole page on every draw to find nothing.
-    let element = control.current?.isConnected === true ? control.current : null;
 
-    if (element === null && heard === HEARD.DESCRIBED) {
-      element = document.querySelector<HTMLElement>(`[aria-describedby~="${wordsId}"]`);
-    }
+    if (seeking.has(wordsId)) findSought();
+    const element = control.current;
 
-    if (element === null) return;
-    learn(element);
+    if (element?.isConnected !== true) return;
     setHeard(heardOver(element, label));
   });
 

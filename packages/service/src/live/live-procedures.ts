@@ -111,6 +111,9 @@
  * `GET /api/live/machine-asks` answers the asks the account's machines hold
  * for its answer, each with the answer that stands on it, the account's own
  * alone; woken by an ask posted, answered, or taken down (`machineAsksRead`).
+ * `GET /api/live/view-choices` answers the account's view choices, its own
+ * and each of a workspace it is still a member of, the account's own alone;
+ * woken by a choice made, changed, or forgotten (`viewChoicesRead`).
  * `GET /api/live/installed-skills?workspaceId=` answers the skills the
  * account sees there, the workspace's and its own, each with whether it may
  * manage it, on the same membership check; woken by one of them installed,
@@ -215,6 +218,7 @@ import { readSyncWindow, SYNC_LOG, syncStanding } from "@repo/database/models/sy
 import type { WorkspaceSeams } from "@repo/database/models/workspace-seams";
 import { ensurePersonalWorkspace } from "@repo/database/models/workspace-store";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
+import { presentedClient } from "@repo/features/client-identity";
 import {
   type AnyLiveRead,
   LIVE_PARAM,
@@ -243,7 +247,8 @@ import {
 import { accountMiddleware, heldReadMiddleware, hosted } from "../orpc/base.js";
 import { type LiveTopics, ownMovedKeys, syncMovedOf } from "../sync/live-query.js";
 import { NO_TOPICS } from "../sync/watch.js";
-import { pageParents, pageTokenOf, readsPages } from "./live-pages.js";
+import { LIVE_ANSWER_ATTRIBUTE, WHOLE_REASON, type WholeReason } from "./answer-span.js";
+import { mayHoldFirstPage, pageParents, pageTokenOf, readsPages } from "./live-pages.js";
 import { type BoundLiveRead, type PartOf, WATCHED_LOOK } from "./live-read-binding.js";
 import { type LiveSealer, NO_ROWS_DIGEST, pollSealer } from "./poll-sealer.js";
 import { accountInboxRead } from "./reads/account-inbox.js";
@@ -284,6 +289,7 @@ import {
   taskSearchRead,
   tasksRead,
 } from "./reads/tasks.js";
+import { viewChoicesRead } from "./reads/view-choices.js";
 import { workspaceIntegrationsRead } from "./reads/workspace-integrations.js";
 import { workspaceInvitationsRead } from "./reads/workspace-invitations.js";
 import { workspaceMachinesRead } from "./reads/workspace-machines.js";
@@ -344,7 +350,7 @@ interface ReadParts<Part extends string> {
   readonly queries: Record<Part, SealedLiveQueryWire>;
 }
 
-/** Which of the sealer's reads answers a part: its digest alone, or its rows with it. */
+/** Which of the sealer's reads answers a part: its digest alone, its rows with it, or its rows alone. */
 type PartRead = (sealer: LiveSealer) => LiveSealer["seal"];
 
 /** Each part read now at the poll address (`pollSealer`), as `how` reads it; unavailable where it could not be read. */
@@ -644,6 +650,30 @@ interface DeltaStanding {
   readonly settled: number;
   readonly window: Effect.Success<ReturnType<typeof readSyncWindow>>;
   readonly whole: boolean;
+  /** Why it is answered whole; none where it is answered past its id. */
+  readonly because: WholeReason | undefined;
+}
+
+/** Why a delta read is answered whole, the first that holds, as `deltaParts` reads them; none where it is answered past the reader's id. */
+function wholeBecause(standing: {
+  readonly from: number | undefined;
+  readonly settled: number;
+  readonly floor: number | undefined;
+  readonly rows: number;
+  readonly admissionMoved: boolean;
+  readonly firstPageHeld: boolean;
+}): WholeReason | undefined {
+  if (standing.from === undefined) return WHOLE_REASON.NO_SYNC;
+
+  if (standing.from > standing.settled) return WHOLE_REASON.PAST_SETTLED;
+
+  if (standing.floor !== undefined && standing.from < standing.floor) return WHOLE_REASON.BELOW_LOG;
+
+  if (standing.rows > SYNC_LOG.MOST) return WHOLE_REASON.TOO_FAR_BEHIND;
+
+  if (standing.admissionMoved) return WHOLE_REASON.ADMISSION_MOVED;
+
+  return standing.firstPageHeld ? WHOLE_REASON.FIRST_PAGE_HELD : undefined;
 }
 
 /** Each part as read, carrying where it stands for a reader that follows it by sync id, and, past one, the ids gone from it, the snapshot left out. */
@@ -706,7 +736,7 @@ const narrowedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends 
   const statements = delta.statements(params, syncMovedOf(rows));
 
   if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-  const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+  const read = yield* readParts(statements.value, (sealer) => sealer.rows);
   const gone = new Map<PartOf<Read>, readonly string[]>();
 
   for (const [part, keys] of ownMovedKeys(delta.own, rows)) {
@@ -741,7 +771,9 @@ const narrowedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends 
  * a reader that names no id, whose id is below the oldest the log kept or
  * past the settled one, that is more than `SYNC_LOG.MOST` rows behind, or
  * whose admission to the rows moved (a `whole` table's row naming its
- * account), in pages where it is `paged` and the read binds them
+ * account), or that may hold the first page of a read that binds pages for
+ * its whole answer (`firstPage`, `mayHoldFirstPage`), in pages where it is
+ * `paged` and the read binds them
  * (`pagedParts`). Otherwise each part is its statement narrowed to what moved,
  * with the reader's id it was read past and the id to read past next, the
  * ids of its own rows a write the reader's topics reach moved that the
@@ -756,6 +788,8 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   params: LiveReadParams<Read>,
   sync: string,
   paged: boolean,
+  firstPage: (past: number) => boolean,
+  client: string,
 ) {
   const delta = query.delta;
 
@@ -765,6 +799,8 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   const reached = delta.reach === undefined ? topics : yield* topicsNamed(delta.reach(params));
   const accounts = new Set(reached.flatMap(([kind, id]) => (kind === TOPIC.ACCOUNT ? [id] : [])));
   const whole = new Set(delta.whole.map((table) => table.name));
+  // Note that a read a build took the first page of for its whole answer is answered whole once, so the parents past that page come back to it.
+  const firstPageHeld = past !== undefined && delta.page !== undefined && firstPage(past);
   /** The id the log is read past: the reader's, then the settled id of each window held past. */
   let from = past;
   /** The txids of the windows held past, which the answer carries, since it is read past them too. */
@@ -790,13 +826,16 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
             row.topics.some(([kind, id]) => kind === TOPIC.ACCOUNT && accounts.has(id)),
         );
 
-        const behind =
-          from === undefined ||
-          from > settled ||
-          (window.floor !== undefined && from < window.floor) ||
-          window.rows.length > SYNC_LOG.MOST;
+        const because = wholeBecause({
+          from,
+          settled,
+          floor: window.floor,
+          rows: window.rows.length,
+          admissionMoved,
+          firstPageHeld,
+        });
 
-        return { settled, window, whole: behind || admissionMoved };
+        return { settled, window, whole: because !== undefined, because };
       }),
     );
 
@@ -834,6 +873,14 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
     ? held.value.read
     : yield* past === undefined ? look : Effect.withTracerEnabled(look, false);
 
+  if (standing.because !== undefined) {
+    yield* Effect.annotateCurrentSpan({
+      [LIVE_ANSWER_ATTRIBUTE.WHOLE_BECAUSE]: standing.because,
+      [LIVE_ANSWER_ATTRIBUTE.CLIENT]: client,
+      [LIVE_ANSWER_ATTRIBUTE.HELD]: past !== undefined,
+    });
+  }
+
   const next = String(standing.settled);
 
   if (standing.whole && paged && delta.page !== undefined) {
@@ -844,7 +891,7 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
     const statements = query.statements(params);
 
     if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-    const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+    const read = yield* readParts(statements.value, (sealer) => sealer.rows);
 
     return { ...read, queries: syncedParts(read.queries, { next }, new Map()) };
   }
@@ -888,7 +935,7 @@ const pagedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   const statements = page.statements(params, { keys: parents.keys, first: after === undefined });
 
   if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-  const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+  const read = yield* readParts(statements.value, (sealer) => sealer.rows);
 
   const sync = {
     next: String(at),
@@ -920,10 +967,14 @@ const liveDeltaParts = /* @__PURE__ */ Effect.fnUntraced(
     params: LiveReadParams<Read>,
     asked: { readonly sync: string | undefined; readonly page: string | undefined },
     paged: boolean,
+    firstPage: (past: number) => boolean,
+    client: string,
   ) {
     const page = query.delta?.page;
 
-    if (asked.page === undefined) return yield* deltaParts(query, params, asked.sync ?? "", paged);
+    if (asked.page === undefined) {
+      return yield* deltaParts(query, params, asked.sync ?? "", paged, firstPage, client);
+    }
 
     if (page === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     const token = yield* pageTokenOf(asked.page);
@@ -941,6 +992,9 @@ const liveDeltaParts = /* @__PURE__ */ Effect.fnUntraced(
  */
 const sameUser = (input: { readonly [LIVE_USER_QUERY]?: string | undefined }, userId: string) =>
   input[LIVE_USER_QUERY] === userId ? Effect.void : Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
+/** The client a whole answer is said to have gone to where the request names no build of its own, as a development tab's does. */
+const UNNAMED_CLIENT = "unnamed";
 
 /**
  * The parts of a bound read as its mode answers them (`LIVE_MODE`): a
@@ -966,15 +1020,33 @@ function boundParts<Read extends AnyLiveRead>(
   const sync = asked[LIVE_POLL.SYNC];
   const page = asked[LIVE_POLL.PAGE];
 
+  const client = presentedClient(request.headers)?.platform ?? UNNAMED_CLIENT;
+
   if (read.delta !== undefined && (sync !== undefined || page !== undefined)) {
-    return liveDeltaParts(read, bound, { sync, page }, readsPages(request));
+    return liveDeltaParts(
+      read,
+      bound,
+      { sync, page },
+      readsPages(request),
+      (past) => mayHoldFirstPage(request, past),
+      client,
+    );
   }
 
   if (read.cursor !== undefined) {
     return liveCursorParts(read, bound, asked, read.look, read.woken, older);
   }
 
-  return liveQueryParts(read, bound, asked, read.look, held, older);
+  const parts = liveQueryParts(read, bound, asked, read.look, held, older);
+
+  // Note that a read followed by sync id asked with none is read whole as a snapshot, as a host asks around a stalled sync id, so its span says so beside the delta path's whole answers.
+  return read.delta === undefined
+    ? parts
+    : Effect.annotateSpans(parts, {
+        [LIVE_ANSWER_ATTRIBUTE.WHOLE_BECAUSE]: WHOLE_REASON.ASKED_WITHOUT_SYNC,
+        [LIVE_ANSWER_ATTRIBUTE.CLIENT]: client,
+        [LIVE_ANSWER_ATTRIBUTE.HELD]: asked[LIVE_POLL.AFTER] !== undefined,
+      });
 }
 
 /**
@@ -1101,6 +1173,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     machines: signedIn.machines.effect(answerBoundRead(machinesRead)),
     workspaceMachines: signedIn.workspaceMachines.effect(answerBoundRead(workspaceMachinesRead)),
     machineAsks: signedIn.machineAsks.effect(answerBoundRead(machineAsksRead)),
+    viewChoices: signedIn.viewChoices.effect(answerBoundRead(viewChoicesRead)),
     workspaceMemories: signedIn.workspaceMemories.effect(answerBoundRead(workspaceMemoriesRead)),
     installedSkills: signedIn.installedSkills.effect(answerBoundRead(installedSkillsRead)),
 

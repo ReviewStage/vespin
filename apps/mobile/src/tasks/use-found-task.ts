@@ -7,16 +7,17 @@
  * the list doesn't hold opens from its own description read, which
  * `useTaskOverview` follows by its id, so the screen says it's still being
  * sought until that read answers, and Task not found only after. Note that
- * the host answers a number it couldn't find and one it never reached the
- * service for alike, so a find that didn't answer a task is asked again a
- * few times, and again when the screen opens anew, rather than kept as Task
- * not found, since a phone off the network would otherwise keep a task it
- * holds out of reach until the app restarts.
+ * the service's word that no task answers to the number is taken at once,
+ * while a find the service never answered is asked again a few times, and
+ * again when the screen opens anew, rather than kept as Task not found, since
+ * a phone off the network would otherwise keep a task it holds out of reach
+ * until the app restarts.
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { LINK_DESTINATION, taskNumberOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -32,11 +33,11 @@ import { useWindow } from "../host/use-window.js";
 /** The key a number's find is held under, by the account, the workspace and the number. */
 const TASK_BY_NUMBER_QUERY = "task-by-number";
 
-/** How many more times a find that answered no task is asked before the screen says Task not found. */
+/** How many more times a find the service never answered is asked before the screen gives it up. */
 const FIND_RETRIES = 2;
 
-/** Why a find answered no task: none was found, or the service was never reached. */
-const FIND_UNANSWERED = "The task's number found no task.";
+/** Why a find answered nothing: the service was never reached, which says nothing of whether the task stands. */
+const FIND_UNANSWERED = "The task's number was not answered.";
 
 /** The task a route names, and whether it's still being sought. */
 export interface FoundTask {
@@ -148,16 +149,20 @@ export function useFoundTask(named: string | undefined, workspace: string | unde
     queryFn: () =>
       acts[ACT_KIND.TASKS_FIND]({ workspace: workspace ?? "", number: number ?? 0 }).then(
         (answer) => {
-          if ("failure" in answer) throw new Error(FIND_UNANSWERED);
+          if (!("failure" in answer)) return answer.taskId;
 
-          return answer.taskId;
+          // Note that only the service's word that no task of the account's answers to the number says it is missing; a find that was never answered is no such word, and fails as the read it is.
+          if (answer.failure === TASK_CALL_FAILURE.NOT_FOUND) return null;
+
+          throw new Error(FIND_UNANSWERED);
         },
       ),
     enabled: finds,
+    // Note that only a find never answered throws, so it alone is asked again; the service's word that none was found answers null, which is never retried.
     retry: FIND_RETRIES,
   });
 
-  const taskId = listed?.id ?? (finds ? found.data : named);
+  const taskId = listed?.id ?? (finds ? (found.data ?? undefined) : named);
 
   // Note that a task the list doesn't hold, named by its id or found by its number, opens from its own read, which is sought until it answers.
   const unlisted = listed === undefined && taskId !== undefined && (number === undefined || finds);
