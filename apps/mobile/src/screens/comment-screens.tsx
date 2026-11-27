@@ -1,30 +1,48 @@
 // comment-screens.tsx -- one thread of a task's description comments, pushed from the task's Overview: its comments as a thread's messages, the words it stands on as its heading, Resolve or Reopen in its bar, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import { PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
+import {
+  COMMENT_ACT,
+  COMMENT_ACT_WORDS,
+  COMMENT_DELETE_QUESTION,
+  commentActs,
+} from "@repo/features/description-comment-model";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
+import type { DescriptionCommentEntry } from "@repo/features/description-comment-wire";
+import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
+import { selectAccount } from "@repo/host/app-state-reads";
 import {
   AskNote,
   AttachedPictures,
   BAR_TITLE,
   BUTTON_LOOK,
+  BUZZ,
+  buzz,
   Composer,
+  ConfirmAsk,
+  EditingLine,
   EmptyState,
   GLYPH,
   GlassDock,
   glyphSymbol,
   NOTICE_KIND,
   PATH_PART,
+  ROW_ACTION_TONE,
   Screen,
   ThreadPage,
   useColors,
   useFailureNotices,
 } from "@repo/ui-native";
+import { useQuery } from "@tanstack/react-query";
+import { setStringAsync } from "expo-clipboard";
 import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { appStateQuery } from "../host/app-state-query.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -33,6 +51,7 @@ import {
   commentAgents,
   threadMessages,
   threadOpen,
+  useCommentActs,
   useCommentMedia,
   useCommentReply,
   useCommentSettle,
@@ -54,7 +73,18 @@ const WORDS = {
   NOT_FOUND: "Comment not found",
   RESOLVE: "Resolve",
   REOPEN: "Reopen",
+  COPY_LINK: "Copy link",
 } as const;
+
+/** Copies a thread's link, which names the thread whichever of its comments it was copied from, as the panel's comment copies its thread's (`LINK_DESTINATION.COMMENT`), with the system's tap as it lands. */
+function copyThreadLink(link: string): void {
+  setStringAsync(link)
+    .then(() => buzz(BUZZ.SUCCESS))
+    .catch((cause: unknown) => {
+      console.error("The comment's link could not be copied.", cause);
+      buzz(BUZZ.ERROR);
+    });
+}
 
 /** A comment field's head: the pictures it carries, each taken off on a press, and what its last send or a picture's bound said; none while it holds neither. */
 function fieldHead(pictures: CommentReply["pictures"], note: string | undefined) {
@@ -211,7 +241,11 @@ function goneOf(quote: string, anchored: boolean): string | undefined {
  * stands open, the reply field docked over its foot, what a reply that did
  * not land said standing in the field's head. A resolved thread offers no
  * reply, as the panel's resolved thread offers none, until Reopen stands it
- * open again. The task's path stands small in
+ * open again. A long press on a comment offers what the panel's comment
+ * menu does: Copy link, which names the thread, and on the reader's own
+ * comment Edit, which lays its words in the field to save in their place,
+ * resolved or not, then Delete, or Delete thread on its first, which ask
+ * first. The task's path stands small in
  * the bar, as a page of the task's does, and the bar's trailing button
  * resolves the thread, or reopens it once resolved, as the panel's check
  * on its first comment does. Opened from a split view's detail, it is
@@ -241,8 +275,17 @@ function CommentThread({
   const media = useCommentMedia(overview?.task.id, thread);
   const settle = useCommentSettle(taskId);
   const pictureOf = useMemberPictures();
-
+  const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+  const readerId = account === undefined ? undefined : signedInAccountId(account);
   const router = useRouter();
+
+  // Note that a deleted thread's page goes as the delete does, rather than standing Comment not found.
+  const leave = useCallback(() => {
+    if (router.canGoBack()) router.back();
+  }, [router]);
+
+  const commentActsOf = useCommentActs(taskId, id, leave);
+  const { editing } = commentActsOf;
   const onOwnTab = useOnOwnTab();
   // Note that a thread stands only while it is in front, since a page pushed over it on the tab's stack, or another tab, keeps it mounted.
   const standing = useIsFocused();
@@ -274,18 +317,92 @@ function CommentThread({
   const task = overview?.task;
   const path = commentPath(overview);
 
-  const composer = {
-    placeholder: WORDS.REPLY,
-    words: reply.words,
-    onWords: reply.onWords,
-    sendable: reply.sendable,
-    onSend: reply.send,
-    head: fieldHead(reply.pictures, reply.note),
-    onAdd: reply.pictures.attach,
-    onDropPictures: reply.pictures.drop,
+  // Note that while one of the reader's comments is edited the field holds its words, Send standing as Save, its files kept as they are, so it offers no +; Cancel gives the field back to the reply, whose words wait meanwhile.
+  const composer =
+    editing === undefined
+      ? {
+          placeholder: WORDS.REPLY,
+          words: reply.words,
+          onWords: reply.onWords,
+          sendable: reply.sendable,
+          onSend: reply.send,
+          head: fieldHead(reply.pictures, reply.note),
+          onAdd: reply.pictures.attach,
+          onDropPictures: reply.pictures.drop,
+        }
+      : {
+          placeholder: WORDS.REPLY,
+          words: editing.words,
+          onWords: commentActsOf.onEditWords,
+          sendable: editing.words.trim() !== "",
+          saving: { onSave: commentActsOf.saveEdit },
+          focusAsk: commentActsOf.editAsk,
+          head: (
+            <>
+              <EditingLine onCancel={commentActsOf.cancelEdit} />
+              {editing.note === undefined ? null : <AskNote words={editing.note} />}
+            </>
+          ),
+        };
+
+  const link =
+    task === undefined || overview?.workspace === undefined
+      ? undefined
+      : linkOf(
+          { kind: LINK_DESTINATION.COMMENT, taskId: taskLinkStep(task), threadId: id },
+          overview.workspace.slug ?? overview.workspace.id,
+        );
+
+  // A comment's long press after Copy message, in the panel's order: Copy link, then Edit, then a delete, red, each group set apart.
+  const menuOf = (entry: DescriptionCommentEntry) => {
+    const acts = thread === undefined ? [] : commentActs(thread, entry, readerId);
+
+    const copies =
+      link === undefined
+        ? []
+        : [
+            {
+              label: WORDS.COPY_LINK,
+              symbol: GLYPH.LINK,
+              tone: ROW_ACTION_TONE.NEUTRAL,
+              onPress: () => copyThreadLink(link),
+            },
+          ];
+
+    const edits = acts.includes(COMMENT_ACT.EDIT)
+      ? [
+          {
+            label: COMMENT_ACT_WORDS[COMMENT_ACT.EDIT],
+            symbol: GLYPH.EDIT,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => commentActsOf.startEdit(entry),
+          },
+        ]
+      : [];
+
+    const deletes = acts.flatMap((act) =>
+      act === COMMENT_ACT.EDIT
+        ? []
+        : [
+            {
+              label: COMMENT_ACT_WORDS[act],
+              symbol: GLYPH.DELETE,
+              tone: ROW_ACTION_TONE.DESTRUCTIVE,
+              onPress: () => commentActsOf.askDelete({ act, entryId: entry.id }),
+            },
+          ],
+    );
+
+    return [copies, edits, deletes].filter((group) => group.length > 0);
   };
 
-  const drawn = thread === undefined ? undefined : threadMessages(thread, agents, pictureOf, media);
+  const drawn =
+    thread === undefined ? undefined : threadMessages(thread, agents, pictureOf, media, menuOf);
+
+  const question =
+    commentActsOf.deleting === undefined
+      ? undefined
+      : COMMENT_DELETE_QUESTION[commentActsOf.deleting.act];
 
   // Note that each picture of the thread reads its own source where it is drawn, under the task it belongs to, so one landing draws that picture alone.
   const page =
@@ -333,13 +450,22 @@ function CommentThread({
         <Screen>
           <ThreadMissing taskId={taskId} overview={overview} />
         </Screen>
-      ) : threadOpen(thread) ? (
+      ) : threadOpen(thread) || editing !== undefined ? (
         <GlassDock bar={<Composer {...composer} />}>
           <Screen>{page}</Screen>
         </GlassDock>
       ) : (
         <Screen>{page}</Screen>
       )}
+      <ConfirmAsk
+        title={question?.title}
+        message={question?.message}
+        act={question?.act ?? ""}
+        destructive
+        presented={question !== undefined}
+        onAct={commentActsOf.confirmDelete}
+        onDismiss={commentActsOf.dismissDelete}
+      />
     </>
   );
 }

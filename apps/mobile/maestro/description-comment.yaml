@@ -83,6 +83,29 @@ appId: dev.vespin.ios
 - assertVisible: "Resolve"
 - waitForAnimationToEnd
 - takeScreenshot: comment-open-thread
+# A comment's long press offers what the panel's comment menu does: Copy
+# link, and, on the reader's own first comment, Edit and Delete thread. Edit
+# lays its words in the field, Send standing as Save, and Cancel gives the
+# field back to the reply; Delete thread asks first, and Cancel keeps it.
+- longPressOn: "Should an owner be able to resend an expired invite from this page?"
+- assertVisible: "Copy link"
+- assertVisible: "Edit"
+- assertVisible: "Delete thread"
+- waitForAnimationToEnd
+- takeScreenshot: comment-menu
+- tapOn: "Edit"
+- assertVisible: "Editing message"
+- waitForAnimationToEnd
+- takeScreenshot: comment-editing
+- tapOn: "Cancel"
+- assertNotVisible: "Editing message"
+- longPressOn: "Should an owner be able to resend an expired invite from this page?"
+- tapOn: "Delete thread"
+- assertVisible: "Delete this thread?"
+- waitForAnimationToEnd
+- takeScreenshot: comment-delete-thread-ask
+- tapOn: "Cancel"
+- assertVisible: "Should an owner be able to resend an expired invite from this page?"
 # A comment's row resolves from its own acts, the trailing swipe's Resolve
 # standing again in its long press menu, as an Inbox thread's does. Note that
 # the flow presses it from that menu rather than swiping, because a swipe

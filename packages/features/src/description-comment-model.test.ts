@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { commentRowLines, commentThreadLines } from "./description-comment-model.js";
+import {
+  COMMENT_ACT,
+  commentActs,
+  commentRowLines,
+  commentThreadLines,
+} from "./description-comment-model.js";
 import {
   DESCRIPTION_COMMENT_ACTOR,
   DESCRIPTION_COMMENT_ENTRY,
@@ -10,6 +15,7 @@ import {
 } from "./description-comment-wire.js";
 
 const ADA = { userId: "user-ada", name: "Ada Lovelace" };
+const GRACE = { userId: "user-grace", name: "Grace Hopper" };
 
 function entry(
   id: number,
@@ -99,5 +105,45 @@ describe("commentThreadLines", () => {
 
     expect(lines.opening.map((event) => event.at)).toEqual([1]);
     expect(lines.comments.map(({ comment }) => comment.at)).toEqual([2]);
+  });
+});
+
+describe("commentActs", () => {
+  const opened = entry(1, DESCRIPTION_COMMENT_ENTRY.COMMENT, "Can we resend it?");
+  const reply = entry(2, DESCRIPTION_COMMENT_ENTRY.COMMENT, "Yes.");
+  const byAgent = { writer: { actor: DESCRIPTION_COMMENT_ACTOR.AGENT } };
+  const agentReply = { ...entry(3, DESCRIPTION_COMMENT_ENTRY.COMMENT, "Done."), ...byAgent };
+  const agentOpened = { ...opened, ...byAgent };
+
+  const started = thread([opened, reply, agentReply]);
+  const agentStarted = thread([agentOpened]);
+
+  it.each([
+    [
+      "its writer edits the first comment and deletes the thread",
+      started,
+      opened,
+      ADA.userId,
+      [COMMENT_ACT.EDIT, COMMENT_ACT.DELETE_THREAD],
+    ],
+    [
+      "its writer edits a reply and deletes it alone",
+      started,
+      reply,
+      ADA.userId,
+      [COMMENT_ACT.EDIT, COMMENT_ACT.DELETE],
+    ],
+    ["another member may do nothing to a member's comment", started, opened, GRACE.userId, []],
+    ["no member edits or deletes an agent's reply", started, agentReply, GRACE.userId, []],
+    [
+      "any member deletes a thread an agent started",
+      agentStarted,
+      agentOpened,
+      GRACE.userId,
+      [COMMENT_ACT.DELETE_THREAD],
+    ],
+    ["a reader not yet known may do nothing", started, opened, undefined, []],
+  ] as const)("%s", (_, on, comment, readerId, acts) => {
+    expect(commentActs(on, comment, readerId)).toEqual(acts);
   });
 });
