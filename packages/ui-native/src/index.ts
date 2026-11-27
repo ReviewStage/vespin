@@ -69,6 +69,7 @@ export { ChangedFileRow } from "./changed-file-row.js";
 export type { ChannelFaces } from "./channel-row.js";
 
 export { ChipMarkProvider, useChipMarkOf } from "./chip-mark.js";
+
 export {
   CHIP_MARK,
   type ChipMark,
@@ -76,6 +77,7 @@ export {
   type ChipMarksHeld,
   chipMarkOf,
 } from "./chip-mark-model.js";
+
 export { ChipNamesProvider, type UseChipNames } from "./chip-names.js";
 
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
