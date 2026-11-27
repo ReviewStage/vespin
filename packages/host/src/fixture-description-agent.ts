@@ -20,7 +20,7 @@ import type { AppTranscript } from "./app-state.js";
 const MINUTE = 60_000;
 
 /** The agent's id, which a fixture run opens its page by (`-agent <id>`). */
-export const FIXTURE_DESCRIPTION_AGENT_ID = "c526e869-a1d2-4efb-96bd-d2e3f405162c";
+export const FIXTURE_DESCRIPTION_AGENT_ID = "eb754400-68d7-4d86-a13a-3610dceb64d5";
 
 /** The agent's title, as its page names it in the bar. */
 const TITLE = "Split ledger exports by currency";

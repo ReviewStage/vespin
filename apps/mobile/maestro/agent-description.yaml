@@ -21,7 +21,7 @@ env:
     clearState: true
     arguments:
       fixture: inbox
-      agent: c526e869-a1d2-4efb-96bd-d2e3f405162c
+      agent: eb754400-68d7-4d86-a13a-3610dceb64d5
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}
