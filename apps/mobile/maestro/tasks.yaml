@@ -268,18 +268,20 @@ env:
     when:
       notVisible: "No task selected"
     commands:
-      # Note that the swipe runs partway across the agent's row, where the
-      # Overview opened at its top stands it, as the leading swipe above
-      # does, because a swipe from the row's name either holds long enough
-      # to lift its preview or runs far enough to press Open; a tap on the
-      # page's plain line, inside the same list, then closes it. It starts
-      # a fifth of the window in from the edge, clear of a wide window's
-      # rail of tabs.
+      # Note that the agent's row is swiped from the row itself, found by its
+      # name, as the resting agent's row is below, because a point a share
+      # of the window down stood on the agent's row on an iPhone but on the
+      # Pages row under it on an iPad, which it opened. The swipe must only
+      # reveal Stop, a working agent's one act, which a full swipe would
+      # run, so Stop is read standing before a tap on the page's plain line,
+      # inside the same list, closes it.
       - swipe:
-          start: "80%, 66%"
-          end: "45%, 66%"
+          from:
+            text: "Build teammate invitations"
+          direction: LEFT
           duration: 900
       - waitForAnimationToEnd
+      - assertVisible: "Stop"
       - takeScreenshot: task-agent-swipe
       - tapOn: "Created by .*"
       - waitForAnimationToEnd
