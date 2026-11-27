@@ -1,0 +1,9 @@
+pinned to f51ebe444c
+== bundle PJjswipe5272f base f51ebe444c
+  built f51ebe444c base app Vmain18.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-dark-transcript-open: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+  iphone-dark-transcript-open shots: at-failure.png step-028-assertCondition-space[Dd]elete.png transcript-open-latest.png 
