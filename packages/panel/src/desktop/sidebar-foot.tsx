@@ -23,8 +23,10 @@ import {
   NavItem,
   ProviderMark,
   riseAbove,
+  SIDEBAR_FOOT_LOOK,
   SidebarAccountRow,
   SidebarFoot as SidebarFootBox,
+  type SidebarFootLook,
   TEXT_ELEMENT,
   TEXT_VARIANT,
   Text,
@@ -323,13 +325,23 @@ export function useAccountMenuGroups(
   });
 }
 
+/** The account's name as the foot says it: its name, else its email, or that no one is signed in. */
+function accountName(account: AccountSnapshot): string {
+  return account.status === ACCOUNT_STATUS.SIGNED_IN
+    ? (account.name ?? account.email)
+    : "Not signed in";
+}
+
 /** The foot's account button and the menu it raises. */
 function AccountMenu({
   account,
+  tiled,
   shown,
   onSignOut,
 }: {
   account: AccountSnapshot;
+  /** Whether it stands as a tile at the rail's foot, its name its hint. */
+  tiled: boolean;
   shown: boolean;
   onSignOut: () => Promise<void>;
 }): React.JSX.Element {
@@ -340,11 +352,15 @@ function AccountMenu({
   return (
     <>
       <NavItem
-        variant={NAV_ITEM_VARIANT.IDENTITY}
-        icon={<AccountAvatar account={account} size={ACTOR_SIZE.ROW} />}
+        variant={tiled ? NAV_ITEM_VARIANT.TILE : NAV_ITEM_VARIANT.IDENTITY}
+        icon={
+          <AccountAvatar account={account} size={tiled ? ACTOR_SIZE.ACCOUNT : ACTOR_SIZE.ROW} />
+        }
+        aria-label={tiled ? accountName(account) : undefined}
+        hint={accountName(account)}
         menu={trigger(riseAbove)}
       >
-        {signedIn ? <ReplayMask>{account.name ?? account.email}</ReplayMask> : "Not signed in"}
+        {signedIn ? <ReplayMask>{accountName(account)}</ReplayMask> : accountName(account)}
       </NavItem>
       {drawn === undefined ? null : (
         <ActionMenu
@@ -368,6 +384,7 @@ function AccountMenu({
  * Settings.
  */
 export function SidebarFoot({
+  look = SIDEBAR_FOOT_LOOK.ROW,
   account,
   updates,
   shown,
@@ -376,6 +393,8 @@ export function SidebarFoot({
   onSettings,
   onSignOut,
 }: {
+  /** Whether it is the column's last row, or a stack at the rail's foot. */
+  look?: SidebarFootLook | undefined;
   account: AccountSnapshot;
   updates: UpdateControl;
   /** Whether the window's call card docks here; folded, the sidebar hands it to the window's corner. */
@@ -387,15 +406,21 @@ export function SidebarFoot({
   onSettings: () => void;
   onSignOut: () => Promise<void>;
 }): React.JSX.Element {
+  const railed = look === SIDEBAR_FOOT_LOOK.RAIL;
+
   return (
-    <SidebarFootBox>
+    <SidebarFootBox look={look}>
       <CallCardDock docked={callDocked} surface={CALL_CARD_SURFACE.SIDEBAR} />
-      <SidebarAccountRow>
-        <AccountMenu account={account} shown={shown} onSignOut={onSignOut} />
+      <SidebarAccountRow look={look}>
+        <AccountMenu account={account} tiled={railed} shown={shown} onSignOut={onSignOut} />
         <OfflineMark />
         <SidebarUpdate updates={updates} />
-        {/* Edge to edge, as Back meets Forward over them, so each stands under its partner at the column's head. */}
-        <span className="sidebar-foot-end flex flex-none">
+        {/* Edge to edge, as Back meets Forward over them, so each stands under its partner at the column's head; at the rail's foot, one over the other. */}
+        <span
+          className={
+            railed ? "sidebar-foot-end flex flex-none flex-col" : "sidebar-foot-end flex flex-none"
+          }
+        >
           <Tooltip label="Send feedback">
             <IconButton
               icon={<MessageSquareIcon />}

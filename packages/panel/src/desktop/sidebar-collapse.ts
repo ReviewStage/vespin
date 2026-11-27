@@ -25,13 +25,13 @@ import { PANE_FLOAT, type PaneFloat } from "./hover-pane.js";
 
 /**
  * How wide the sidebar may be dragged, in CSS pixels, and where it starts:
- * the range VS Code, Cursor, and Codex give theirs, around the width the
- * sidebar had before it could be dragged.
+ * the rail of places and, beside it, a list as wide as the range VS Code,
+ * Cursor, and Codex give their sidebars.
  */
 export const SIDEBAR_WIDTH = {
-  MIN: 200,
-  MAX: 400,
-  DEFAULT: 264,
+  MIN: 264,
+  MAX: 440,
+  DEFAULT: 340,
 } as const;
 
 /**

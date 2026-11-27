@@ -1213,8 +1213,12 @@ export function ShellPlaces(): React.JSX.Element {
           ) : null}
         </main>
         {barShown ? <MobileBar tasks={tasks} /> : null}
-        {/* Folded, the sidebar's call card floats in the corner it would have stood over. */}
-        <CallCardDock docked={sidebar.collapsed} surface={CALL_CARD_SURFACE.FLOATING} />
+        {/* The call card floats in the window's corner beside a wide room's sidebar, whose rail has no room to dock it, and
+          on a phone while the drawer is folded. */}
+        <CallCardDock
+          docked={sidebar.collapsed || room !== SHELL_ROOM.NARROW}
+          surface={CALL_CARD_SURFACE.FLOATING}
+        />
         {/* Note that the floating sidebar's title-bar row is claimed back from the work's drag strips here, after the work,
           because a later drag region wins and the sidebar comes before the work, so its Back and Forward keep their presses. */}
         {sidebar.overlay !== SIDEBAR_OVERLAY.CLOSED && room === SHELL_ROOM.WIDE ? (

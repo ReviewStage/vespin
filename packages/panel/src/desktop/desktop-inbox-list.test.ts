@@ -460,7 +460,7 @@ test("a plan main says changed is read again, so an item answered on another Mac
 function sidebarInboxCount(page: HTMLElement): number | undefined {
   const row =
     [...page.querySelectorAll<HTMLElement>(".sidebar-places .ui-nav-item")].find(
-      (each) => each.querySelector(".ui-nav-item-name")?.textContent === "Inbox",
+      (each) => each.textContent?.startsWith("Inbox") === true,
     ) ?? assert.fail("the sidebar draws its Inbox row");
 
   const count = row.textContent?.match(/\d+/u)?.[0];

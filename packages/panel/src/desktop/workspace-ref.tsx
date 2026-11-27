@@ -95,9 +95,12 @@ export function WorkspaceRef({
   name,
   line,
   card,
+  tiled = true,
 }: {
   workspace: NamedWorkspace;
   size?: WorkspaceRefSize;
+  /** Whether its tile stands before its name; the sidebar's head leaves it to the rail. */
+  tiled?: boolean | undefined;
   name?: ReactNode;
   line?: ReactNode;
   card?: ReactNode;
@@ -127,9 +130,11 @@ export function WorkspaceRef({
       )}
       data-size={size}
     >
-      <ReplayMask>
-        <WorkspaceTile workspace={workspace} size={TILE_OF_SIZE[size]} />
-      </ReplayMask>
+      {tiled ? (
+        <ReplayMask>
+          <WorkspaceTile workspace={workspace} size={TILE_OF_SIZE[size]} />
+        </ReplayMask>
+      ) : null}
       {line === undefined ? (
         named
       ) : (

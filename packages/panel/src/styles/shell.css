@@ -47,7 +47,7 @@
   --content-inset: calc(var(--column-inset) + var(--row-inset));
   /* The sidebar's default width (`SIDEBAR_WIDTH.DEFAULT`), and its width as
      drawn, which the app stage carries once the developer has dragged it. */
-  --sidebar-width-default: 264px;
+  --sidebar-width-default: 340px;
   --sidebar-width: var(--sidebar-width-default);
   /* The widest a narrow room's drawer stands, a phone's drawer's usual
      width, so a task's name keeps its room beside its time and its ⋯. */
@@ -851,6 +851,29 @@
   flex-direction: column;
   padding: 0 var(--column-inset) var(--column-inset);
   background: var(--ui-color-sidebar);
+}
+
+/* Drawn as a rail of places beside its list (`SidebarRail`), the sidebar
+   stands the rail at its start, the column's whole height under the title
+   row, on a ground a step deeper than the column's, and its head, its list,
+   and its buttons past it (`data-rail`). A phone's tree draws no rail. */
+.desktop-sidebar[data-rail] {
+  position: relative;
+  padding-inline-start: calc(var(--ui-rail-width) + var(--column-inset));
+}
+
+/* Note that a window too short for the rail's tiles and foot scrolls the rail
+   alone, with no bar of its own, so Send feedback and Settings stay in reach. */
+.desktop-sidebar .sidebar-rail {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  padding-top: var(--desktop-bar-height);
+  background: var(--ui-color-fill-hover);
 }
 
 /* Work column ------------------------------------------------------------- */

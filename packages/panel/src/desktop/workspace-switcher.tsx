@@ -143,11 +143,14 @@ export interface WorkspaceRowNewTask {
 /** The sidebar's head while an account is signed in and its workspaces are read. */
 export function WorkspaceSwitcher({
   tasks,
+  tiled = true,
   inSight,
   newTask,
   admin,
 }: {
   tasks: SidebarTasksControl;
+  /** Whether it draws the workspace's tile beside its name; the rail draws the tile at its head instead. */
+  tiled?: boolean | undefined;
   /** Whether the sidebar is in sight, so the menu closes with it folding away. */
   inSight: boolean;
   newTask: WorkspaceRowNewTask;
@@ -173,7 +176,7 @@ export function WorkspaceSwitcher({
         menu={menu.trigger(dropBelowStart)}
         mark={<ChevronDownIcon />}
       >
-        <WorkspaceRef workspace={listed} size={WORKSPACE_REF_SIZE.HEAD} />
+        <WorkspaceRef workspace={listed} size={WORKSPACE_REF_SIZE.HEAD} tiled={tiled} />
       </NavItem>
       <NewTaskButton tasks={tasks} home={newTask.home} onNewTask={newTask.onOpen} />
       {menu.drawn === undefined ? null : (
