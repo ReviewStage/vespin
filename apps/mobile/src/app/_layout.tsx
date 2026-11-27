@@ -19,6 +19,7 @@ import { useColorScheme } from "react-native";
 import { withTapTraces } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
+import { InboxAttentionProvider } from "../inbox/inbox-groups.js";
 import { useKeeping } from "../keeping.js";
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
 import { notePick } from "../row-picks.js";
@@ -155,11 +156,13 @@ function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <HostProvider>
-        <FailureNoticeProvider>
-          <VoiceCallProvider>
-            <KeptScreens />
-          </VoiceCallProvider>
-        </FailureNoticeProvider>
+        <InboxAttentionProvider>
+          <FailureNoticeProvider>
+            <VoiceCallProvider>
+              <KeptScreens />
+            </VoiceCallProvider>
+          </FailureNoticeProvider>
+        </InboxAttentionProvider>
       </HostProvider>
     </ThemeProvider>
   );

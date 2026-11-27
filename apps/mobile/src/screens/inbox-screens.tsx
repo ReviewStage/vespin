@@ -556,6 +556,7 @@ function InboxEmpty({
   show,
   search,
   feed,
+  read,
   counts,
   onRetry,
   onShow,
@@ -563,11 +564,13 @@ function InboxEmpty({
   readonly show: InboxShow;
   readonly search: string;
   readonly feed: InboxFeed;
+  readonly read: boolean;
   readonly counts: InboxCounts;
   readonly onRetry: () => void;
   readonly onShow: (show: InboxShow) => void;
 }) {
-  if (feed === INBOX_FEED.READING)
+  // Note that a feed that failed stays failed, but one that answered still reads until the screen's own rows answered, since the kept rows load after the document says the feed stands.
+  if (feed !== INBOX_FEED.FAILED && (feed === INBOX_FEED.READING || !read))
     return <EmptyState title={READING_INBOX} symbol={GLYPH.INBOX} loading />;
 
   if (feed === INBOX_FEED.FAILED) {
@@ -1513,6 +1516,7 @@ function InboxStackList(held: InboxHeld) {
                 show={show}
                 search={search}
                 feed={listing.feed}
+                read={listing.read}
                 counts={listing.counts}
                 onRetry={() => void acts.refresh()}
                 onShow={choose}
@@ -1558,6 +1562,7 @@ function inboxListColumn(
             show={show}
             search={search}
             feed={listing.feed}
+            read={listing.read}
             counts={listing.counts}
             onRetry={() => void acts.refresh()}
             onShow={choose}
@@ -1651,7 +1656,8 @@ function InboxSplitScreen({
  */
 function useThreadSteps(id: string): ThreadSteps {
   const { show } = useInboxScope();
-  const listing = useInboxListing({ show, search: "", chosen: id, pinnedFirst: true });
+  // Note that the steps read the app's one read of the Inbox, never one of their own for the thread opened, so opening a thread reads nothing more; a thread the list's scope never shows has no steps but those it was handed.
+  const listing = useInboxListing({ show, search: "", pinnedFirst: true });
   const [handed] = useState(() => handedOrders.get(id));
 
   // Note that the hand-off is taken once, so a later open of this thread with none handed, such as from a notification, never finds a stale one.
