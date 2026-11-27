@@ -214,7 +214,7 @@ export function MenuRow({
                 {only === undefined ? (
                   more
                 ) : (
-                  // Note that a lone act is a group named by the row's label, so a reader hears which host's "Remove" or which invitation's "Cancel invitation" it is.
+                  // Note that a lone act is a group named by the row's label, so a reader hears which host's "Remove" or which invitation's "Revoke invitation" it is.
                   // biome-ignore lint/a11y/useSemanticElements: a row's act is a press on its thing, not a form's field, so it is no `<fieldset>`.
                   <div role="group" aria-labelledby={control.labelId} className="contents">
                     {more}

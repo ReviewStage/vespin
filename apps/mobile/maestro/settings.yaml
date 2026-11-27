@@ -120,11 +120,11 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: settings-workspace-invitations
 # An invitation's row pushes its page: its role and expiry, Copy invite link,
-# and Cancel invitation in red at the foot.
+# and Revoke invitation in red at the foot.
 - tapOn: "katherine@example.com"
 - waitForAnimationToEnd
 - assertVisible: "Copy invite link"
-- assertVisible: "Cancel invitation"
+- assertVisible: "Revoke invitation"
 - takeScreenshot: settings-invitation
 - tapOn:
     id: "BackButton"

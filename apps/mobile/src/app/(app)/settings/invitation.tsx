@@ -1,4 +1,4 @@
-// invitation.tsx -- one pending invitation of the workspace the app works in, as Settings › Workspace's Invitations opens it: the address in the bar, the role it invites as and when its link stops working, Copy invite link, and Cancel invitation alone in red at the foot, asked first.
+// invitation.tsx -- one pending invitation of the workspace the app works in, as Settings › Workspace's Invitations opens it: the address in the bar, the role it invites as and when its link stops working, Copy invite link, and Revoke invitation alone in red at the foot, asked first.
 
 import { dayAndTimeText } from "@repo/features/time-format";
 import { readingWords } from "@repo/features/words";

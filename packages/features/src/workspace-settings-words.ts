@@ -27,11 +27,11 @@ export const INVITATION_WORDS = {
   INVITING: "Inviting",
   INVITE_TITLE: (workspace: string) => `Invite to ${workspace}`,
   EMAIL_PLACEHOLDER: "name@example.com",
-  CANCEL: "Cancel invitation",
-  CANCEL_QUESTION: "Cancel invitation?",
+  CANCEL: "Revoke invitation",
+  CANCEL_QUESTION: "Revoke invitation?",
   CANCEL_BODY: (email: string) =>
     `The link sent to ${email} stops working. Inviting the address again sends a new one.`,
-  CANCEL_RUNNING: "Canceling",
+  CANCEL_RUNNING: "Revoking",
   /** The line under an invited address, its role named first. */
   INVITED_AS: (role: string) => `Invited as ${role}`,
 } as const;
