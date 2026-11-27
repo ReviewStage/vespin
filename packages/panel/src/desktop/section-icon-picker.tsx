@@ -1,4 +1,11 @@
 import {
+  findGlyphs,
+  glyphChoices,
+  glyphKey,
+  isSuggestedGlyph,
+  recentIcons,
+} from "@repo/features/section-icon-model";
+import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_COLOR,
   TASK_SECTION_ICON_KIND,
@@ -36,13 +43,6 @@ import {
 } from "@repo/ui";
 import { drawnDark } from "@repo/ui/appearance";
 import { SmilePlusIcon } from "@repo/ui/icons";
-import {
-  findGlyphs,
-  glyphChoices,
-  glyphKey,
-  isSuggestedGlyph,
-  recentIcons,
-} from "@repo/ui/section-icon-model";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { queryOptions, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Schema } from "effect";

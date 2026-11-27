@@ -1,4 +1,4 @@
-# tasks-headers.yaml -- the Tasks list's group headers as the desktop's sidebar heads them: a repository's + opening New task with the repository chosen, its long press holding Keep at top beside Open on GitHub, a section's long press holding Change icon with the picker's suggested glyphs, Color, Emoji, and Remove icon, and a row's Move to holding New section, which asks for the section's name.
+# tasks-headers.yaml -- the Tasks list's group headers as the desktop's sidebar heads them: a repository's + opening New task with the repository chosen, its long press holding Keep at top beside Open on GitHub, a section's long press holding Change icon, which opens the icon picker, and a row's Move to holding New section, which asks for the section's name.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -50,10 +50,8 @@ env:
 - waitForAnimationToEnd
 - takeScreenshot: tasks-headers-repository-menu
 # A section's long press holds Change icon after Rename, as the desktop's
-# does: the picker's suggested glyphs in the color the section's glyph
-# wears, the rocket it wears checked, then Color, Emoji, and Remove icon.
-# Note that the app is launched again rather than the menu tapped away,
-# because a tall menu stands over any point a tap off it could take.
+# does. Note that the app is launched again rather than the menu tapped
+# away, because a tall menu stands over any point a tap off it could take.
 - launchApp:
     arguments:
       fixture: inbox
@@ -71,28 +69,29 @@ env:
 - assertVisible: "Delete section"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-headers-section-menu
+# Change icon opens the app's one icon picker over the section, as the
+# desktop's icon well does: the rocket it wears large at its top, the text's
+# own ink and the eight colors under it, Icons and Emoji, and the suggested
+# glyphs, the rocket ringed. A color chosen recolors the rocket in the
+# preview; Cancel drops it, so nothing is written.
 - tapOn: "Change icon"
+- extendedWaitUntil:
+    visible: "Suggested"
+    timeout: 10000
+- assertVisible: "Section icon"
 - assertVisible: "Rocket"
-- assertVisible: "Folder"
-- waitForAnimationToEnd
+- assertVisible: "Black|White"
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: tasks-headers-section-icons
-# Note that the menu is drawn up from inside it, from a glyph it shows,
-# rather than by a scroll to Remove icon, because the glyphs run past the
-# menu's foot on the iPhone, where Color, Emoji, and Remove icon stand in
-# the hierarchy already though the menu draws none of them, so a scroll
-# found them at once and a tap on Color landed off the menu and closed it.
-- swipe:
-    from:
-      text: "Layers"
-    direction: UP
-- waitForAnimationToEnd
-- assertVisible: "Emoji"
-- assertVisible: "Remove icon"
-- tapOn: "Color"
-- assertVisible: "Black"
-- assertVisible: "Teal"
-- waitForAnimationToEnd
+- tapOn: "Teal"
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: tasks-headers-section-colors
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Section icon"
+    timeout: 5000
 # A row's Move to, in More, holds New section after the sections, as the
 # desktop's Move to section does, which asks for the name in the system's
 # alert, saying the task moves into it; Cancel makes nothing.

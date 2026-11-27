@@ -394,6 +394,10 @@ export { ScreenFailure } from "./screen-failure.js";
 
 export { SealedPage } from "./sealed-page.js";
 
+export { SectionIconSheet } from "./section-icon-picker.js";
+
+export { RECENT_ICONS_MOST } from "./section-icon-picker-model.js";
+
 export { sectionGlyphColor, sectionInk } from "./section-ink.js";
 
 export { type SentPictures, sentPictures } from "./sent-pictures-model.js";

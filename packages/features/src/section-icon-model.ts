@@ -16,13 +16,13 @@
  * opens rather than with the window.
  */
 
-import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
+import { matchesTokens, searchTokens } from "./search-tokens.js";
 import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_KIND,
   type TaskSectionIcon,
-} from "@repo/features/task-section-wire";
-import { sectionGlyphWords } from "@repo/features/task-sections-model";
+} from "./task-section-wire.js";
+import { sectionGlyphWords } from "./task-sections-model.js";
 
 /** The glyphs whose stored name is not Lucide's own, and the Lucide icon each is drawn as. */
 const RENAMED_GLYPH = new Map<string, string>([[TASK_SECTION_GLYPH.FLASK, "flask-conical"]]);
