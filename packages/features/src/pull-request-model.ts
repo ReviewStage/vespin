@@ -16,7 +16,6 @@ import {
   type PullRequestState,
   REVIEW_DECISION,
   REVIEW_STATE,
-  type ReactionGroup,
   type ReviewState,
   type ReviewThread,
 } from "./agent-wire.js";
@@ -31,6 +30,7 @@ import {
   REACTION,
   type Reaction,
 } from "./pull-request-write-wire.js";
+import { andList } from "./words.js";
 
 /**
  * pull-request-model.ts -- an agent's pull request as every client's Pull request surface reads it: where it stands in a word, what its merge control offers and says, how its checks went, and who reviewed it.
@@ -493,11 +493,14 @@ export const REACTION_FACES = {
 /** The menu's name for giving a reaction, as GitHub's own smiley names it. */
 export const ADD_REACTION_WORDS = "Add reaction";
 
-/** The reactions a comment wears as one line, each emoji by how many gave it, in GitHub's order: "👍 2  ❤️ 1"; none where it wears none. */
-export function reactionsLine(reactions: readonly ReactionGroup[]): string | undefined {
-  if (reactions.length === 0) return undefined;
+/** Who gave a reaction, in words, as the panel's tooltip and the iOS app's pill say it: who did, as many as the read named, the rest counted ("ada, grace, and 2 more reacted with thumbs up"). */
+export function reactedWords(names: readonly string[], count: number, name: string): string {
+  const others = count - names.length;
 
-  return reactions.map((each) => `${REACTION_FACES[each.content].emoji} ${each.count}`).join("  ");
+  if (names.length === 0) return `${count} reacted with ${name}`;
+  const who = others > 0 ? [...names, `${others} more`] : names;
+
+  return `${andList(who)} reacted with ${name}`;
 }
 
 /* ----- The checks ----- */

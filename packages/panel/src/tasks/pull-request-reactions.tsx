@@ -24,13 +24,16 @@
  */
 
 import type { GitHubPerson, ReactionGroup } from "@repo/features/agent-wire";
-import { ADD_REACTION_WORDS, REACTION_FACES } from "@repo/features/pull-request-model";
+import {
+  ADD_REACTION_WORDS,
+  REACTION_FACES,
+  reactedWords,
+} from "@repo/features/pull-request-model";
 import {
   PULL_REQUEST_ACTION,
   REACTION,
   type Reaction,
 } from "@repo/features/pull-request-write-wire";
-import { andList } from "@repo/features/words";
 import {
   AnchoredPopover,
   IconButton,
@@ -53,16 +56,6 @@ import { PullRequestWriteNote, usePullRequestWrites } from "./pull-request-write
 const REACTION_ORDER: readonly Reaction[] = Object.values(REACTION);
 
 const ADD_REACTION = ADD_REACTION_WORDS;
-
-/** What a reaction's tooltip says: who gave it, as many as the read named, the rest counted. */
-function reactedWords(names: readonly string[], count: number, name: string): string {
-  const others = count - names.length;
-
-  if (names.length === 0) return `${count} reacted with ${name}`;
-  const who = others > 0 ? [...names, `${others} more`] : names;
-
-  return `${andList(who)} reacted with ${name}`;
-}
 
 /** The reactions as the row draws them: one being given that nobody had given yet stands as a pill of its own, the reader's. */
 function drawnReactions(

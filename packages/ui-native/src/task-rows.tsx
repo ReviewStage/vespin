@@ -52,7 +52,7 @@ import type { ReactElement, ReactNode } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import type { RowQuestion } from "./asks.js";
-import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
+import { BUTTON_LOOK, BUTTON_SIZE, Button, type ReactionPill, ReactionPills } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { useRowInset } from "./layout-margin.js";
@@ -907,8 +907,8 @@ type WordsRowProps = {
   readonly edge?: WordsEdge | undefined;
   /** Groups its long press menu holds after its acts, such as a pull request description's Add reaction; none where it offers nothing more. */
   readonly menuGroups?: readonly LongPressGroup[] | undefined;
-  /** The reactions the words wear as one line, such as "👍 2  ❤️ 1", under them; none where they wear none. */
-  readonly reactions?: string | undefined;
+  /** The reactions the words wear, drawn as pills under them (`ReactionPills`); none where they wear none. */
+  readonly reactions?: readonly ReactionPill[] | undefined;
   /** Whether the words stand cut to their first dozen lines or so, fading into the ground at their foot, as a long pull request description stands until Show more. */
   readonly folded?: boolean | undefined;
 };
@@ -1182,12 +1182,8 @@ export function WordsRow({
             />
           </ZStack>
         )}
-        {reactions === undefined ? null : (
-          <Text
-            modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}
-          >
-            {reactions}
-          </Text>
+        {reactions === undefined || reactions.length === 0 ? null : (
+          <ReactionPills pills={reactions} />
         )}
       </VStack>
       {comments === undefined || comments.count === 0 ? null : <CommentCount comments={comments} />}

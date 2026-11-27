@@ -46,6 +46,8 @@ export {
   LabelChip,
   type ListScopes,
   PriorityChip,
+  type ReactionPill,
+  ReactionPills,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
