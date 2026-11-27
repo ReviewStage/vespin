@@ -32,6 +32,7 @@ import {
   glyphSymbol,
   NOTICE_KIND,
   PATH_PART,
+  type PillFieldHandle,
   ROW_ACTION_TONE,
   Screen,
   ThreadPage,
@@ -41,7 +42,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
@@ -75,6 +76,9 @@ const WORDS = {
   REOPEN: "Reopen",
   COPY_LINK: "Copy link",
 } as const;
+
+/** What an edit's field does with an `@` word: nothing, since an edit offers no mention list, as the thread's reply offers none. */
+function noAtWord(): void {}
 
 /** Copies a thread's link, which names the thread whichever of its comments it was copied from, as the panel's comment copies its thread's (`LINK_DESTINATION.COMMENT`), with the system's tap as it lands. */
 function copyThreadLink(link: string): void {
@@ -285,6 +289,7 @@ function CommentThread({
   }, [router]);
 
   const commentActsOf = useCommentActs(taskId, id, leave);
+  const editField = useRef<PillFieldHandle | null>(null);
   const { editing } = commentActsOf;
   const onOwnTab = useOnOwnTab();
   // Note that a thread stands only while it is in front, since a page pushed over it on the tab's stack, or another tab, keeps it mounted.
@@ -337,6 +342,8 @@ function CommentThread({
           sendable: editing.words.trim() !== "",
           saving: { onSave: commentActsOf.saveEdit },
           focusAsk: commentActsOf.editAsk,
+          // Note that the comment's own files are named to the field, so each marker that names one stands as its pill and is saved as written rather than escaped as words.
+          pills: { field: editField, onAtWord: noAtWord, files: editing.files },
           head: (
             <>
               <EditingLine onCancel={commentActsOf.cancelEdit} />

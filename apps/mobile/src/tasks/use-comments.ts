@@ -53,11 +53,13 @@ import {
   buzz,
   GLYPH,
   type LongPressGroup,
+  NOTICE_KIND,
   type PictureById,
   THREAD_MEDIA,
   type ThreadEvent,
   type ThreadMedia,
   type ThreadMessage,
+  useFailureNotices,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
@@ -659,11 +661,12 @@ export function useCommentSettle(taskId: string): (thread: DescriptionCommentThr
   };
 }
 
-/** A comment being edited in its thread's field: which, the words it holds now, the field's words, and what a save that did not land said. */
+/** A comment being edited in its thread's field: which, the words it holds now, the field's words, the names of the files it carries, which its markers name as pills, and what a save that did not land said. */
 export interface CommentEditing {
   readonly entryId: string;
   readonly was: string;
   readonly words: string;
+  readonly files: ReadonlySet<string>;
   readonly note?: string | undefined;
 }
 
@@ -718,6 +721,13 @@ export function useCommentActs(
   const [editing, setEditing] = useState<CommentEditing | undefined>(undefined);
   const [editAsk, setEditAsk] = useState(0);
   const [deleting, setDeleting] = useState<CommentDeleting | undefined>(undefined);
+  const notices = useFailureNotices();
+  // Note that the edit open now is read when a save's refusal lands, which may be after another edit was opened.
+  const editingNow = useRef(editing);
+
+  useEffect(() => {
+    editingNow.current = editing;
+  }, [editing]);
 
   return useMemo(() => {
     const saveEdit = (typed: string): boolean => {
@@ -728,7 +738,7 @@ export function useCommentActs(
       setEditing(undefined);
 
       if (kept === editing.was.trim()) return true;
-      const { entryId, was } = editing;
+      const { entryId, was, files } = editing;
 
       void write(
         () =>
@@ -740,8 +750,14 @@ export function useCommentActs(
         {
           refused: changeRefusal,
           unanswered: COMMENT_NOTE.NOT_CHANGED,
-          // Note that an edit refused comes back in the field with why, so its words are never lost.
-          inPlace: (note) => setEditing({ entryId, was, words: kept, note }),
+          // Note that an edit refused comes back in the field with why, so its words are never lost, unless another edit was opened since, whose words stay and the notice says why this one did not go.
+          inPlace: (note, noticed) => {
+            if (editingNow.current === undefined) {
+              setEditing({ entryId, was, words: kept, files, note });
+            } else if (!noticed) {
+              notices.say({ kind: NOTICE_KIND.REFUSED, words: note });
+            }
+          },
           went: BUZZ.SUCCESS,
         },
       );
@@ -778,7 +794,8 @@ export function useCommentActs(
       startEdit: (entry) => {
         // Note that the field holds the words as written, so a file's marker stays where it stands and its file stays named.
         const words = entry.words ?? "";
-        setEditing({ entryId: entry.id, was: words, words });
+        const files = new Set((entry.files ?? []).map((file) => file.name));
+        setEditing({ entryId: entry.id, was: words, words, files });
         setEditAsk((at) => at + 1);
       },
       onEditWords: (words) => setEditing((was) => (was === undefined ? was : { ...was, words })),
@@ -789,7 +806,7 @@ export function useCommentActs(
       confirmDelete,
       dismissDelete: () => setDeleting(undefined),
     };
-  }, [acts, write, taskId, threadId, editing, editAsk, deleting, onThreadGone]);
+  }, [acts, write, notices, taskId, threadId, editing, editAsk, deleting, onThreadGone]);
 }
 
 /** The open threads standing on each block of a description, by the block's start, the oldest started first. */
