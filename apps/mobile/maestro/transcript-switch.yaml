@@ -20,12 +20,12 @@ env:
     timeout: 30000
 - assertNotVisible: "Where do totals round today\\?"
 - takeScreenshot: transcript-switch-opened
-# The reader scrolls back up to the first ask, which lets the transcript go
-# of its end.
+# The reader scrolls back up a few turns, to the table's ask, which lets the
+# transcript go of its end.
 - runFlow:
     file: subflows/scroll-in.yaml
     env:
-      ELEMENT: "Where do totals round today\\?"
+      ELEMENT: "Show me the cases the tests cover, side by side."
       DIRECTION: UP
       BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd
