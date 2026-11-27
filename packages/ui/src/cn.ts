@@ -175,7 +175,6 @@ const PANEL_WINDOW = {
     "section-icon-scroll",
     "sidebar-row-age",
     "sidebar-row-repository",
-    "sidebar-slot-start",
     "workspace-ref-lift",
   ],
   shadow: ["actor-for-ring", "actor-outline", "actor-outline-ring", "actor-ring"],

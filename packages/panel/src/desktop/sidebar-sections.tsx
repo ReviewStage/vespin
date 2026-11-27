@@ -49,8 +49,6 @@ import {
   LAYOUT_ELEMENT,
   type ListRowNest,
   MoreButton,
-  NOTE_LINE_LOOK,
-  NoteLine,
   nextRowOrHead,
   Skeleton,
   SkeletonRegion,
@@ -69,7 +67,6 @@ import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
@@ -90,7 +87,7 @@ import {
 } from "./row-moves.js";
 import { SectionIconWell, sectionGlyph } from "./section-icon-picker.js";
 import { SIDEBAR_ENTRY, type SidebarEntry, SidebarEntryRow } from "./sidebar-entries.js";
-import { SIDEBAR_SECTION_SLOT, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
+import { sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
 import { type OpenMarks, type SidebarTasksControl, useUnreadAmong } from "./sidebar-open.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import { useFormDialog } from "./use-form-dialog.js";
@@ -970,11 +967,10 @@ export function TaskRowsSkeleton({ widths }: { widths: readonly string[] }): Rea
 
 /**
  * What a section draws in place of its rows while the view leaves none
- * standing: a row's skeleton while the list is first read, nothing where it
- * could not be read, which the list's own line says, and once read a word
- * that tasks are dragged in; nothing while it draws rows. Note that under a
- * finger, which drags no row in, an empty section stands as its header
- * alone, as the iOS app's does.
+ * standing: a row's skeleton while the list is first read, and nothing
+ * else, so an empty section stands as its header alone, as the iOS app's
+ * does, and the sections sit close; a row dragged onto the header drops in
+ * it, as the whole section is its drop zone.
  */
 function SectionFoot({
   drawn,
@@ -983,19 +979,9 @@ function SectionFoot({
   drawn: DrawnSection;
   tasks: SidebarTasksControl;
 }): React.JSX.Element | null {
-  const coarse = useCoarsePointer();
-
   if (drawn.tasks.length > 0 || drawn.managers.length > 0 || tasks.listFailed) return null;
 
-  if (!tasks.listRead) return <TaskRowsSkeleton widths={SECTION_SKELETON} />;
-
-  if (coarse) return null;
-
-  return (
-    <div className={SIDEBAR_SECTION_SLOT}>
-      <NoteLine look={NOTE_LINE_LOOK.INSET}>Drag tasks here</NoteLine>
-    </div>
-  );
+  return tasks.listRead ? null : <TaskRowsSkeleton widths={SECTION_SKELETON} />;
 }
 
 /** One section: its header, its menu, its rows, and what the view leaves out of them. */
