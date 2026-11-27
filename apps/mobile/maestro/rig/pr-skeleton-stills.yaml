@@ -14,9 +14,7 @@ appId: dev.vespin.ios
     visible: "Recorded the invite flow"
     timeout: 30000
 - openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128"
-- tapOn:
-    text: "Open"
-    optional: true
+- runFlow: pr-load-probe/open-ask.yaml
 - extendedWaitUntil:
     visible: "Reading pull request"
     timeout: 30000
@@ -31,9 +29,7 @@ appId: dev.vespin.ios
     visible: "Recorded the invite flow"
     timeout: 30000
 - openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128?agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5"
-- tapOn:
-    text: "Open"
-    optional: true
+- runFlow: pr-load-probe/open-ask.yaml
 - extendedWaitUntil:
     visible: "Invite a teammate by email.*"
     timeout: 30000
@@ -54,9 +50,7 @@ appId: dev.vespin.ios
     visible: "Recorded the invite flow"
     timeout: 30000
 - openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128?agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5"
-- tapOn:
-    text: "Open"
-    optional: true
+- runFlow: pr-load-probe/open-ask.yaml
 - extendedWaitUntil:
     visible: "Invite a teammate by email.*"
     timeout: 30000
