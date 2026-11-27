@@ -37,6 +37,7 @@ import type {
 } from "@repo/features/github-repositories-wire";
 import type { GitHubTokenSummary } from "@repo/features/github-token-wire";
 import type { HostLine } from "@repo/features/host-live";
+import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
@@ -433,6 +434,26 @@ export interface AppInboxRead extends AppHostRead<AppInboxItems> {
   stored?: true;
 }
 
+/** The items one place's search found on the service (`AGENTS_INBOX_SEARCH`): the words they were found by, and the items, by the plan each is on and those on no task by their agent, as the feed's are. */
+export interface AppInboxFound {
+  readonly query: string;
+  readonly items: AppInboxItems;
+}
+
+/**
+ * The items each place a search is asked from found on the service, by the
+ * place (`INBOX_SEARCH_PLACE`), each as the host's read of it stands, the
+ * member's own writes drawn over them: held from the place's first answer
+ * until its words clear, or its screen goes, and replaced by each answer to
+ * its newer words. One absent holds nothing found.
+ */
+export type AppInboxFoundPlaces = Readonly<
+  Partial<Record<InboxSearchPlace, AppHostRead<AppInboxFound>>>
+>;
+
+/** No place holding anything found, as the host stands before any search and after a sign-out. */
+export const NO_INBOX_FOUND: AppInboxFoundPlaces = {};
+
 /** One plan's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
 export type AppHolderInbox = AppHostRead<readonly InboxItem[]>;
 
@@ -789,6 +810,7 @@ export interface AppHostReads {
   [LIVE_READ.AGENT_ORIGINS]: AgentOrigin | null;
   [LIVE_READ.INBOX_ITEMS]: AppInboxItems;
   [LIVE_READ.INBOX_OLDER]: AppInboxItems;
+  [LIVE_READ.INBOX_FOUND]: AppInboxFound;
   [LIVE_READ.HOLDER_INBOX]: readonly InboxItem[];
   [LIVE_READ.INSTALLED_SKILLS]: readonly InstalledSkillSummary[];
   [LIVE_READ.INTEGRATIONS]: IntegrationStatusesAnswer;
@@ -953,6 +975,14 @@ export interface AppState {
    * feed holds. What All lists past the feed, and nothing counts.
    */
   [LIVE_READ.INBOX_OLDER]: AppHostRead<AppInboxItems>;
+  /**
+   * The items each place a search is asked from found on the service past
+   * what the host holds (`AGENTS_INBOX_SEARCH`), by the place, held while the
+   * place's words stand, the member's own writes drawn over them. What a
+   * place's search lists beside the items held, under the scope it shows,
+   * and nothing counts.
+   */
+  [LIVE_READ.INBOX_FOUND]: AppInboxFoundPlaces;
   /** Each plan's inbox the windows chose, held while a window holds it and a while after: what a chosen item's pane and a task's Inbox tab read past the feed. */
   [LIVE_READ.HOLDER_INBOX]: AppHolderInboxes;
   /** The skills the account sees in each workspace the windows chose, by the workspace, held while Settings › Skills shows them and a while after: what that page draws. */
@@ -1176,6 +1206,8 @@ export const HOST_READ_SLICE = {
     on: KEYS_ON.ROWS,
     rowId: "id" satisfies keyof InboxItem,
   },
+  // Note that a place's found items cross whole, since each answer replaces them.
+  [LIVE_READ.INBOX_FOUND]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.HOLDER_INBOX]: {
     keys: READ_KEYS.TWO,
     on: KEYS_ON.SLICE,

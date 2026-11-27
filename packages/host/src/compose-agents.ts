@@ -59,9 +59,11 @@ import {
   ACCOUNT_INBOX_READ,
   INBOX_ITEMS_READ,
   INBOX_OLDER_READ,
+  INBOX_SEARCH_READ,
   inboxOfLiveRows,
   TASK_INBOX_READ,
 } from "@repo/features/inbox-live";
+import type { AgentInboxSearchAnswer, InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   acknowledgedNow,
@@ -94,7 +96,18 @@ import {
   ROW_GONE,
   type WriteDeclaration,
 } from "@repo/sync";
-import { Clock, Effect, FiberHandle, Option, RcMap, Schema, type Scope, Stream } from "effect";
+import {
+  Clock,
+  Deferred,
+  Effect,
+  FiberHandle,
+  FiberSet,
+  Option,
+  RcMap,
+  Schema,
+  type Scope,
+  Stream,
+} from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountGateDependencies,
@@ -381,6 +394,12 @@ export interface AgentsDependencies extends AccountGateDependencies {
 /** One page of the account's older items as its parts decode, none where one does not. */
 const decodeOlderPage = Schema.decodeUnknownOption(INBOX_OLDER_READ.rows);
 
+/** The rows of a read past the feed, an older page's or a search's, which carry the same parts. */
+type PastFeedRows = typeof INBOX_OLDER_READ.rows.Type;
+
+/** The items a search found as their parts decode, none where one does not. */
+const decodeSearchHits = Schema.decodeUnknownOption(INBOX_SEARCH_READ.rows);
+
 /** The kind each part of the account's items read counts its dropped rows as. */
 const ACCOUNT_ITEMS_ROW_KIND = {
   stamps: PRODUCT_ROW_KIND.INBOX_STAMPS,
@@ -594,7 +613,11 @@ export function composeAgents(
     const older = olderInboxItems({
       pool: dependencies.pool,
       tell: (read) => dependencies.kernel.emit(GATEWAY_EVENT.INBOX_OLDER_CHANGED, carried(read)),
+      tellFound: (found) =>
+        dependencies.kernel.emit(GATEWAY_EVENT.INBOX_FOUND_CHANGED, carried(found)),
     });
+
+    const searchFibers = yield* FiberSet.make<void>();
 
     const holders = yield* holderInboxes(inboxes, {
       gate,
@@ -746,7 +769,7 @@ export function composeAgents(
       { transcripts, slice: transcriptSlice, queues },
       { inboxes, holders, accountWide },
       { accounts, followed: accountFollow },
-      { reads: sessionReads, followItems, preferences, holdPreferences, older },
+      { reads: sessionReads, followItems, preferences, holdPreferences, older, searchFibers },
       { repositoryChapters, origins, managerChats },
       fetched,
       { parts, repositoryParts },
@@ -783,9 +806,27 @@ interface SessionReads {
   /** The account's preferences row, held for the session by `holdPreferences`. */
   readonly preferences: HeldSlice<string>;
   readonly holdPreferences: (userId: string) => Effect.Effect<void>;
-  /** The account's settled items older than its feed holds, the pages All read of them, held for the session. */
+  /** The account's settled items older than its feed holds, the pages All read of them, and the items each place's search found, held for the session. */
   readonly older: OlderInboxItems;
+  /** The fibers asking each place's searches of the service, one a place at a time. */
+  readonly searchFibers: FiberSet.FiberSet<void>;
 }
+
+/** Words a place asks the service for, and the asker waiting on their answer. */
+interface SearchAsked {
+  readonly query: string;
+  readonly answered: Deferred.Deferred<AgentInboxSearchAnswer>;
+}
+
+/** Where one place's searches stand: the words it asks now, the words waiting for the search out to answer, and whether a search is out. */
+interface PlaceSearches {
+  latest: string | undefined;
+  waiting: SearchAsked | undefined;
+  out: boolean;
+}
+
+/** What an asker hears of words newer words from the place replaced, before they were asked or while they were out. */
+const SEARCH_REPLACED = { replaced: true } as const;
 
 /** The live follows' reads the windows hold (`contract/live-follow.ts`), each held through its stream's scope. */
 interface LiveFollows {
@@ -869,7 +910,14 @@ function composed(
   /** What waits across the account, and main's one follow of it. */
   { accounts, followed: accountFollow }: AccountFollow,
   /** The session's account reads, every item the account reaches and its preferences among them. */
-  { reads: sessionReads, followItems, preferences, holdPreferences, older }: SessionReads,
+  {
+    reads: sessionReads,
+    followItems,
+    preferences,
+    holdPreferences,
+    older,
+    searchFibers,
+  }: SessionReads,
   /** The pull requests' chapters, the agents' origins, and the Managers' chats the windows hold. */
   { repositoryChapters, origins, managerChats }: LiveFollows,
   { tools, models, modelsHold }: FetchedReads,
@@ -932,22 +980,177 @@ function composed(
         agents: agents.rows,
       });
 
-      if (Option.isNone(rows) || dependencies.accountId() !== userId) return olderUnanswered;
-      yield* drawHolders({ tasks: rows.value.tasks, agents: rows.value.agents });
+      const placed = yield* placedPastFeed(userId, drawHolders, rows);
 
-      if (dependencies.accountId() !== userId) return olderUnanswered;
-      const placedOn = new Map(rows.value.stamps.map((stamp) => [stamp.id, stamp.taskId]));
-
-      older.took(
-        inboxOfLiveRows(rows.value).flatMap((item) => {
-          const taskId = placedOn.get(item.id);
-
-          return taskId === undefined ? [] : [placedItem(item, taskId)];
-        }),
-      );
+      if (placed === undefined) return olderUnanswered;
+      older.took(placed);
 
       return sealed.next === undefined ? {} : { next: sealed.next };
     });
+
+  /**
+   * The items a read past the feed answered, an older page or a search's
+   * hits, each on its plan, once the tasks and agents they stand on are
+   * drawn into the task list as cold tasks where it holds them not
+   * (`drawHolders`), so an Inbox groups them under them; none where the
+   * rows did not decode, or the account `userId` names signed out meanwhile.
+   */
+  const placedPastFeed = (
+    userId: string,
+    drawHolders: (rows: TaskListLiveRows) => Effect.Effect<void>,
+    rows: Option.Option<PastFeedRows>,
+  ) =>
+    Effect.gen(function* () {
+      if (Option.isNone(rows) || dependencies.accountId() !== userId) return undefined;
+      yield* drawHolders({ tasks: rows.value.tasks, agents: rows.value.agents });
+
+      if (dependencies.accountId() !== userId) return undefined;
+      const placedOn = new Map(rows.value.stamps.map((stamp) => [stamp.id, stamp.taskId]));
+
+      return inboxOfLiveRows(rows.value).flatMap((item) => {
+        const taskId = placedOn.get(item.id);
+
+        return taskId === undefined ? [] : [placedItem(item, taskId)];
+      });
+    });
+
+  /** Where each place's searches stand, by the place; a sign-out lets every one go. */
+  let placeSearches = new Map<InboxSearchPlace, PlaceSearches>();
+
+  /** Whether `query` is still the words `at` asks, its `searches` not let go by a sign-out since, so an answer to them may be drawn. */
+  const stillAsked = (at: InboxSearchPlace, searches: PlaceSearches, query: string) =>
+    placeSearches.get(at) === searches && searches.latest === query;
+
+  /**
+   * The items the service's search finds by `query` (`INBOX_SEARCH_READ`),
+   * of any age, read into the session's found items for `at`, and the tasks
+   * and agents they stand on into the task list as cold tasks, as an older
+   * page's are; answered once both are drawn. An answer to words the place
+   * no longer asks draws nothing and answers that they were replaced. Words
+   * the service did not answer find nothing for the place, so the items its
+   * words before found never stand for these. Note that the list is marked
+   * before the search is asked, as for an older page.
+   */
+  const searchFound = (at: InboxSearchPlace, searches: PlaceSearches, query: string) =>
+    Effect.gen(function* () {
+      const userId = dependencies.accountId();
+      const drawHolders = dependencies.coldMarked?.();
+
+      if (!gate() || userId === undefined || drawHolders === undefined) return olderUnanswered;
+      const sealed = yield* asked(client.liveRead(INBOX_SEARCH_READ, { userId, query }, {}));
+
+      if (!stillAsked(at, searches, query)) return SEARCH_REPLACED;
+
+      const placed =
+        "failure" in sealed
+          ? undefined
+          : yield* placedPastFeed(
+              userId,
+              drawHolders,
+              decodeSearchHits({
+                stamps: sealed.queries.stamps.rows,
+                items: sealed.queries.items.rows,
+                messages: sealed.queries.messages.rows,
+                files: sealed.queries.files.rows,
+                tasks: sealed.queries.tasks.rows,
+                agents: sealed.queries.agents.rows,
+              }),
+            );
+
+      if (dependencies.accountId() !== userId) return olderUnanswered;
+
+      if (!stillAsked(at, searches, query)) return SEARCH_REPLACED;
+      older.found(at, query, placed ?? []);
+
+      return placed === undefined ? olderUnanswered : {};
+    });
+
+  /**
+   * Asks the service each of `at`'s words waiting, in turn, one search out
+   * at a time, each asker answered as its search lands, until none waits.
+   * Note that the search out is never interrupted for newer words, since a
+   * statement the socket asked runs to its end on the service whatever the
+   * host does (`live-wire.ts` carries no cancel), so newer words wait for it
+   * rather than running beside it; and that its asker hears it unanswered
+   * where a sign-out interrupts it.
+   */
+  const askWaiting = (at: InboxSearchPlace, searches: PlaceSearches) =>
+    Effect.gen(function* () {
+      for (;;) {
+        const next = searches.waiting;
+
+        if (next === undefined) {
+          searches.out = false;
+
+          return;
+        }
+
+        searches.waiting = undefined;
+
+        const answer = yield* Effect.onInterrupt(searchFound(at, searches, next.query), () =>
+          Deferred.succeed(next.answered, olderUnanswered),
+        );
+
+        yield* Deferred.succeed(next.answered, answer);
+      }
+    });
+
+  /**
+   * A place's search, as a window asks it (`AGENTS_INBOX_SEARCH`): its words
+   * asked of the service (`searchFound`), at once where the place has no
+   * search out, else once the one out answers, only the place's latest
+   * words waiting, so a place holds at most one search on the service; or,
+   * with no words, the place's search and what it found let go. Answered as
+   * its search lands, or, replaced, as newer words take its place
+   * (`SEARCH_REPLACED`); an answer to words the place no longer asks is
+   * drawn nowhere.
+   */
+  const inboxSearch = (at: InboxSearchPlace, query: string | undefined) =>
+    Effect.gen(function* () {
+      const searches = placeSearches.get(at) ?? {
+        latest: undefined,
+        waiting: undefined,
+        out: false,
+      };
+
+      placeSearches.set(at, searches);
+      const replaced = searches.waiting;
+      searches.waiting = undefined;
+      searches.latest = query;
+
+      if (replaced !== undefined) yield* Deferred.succeed(replaced.answered, SEARCH_REPLACED);
+
+      if (query === undefined) {
+        older.letGo(at);
+
+        return {};
+      }
+
+      const answered = yield* Deferred.make<AgentInboxSearchAnswer>();
+      searches.waiting = { query, answered };
+
+      // Note that the search is marked out before its fiber runs, so words asked meanwhile wait for it.
+      if (!searches.out) {
+        searches.out = true;
+        yield* FiberSet.run(searchFibers, askWaiting(at, searches));
+      }
+
+      return yield* Deferred.await(answered);
+    });
+
+  /** Lets every place's search go, as a sign-out does: each search out interrupted, and each asker waiting answered unanswered. */
+  const searchesEnd = Effect.gen(function* () {
+    const ended = placeSearches;
+    placeSearches = new Map();
+
+    for (const searches of ended.values()) {
+      if (searches.waiting !== undefined) {
+        yield* Deferred.succeed(searches.waiting.answered, olderUnanswered);
+      }
+    }
+
+    yield* FiberSet.clear(searchFibers);
+  });
 
   /**
    * A write to an agent's row of the task list, as the agents' own writes
@@ -1529,6 +1732,7 @@ function composed(
     AGENTS_INBOX_REMIND: declaredWrite(dependencies.pool, reminded),
     AGENTS_INBOX_ITEM_HOME: ({ itemId }) => asked(client.inboxItemHome(itemId)),
     AGENTS_INBOX_OLDER_PAGE: ({ before }) => olderPage(before),
+    AGENTS_INBOX_SEARCH: ({ place, query }) => inboxSearch(place, query),
     AGENTS_INBOX_READ_ALL: declaredWrite(dependencies.pool, markedAll),
     AGENTS_INBOX_ATTACHMENT: ({ itemId, attachmentId, playable = PLAYABLE_VIDEO_TYPE.WEBM }) =>
       keptAsked(
@@ -1667,6 +1871,7 @@ function composed(
 
     for (const userId of yield* RcMap.keys(accounts)) yield* RcMap.invalidate(accounts, userId);
     yield* sessionReads.end;
+    yield* searchesEnd;
     older.clear();
     yield* preferences.end;
     yield* tools.end;

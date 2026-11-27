@@ -17,11 +17,12 @@ import {
   listedItems,
   taskGroups,
 } from "@repo/features/inbox-list-model";
+import { INBOX_SEARCH_PLACE } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import type { TaskSummary } from "@repo/features/task-wire";
 import type { AppInboxTaskHolding } from "@repo/host/app-state";
-import { inboxHoldingsWithOlder } from "@repo/host/app-state-reads";
+import { inboxBeyondFeed, inboxHoldingsWithOlder } from "@repo/host/app-state-reads";
 import { useMinute } from "@repo/ui";
 import { afterPaint } from "@repo/ui/after-paint";
 import { useQuery } from "@tanstack/react-query";
@@ -45,6 +46,7 @@ import { useHeldInboxList } from "./use-held-inbox-list.js";
 import { taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
 import { useInboxOlderPages } from "./use-inbox-older-pages.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
+import { useInboxServiceSearch } from "./use-inbox-service-search.js";
 import { useInboxWaitingTasks, useListedInbox } from "./use-inbox-slices.js";
 import { useHeldTaskInbox, useInboxDraftsLetGo } from "./use-task-inbox.js";
 import { useTasklessInboxGroups } from "./use-taskless-inbox-groups.js";
@@ -63,7 +65,11 @@ import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
  * the pane shows keeping its place among the steps, as it does under any
  * scope (`inboxList`); the field hands it on a render behind its own words
  * (`inbox-list.tsx`'s `ListSearch`), so a key lands in the field before the
- * list is ranked again for it.
+ * list is ranked again for it. The words are asked of the service too, once
+ * typing pauses (`use-inbox-service-search.ts`), and the items it finds past
+ * what the host holds join what the list lists, never what it counts, under
+ * the scope shown as every other item is, each item the host holds itself
+ * listed as it holds it, so what is shown already stays as it stood.
  *
  * The chosen item's task's own read is held here without its cards'
  * drafts, which the pane that draws the box reads (`useInboxCardDrafts`),
@@ -306,7 +312,11 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const listsOlder = narrowedTask === undefined && choices.show === INBOX_SHOW.ALL;
   const olderPages = useInboxOlderPages(tasks.me, listsOlder && inbox.open && tasks.shown);
   const { data: olderHeld } = useQuery(inboxOlderQuery());
-  const older = listsOlder ? olderHeld : undefined;
+  // The list's search, which narrows what it lists, never what it counts, and asks the service for what it finds past what the host holds.
+  const [query, setQuery] = useState("");
+  const serviceSearch = useInboxServiceSearch(INBOX_SEARCH_PLACE.INBOX, query, tasks.signedIn);
+  // Note that what the list lists past the feed is All's older items and the items the search found, which every scope filters as it does the feed's.
+  const older = inboxBeyondFeed(listsOlder ? olderHeld : undefined, serviceSearch.found);
 
   const {
     groups: taskless,
@@ -457,16 +467,18 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     [everyItem, narrowedTask, now],
   );
 
-  // What the list lists: what stands, and under All the older items beside it, which nothing counts.
-  const listedStanding = useMemo(
-    () => (everyListed === everyItem ? standing : inboxAtNow(everyListed, now)),
-    [everyListed, everyItem, standing, now],
-  );
+  // What the list lists: what stands, and beside it under All the older items, and the items the search found, which nothing counts.
+  const listedStanding = useMemo(() => {
+    if (everyListed === everyItem) return standing;
+
+    return inboxAtNow(
+      narrowedTask === undefined ? everyListed : taskGroups(everyListed, narrowedTask),
+      now,
+    );
+  }, [everyListed, everyItem, standing, narrowedTask, now]);
 
   // Note that every item marked read is pushed with each followed inbox, its marker among its rows, so nothing is read again.
   const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: tasks.me });
-  // The list's search, which narrows what it lists, never what it counts.
-  const [query, setQuery] = useState("");
   const tokens = useMemo(() => searchTokens(query), [query]);
 
   const search = useMemo(
@@ -628,6 +640,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     filteredOut,
     search: { query, onQuery: setQuery },
     searched,
+    searchingService: serviceSearch.searching,
     missing,
     chosenFailed,
     onRetryChosen,

@@ -236,6 +236,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     filteredOut,
     search,
     searched,
+    searchingService,
     missing,
     chosenFailed,
     onRetryChosen,
@@ -685,6 +686,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                       onList={columns.onList}
                       onRetry={onRetry}
                       searched={searched}
+                      searching={searchingService}
                       onNewTask={newTask}
                       none={narrowedTask === undefined ? undefined : NOTHING_HERE}
                     />

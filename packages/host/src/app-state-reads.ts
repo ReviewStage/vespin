@@ -28,6 +28,7 @@ import {
   inboxGroups,
 } from "@repo/features/inbox-list-model";
 import { inboxInOrder } from "@repo/features/inbox-live";
+import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -694,6 +695,67 @@ const NO_OLDER: AppInboxItems = { [INBOX_SCOPE_KIND.TASK]: {} };
  */
 export function selectInboxOlder(state: AppStateSnapshot): AppInboxItems {
   return state[LIVE_READ.INBOX_OLDER].rows ?? NO_OLDER;
+}
+
+/**
+ * The items `place`'s search found on the service past what the host holds
+ * (`LIVE_READ.INBOX_FOUND`), as a `select`'s answer: by the plan each is on,
+ * and on no task by its agent; none while the place holds nothing found.
+ * Note that nothing that counts or badges reads them either.
+ */
+export function selectInboxFound(
+  state: AppStateSnapshot,
+  place: InboxSearchPlace,
+): AppInboxItems | undefined {
+  return state[LIVE_READ.INBOX_FOUND][place]?.rows?.items;
+}
+
+/** Each pair of items beyond the feed laid together, by the older items and then the found, so one pair answers one object while neither moves. */
+const besideHeld = new WeakMap<AppInboxItems, WeakMap<AppInboxItems, AppInboxItems>>();
+
+/**
+ * The items an Inbox lists past the account's feed: the older items All
+ * read (`selectInboxOlder`) and a place's found items (`selectInboxFound`),
+ * either where it alone is handed, the very one handed; an item both hold
+ * stands as the older items hold it, so a found item All already lists
+ * never moves. None where neither is handed. Lay the answer beside the
+ * feed's holdings with `inboxHoldingsWithOlder` (or `inboxWithOlder`), which
+ * leave out an item the holdings hold themselves. Note that the answer for
+ * one pair is one object, so a list grouping it groups again only as one
+ * of them moves.
+ */
+export function inboxBeyondFeed(
+  older: AppInboxItems | undefined,
+  found: AppInboxItems | undefined,
+): AppInboxItems | undefined {
+  if (older === undefined || found === undefined) return older ?? found;
+  const held = besideHeld.get(older)?.get(found);
+
+  if (held !== undefined) return held;
+  // Note that the found items are laid beside the older as the older are beside the feed, so the older copy of an item stands.
+  const beside = inboxWithOlder(older, found);
+
+  const byFound = besideHeld.get(older) ?? new WeakMap<AppInboxItems, AppInboxItems>();
+  byFound.set(found, beside);
+  besideHeld.set(older, byFound);
+
+  return beside;
+}
+
+/**
+ * What an Inbox lists past the account's feed, as a `select`: the older
+ * items All read, where `older` says the Inbox lists them, beside the items
+ * `place`'s search found (`inboxBeyondFeed`); none where neither stands.
+ * The same object while neither slice moves.
+ */
+export function selectInboxBeyondFeed(
+  state: AppStateSnapshot,
+  shown: { readonly older: boolean; readonly place: InboxSearchPlace },
+): AppInboxItems | undefined {
+  return inboxBeyondFeed(
+    shown.older ? state[LIVE_READ.INBOX_OLDER].rows : undefined,
+    selectInboxFound(state, shown.place),
+  );
 }
 
 /** Whether `older` holds no item on any holder, as before All reads a page. */

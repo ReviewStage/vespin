@@ -1,6 +1,7 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import { holderName } from "@repo/features/inbox-list-model";
+import { INBOX_SEARCH_PLACE } from "@repo/features/inbox-service-search";
 import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
@@ -15,6 +16,7 @@ import {
   inboxFeedHolds,
   inboxGroupsIn,
   inboxHoldingsWithOlder,
+  selectInboxBeyondFeed,
   selectInboxFeed,
   selectInboxHoldings,
   shareAppState,
@@ -270,5 +272,37 @@ describe("selectInboxHoldings", () => {
     ]);
     expect(merged.read.get("newer")?.find(({ id }) => id === "c")?.status).toBe(INBOX_STATUS.OPEN);
     expect(merged.agents).toEqual({ "manager-1": [settled("g", 1)] });
+  });
+
+  it("answers what lies past the feed as the older items under All beside a place's found items, the older copy of an item standing, the very slice where one alone stands, and one object while neither moves", () => {
+    const older = { [INBOX_SCOPE_KIND.TASK]: { archived: [thread("e", 5)] } };
+
+    const found = {
+      [INBOX_SCOPE_KIND.TASK]: {
+        archived: [{ ...thread("e", 5), title: "found again" }, thread("h", 7)],
+      },
+    };
+
+    const document: AppStateSnapshot = {
+      ...documentWith(byTask, false, []),
+      [LIVE_READ.INBOX_OLDER]: { rows: older },
+      [LIVE_READ.INBOX_FOUND]: {
+        [INBOX_SEARCH_PLACE.INBOX]: { rows: { query: "ledger", items: found } },
+      },
+    };
+
+    const inbox = { older: true, place: INBOX_SEARCH_PLACE.INBOX } as const;
+    const beyond = selectInboxBeyondFeed(document, inbox);
+
+    expect(beyond?.[INBOX_SCOPE_KIND.TASK].archived?.map(({ id, title }) => [id, title])).toEqual([
+      ["h", "h"],
+      ["e", "e"],
+    ]);
+    expect(selectInboxBeyondFeed({ ...document }, inbox)).toBe(beyond);
+    expect(selectInboxBeyondFeed(document, { ...inbox, older: false })).toBe(found);
+
+    expect(
+      selectInboxBeyondFeed(document, { older: true, place: INBOX_SEARCH_PLACE.EVERYTHING }),
+    ).toBe(older);
   });
 });

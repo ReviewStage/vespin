@@ -42,6 +42,7 @@ import {
   ACCOUNT_INBOX_READ,
   INBOX_ITEMS_READ,
   INBOX_OLDER_READ,
+  INBOX_SEARCH_READ,
   TASK_INBOX_READ,
 } from "@repo/features/inbox-live";
 import {
@@ -306,6 +307,12 @@ function fakeService() {
   /** Each page of the account's older items the service answers, by the cursor it reads past, the first under none; a page it holds none of goes unanswered. */
   const olderPages = new Map<string, OlderPage>();
 
+  /** The items each query's search finds, by the query, each answered once its gate opens. */
+  const searchHits = new Map<
+    string,
+    { readonly page: OlderPage; readonly gate: Effect.Effect<void> }
+  >();
+
   /** The models the account is offered, as the service answers them; the one Claude model from the start. */
   let offeredModels: readonly CatalogModel[] = MODELS;
   /** The account's provider keys, as the service answers them; the one Claude key from the start. */
@@ -481,6 +488,7 @@ function fakeService() {
         readonly userId?: string;
         readonly sync?: string;
         readonly before?: string;
+        readonly query?: string;
       },
       poll?: { readonly after?: string | undefined },
     ) =>
@@ -536,6 +544,15 @@ function fakeService() {
             return Effect.succeed(
               page === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : olderAnswer(page),
             );
+          }
+
+          case INBOX_SEARCH_READ.name: {
+            asked.push(`inbox-search:${params.query}`);
+            const hits = searchHits.get(params.query ?? "");
+
+            return hits === undefined
+              ? Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED })
+              : Effect.as(hits.gate, olderAnswer(hits.page));
           }
 
           default:
@@ -1171,6 +1188,10 @@ function fakeService() {
     answerOlder: (before: string | undefined, page: OlderPage) => {
       olderPages.set(before ?? "", page);
     },
+    /** The items the service's search finds by `query` from now on, answered once `gate` opens. */
+    answerSearch: (query: string, page: OlderPage, gate: Effect.Effect<void> = Effect.void) => {
+      searchHits.set(query, { page, gate });
+    },
     /** Whether the service answers the account's items' live read; none answers unanswered. */
     sealItems: (next: typeof LIVE_ANSWERED | undefined) => {
       itemsLive = next;
@@ -1622,6 +1643,7 @@ export function subject(
       sealAccount: service.sealAccount,
       sealItems: service.sealItems,
       answerOlder: service.answerOlder,
+      answerSearch: service.answerSearch,
       /** The rows each page of older items drew into the task list as cold tasks, in order. */
       coldDrawn,
       stallItems: service.stallItems,
@@ -1637,6 +1659,11 @@ export function subject(
       olderItems: () =>
         events.flatMap((event) =>
           event.kind === GATEWAY_EVENT.INBOX_OLDER_CHANGED ? [event.payload] : [],
+        ),
+      /** Every telling of the items each place's search found, whole, in order. */
+      foundItems: () =>
+        events.flatMap((event) =>
+          event.kind === GATEWAY_EVENT.INBOX_FOUND_CHANGED ? [event.payload] : [],
         ),
       /** Every telling of the account's items, whole, in order. */
       accountItems: () =>

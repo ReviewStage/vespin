@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { type AgentInboxAnswerView, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { INBOX_SEARCH_PLACE } from "@repo/features/inbox-service-search";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -1785,6 +1786,42 @@ function paneTitle(page: HTMLElement): string | null | undefined {
   return page.querySelector(".inbox-view-items .inbox-subject-title")?.textContent;
 }
 
+test("a search's words are asked of the service once typing pauses, and an item it finds past the feed joins the items the list found already, after them, under the scope shown; its words cleared let it go", async () => {
+  const FOUND: InboxItem = {
+    ...noticeOf(item("a1b2c3d4-0000-4000-8000-000000000041", "Was on-call paged last night?", 300)),
+    status: INBOX_STATUS.CLOSED,
+  };
+
+  world.searchFinds.set("on-call", { [BILLING.id]: [FOUND] });
+  const { page } = mount({});
+  await settle();
+
+  searchList(page, "on-call");
+  assert.deepEqual(listed(page), ["How is a failed email retried?"], "the Inbox's own hit at once");
+  assert.deepEqual(world.searchAsked, [], "nothing asked before typing pauses");
+
+  await vi.waitFor(() =>
+    assert.deepEqual(listed(page), [
+      "How is a failed email retried?",
+      "Was on-call paged last night?",
+    ]),
+  );
+
+  assert.deepEqual(world.searchAsked, [{ place: INBOX_SEARCH_PLACE.INBOX, query: "on-call" }]);
+
+  showScope(page, "Open");
+  await settle();
+  assert.equal(
+    listed(page).includes("Was on-call paged last night?"),
+    false,
+    "Open lists no settled item found",
+  );
+
+  searchList(page, "");
+  await settle();
+  assert.deepEqual(world.searchAsked.at(-1), { place: INBOX_SEARCH_PLACE.INBOX });
+});
+
 test("the Inbox's head is one row in the list, its search beside its buttons and the title bar's row over it empty; the search narrows the list to the items saying every word typed, the item open leaving the list but not the pane, gives its place to a selection and comes back with its words, and Escape empties it", async () => {
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
@@ -1821,9 +1858,13 @@ test("the Inbox's head is one row in the list, its search beside its buttons and
   assert.equal(input.closest("search[hidden]"), null, "the search is back");
   assert.equal(input.value, "on-call", "with its words");
 
+  // Note that an empty list says nothing matched only once the service answers that it found nothing either.
   searchList(page, "zzz");
   assert.deepEqual(listed(page), []);
-  assert.ok(page.querySelector(".inbox-tasks")?.textContent?.includes("No items match “zzz”."));
+  assert.ok(page.querySelector(".inbox-tasks")?.textContent?.includes("Searching older items…"));
+  await vi.waitFor(() =>
+    assert.ok(page.querySelector(".inbox-tasks")?.textContent?.includes("No items match “zzz”.")),
+  );
 
   act(() => input.focus());
   act(() => {
