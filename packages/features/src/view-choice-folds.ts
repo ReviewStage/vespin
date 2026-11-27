@@ -6,8 +6,13 @@
  * of that press alone over every fold another device kept. A press is
  * therefore one id folded in or out (`FoldPress`), laid over the list the
  * account keeps once it is read (`foldsToWrite`), and drawn meanwhile over
- * none (`foldsPressed`).
+ * none (`foldsPressed`). Presses wait for the account that made them alone
+ * (`pressesFor`), so a press made before a sign-out is never laid over the
+ * folds of the account signed in next.
  */
+
+/** No press, one list for every draw. */
+const NO_PRESSES: readonly never[] = [];
 
 /** One id folded in or out of a list of folds: a group folded, a section folded, a task opened. */
 export interface FoldPress<Id> {
@@ -40,4 +45,18 @@ export function foldsToWrite<Id>(
   if (!read.answered || presses.length === 0) return undefined;
 
   return foldsPressed(read.saved, presses);
+}
+
+/** Presses waiting for the account's folds, with the account signed in as they were made; none signed in while none is. */
+export interface FoldsWaiting<Id> {
+  readonly accountId: string | undefined;
+  readonly presses: readonly FoldPress<Id>[];
+}
+
+/** The presses waiting for `accountId`'s folds: those made under it, and none made under another account. */
+export function pressesFor<Id>(
+  waiting: FoldsWaiting<Id>,
+  accountId: string | undefined,
+): readonly FoldPress<Id>[] {
+  return waiting.accountId === accountId ? waiting.presses : NO_PRESSES;
 }

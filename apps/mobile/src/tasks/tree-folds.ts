@@ -14,20 +14,29 @@
  * no fold on the sidebar, so the phone holds theirs in memory alone.
  */
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
   NO_REPOSITORY_KEY,
   TASK_TREE_GROUP,
   type TaskTreeGroup,
 } from "@repo/features/task-tree-model";
-import { type FoldPress, foldsPressed, foldsToWrite } from "@repo/features/view-choice-folds";
+import {
+  type FoldsWaiting,
+  foldsPressed,
+  foldsToWrite,
+  pressesFor,
+} from "@repo/features/view-choice-folds";
 import {
   openedTasksBounded,
   VIEW_CHOICE_KEY,
   type ViewChoiceKey,
   type ViewChoiceValue,
 } from "@repo/features/view-choice-wire";
+import type { AppStateSnapshot } from "@repo/host/app-state";
+import { useQuery } from "@tanstack/react-query";
 import { Option } from "effect";
 import { useEffect, useMemo, useState } from "react";
+import { appStateQuery } from "../host/app-state-query.js";
 import { useViewChoice } from "../view-choices.js";
 
 /** What a fold that did not keep says in the failure notice. */
@@ -44,6 +53,14 @@ type ListFoldKey =
 
 /** What a list of folds keeps each fold by: a section's or a task's id, or a repository's full name, null for none. */
 type FoldId<Key extends ListFoldKey> = ViewChoiceValue<Key>[number];
+
+/** No press waiting for the account's folds. */
+const NOTHING_WAITING: FoldsWaiting<never> = { accountId: undefined, presses: [] };
+
+/** The account signed in, as a `select`; none while nobody is. */
+function selectAccountId(state: AppStateSnapshot): string | undefined {
+  return signedInAccountId(state.account);
+}
 
 /** A list kept as it is, its key bounding nothing. */
 function unbounded<Id>(ids: readonly Id[]): readonly Id[] {
@@ -87,25 +104,38 @@ function useFoldList<Key extends ListFoldKey>(
   bounded: (ids: readonly FoldId<Key>[]) => readonly FoldId<Key>[],
 ): FoldList<FoldId<Key>> {
   const { value, answered, choose } = useViewChoice(key, null, FOLD_REFUSED);
-  const [waiting, setWaiting] = useState<readonly FoldPress<FoldId<Key>>[]>(NONE);
+  const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
+  const [waiting, setWaiting] = useState<FoldsWaiting<FoldId<Key>>>(NOTHING_WAITING);
+  const presses = pressesFor(waiting, accountId);
   // SAFETY: each list key's value is a list of its ids (`ListFoldKey`).
   const saved = Option.getOrElse(value, () => NONE) as readonly FoldId<Key>[];
-  const drawn = useMemo(() => foldsPressed(saved, waiting), [saved, waiting]);
+  const drawn = useMemo(() => foldsPressed(saved, presses), [saved, presses]);
 
-  // Note that the presses that waited are laid over the account's list as it is first read, and written once.
+  // Note that the presses that waited are laid over the account's list as it is first read, and written once; those another account made, before a sign-out, are dropped.
   useEffect(() => {
-    const written = foldsToWrite({ answered, saved }, waiting);
+    if (waiting.presses.length > 0 && presses.length === 0) {
+      setWaiting(NOTHING_WAITING);
+
+      return;
+    }
+
+    const written = foldsToWrite({ answered, saved }, presses);
 
     if (written === undefined) return;
-    setWaiting(NONE);
+    setWaiting(NOTHING_WAITING);
     choose(bounded(written));
-  }, [answered, saved, waiting, choose, bounded]);
+  }, [answered, saved, waiting, presses, choose, bounded]);
 
   const press = (id: FoldId<Key>, on: boolean) => {
     const written = foldsToWrite({ answered, saved }, [{ id, on }]);
 
-    if (written === undefined) setWaiting((was) => [...was, { id, on }]);
-    else choose(bounded(written));
+    if (written !== undefined) {
+      choose(bounded(written));
+
+      return;
+    }
+
+    setWaiting((was) => ({ accountId, presses: [...pressesFor(was, accountId), { id, on }] }));
   };
 
   return [drawn, press];

@@ -1,10 +1,10 @@
 import { expect, test } from "vitest";
-import { foldsToWrite } from "./view-choice-folds.js";
+import { foldsToWrite, pressesFor } from "./view-choice-folds.js";
 
 /**
  * view-choice-folds.test.ts -- a fold pressed before the account's folds are
  * read waits for them, and is then laid over them, so no other fold the
- * account keeps is written away.
+ * account keeps is written away; and never over another account's.
  */
 
 test("a task opened before the account's opened tasks are read writes nothing, then joins them once read", () => {
@@ -23,4 +23,13 @@ test("presses made in turn are laid in turn, the one last pressed standing", () 
   ];
 
   expect(foldsToWrite({ answered: true, saved: ["a", "b"] }, presses)).toEqual(["b"]);
+});
+
+test("a press waiting for one account's folds is dropped once another account is signed in", () => {
+  const waiting = { accountId: "user-a", presses: [{ id: "acme/app", on: true }] };
+
+  expect(pressesFor(waiting, "user-b")).toEqual([]);
+  expect(
+    foldsToWrite({ answered: true, saved: ["b"] }, pressesFor(waiting, "user-b")),
+  ).toBeUndefined();
 });
