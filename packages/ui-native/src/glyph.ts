@@ -126,6 +126,8 @@ export const GLYPH = {
   CHANGES: lucide(LUCIDE_SYMBOL.FILE_DIFF),
   /** A pull request's checks, as the panel's Checks tab leads with them. */
   CHECKS: catalogLucide("ClipboardCheck"),
+  /** A pull request's chapters, as the panel's Chapters tab leads with them. */
+  CHAPTERS: catalogLucide("BookBookmark"),
   ISSUE: lucide(LUCIDE_SYMBOL.CIRCLE_DOT),
   FILE: lucide(LUCIDE_SYMBOL.FILE),
   FILE_TEXT: lucide(LUCIDE_SYMBOL.FILE_TEXT),

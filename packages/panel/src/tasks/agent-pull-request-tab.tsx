@@ -34,6 +34,7 @@ import {
 } from "@repo/features/link-grammar";
 import { type LinkStanding, PULL_REQUEST_MOMENT } from "@repo/features/link-standing-model";
 import { formatCount } from "@repo/features/number-format";
+import { CHAPTERS_SHOWN, chaptersShown } from "@repo/features/pull-request-chapters-shown";
 import {
   CHECK_WORDS,
   checksCountOf,
@@ -216,7 +217,7 @@ import {
   type AnnotationReply,
 } from "./annotation-card.js";
 import { threadPreview } from "./changes-model.js";
-import { CHAPTERS_SHOWN, chapterPaths, chaptersShown, chapterViewed } from "./chapters-model.js";
+import { chapterPaths, chapterViewed } from "./chapters-model.js";
 import { type ChaptersRead, useChaptersRead } from "./chapters-read.js";
 import { CommentTools } from "./comment-menu.js";
 import {
