@@ -41,6 +41,14 @@ import {
  * finished at its last save (`updatedAt`).
  */
 
+/** The Tasks page's two views: its List, and its Board, which the switch beside its title calls Columns. */
+export const TASKS_PAGE_VIEW = {
+  LIST: "list",
+  BOARD: "board",
+} as const;
+
+export type TasksPageView = (typeof TASKS_PAGE_VIEW)[keyof typeof TASKS_PAGE_VIEW];
+
 /** A task's key in a list of tasks: its id. */
 export function taskIdOf(task: TaskSummary): string {
   return task.id;
