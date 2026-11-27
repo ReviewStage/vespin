@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { INBOX_SCOPE_KIND, type ViewChoiceWriteParams } from "@repo/features/agent-view";
 import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
 import { AUTOMATION_FOLLOW } from "@repo/features/automation-view";
 import {
@@ -23,6 +23,7 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
+import { VIEW_CHOICE, VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import {
   WORKSPACE_ROLE,
   type WorkspaceMachine,
@@ -39,6 +40,7 @@ import {
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { createMemoryHistory } from "@tanstack/react-router";
+import { Schema } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";
@@ -53,7 +55,7 @@ import {
   holdAutomations,
   holdMembers,
 } from "../testing/app-state.js";
-import { withQueryClient } from "../testing/copy-feedback.js";
+import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -66,6 +68,7 @@ import {
   tasksControl,
   waitingOf,
 } from "../testing/tasks-control.js";
+import { hearViewChoices } from "../testing/view-choices.js";
 import { windowRouter } from "../testing/window-router.js";
 import { type PersonRoute, usePersonRoute } from "../workspace-routes.js";
 import { PersonPage } from "./person-page.js";
@@ -887,17 +890,26 @@ test("someone who left whom only the place that opened the page names keeps that
   await vi.waitFor(() => assert.deepEqual(head(page), ["Lee Park", "Former member"]));
 });
 
-/** The sidebar's views as this Mac keeps them, by workspace. */
-function keptViews(): Record<string, { assignee?: unknown }> {
-  return JSON.parse(window.localStorage.getItem("app.sidebarTaskViews") ?? "{}");
+/** Whose tasks the sidebar's view lists, as the page's presses keep it on the account, each press in order. */
+async function keptAssignees(written: readonly ViewChoiceWriteParams[]): Promise<unknown[]> {
+  await settleQueries();
+
+  return written.map((write) => {
+    const { workspaceId, value } = write;
+    assert.equal(workspaceId, ACME.id);
+
+    return Schema.decodeUnknownSync(VIEW_CHOICE[VIEW_CHOICE_KEY.SIDEBAR_TASK_VIEW].schema)(value)
+      .assignedTo;
+  });
 }
 
 test("Show their tasks in the sidebar lists the tasks assigned to them", async () => {
   const { page } = mount(CHARLES.userId);
   await settle();
+  const written = hearViewChoices();
 
   button(page, "Show their tasks in the sidebar").click();
-  assert.deepEqual(keptViews()[ACME.id]?.assignee, { kind: "member", userId: CHARLES.userId });
+  assert.deepEqual(await keptAssignees(written), [{ kind: "member", userId: CHARLES.userId }]);
 });
 
 test("a person's tasks assigned to them stand above those they created, a task both listed once as assigned, its foot counts the two it leaves out and lists every one assigned in the sidebar, and a press on its head folds the rows and the foot away together", async () => {
@@ -921,8 +933,9 @@ test("a person's tasks assigned to them stand above those they created, a task b
   // Each section wears no face, the page's head saying whose they are.
   assert.equal(page.querySelector('section[aria-label="Assigned"] .actor-mark'), null);
 
+  const written = hearViewChoices();
   button(page, "Show 2 more").click();
-  assert.deepEqual(keptViews()[ACME.id]?.assignee, { kind: "member", userId: CHARLES.userId });
+  assert.deepEqual(await keptAssignees(written), [{ kind: "member", userId: CHARLES.userId }]);
 
   const head = page.querySelector<HTMLButtonElement>(
     'section[aria-label="Assigned"] button[aria-expanded]',

@@ -7,27 +7,39 @@ import {
   type InboxWhose,
   MINE,
 } from "@repo/features/inbox-list-model";
+import {
+  openedTasksBounded,
+  openedTasksToggled,
+  VIEW_CHOICE_KEY,
+  type ViewChoiceKey,
+  type ViewChoiceValue,
+} from "@repo/features/view-choice-wire";
 import { Schema } from "effect";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useSteadyDoor } from "../steady-door.js";
-import { keptKey, useKept } from "../use-kept.js";
+import { type KeptKey, keptKey, useKept, useKeptLeaving } from "../use-kept.js";
+import { type AccountChoice, useAccountChoice } from "../view-choices.js";
 
 /**
- * folded-groups.ts -- which of the sidebar's groups the developer folded, Managers, Pinned, Following, the Tasks head's, and the repositories', kept across launches, and what the Inbox lists and how wide its list stands kept the same way.
+ * folded-groups.ts -- which of the sidebar's groups the developer folded, Managers, Pinned, Following, the Tasks head's, and the repositories', kept on the account, and what the Inbox lists and how wide its list stands kept on this Mac.
  *
- * A fold is this window's alone, as the sidebar's width is, so it is kept in
- * the renderer's own storage rather than on the account: a group folded on
- * one Mac stays open on another. A group is kept by its repository's full
- * name, and the tasks with no repository by null. A repository whose last
- * task goes leaves its entry behind: it is a few bytes, and a task on it
- * later comes back folded as it was left. Pinned is kept under a key of
- * its own, since it is no repository, as are Following and the Tasks head,
- * which folds the sections and the list together whoever's tasks it names, and so are the account's own
- * sections, each by its id. A task's child tasks nested under
- * its row stand folded until it is opened, so the tasks opened are kept,
- * each by its id, under a key of their own. A fixture run starts with every group open
- * and keeps nothing, so its frames never wear a developer's folds. The
- * Inbox's view choices are kept on the same terms, the scope it shows,
+ * A fold is the reader's reading of their own sidebar, as Slack and Notion
+ * keep a sidebar's folds, so it is one of the account's view choices
+ * (`view-choices.ts`): a group folded on one Mac stands folded on every
+ * device, the iPhone's Tasks tab among them. A group is kept by its
+ * repository's full name, and the tasks with no repository by null. A
+ * repository whose last task goes leaves its entry behind: it is a few
+ * bytes, and a task on it later comes back folded as it was left. Pinned is
+ * kept under a key of its own, since it is no repository, as are Following
+ * and the Tasks head, which folds the sections and the list together
+ * whoever's tasks it names, and so are the account's own sections, each by
+ * its id. A task's child tasks nested under its row stand folded until it
+ * is opened, so the tasks opened are kept, each by its id, under a key of
+ * their own, the latest `MAX_OPENED_TASKS` of them (`openedTasksToggled`). A fold this Mac kept
+ * itself before the account kept it moves up once (`useKeptMovedUp`). A
+ * fixture run starts with every group open and keeps nothing, so its
+ * frames never wear a developer's folds. The
+ * Inbox's view choices are kept on this Mac, the scope it shows,
  * whom the items it lists are addressed to, a teammate by their account's
  * id, whether its pinned tasks' items stand first, and which of those runs
  * are folded, and so is its list's width; a task's own Inbox lists every item it holds, and keeps no
@@ -40,7 +52,7 @@ import { keptKey, useKept } from "../use-kept.js";
  * width for every page.
  */
 
-/** Where the folds are kept in the renderer's storage. */
+/** Where the choices are kept in the renderer's storage, the folds kept there before the account kept them. */
 const STORAGE_KEY = {
   GROUPS: "app.sidebarFoldedGroups",
   PINNED: "app.sidebarPinnedFolded",
@@ -138,7 +150,7 @@ const storedWhose = Schema.fromJsonString(
 /** Which scope the Inbox shows. */
 const storedShow = Schema.fromJsonString(Schema.Literals(Object.values(INBOX_SHOW)));
 
-/** The Inbox's view choices, each kept on this Mac under its own key. */
+/** The choices this Mac keeps, each under its own key, and the folds it kept before they moved up to the account. */
 const KEPT = {
   INBOX_SHOW: keptKey<InboxShow>(STORAGE_KEY.INBOX_SHOW, storedShow),
   WHOSE: keptKey<InboxWhose>(STORAGE_KEY.INBOX_WHOSE, storedWhose),
@@ -156,30 +168,6 @@ const KEPT = {
   PAGE_COMMENTS_WIDTH: keptKey(STORAGE_KEY.PAGE_COMMENTS_WIDTH, storedWidth),
   RUNS_PANEL: keptKey(STORAGE_KEY.RUNS_PANEL, storedRunsPanel),
 } as const;
-
-/** Every fold the sidebar keeps. */
-interface Folds {
-  readonly groups: readonly (string | null)[];
-  readonly pinned: boolean;
-  readonly following: boolean;
-  /** The Tasks head's, which folds the sections and the list under it. */
-  readonly tasks: boolean;
-  readonly managers: boolean;
-  /** The account's own sections folded, by id. */
-  readonly sections: readonly string[];
-  /** The tasks whose child tasks stand open under them, by id. */
-  readonly openedTasks: readonly string[];
-}
-
-const OPEN: Folds = {
-  groups: [],
-  pinned: false,
-  following: false,
-  tasks: false,
-  managers: false,
-  sections: [],
-  openedTasks: [],
-};
 
 /** The folds with `held` folded where it was open, and open where it was folded. */
 function toggled<K extends string | null>(folded: readonly K[], held: K): K[] {
@@ -207,78 +195,82 @@ export interface FoldedGroups {
   toggleTask: (taskId: string) => void;
 }
 
-/** The sidebar's folds, each kept as it is pressed, unless the run is `staged`. */
+/** No group folded, and no task opened. */
+const NONE: readonly never[] = [];
+
+/** A sidebar fold of the account's, moved up from the name this window kept it under. */
+function useFold<Key extends ViewChoiceKey>(
+  key: Key,
+  kept: KeptKey<ViewChoiceValue<Key>>,
+  fallback: ViewChoiceValue<Key>,
+  staged: boolean,
+): AccountChoice<Key> {
+  return useAccountChoice(key, null, fallback, staged, useKeptLeaving(kept));
+}
+
+/** Each of the sidebar's folds, as the account keeps it. */
+interface FoldChoices {
+  readonly groups: AccountChoice<typeof VIEW_CHOICE_KEY.SIDEBAR_FOLDED_GROUPS>;
+  readonly pinned: AccountChoice<typeof VIEW_CHOICE_KEY.SIDEBAR_PINNED_FOLDED>;
+  readonly following: AccountChoice<typeof VIEW_CHOICE_KEY.SIDEBAR_FOLLOWING_FOLDED>;
+  /** The Tasks head's, which folds the sections and the list under it. */
+  readonly tasks: AccountChoice<typeof VIEW_CHOICE_KEY.SIDEBAR_TASKS_FOLDED>;
+  readonly managers: AccountChoice<typeof VIEW_CHOICE_KEY.SIDEBAR_MANAGERS_FOLDED>;
+  /** The account's own sections folded, by id. */
+  readonly sections: AccountChoice<typeof VIEW_CHOICE_KEY.SIDEBAR_FOLDED_SECTIONS>;
+  /** The tasks whose child tasks stand open under them, by id. */
+  readonly opened: AccountChoice<typeof VIEW_CHOICE_KEY.SIDEBAR_OPENED_TASKS>;
+}
+
+/** The sidebar's folds, each kept on the account as it is pressed, unless the run is `staged`. */
 export function useFoldedGroups(staged: boolean): FoldedGroups {
-  // Note that the fixture run's folds are a state of their own rather than
-  // the kept ones reset, because the run is only known a render after the
-  // kept folds were read, as `sidebar-collapse.ts` says of its own.
-  const [groups, keepGroups] = useKept(KEPT.FOLDED_GROUPS, OPEN.groups);
-  const [pinned, keepPinned] = useKept(KEPT.PINNED_FOLDED, OPEN.pinned);
-  const [following, keepFollowing] = useKept(KEPT.FOLLOWING_FOLDED, OPEN.following);
-  const [tasksFolded, keepTasks] = useKept(KEPT.TASKS_FOLDED, OPEN.tasks);
-  const [managers, keepManagers] = useKept(KEPT.MANAGERS_FOLDED, OPEN.managers);
-  const [sections, keepSections] = useKept(KEPT.FOLDED_SECTIONS, OPEN.sections);
-  const [openedTasks, keepOpenedTasks] = useKept(KEPT.OPENED_TASKS, OPEN.openedTasks);
-  const [stagedFolds, setStagedFolds] = useState<Folds>(OPEN);
+  const KEY = VIEW_CHOICE_KEY;
+  const [openedLeft, forgetOpened] = useKeptLeaving(KEPT.OPENED_TASKS);
 
-  const folds = staged
-    ? stagedFolds
-    : { groups, pinned, following, tasks: tasksFolded, managers, sections, openedTasks };
+  const choices: FoldChoices = {
+    groups: useFold(KEY.SIDEBAR_FOLDED_GROUPS, KEPT.FOLDED_GROUPS, NONE, staged),
+    pinned: useFold(KEY.SIDEBAR_PINNED_FOLDED, KEPT.PINNED_FOLDED, false, staged),
+    following: useFold(KEY.SIDEBAR_FOLLOWING_FOLDED, KEPT.FOLLOWING_FOLDED, false, staged),
+    tasks: useFold(KEY.SIDEBAR_TASKS_FOLDED, KEPT.TASKS_FOLDED, false, staged),
+    managers: useFold(KEY.SIDEBAR_MANAGERS_FOLDED, KEPT.MANAGERS_FOLDED, false, staged),
+    sections: useFold(KEY.SIDEBAR_FOLDED_SECTIONS, KEPT.FOLDED_SECTIONS, NONE, staged),
+    opened: useAccountChoice(KEY.SIDEBAR_OPENED_TASKS, null, NONE, staged, [
+      openedLeft === undefined ? undefined : openedTasksBounded(openedLeft),
+      forgetOpened,
+    ]),
+  };
 
-  // Note that a fold is written through a steady door, so the folds stand as one object until one of them moves, and a list drawn through them is drawn again only then.
-  const fold = useSteadyDoor((next: Partial<Folds>) => {
-    if (staged) {
-      setStagedFolds({ ...stagedFolds, ...next });
-
-      return;
-    }
-
-    if (next.groups !== undefined) keepGroups(next.groups);
-
-    if (next.pinned !== undefined) keepPinned(next.pinned);
-
-    if (next.following !== undefined) keepFollowing(next.following);
-
-    if (next.tasks !== undefined) keepTasks(next.tasks);
-
-    if (next.managers !== undefined) keepManagers(next.managers);
-
-    if (next.sections !== undefined) keepSections(next.sections);
-
-    if (next.openedTasks !== undefined) keepOpenedTasks(next.openedTasks);
-  });
-
-  const { groups: foldedGroups, pinned: pinnedFolded, following: followingFolded } = folds;
-  const { tasks: foldedTasks, managers: managersFolded, sections: foldedSections } = folds;
-  const { openedTasks: opened } = folds;
+  // Note that each press reaches the folds through a steady door and changes the fold standing as it is pressed, so the folds stand as one object until one of them moves, and a list drawn through them is drawn again only then.
+  const press = useSteadyDoor((pressed: (folds: FoldChoices) => void) => pressed(choices));
+  const groups = choices.groups.value;
+  const pinned = choices.pinned.value;
+  const following = choices.following.value;
+  const tasks = choices.tasks.value;
+  const managers = choices.managers.value;
+  const sections = choices.sections.value;
+  const opened = choices.opened.value;
 
   return useMemo(
     (): FoldedGroups => ({
-      folded: (repository) => foldedGroups.includes(repository),
-      toggle: (repository) => fold({ groups: toggled(foldedGroups, repository) }),
-      pinnedFolded,
-      togglePinned: () => fold({ pinned: !pinnedFolded }),
-      followingFolded,
-      toggleFollowing: () => fold({ following: !followingFolded }),
-      tasksFolded: foldedTasks,
-      toggleTasks: () => fold({ tasks: !foldedTasks }),
-      managersFolded,
-      toggleManagers: () => fold({ managers: !managersFolded }),
-      sectionFolded: (sectionId) => foldedSections.includes(sectionId),
-      toggleSection: (sectionId) => fold({ sections: toggled(foldedSections, sectionId) }),
+      folded: (repository) => groups.includes(repository),
+      toggle: (repository) =>
+        press((all) => all.groups.change((held) => toggled(held, repository))),
+      pinnedFolded: pinned,
+      togglePinned: () => press((all) => all.pinned.change((held) => !held)),
+      followingFolded: following,
+      toggleFollowing: () => press((all) => all.following.change((held) => !held)),
+      tasksFolded: tasks,
+      toggleTasks: () => press((all) => all.tasks.change((held) => !held)),
+      managersFolded: managers,
+      toggleManagers: () => press((all) => all.managers.change((held) => !held)),
+      sectionFolded: (sectionId) => sections.includes(sectionId),
+      toggleSection: (sectionId) =>
+        press((all) => all.sections.change((held) => toggled(held, sectionId))),
       taskOpened: (taskId) => opened.includes(taskId),
-      toggleTask: (taskId) => fold({ openedTasks: toggled(opened, taskId) }),
+      toggleTask: (taskId) =>
+        press((all) => all.opened.change((held) => openedTasksToggled(held, taskId))),
     }),
-    [
-      fold,
-      foldedGroups,
-      pinnedFolded,
-      followingFolded,
-      foldedTasks,
-      managersFolded,
-      foldedSections,
-      opened,
-    ],
+    [press, groups, pinned, following, tasks, managers, sections, opened],
   );
 }
 
