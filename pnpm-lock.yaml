@@ -290,7 +290,7 @@ patchedDependencies:
     hash: af32b6645b074a081cae42956870b6c779240a52fac319191531b3724c5be619
     path: patches/@sentry__browser@11.8.0.patch
   '@shopify/flash-list@2.3.2':
-    hash: 70c6298316e6c0d2f448281eec8464b58067f5c2204384a6c03140c96ac4d6b5
+    hash: b14daaecc5aad0871cb9f14ea4536e30b2bf7a54685e55e447bbdf7740f9ab12
     path: patches/@shopify__flash-list@2.3.2.patch
   '@tanstack/db@1.0.0-rc.1.5':
     hash: aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f
@@ -1917,7 +1917,7 @@ importers:
         version: link:../wire
       '@shopify/flash-list':
         specifier: 2.3.2
-        version: 2.3.2(patch_hash=70c6298316e6c0d2f448281eec8464b58067f5c2204384a6c03140c96ac4d6b5)(@babel/runtime@7.29.10)(react-native@0.88.1)(react@19.3.0)
+        version: 2.3.2(patch_hash=b14daaecc5aad0871cb9f14ea4536e30b2bf7a54685e55e447bbdf7740f9ab12)(@babel/runtime@7.29.10)(react-native@0.88.1)(react@19.3.0)
       effect:
         specifier: 'catalog:'
         version: 4.0.4
@@ -14660,7 +14660,7 @@ snapshots:
 
   '@shikijs/vscode-textmate@10.1.0': {}
 
-  '@shopify/flash-list@2.3.2(patch_hash=70c6298316e6c0d2f448281eec8464b58067f5c2204384a6c03140c96ac4d6b5)(@babel/runtime@7.29.10)(react-native@0.88.1)(react@19.3.0)':
+  '@shopify/flash-list@2.3.2(patch_hash=b14daaecc5aad0871cb9f14ea4536e30b2bf7a54685e55e447bbdf7740f9ab12)(@babel/runtime@7.29.10)(react-native@0.88.1)(react@19.3.0)':
     dependencies:
       '@babel/runtime': 7.29.10
       react: 19.3.0

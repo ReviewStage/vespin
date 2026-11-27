@@ -315,7 +315,10 @@ patchedDependencies:
 # correction was skipped: a scroll up left the offset inside the prompt, with
 # some 25,000 pt of rows suddenly above it, and the reader stood at its first
 # line (STAG-5272). The patch searches the whole data whenever the row is
-# not among those drawn. It patches `dist/`, which Metro reads, never `src/`.
+# not among those drawn, and so that the row it finds is one the reader
+# stands on, refreshes it on every scroll rather than once the scroll's
+# momentum ends, and holds the first visible row already measured, never one
+# still at its estimate. It patches `dist/`, which Metro reads, never `src/`.
 # Upstream tracks the missing estimate for an unmeasured row as
 # Shopify/flash-list#2526 (fix PR #2531, open), and rows misplaced as they
 # are measured during a fast scroll as #2175. Delete the patch when a release
