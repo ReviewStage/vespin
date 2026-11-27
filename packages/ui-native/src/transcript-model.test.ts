@@ -1,10 +1,12 @@
 import { agentParts, WHOLE_PART } from "@repo/features/agent-parts";
 import {
   AGENT_ATTACHMENT_TYPE,
+  AGENT_SENDER,
   CHECK_SUMMARY,
   PART_CUT_FIELD,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { managerChatView } from "@repo/features/manager-chat-view";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
@@ -364,6 +366,45 @@ describe("transcriptItems", () => {
     ]);
   });
 
+  it.each([
+    {
+      sender: "a member",
+      sentBy: { name: "Grace", userId: "u2" },
+      opens: JSON.stringify({ kind: LINK_DESTINATION.PERSON, userId: "u2" }),
+    },
+    {
+      sender: "another agent",
+      sentBy: { name: "Triage", agent: true, agentId: "0a09f5a6-cff0-4615-aff3-a54d80f101dc" },
+      opens: JSON.stringify({
+        kind: LINK_DESTINATION.AGENT,
+        agentId: "0a09f5a6-cff0-4615-aff3-a54d80f101dc",
+      }),
+    },
+    {
+      sender: "an App's bot on GitHub",
+      sentBy: { name: "coderabbitai[bot]", kind: AGENT_SENDER.GITHUB },
+      opens: "https://github.com/apps/coderabbitai",
+    },
+    { sender: "the app", sentBy: { name: "Vespin", kind: AGENT_SENDER.APP }, opens: undefined },
+  ] as const)(
+    "opens what $sender's name opens on the panel: their page, or nothing",
+    ({ sentBy, opens }) => {
+      const items = transcriptItems(
+        [{ id: "sent", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Hi." }], sentBy }],
+        {
+          writing: false,
+          readerId: "u1",
+          toggles: NO_TOGGLES,
+          now: 1,
+          pullRequests: [],
+          placeAddress: (place) => JSON.stringify(place),
+        },
+      );
+
+      expect(items).toMatchObject([{ kind: TRANSCRIPT_ITEM.SAID, senderAddress: opens }]);
+    },
+  );
+
   it("names an app's line while the reader is not yet known", () => {
     const items = transcriptItems(
       [
@@ -477,7 +518,10 @@ describe("transcriptItems", () => {
     expect(
       transcriptItems(lines, {
         ...reading,
-        suggestionAddress: (agentId) => `https://vespin.dev/acme/agent/${agentId}`,
+        placeAddress: (place) =>
+          place.kind === LINK_DESTINATION.AGENT
+            ? `https://vespin.dev/acme/agent/${place.agentId}`
+            : undefined,
       }),
     ).toMatchObject([
       {
@@ -984,6 +1028,38 @@ describe("managerChatItems", () => {
     });
   });
 
+  it("stands New over the first message after the reader's mark, skipping their own unless they marked the chat unread", () => {
+    // Note that the chat's rows stand newest first, as the slice holds them.
+    const rows = [
+      row("m2", 4, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, text: "Shipped." }),
+      row("a1", 3, { authorKind: MANAGER_CHAT_AUTHOR.PERSON, authorUserId: "u1", text: "Go." }),
+      row("m1", 2, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, text: "Ready?" }),
+    ];
+
+    const view = managerChatView(rows, [], { running: undefined });
+
+    /** The chat's items as words, a rule as its kind and words, read with New after the mark, over the reader's own or not. */
+    const drawn = (newOverOwn: boolean) =>
+      managerChatItems(view, [], {
+        writing: false,
+        readerId: "u1",
+        toggles: NO_TOGGLES,
+        now: 5 * minute,
+        pullRequests: [],
+        newAfter: 2.5 * minute,
+        newOverOwn,
+      }).map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? item.words
+          : [item.kind, "words" in item && item.words],
+      );
+
+    expect([drawn(false), drawn(true)]).toEqual([
+      ["Ready?", "Go.", [TRANSCRIPT_ITEM.RULE, "New"], "Shipped."],
+      ["Ready?", [TRANSCRIPT_ITEM.RULE, "New"], "Go.", "Shipped."],
+    ]);
+  });
+
   it("stands a thread's replies on its own page, the channel summing them under the message they answer: the root alone, a rule counting them, the replies, and the reader's reply on its way", () => {
     const rows = [
       row("r2", 4, {
@@ -1029,6 +1105,7 @@ describe("managerChatItems", () => {
       pullRequests: [],
       sending,
       readerName: "Ada",
+      placeAddress: (place: LinkDestination) => JSON.stringify(place),
     };
 
     const channel = managerChatItems(view, [], reading);
@@ -1052,15 +1129,21 @@ describe("managerChatItems", () => {
     expect(
       thread?.map((item) =>
         item.kind === TRANSCRIPT_ITEM.SAID
-          ? [item.words, item.channel?.name, item.thread]
+          ? [item.words, item.channel?.name, item.channel?.address, item.thread]
           : [item.kind, item.kind === TRANSCRIPT_ITEM.RULE && item.words],
       ),
     ).toEqual([
-      ["Shipped.", "Pat", undefined],
+      // Note that a person's face and name open their page, and the Manager's, whose chat this is, open nothing.
+      ["Shipped.", "Pat", undefined, undefined],
       [TRANSCRIPT_ITEM.RULE, "2 replies"],
-      ["Which branch?", "Grace", undefined],
-      ["Done.", "Pat", undefined],
-      ["Thanks!", "Ada", undefined],
+      [
+        "Which branch?",
+        "Grace",
+        JSON.stringify({ kind: LINK_DESTINATION.PERSON, userId: "u2" }),
+        undefined,
+      ],
+      ["Done.", "Pat", undefined, undefined],
+      ["Thanks!", "Ada", undefined, undefined],
     ]);
     expect(managerThreadItems(view, "gone", [], reading)).toBeUndefined();
   });

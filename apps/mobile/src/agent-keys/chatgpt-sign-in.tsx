@@ -221,7 +221,9 @@ export function ChatGptSignIn() {
           icon={glyphSymbol(GLYPH.CLOSE)}
           accessibilityLabel={WORDS.CANCEL}
           onPress={close}
-        />
+        >
+          {WORDS.CANCEL}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>{body}</SettingsForm>

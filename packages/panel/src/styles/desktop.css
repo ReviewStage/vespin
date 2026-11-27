@@ -1714,6 +1714,12 @@ body,
 .side-panel-content .agent-tab-foot .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
+
+/* A Manager's thread beside its chat (`desktop-agent-page.tsx`) stands its
+   box on the content edge its messages and its head's words stand on. */
+.manager-thread-pane .agent-tab-foot .agent-composer {
+  padding-inline: var(--content-inset);
+}
 /* The apps an agent is using float at the right edge of that same column,
    and across it in a narrow foot (`tasks.css`). */
 .desktop-agent .agent-computer-float,

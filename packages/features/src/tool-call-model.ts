@@ -59,6 +59,7 @@ import {
   computerCallWords,
   computerNotRunWords,
   MACHINE_NOT_RUN_WORDS,
+  moreFiles,
   pageName,
 } from "./turn-rows.js";
 
@@ -201,11 +202,12 @@ function textBlock(text: string): ToolBlock {
 
 /** A subject with many files: the first, and how many more. */
 function pathsSubject(paths: readonly string[]): string {
-  const [first, ...rest] = paths;
+  const [first] = paths;
+  const more = moreFiles(paths);
 
   if (first === undefined) return "";
 
-  return rest.length === 0 ? first : `${first} +${rest.length}`;
+  return more === undefined ? first : `${first} ${more}`;
 }
 
 /** The string under a key of a record, or nothing where the record has none. */

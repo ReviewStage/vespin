@@ -22,7 +22,7 @@ import {
 } from "@repo/features/ios-share-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectRepositoryList, selectWorkspaces } from "@repo/host/app-state-reads";
-import { useLiveQuery } from "@tanstack/react-db";
+import { WINDOW_READ } from "@repo/host/read-window";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef } from "react";
@@ -37,6 +37,7 @@ import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { SERVICE_ORIGIN } from "./host/compose-mobile.js";
 import { APP_VERSION, useTaskListCollections } from "./host/host-provider.js";
+import { useWindow } from "./host/use-window.js";
 import { useSplashReleased } from "./splash.js";
 
 /** Where the share sheet's Start goes, named as this build. */
@@ -59,7 +60,7 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
   const collections = useTaskListCollections();
   const drawn = useSplashReleased();
 
-  const tasks = useLiveQuery((q) =>
+  const read = useWindow((q) =>
     drawn
       ? q.from({ task: collections.tasks }).select(({ task }) => ({
           id: task.id,
@@ -67,7 +68,10 @@ function useSnapshotJson(accountId: string | undefined): string | undefined {
           createdAt: task.createdAt,
         }))
       : undefined,
-  ).data;
+  );
+
+  // Note that no snapshot is written until the tasks have been read, so the share sheet never offers an empty list of repositories.
+  const tasks = read.status === WINDOW_READ.ROWS ? read.rows : undefined;
 
   const select = useCallback(
     (state: AppStateSnapshot) =>

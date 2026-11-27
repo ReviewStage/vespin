@@ -124,6 +124,8 @@ export const GLYPH = {
   BLOCKS: lucide(LUCIDE_SYMBOL.HAND),
   HEADING: lucide(LUCIDE_SYMBOL.HEADING),
   CHANGES: lucide(LUCIDE_SYMBOL.FILE_DIFF),
+  /** A pull request's checks, as the panel's Checks tab leads with them. */
+  CHECKS: catalogLucide("ClipboardCheck"),
   ISSUE: lucide(LUCIDE_SYMBOL.CIRCLE_DOT),
   FILE: lucide(LUCIDE_SYMBOL.FILE),
   FILE_TEXT: lucide(LUCIDE_SYMBOL.FILE_TEXT),
@@ -205,8 +207,8 @@ export const GLYPH = {
   EDIT: lucide(LUCIDE_SYMBOL.PENCIL_LINE),
   WRITE: lucide(LUCIDE_SYMBOL.FILE_PEN),
   COPY: lucide(LUCIDE_SYMBOL.COPY),
-  /** Reply in thread, which opens a Manager chat message's thread, the panel's Lucide MessageSquareReply, among every glyph the catalog holds. */
-  REPLY_IN_THREAD: catalogLucide("MessageSquareReply"),
+  /** Reply in thread, which opens a Manager chat message's thread, the panel's Lucide MessageSquareText, among every glyph the catalog holds. */
+  REPLY_IN_THREAD: catalogLucide("MessageSquareText"),
   SAVE: lucide(LUCIDE_SYMBOL.DOWNLOAD),
   LINK: lucide(LUCIDE_SYMBOL.LINK),
   UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),
@@ -295,6 +297,8 @@ export const GLYPH = {
   GOES_OUT: system("arrow.up.forward"),
   MENU_OPENS: system("chevron.up.chevron.down"),
   STOP_TURN: system("stop.fill"),
+  // A video still's play mark, the system's own, as Messages and Photos mark a video at rest.
+  VIDEO_PLAY: system("play.circle.fill"),
   // A sheet's confirm, the system's checkmark in its prominent bar button, as iOS 26's own sheets close on it.
   CONFIRM: system("checkmark"),
   // A task's status ring, the panel's own mark.

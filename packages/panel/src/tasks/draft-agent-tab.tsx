@@ -9,7 +9,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
 import { ConversationLead } from "../ai-elements/conversation.js";
-import { useMemberDirectory } from "../member-directory.js";
 import { appStateQuery, selectNewAgentServersOff } from "../use-app-state.js";
 import type { CallWhenStarted } from "../voice-call.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
@@ -21,7 +20,7 @@ import { ArchivedComposerNote } from "./archived-note.js";
 import { useHandedWords } from "./box-words.js";
 import { ConnectAgentBanner } from "./connect-agent-banner.js";
 import { ForkChip, SuggestionChip } from "./fork-action.js";
-import { deviceOfPlace, NewTaskRunsOnChip, useOwnedMachines, useStartRunsOn } from "./runs-on.js";
+import { NewTaskRunsOnChip, useStartRunsOn } from "./runs-on.js";
 import type { AgentComposerControl, ComposerNote } from "./use-agent-composer.js";
 import type { AgentDraft, AgentsControl } from "./use-agents.js";
 import { WorkingLine } from "./working-time.js";
@@ -180,10 +179,7 @@ export function DraftAgentTab({
   }, []);
   const devices = control.macs ?? NO_DEVICES;
 
-  // Note that the task's workspace is the directory's around its page, whose machines Runs on offers after the member's devices.
-  const owned = useOwnedMachines(useMemberDirectory().workspaceId);
-
-  const [place, choosePlace] = useStartRunsOn(
+  const [device, choosePlace] = useStartRunsOn(
     devices,
     draft.runsOn,
     {
@@ -192,10 +188,7 @@ export function DraftAgentTab({
       me: control.me,
     },
     (runsOn) => control.onDraftChange({ runsOn }),
-    owned,
   );
-
-  const device = deviceOfPlace(place);
 
   // Note that a model nothing of the account's pays for holds Send, with the press that connects one, rather than being refused once sent, but on a device that runs its harness, on the device's own sign-in.
   const models = useMemo(() => modelsRunOn(control.models, device), [control.models, device]);
@@ -363,8 +356,7 @@ export function DraftAgentTab({
               ? (narrow) => (
                   <NewTaskRunsOnChip
                     devices={devices}
-                    owned={owned}
-                    place={place}
+                    device={device}
                     disabled={sending}
                     narrow={narrow}
                     onChoose={choosePlace}

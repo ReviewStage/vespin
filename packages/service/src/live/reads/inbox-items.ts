@@ -14,10 +14,6 @@ import { ORDER } from "@repo/features/live-read";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { Clock, Effect } from "effect";
 import { TASKLESS_LIVE, tasklessLiveParam } from "../../agents/taskless-reads.js";
-import {
-  WORKSPACE_MACHINE_LIVE,
-  workspaceMachineLiveParam,
-} from "../../agents/workspace-machine-reads.js";
 import { HOSTED_REFUSAL } from "../../http/http-effect.js";
 import {
   type AccountItemsReader,
@@ -43,10 +39,8 @@ import { ITEM_GATES, SCOPE_INBOX_READS } from "./scope-inbox.js";
  * items it carries are those changed since `settledSince`, which it binds
  * from the clock, since a live statement reads none, and those the reader
  * set a reminder on and has not read since. The items on no task it
- * carries only to a build that reads them (`tasklessLiveParam`), and those
- * of an agent on a workspace's machine likewise
- * (`workspaceMachineLiveParam`), each bound from the headers the build
- * names itself in. A `since` of no shape, epoch
+ * carries only to a build that reads them (`tasklessLiveParam`), which it
+ * binds from the headers the build names itself in. A `since` of no shape, epoch
  * milliseconds as text, is refused; none reads every item.
  *
  * A reader past a sync id is answered the items that moved alone, each
@@ -72,13 +66,11 @@ function itemsReaderOf(params: {
   readonly userId: string;
   readonly settledSince: string;
   readonly taskless: string;
-  readonly workspaceMachines: string;
 }): AccountItemsReader {
   return {
     userId: params.userId,
     settledSince: instantParam(params.settledSince),
     taskless: params.taskless === TASKLESS_LIVE.CARRIED,
-    workspaceMachines: params.workspaceMachines === WORKSPACE_MACHINE_LIVE.CARRIED,
   };
 }
 
@@ -91,7 +83,6 @@ export const inboxItemsRead = bindLiveRead(INBOX_ITEMS_READ, {
     Effect.map(Clock.currentTimeMillis, (now) => ({
       settledSince: String(now - ACCOUNT_INBOX_ITEMS.SETTLED_WINDOW_MILLIS),
       taskless: tasklessLiveParam(request),
-      workspaceMachines: workspaceMachineLiveParam(request),
     })),
   // Note that the query is read rather than the param, which binds a `since` left out as empty, and one named empty is refused.
   admit: (_params, query) => {

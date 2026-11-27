@@ -175,8 +175,6 @@ export const HOSTED_API_ERROR = {
   TASK_PARENT_HELD: "task-parent-held",
   /** The account named too many pairing codes that no pending pairing has, so its reads, approves, and denies by code are refused until the time the refusal names; nothing was read or written. */
   HOST_PAIRING_HELD: "host-pairing-held",
-  /** A box's approve named an owner other than the one the machine it runs on already stands as a host of: a member's own, or a workspace's, never both; nothing was written, and the pairing still waits for an answer. */
-  MACHINE_OWNED_ELSEWHERE: "machine-owned-elsewhere",
   /** A write sent again under the idempotency key (`IDEMPOTENCY_KEY`) it was taken under before; it was not run again, so what it wrote stands as the service holds it now. */
   ALREADY_WRITTEN: "already-written",
   /** The member has Memory off, so their workspace's memories are neither kept nor searched for them; nothing was read or written. */

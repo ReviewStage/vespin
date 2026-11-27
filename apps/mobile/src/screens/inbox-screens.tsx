@@ -991,6 +991,17 @@ function ThreadDetail({
     ],
   };
 
+  // Note that a press on a message's writer opens their page, the agent's or a member's, as the panel's writer opens theirs; a member no account names opens nothing.
+  const writerOpen = (writer: (typeof messages)[number]["writer"]) => {
+    const { userId } = writer;
+
+    if (writer.agent) return openAgent.onPress;
+
+    if (userId === undefined) return undefined;
+
+    return () => router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.PERSON, userId })));
+  };
+
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
   const undeliveredLines = new Map(undelivered.lines.map((line) => [line.key, line]));
@@ -1005,6 +1016,7 @@ function ThreadDetail({
       picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
       harness: message.writer.agent ? harness : undefined,
       manager: message.writer.agent ? writerManager : undefined,
+      onOpen: writerOpen(message.writer),
     },
     stamp:
       message.stamp === undefined
@@ -1173,13 +1185,17 @@ function ThreadDetail({
           disabled={place.steps.previous === undefined}
           icon={glyphSymbol(GLYPH.PREVIOUS_ITEM)}
           onPress={() => stepTo(place.steps.previous)}
-        />
+        >
+          {STEP_WORDS.PREVIOUS}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Button
           accessibilityLabel={STEP_WORDS.NEXT}
           disabled={place.steps.next === undefined}
           icon={glyphSymbol(GLYPH.NEXT_ITEM)}
           onPress={() => stepTo(place.steps.next)}
-        />
+        >
+          {STEP_WORDS.NEXT}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.View>
           <StackBarMenu menu={compactMenu} />
         </Stack.Toolbar.View>
@@ -1354,9 +1370,15 @@ function InboxStackList(held: InboxHeld) {
   const placement = useHeldSearchPlacement(search);
 
   // Note that Select mode names how many are chosen in the title's place, stands Select all where the switcher stood and Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
+  // Note that the count stands inline in the bar, as Photos' Select Items does, rather than in the large title, because iOS left the large title blank once its words changed under it.
   return (
     <>
-      <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }}>
+      <Stack.Screen
+        options={{
+          title: choosing?.title ?? INBOX_TITLE,
+          headerLargeTitleEnabled: choosing === undefined,
+        }}
+      >
         {choosing !== undefined ? null : (
           <Stack.SearchBar
             ref={field}
@@ -1388,6 +1410,7 @@ function InboxStackList(held: InboxHeld) {
           </Stack.Toolbar.Button>
         ) : (
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
+            <Stack.Toolbar.Label>{menu.label}</Stack.Toolbar.Label>
             {toolbarMenuActions(menu)}
           </Stack.Toolbar.Menu>
         )}
@@ -1397,7 +1420,9 @@ function InboxStackList(held: InboxHeld) {
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
             accessibilityLabel={compose.label}
             onPress={compose.onPress}
-          />
+          >
+            {compose.label}
+          </Stack.Toolbar.Button>
         )}
       </Stack.Toolbar>
       {choosing === undefined ? null : (
@@ -1408,6 +1433,7 @@ function InboxStackList(held: InboxHeld) {
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass. A menu that would act on nothing, such as Remind me with no thread chosen, stands as a dimmed button, because the bar's menu draws its `disabled` live on iOS.
             isBarMenu(act) && act.disabled !== true ? (
               <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
+                <Stack.Toolbar.Label>{act.label}</Stack.Toolbar.Label>
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 {toolbarMenuActions(act)}
               </Stack.Toolbar.Menu>
@@ -1418,6 +1444,7 @@ function InboxStackList(held: InboxHeld) {
                 disabled={act.disabled === true}
                 onPress={isBarMenu(act) ? doNothing : act.onPress}
               >
+                <Stack.Toolbar.Label>{act.label}</Stack.Toolbar.Label>
                 {act.symbol === undefined ? null : (
                   <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
                 )}

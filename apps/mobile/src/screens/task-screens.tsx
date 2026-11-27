@@ -1,6 +1,11 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
-import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
+import {
+  AGENT_MACHINE,
+  AGENT_STATUS,
+  type AgentStatus,
+  type ListedAgent,
+} from "@repo/features/agent-wire";
 import { PRODUCT_STANDING_FIELD, PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionHead } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
@@ -166,6 +171,7 @@ import {
   type RowSubmenu,
   type RowSwipe,
   repositoryChoice,
+  runsOnGlyph,
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
@@ -201,7 +207,6 @@ import {
 } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { useAgentPlaceGlyph } from "../agents/use-agent-place.js";
 import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useWholeListRead } from "../host/host-provider.js";
@@ -245,6 +250,7 @@ import {
 } from "../tasks/use-inline-description.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
+import { useDevicePlatform } from "../tasks/use-start.js";
 import {
   type ReadListing,
   type RowAsks,
@@ -2578,8 +2584,8 @@ export function TaskAgentRow({
   const runsOn = agentRunsOnWords(agent);
   const { acts } = useAgentRowParts(agent, name, asking);
 
-  // Note that a machine's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac, whether it is the member's device or the workspace's.
-  const placeGlyph = useAgentPlaceGlyph(agent);
+  // Note that a device's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac.
+  const platform = useDevicePlatform(agent.mac?.deviceId);
 
   return (
     <AgentRow
@@ -2589,7 +2595,7 @@ export function TaskAgentRow({
       face={agent.face}
       state={agentState(agent.status)}
       runsOn={runsOn}
-      runsOnGlyph={placeGlyph}
+      runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
       waiting={waiting}
       depth={nest?.depth}
       fold={nest?.fold}
@@ -3455,7 +3461,9 @@ function TasksStackList({
           icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
           accessibilityLabel={compose.label}
           onPress={compose.onPress}
-        />
+        >
+          {compose.label}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         <TasksTree
@@ -3780,7 +3788,9 @@ export function TaskScreen() {
               icon={glyphSymbol(GLYPH.AGENT)}
               accessibilityLabel={WORDS.NEW_AGENT}
               onPress={() => newAgent(overview.task)}
-            />
+            >
+              {WORDS.NEW_AGENT}
+            </Stack.Toolbar.Button>
           </Stack.Toolbar>
         )}
       </InlineBar>

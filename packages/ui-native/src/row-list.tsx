@@ -70,6 +70,7 @@ import { menuPressAt, menuTree } from "./row-menu-model.js";
 import {
   RowChoosingContext,
   RowOpenContext,
+  RowPickContext,
   RowSearchedContext,
   RowSelectedContext,
 } from "./row-open.js";
@@ -288,6 +289,7 @@ export function RowList({
   // Whether a two-finger drag started Select mode before the list was drawn in it.
   const dragged = useRef(false);
   const chooses = choosing !== undefined;
+  const picked = useContext(RowPickContext);
 
   useEffect(() => {
     if (!chooses) dragged.current = false;
@@ -335,7 +337,9 @@ export function RowList({
 
         const id = selectedId(selection);
 
-        if (id !== undefined) onSelect?.(id);
+        if (id === undefined || onSelect === undefined) return;
+        picked?.();
+        onSelect(id);
       }}
       modifiers={[
         listStyle(look),

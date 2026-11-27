@@ -479,6 +479,8 @@ export const RunnerTranscriptCallSchema = Schema.Union([
     call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE),
     key: TranscriptKeySchema,
     after: Schema.NullOr(TranscriptCursorSchema),
+    /** Whether a main transcript loads from its latest compaction, as Claude Code resumes it, rather than whole; whole where absent, as from a runner from before it. */
+    fromLatestCompaction: Schema.optionalKey(Schema.Boolean),
   }),
   Schema.Struct({
     call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LIST_SESSIONS),

@@ -1,9 +1,8 @@
-# settings-machines.yaml -- Settings › Machines on the Inbox fixture: the account's machines, each with where it stands and what it is, and an offline machine's Remove asked first, with the command that removes it by hand, and canceled; then the machines the workspace owns under them, and one's Remove asked first and canceled.
+# settings-machines.yaml -- Settings › Machines on the Inbox fixture: the account's machines, each with where it stands and what it is, and an offline machine's Remove asked first, with the command that removes it by hand, and canceled.
 #
 # Launched on the host's Inbox fixture, whose account has a Mac online and a
-# Linux server marked away, and whose workspace, which Ada owns, owns a Linux
-# box online and a Mac still setting up (`@repo/host/fixture-inbox`), so no
-# server is reached.
+# Linux server marked away (`@repo/host/fixture-inbox`), so no server is
+# reached.
 appId: dev.vespin.ios
 ---
 - launchApp:
@@ -36,20 +35,3 @@ appId: dev.vespin.ios
     env:
       QUESTION: "Remove build-box?"
 - assertVisible: "build-box"
-# The workspace's own machines stand under Ada's, which she renames and removes as its owner.
-- scrollUntilVisible:
-    element: "Team Mac Studio"
-- assertVisible: "Shared machines in Ada Lovelace"
-- assertVisible: "build-01"
-- takeScreenshot: settings-machines-shared
-- longPressOn: "build-01"
-- assertVisible: "Rename"
-- tapOn: "Remove"
-- assertVisible: "Remove build-01?"
-- waitForAnimationToEnd
-- takeScreenshot: settings-machines-shared-remove
-- runFlow:
-    file: subflows/dismiss-ask.yaml
-    env:
-      QUESTION: "Remove build-01?"
-- assertVisible: "build-01"

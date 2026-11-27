@@ -37,7 +37,8 @@ import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { taskSummaryOf } from "@repo/features/task-list-live";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { GATEWAY_METHOD } from "@repo/gateway";
-import { temporaryDirectoryScoped } from "@repo/runtime/testing";
+import { ForegroundClock } from "@repo/runtime/effect";
+import { temporaryDirectoryScoped, testForegroundClock } from "@repo/runtime/testing";
 import { type EntityPool, entityPool } from "@repo/sync";
 import { nodeKeptCollections } from "@repo/sync/testing";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
@@ -1307,7 +1308,8 @@ it.effect(
   "a live read that gets no answer is asked again past the bound on a backoff, and the transcript reads on the moment the service answers again",
   () =>
     Effect.gen(function* () {
-      const reach = yield* SubscriptionRef.make({ reachable: false, answeredAt: 0 });
+      const answeredAt = (yield* ForegroundClock).now();
+      const reach = yield* SubscriptionRef.make({ reachable: false, answeredAt });
       yield* Effect.gen(function* () {
         const { acts, asked, held, sealTranscript, live } = yield* subject();
         const seals = () => asked.filter((ask) => ask === `transcript-live:${AGENT_ID}`).length;
@@ -1326,7 +1328,7 @@ it.effect(
 
         // Note that the read never gave up, so the service answering again asks at once, a minute short of its wait.
         sealTranscript(LIVE_ANSWERED);
-        yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1 });
+        yield* SubscriptionRef.set(reach, { reachable: true, answeredAt });
         yield* settled;
         assert.equal(seals(), 7);
         transcriptRows(live, 2);
@@ -1588,6 +1590,7 @@ it.effect(
       yield* followedOnce(harness);
       const { asked, transcripts, live } = harness;
       assert.deepEqual(ids(harness.held().at(-1)), ["m-1:0", "m-2:0"], "let go, it stays held");
+      assert.equal(harness.held().at(-1)?.word?.caughtUp, false, "but no longer caught up");
 
       // Written while no window held it.
       const away = pageNow("3:0", { holds: false, text: "Written while away." });
@@ -1602,8 +1605,11 @@ it.effect(
       yield* harness.acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
       yield* settled;
       const laid = transcripts().slice(laidBefore);
-      assert.equal(laid[0]?.asked, askedBefore, "what was held stands before any read");
-      assert.equal(laid[0]?.rows?.word?.caughtUp, false, "not caught up until read on");
+      // Note that what was held stands on the slice as it was let go, so nothing is laid before the read on from its cursor.
+      assert.ok(
+        laid.every((each) => each.asked > askedBefore),
+        "what was held stands before any read",
+      );
       assert.deepEqual(ids(laid.at(-1)?.rows), ["m-1:0", "m-2:0", "m-3:0"]);
       assert.deepEqual(asked.slice(askedBefore), [
         `messages-now:${AGENT_ID}:2:0`,
@@ -1685,7 +1691,8 @@ it.effect(
   "a transcript held again while the service answers no read at all stays followed, and reads on the moment the service is back",
   () =>
     Effect.gen(function* () {
-      const reach = yield* SubscriptionRef.make({ reachable: false, answeredAt: 0 });
+      const answeredAt = (yield* ForegroundClock).now();
+      const reach = yield* SubscriptionRef.make({ reachable: false, answeredAt });
       yield* Effect.gen(function* () {
         const harness = yield* subject();
         yield* followedOnce(harness);
@@ -1700,7 +1707,7 @@ it.effect(
         const back = pageNow("3:0", { holds: false, text: "Back again." });
         harness.pageNow(back);
         harness.pageNewest(newestPage("3:0", "Back again.", "40"));
-        yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1 });
+        yield* SubscriptionRef.set(reach, { reachable: true, answeredAt });
         yield* settled;
         assert.equal(held().at(-1)?.failure, undefined);
         assert.ok(JSON.stringify(held().at(-1)?.messages).includes("Back again."));
@@ -2798,7 +2805,7 @@ it.effect(
         asked.filter((each) => each.startsWith("account-items-whole:")),
         ["account-items-whole:user-dana"],
       );
-    }),
+    }).pipe(Effect.provideServiceEffect(ForegroundClock, testForegroundClock)),
 );
 
 it.effect(

@@ -375,6 +375,9 @@ importers:
       '@repo/wire':
         specifier: workspace:*
         version: link:../../packages/wire
+      '@tanstack/react-query':
+        specifier: 'catalog:'
+        version: 5.106.1(@types/react@19.2.18)(react@19.2.8)
       effect:
         specifier: 'catalog:'
         version: 4.0.4
@@ -699,6 +702,9 @@ importers:
       '@repo/host':
         specifier: workspace:*
         version: link:../../packages/host
+      '@repo/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@repo/settings':
         specifier: workspace:*
         version: link:../../packages/settings
@@ -817,9 +823,6 @@ importers:
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(vitest@5.1.1)
-      '@repo/runtime':
-        specifier: workspace:*
-        version: link:../../packages/runtime
       '@repo/wire':
         specifier: workspace:*
         version: link:../../packages/wire
@@ -1190,6 +1193,9 @@ importers:
       micromark-extension-gfm:
         specifier: 3.0.0
         version: 3.0.0
+      undici:
+        specifier: 8.12.4
+        version: 8.12.4
       ws:
         specifier: 'catalog:'
         version: 8.21.3
