@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "c427d6c9-3020-4cc0-aadc-4c98b2453d8e",
-  "prevIds": ["ea32bf4a-39ad-48ae-8b7c-002adbe6d3b7"],
+  "id": "30dc38ec-bec9-43a6-8cfa-ba69b95c2d1e",
+  "prevIds": ["105f9a66-00ca-4b71-ae25-cb18130e5069", "9d4caecc-5b53-48f2-8d69-67e249bebd97"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -31,6 +31,12 @@
     {
       "isRlsEnabled": false,
       "name": "account_sound_choice",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "account_view_choice",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1419,6 +1425,84 @@
       "entityType": "columns",
       "schema": "public",
       "table": "account_sound_choice"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_view_choice"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_view_choice"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_view_choice"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_view_choice"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "value",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_view_choice"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_view_choice"
     },
     {
       "type": "uuid",
@@ -16171,6 +16255,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "account_view_choice_organization",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "account_view_choice"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "user_id",
           "isExpression": false,
           "asc": true,
@@ -20621,6 +20726,32 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "account_view_choice_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "account_view_choice"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["organization_id"],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "account_view_choice_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "account_view_choice"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["child_conversation_id"],
       "schemaTo": "public",
       "tableTo": "conversations",
@@ -23940,6 +24071,14 @@
       "entityType": "pks"
     },
     {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "account_view_choice_pkey",
+      "schema": "public",
+      "table": "account_view_choice",
+      "entityType": "pks"
+    },
+    {
       "columns": ["child_conversation_id"],
       "nameExplicit": false,
       "name": "agent_delegation_pkey",
@@ -24692,6 +24831,15 @@
       "entityType": "uniques",
       "schema": "public",
       "table": "account_sound"
+    },
+    {
+      "nameExplicit": true,
+      "columns": ["user_id", "key", "organization_id"],
+      "nullsNotDistinct": true,
+      "name": "account_view_choice_user_key_organization",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "account_view_choice"
     },
     {
       "nameExplicit": true,
