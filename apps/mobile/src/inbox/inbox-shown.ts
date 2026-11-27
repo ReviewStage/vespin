@@ -36,7 +36,8 @@ export function useInboxShown(): boolean {
  */
 export function useKeepInboxShown(shown: boolean): void {
   useEffect(() => {
-    Settings.set({ [KEPT.KEY]: shown ? KEPT.ON : KEPT.OFF });
+    // DIAGNOSTIC (not for merge): the user-defaults write left out, to see whether it takes Settings down on an iPad.
+    console.warn(`VESPIN-DIAG keepInboxShown skipped shown=${shown}`);
   }, [shown]);
 }
 
