@@ -93,7 +93,7 @@ export function previewMessages(
     .slice(-PREVIEW_MESSAGES);
 }
 
-/** An item's step as the preview says it, where it is one of the agent's own: its words, a call's line or the card it stands as, or a fold's summary. */
+/** An item's step as the preview says it, where it is one of the agent's own: its words, a call's line or the card it stands as, a worker's job, or a fold's summary. */
 function stepOf(item: TranscriptItem): string | undefined {
   switch (item.kind) {
     case TRANSCRIPT_ITEM.WORDS:
@@ -104,6 +104,8 @@ function stepOf(item: TranscriptItem): string | undefined {
       return subject === undefined || subject === "" ? verb : `${verb} ${subject}`;
     }
 
+    case TRANSCRIPT_ITEM.WORKER:
+      return item.job;
     case TRANSCRIPT_ITEM.FOLD:
       return item.summary;
     // Note that a card a call stands as alone says the call as its row would, its verb then what it showed or opened, since the call's own line is left out.

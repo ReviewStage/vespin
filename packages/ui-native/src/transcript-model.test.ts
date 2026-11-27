@@ -2,6 +2,7 @@ import { agentParts, WHOLE_PART } from "@repo/features/agent-parts";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_SENDER,
+  AGENT_STATUS,
   CHECK_SUMMARY,
   PART_CUT_FIELD,
   PULL_REQUEST_STATE,
@@ -13,6 +14,7 @@ import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { describe, expect, it } from "vitest";
 import {
+  CALL_STANDING,
   drawnCallIds,
   managerChatItems,
   managerThreadItems,
@@ -709,6 +711,74 @@ describe("transcriptItems", () => {
     const foot = items.find((item) => item.kind === TRANSCRIPT_ITEM.FOOT);
 
     expect(foot?.kind === TRANSCRIPT_ITEM.FOOT ? foot.copy : undefined).toBe(copy);
+  });
+  // Note that the regression this catches is a worker's row reading its call's state, which settles the moment the worker is under way, so a worker still at work would stand done.
+  it("draws a delegation as its worker's row, where it stands and the pair it runs on read from the worker's own session over its call, and why one that never began failed under it", () => {
+    const items = transcriptItems(
+      [
+        {
+          id: "work",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            {
+              type: "tool-delegate",
+              toolCallId: "running",
+              state: "output-available",
+              input: { task: "Read the CSV writers.", model: "anthropic/claude-sonnet-5.5" },
+              output: { status: "started" },
+            },
+            {
+              type: "tool-delegate",
+              toolCallId: "refused",
+              state: "output-error",
+              input: { task: "Compare the ledgers." },
+              errorText: "The worker could not start.",
+            },
+          ],
+          startedAt: 0,
+        },
+      ],
+      {
+        writing: true,
+        readerId: undefined,
+        toggles: NO_TOGGLES,
+        now: 2,
+        pullRequests: [],
+        workers: new Map([
+          [
+            "running",
+            {
+              callId: "running",
+              status: AGENT_STATUS.RUNNING,
+              model: "anthropic/claude-opus-5.5",
+              effort: "high",
+              startedAt: 1,
+            },
+          ],
+        ]),
+      },
+    );
+
+    const rows = items.flatMap((item) =>
+      item.kind === TRANSCRIPT_ITEM.WORKER
+        ? [{ job: item.job, pair: item.pair, standing: item.standing, failure: item.failure }]
+        : [],
+    );
+
+    expect(rows).toEqual([
+      {
+        job: "Read the CSV writers.",
+        pair: "Opus 5.5 High",
+        standing: CALL_STANDING.RUNNING,
+        failure: undefined,
+      },
+      {
+        job: "Compare the ledgers.",
+        pair: undefined,
+        standing: CALL_STANDING.FAILED,
+        failure: "The worker could not start.",
+      },
+    ]);
   });
 });
 

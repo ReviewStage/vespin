@@ -98,6 +98,8 @@ const IOS_ROUTE = {
   PERSON: "/tasks/person",
   /** One thread of a Manager's chat, by the message it hangs on, under its agent's route. */
   CHAT_THREAD: "thread",
+  /** One of an agent's workers, by the delegation call that started it, under its agent's route, pushed from its row alone, since a worker's link stays the web's. */
+  WORKER: "worker",
 } as const;
 
 /** A place the app draws a screen for, which always has a route of the app's. */
@@ -419,8 +421,9 @@ export function iosRouteOnTab(route: string, standing: IosTab | undefined): stri
  * steps aside for, as Messages hides its tabs in a chat so the composer
  * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, a
  * thread of a Manager's chat, a pull request it opened, or a comment's thread on a task's description or a
- * new comment, each ending in its reply field. A list, a task, and a page the
- * agent showed keep the bar.
+ * new comment, each ending in its reply field; and a worker's transcript,
+ * pushed over its agent's, so the bar does not come back between them. A
+ * list, a task, and a page the agent showed keep the bar.
  */
 export function iosRouteHidesTabs(pathname: string): boolean {
   const [tab, first, second, third] = pathname.split("/").filter((segment) => segment !== "");
@@ -434,7 +437,12 @@ export function iosRouteHidesTabs(pathname: string): boolean {
 
   if (`${route}/${first ?? ""}` !== IOS_ROUTE.AGENT || second === undefined) return false;
 
-  return third === undefined || third === IOS_ROUTE.PULL_REQUEST || third === IOS_ROUTE.CHAT_THREAD;
+  return (
+    third === undefined ||
+    third === IOS_ROUTE.PULL_REQUEST ||
+    third === IOS_ROUTE.CHAT_THREAD ||
+    third === IOS_ROUTE.WORKER
+  );
 }
 
 /**

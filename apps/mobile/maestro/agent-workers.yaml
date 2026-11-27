@@ -1,0 +1,63 @@
+# agent-workers.yaml -- an agent's delegations, each drawn as the panel's subagent row: its job, the pair its worker runs on, how long a running one has worked, where each stands, and why a failed one failed under it; a Claude Code subagent folds open in place on its task and answer, and a finished worker's row opens the worker's own page, its transcript read whole.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+#
+# Note that an iPad stands in landscape, where the transcript stands in the
+# detail column beside the list, and that the window is turned back upright
+# however the flow ends, because a run left in landscape fails every flow
+# after it.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose worker agent handed its audit
+# to three workers and a Claude Code subagent and still waits on one
+# (`@repo/host/fixture-worker-agent`), and opened on its page by
+# `-agent <id>`; nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: e3b7a9d1-58c2-4f06-b1d4-6a9c2e7f3b18
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+# Note that the launch waits up to half a minute for its first words, as
+# `agent.yaml`'s does.
+- extendedWaitUntil:
+    visible: "I'll split the audit between workers.*"
+    timeout: 30000
+# Each worker stands on one line, heard as its job and the pair it runs on:
+# one still at work, one finished, and one that never started, which says
+# why under its line.
+- assertVisible: "Read every CSV writer under src/export.*Sonnet 5.5 Medium"
+- assertVisible: "Check that the export's tests cover half-cent totals.*Sonnet 5.5 Medium"
+- assertVisible: "Compare the ledger's rounding with the export's.*"
+- assertVisible: "The worker could not start: its sandbox ran out of disk space."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-workers
+# A Claude Code subagent keeps no page, so a press folds it open on its
+# task and its answer, as a call's row opens.
+- tapOn: "Find the export's callers"
+- assertVisible: "List every caller of exportCsv in the repository."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-workers-native-open
+- tapOn: "Find the export's callers"
+# A finished worker's row opens the worker's own page, pushed over the
+# agent's: the task it was handed, its work folded, and its answer, under
+# its job.
+- tapOn: "Check that the export's tests cover half-cent totals.*Sonnet 5.5 Medium"
+- extendedWaitUntil:
+    visible: "The suite covers half-cent totals for USD and EUR.*"
+    timeout: 10000
+- assertVisible: "2 tool calls"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-worker-opened

@@ -51,6 +51,8 @@ import {
 } from "./agent-tools.js";
 import {
   AGENT_DELEGATE_TOOL,
+  AGENT_STATUS,
+  type AgentStatus,
   type AgentTranscriptMessage,
   PART_CUT_FIELD,
   type PartCut,
@@ -611,6 +613,31 @@ export function nativeSubagent(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
 ): boolean {
   return part.tool === CLAUDE_CODE_TOOL.AGENT;
+}
+
+/**
+ * How a worker's row marks where it stands, as its own session reads: still
+ * running while it starts or works, at rest once it completed or was
+ * stopped, whose own page says which, and failed where it failed.
+ */
+export function workerToolState(status: AgentStatus): ToolState {
+  switch (status) {
+    case AGENT_STATUS.STARTING:
+    case AGENT_STATUS.RUNNING:
+      return TOOL_STATE.INPUT_AVAILABLE;
+    case AGENT_STATUS.FAILED:
+      return TOOL_STATE.OUTPUT_ERROR;
+    case AGENT_STATUS.COMPLETED:
+    case AGENT_STATUS.CANCELED:
+      return TOOL_STATE.OUTPUT_AVAILABLE;
+  }
+}
+
+/** Where a worker stands, read from its delegation's part: running until the call answers, then completed, or failed where the call ended in an error. */
+export function workerStatusOf(state: ToolState): AgentStatus {
+  if (state === TOOL_STATE.OUTPUT_AVAILABLE) return AGENT_STATUS.COMPLETED;
+
+  return state === TOOL_STATE.OUTPUT_ERROR ? AGENT_STATUS.FAILED : AGENT_STATUS.RUNNING;
 }
 
 /** The usage limit's notice a worker's call answered with where the plan's limit ended it, which its row draws in its answer's place; none for any other answer. */

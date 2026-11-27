@@ -541,6 +541,7 @@ export {
 } from "./transcript.js";
 
 export {
+  delegatedWorker,
   drawnCallIds,
   managerChatItems,
   managerThreadItems,

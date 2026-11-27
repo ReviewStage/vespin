@@ -26,6 +26,8 @@ import {
   type TurnStretch,
   turnStretches,
   wholeCallOf,
+  workerStatusOf,
+  workerToolState,
   workRows,
 } from "@repo/features/agent-parts";
 import { editsInPlace, REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
@@ -279,8 +281,6 @@ import {
   transcriptRowKey,
   WORKING_PHASE,
   type WorkingPhase,
-  workerStatusOf,
-  workerToolState,
   workerWorkingPhase,
   workingLineWords,
 } from "./agent-model.js";

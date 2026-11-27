@@ -26,17 +26,21 @@ import {
   AGENT_PART,
   type AgentPart,
   type AgentPartCut,
+  agentParts,
   agentRows,
   type ComputerApps,
   CUT_PART_WORDS,
   computerAppsOf,
   cutPartText,
+  isDelegation,
   messageWords,
+  nativeSubagent,
   placedMessages,
   turnStretches,
   WHOLE_PART,
   type WholePartRead,
   wholeCallOf,
+  workerToolState,
   workRows,
 } from "@repo/features/agent-parts";
 import {
@@ -52,6 +56,7 @@ import {
   type AgentOrigin,
   type AgentPullRequest,
   type AgentSender,
+  type AgentSubagentStanding,
   type AgentTranscriptMessage,
   agentMessageWords,
   PULL_REQUEST_STATE,
@@ -82,6 +87,9 @@ import {
   repliesWords,
 } from "@repo/features/manager-chat-view";
 import { type MessageFileChip, messageFileChips } from "@repo/features/message-files";
+import { effortLabel } from "@repo/features/model-effort";
+import { modelLabel, providerOf } from "@repo/features/model-label";
+import { type ModelChoice, type ModelProvider, NO_EFFORT } from "@repo/features/models-wire";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
@@ -105,6 +113,8 @@ import {
   type ToolState,
 } from "@repo/features/tool-call-block";
 import {
+  type DelegationView,
+  delegationView,
   shownPageVersion,
   TOOL_TARGET,
   type ToolCallView,
@@ -123,6 +133,7 @@ import {
 import {
   CALL_KIND,
   CALL_MARK,
+  CALL_WORDS,
   type CallKind,
   type CallLine,
   calledFile,
@@ -146,6 +157,8 @@ export const TRANSCRIPT_ITEM = {
   WORDS: "words",
   /** One tool call, its line, and its body where it stands open. */
   CALL: "call",
+  /** One delegation to a worker, as the panel's subagent row: its job, the pair it runs on, how long it has worked, and where it stands. */
+  WORKER: "worker",
   /** A run of calls, as one line that opens on the rows it holds. */
   FOLD: "fold",
   /** The pictures or recordings a call showed, under its line. */
@@ -365,6 +378,28 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly answered: readonly ShownMedia[];
     }
   | {
+      readonly kind: typeof TRANSCRIPT_ITEM.WORKER;
+      /** The call that started the worker, which its page is read under and which opens and closes its row. */
+      readonly callId: string;
+      /** The job it was handed, as the panel's row names it: the few words the agent named it by, or its task's first line. */
+      readonly job: string;
+      /** The model and effort it runs on, as the panel's row says them ("Opus 5.5 High"); none where no pair is known. */
+      readonly pair: string | undefined;
+      /** The provider whose harness its model runs in, whose mark leads its row, as the panel's row wears it; none where its model is not known, when the worker's glyph stands in. */
+      readonly harness: ModelProvider | undefined;
+      /** Where it stands, read from its own session where the page says, since its call may settle the moment it is under way. */
+      readonly standing: CallStanding;
+      /** When it began, which its row counts how long it has worked from while it runs; none where the page does not say. */
+      readonly startedAt: number | undefined;
+      /** Why its call failed, under its line; none where it did not, or where the error only repeats the job. */
+      readonly failure: string | undefined;
+      /** Whether it is a native harness's subagent, whose work no page keeps, so its row folds open on its task and answer rather than opening the worker. */
+      readonly native: boolean;
+      readonly open: boolean;
+      /** Its task and its answer while it stands open, for a row that opens no worker's page. */
+      readonly body: readonly CallBodyBlock[];
+    }
+  | {
       readonly kind: typeof TRANSCRIPT_ITEM.FOLD;
       readonly summary: string;
       readonly open: boolean;
@@ -459,10 +494,16 @@ interface TranscriptReading {
   readonly wholePart?: ((cut: AgentPartCut) => WholePartRead | undefined) | undefined;
   /** What the transcript opens on where an automation's run started the agent, drawn on its first line; none for any other agent, or while older pages are still unread. */
   readonly origin?: TranscriptOrigin | undefined;
+  /** Whether the transcript is a worker's (`workerLines`), whose first line is the task it was handed, which stands as the panel's Subagent task card; none for an agent's own. */
+  readonly worker?: boolean | undefined;
   /** The address of a place of the agent's workspace, such as the agent a line was suggested by or a line's sender, which the line's head opens; none where the workspace can't be named, when the head names them alone. */
   readonly placeAddress?: ((place: LinkDestination) => string | undefined) | undefined;
   /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
   readonly waitingCalls?: ReadonlySet<string> | undefined;
+  /** Where each of the agent's workers stands as its own session reads, by the call that started it (`subagents`), which its row says over the call's own state; none from a page that says none, as a worker's own. */
+  readonly workers?: ReadonlyMap<string, AgentSubagentStanding> | undefined;
+  /** When each worker the newest turn still waits on began, by the call that started it (`delegations`), which its row counts from where its standing says nothing. */
+  readonly delegations?: ReadonlyMap<string, number> | undefined;
 }
 
 /** How a Manager's chat is read for its list: as a transcript is, and the greeting it opens on. */
@@ -1151,6 +1192,115 @@ function callItems(
   return [call, ...page, ...mediaItem];
 }
 
+/**
+ * A pair as a worker's row says it, as the panel's model label does: the
+ * model's name, then its effort where the model has one of its own. Note
+ * that the speed and the context window the panel's label reads off the
+ * catalog are left out, since the transcript reads no catalog, and a fast
+ * model's id names its speed in its name anyway.
+ */
+function pairWords(choice: ModelChoice): string {
+  const model = modelLabel(choice.model);
+
+  return choice.effort === NO_EFFORT ? model : `${model} ${effortLabel(choice.effort)}`;
+}
+
+/** The job a delegation's row names, as the panel's does: the few words the agent named it by, else its task's first line, else what a worker's call is called. */
+function jobOf(view: DelegationView): string {
+  return view.title ?? (cardTitle(view.task) || CALL_WORDS[CALL_KIND.WORKER].verb);
+}
+
+/** A worker as its own page names it, read off the delegation that started it: the task it was handed, which its page opens on (`workerLines`), the job its row names, and the pair it runs on. */
+export interface DelegatedWorker {
+  readonly task: string;
+  readonly job: string;
+  readonly pair: string | undefined;
+}
+
+/**
+ * The worker the delegation call `callId` started, as the agent's messages
+ * hold the call, with the pair its own session says it runs on where its
+ * standing is known (`subagents`); none where the messages hold no such
+ * call, as where the page that held it is not read.
+ */
+export function delegatedWorker(
+  messages: readonly AgentTranscriptMessage[],
+  callId: string,
+  standing: AgentSubagentStanding | undefined,
+): DelegatedWorker | undefined {
+  const part = messages
+    .flatMap((message) => agentParts(message))
+    .filter(isDelegation)
+    .find((each) => each.callId === callId);
+
+  if (part === undefined) return undefined;
+  const view = delegationView(part, undefined);
+  const choice = standing ?? view.choice;
+
+  return {
+    task: view.task,
+    job: jobOf(view),
+    pair: choice === undefined ? undefined : pairWords(choice),
+  };
+}
+
+/**
+ * One delegation to a worker as its row, as the panel's subagent row
+ * (`TranscriptSubagent`) stands: the job, the pair it runs on, and where it
+ * stands, each read from the worker's own session where the page says
+ * (`workers`), since its call may settle the moment the worker is under
+ * way, and when it began, which a running row counts from. A failure stands
+ * under its line unless it only repeats the job. A press opens the
+ * worker's own page where the screen offers one; a native harness's
+ * subagent, whose work no page keeps, and a worker the screen opens no page
+ * for, fold open on the task and the answer instead.
+ */
+function workerItems(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+  base: ItemBase,
+  reading: ItemsReading,
+): readonly TranscriptItem[] {
+  const view = delegationView(part, undefined);
+  const standing = reading.workers?.get(part.callId);
+  const choice = standing === undefined ? view.choice : standing;
+  const state = standing === undefined ? part.state : workerToolState(standing.status);
+  const job = jobOf(view);
+  const native = nativeSubagent(part);
+  const open = reading.toggles.calls.has(part.callId);
+  const call = native && open ? toolCallView(part) : undefined;
+
+  const body = !open
+    ? []
+    : call !== undefined
+      ? callBody(call.input, call.output, undefined)
+      : callBody(
+          { kind: TOOL_BLOCK.TEXT, text: view.task },
+          view.result === undefined ? undefined : { kind: TOOL_BLOCK.TEXT, text: view.result },
+          undefined,
+        );
+
+  return [
+    {
+      ...base,
+      kind: TRANSCRIPT_ITEM.WORKER,
+      callId: part.callId,
+      job,
+      pair: choice === undefined ? undefined : pairWords(choice),
+      harness: choice === undefined ? undefined : providerOf(choice.model),
+      standing: standingOf(state, false),
+      startedAt: standing?.startedAt ?? reading.delegations?.get(part.callId),
+      // Note that an error that only repeats the job says nothing the row's failed mark does not.
+      failure:
+        part.errorText === undefined || part.errorText.trim() === job.trim()
+          ? undefined
+          : part.errorText,
+      native,
+      open,
+      body,
+    },
+  ];
+}
+
 /** One part as its items; none for what the agent thought, or a part with nothing to draw. */
 function partItems(
   part: AgentPart,
@@ -1163,7 +1313,7 @@ function partItems(
         ? []
         : [{ ...base, kind: TRANSCRIPT_ITEM.WORDS, words: part.text }];
     case AGENT_PART.TOOL:
-      return callItems(part, base, reading);
+      return isDelegation(part) ? workerItems(part, base, reading) : callItems(part, base, reading);
     case AGENT_PART.ARRIVED:
       return [saidItem(part.line, base, reading)];
     default:
@@ -1392,6 +1542,13 @@ export function transcriptItems(
 
   const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
 
+  // Note that a turn holding a worker still at work reads as running, as the panel's does, since its call may settle the moment the worker is under way.
+  const running = new Map(
+    [...(reading.workers?.values() ?? [])].map(
+      (standing) => [standing.callId, workerToolState(standing.status)] as const,
+    ),
+  );
+
   const items = placed.flatMap(({ message, arrived }): readonly TranscriptItem[] => {
     if (message.role === MESSAGE_ROLE.USER) {
       const base = { place: linePlace(message.id, message.id), depth: 0 };
@@ -1404,7 +1561,12 @@ export function transcriptItems(
     }
 
     const moving = message.id === writing;
-    const rows = agentRows(message, moving, { arrived, delegated: delegated.has(message.id) });
+
+    const rows = agentRows(message, moving, {
+      workers: running,
+      arrived,
+      delegated: delegated.has(message.id),
+    });
 
     const turn = turnStretches(rows).flatMap((stretch) =>
       stretch.line === undefined
@@ -1892,7 +2054,7 @@ export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): Tra
   // Note that a Manager's working line turns the turn under way's work (Show work).
   if (item.kind === TRANSCRIPT_ITEM.WORKING) return { ...toggles, liveWork: !toggles.liveWork };
 
-  if (item.kind === TRANSCRIPT_ITEM.CALL) {
+  if (item.kind === TRANSCRIPT_ITEM.CALL || item.kind === TRANSCRIPT_ITEM.WORKER) {
     const calls = new Set(toggles.calls);
 
     if (!calls.delete(item.callId)) calls.add(item.callId);

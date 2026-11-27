@@ -954,6 +954,26 @@ const AgentConversation = memo(function AgentConversation({
     ],
   );
 
+  // Where each of the agent's workers stands as its own session reads, and when each its newest turn waits on began, by the call that started it, which its row says over the call's own state.
+  const subagents = transcript?.word?.subagents;
+  const workerStarts = transcript?.word?.delegations;
+
+  const workers = useMemo(
+    () =>
+      subagents === undefined
+        ? undefined
+        : new Map(subagents.map((standing) => [standing.callId, standing] as const)),
+    [subagents],
+  );
+
+  const delegations = useMemo(
+    () =>
+      workerStarts === undefined
+        ? undefined
+        : new Map(workerStarts.map((start) => [start.callId, start.startedAt] as const)),
+    [workerStarts],
+  );
+
   // The member's messages on their way stand as their own lines at the end, as the host draws them.
   const transcriptRows = useMemo(
     () =>
@@ -969,6 +989,8 @@ const AgentConversation = memo(function AgentConversation({
             origin,
             placeAddress,
             waitingCalls,
+            workers,
+            delegations,
           }),
     [
       chat,
@@ -982,6 +1004,8 @@ const AgentConversation = memo(function AgentConversation({
       whole.read,
       origin,
       placeAddress,
+      workers,
+      delegations,
     ],
   );
 
@@ -1252,6 +1276,13 @@ const AgentConversation = memo(function AgentConversation({
   const openChatThread = (root: string) =>
     router.push({ pathname: onOwnTab("/tasks/agent/[id]/thread/[root]"), params: { id, root } });
 
+  // Note that a worker opens on its own page pushed over the agent's, on its own stack in every window, as the panel opens its tab beside the agent's.
+  const openWorker = ({ callId }: { readonly callId: string }) =>
+    router.push({
+      pathname: onOwnTab("/tasks/agent/[id]/worker/[call]"),
+      params: { id, call: callId },
+    });
+
   // The message a link named that the page has landed on, so it lands once.
   const landedOn = useRef<string | undefined>(undefined);
 
@@ -1390,6 +1421,8 @@ const AgentConversation = memo(function AgentConversation({
         messageMore={messageActs.more}
         channel={chatFaces?.faces}
         onOpenChatThread={chat ? openChatThread : undefined}
+        // Note that a Manager's chat opens no worker, its rows folding open on the task and the answer, as the panel's chat does.
+        onOpenWorker={chat ? undefined : openWorker}
         onOpenThread={openThread}
         undelivered={undelivered}
         onOpenPullRequest={(item) => openPullRequest(item.url)}
