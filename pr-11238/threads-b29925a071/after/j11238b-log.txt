@@ -1,0 +1,10 @@
+-- j11238b: main pinned to 3ab3084252: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to b29925a071
+== bundle PJj11238b base b29925a071
+  built b29925a071 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+agent: fails 0 shots 3 
+manager: fails 0 shots 1 
