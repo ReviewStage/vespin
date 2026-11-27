@@ -1,12 +1,14 @@
-// automation-screens.tsx -- the Automations tab's list, as the desktop's Automations page lists them: the workspace's and then the reader's own, each in the order View options chose, a finished one-time automation folded under Finished, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
+// automation-screens.tsx -- the Automations tab's list, as the desktop's Automations page lists them: the workspace's and then the reader's own, each under its owner's picture and folding with its count, each in the order View options chose, the one-time automations that ran folded under Finished, the latest first, each saying what its run started, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
 import { firingMark } from "@repo/features/automation-firing-mark";
 import {
+  AUTOMATION_LIST_GROUP,
   AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
   AUTOMATIONS_ORDER_WORDS,
+  type AutomationListGroup,
   type AutomationsOrder,
   automationGroups,
   automationManager,
@@ -16,9 +18,14 @@ import {
   finishedAutomations,
 } from "@repo/features/automation-list-model";
 import { automationPreset } from "@repo/features/automation-presets";
-import type { AutomationSummary } from "@repo/features/automation-wire";
+import {
+  AUTOMATION_SCOPE,
+  type AutomationScope,
+  type AutomationSummary,
+} from "@repo/features/automation-wire";
 import {
   AUTOMATION_DELETE_WORDS,
+  AUTOMATION_FINISHED,
   AUTOMATION_PHONE_WORDS,
   AUTOMATION_SUGGESTION_WORDS,
   AUTOMATION_TAKE_OVER_WORDS,
@@ -58,7 +65,14 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
+import {
+  type ComponentProps,
+  createContext,
+  type ReactNode,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { newAutomationRoute } from "../automations/automation-editor-route.js";
 import {
@@ -96,7 +110,8 @@ import { useComposeAction, useDetailColumnBar, useSplitBuild } from "./app-sideb
 const SEARCH_AUTOMATIONS = "Search automations";
 
 /** What the folded group of finished one-time automations is called, as the desktop's list calls it. */
-const FINISHED = "Finished";
+/** Which of the list's groups stand folded until the reader folds or opens one: Finished alone, as the desktop's list folds it. */
+const FOLDED_AT_FIRST: readonly AutomationListGroup[] = [AUTOMATION_LIST_GROUP.FINISHED];
 
 /** What the list says where a search keeps none. */
 const NO_MATCH = "No automations match.";
@@ -352,12 +367,21 @@ function AutomationsList({
   const acts = useAutomationActs();
   const managers = useWorkspaceManagers(workspace.id);
   const [asking, setAsking] = useState<AutomationSummary | undefined>(undefined);
+  const switcher = useWorkspaceSwitcher();
   // Note that Finished opens folded, as the desktop's group does, since a one-time automation that ran is done with.
-  const [finishedFolded, setFinishedFolded] = useState(true);
+  const [folded, setFolded] = useState<readonly AutomationListGroup[]>(FOLDED_AT_FIRST);
+
+  const fold = (group: AutomationListGroup) => ({
+    foldable: true,
+    folded: folded.includes(group),
+    onFold: (next: boolean) =>
+      setFolded((was) => (next ? [...was, group] : was.filter((each) => each !== group))),
+  });
+
   const tokens = searchTokens(search);
   const automations = read.rows?.filter((automation) => found(automation, tokens));
   const groups = automations === undefined ? [] : automationGroups(automations, order);
-  const finished = automations === undefined ? [] : finishedAutomations(automations, order);
+  const finished = automations === undefined ? [] : finishedAutomations(automations);
 
   // Note that a Delete asked about one deleted elsewhere since withdraws its question.
   const asked =
@@ -417,6 +441,8 @@ function AutomationsList({
             key={group.owner}
             title={automationOwnerName(group.owner, workspace.name, true)}
             count={group.automations.length}
+            owner={sectionOwner(group.owner, switcher)}
+            {...fold(group.owner)}
           >
             <RowForEach data={group.automations} keyOf={automationKey}>
               {row}
@@ -425,11 +451,10 @@ function AutomationsList({
         ))}
         {finished.length === 0 ? null : (
           <ListSection
-            title={FINISHED}
+            title={AUTOMATION_FINISHED}
             count={finished.length}
-            foldable
-            folded={finishedFolded}
-            onFold={setFinishedFolded}
+            glyph={GLYPH.HISTORY}
+            {...fold(AUTOMATION_LIST_GROUP.FINISHED)}
           >
             <RowForEach data={finished} keyOf={automationKey}>
               {row}
@@ -544,6 +569,24 @@ function SuggestedAutomations({
       {rows}
     </ListSection>
   );
+}
+
+/**
+ * Whose an owner's group is, as its header's picture: the workspace's tile
+ * for its automations, and the reader's own photo for theirs, as the
+ * desktop's groups lead with them; none before the workspaces are read.
+ */
+function sectionOwner(
+  owner: AutomationScope,
+  switcher: ReturnType<typeof useWorkspaceSwitcher>,
+): ComponentProps<typeof ListSection>["owner"] {
+  if (switcher === undefined) return undefined;
+
+  if (owner === AUTOMATION_SCOPE.WORKSPACE) return { workspace: switcher.chosen };
+
+  return switcher.account === undefined
+    ? undefined
+    : { person: { name: switcher.account.name, picture: switcher.account.picture } };
 }
 
 /** An automation's row id in the list. */

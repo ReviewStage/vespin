@@ -271,6 +271,15 @@ export type AutomationNext =
   | { readonly kind: typeof AUTOMATION_NEXT.RAN }
   | { readonly kind: typeof AUTOMATION_NEXT.AT; readonly at: number };
 
+/** The groups the list stands its rows in, each folding as the sidebar's groups do: each owner's, then Finished. */
+export const AUTOMATION_LIST_GROUP = {
+  ...AUTOMATION_SCOPE,
+  FINISHED: "finished",
+} as const;
+
+export type AutomationListGroup =
+  (typeof AUTOMATION_LIST_GROUP)[keyof typeof AUTOMATION_LIST_GROUP];
+
 /** One owner's automations, in the order the list was asked for. */
 export interface AutomationGroup {
   readonly owner: AutomationScope;
@@ -483,12 +492,18 @@ export function automationGroups(
   });
 }
 
-/** The one-time automations that ran and stand paused for it, in `order`, which the list folds away under Finished. */
+/**
+ * The one-time automations that ran and stand paused for it, which the list
+ * folds away under Finished as their history: the one that ran last first,
+ * whatever order the list was asked for, since what they did is the one thing
+ * left to read of them, and a tie to the newest made.
+ */
 export function finishedAutomations(
   automations: readonly AutomationSummary[],
-  order: AutomationsOrder = DEFAULT_AUTOMATIONS_ORDER,
 ): readonly AutomationSummary[] {
-  return automations.filter(automationFinished).toSorted(byOrder(order));
+  return automations
+    .filter(automationFinished)
+    .toSorted((a, b) => byInstant(a.lastRun?.firedAt, b.lastRun?.firedAt, true) || byNewest(a, b));
 }
 
 /**
@@ -661,6 +676,19 @@ export function automationRunTitle(run: AutomationRunSummary): string {
   if (title !== null && !titlesNothing(title)) return title;
 
   return automationFiringTitle(run.firing);
+}
+
+/**
+ * What a finished one-time automation's run did, as its row in Finished says
+ * it, so the list keeps what each was used for: the agent it started, by its
+ * title, or that it started one with none yet; and why it did not start,
+ * where it did not.
+ */
+export function automationRanLine(run: AutomationRunSummary): string {
+  if (run.agent === null) return automationRunLine(run);
+  const title = run.agent.title;
+
+  return title === null || titlesNothing(title) ? "Started an agent" : `Started “${title}”`;
 }
 
 /** Where one agent's run stands among its automation's runs that started an agent: that run, its place counted from the oldest, and the agents of the runs either side. */

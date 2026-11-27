@@ -727,6 +727,19 @@ export function automationRows(page: HTMLElement): Element[] {
   return [...page.querySelectorAll(".automation-group li")];
 }
 
+/** What each group's heading says to a reader, top to bottom: its words and its count, past the owner's picture or the glyph it leads with, which is decoration. */
+export function groupHeadings(page: HTMLElement): string[] {
+  return [...page.querySelectorAll(".automation-group h2")].map((heading) => {
+    const said = heading.cloneNode(true);
+
+    assert.ok(said instanceof Element);
+
+    for (const hidden of said.querySelectorAll("[aria-hidden=true]")) hidden.remove();
+
+    return said.textContent ?? "";
+  });
+}
+
 /** The row of the automation named. */
 export function rowOf(page: HTMLElement, name: string): Element {
   const row = automationRows(page).find(

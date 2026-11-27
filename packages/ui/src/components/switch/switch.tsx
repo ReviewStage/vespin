@@ -120,3 +120,16 @@ export function SwitchMark({ checked }: { checked: boolean }): React.JSX.Element
     </span>
   );
 }
+
+/**
+ * The room a switch takes, kept empty: a row that no longer offers its
+ * switch, such as a finished one-time automation's, keeps its columns where
+ * the rows around it, and the heads over them (`ListHeads`), stand theirs.
+ */
+export function SwitchRoom(): React.JSX.Element {
+  return (
+    <span className="ui-switch-room invisible inline-flex" aria-hidden="true">
+      <SwitchMark checked={false} />
+    </span>
+  );
+}

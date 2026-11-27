@@ -41,7 +41,7 @@ import {
   useListSelection,
 } from "../selection/list-selection.js";
 import { SELECT_BOX_PLACE, SelectBox } from "../selection/select-box.js";
-import { SwitchMark } from "../switch/switch.js";
+import { SwitchRoom } from "../switch/switch.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import {
   reachInRun,
@@ -741,8 +741,8 @@ export function ListHeads({
           </span>
         </div>
         {drawsActs ? (
-          <div className="ui-list-row-actions invisible row-1 flex items-center gap-ui-4">
-            <SwitchMark checked={false} />
+          <div className="ui-list-row-actions row-1 flex items-center gap-ui-4">
+            <SwitchRoom />
           </div>
         ) : null}
         {more ? (

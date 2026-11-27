@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { AGENT_BOUNDS, AGENT_STATUS } from "@repo/features/agent-wire";
 import { AUTOMATION_PRESET } from "@repo/features/automation-presets";
 import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import {
   AUTOMATION_ACTION,
+  AUTOMATION_FIRING,
+  AUTOMATION_RUN_STATUS,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
@@ -28,6 +30,7 @@ import {
   CI_DIGEST,
   DIGEST,
   FAILING,
+  groupHeadings,
   layIntegrations,
   layStanding,
   listed,
@@ -142,10 +145,7 @@ test("the listed workspace's automations stand before the personal ones, under a
   await settle();
 
   assert.deepEqual(listed(), [WORKSPACE.id]);
-  assert.deepEqual(
-    [...page.querySelectorAll(".automation-group h2")].map((heading) => heading.textContent),
-    ["Acme", "Only you"],
-  );
+  assert.deepEqual(groupHeadings(page), ["Acme", "Only you"]);
   assert.deepEqual(rows(page), [
     ["Nightly flaky-test sweep", "Acme"],
     ["Dependency bumps", "Acme"],
@@ -153,13 +153,62 @@ test("the listed workspace's automations stand before the personal ones, under a
   ]);
 });
 
-test("one owner's automations alone stand under no heading, still naming their owner", async () => {
+test("one owner's automations alone still stand under their owner's heading, as the sidebar heads a lone group, each row naming their owner", async () => {
   world.standing = [DIGEST];
   const page = mount();
   await settle();
 
-  assert.equal(page.querySelectorAll(".automation-group h2").length, 0);
+  assert.deepEqual(groupHeadings(page), ["Only you"]);
   assert.deepEqual(rows(page), [["Morning digest", "Only you"]]);
+});
+
+test("a one-time automation that ran stands under Finished, counted while folded, saying what its run started, and the fold a reader chose stands on the next page", async () => {
+  window.localStorage.clear();
+  const due = Date.UTC(2026, 10, 20, 9);
+
+  const launched = automation(9, {
+    name: "Launch-day smoke test",
+    scope: AUTOMATION_SCOPE.WORKSPACE,
+    enabled: false,
+    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, at: "2026-11-20T09:00", timezone: "UTC" },
+    lastRun: {
+      id: "1c2d3e4f-5a6b-4c7d-8e9f-000000000009",
+      firing: { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: due },
+      status: AUTOMATION_RUN_STATUS.STARTED,
+      reason: null,
+      agent: {
+        id: "8c1a6a4f-3d2e-4d8b-8b66-000000000009",
+        title: "Smoke-test the release",
+        status: AGENT_STATUS.COMPLETED,
+      },
+      firedAt: due,
+      settledAt: due + 60_000,
+    },
+  });
+
+  world.standing = [DIGEST, launched];
+  const page = mount();
+  await settle();
+  assert.deepEqual(groupHeadings(page), ["Only you", "Finished1 automation"]);
+  assert.deepEqual(rows(page), [["Morning digest", "Only you"]], "Finished stands folded");
+
+  const finished = [...page.querySelectorAll(".automation-group h2 button")].find((head) =>
+    head.textContent?.includes("Finished"),
+  );
+
+  assert.ok(finished instanceof HTMLElement);
+  act(() => finished.click());
+  assert.match(
+    rowOf(page, "Launch-day smoke test").textContent ?? "",
+    /Started “Smoke-test the release”/u,
+  );
+
+  act(() => world.root?.unmount());
+  document.body.innerHTML = "";
+  const again = mount();
+  await settle();
+  assert.ok(rowOf(again, "Launch-day smoke test"), "Finished stands open as it was left");
+  window.localStorage.clear();
 });
 
 test("an automation turned off reads Off where its next run would, and a failed newest run is marked at its row's end", async () => {
@@ -841,10 +890,7 @@ test("a personal automation another member made is not called Only you, in its r
   const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
 
-  assert.deepEqual(
-    [...page.querySelectorAll(".automation-group h2")].map((heading) => heading.textContent),
-    ["Acme", "Personal"],
-  );
+  assert.deepEqual(groupHeadings(page), ["Acme", "Personal"]);
   assert.deepEqual(rows(page).at(-1), ["Their digest", "Personal"]);
   act(() => world.root?.unmount());
 

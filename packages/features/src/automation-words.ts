@@ -5,6 +5,7 @@
 import {
   AUTOMATION_NEXT,
   automationNext,
+  automationRanLine,
   automationRunLine,
   automationTriggerText,
 } from "./automation-list-model.js";
@@ -230,15 +231,23 @@ const OFF_WORD = "Off";
 /**
  * An automation's line under its name on a phone, whose row stands no
  * switch: when it runs next and what fires it, or, turned off, that it is
- * off before what fires it.
+ * off before what fires it; and a one-time automation that ran, under
+ * Finished, what its run started (`automationRanLine`), since nothing will
+ * fire it again.
  */
 export function automationPhoneLine(automation: AutomationSummary, now: number): string {
   const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
+  const ran = automationNext(automation).kind === AUTOMATION_NEXT.RAN ? automation.lastRun : null;
+
+  if (ran !== null) return automationRanLine(ran);
 
   return automation.enabled
     ? automationNarrowLine(automation, trigger, now)
     : `${OFF_WORD} · ${trigger}`;
 }
+
+/** What the list's last group is called, the one-time automations that ran, folded as their history. */
+export const AUTOMATION_FINISHED = "Finished";
 
 /** How an automation's newest run went, in a few words: "Last run: Finished", or that it has not run. */
 export function automationLastRunWords(automation: AutomationSummary): string {
