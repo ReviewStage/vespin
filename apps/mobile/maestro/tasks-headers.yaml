@@ -76,10 +76,18 @@ env:
 - assertVisible: "Folder"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-headers-section-icons
-- scrollUntilVisible:
-    element: "Remove icon"
-    direction: DOWN
+# Note that the menu is drawn up from inside it, from a glyph it shows,
+# rather than by a scroll to Remove icon, because the glyphs run past the
+# menu's foot on the iPhone, where Color, Emoji, and Remove icon stand in
+# the hierarchy already though the menu draws none of them, so a scroll
+# found them at once and a tap on Color landed off the menu and closed it.
+- swipe:
+    from:
+      text: "Layers"
+    direction: UP
+- waitForAnimationToEnd
 - assertVisible: "Emoji"
+- assertVisible: "Remove icon"
 - tapOn: "Color"
 - assertVisible: "Black"
 - assertVisible: "Teal"
