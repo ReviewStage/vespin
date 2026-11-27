@@ -167,7 +167,7 @@ type OnFirstLine = ((line: FirstLine) => void) | undefined;
 const QUOTE_RULE = 3;
 
 /** How far a quote's words stand in from the column: its rule and its padding. */
-const QUOTE_INSET = QUOTE_RULE + SPACE.ROW;
+export const QUOTE_INSET = QUOTE_RULE + SPACE.ROW;
 
 const styles = StyleSheet.create({
   marker: { position: "absolute", left: 0, top: 0 },
@@ -1230,6 +1230,13 @@ type PictureProps = {
   readonly bounds?: MediaBounds | undefined;
 };
 
+/** A quote, as the panel's transcript quotes: what it holds behind a rule down its left, in from the column by `QUOTE_INSET`, as a quote in Markdown stands, and what a call sent another agent stands too. */
+export function Quote({ children }: { readonly children: ReactNode }) {
+  const colors = useColors();
+
+  return <View style={[styles.quote, { borderColor: colors.CHIP_EDGE }]}>{children}</View>;
+}
+
 /**
  * A picture at its message's width, which a press opens full screen in the
  * app's viewer, grown out of the thumbnail and drawn at once from the bitmap
@@ -1424,14 +1431,14 @@ function BlockView({
       return <ListView block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.QUOTE:
       return (
-        <View style={[styles.quote, { borderColor: colors.CHIP_EDGE }]}>
+        <Quote>
           {/* Note that a quote's chips are held to the width inside its rule and padding. */}
           <Blocks
             blocks={block.blocks}
             drawing={{ ...drawing, lineWidth: drawing.lineWidth - QUOTE_INSET }}
             gap={NESTED_GAP}
           />
-        </View>
+        </Quote>
       );
     case MARKDOWN_BLOCK.TABLE:
       return <TableView key={drawing.fontScale} block={block} drawing={drawing} />;

@@ -841,6 +841,96 @@ describe("a call the agent holds for the reader's answer", () => {
   });
 });
 
+describe("a call about another agent", () => {
+  const AGENT = { id: "agent-digest", title: "Weekly digest" } as const;
+  const DIGEST_PAGE = JSON.stringify({ kind: LINK_DESTINATION.AGENT, agentId: AGENT.id });
+
+  it.each([
+    {
+      name: "a message quotes the words it sent, its chip opening the agent",
+      tool: "message_agent",
+      input: {
+        agentId: AGENT.id,
+        text: "Does a resent invite keep its id?\n\nIt matters for the digest.",
+      },
+      output: { status: "accepted", agent: AGENT },
+      named: {
+        line: { verb: "Messaged", subject: "Does a resent invite keep its id?" },
+        chip: AGENT.title,
+        agent: DIGEST_PAGE,
+        sent: {
+          words: "Does a resent invite keep its id?\n\nIt matters for the digest.",
+          note: undefined,
+        },
+        opensAgent: false,
+        body: [],
+      },
+    },
+    {
+      name: "a start quotes its prompt and its note",
+      tool: "start_agent",
+      input: { taskId: "task-1", prompt: "Write the resend email.", note: "Keep it short." },
+      output: { status: "accepted", agent: AGENT },
+      named: {
+        line: { verb: "Started" },
+        chip: AGENT.title,
+        agent: DIGEST_PAGE,
+        sent: { words: "Write the resend email.", note: "Keep it short." },
+        opensAgent: false,
+        body: [],
+      },
+    },
+    {
+      name: "a read opens the agent from its whole row",
+      tool: "read_agent",
+      input: { agentId: AGENT.id },
+      output: { status: "accepted", agent: AGENT },
+      named: {
+        line: { verb: "Read" },
+        chip: AGENT.title,
+        agent: DIGEST_PAGE,
+        sent: undefined,
+        opensAgent: true,
+      },
+    },
+    {
+      name: "a message refused folds its input and its refusal open rather than quoting it",
+      tool: "message_agent",
+      input: { agentId: AGENT.id, text: "Are you there?" },
+      output: { status: "refused", reason: "The agent is archived." },
+      named: {
+        agent: undefined,
+        sent: undefined,
+        opensAgent: false,
+        body: expect.arrayContaining([expect.objectContaining({ title: "Input" })]),
+      },
+    },
+  ] as const)("$name", ({ tool, input, output, named }) => {
+    const items = transcriptItems(
+      [
+        {
+          id: "work",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            { type: `tool-${tool}`, toolCallId: "call", state: "output-available", input, output },
+          ],
+          finishedAt: 1,
+        },
+      ],
+      {
+        writing: false,
+        readerId: undefined,
+        toggles: { ...NO_TOGGLES, calls: new Set(["call"]) },
+        now: 2,
+        pullRequests: [],
+        placeAddress: (place) => JSON.stringify(place),
+      },
+    );
+
+    expect(items.find((item) => item.kind === TRANSCRIPT_ITEM.CALL)).toMatchObject(named);
+  });
+});
+
 describe("a call whose answer its page carried cut", () => {
   const CUT = { messageId: "work", index: 0, bytes: 2048, head: "first lines", tail: "last lines" };
 

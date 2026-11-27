@@ -1,0 +1,77 @@
+# agent-calls.yaml -- an agent's calls to other agents, as the panel draws them: a message and a start each name the agent by its chip and open on the words they sent, quoted, a start's note under its heading; a read opens the agent it names from its whole row.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+#
+# Note that an iPad stands in landscape, where the transcript stands in the
+# detail column beside the list, so it is scrolled well inside that column
+# (`BESIDE`), and that the window is turned back upright however the flow
+# ends, because a run left in landscape fails every flow after it.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose orchestrating agent read the
+# invitations agent, messaged it, and started the digest agent, each call a
+# row of its own (`@repo/host/fixture-orchestrator-agent`), and opened on its
+# page by `-agent <id>`; nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: d637f97a-b2e3-4f0c-a7ce-e3f4051627d3
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+# Note that the launch waits up to half a minute for its first words, as
+# `agent.yaml`'s does.
+- extendedWaitUntil:
+    visible: "The digest agent is writing it.*"
+    timeout: 30000
+# Each call names its agent by its chip after its verb, a message and a
+# start with the first line of what they sent after it.
+- assertVisible: "Read Build teammate invitations"
+- assertVisible: "Messaged Build teammate invitations The digest will count.*"
+- assertVisible: "Started Send the weekly digest Summarize what merged.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-calls-rows
+# A press on a message opens it on the words it sent, quoted whole, in the
+# place of its input and answer.
+- tapOn: "Messaged Build teammate invitations.*"
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: ".*keep its id when it.s resent.*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- assertNotVisible: "Input"
+- tapOn: "Started Send the weekly digest.*"
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Note"
+      BESIDE: ${FLOATING_TABS}
+- assertVisible: "Count pending invites apart from members.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-calls-sent
+# A read sent no words, so its whole row opens the agent it names on its
+# own page.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Read Build teammate invitations"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- tapOn: "Read Build teammate invitations"
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 10000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-calls-opened
