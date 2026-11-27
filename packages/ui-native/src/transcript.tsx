@@ -706,13 +706,14 @@ function CallRow({
             <BodyBlock key={block.title} title={block.title} text={block.text} colors={colors} />
           ))}
           {/* Note that what the body holds under its answer, such as the window a computer call read, stands after its blocks, as the panel's body ends on it. */}
-          {item.answered.map((shown) => (
-            <View key={shown.id} style={styles.shown}>
+          {item.answered.map((shown, index) => (
+            // Note that a piece's place among its call's is its identity where it was not kept: a call never reorders.
+            <View key={shown.id ?? index} style={styles.shown}>
               <ShownMediaView
                 shown={shown}
-                source={drawing.mediaSource(shown.id)}
+                source={shownSource(drawing, shown)}
                 onOpenElsewhere={drawing.onOpenElsewhere}
-                onRetry={retryOf(drawing, shown.id)}
+                onRetry={shownRetry(drawing, shown)}
               />
             </View>
           ))}
@@ -1118,6 +1119,16 @@ function retryOf(drawing: RowDrawing, id: string): (() => void) | undefined {
   return retry === undefined ? undefined : () => retry(id);
 }
 
+/** Where a shown piece's bytes are read from: its kept file, or none while a picture a set showed was not kept, which stands as one still on its way. */
+function shownSource(drawing: RowDrawing, shown: ShownMedia): PictureRef | null | undefined {
+  return shown.id === undefined ? undefined : drawing.mediaSource(shown.id);
+}
+
+/** What reads a shown piece again, where it was kept and the transcript offers it. */
+function shownRetry(drawing: RowDrawing, shown: ShownMedia): (() => void) | undefined {
+  return shown.id === undefined ? undefined : retryOf(drawing, shown.id);
+}
+
 /** One thing a call showed, as its kind draws it: a picture, a recording in the system's player, or a sound clip in its strip; one whose bytes could not be read offers Try again. */
 function ShownMediaView({
   shown,
@@ -1246,11 +1257,10 @@ function TranscriptRow({
               onRetry={sentFileRetry(drawing, item.place.row, file)}
             />
           ))}
-          {/* Note that a line of files alone draws no empty bubble under them, and an automation's prompt stands in its card rather than a bubble. */}
+          {/* Note that a line of no words, files alone or another agent's message whose words were only its head, draws no empty bubble, as the panel's draws none, and an automation's prompt stands in its card rather than a bubble. */}
           {item.card !== undefined ? (
             <PromptCard item={item} card={item.card} drawing={drawing} />
-          ) : item.words.trim() === "" &&
-            (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
+          ) : item.words.trim() === "" ? null : (
             <MessageMenu
               words={item.words}
               at={item.at}
@@ -1419,11 +1429,11 @@ function TranscriptRow({
         return (
           <View style={[styles.row, mediaInset, styles.media]}>
             <PictureSet
-              pictures={item.media.map((shown) => ({
-                key: shown.id,
-                source: drawing.mediaSource(shown.id),
+              pictures={item.media.map((shown, index) => ({
+                key: shown.id ?? String(index),
+                source: shownSource(drawing, shown),
                 alt: shown.label,
-                onRetry: retryOf(drawing, shown.id),
+                onRetry: shownRetry(drawing, shown),
               }))}
             />
           </View>
@@ -1432,13 +1442,14 @@ function TranscriptRow({
 
       return (
         <View style={[styles.row, mediaInset, styles.media]}>
-          {item.media.map((shown) => (
-            <View key={shown.id} style={styles.shown}>
+          {item.media.map((shown, index) => (
+            // Note that a piece's place among its call's is its identity where it was not kept: a call never reorders.
+            <View key={shown.id ?? index} style={styles.shown}>
               <ShownMediaView
                 shown={shown}
-                source={drawing.mediaSource(shown.id)}
+                source={shownSource(drawing, shown)}
                 onOpenElsewhere={drawing.onOpenElsewhere}
-                onRetry={retryOf(drawing, shown.id)}
+                onRetry={shownRetry(drawing, shown)}
               />
               {shown.caption === "" ? null : (
                 <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>

@@ -2,7 +2,7 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { askHeadWords } from "@repo/features/inbox-ask-words";
+import { askHeadWords, NEWER_APP_ASK } from "@repo/features/inbox-ask-words";
 import {
   answerOf,
   askNumberedPick,
@@ -51,7 +51,6 @@ import {
 } from "@repo/features/inbox-wire";
 import { markdownLink } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -659,9 +658,6 @@ function EarlierMessages({
     </li>
   );
 }
-
-/** What an ask's box says where its type is one this build does not know. */
-const NEWER_APP_ASK = `Answer this in a newer ${PRODUCT_NAME}.`;
 
 /**
  * Who an open ask waits on where that is a teammate (`inboxWaitsOn`): its

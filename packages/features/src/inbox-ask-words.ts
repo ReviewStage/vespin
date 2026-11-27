@@ -1,4 +1,5 @@
 import { INBOX_ASK, type InboxAsk, type InboxAskRead } from "./inbox-wire.js";
+import { PRODUCT_NAME } from "./product-name.js";
 
 /**
  * inbox-ask-words.ts -- what an Inbox ask asks, in the words its box leads with: the one name the box, the list's row, and the agent's transcript say it by; and what an unfinished answer lacks, in the words its refused send says it by.
@@ -100,3 +101,6 @@ export const INBOX_BOX_WORDS = {
  * puts the panel away, and its mark is never Close's ×.
  */
 export const RESOLVE = "Resolve";
+
+/** What an ask's card says where its type is one this build does not know, the box still replying. */
+export const NEWER_APP_ASK = `Answer this in a newer ${PRODUCT_NAME}.`;

@@ -82,6 +82,61 @@ describe("transcriptItems", () => {
     });
   });
 
+  // A set shown whose pictures were not kept drew nothing at all, its call vanishing whole.
+  it("stands each picture a shown set did not keep in its place, as one still on its way, rather than leaving the set out", () => {
+    const items = transcriptItems(
+      [
+        {
+          id: "work",
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            {
+              type: "tool-show_media",
+              toolCallId: "shots",
+              state: "output-available",
+              input: { images: [{ path: "/shots/dialog.png", caption: "The dialog" }] },
+              output: { status: "accepted", pictures: [] },
+            },
+          ],
+          finishedAt: 1,
+        },
+      ],
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
+    );
+
+    expect(items).toMatchObject([
+      {
+        kind: TRANSCRIPT_ITEM.MEDIA,
+        media: [
+          { id: undefined, caption: "The dialog", label: "The dialog", kind: SHOWN_MEDIA.PICTURE },
+        ],
+      },
+    ]);
+  });
+
+  // An opened call that was given nothing and answered nothing to draw stood as padding alone.
+  it("says an opened call answered nothing where its body would hold no block, and nothing while it still runs", () => {
+    const call = (state: string) => ({
+      id: "work",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [{ type: "tool-lookup", toolCallId: "look", state, input: {}, output: { ok: true } }],
+    });
+
+    const opened = (state: string) =>
+      transcriptItems([call(state)], {
+        writing: false,
+        readerId: undefined,
+        toggles: { ...NO_TOGGLES, calls: new Set(["look"]) },
+        now: 2,
+        pullRequests: [],
+      }).find((item) => item.kind === TRANSCRIPT_ITEM.CALL);
+
+    expect(opened("output-available")).toMatchObject({
+      body: [{ title: "Output", text: "No output" }],
+    });
+    expect(opened("input-available")).toMatchObject({ body: [] });
+  });
+
   it("stands a computer call's window in its body once opened, never under its row, and reads it only then", () => {
     const work = {
       id: "work",
