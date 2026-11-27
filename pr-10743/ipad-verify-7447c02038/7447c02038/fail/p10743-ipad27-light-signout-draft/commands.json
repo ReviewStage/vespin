@@ -1,0 +1,348 @@
+[ {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "P" : "p10743-ipad27-light-signout-draft",
+        "FLOATING_TABS" : "true",
+        "DYNAMIC_ISLAND" : "false",
+        "MAESTRO_DRIVER_STARTUP_TIMEOUT" : "180000",
+        "MAESTRO_FILENAME" : ".kbd-signout-draft",
+        "MAESTRO_DEVICE_UDID" : "BAD5C9D5-2CB3-466D-8272-09ADD64A74E8",
+        "MAESTRO_SHARD_ID" : "1",
+        "MAESTRO_SHARD_INDEX" : "0"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795769524974,
+    "duration" : 2,
+    "sequenceNumber" : 0,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "P" : "p10743-ipad27-light-signout-draft",
+          "FLOATING_TABS" : "true",
+          "DYNAMIC_ISLAND" : "false",
+          "MAESTRO_DRIVER_STARTUP_TIMEOUT" : "180000",
+          "MAESTRO_FILENAME" : ".kbd-signout-draft",
+          "MAESTRO_DEVICE_UDID" : "BAD5C9D5-2CB3-466D-8272-09ADD64A74E8",
+          "MAESTRO_SHARD_ID" : "1",
+          "MAESTRO_SHARD_INDEX" : "0"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios",
+        "onFlowComplete" : {
+          "commands" : [ {
+            "setOrientationCommand" : {
+              "orientation" : "PORTRAIT",
+              "optional" : false
+            }
+          } ]
+        }
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795769524978,
+    "duration" : 1,
+    "sequenceNumber" : 1,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios",
+          "onFlowComplete" : {
+            "commands" : [ {
+              "setOrientationCommand" : {
+                "orientation" : "PORTRAIT",
+                "optional" : false
+              }
+            } ]
+          }
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "launchAppCommand" : {
+      "appId" : "dev.vespin.ios",
+      "clearState" : true,
+      "launchArguments" : {
+        "fixture" : "inbox",
+        "agent" : "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795769524980,
+    "duration" : 2455,
+    "sequenceNumber" : 2,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "launchAppCommand" : {
+        "appId" : "dev.vespin.ios",
+        "clearState" : true,
+        "launchArguments" : {
+          "fixture" : "inbox",
+          "agent" : "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "setOrientationCommand" : {
+      "orientation" : "PORTRAIT",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795769527440,
+    "duration" : 1049,
+    "sequenceNumber" : 3,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "setOrientationCommand" : {
+        "orientation" : "PORTRAIT",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Add a way to resend an invite that expired.",
+          "optional" : false
+        }
+      },
+      "timeout" : "30000",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795769528492,
+    "duration" : 4737,
+    "sequenceNumber" : 4,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Add a way to resend an invite that expired.",
+            "optional" : false
+          }
+        },
+        "timeout" : "30000",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "idRegex" : "composer-field",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795769533230,
+    "duration" : 2923,
+    "sequenceNumber" : 5,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "idRegex" : "composer-field",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "tapOnElement" : {
+          "selector" : {
+            "textRegex" : "Continue",
+            "optional" : false
+          },
+          "retryIfNoChange" : false,
+          "waitUntilVisible" : false,
+          "longPress" : false,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Speed up your typing.*",
+          "optional" : false
+        }
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795769536156,
+    "duration" : 7658,
+    "sequenceNumber" : 6,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "tapOnElement" : {
+            "selector" : {
+              "textRegex" : "Continue",
+              "optional" : false
+            },
+            "retryIfNoChange" : false,
+            "waitUntilVisible" : false,
+            "longPress" : false,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Speed up your typing.*",
+            "optional" : false
+          }
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "space|[Dd]elete",
+          "optional" : false
+        }
+      },
+      "label" : "RIG: the software keyboard stands before the first inputText",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795769543815,
+    "duration" : 453,
+    "sequenceNumber" : 7,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "space|[Dd]elete",
+            "optional" : false
+          }
+        },
+        "label" : "RIG: the software keyboard stands before the first inputText",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "inputTextCommand" : {
+      "text" : "Draft that must not survive",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795769544269,
+    "duration" : 3105,
+    "sequenceNumber" : 8,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "inputTextCommand" : {
+        "text" : "Draft that must not survive",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "hideKeyboardCommand" : {
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "FAILED",
+    "timestamp" : 1795769547376,
+    "duration" : 6111,
+    "error" : {
+      "message" : "Couldn't hide the keyboard. This can happen if the app uses a custom input or doesn't expose a standard dismiss action.",
+      "debugMessage" : "Instead of hideKeyboard, try tapping on non-interactive element to hide keyboard. Example:\n\n- tapOn: \n    text: 'Static Text on your screen'"
+    },
+    "sequenceNumber" : 9,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "hideKeyboardCommand" : {
+        "optional" : false
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-010-hideKeyboard.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-010-hideKeyboard.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "setOrientationCommand" : {
+      "orientation" : "PORTRAIT",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795769554142,
+    "duration" : 249,
+    "sequenceNumber" : 10,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "setOrientationCommand" : {
+        "orientation" : "PORTRAIT",
+        "optional" : false
+      }
+    }
+  }
+} ]

@@ -1,0 +1,27 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow .kbd-signout-draft
+  > On Flow Complete
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Set orientation PORTRAIT... COMPLETED
+Assert that "Add a way to resend an invite that expired." is visible... COMPLETED
+Tap on id: composer-field... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text Draft that must not survive... COMPLETED
+Hide Keyboard... FAILED
+Set orientation PORTRAIT... COMPLETED
+
+Couldn't hide the keyboard. This can happen if the app uses a custom input or doesn't expose a standard dismiss action.
+
+Instead of hideKeyboard, try tapping on non-interactive element to hide keyboard. Example:
+
+- tapOn: 
+    text: 'Static Text on your screen'
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjipadrest2/p10743-ipad27-light-signout-draft/2026-11-27_005158

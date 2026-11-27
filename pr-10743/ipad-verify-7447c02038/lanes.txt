@@ -1,0 +1,24 @@
+p10743 hdr portrait: fails 0 shots 1 
+  portrait chrome rows: [('RNSSplitScreen', [0, 32, 340, 86]), ('RNSSplitScreen', [341, 32, 834, 86]), ('RNSScreen', [341, 86, 834, 140])] labeled items in the chrome: [('Show Sidebar', [14, 36, 50, 72]), ('Inbox', [148, 97, 192, 118]), ('More', [296, 104, 320, 112]), ('More', [299, 106, 317, 110]), ('New task', [355, 90, 391, 126]), ('More', [626, 92, 658, 124]), ('More', [635, 106, 649, 109]), ('Resolve', [676, 90, 714, 126]), ('Remind me', [732, 92, 764, 124]), ('Remind me', [739, 99, 756, 116]), ('Mark as unread', [782, 90, 820, 126])] sidebar toggles: 1 [('Show Sidebar', [14, 36, 50, 72])] New task items on screen: 1 [[355, 90, 391, 126]] 
+p10743 hdr landscape:  
+  landscape Traceback (most recent call last):   File "/Users/deanstratakos/vespin-ipad-agent/hdrread.py", line 3, in <module>     j=json.load(open(sys.argv[1])); rows=[]   File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/__init__.py", line 293, in load     return loads(fp.read(),   File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/__init__.py", line 346, in loads     return _default_decoder.decode(s)   File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/decoder.py", line 337, in decode     obj, end = self.raw_decode(s, idx=_w(s, 0).end())   File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/json/decoder.py", line 355, in raw_decode     raise JSONDecodeError("Expecting value", s, err.value) from None json.decoder.JSONDecodeError: Expecting value: line 2 column 1 (char 1) 
+p10743-ipad27-light-automations: fails 0 shots 12 
+p10743-ipad27-light-automations: no automations.yaml
+p10743-ipad27-light-failure-notice: fails 0 shots 6 
+p10743-ipad27-light-failure-notice: no failure-notice.yaml
+p10743-ipad27-light-description-edit: fails 0 shots 11 
+p10743-ipad27-light-description-edit: no description-edit.yaml
+p10743-ipad27-light-inbox: fails 1 shots 2 Assert that "Mark all as read" is visible... FAILED
+p10743-ipad27-light-manager-thread: fails 0 shots 5 
+p10743-ipad27-light-manager-thread: no manager-thread.yaml
+p10743-ipad27-light-pinned-p: fails 0 shots 1 
+  hdr pinned p10743 portrait: Pinned: Pinned [28,204][71,220] count=2 | Everything else: Everything else [28,411][123,427] count=9 | Weekly digest email: [58,238][216,258] -> PASS
+p10743-ipad27-light-pinned-l: fails 0 shots 1 
+  hdr pinned p10743 landscape: Pinned: Pinned [81,559][124,575] count=1 | Everything else: MISSING | Weekly digest email: [74,611][222,632] -> FAIL
+p10743-ipad27-light-pinned-l: fails 1 (c006chk verdict: headers)
+p10743-ipad27-light-standing: fails 1 shots 7 Assert that "Priority, Low" is visible... FAILED
+  hdr stand p10743 chips: Status In progress then Todo, Priority High then Low: FAIL at Assert that "Priority, Low" is visible... FAILED
+p10743-ipad27-light-agent-not-delivered: fails 0 shots 3 
+p10743-ipad27-light-mt-before-10924: fails 0 shots 3 
+p10743-ipad27-light-signout-draft: fails 1 shots 1 Hide Keyboard... FAILED
+p10743-signout-draft: FAIL Hide Keyboard... FAILED
