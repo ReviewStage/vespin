@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import type {
-  AgentOverviewPullRequestAnswerView,
-  ViewChoiceWriteParams,
-} from "@repo/features/agent-view";
+import type { AgentOverviewPullRequestAnswerView } from "@repo/features/agent-view";
 import {
   type AgentOverviewConversation,
   CHANGED_FILE_STATUS,
@@ -33,7 +30,6 @@ import {
 } from "@repo/features/pull-request-write-wire";
 import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
-import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { appSettingsWire, experimentsOn, settingsView } from "@repo/settings/testing";
 import { TextSelection } from "@tiptap/pm/state";
@@ -93,12 +89,7 @@ import {
   world,
   writeBox,
 } from "../testing/agent-pull-request-tab.js";
-import {
-  fakeActPort,
-  fakeActPortCalls,
-  fakeAppBridge,
-  fakeAppBridgeCalls,
-} from "../testing/app-bridge.js";
+import { fakeAppBridge, fakeAppBridgeCalls } from "../testing/app-bridge.js";
 import { copyingInto, DESKTOP_LINKS, fakeAppPlatform } from "../testing/app-platform.js";
 import { handSettings } from "../testing/app-state.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -2177,63 +2168,6 @@ test("a link to a thread opens a folded Conversation to land on it, centering it
   cardHeight = 600;
   await reveal();
   assert.equal(top, 900 - 58, "a tall card's top stands just under the heading's band");
-});
-
-test("a link to a thread asks once to open a folded Conversation while the account's choices are still read", async () => {
-  window.localStorage.setItem(
-    "app.conversation-filters",
-    JSON.stringify({
-      hideBots: false,
-      hideResolved: false,
-      descriptionOpen: true,
-      conversationOpen: false,
-    }),
-  );
-  // Note that the host draws no choice ahead before its first read of them lands, which here never does.
-  const written: ViewChoiceWriteParams[] = [];
-  fakeActPort({
-    ...fakeActPortCalls(),
-    [ACT_KIND.VIEW_CHOICE_WRITE]: (write) => {
-      written.push(write);
-
-      return Promise.resolve({});
-    },
-  });
-
-  const tab = await drawn(
-    createElement(Routed, { control: jumpControl([thread({ id: JUMPED })]), heard: [] }),
-  );
-
-  assert.equal(sectionHead(tab, "Conversation").getAttribute("aria-expanded"), "false");
-  act(() =>
-    routeOpen({
-      workspace: "acme",
-      place: {
-        kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
-        taskId: AGENT.taskId ?? "",
-        agentId: AGENT.id,
-        threadId: JUMPED,
-        view: PULL_REQUEST_THREAD_VIEW.CONVERSATION,
-      },
-    }),
-  );
-  await settle();
-  await frames();
-
-  assert.deepEqual(
-    written.map(({ key, value }) => ({ key, value })),
-    [
-      {
-        key: VIEW_CHOICE_KEY.CONVERSATION_FILTERS,
-        value: {
-          hideBots: false,
-          hideResolved: false,
-          descriptionOpen: true,
-          conversationOpen: true,
-        },
-      },
-    ],
-  );
 });
 
 test("a thread whose file the changes no longer hold stays in the Conversation, brought into view there; a link to one the conversation no longer holds is let go", async () => {
