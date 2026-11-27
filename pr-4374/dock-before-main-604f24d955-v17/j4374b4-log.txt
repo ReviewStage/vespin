@@ -1,0 +1,17 @@
+-- j4374b4: main pinned to 604f24d955: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to 604f24d955
+== bundle PJj4374b4 base 604f24d955
+  built 604f24d955 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app, main 604f24d955
+ipad27-light-manager-thread-landscape: fails 0 shots 6 
+  landscape Send tap: 04:08:44.855 [ INFO] maestro.Maestro.tap-HgV9Ck0: Tapping on element:  UiElement(treeNode=TreeNode(attributes={accessibilityText=Send, title=, value=, text=, hintText=, resource-id=, bounds=[1047,350]|04:08:53.634 [ INFO] maestro.Maestro.tap-HgV9Ck0: Tapping on element:  UiElement(treeNode=TreeNode(attributes={accessibilityText=Left before it ships: a Resend button on pending invites, and the audit|
+iphone-light-dock-bounds: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+  bounds at manager-chat-from-thread: neither found
+iphone-light-kb-PORTRAIT: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+  iphone-light-kb-PORTRAIT keyboard up, orientation PORTRAIT: screen missing; composer-field missing; Send missing; keyboard top no keyboard keys in tree; 
+iphone-light-kb-LANDSCAPE_LEFT: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+  iphone-light-kb-LANDSCAPE_LEFT keyboard up, orientation LANDSCAPE_LEFT: screen missing; composer-field missing; Send missing; keyboard top no keyboard keys in tree; 
