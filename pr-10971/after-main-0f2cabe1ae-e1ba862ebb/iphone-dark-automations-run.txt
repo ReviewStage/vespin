@@ -1,0 +1,136 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @2fd6b6c7 (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow automations
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: automations-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when "${TAB}" is not visible and ${FLOATING_TABS == 'true'} is true...
+  Run flow when "Automations" is not visible and false is true... SKIPPED
+  Run flow when "${TAB}", id: place-row is visible and ${FLOATING_TABS == 'true'} is true...
+  Run flow when "Automations", id: place-row is visible and false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Weekly digest" is visible... COMPLETED
+Assert that "Fix failing checks" is visible... COMPLETED
+Assert that "Check each deploy" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot automations-list... COMPLETED
+Tap on "View options"... COMPLETED
+Tap on "Order by"... COMPLETED
+Assert that "Last run" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot automations-order... COMPLETED
+Tap on "Name"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot automations-by-name... COMPLETED
+Tap on "View options"... COMPLETED
+Tap on "Reset view"... COMPLETED
+Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml...
+  Run to-row.yaml...
+    Run flow when ${FLOATING_TABS != 'true'} is true...
+      Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+    Run flow when true is true... COMPLETED
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run clear-of-tabs.yaml...
+      Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+      Run flow when "Fix failing checks", Above id: search-tab is not visible and true is true... SKIPPED
+      Wait for animation to end... COMPLETED
+    Run clear-of-tabs.yaml... COMPLETED
+  Run to-row.yaml... COMPLETED
+  Long press on "${ROW}"... COMPLETED
+  Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/row-menu.yaml... COMPLETED
+Assert that "Run now" is visible... COMPLETED
+Assert that "Turn off" is visible... COMPLETED
+Assert that "Copy link" is visible... COMPLETED
+Take screenshot automations-menu... COMPLETED
+Tap on "Delete"... COMPLETED
+Assert that "Delete automation" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot automations-delete-ask... COMPLETED
+Run subflows/dismiss-ask.yaml...
+  Run flow when "Cancel" is not visible...
+  Run flow when "Cancel" is not visible... SKIPPED
+  Run flow when "Cancel" is visible...
+    Tap on "Cancel"... COMPLETED
+  Run flow when "Cancel" is visible... COMPLETED
+  Wait for animation to end... COMPLETED
+  Assert that "${QUESTION}" is not visible... COMPLETED
+Run subflows/dismiss-ask.yaml... COMPLETED
+Assert that "Fix failing checks" is visible... COMPLETED
+Tap on "Weekly digest"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Run now" is visible... COMPLETED
+Assert that "Trigger" is visible... COMPLETED
+Assert that "Next runs.*" is visible... COMPLETED
+Take screenshot automation-page... COMPLETED
+Scrolling DOWN until "Where it runs" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+Assert that "Runs land in.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot automation-page-where... COMPLETED
+Tap on "More"... COMPLETED
+Assert that "Copy link" is visible... COMPLETED
+Assert that "Delete" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot automation-page-more... COMPLETED
+Run subflows/dismiss.yaml...
+  Tap on point (${POINT})... COMPLETED
+  Wait for animation to end... COMPLETED
+Run subflows/dismiss.yaml... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+    Scrolling DOWN until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+Run subflows/scroll-in.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot automation-page-runs... COMPLETED
+Tap on "Send the weekly digest"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that ".*merged pull requests.*" is visible... COMPLETED
+Take screenshot automation-run-agent... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Recent runs" is visible... COMPLETED
+Tap on id: BackButton... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when "Runs" is not visible...
+Run flow when "Runs" is not visible... SKIPPED
+Tap on "Runs"... COMPLETED
+Wait for animation to end... COMPLETED
+Assert that "Check each deploy" is visible... COMPLETED
+Take screenshot automations-runs... COMPLETED
+Tap on "Failed,? [0-9]+"... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when ${FLOATING_TABS != 'true'} is true...
+  Assert that "Fix failing checks" is not visible... COMPLETED
+Run flow when true is true... COMPLETED
+Run flow when ${FLOATING_TABS == 'true'} is true...
+Run flow when false is true... SKIPPED
+Take screenshot automations-runs-failed... COMPLETED
