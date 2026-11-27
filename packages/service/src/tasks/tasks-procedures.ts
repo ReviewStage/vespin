@@ -101,7 +101,6 @@ import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import type { SandboxDeleteReach } from "../agents/session-sandboxes.js";
 import type { TypedTurn } from "../agents/sessions/agent-sessions.js";
 import { withTaskAgents } from "../agents/task-agents.js";
-import { readsWorkspaceMachines } from "../agents/workspace-machine-reads.js";
 import { SERVER_TASK_SOURCE } from "../events/server-events.js";
 import { refreshRepositoryReads } from "../github/repository-reads.js";
 import {
@@ -234,7 +233,6 @@ const startedAgentOn = (
   stored: StoredTask,
   agent: TaskAgentStart,
   reached: StartReach | undefined,
-  readsWorkspace: boolean,
 ) => {
   const { task } = stored;
 
@@ -243,7 +241,9 @@ const startedAgentOn = (
     userId,
     { taskId: task.id },
     agent,
-    { reached, landed: stored, readsWorkspaceMachines: readsWorkspace },
+    undefined,
+    reached,
+    stored,
   ).pipe(
     Effect.flatMap((started) =>
       Effect.map(
@@ -313,8 +313,7 @@ const EDIT_REFUSAL: ReadonlyMap<string, HostedRefusal> = new Map<string, HostedR
 /**
  * Keeps the place a create names as its member's last pick, which a later
  * Start of theirs naming none runs at: the cloud, or a device of the
- * member's own, never another's, which no Start of theirs could run on, nor
- * a workspace's machine, which a Start in another workspace could not. A
+ * member's own, never another's, which no Start of theirs could run on. A
  * task holds no place, so this is all a create's place does where it starts
  * no agent. Note that a pick that fails to keep fails nothing, because the
  * task is already committed, and a create answered with an error would be
@@ -322,8 +321,6 @@ const EDIT_REFUSAL: ReadonlyMap<string, HostedRefusal> = new Map<string, HostedR
  */
 const pickKept = (userId: string, asked: TaskRunsOnRequest) =>
   Effect.gen(function* () {
-    if (asked.machine === AGENT_MACHINE.WORKSPACE) return;
-
     if (asked.machine === AGENT_MACHINE.DEVICE) {
       const device = (yield* devicesNamed([asked.deviceId])).get(asked.deviceId);
 
@@ -430,7 +427,7 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
 
       const tasks = yield* hostedStoreOrUnavailable(
         Effect.flatMap(listTasks(context.userId), (listed) =>
-          withTaskAgents(context.userId, listed, readsWorkspaceMachines(context.request)),
+          withTaskAgents(context.userId, listed),
         ),
       );
 
@@ -505,7 +502,6 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
               reached.repository === null
                 ? undefined
                 : { repository: reached.repository, access: reached.githubAccess },
-              readsWorkspaceMachines(context.request),
             );
 
       // An agent's Start commits after the task's insert, so its transaction, where it has one, is the later.

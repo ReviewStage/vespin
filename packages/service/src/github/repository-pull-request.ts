@@ -56,7 +56,12 @@ import {
   type GitHubTokenAccess,
   markRefusedToken,
 } from "./github-app.js";
-import { type PullRequestReadFailure, pullRequestByNumber } from "./pull-requests.js";
+import {
+  overviewPullOf,
+  overviewPullSubject,
+  type PullRequestReadFailure,
+  pullRequestByNumber,
+} from "./pull-requests.js";
 import { memberPlace } from "./workspace-repositories.js";
 
 /** A pull request a query names: the workspace whose installation reaches its repository, the repository's full name, and its number. */
@@ -147,17 +152,22 @@ interface ReachedOverview {
 
 /**
  * The pull request the query names, to a member of its workspace, as an
- * overview's part reads it: by its number alone, with none of what the
- * published read asks beside it (its head's checks, its place in the merge
- * queue), since each part reads what it draws itself. Note that each part
+ * overview's part reads it: by its number alone, read whole and rendered,
+ * which the pull request's own part reads rather than ask again, with none
+ * of what the published read asks beside it (its head's checks, its place
+ * in the merge queue), since each part reads what it draws itself. Note that each part
  * reaches it in its own request, every request on the token's one throttled
  * queue (`@repo/github`), so one read fewer here is one fewer for every
  * part. Not found as `reachedByNumber` is.
  */
 export const reachedOverview = (userId: string, query: PullRequestQuery) =>
   Effect.map(
-    reachedByNumber(userId, query, pullRequestByNumber),
-    ({ bearer, subject, found }): ReachedOverview => ({ bearer, subject, pullRequest: found }),
+    reachedByNumber(userId, query, overviewPullOf),
+    ({ bearer, subject, found }): ReachedOverview => ({
+      bearer,
+      subject,
+      pullRequest: { ...overviewPullSubject(found), read: found },
+    }),
   );
 
 /** The pull request the query names, read with its head's checks, to a member of its workspace; not found as `reachedByNumber` is. */

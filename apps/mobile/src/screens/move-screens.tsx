@@ -148,7 +148,9 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
           icon={glyphSymbol(GLYPH.CLOSE)}
           accessibilityLabel={WORDS.CANCEL}
           onPress={() => router.back()}
-        />
+        >
+          {WORDS.CANCEL}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button disabled={chosen === undefined} onPress={move}>

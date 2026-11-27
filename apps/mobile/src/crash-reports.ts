@@ -1,5 +1,5 @@
 /**
- * crash-reports.ts -- the app's crash and error reports: Sentry's React Native SDK, started as the bundle loads, on the desktop's and the web's terms.
+ * crash-reports.ts -- the app's crash and error reports and its masked session replay: Sentry's React Native SDK, started as the bundle loads, on the desktop's and the web's terms.
  *
  * The app reports to the project the desktop does, under the same DSN
  * (`SENTRY_DSN`), which `app.config.ts` writes into the build's `extra` as
@@ -16,14 +16,23 @@
  * (`@repo/features/sentry-breadcrumbs`), and no event names the account,
  * since the app sets no user (`PRIVACY.md`).
  *
- * It traces a launch alone, never a request, a screen, or a press: Sentry's
- * app start, from the process's start through its native steps and the
- * bundle's run, held open to the launch's first Inbox rows, with the
- * launch's own phases inside it (`launch-phases.ts`) and a processor profile
- * of the app's functions while it stands. Each carries only durations and the
- * names of the app's own functions, never a value they handled, and no span
- * is made for a request, so no address is traced, and no trace header goes
- * out on one.
+ * It traces a launch, and after it every screen change and tap, never a
+ * request. A launch is Sentry's app start, from the process's start through
+ * its native steps and the bundle's run, held open to the launch's first
+ * Inbox rows, with the launch's own phases inside it (`launch-phases.ts`)
+ * and a processor profile of the app's functions while it stands. A screen
+ * change is a span named by its screen's route as its file is named
+ * (`agent/[id]`), with its time to the screen's first frame inside it, and
+ * a tap is a span named by the screen it landed on, held to the first frame
+ * after it; neither is profiled (`traceScreens`). Note that screens and taps
+ * are traced only once the launch's trace has ended, because the profiler
+ * stops its profile as any other trace starts, and the first screen's would
+ * cut the launch's short. Each carries only durations, the screens' routes,
+ * the touched components' names, and the names of the app's own functions,
+ * never a value they handled, an id, or the words on screen
+ * (`@repo/features/sentry-screens`),
+ * and no span is made for a request, so no address is traced, and no trace
+ * header goes out on one.
  *
  * The native half starts first, as the app launches and before React Native
  * loads, on the same DSN, environment, release and build number, which
@@ -36,6 +45,21 @@
  * a request's URL reaches a report only as the JavaScript `fetch` breadcrumb,
  * through the filter above.
  *
+ * It records every session as Sentry's mobile replay, fully masked, as the
+ * desktop's and the web's replays are
+ * (`packages/panel/src/session-replay.ts`): every word, field, symbol and
+ * vector, and every picture the app did not ship with, is drawn as a box of
+ * its color in its place, and a web view, a video, a PDF and a Safari sheet
+ * always are, so what leaves is the screens' layout and where they were
+ * touched, never a person's words or pictures (`REPLAY_MASKING`). Note that
+ * the SDK finds what to mask by the class iOS draws it with, so a way of
+ * drawing it does not know leaves unmasked: a new kind of view is checked in
+ * a replay before it ships. Nothing is unmasked, since `@repo/ui-native` has
+ * no mark for the app's own words as `@repo/ui`'s `ReplayUnmask` is; a
+ * request's details stay out of it, as no address is allowed one; and a
+ * replay, like every report, names no account. It stands and stops with the
+ * SDK, so the same switch holds it.
+ *
  * Every event names the build's release and build number, the names
  * `release-ios.yml` uploads the build's Hermes source maps and dSYMs under
  * (`<bundle id>@<version>+<build>`, as sentry-cli reads them from the app's
@@ -47,26 +71,36 @@ import type { AccountProvider } from "@repo/credentials/snapshot";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { eventWithoutAccessTokens, withoutAccessTokens } from "@repo/features/sentry-breadcrumbs";
 import { sentryReporterLayer } from "@repo/features/sentry-reporting";
+import { tapWithoutWords, transactionWithoutRouteKeys } from "@repo/features/sentry-screens";
 import type { SignInFailure } from "@repo/features/words";
 import { sentryReportingEnabled } from "@repo/host";
 import { selectAppSettingsView } from "@repo/host/app-state-reads";
 import { SENTRY_ENVIRONMENT, type SentryEnvironment } from "@repo/host/sentry-environment";
 import {
   addBreadcrumb,
+  addIntegration,
   captureException,
   close,
+  expoRouterIntegration,
   extendAppStart,
   finishExtendedAppStart,
+  getClient,
   getExtendedAppStartSpan,
   init,
+  mobileReplayIntegration,
   nativeCrash,
+  type ReactNativeClient,
+  reactNativeTracingIntegration,
+  type Span,
   setTag,
+  spanToJSON,
   startInactiveSpan,
+  withTouchEventBoundary,
 } from "@sentry/react-native";
 import { useQuery } from "@tanstack/react-query";
 import { type Layer, Option, Schema } from "effect";
 import Constants from "expo-constants";
-import { useEffect } from "react";
+import { type ComponentType, useEffect } from "react";
 import { AppState } from "react-native";
 import { crashReportsModule } from "./crash-reports-module.js";
 import { appStateQuery } from "./host/app-state-query.js";
@@ -106,20 +140,45 @@ export const SIGN_IN_END = { CLOSED: "closed" } as const;
 type SignInEnd = (typeof SIGN_IN_END)[keyof typeof SIGN_IN_END] | SignInFailure;
 
 /**
- * The SDK's automatic tracing, left out so only a launch is traced: a span
- * for each request and its trace header (`ReactNativeTracing`), the
- * navigation it reads through expo-router (`ExpoRouter`), the root's
- * registration it starts a screen's span on (`AppRegistry`), and a screen's
- * time to display (`TimeToDisplay`). Note that they're left out by name
- * rather than by `enableAutoPerformanceTracing`, because the SDK hands that
- * option to its native half, which then stops measuring the app's start.
+ * The SDK's tracing, which records screen changes and taps and never a
+ * request: neither `fetch` nor XHR becomes a span, so no address is traced
+ * and no request carries a trace header, beside `tracePropagationTargets`,
+ * which the native half reads too. Note that the one integration stands for
+ * the whole launch, across every start of the SDK, because the screens'
+ * tracing keeps the current screen on it, which a tap's span is named by.
  */
-const UNTRACED: ReadonlySet<string> = new Set([
-  "ReactNativeTracing",
-  "ExpoRouter",
-  "AppRegistry",
-  "TimeToDisplay",
-]);
+const tracing = reactNativeTracingIntegration({ traceFetch: false, traceXHR: false });
+
+/** The SDK's integrations this file stands in for: the tracing above, and the screens' (`traceScreens`), added once the launch's trace has ended. */
+const REPLACED_INTEGRATION = { TRACING: "ReactNativeTracing", SCREENS: "ExpoRouter" } as const;
+
+/**
+ * The SDK's integration left out: the root's registration (`AppRegistry`).
+ * Note that the app start resets itself as the root registers once it is
+ * extended (`extendAppStart`, before `expo-router/entry` runs), which would
+ * drop the launch's extension, and with it the launch's trace and the
+ * screens' tracing that waits on its end. It only starts a screen's span
+ * again as an Android activity restarts, which iOS never does.
+ */
+const UNREGISTERED = "AppRegistry";
+
+/** The operation the SDK names a tap's span by. */
+const TAP_OP = "ui.action.touch";
+
+/** The span inside a tap's, from the tap to the first frame after it, which also keeps the tap's span from being dropped as empty. */
+const TAP_FRAME = { op: "ui.action.touch.frame", name: "First frame after the tap" } as const;
+
+/**
+ * The replay's masking, every kind named though each is the SDK's default, so
+ * a later default never unmasks one: text, pictures, and vectors drawn as
+ * boxes, a web view, a video, a PDF and a Safari sheet always. Note that the
+ * SDK masks SwiftUI's text, pictures and symbols by their layers on iOS 26,
+ * where SwiftUI draws them with no view of their own.
+ */
+const REPLAY_MASKING = { maskAllText: true, maskAllImages: true, maskAllVectors: true } as const;
+
+/** The name the SDK adds its own replay under where a replay rate is set, which `REPLAY_MASKING`'s takes the place of. */
+const MOBILE_REPLAY = "MobileReplay";
 
 /** The operation a launch phase's span names, inside the app start's extension. */
 const LAUNCH_PHASE_OP = "app.start.phase";
@@ -161,8 +220,8 @@ const reportable = sentryReportingEnabled(launchFixtureProfile() === undefined, 
 /** Whether the SDK stands now: reportable, and on this device's choice to share usage data. */
 let standing = reportable && crashReportsModule.sharesUsageData();
 
-/** The options the SDK starts on, enabled or not. */
-function sentryOptions(enabled: boolean): Parameters<typeof init>[0] {
+/** The options the SDK starts on, enabled or not, and profiling the launch where it starts with one. */
+function sentryOptions(enabled: boolean, launch: boolean): Parameters<typeof init>[0] {
   const build = sentryBuild();
   const version = Constants.expoConfig?.version;
   const buildNumber = Constants.expoConfig?.ios?.buildNumber;
@@ -176,15 +235,99 @@ function sentryOptions(enabled: boolean): Parameters<typeof init>[0] {
       ? { release: `${bundleId}@${version}+${buildNumber}`, dist: buildNumber }
       : undefined),
     enableNetworkBreadcrumbs: false,
-    beforeBreadcrumb: withoutAccessTokens,
+    beforeBreadcrumb: (breadcrumb) => {
+      const kept = withoutAccessTokens(breadcrumb);
+
+      return kept && tapWithoutWords(kept);
+    },
     beforeSend: eventWithoutAccessTokens,
-    // Note that every launch is traced and profiled, and nothing else: the SDK's automatic tracing is left out, so no request, screen, or press becomes a span, and no request carries a trace header.
+    beforeSendTransaction: transactionWithoutRouteKeys,
+    // Note that every launch, screen change and tap is traced, and no request: the SDK's request tracing is off (`tracing`), and no request carries a trace header.
     tracesSampleRate: 1,
-    profilesSampleRate: 1,
-    integrations: (defaults) => defaults.filter(({ name }) => !UNTRACED.has(name)),
+    ...(launch ? { profilesSampleRate: 1 } : undefined),
+    enableUserInteractionTracing: true,
+    // Note that every session is recorded, masked whole (`REPLAY_MASKING`).
+    replaysSessionSampleRate: 1,
+    replaysOnErrorSampleRate: 1,
+    integrations: (defaults) => [
+      ...defaults.flatMap((integration) => {
+        if (integration.name === REPLACED_INTEGRATION.TRACING) return [tracing];
+
+        return integration.name === REPLACED_INTEGRATION.SCREENS ||
+          integration.name === UNREGISTERED ||
+          integration.name === MOBILE_REPLAY
+          ? []
+          : [integration];
+      }),
+      mobileReplayIntegration(REPLAY_MASKING),
+      { name: "TapNames", setup: (client) => client.on("spanStart", nameTap) },
+    ],
     tracePropagationTargets: [],
     _experiments: { enableStandaloneAppStartTracing: true },
   };
+}
+
+/**
+ * Names a tap's span by the screen it landed on, as the screens' tracing
+ * last named it, rather than the touched element's label, which may be the
+ * words it shows, and holds it open to the first frame after the tap. Note
+ * that a tap on no screen yet, before the launch's trace has ended, is no
+ * span, since the SDK starts one only on a screen it knows, and neither is
+ * a tap on an element with no label or words, since the SDK names its span
+ * by them before this renames it.
+ */
+function nameTap(span: Span): void {
+  if (spanToJSON(span).op !== TAP_OP) return;
+  const screen = tracing.state.currentRoute;
+
+  if (screen !== undefined) span.updateName(`Tap on ${screen}`);
+  const frame = startInactiveSpan({ ...TAP_FRAME, parentSpan: span });
+
+  requestAnimationFrame(() => frame.end());
+}
+
+/** Whether this launch traces its screens already, which it starts once and keeps across every start of the SDK (`tracing`). */
+let screensTraced = false;
+
+/**
+ * Traces each screen change from now on, through Expo Router's navigation,
+ * with the time to each screen's first frame, once a launch, and profiles
+ * no trace after the launch's. Note that the profiler reads its rate as
+ * each trace starts, and that stopping a profile runs on the JavaScript
+ * thread as the next trace starts, so profiling every tap would hold each
+ * tap behind the last one's profile.
+ */
+function traceScreens(): void {
+  const options = getClient<ReactNativeClient>()?.getOptions();
+
+  if (options) options.profilesSampleRate = 0;
+
+  if (screensTraced) return;
+  screensTraced = true;
+  // Note that a screen already seen, as Back returns to it, is traced too, since with no request traced it would hold no span the SDK counts and be dropped.
+  addIntegration(
+    expoRouterIntegration({
+      enableTimeToInitialDisplay: true,
+      ignoreEmptyBackNavigationTransactions: false,
+    }),
+  );
+}
+
+/** Traces the screens once the launch's trace has ended, by its rows or by the SDK's deadline, or at once where none stands. */
+function traceScreensAfterLaunch(): void {
+  const extension = getExtendedAppStartSpan();
+
+  if (!extension.isRecording()) {
+    traceScreens();
+
+    return;
+  }
+
+  const unsubscribe = getClient()?.on("spanEnd", (ended) => {
+    if (ended !== extension) return;
+    unsubscribe?.();
+    traceScreens();
+  });
 }
 
 /**
@@ -199,12 +342,14 @@ function sentryOptions(enabled: boolean): Parameters<typeof init>[0] {
 function startCrashReports(): void {
   const buildNumber = Constants.expoConfig?.ios?.buildNumber;
 
-  init(sentryOptions(standing));
+  init(sentryOptions(standing, true));
 
   if (buildNumber !== undefined) setTag(BUILD_NUMBER_TAG, buildNumber);
 
   // Note that a launch in front holds Sentry's app start open until its Inbox shows (`finishLaunchTrace`); one woken in the background isn't held, since nobody waits through it.
   if (standing && AppState.currentState !== "background") extendAppStart();
+
+  if (standing) traceScreensAfterLaunch();
   const test = launchSentryTest();
 
   if (test === LAUNCH_SENTRY_TEST.JS) captureException(new Error(TEST_REPORT_WORDS));
@@ -216,8 +361,9 @@ function startCrashReports(): void {
  * Holds the SDK to this device's choice to share usage data, as the host
  * reads it: kept for the next launch's native start, and the SDK closed, its
  * native half with it, where it reads off, or started again where it reads
- * on after a close. Note that a close drops what the SDK holds unsent, such
- * as this launch's trace, since nothing goes out once the choice is off.
+ * on after a close. Note that a close records nothing more and drops this
+ * launch's trace, but the native half flushes as it closes, so a replay
+ * segment or report already queued may still go out.
  */
 function shareCrashReports(shares: boolean): void {
   crashReportsModule.keepSharesUsageData(shares);
@@ -225,8 +371,10 @@ function shareCrashReports(shares: boolean): void {
   if (!reportable || shares === standing) return;
   standing = shares;
 
-  if (shares) init(sentryOptions(true));
-  else void close();
+  if (shares) {
+    init(sentryOptions(true, false));
+    traceScreens();
+  } else void close();
 }
 
 /** Holds the SDK to Settings › Account › Share usage data as the host reads it (`shareCrashReports`). */
@@ -280,6 +428,11 @@ export function finishLaunchTrace(readyMs: number, activeMs: number | undefined)
   finishExtendedAppStart().catch((cause: unknown) => {
     console.error("The launch's trace could not end.", cause);
   });
+}
+
+/** The app's root with every tap on it recorded: a breadcrumb naming the touched components, and a span where it lands on a screen (`nameTap`). */
+export function withTapTraces(Root: ComponentType): ComponentType {
+  return withTouchEventBoundary(Root);
 }
 
 /** Reports a screen whose drawing threw, once for each throw its boundary caught. */

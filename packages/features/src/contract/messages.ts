@@ -41,6 +41,8 @@ import {
 } from "../agent-wire.js";
 import { transcriptNowAnswerSchema } from "../live-wire.js";
 import {
+  managerChatEditAnswerSchema,
+  managerChatEditRequestSchema,
   managerChatReactAnswerSchema,
   managerChatReactRequestSchema,
 } from "../manager-chat-live.js";
@@ -50,6 +52,9 @@ import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
 /** A message is its words, its files, and a key: the bound's characters at JSON's widest escape, the files, and room for the keys around them. */
 const MESSAGE_BODY_BYTES =
   6 * AGENT_BOUNDS.MAX_MESSAGE_CHARS + MAXIMUM_ATTACHMENTS_BODY_BYTES + 1_024;
+
+/** An edit of a chat message is its words, at JSON's widest escape, and room for its key and the keys around them. */
+const EDIT_BODY_BYTES = 6 * AGENT_BOUNDS.MAX_MESSAGE_CHARS + 1_024;
 
 /** A line of a call is its words, at JSON's widest escape, and room for its ids and the keys around them. */
 const VOICE_LINE_BODY_BYTES = 6 * VOICE_LINE_BOUNDS.TEXT_CHARS + 1_024;
@@ -182,6 +187,18 @@ export const messagesContract = {
     )
     .input(exactBodyInput(EffectSchema.Struct(byChatMessage), managerChatReactRequestSchema))
     .output(EffectSchema.flip(managerChatReactAnswerSchema)),
+  /** One member's edit of their own message of a Manager's chat, its words changed in place and marked edited; where they changed, the Manager is told in a line of its own, which steers its turn or opens one as a message does, and nothing of the chat is dropped. */
+  chatEdit: messageProcedure
+    .meta(bodyCap(EDIT_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.PATCH,
+        path: "/api/agents/{id}/chat-messages/{message}",
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(EffectSchema.Struct(byChatMessage), managerChatEditRequestSchema))
+    .output(EffectSchema.flip(managerChatEditAnswerSchema)),
   /** One change of an agent's queue of messages waiting behind its turn, answering the queue as it then stands. */
   queue: messageProcedure
     .meta(bodyCap(MESSAGE_BODY_BYTES))

@@ -604,6 +604,32 @@ export function HeldMenu({
   );
 }
 
+/**
+ * A card a message's words stand folded in, such as an automation's prompt,
+ * whose long press offers Copy message, Copy link where it has an address,
+ * and Share, as the panel's card offers Copy under it; no Select text, since
+ * its words stand folded away from where the menu is held.
+ */
+export function CardMenu({
+  words,
+  link,
+  width,
+  children,
+}: {
+  readonly words: string;
+  /** Its address on vespin.dev, which Copy link copies; none where it has none. */
+  readonly link?: string | undefined;
+  /** The width it stands in where the caller knows it before it is laid out (`HeldMenu`'s `width`). */
+  readonly width?: number | undefined;
+  readonly children: ReactElement;
+}) {
+  return (
+    <HeldMenu acts={useMessageActs(words, link, [], undefined)} width={width}>
+      {children}
+    </HeldMenu>
+  );
+}
+
 /** A message's React Native views, whose long press offers Copy message, Select text and Share; the views alone for a message of no words. */
 export function CopyWordsMenu({
   words,

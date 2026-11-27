@@ -11,8 +11,9 @@
    it is written (`mobile-bar.tsx`). What stays here is what utilities say
    badly: the sheet laid on the window's frame and the custom properties it
    is measured by, the selectors that read the room and the shell's state
-   (`:has()`), the drag regions, the frame's translucency, and the panes'
-   slide.
+   (the marks its pages hold on it, `shell-marks.tsx`, rather than a
+   `:has()` over what they draw), the drag regions, the frame's
+   translucency, and the panes' slide.
 
    The panel lays it just before desktop.css (index.css), which restages
    these elements for each of the window's own screens. Anything else that
@@ -57,7 +58,7 @@
      is as tall as a control and the toolbar's padding make it, and its
      buttons stand at the window's edge, as in full screen; the desktop
      profile sets both by the traffic lights (desktop.css). */
-  --title-bar-middle: calc(var(--ui-control-height) / 2 + var(--ui-space-8));
+  --title-bar-middle: calc(var(--ui-control-height) / 2 + var(--ui-title-bar-inset));
   --title-bar-left: var(--column-inset);
   /* Where the work column's toolbar starts its tab while the sidebar is
      folded: clear of where the title bar starts and both buttons there, by a
@@ -91,6 +92,26 @@
    card. */
 .sidebar-workspace {
   padding-bottom: calc(var(--title-bar-middle) - var(--ui-control-height) / 2);
+}
+
+/* The sidebar draws its rows at its own roles (`profiles.css`'s
+   `--ui-sidebar-*`): a row's height stands for a control's, its words' size
+   for the body's, its gaps for the list's and the section's, its corner for
+   a control's, its inset for a row's, and its glyph's gap for the icon gap,
+   so every row, head, and button in it follows them without a class of its
+   own. The places at its top stand a gap of their own apart. */
+.desktop-sidebar {
+  --ui-control-height: var(--ui-sidebar-row-height);
+  --ui-type-body-size: var(--ui-sidebar-text-size);
+  --ui-list-gap: var(--ui-sidebar-row-gap);
+  --ui-section-gap: var(--ui-sidebar-group-gap);
+  --ui-control-radius: var(--ui-sidebar-row-radius);
+  --ui-row-inset: var(--ui-sidebar-row-inset);
+  --ui-icon-gap: var(--ui-sidebar-icon-gap);
+}
+
+.desktop-sidebar .sidebar-places {
+  --ui-list-gap: var(--ui-sidebar-places-gap);
 }
 
 /* The head stands on the lines of the column under it and the buttons over
@@ -173,8 +194,8 @@
    soft and its edge a hairline and a soft shadow. A narrow room shows one
    column at a time and keeps it full bleed. */
 .desktop-shell {
-  --sheet-gap: var(--ui-space-8);
-  --sheet-radius: var(--ui-radius-14);
+  --sheet-gap: var(--ui-sheet-gap);
+  --sheet-radius: var(--ui-sheet-radius);
 
   background: var(--ui-color-sidebar);
 }
@@ -226,11 +247,8 @@
    hidden, between visits (`desktop-shell.tsx`) is no page standing, so a
    page with tabs is any but the Inbox's, or the Inbox while it is shown. */
 :where(:root):not([data-ui-room="narrow"])
-  .desktop-shell
-  > .desktop-main:not(
-    :has(.desktop-task:not([data-page="inbox"])),
-    [data-inbox-shown="true"]
-  )::before,
+  .desktop-shell:not([data-task-page])
+  > .desktop-main:not([data-inbox-shown="true"])::before,
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > :is(.desktop-settings, .desktop-version-history)
@@ -346,11 +364,8 @@
 }
 
 :where(:root):not([data-ui-room="narrow"])
-  .desktop-shell
-  > .desktop-main:not(
-    :has(.desktop-task:not([data-page="inbox"])),
-    [data-inbox-shown="true"]
-  )::before,
+  .desktop-shell:not([data-task-page])
+  > .desktop-main:not([data-inbox-shown="true"])::before,
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell
   > .desktop-main
@@ -503,16 +518,15 @@
 
    Note that a box on the way down that disqualifies a bar is written
    `… :where(.ui-pane-bar, .ui-toolbar)`, never `… *`, though both name the
-   bar itself, because Chromium files these rules' `:has()` and
-   `:nth-child(of S)` under one invalidation set each, shared by every rule
+   bar itself, because Chromium files these rules' `:nth-child(of S)`
+   under one invalidation set, shared by every rule
    that uses them, and a `*` there turns that set into "everything below":
    inserting one element into the page, or a menu or a tooltip into the
    body, then restyled the whole window (about 2,700 elements) rather than
    a few dozen. The `:where()` keeps the weight a `*` had. */
 :where(:root):not([data-ui-room="narrow"])
   :is(
-    .desktop-shell
-      > .desktop-main:not(:has(.desktop-task:not([data-page="inbox"])), [data-inbox-shown="true"]),
+    .desktop-shell:not([data-task-page]) > .desktop-main:not([data-inbox-shown="true"]),
     .desktop-shell
       > .desktop-main
       .desktop-task
@@ -533,11 +547,7 @@
     .ui-toolbar:nth-child(1 of :not([hidden]))
   ):not(
     :is(
-        .desktop-shell
-          > .desktop-main:not(
-            :has(.desktop-task:not([data-page="inbox"])),
-            [data-inbox-shown="true"]
-          ),
+        .desktop-shell:not([data-task-page]) > .desktop-main:not([data-inbox-shown="true"]),
         .desktop-shell
           > .desktop-main
           .desktop-task

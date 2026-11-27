@@ -25,16 +25,16 @@ import { Context, Predicate } from "effect";
 export const SENTRY_TRACES_SAMPLE_RATE = 0.1;
 
 /**
- * How each desktop window profiles, as Sentry's options name it: every
- * window, started and stopped by the window itself while it is in use
+ * How desktop windows profile, as Sentry's options name it: about one window
+ * in ten, started and stopped by the window itself while it is in use
  * (`apps/desktop/src/renderer/desktop-sentry-sdk.ts`). Note that it is not
  * Sentry's `trace` lifecycle, which profiles only while a kept root span is
  * open: a window's spans are mostly timed after they end, and an
  * interaction's after it, so they never carried a profile.
  */
 export const SENTRY_PROFILING = {
-  // Every window while desktop's users are few; about 0.1–0.2 once it has a few hundred a day.
-  profileSessionSampleRate: 1,
+  // About one window in ten, chosen as it opens, because a profiled window's sampler costs it a steady few percent of a core while in use.
+  profileSessionSampleRate: 0.1,
   profileLifecycle: "manual",
 } as const;
 

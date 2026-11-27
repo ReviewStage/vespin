@@ -5,7 +5,6 @@ import {
   type AgentPullRequest,
   type AgentStatus,
   type AgentSummary,
-  agentMachineOf,
 } from "@repo/features/agent-wire";
 import {
   agentGlyphState,
@@ -221,6 +220,7 @@ import { type KeptPage, keptPagesAfter } from "./kept-pages.js";
 import { AgentMenuTab } from "./main-tabs.js";
 import { PULL_REQUEST_TAB, pullRequestTabLoaded, TURN_CHANGES_TAB } from "./pages-on-demand.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneFindGroups } from "./phone-head.js";
+import { SHELL_MARK, useShellMark } from "./shell-marks.js";
 import {
   type AddEntry,
   AddTabButton,
@@ -1070,12 +1070,12 @@ export function panelOffers(input: {
     return { name: subject.name, icon: <AgentGlyph agent={subject.agent} /> };
   };
 
-  // Note that an agent on a Mac or a workspace's machine is offered none, because only a cloud sandbox runs a browser.
+  // Note that an agent on a Mac is offered none, because only a cloud sandbox runs a browser.
   const cloudOffers: readonly CloudBrowserOffer[] =
     holder === SIDE_PANEL_HOLDER.INBOX
       ? []
       : (agents.agents ?? [])
-          .filter((agent) => agentMachineOf(agent) === AGENT_MACHINE.VERCEL)
+          .filter((agent) => agent.machine !== AGENT_MACHINE.DEVICE)
           .filter((agent) => mine(agent.id))
           .sort((a, b) => Number(b.id === input.viewedAgent) - Number(a.id === input.viewedAgent))
           .map((agent) => ({ agentId: agent.id, agent, owner: ownerOf(agent.id) }));
@@ -1090,20 +1090,17 @@ export function panelOffers(input: {
       ? undefined
       : {
           terminals: {
-            // Note that a workspace's machine opens no terminal to its agents, as a cloud sandbox and a Mac do.
-            offers: terminalOffers(agents, panel).filter(
-              ({ agent }) => agentMachineOf(agent) !== AGENT_MACHINE.WORKSPACE && mine(agent.id),
-            ),
+            offers: terminalOffers(agents, panel).filter(({ agent }) => mine(agent.id)),
             onNew: onNewTerminal,
           },
         }),
-    // Note that only a cloud agent has a mirror, so an agent on a Mac or a workspace's machine is offered no Local tab.
+    // Note that only a cloud agent has a mirror, so an agent on a Mac is offered no Local tab.
     ...(input.onNewLocal === undefined || holder === SIDE_PANEL_HOLDER.INBOX
       ? undefined
       : {
           locals: {
             offers: terminalOffers(agents, panel).filter(
-              ({ agent }) => agentMachineOf(agent) === AGENT_MACHINE.VERCEL && mine(agent.id),
+              ({ agent }) => agent.machine !== AGENT_MACHINE.DEVICE && mine(agent.id),
             ),
             onNew: input.onNewLocal,
           },
@@ -3446,6 +3443,8 @@ function PanelFrame({
 }): React.JSX.Element {
   const toggleRoom = useSelector(fullScreenRoomStore);
   const beside = besideToggle ? toggleRoom : null;
+  useShellMark(SHELL_MARK.SIDE_PANEL);
+  useShellMark(panel.fullScreen ? SHELL_MARK.FULL_SCREEN_PANEL : undefined);
 
   // Escape takes the panel out of filling the window, wherever it fills it: beside its document again, or shut by
   // its way back where the room holds it only full screen (`places/narrow-backs.ts`).

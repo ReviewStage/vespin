@@ -187,6 +187,8 @@ export type ButtonSize = (typeof BUTTON_SIZE)[keyof typeof BUTTON_SIZE];
 export const ICON_BUTTON_SIZE = {
   ...BUTTON_SIZE,
   LARGE: "large",
+  /** An icon picker's cell: a glyph or an emoji drawn larger than a control's, so a choice reads at a glance (`IconPickerChoice`). */
+  PICKER: "picker",
 } as const;
 
 export type IconButtonSize = (typeof ICON_BUTTON_SIZE)[keyof typeof ICON_BUTTON_SIZE];
@@ -304,6 +306,8 @@ function boxSize(
 
   if (iconOnly && size === ICON_BUTTON_SIZE.LARGE) return "icon-large";
 
+  if (iconOnly && size === ICON_BUTTON_SIZE.PICKER) return "icon-picker";
+
   if (iconOnly) return compact ? "icon-compact" : "icon";
 
   if (variant === BUTTON_VARIANT.ROW) return "row";
@@ -369,7 +373,7 @@ function linkClasses(look: ButtonLook): string {
 function faceClasses(size: BoxSize | undefined, ringShown: boolean, done: boolean): string {
   return cn(
     "ui-button-face inline-flex items-center gap-icon-gap min-w-0",
-    size === "compact" && "gap-1",
+    size === "compact" && "gap-icon-gap-compact",
     ringShown && "invisible",
     done && "opacity-0",
   );

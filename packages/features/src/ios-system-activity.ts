@@ -19,6 +19,7 @@
  */
 
 import { Schema as EffectSchema } from "effect";
+import type { InboxFields } from "./inbox-digest.js";
 import {
   holderWorkspaceId,
   type InboxAnyHolder,
@@ -94,7 +95,7 @@ function agentPlace(agentId: string, taskId: string | undefined): LinkDestinatio
 
 /** An Inbox thread's activity: its title and its page, under its task's workspace, or its agent's for a thread on no task, a Manager's. */
 export function threadActivity(
-  listed: InboxListed<InboxAnyHolder>,
+  listed: { readonly holder: InboxAnyHolder; readonly item: InboxFields },
   workspaces: readonly Workspace[],
 ): IosActivity {
   const { holder, item } = listed;

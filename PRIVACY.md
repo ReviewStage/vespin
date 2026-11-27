@@ -229,6 +229,10 @@ keep it, or a replay of its transcript where we don't, and the branch the
 agent pushed. Nothing is read from your machine, and a continue only stops the
 agent there. To tell your machines apart, each sends us a keyed hash of its
 hardware or machine id, never the id itself, and a Mac sends its model name.
+We keep **where you last chose to run an agent**, the cloud or which of your
+machines, with your account, so New task starts there in each of your
+signed-in apps; only apps signed in to your account read it, and it is
+deleted with your account.
 
 When such an agent starts, it runs on the Claude Code or Codex login already
 set up on that machine, never on a credential you saved in Vespin: we send that
@@ -320,7 +324,12 @@ recording was, or match the Service's counts to a recording by their shared
 workspace and timing; we do not do this. While a maintainer is signed in as
 your account with your support access (section 4), their use of the web app is
 recorded the same way, under your account, and counted under that browser's
-own ID. The iOS app records nothing.
+own ID.
+
+The Vespin iOS app records your sessions too, to help us find and fix bugs.
+Text, images, and what you type are masked on your iPhone or iPad before a
+recording leaves it; recordings are sent to Sentry, filed under no account,
+and stop when "Share usage data" is off.
 
 Turning off Settings › Account › "Share usage data" stops the counts, the
 recordings, and the Sentry reports described below from that Mac or browser,
@@ -341,10 +350,10 @@ error's own words can quote what an agent was working on. The Mac app also sends
 Sentry diagnostic data about its resource use, such as processor usage, and
 how long its main process stopped answering whenever it did, with the stack of
 its own functions it stood still in, never the values they held. The
-Service sends processor profiles of the traces Sentry keeps, and the Mac
-app's windows of the time they are in use, from a click, keystroke, or scroll
-until ten seconds without one: which of their own functions ran and for how
-long, never the values they handled. The Mac app's windows also say, of a slow click, keystroke, or
+Service sends processor profiles of the traces Sentry keeps, and about one in
+ten of the Mac app's windows of the time they are in use, from a click,
+keystroke, or scroll until ten seconds without one: which of their own
+functions ran and for how long, never the values they handled. The Mac app's windows also say, of a slow click, keystroke, or
 screen they timed, which of their own functions held the window and for how
 long. The Mac app and the web app send none of this while "Share
 usage data" is off. A report made as the app starts, before it has read that
@@ -383,10 +392,16 @@ account. Each time you open the app, it sends Sentry a performance
 trace of its start: how long each of its startup steps took, from iOS
 starting it to your Inbox's first rows, and a processor profile of which of
 the app's own functions ran and for how long, never the values they handled.
-It sends no other performance traces, and no screenshots or recordings of the
-screen. It sends Sentry nothing while Settings › Account › "Share usage data"
-is off on that iPhone or iPad, a crash as the app starts included, and starts
-again when you turn it back on. Once, on the first launch after the update
+After that, it sends a performance trace of each screen you open, naming the
+screen by its kind (such as an agent's page) and saying how long it took to
+show, and of each tap, naming the screen it landed on and how long the app
+took to draw its next frame. Reports may also list your last taps and screens
+before an error, by the screen and the app's own component names. None of
+this names a task, an agent, or anything else by its id, or carries the words
+on your screen, and the app's requests are not traced. It sends Sentry
+nothing while Settings › Account › "Share usage data" is off on that iPhone or
+iPad, a crash as the app starts included, and starts again when you turn it
+back on. Once, on the first launch after the update
 that brought this, it may start Sentry for a moment before it has read the
 switch, so a crash or error in that moment can still be reported.
 
@@ -409,6 +424,14 @@ settings, outside Vespin. Showing one sends nothing to us or anyone else. It is 
 turn it on. The notification that a command waits on your Mac, which the Mac
 app shows whatever this setting, names no command.
 
+How you choose to have diffs and files drawn in Settings › Appearance (line
+numbers, word wrap, the layout, how changes are marked, backgrounds, the
+light and dark syntax themes, the font and its ligatures, and whether inline
+comments stand minimized) is kept with your account, so each of your
+signed-in apps draws them the same way; the font size and line height stay on
+each device. Only apps signed in to your account read these choices, and they
+are deleted with your account.
+
 If you add your own sounds in Settings › Preferences › Notifications, to play when an
 agent finishes or something needs you, we keep **each sound's audio and the
 name you give it** with your account: its bytes, its audio type, a
@@ -418,6 +441,12 @@ never keep the file's own name, which the app only offers as the name to
 start from, and a sound is sent only to apps signed in to your account.
 You can rename or remove each one in the same place, and all of them are
 deleted with your account.
+
+How you choose to read your own lists, such as how a workspace's Managers
+are sorted, is kept with your account, so each of your signed-in apps shows
+them the same way: **which choice you made, and for which workspace**. A
+choice is read only by apps signed in to your account, never by a teammate,
+and it is deleted with the workspace it was made for or with your account.
 
 If you sign in to the Vespin iOS app and allow notifications, the app
 registers your iPhone's Apple push token with the Service, with which of
@@ -507,14 +536,14 @@ team's Slack, by way of PostHog, whether or not you share usage data. That copy
 is filed under a random identifier, with no name, email, or account id and no
 person profile, so PostHog cannot tie it to you.
 
-### Information stored on your Mac and iPhone
+### Information stored on your Mac, iPhone, and browser
 
 The Mac app keeps its window layout and the drafts of messages you have not
 sent. While you are signed in, it also keeps a copy of your workspaces' lists,
 changes you made offline, the words of messages to agents that were not
-delivered, with the names of their files, and **your Inbox's newest threads**,
-up to about 150 KB of them: each thread's title, who it waits on, and its
-messages' words and the names of their files (never a file itself), as the
+delivered, with the names of their files, and **your Inbox's open threads and
+those settled in the last 30 days**: each thread's title, who it waits on, and
+its messages' words and the names of their files (never a file itself), as the
 Inbox last showed them, so it can draw your Inbox at once when it opens. All
 of it is in a local database kept for each account you sign in with,
 `local.sqlite`, which only your user account on the Mac can read. It is not
@@ -523,12 +552,27 @@ protected by your Mac's disk encryption (FileVault) where you turn it on. The
 app deletes it when you sign out. The Vespin iOS app keeps the same database
 on your iPhone, in its own storage, protected by the iPhone's Data
 Protection, and deletes it when you sign out. On the Mac your sign-in tokens
-are kept encrypted under a key in the macOS Keychain. On the iPhone they are
-kept in the iPhone's Keychain itself, readable after the phone's first unlock
-since it started, never synced to iCloud or moved to another device, and
-deleted when you sign out. Earlier versions of the app kept them encrypted in
-its own files under a key in the Keychain; once the tokens moved into the
-Keychain itself, the app deletes that key.
+are kept encrypted under a key in the macOS Keychain. That key stays in the
+Keychain, and a build of Vespin signed by another Apple developer team than
+the one that made it can read it only when you allow it, which macOS asks
+once; if you refuse, the app signs you out, and you sign in again. On the
+iPhone they are kept in the iPhone's Keychain itself, readable after the
+phone's first unlock since it started, never synced to iCloud or moved to
+another device, and deleted when you sign out. Earlier versions of the app
+kept them encrypted in its own files under a key in the Keychain; once the
+tokens moved into the Keychain itself, the app deletes that key.
+
+While you are signed in, the Vespin web app (vespin.dev/app) keeps a copy of
+your workspaces' lists and **your Inbox's open threads and those settled in
+the last 30 days**: each thread's title, who it waits on, and its messages'
+words and the names of their files (never a file itself), as the Inbox last
+showed them, so a page load can draw them at once and ask us only for what
+changed. It is in your browser's storage for vespin.dev (IndexedDB), for the
+account signed in. Your browser keeps it as it keeps any site's data, and it
+is not encrypted under a key of Vespin's own. Vespin deletes it when you sign
+out, and when another account signs in to the web app in that browser.
+Changes you made offline and messages to agents that were not delivered are
+held only in the open tab, and are lost when it closes.
 
 When you close New task in the Vespin iOS app and choose Save draft, the
 app keeps that draft's words on your iPhone or iPad, one draft for each
@@ -705,7 +749,7 @@ delete fails or does not finish in time, it may remain. A repository snapshot
 made before default-branch drives expires thirty days after its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
-  preferences, your sounds, integration records, your phones' push
+  preferences, your sounds, your view choices, integration records, your phones' push
   tokens, when you were last active at a client, and the notifications held
   for you) is deleted at once.
 - **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,

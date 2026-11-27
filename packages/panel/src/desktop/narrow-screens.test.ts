@@ -22,6 +22,7 @@ import { useSettingsRoute } from "../settings-link.js";
 // Note that Settings is loaded as the window loads it, on first use (`panel-router.tsx`'s lazy routes),
 // so its module is read here first and its load settles within the test's own ticks.
 import "./settings-route.lazy.js";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { useStageRoom } from "../stage-room.js";
 import {
   type DescriptionHistorySource,
@@ -36,7 +37,6 @@ import { layContainersAt, shown } from "../testing/container-width.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { pixelsOf, wayBackGap } from "../testing/laid-length.js";
-import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
 import { tasksControl } from "../testing/tasks-control.js";

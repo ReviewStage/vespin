@@ -1,5 +1,6 @@
 import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentInboxMessagedView } from "@repo/features/agent-view";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import {
   holderRepository,
   holderTask,
@@ -60,12 +61,10 @@ import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
 import {
-  heldTaskMentions,
   type TasklessPlace,
   TaskMentions,
   type TaskMentionsValue,
-  useMentionAgentsReader,
-  useSavedDescriptionText,
+  useHolderMentions,
 } from "../tasks/task-mentions.js";
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { useAgentPullRequestAddress } from "../tasks/use-agent-pull-request.js";
@@ -136,10 +135,10 @@ import { taskCardOf } from "./task-card.js";
  * item stands alone, step through the list (`inbox-pager.tsx`). Everything in it that names a
  * person, an answer and an agent's starter, reads them against the listed
  * workspace's members (`member-directory.tsx`). The chosen item's box
- * mentions what its task's repository and workspace hold (`answerPlace`),
- * and what the task's page offers besides: its description and sections as
- * saved, its pages, its agents, and their pull requests
- * (`heldTaskMentions`); and its skills are read through its task and drawn
+ * mentions what its holder's own page offers (`useHolderMentions`): a
+ * task's, what its repository and workspace hold and its description and
+ * sections as saved, its pages, its agents, and their pull requests; a
+ * Manager's, what the Manager's page offers; and its skills are read through its task and drawn
  * as chips that open their `SKILL.md` in the panel beside it, as a file the
  * item names opens.
  *
@@ -231,6 +230,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     steps,
     onPointing,
     chosen,
+    chosenItem,
     filteredOut,
     search,
     searched,
@@ -292,12 +292,8 @@ export const DesktopInbox = memo(function DesktopInbox({
       ? (tasks.workspace?.slug ?? tasks.workspace?.id)
       : (tasks.workspaces.find((each) => each.id === chosenWorkspaceId)?.slug ?? chosenWorkspaceId);
 
-  // What the chosen item's box offers an `@`, read under that workspace and repository.
-  const readMentionAgents = useMentionAgentsReader(
-    place?.workspaceId,
-    useTaskNames(tasks.typedNames),
-    named.models,
-  );
+  // The tasks the window lists, which name the workspace's agents an `@` in the chosen item's box offers.
+  const taskNames = useTaskNames(tasks.typedNames);
 
   // An item's box starts a new thread with its agent, which opens in its place.
   const { startInboxThread } = agents;
@@ -338,9 +334,9 @@ export const DesktopInbox = memo(function DesktopInbox({
   const openFile = (ref: CodeRef, commit: string | undefined, reads?: FileReads) =>
     onPressTab({ kind: TAB_PRESS.FILE, ref, commit, reads });
 
-  // A file the item's words or box name opens as its code does, in the panel beside the Inbox.
+  // A file the item's words or box name opens as its code does, in the panel beside the Inbox, a thread on no task's read through its agent's repository.
   const openMentionedFile = (path: string, lines: OpenFileLines | undefined) =>
-    openFile(fileRef(path, lines), lines?.commit);
+    openFile(fileRef(path, lines), lines?.commit, agentFileReads(chosen?.holder));
 
   // The task's agents this Inbox read, an archived one's among them, whose Pull request tabs the panel beside the item draws.
   const { heldIds } = agents;
@@ -464,20 +460,14 @@ export const DesktopInbox = memo(function DesktopInbox({
   const openMention = (mention: DescriptionMention) =>
     openPlaceHere(placeOfMention(mention), () => tasks.onShowMention(mention));
 
-  // An item offers what its task's page does: its description and sections as saved, its pages, its agents, and their pull requests.
-  const heldTask = holderTask(chosen?.holder);
-  const descriptionText = useSavedDescriptionText(heldTask);
-
-  const mentions =
-    place === undefined || heldTask === undefined
-      ? undefined
-      : heldTaskMentions(
-          heldTask,
-          place.workspace,
-          descriptionText,
-          { pages: view.pages, agents: named, readAgents: readMentionAgents },
-          { onOpenTask: openMention, onOpenFile: openMentionedFile },
-        );
+  // An item offers what its holder's own page does: a task's, its description and sections as saved, its pages, its agents, and their pull requests; a Manager's, what its page offers.
+  const mentions = useHolderMentions(
+    chosen?.holder,
+    chosenLinkWorkspace,
+    { pages: view.pages, agents: named },
+    { tasks: taskNames, models: named.models },
+    { onOpenTask: openMention, onOpenFile: openMentionedFile },
+  );
 
   const drawing = useSidePanelDrawing(sidePanel);
   const views = useTabViews();
@@ -546,7 +536,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   }, [taskId, taskAgents, heldIds, onTaskAgents]);
 
   // The chosen item's thread, beside the list or in its place.
-  const itemPane = (listed: InboxListed<InboxAnyHolder>) => (
+  const itemPane = (listed: InboxListed<InboxAnyHolder>, item: InboxItem) => (
     <OpenAddressesHere value={openHere}>
       <SkillFiles
         source={agents.readSkills}
@@ -561,7 +551,7 @@ export const DesktopInbox = memo(function DesktopInbox({
           <TaskMentions value={mentions}>
             <DraftedInboxPane
               holder={listed.holder}
-              item={listed.item}
+              item={item}
               control={live}
               scope={liveScope}
               opened={opened}
@@ -570,7 +560,6 @@ export const DesktopInbox = memo(function DesktopInbox({
               hidden={columns.shown === INBOX_COLUMNS.LIST}
               onBack={columns.onBack}
               pager={columns.shown === INBOX_COLUMNS.ITEM ? pager : undefined}
-              mentions={mentions}
               newThread={newThread}
               phone={
                 phone
@@ -583,7 +572,7 @@ export const DesktopInbox = memo(function DesktopInbox({
               }
               doors={{
                 ...paneDoors(tasks, listed.holder, { panelFor: taskId, openPlace: openPlaceHere }),
-                onMark: markItem,
+                onMark: (each, unread) => markItem(inboxRowOf(each), unread),
                 onClose: resolveItems,
                 onRemind: marks.onRemind,
                 // The thread hands its crumbs the keys only while it is the item shown and the panel beside it does not hold them.
@@ -700,7 +689,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                   onRemind={marks.onRemind}
                   onPointing={onPointing}
                 />
-                {chosen === undefined ? (
+                {chosen === undefined || chosenItem === undefined ? (
                   <section
                     className={INBOX_VIEW_ITEMS}
                     hidden={
@@ -737,7 +726,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                     )}
                   </section>
                 ) : (
-                  itemPane(chosen)
+                  itemPane(chosen, chosenItem)
                 )}
               </div>
             </PageFind>
@@ -830,9 +819,7 @@ function fileRef(path: string, lines: OpenFileLines | undefined): CodeRef {
 /**
  * Where the chosen item's words are read in the window's Inbox, which
  * stands on no plan's page: its plan's workspace, by its slug, and
- * repository. Its box mentions what that repository and workspace hold, as
- * the plan's page does (`heldTaskMentions`), and its skills' files open
- * there. None until both are known.
+ * repository, where its skills' files open. None until both are known.
  */
 function answerPlace(holder: InboxAnyHolder, tasks: TasksControl): TasklessPlace | undefined {
   const workspaceId = holderWorkspaceId(holder);
@@ -843,6 +830,14 @@ function answerPlace(holder: InboxAnyHolder, tasks: TasksControl): TasklessPlace
   const workspace = tasks.workspaces.find((each) => each.id === workspaceId)?.slug ?? workspaceId;
 
   return { workspace, workspaceId, repository };
+}
+
+/** How a file a thread on no task names is read: through its agent's workspace and repository; none for a task's thread, read through its task, or an agent of no repository. */
+function agentFileReads(holder: InboxAnyHolder | undefined): FileReads | undefined {
+  if (holder === undefined || "task" in holder) return undefined;
+  const { workspaceId, repository } = holder.agent;
+
+  return repository === null ? undefined : { place: { workspaceId, repository }, repository };
 }
 
 /**

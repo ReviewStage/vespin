@@ -15,6 +15,7 @@ import {
   DetailPage,
   DrawerScrim,
   IconButton,
+  joinRefs,
   NOT_FOUND_THING,
   NotFound,
   PAGE_FRAME,
@@ -105,6 +106,7 @@ import { PersonPageSkeleton } from "./person-frame.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead, phoneBar, type TaskHeadBack } from "./phone-head.js";
 import { PLACE_LIST, PLACE_PAGE, PLACE_SPLIT } from "./place-columns.js";
+import { ShellMarks, useShellMarks } from "./shell-marks.js";
 import { SidePanelChord, SidePanelToggle, usePanelToggleRoom } from "./side-panel.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
 import { homeTaskCardOf } from "./task-card.js";
@@ -1140,6 +1142,9 @@ export function ShellPlaces(): React.JSX.Element {
   const { account } = settings;
   useFocusHandedBack(focusHolder);
   const bar = useBarStanding(tasks);
+  // The marks the pages hold on the shell (`shell-marks.tsx`), worn on its element.
+  const marks = useShellMarks();
+  const shellRef = useMemo(() => joinRefs(shell, marks.ref), [shell, marks.ref]);
   const inboxOpen = bar.inbox.open;
   const boardOpen = bar.place === ROUTED_PLACE.BOARD;
   const inboxItemShown = bar.inbox.chosen !== undefined;
@@ -1164,7 +1169,7 @@ export function ShellPlaces(): React.JSX.Element {
 
   return (
     <div
-      ref={shell}
+      ref={shellRef}
       className="desktop-shell"
       data-room={room}
       data-sidebar-collapsed={String(placed.collapsed)}
@@ -1172,99 +1177,106 @@ export function ShellPlaces(): React.JSX.Element {
       data-panel-toggle={String(panelToggle && room !== SHELL_ROOM.NARROW)}
       data-mobile-bar={String(barShown)}
     >
-      <DesktopSidebar
-        sidebar={placed}
-        history={history}
-        tasks={tasks}
-        tab={tab}
-        onTabChange={onTabChange}
-        account={account}
-        updates={settings.updates}
-        onSignOut={settings.onSignOut}
-        onPressWithin={keepOverlay}
-        room={room}
-        watched={watched}
-      />
-      {room === SHELL_ROOM.NARROW ? <DrawerScrim open={drawerOver} /> : null}
-      <main
-        className="desktop-main"
-        inert={drawerOver || phoneTasks}
-        data-inbox-shown={String(inboxOpen)}
-      >
-        {/* A chip of an agent off its task's page names its model and its starter as the agent's tab does. */}
-        <MentionedAgents value={mentionedAgents}>
-          <ChipCards value={chipCards}>
-            <Outlet />
-          </ChipCards>
-        </MentionedAgents>
-        {/* Note that the Inbox kept stands after the place shown, so a lookup of the place's first box finds the place's,
+      <ShellMarks hold={marks.hold}>
+        <DesktopSidebar
+          sidebar={placed}
+          history={history}
+          tasks={tasks}
+          tab={tab}
+          onTabChange={onTabChange}
+          account={account}
+          updates={settings.updates}
+          onSignOut={settings.onSignOut}
+          onPressWithin={keepOverlay}
+          room={room}
+          watched={watched}
+        />
+        {room === SHELL_ROOM.NARROW ? <DrawerScrim open={drawerOver} /> : null}
+        <main
+          className="desktop-main"
+          inert={drawerOver || phoneTasks}
+          data-inbox-shown={String(inboxOpen)}
+        >
+          {/* A chip of an agent off its task's page names its model and its starter as the agent's tab does. */}
+          <MentionedAgents value={mentionedAgents}>
+            <ChipCards value={chipCards}>
+              <Outlet />
+            </ChipCards>
+          </MentionedAgents>
+          {/* Note that the Inbox kept stands after the place shown, so a lookup of the place's first box finds the place's,
             and beside every place's route rather than in one, so another place standing, Admin, the Board, or a person's
             page, lets go of nothing it held; its own route draws nothing in the `Outlet` (`InboxPlace`). */}
-        {inboxOpen || inboxKept ? (
-          <KeptPage shown={inboxOpen} chipCards={chipCards} mentionedAgents={mentionedAgents}>
-            <DesktopInbox tasks={tasks} room={room} phoneStart={phoneAccount} />
-          </KeptPage>
-        ) : null}
-      </main>
-      {barShown ? <MobileBar tasks={tasks} /> : null}
-      {/* Folded, the sidebar's call card floats in the corner it would have stood over. */}
-      <CallCardDock docked={sidebar.collapsed} surface={CALL_CARD_SURFACE.FLOATING} />
-      {/* Note that the floating sidebar's title-bar row is claimed back from the work's drag strips here, after the work,
+          {inboxOpen || inboxKept ? (
+            <KeptPage shown={inboxOpen} chipCards={chipCards} mentionedAgents={mentionedAgents}>
+              <DesktopInbox tasks={tasks} room={room} phoneStart={phoneAccount} />
+            </KeptPage>
+          ) : null}
+        </main>
+        {barShown ? <MobileBar tasks={tasks} /> : null}
+        {/* Folded, the sidebar's call card floats in the corner it would have stood over. */}
+        <CallCardDock docked={sidebar.collapsed} surface={CALL_CARD_SURFACE.FLOATING} />
+        {/* Note that the floating sidebar's title-bar row is claimed back from the work's drag strips here, after the work,
           because a later drag region wins and the sidebar comes before the work, so its Back and Forward keep their presses. */}
-      {sidebar.overlay !== SIDEBAR_OVERLAY.CLOSED && room === SHELL_ROOM.WIDE ? (
-        <div className="sidebar-float-claim" />
-      ) : null}
-      {/* The folded sidebar peeks out while the pointer rests at the window's left edge, as Linear's does;
+        {sidebar.overlay !== SIDEBAR_OVERLAY.CLOSED && room === SHELL_ROOM.WIDE ? (
+          <div className="sidebar-float-claim" />
+        ) : null}
+        {/* The folded sidebar peeks out while the pointer rests at the window's left edge, as Linear's does;
           a narrow room's drawer opens by its toggle alone, as a phone's does. */}
-      {sidebar.collapsed &&
-      sidebar.overlay === SIDEBAR_OVERLAY.CLOSED &&
-      room === SHELL_ROOM.WIDE ? (
-        <div
-          className="sidebar-peek-edge"
-          data-sidebar-peek-edge=""
-          onPointerEnter={() => sidebar.onOverlay(SIDEBAR_OVERLAY.PEEK)}
-        />
-      ) : null}
-      {/* Note that they follow the drag strips they cover, because a later drag region wins.
+        {sidebar.collapsed &&
+        sidebar.overlay === SIDEBAR_OVERLAY.CLOSED &&
+        room === SHELL_ROOM.WIDE ? (
+          <div
+            className="sidebar-peek-edge"
+            data-sidebar-peek-edge=""
+            onPointerEnter={() => sidebar.onOverlay(SIDEBAR_OVERLAY.PEEK)}
+          />
+        ) : null}
+        {/* Note that they follow the drag strips they cover, because a later drag region wins.
           Folded, the sidebar's offline pill stands here, as its New task does. */}
-      {/* A phone's every page heads itself with one row of its own (`phone-head.tsx`), its way back or its one control
+        {/* A phone's every page heads itself with one row of its own (`phone-head.tsx`), its way back or its one control
           where these stood; off the places bar's places, the drawer opens by a swipe in from the screen's edge. */}
-      {room === SHELL_ROOM.NARROW ? (
-        <SidebarChord sidebar={sidebar} />
-      ) : (
-        <PanePin
-          as={PANE_PIN_ELEMENT.DIV}
-          className="title-bar-controls"
-          onPin={keepOverlay}
-          onPointerLeave={(event) => leaveTitleBar(sidebar, event)}
-        >
-          <SidebarToggle sidebar={sidebar} />
-          {/* While the sidebar floats over the work, its workspace row's New task is the one in sight. */}
-          {sidebar.collapsed && sidebar.overlay === SIDEBAR_OVERLAY.CLOSED ? (
-            <NewTaskButton tasks={tasks} />
-          ) : null}
-          {sidebar.collapsed ? (
-            <ReplayUnmask>
-              <OfflineMark />
-            </ReplayUnmask>
-          ) : null}
-        </PanePin>
-      )}
-      {/* A phone's page offers the panel from its ⋯, and the panel, open, heads itself with its way out. */}
-      {panelToggle && room === SHELL_ROOM.NARROW ? (
-        <SidePanelChord
-          panel={tasks.sidePanel}
-          disabled={descriptionToggle && tasks.region.kind !== TASK_REGION.READY}
-        />
-      ) : panelToggle ? (
-        <div ref={setToggleRoom} className="title-bar-controls" data-edge="end" inert={drawerOver}>
-          <SidePanelToggle
+        {room === SHELL_ROOM.NARROW ? (
+          <SidebarChord sidebar={sidebar} />
+        ) : (
+          <PanePin
+            as={PANE_PIN_ELEMENT.DIV}
+            className="title-bar-controls"
+            onPin={keepOverlay}
+            onPointerLeave={(event) => leaveTitleBar(sidebar, event)}
+          >
+            <SidebarToggle sidebar={sidebar} />
+            {/* While the sidebar floats over the work, its workspace row's New task is the one in sight. */}
+            {sidebar.collapsed && sidebar.overlay === SIDEBAR_OVERLAY.CLOSED ? (
+              <NewTaskButton tasks={tasks} />
+            ) : null}
+            {sidebar.collapsed ? (
+              <ReplayUnmask>
+                <OfflineMark />
+              </ReplayUnmask>
+            ) : null}
+          </PanePin>
+        )}
+        {/* A phone's page offers the panel from its ⋯, and the panel, open, heads itself with its way out. */}
+        {panelToggle && room === SHELL_ROOM.NARROW ? (
+          <SidePanelChord
             panel={tasks.sidePanel}
             disabled={descriptionToggle && tasks.region.kind !== TASK_REGION.READY}
           />
-        </div>
-      ) : null}
-      {newTaskDialog}
+        ) : panelToggle ? (
+          <div
+            ref={setToggleRoom}
+            className="title-bar-controls"
+            data-edge="end"
+            inert={drawerOver}
+          >
+            <SidePanelToggle
+              panel={tasks.sidePanel}
+              disabled={descriptionToggle && tasks.region.kind !== TASK_REGION.READY}
+            />
+          </div>
+        ) : null}
+        {newTaskDialog}
+      </ShellMarks>
     </div>
   );
 }

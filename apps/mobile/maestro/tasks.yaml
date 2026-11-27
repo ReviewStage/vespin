@@ -1,4 +1,4 @@
-# tasks.yaml -- the Tasks tab's tree, its empty sections standing as their headers, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link in More copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its archive confirmed, the agent then folded under Archived, its page standing Unarchive in the composer's place, and its row's Unarchive bringing it back, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
+# tasks.yaml -- the Tasks tab's tree, its empty sections standing as their headers, a group folded, a task marked done by its menu and by its swipe, a row's long press preview and its leading swipe, its menu's Copy link in More copying at once, Rename alert, and Permanently delete question, an agent's preview and swipe, its archive confirmed, the agent then folded under Archived, its page standing Unarchive in the composer's place, and its row's Unarchive bringing it back, its unread mark and the read opening it takes, Mark done asking first while an agent works, a task's Overview with a page opened whole from it, its status changed from its ⋯, the ⋯'s acts with Copy › (Copy description and Copy link) first, New sub-task, and its comment threads with their files and a reply typed, the list in landscape, and its search.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -403,8 +403,10 @@ env:
     file: subflows/dismiss.yaml
 - assertNotVisible: "No assignee"
 - assertVisible: "Assignee, .*"
-# Its ⋯ holds the panel's acts: Copy link, Rename, New sub-task, Open in
-# browser, and Permanently delete, red and last, which asks first. Note that
+# Its ⋯ holds the panel's acts: Copy, holding Copy description, as the
+# panel's open task's menu leads with it, and Copy link; Open in browser,
+# Rename, New sub-task, and Permanently delete, red and last, which asks
+# first. Note that
 # a regular window's bar stands New sub-task as a glyph beside ⋯ instead
 # (`bar-act.yaml`), so there ⋯ is opened once it is found.
 - runFlow:
@@ -417,9 +419,32 @@ env:
       true: ${FLOATING_TABS == 'true'}
     commands:
       - tapOn: "More"
-- assertVisible: "Copy link"
+- assertVisible: "Copy"
+- assertVisible: "Open in browser"
 - assertVisible: "Permanently delete"
 - takeScreenshot: task-more-menu
+# Copy holds Copy description and Copy link in one row of the ⋯, so
+# Permanently delete stays in sight on an iPhone 18 Pro, where Copy
+# description as a row of its own pushed it past the menu's height. Copy link
+# copies at once and puts the menu away, and ⋯ is opened again for
+# Permanently delete.
+- tapOn: "Copy"
+- assertVisible: "Copy description"
+- assertVisible: "Copy link"
+- waitForAnimationToEnd
+- takeScreenshot: task-more-menu-copy
+- tapOn: "Copy link"
+- waitForAnimationToEnd
+- runFlow:
+    file: subflows/bar-act.yaml
+    env:
+      ACT: New sub-task
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: "More"
+- assertVisible: "Permanently delete"
 # Note that the tap is never retried, because a retry once the menu has
 # closed lands behind the question and puts it away.
 - tapOn:

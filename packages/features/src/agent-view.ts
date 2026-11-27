@@ -1,4 +1,4 @@
-import { CommandPrefixSchema } from "@repo/wire";
+import { CommandPrefixSchema, literalsReadingUnknown } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { accountInboxAnswerSchema } from "./account-inbox-wire.js";
 import {
@@ -63,7 +63,10 @@ import {
   liveActivityTokenRequestSchema,
 } from "./live-activity-wire.js";
 import { machineAskAnswerRequestSchema } from "./machine-ask-wire.js";
-import { managerChatReactRequestSchema } from "./manager-chat-live.js";
+import {
+  managerChatEditRequestSchema,
+  managerChatReactRequestSchema,
+} from "./manager-chat-live.js";
 import {
   MEMORY_QUERY,
   memoryIdSchema,
@@ -101,6 +104,7 @@ import {
   soundRenameRequestSchema,
 } from "./sound-clip-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
+import { viewChoiceWriteSchema } from "./view-choice-wire.js";
 import { voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
@@ -167,6 +171,7 @@ const AGENT_ACCOUNT_CALLS = {
     renameSound: accountContract.renameSound,
     removeSound: accountContract.removeSound,
     chooseSound: accountContract.chooseSound,
+    writeViewChoice: accountContract.writeViewChoice,
   },
 };
 
@@ -616,6 +621,16 @@ export const soundChoiceAnswerViewSchema = answerView(accountContract.chooseSoun
 
 export type SoundChoiceAnswerView = typeof soundChoiceAnswerViewSchema.Type;
 
+/** One of the account's view choices kept or forgotten, as a surface asks it. */
+export const viewChoiceWriteParamsSchema = viewChoiceWriteSchema;
+
+export type ViewChoiceWriteParams = typeof viewChoiceWriteParamsSchema.Type;
+
+/** A view choice's write, as the window hears it: the transaction it committed in, or why there is no answer. */
+export const viewChoiceWrittenViewSchema = answerView(accountContract.writeViewChoice);
+
+export type ViewChoiceWrittenView = typeof viewChoiceWrittenViewSchema.Type;
+
 /** A workspace's memories, as the window hears one forgotten: the memories as they stand, or why there are none. */
 export const memoriesAnswerViewSchema = answerView(accountContract.forgetMemory);
 
@@ -858,6 +873,20 @@ export type ManagerChatReactParams = typeof managerChatReactParamsSchema.Type;
 export const managerChatReactAnswerViewSchema = answerView(messagesContract.chatReact);
 
 export type ManagerChatReactAnswerView = typeof managerChatReactAnswerViewSchema.Type;
+
+/** A member's edit of their own message of a Manager's chat, as the window asks it: the Manager, the message, and the edit as the service takes it (`managerChatEditRequestSchema`). */
+export const managerChatEditParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  messageId: EffectSchema.NonEmptyString,
+  ...managerChatEditRequestSchema.fields,
+});
+
+export type ManagerChatEditParams = typeof managerChatEditParamsSchema.Type;
+
+/** A member's edit of a message of a Manager's chat, as the host hears the service answer it: whether it changed the words, or why it was not taken. */
+export const managerChatEditAnswerViewSchema = answerView(messagesContract.chatEdit);
+
+export type ManagerChatEditAnswerView = typeof managerChatEditAnswerViewSchema.Type;
 
 /**
  * One change of an agent's queue, as the window asks it: the agent, the
@@ -1115,10 +1144,17 @@ export const agentPinParamsSchema = EffectSchema.Struct({
 
 export type AgentPinParams = typeof agentPinParamsSchema.Type;
 
-/** A look at a Manager's chat, as the window names it to move the reader's own mark (`read-mark.ts`). */
+/** A message of a Manager's chat Mark unread is asked from: its id, which the service reads it by, and when it was sent, which the reader's mark is drawn just before until the service answers. */
+export const agentUnreadFromSchema = EffectSchema.Struct({
+  messageId: EffectSchema.NonEmptyString,
+  sentAt: countedNumber,
+});
+
+/** A look at a Manager's chat, or Mark unread from one of its messages (`unreadFrom`), as the window names it to move the reader's own mark (`read-mark.ts`). */
 export const agentMarkReadParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   readMark: readMarkSchema,
+  unreadFrom: EffectSchema.optionalKey(agentUnreadFromSchema),
 });
 
 export type AgentMarkReadParams = typeof agentMarkReadParamsSchema.Type;
@@ -1526,13 +1562,19 @@ export const agentPartViewSchema = answerView(messagesContract.agentPart);
 
 export type AgentPartView = typeof agentPartViewSchema.Type;
 
-/** The type a served file stands under: a transcript's picture may be a WebM an agent recorded, its MP4 copy to a window that plays MP4, or a sound clip, as well as a picture or a file. */
-const servedFileTypeSchema = EffectSchema.Literals([
-  ...Object.values(AGENT_ATTACHMENT_TYPE),
-  CONVERSATION_MEDIA_TYPE.WEBM,
-  MP4_TYPE,
-  ...Object.values(AUDIO_TYPE),
-]);
+/**
+ * The type a served file stands under: a transcript's picture may be a WebM an agent recorded, its MP4 copy to a window that plays MP4, or a sound clip, as well as a picture or a file.
+ * Note that a type this build does not know reads as a file of any other kind, whose chip saves its bytes, so a type a later build serves is never a failed read.
+ */
+const servedFileTypeSchema = literalsReadingUnknown(
+  [
+    ...Object.values(AGENT_ATTACHMENT_TYPE),
+    CONVERSATION_MEDIA_TYPE.WEBM,
+    MP4_TYPE,
+    ...Object.values(AUDIO_TYPE),
+  ],
+  AGENT_ATTACHMENT_TYPE.OTHER,
+);
 
 /**
  * The image, or the file an inbox answer carried, as the window hears it:

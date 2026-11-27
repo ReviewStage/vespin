@@ -475,8 +475,9 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         );
         assert.deepEqual(reachRequests(github.sent.slice(asked), installation.id), {
           installationReads: 1,
-          listings: 1,
-          listingMints: 1,
+          repositoryReads: 1,
+          reachMints: 1,
+          listings: 0,
           repositoryMints: 0,
         });
       }),
@@ -1235,8 +1236,9 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         assert.deepEqual(warm, cold);
         assert.deepEqual(reachRequests(github.sent.slice(asked), installation.id), {
           installationReads: 1,
-          listings: 1,
-          listingMints: 1,
+          repositoryReads: 1,
+          reachMints: 1,
+          listings: 0,
           repositoryMints: 1,
         });
 

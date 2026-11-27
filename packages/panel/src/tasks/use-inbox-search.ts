@@ -9,17 +9,20 @@
  * them at once while their follows come back.
  */
 
+import { type InboxRow, inboxReadRows } from "@repo/features/inbox-digest";
 import {
   type InboxAnyHolder,
   type InboxGroup,
   type InboxListed,
   inboxGroups,
+  inboxSearchWordsOf,
   needsYou,
 } from "@repo/features/inbox-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import type { AppInboxTaskHolding } from "@repo/host/app-state";
 import { useMemo } from "react";
 import { useTaskListRows } from "../task-list-collections.js";
+import { wholeInboxItems } from "./inbox-whole-items.js";
 import { NO_HOLDINGS, taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
 import { useListedInbox } from "./use-inbox-slices.js";
 import { useTasklessInboxGroups } from "./use-taskless-inbox-groups.js";
@@ -28,6 +31,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
 /** What a search finds in the Inbox: its items, what needs the reader first, then the latest changed; and how far their read has come. */
 export interface InboxSearch {
   readonly items: readonly InboxListed<InboxAnyHolder>[];
+  /** Every line of words each item's row says, read from the whole item (`inboxSearchWordsOf`). */
+  readonly wordsOf: (row: InboxRow) => readonly string[];
   /** Whether an inbox the search asked for has not been pushed yet. */
   readonly reading: boolean;
   /** Whether an inbox the search asked for could not be read. */
@@ -81,15 +86,21 @@ export function useInboxSearch(tasks: TasksControl, asked: boolean): InboxSearch
   const read = useHolderInboxItems(holdings);
 
   // Note that a thread on no task is searched as a task's is, from the account's feed the Inbox lists it from.
-  const { groups: taskless } = useTasklessInboxGroups(
+  const { groups: taskless, whole: tasklessWhole } = useTasklessInboxGroups(
     workspaceId,
     tasks.agentsCarried,
     tasks.agents.models,
   );
 
+  const wordsOf = useMemo(() => {
+    const whole = wholeInboxItems(read.items, tasklessWhole);
+
+    return inboxSearchWordsOf((itemId) => whole.get(itemId));
+  }, [read.items, tasklessWhole]);
+
   const items = useMemo(() => {
     const groups: readonly InboxGroup<InboxAnyHolder>[] = asked
-      ? [...inboxGroups(read.items, { tasks: held, listed }), ...taskless]
+      ? [...inboxGroups(inboxReadRows(read.items), { tasks: held, listed }), ...taskless]
       : [];
 
     return searchOrder(groups, tasks.me);
@@ -99,5 +110,5 @@ export function useInboxSearch(tasks: TasksControl, asked: boolean): InboxSearch
   const reading = read.pending;
   const { onRetry } = read;
 
-  return { items, reading, failed: read.failed, onRetry };
+  return { items, wordsOf, reading, failed: read.failed, onRetry };
 }

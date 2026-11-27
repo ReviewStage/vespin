@@ -1,8 +1,9 @@
 import { AGENT_STATUS, type AgentStatus, type AgentSummary } from "@repo/features/agent-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
 import type { Actor } from "@repo/ui/actor-model";
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useCallback, useMemo } from "react";
 import { usePerson } from "../member-directory.js";
+import { STEADY_DOORS, useSteadyDoors } from "../steady-door.js";
 import { type AgentModeControl, useAgentPermissionMode } from "./agent-approvals.js";
 import { ForwardChip } from "./agent-forward.js";
 import { modelsRunOn, offersStop, teammateStarter, turnUnderWay } from "./agent-model.js";
@@ -74,14 +75,23 @@ export function useAgentBox(input: {
   agents: AgentsControl;
 }): AgentBox {
   const { agentId, agent, agents } = input;
-  const model = useAgentModel({ agent, choose: agents.onChoose });
+
+  // Note that the model's and the servers' controls are steady, their presses calling the newest, so the box holds from write to write while they say the same.
+  const model = useSteadyDoors(
+    useAgentModel({ agent, choose: agents.onChoose }),
+    STEADY_DOORS.OWN_FUNCTIONS,
+  );
+
   const mode = useAgentPermissionMode({ agent, write: agents.onPermissionMode });
 
-  const servers = useAgentServers({
-    agent: agent ?? { id: agentId },
-    write: agents.onSwitchServers,
-    onOpenSettings: agents.onOpenIntegrations,
-  });
+  const servers = useSteadyDoors(
+    useAgentServers({
+      agent: agent ?? { id: agentId },
+      write: agents.onSwitchServers,
+      onOpenSettings: agents.onOpenIntegrations,
+    }),
+    STEADY_DOORS.OWN_FUNCTIONS,
+  );
 
   const placeMove = useMovePlace(agent, agents);
   // Note that an agent on the reader's own device runs on that device's sign-in, so a model of a harness it runs is offered whatever pays for it.
@@ -101,29 +111,73 @@ export function useAgentBox(input: {
   const teammate = teammateStarter(agent?.startedBy, agents.me) !== undefined;
   const owner = teammate ? starter : undefined;
 
-  return {
-    agentId,
-    status: agent?.status ?? AGENT_STATUS.COMPLETED,
-    stoppable: agent !== undefined && offersStop(agent),
-    steers: agent !== undefined && turnUnderWay(agent),
-    model,
-    models,
-    modelsFailed: agents.modelsFailed,
-    readModels: agents.readModels,
-    owner,
-    servers: teammate ? undefined : servers,
-    mode,
-    // Note that only an agent on a harness has a session to clear, and only one the reader controls.
-    onClear: agent?.runtime === undefined || teammate ? undefined : () => agents.onClear(agentId),
-    approvalsWaiting: agent?.pendingApprovals?.length ?? 0,
-    tools: (narrow) =>
+  // Note that the box is the same object while what it says is, because the tab draws again on every write to the transcript and a box made afresh drew the whole dock again with it.
+  const tools = useCallback(
+    (narrow: boolean) =>
       agent === undefined ? null : (
         <>
           <AgentPlace agent={agent} move={placeMove} narrow={narrow} />
           <ForwardChip agent={agent} />
         </>
       ),
-    place: (narrow) =>
+    [agent, placeMove],
+  );
+
+  const drawPlace = useCallback(
+    (narrow: boolean) =>
       agent === undefined ? null : <AgentPlace agent={agent} move={placeMove} narrow={narrow} />,
-  };
+    [agent, placeMove],
+  );
+
+  const runtime = agent?.runtime;
+  const { onClear: clear } = agents;
+
+  // Note that only an agent on a harness has a session to clear, and only one the reader controls.
+  const onClear = useMemo(
+    () => (runtime === undefined || teammate ? undefined : () => clear(agentId)),
+    [runtime, teammate, clear, agentId],
+  );
+
+  const status = agent?.status ?? AGENT_STATUS.COMPLETED;
+  const stoppable = agent !== undefined && offersStop(agent);
+  const steers = agent !== undefined && turnUnderWay(agent);
+  const approvalsWaiting = agent?.pendingApprovals?.length ?? 0;
+  const shownServers = teammate ? undefined : servers;
+
+  return useMemo(
+    () => ({
+      agentId,
+      status,
+      stoppable,
+      steers,
+      model,
+      models,
+      modelsFailed: agents.modelsFailed,
+      readModels: agents.readModels,
+      owner,
+      servers: shownServers,
+      mode,
+      onClear,
+      approvalsWaiting,
+      tools,
+      place: drawPlace,
+    }),
+    [
+      agentId,
+      status,
+      stoppable,
+      steers,
+      model,
+      models,
+      agents.modelsFailed,
+      agents.readModels,
+      owner,
+      shownServers,
+      mode,
+      onClear,
+      approvalsWaiting,
+      tools,
+      drawPlace,
+    ],
+  );
 }

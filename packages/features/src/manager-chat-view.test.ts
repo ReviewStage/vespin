@@ -4,7 +4,7 @@ import { test } from "vitest";
 import { AGENT_PART, type AgentPart } from "./agent-parts.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "./manager-chat-live.js";
-import { managerChatView } from "./manager-chat-view.js";
+import { CHAT_LANDING, chatMessageLanding, managerChatView } from "./manager-chat-view.js";
 
 /**
  * manager-chat-view.test.ts -- a Manager's chat drawn from its rows: oldest
@@ -145,6 +145,29 @@ test("a reply stands in its root's thread, in runs of its own, and one also post
       ["again", true],
       ["answer", true],
       ["sent-too", false],
+    ],
+  );
+});
+
+// Note that the regression this catches is a link to a reply landing in the chat, where it does not stand, or a reply posted to the chat too being sent off to its thread.
+test("a link to a message lands on its row in the chat, a reply standing in its thread alone in that thread, and one not read nowhere yet", () => {
+  const view = managerChatView(
+    [
+      { ...row("sent-too", 3, 3, { turn: "t" }), threadRoot: "ask", broadcast: true },
+      { ...row("answer", 2, 2, { turn: "t" }), threadRoot: "ask" },
+      row("ask", 1, 1, { person: "ada" }),
+    ],
+    [],
+    { running: undefined },
+  );
+
+  assert.deepEqual(
+    ["ask", "sent-too", "answer", "older"].map((id) => chatMessageLanding(view, id)),
+    [
+      { kind: CHAT_LANDING.CHAT },
+      { kind: CHAT_LANDING.CHAT },
+      { kind: CHAT_LANDING.THREAD, root: "ask" },
+      { kind: CHAT_LANDING.UNREAD },
     ],
   );
 });

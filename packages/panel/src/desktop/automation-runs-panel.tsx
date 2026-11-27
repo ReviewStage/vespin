@@ -24,7 +24,6 @@ import {
   ListRow,
   RESIZE_EDGE_SIDE,
   ResizeEdge,
-  SCROLL_FADE,
   ScrollArea,
   SKELETON_KIND,
   Skeleton,
@@ -291,7 +290,7 @@ function RunsBody({
   const now = useMinute();
 
   return (
-    <ScrollArea fade={SCROLL_FADE.START}>
+    <ScrollArea>
       <div className="automation-runs-body flex min-h-full flex-col gap-control-gap p-ui-16">
         {headed ? (
           <div className="automation-runs-head px-ui-2">

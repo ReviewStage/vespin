@@ -17,13 +17,13 @@ import {
 } from "@repo/features/agent-view";
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
+import type { InboxItemReads } from "@repo/features/inbox-digest";
 import {
   agentHolder,
   type InboxAgentHolder,
   type InboxAnyHolder,
   type InboxGroup,
   type InboxHolderAgent,
-  type InboxReads,
   inboxGroup,
   inboxGroups,
 } from "@repo/features/inbox-list-model";
@@ -33,7 +33,7 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import type { TaskSummary } from "@repo/features/task-wire";
+import type { TaskRunsOnRequest, TaskSummary } from "@repo/features/task-wire";
 import type { TaskListParts } from "@repo/features/tasks-view";
 import { HOST_LIVE, TASKS_READ } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
@@ -602,10 +602,10 @@ export function answerKeeper<T>(): (next: T) => T {
 }
 
 /** No task's feed read: the feed before it first answers. */
-const NO_INBOX_READS: InboxReads = new Map();
+const NO_INBOX_READS: InboxItemReads = new Map();
 
-/** The account's feed of every item as the list model reads it: each task's items by the task's id. */
-function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxReads {
+/** The account's feed of every item: each task's items by the task's id. */
+function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxItemReads {
   const rows = feed.rows;
 
   return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.TASK]));
@@ -621,10 +621,12 @@ function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxR
  * the agent's id (`AppInboxItems`' `agents`).
  */
 export interface InboxHoldings {
-  readonly read: InboxReads;
+  readonly read: InboxItemReads;
   readonly tasks: readonly { readonly taskId: string }[];
   readonly keptHolders: readonly TaskSummary[];
   readonly agents: Readonly<Record<string, readonly InboxItem[]>>;
+  /** That the feed's items are kept on disk and read through live queries (`AppInboxRead`'s `stored`), so `read` and `agents` hold none of them. */
+  readonly stored?: true;
 }
 
 /** No agent on no task holding items: the feed before it first answers, and a service's from before it carried them. */
@@ -639,7 +641,7 @@ function taskListPending(listStatus: AppStateSnapshot["tasks"]["listStatus"]): b
 }
 
 /** The tasks the feed's items are on, the task whose item changed latest first, as the account's read of what waits lists them. */
-function tasksOfFeed(read: InboxReads): readonly { readonly taskId: string }[] {
+function tasksOfFeed(read: InboxItemReads): readonly { readonly taskId: string }[] {
   return [...read]
     .flatMap(([taskId, items]) =>
       items.length === 0
@@ -673,6 +675,7 @@ export const selectInboxHoldings = memoizedSelect(
         ? (feed.keptHolders ?? NO_KEPT_HOLDERS)
         : NO_KEPT_HOLDERS,
       agents: feed.rows?.agents ?? NO_AGENT_ITEMS,
+      ...(feed.stored === true ? { stored: true } : undefined),
     };
   },
 );
@@ -710,7 +713,7 @@ function agentGroupsIn(
   held: InboxHoldings["agents"],
   listedAgents: readonly ListedAgent[],
   workspaceId: string | undefined,
-): readonly InboxGroup<InboxAgentHolder>[] {
+): readonly InboxGroup<InboxAgentHolder, InboxItem>[] {
   const byId = new Map(listedAgents.map((agent) => [agent.id, agent]));
 
   return Object.entries(held).flatMap(([agentId, items]) => {
@@ -737,13 +740,15 @@ function agentGroupsIn(
  * workspace named groups every workspace's. A task the list holds none of
  * yet, while it is still read or drawn, is grouped under as the phone kept
  * it (`keptHolders`), so a launch draws its kept Inbox before the whole list.
+ * Each group holds its whole items, which the client reads as the list's
+ * rows (`inboxRowGroups`) once it has drawn its own sends on them.
  */
 export function inboxGroupsIn(
   holdings: InboxHoldings,
   listed: readonly TaskSummary[],
   workspaceId: string | undefined,
   listedAgents: readonly ListedAgent[],
-): readonly InboxGroup<InboxAnyHolder>[] {
+): readonly InboxGroup<InboxAnyHolder, InboxItem>[] {
   const held = new Set(listed.map((task) => task.id));
   const kept = holdings.keptHolders.filter((task) => !held.has(task.id));
   const tasks = kept.length === 0 ? listed : [...listed, ...kept];
@@ -973,6 +978,15 @@ export function selectAgentDefault(state: AppStateSnapshot): ModelChoice | undef
   const stored = state[LIVE_READ.ACCOUNT_PREFERENCES][accountId]?.rows?.agent;
 
   return agentDefaultOf(stored, state[LIVE_READ.MODELS][accountId] ?? {});
+}
+
+/** Where the account's last Start chose to run an agent, which New task's Runs on starts on (`runs-on-pick.ts`), as a `select`; none before the preferences are read, or where no Start named a place. */
+export function selectRunsOnPick(state: AppStateSnapshot): TaskRunsOnRequest | undefined {
+  const accountId = signedInAccountId(state.account);
+
+  return accountId === undefined
+    ? undefined
+    : state[LIVE_READ.ACCOUNT_PREFERENCES][accountId]?.rows?.runsOn;
 }
 
 /** The repositories a workspace's GitHub reaches, or every workspace's under `EVERY_WORKSPACE`, as the host holds their read (`ACT_KIND.TASKS_REPOSITORIES_FOLLOW`), as a `select`; none before it is read. */

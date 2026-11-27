@@ -1,0 +1,85 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "The new Manager's name, its title from the start."
+    },
+    "face": {
+      "type": "object",
+      "properties": {
+        "character": {
+          "type": "string",
+          "enum": [
+            "ghost",
+            "planet",
+            "cat",
+            "backpack",
+            "mug",
+            "speech-bubble"
+          ]
+        },
+        "color": {
+          "type": "string",
+          "enum": [
+            "yellow",
+            "green",
+            "blue",
+            "pink",
+            "purple",
+            "peach",
+            "red",
+            "orange",
+            "teal",
+            "gray"
+          ]
+        },
+        "emoji": {
+          "type": "string",
+          "maxLength": 32
+        }
+      },
+      "required": [
+        "character",
+        "color"
+      ],
+      "additionalProperties": false,
+      "description": "The face it wears: a character and a color, and one emoji in the character's place if you like; left out, one is picked."
+    },
+    "repositories": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 140,
+        "pattern": "^[A-Za-z0-9](?:-?[A-Za-z0-9])*\\/(?!\\.{1,2}$)[A-Za-z0-9_.-]+$"
+      },
+      "minItems": 1,
+      "maxItems": 10,
+      "description": "The GitHub repositories it works in, as owner/name, the first its checkout; left out, your own."
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "The model it runs on, by its catalog id, as list_models lists it; left out with effort, the asking member's default."
+    },
+    "effort": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "The reasoning effort, as the model lists it; given with the model or not at all."
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 15000,
+      "description": "A first message handed to it from you, which opens its first turn; left out, it waits for the member's first words."
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false
+}

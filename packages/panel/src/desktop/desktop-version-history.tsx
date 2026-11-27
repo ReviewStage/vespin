@@ -35,7 +35,6 @@ import {
   RowHint,
   RowHintOptions,
   reachedKey,
-  SCROLL_FADE,
   ScrollArea,
   ShowMoreRow,
   SKELETON_KIND,
@@ -1011,7 +1010,7 @@ export function DesktopVersionHistory({
               </Text>
             )}
             <Fill className="sidebar-section -m-ring-reach">
-              <ScrollArea ref={log} fade={SCROLL_FADE.BOTH}>
+              <ScrollArea ref={log}>
                 {/* biome-ignore lint/a11y/noStaticElementInteractions: the keys and the focus are the rows' own, which the box only hears bubble. */}
                 <div
                   {...roving}
@@ -1081,7 +1080,7 @@ export function DesktopVersionHistory({
             aria-label={LIST_LABEL.SECTIONS}
             inert={opened === undefined}
           >
-            <ScrollArea fade={SCROLL_FADE.BOTH}>
+            <ScrollArea>
               {/* biome-ignore lint/a11y/noStaticElementInteractions: the keys and the focus are the rows' own, which the box only hears bubble. */}
               <div
                 className="sidebar-section-body flex min-h-full flex-col p-ring-reach"

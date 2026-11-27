@@ -28,6 +28,7 @@ import type {
   AutomationWorkspaceRun,
 } from "@repo/features/automation-wire";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
+import type { FailureFacts } from "@repo/features/failure-facts";
 import type {
   GitHubRepositoriesAnswer,
   GitHubRepositoryIssueAnswer,
@@ -68,10 +69,10 @@ import {
   type TaskListParts,
   type TasksView,
 } from "@repo/features/tasks-view";
+import type { ViewChoiceLiveRow } from "@repo/features/view-choice-live";
 import type { StandingCall } from "@repo/features/voice-wire";
 import type { WorkspaceIntegrations } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
-import type { WorkspaceMachineLine } from "@repo/features/workspace-machine-view";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import type { WorkspaceMembersAnswer } from "@repo/features/workspace-wire";
 import type { SessionReplayBootstrap } from "@repo/gateway/window-session";
@@ -285,13 +286,18 @@ export interface AppInboxSlice {
 /**
  * One read the host holds for the panel (`live-collection.ts`), as every
  * window draws it: its rows as it last answered, absent until it first
- * does, and whether it said it could not answer before it ever had. A read
- * that stops answering once it has keeps its rows, since its next answer
- * brings them up to date. What the panel reads through a live read's query.
+ * does, and whether it said it could not answer before it ever had, with
+ * what failed beneath it where the read said, so the window that shows it
+ * reports a read that got no answer as the network's failure rather than the
+ * app's (`@repo/features/shown-failure`). A read that stops answering once it
+ * has keeps its rows, since its next answer brings them up to date. What the
+ * panel reads through a live read's query.
  */
 export interface AppHostRead<Rows> {
   rows?: Rows;
   failed?: true;
+  /** What failed beneath a read that never answered, where it said; only beside `failed`. */
+  cause?: FailureFacts;
   /** Whether the rows are the ones the phone kept on disk, drawn before the service's first answer took their place; only the account's Inbox sets it (`account-items-follow.ts`). */
   kept?: true;
 }
@@ -423,6 +429,8 @@ export type AppInboxItems = {
  */
 export interface AppInboxRead extends AppHostRead<AppInboxItems> {
   keptHolders?: readonly TaskSummary[];
+  /** That the items stand in the pool's Inbox kind kept on disk, which a screen reads through live queries, so the rows told here are none (`inbox-rows.ts`). */
+  stored?: true;
 }
 
 /** One plan's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
@@ -540,6 +548,9 @@ export type AppMachines = Readonly<Record<string, AppHostRead<readonly MachineLi
 /** The asks the account's machines hold for its answer, by the account, as the host's read of them stands. */
 export type AppMachineAsks = Readonly<Record<string, AppHostRead<readonly MachineAskLine[]>>>;
 
+/** The account's view choices the windows hold, by the account, as the host's read of them stands, every choice still out drawn over them. */
+export type AppViewChoices = Readonly<Record<string, AppHostRead<readonly ViewChoiceLiveRow[]>>>;
+
 /**
  * Each workspace's pending invitations the host holds for an owner's or an
  * admin's windows (`workspace-invitations-read.ts`): those a window draws,
@@ -549,16 +560,6 @@ export type AppMachineAsks = Readonly<Record<string, AppHostRead<readonly Machin
  */
 export type AppWorkspaceInvitations = Readonly<
   Record<string, AppHostRead<readonly WorkspaceInvitation[]>>
->;
-
-/**
- * The machines each workspace owns the host holds for its windows
- * (`workspace-machines-follow.ts`), by the workspace's id, each by name, with
- * a rename still out drawn over it and a removal drawn gone, once its read
- * answered. One absent is held by nobody.
- */
-export type AppWorkspaceMachines = Readonly<
-  Record<string, AppHostRead<readonly WorkspaceMachineLine[]>>
 >;
 
 /**
@@ -812,8 +813,8 @@ export interface AppHostReads {
   [LIVE_READ.HOSTS]: AppHostsHeld;
   [LIVE_READ.MACHINES]: readonly MachineLine[];
   [LIVE_READ.MACHINE_ASKS]: readonly MachineAskLine[];
+  [LIVE_READ.VIEW_CHOICES]: readonly ViewChoiceLiveRow[];
   [LIVE_READ.WORKSPACE_INVITATIONS]: readonly WorkspaceInvitation[];
-  [LIVE_READ.WORKSPACE_MACHINES]: readonly WorkspaceMachineLine[];
   [LIVE_READ.THIS_MAC_HOST]: AppThisMacHost;
   [LIVE_READ.TRANSCRIPT]: AppTranscript;
   [LIVE_READ.WORKSPACE_MEMBERS]: WorkspaceMembersAnswer;
@@ -993,9 +994,10 @@ export interface AppState {
   [LIVE_READ.MACHINES]: AppMachines;
   /** The asks the account's machines hold for its answer, held while a window could draw one: what an agent's tab asks over its box, and what a row counts as needing you. */
   [LIVE_READ.MACHINE_ASKS]: AppMachineAsks;
+  /** The account's view choices (a sort, a filter, a fold), held while a window draws a surface that reads one: what each such surface stands in. */
+  [LIVE_READ.VIEW_CHOICES]: AppViewChoices;
   /** Each workspace's pending invitations an owner's or an admin's windows draw, held while a window draws them and a while after: what Settings › Workspace lists under Invitations. */
   [LIVE_READ.WORKSPACE_INVITATIONS]: AppWorkspaceInvitations;
-  [LIVE_READ.WORKSPACE_MACHINES]: AppWorkspaceMachines;
   /** Which machine This Mac is and the device its host's record names, held for the signed-in session and told as it moves: what Settings › Hosts and Runs on name This Mac by. */
   [LIVE_READ.THIS_MAC_HOST]: AppThisMacHosts;
   /** Each agent's or worker's transcript the windows' tabs show, held while a tab shows it and a while after, followed only while one does: what an agent's tab and a worker's draw. Never written to disk. */
@@ -1211,12 +1213,12 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.HOSTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.MACHINES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.MACHINE_ASKS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  [LIVE_READ.VIEW_CHOICES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.WORKSPACE_INVITATIONS]: {
     keys: READ_KEYS.ONE,
     on: KEYS_ON.SLICE,
     rowId: "id" satisfies keyof WorkspaceInvitation,
   },
-  [LIVE_READ.WORKSPACE_MACHINES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.THIS_MAC_HOST]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   // Note that a transcript crosses as the messages that moved, since each step of a turn rewrites one message, its journal, while the rest stand.
   [LIVE_READ.TRANSCRIPT]: {

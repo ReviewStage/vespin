@@ -54,7 +54,7 @@ env:
     file: subflows/scroll-to.yaml
     env:
       ELEMENT: ".*reviewed the flow.*"
-# The chip held: the system's sheet of the link's acts, not the message's Copy message.
+# The chip held: its own menu of the link's acts, UIKit's, not the message's Copy message, closed by its Copy link.
 - longPressOn:
     text: ".*reviewed the flow.*"
     point: "6%, 50%"
@@ -63,7 +63,7 @@ env:
 - assertNotVisible: "Copy message"
 - waitForAnimationToEnd
 - takeScreenshot: person-chip-hold-thread
-- tapOn: "Cancel"
+- tapOn: "Copy link"
 - waitForAnimationToEnd
 # The chip pressed: the person's page, their name heading it.
 - tapOn:
@@ -142,4 +142,4 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: person-chip-hold-transcript
-- tapOn: "Cancel"
+- tapOn: "Copy link"

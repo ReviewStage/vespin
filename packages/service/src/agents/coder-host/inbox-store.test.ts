@@ -19,7 +19,6 @@ import { inboxItemRead } from "@repo/database/schemas/inbox-item-read";
 import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
-  connectWorkspaceMachine,
   getTestDB,
   joinWorkspace,
   leaveWorkspace,
@@ -30,11 +29,7 @@ import {
   ACCOUNT_INBOX_REPOSITORYLESS,
   type AccountInboxTask,
 } from "@repo/features/account-inbox-wire";
-import {
-  AGENT_ATTACHMENT_TYPE,
-  AGENT_MACHINE,
-  type AgentAttachment,
-} from "@repo/features/agent-wire";
+import { AGENT_ATTACHMENT_TYPE, type AgentAttachment } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
@@ -105,7 +100,6 @@ import { agentInboxRead, taskInboxRead } from "../../live/reads/scope-inbox.js";
 import { memoryBlobStore } from "../../testing/blob-store-fake.js";
 import { wokenOnHub } from "../../testing/sync-woken.js";
 import { TASKLESS_LIVE } from "../taskless-reads.js";
-import { WORKSPACE_MACHINE_LIVE, type WorkspaceMachineLive } from "../workspace-machine-reads.js";
 import { accountInboxPast, agentInboxPast, taskInboxPast } from "./inbox-page.js";
 
 /**
@@ -310,7 +304,6 @@ const liveAnswerOf = (
         userId,
         repositoryless: ACCOUNT_INBOX_REPOSITORYLESS.INCLUDE,
         taskless,
-        workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
       }),
     );
 
@@ -335,13 +328,11 @@ const accountItemIdsOf = (
   since: number,
   settledSince: number,
   taskless: (typeof TASKLESS_LIVE)[keyof typeof TASKLESS_LIVE] = TASKLESS_LIVE.LEFT_OUT,
-  workspaceMachines: WorkspaceMachineLive = WORKSPACE_MACHINE_LIVE.CARRIED,
 ) =>
   Effect.gen(function* () {
     const parts = Option.getOrThrow(
       inboxItemsRead.statements({
         userId,
-        workspaceMachines,
         since: String(since),
         settledSince: String(settledSince),
         taskless,
@@ -490,47 +481,6 @@ it.layer(Layer.merge(getTestDB(), blobs.layer))("the inbox store", (it) => {
   );
 
   it.effect(
-    "an item of an agent on a workspace's machine is left out of the account's inbox, live and held, and its task's, for a build that reads no such agent",
-    () =>
-      Effect.gen(function* () {
-        const { agent, workspaceId } = yield* openAgentIn;
-        const posted = yield* post(agent);
-        const box = yield* connectWorkspaceMachine(workspaceId, agent.userId);
-        yield* (yield* Database)
-          .update(agentTable)
-          .set({ machine: AGENT_MACHINE.WORKSPACE, deviceId: box })
-          .where(eq(agentTable.id, agent.agentId));
-
-        const readBy = (workspaceMachines: boolean) =>
-          Effect.gen(function* () {
-            const live = yield* accountItemIdsOf(
-              agent.userId,
-              0,
-              0,
-              TASKLESS_LIVE.LEFT_OUT,
-              workspaceMachines ? WORKSPACE_MACHINE_LIVE.CARRIED : WORKSPACE_MACHINE_LIVE.LEFT_OUT,
-            );
-
-            const held = yield* accountWaitingItems(agent.userId, workspaceMachines);
-            const ofTask = yield* taskInboxItems(agent.userId, agent.taskId, workspaceMachines);
-
-            return {
-              live: live.items,
-              held: held.map((item) => item.id),
-              ofTask: ofTask.map((item) => item.id),
-            };
-          });
-
-        assert.deepEqual(yield* readBy(true), {
-          live: [posted.id],
-          held: [posted.id],
-          ofTask: [posted.id],
-        });
-        assert.deepEqual(yield* readBy(false), { live: [], held: [], ofTask: [] });
-      }),
-  );
-
-  it.effect(
     "the live statements of a plan's inbox and an agent's deliver the items their held reads answer, open, answered, and closed alike, to a member and to no one else",
     () =>
       Effect.gen(function* () {
@@ -565,11 +515,7 @@ it.layer(Layer.merge(getTestDB(), blobs.layer))("the inbox store", (it) => {
 
         for (const reader of [agent.userId, teammate, outsider]) {
           const plan = Option.getOrThrow(
-            taskInboxRead.statements({
-              userId: reader,
-              id: agent.taskId ?? "",
-              workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
-            }),
+            taskInboxRead.statements({ userId: reader, id: agent.taskId ?? "" }),
           );
 
           const ofAgent = Option.getOrThrow(
@@ -2119,11 +2065,7 @@ it.layer(Layer.merge(getTestDB(), blobs.layer))("who an inbox item waits on", (i
   const liveTaskInbox = (readerId: string, taskId: string) =>
     Effect.gen(function* () {
       const statements = Option.getOrThrow(
-        taskInboxRead.statements({
-          userId: readerId,
-          id: taskId,
-          workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
-        }),
+        taskInboxRead.statements({ userId: readerId, id: taskId }),
       );
 
       const sql = yield* SqlClient.SqlClient;

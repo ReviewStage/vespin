@@ -16,6 +16,7 @@ import {
   type AgentQueueAnswerView,
   type DevicePresenceAnswerView,
   type HostDoneAnswerView,
+  type ManagerChatEditAnswerView,
   type ManagerChatReactAnswerView,
   type MemoriesAnswerView,
   type MemorySaveAnswerView,
@@ -33,7 +34,7 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
+import { FAILURE_FACT, type FailureFacts, GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { GITHUB_TOKEN_STATUS, type GitHubTokenSummary } from "@repo/features/github-token-wire";
 import { HOSTS_READ } from "@repo/features/host-live";
@@ -248,6 +249,8 @@ type CommittedIn = { readonly txid?: string };
 /** The service as a script, writing down every ask in the order it was made. */
 function fakeService() {
   const asked: string[] = [];
+  /** The sync id each read of the account's items asked past, in order: empty for a read asked whole, none for one asked around a stall. */
+  const itemsAsked: (string | undefined)[] = [];
   /** Each change of a queue the service was asked, as it was asked. */
   const queueChanges: AgentQueueChange[] = [];
   let scope: typeof LIVE_ANSWERED | { readonly failure: "not-found" } | undefined;
@@ -276,11 +279,13 @@ function fakeService() {
     ),
     scope: polledLive(SCOPE_PARTS),
     account: polledLive(ACCOUNT_PARTS),
-    items: polledLive(ITEMS_PARTS),
+    items: polledLive<(typeof ITEMS_PARTS)[number], typeof LIVE_SIGNED_OUT>(ITEMS_PARTS),
     memories: polledLive(MEMORIES_PARTS),
     origin: polledLive(["origin"]),
     // A Manager's chat: its newest page, followed; and the older page a read before a `seq` is answered at once, whatever `seq` it names.
-    managerChat: polledLive(["messages"]),
+    managerChat: polledLive<"messages", { readonly failure: string; readonly cause: FailureFacts }>(
+      ["messages"],
+    ),
     managerChatOlder: polledLive(["messages"]),
     hosts: polledLive(["hosts"]),
     // Note that the account stored no preferences and keeps no clip until a test sets a row, as a new account has none.
@@ -310,6 +315,8 @@ function fakeService() {
   let startTxid: string | undefined;
   // Whether a Start goes unanswered, as one sent offline does.
   let startsUnanswered = false;
+  /** Whether each close goes unanswered, as one sent offline does. */
+  let closesUnanswered = false;
   // The transaction the service says each inbox write committed in; none says it changed nothing.
   let committedIn: CommittedIn = {};
   /** The item as the agent changed it first, which a close is answered not taken with; none takes every close. */
@@ -330,6 +337,8 @@ function fakeService() {
   let chatSendGate: Effect.Effect<void> = Effect.void;
   // What a reaction to a message of a Manager's chat answers; taken, changing what stood, from the start.
   let reactAnswer: ManagerChatReactAnswerView = { changed: true };
+  // What an edit of a message of a Manager's chat answers; taken, its words changed.
+  const editAnswer: ManagerChatEditAnswerView = { changed: true };
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -404,6 +413,8 @@ function fakeService() {
   /** The account's items as their live read answers them, by the sync id the follow asks past. */
   const accountItemsLive = (userId: string | undefined, sync: string | undefined) =>
     Effect.suspend((): Effect.Effect<unknown> => {
+      itemsAsked.push(sync);
+
       if (sync === "") asked.push(`account-items-live:${userId}`);
 
       if (sync === undefined) asked.push(`account-items-whole:${userId}`);
@@ -464,8 +475,9 @@ function fakeService() {
       poll?: { readonly after?: string | undefined },
     ) =>
       Effect.suspend((): Effect.Effect<unknown> => {
-        const answered = <Part extends string>(script: PolledLive<Part>) =>
-          poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after);
+        const answered = (
+          script: Pick<PolledLive<string, { readonly failure: string }>, "first" | "poll">,
+        ) => (poll === undefined ? Effect.succeed(script.first()) : script.poll(poll.after));
 
         switch (read.name) {
           case HOSTS_READ.name:
@@ -620,6 +632,12 @@ function fakeService() {
         asked.push(`chatReact:${agentId}:${messageId}:${request.kind}:${request.reacted}`);
 
         return reactAnswer;
+      }),
+    chatEdit: (agentId, messageId, request) =>
+      Effect.sync(() => {
+        asked.push(`chatEdit:${agentId}:${messageId}:${request.text}`);
+
+        return editAnswer;
       }),
     chatSend: (agentId, request) =>
       Effect.andThen(
@@ -878,6 +896,7 @@ function fakeService() {
       ),
     removeSound: () => Effect.succeed({ sound: null }),
     chooseSound: ({ slot }) => Effect.succeed({ slot, id: null }),
+    writeViewChoice: () => Effect.succeed({}),
     markActive: () => Effect.sync(() => void asked.push("active")),
     registerPushDevice: () => Effect.succeed({ done: true as const }),
     unregisterPushDevice: () => Effect.succeed({ done: true as const }),
@@ -1019,6 +1038,13 @@ function fakeService() {
         asked.push(`close:${itemId}:${request.revision}:${request.clientKey}`);
       }).pipe(
         Effect.map(() => {
+          if (closesUnanswered) {
+            return {
+              failure: AGENT_CALL_FAILURE.UNANSWERED,
+              cause: { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: CALL_FAULT.NETWORK },
+            };
+          }
+
           if (changedFirst !== undefined) return { item: changedFirst, taken: false };
 
           return {
@@ -1049,6 +1075,7 @@ function fakeService() {
   return {
     client,
     asked,
+    itemsAsked,
     queueChanges,
     live,
     /** Whether the service answers a transcript's live read, or that the account reaches no such agent; none answers unanswered. */
@@ -1127,7 +1154,8 @@ function fakeService() {
     },
     /** Holds the account items' sync id where it stands, as a long transaction does, so each read past it is answered nothing moved. */
     stallItems: () => {
-      itemsStalledAt = live.items.first().queries.stamps.digest;
+      const first = live.items.first();
+      itemsStalledAt = "failure" in first ? undefined : first.queries.stamps.digest;
     },
     /** The transaction a Start answers it committed in; none answers none. */
     startCommits: (txid: string | undefined) => {
@@ -1136,6 +1164,10 @@ function fakeService() {
     /** Whether each Start from now on goes unanswered, as one sent offline does. */
     leaveStartsUnanswered: (unanswered: boolean) => {
       startsUnanswered = unanswered;
+    },
+    /** Whether each close from now on goes unanswered, as one sent offline does. */
+    leaveClosesUnanswered: (unanswered: boolean) => {
+      closesUnanswered = unanswered;
     },
     /** What each host's removal answers from now on, and what it waits on before it does. */
     answerRemoves: (answer: HostDoneAnswerView, gate: Effect.Effect<void> = Effect.void) => {
@@ -1183,6 +1215,9 @@ export const NOW = 1_800_000_100_000;
 /** A transcript's live read as the test scripts it. */
 export type TranscriptLive = PolledLive<(typeof TRANSCRIPT_PARTS)[number], typeof LIVE_SIGNED_OUT>;
 
+/** The account's items' live read as a test drives it, which may refuse the session as signed out. */
+export type ItemsLive = PolledLive<(typeof ITEMS_PARTS)[number], typeof LIVE_SIGNED_OUT>;
+
 /** That the service answers a live read, its rows polled from the test's script (`polledLive`). */
 export const LIVE_ANSWERED = "answered";
 
@@ -1221,10 +1256,7 @@ const MEMORIES_PARTS = ["memories"] as const;
 const INSTALL_SCRIPT = "https://app.test/install.sh";
 
 /** The account's items' read as the service answers it, before it is read by sync id. */
-type ItemsAnswer = Exclude<
-  ReturnType<PolledLive<(typeof ITEMS_PARTS)[number]>["first"]>,
-  { failure: string }
->;
+type ItemsAnswer = Exclude<ReturnType<ItemsLive["first"]>, { failure: string }>;
 
 /** A row's text field `name`; none where it carries none. */
 function textOf<Row>(row: Row, name: string): string | undefined {
@@ -1381,6 +1413,7 @@ export function subject(
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
     fileDownload?: FileDownloadSeam;
+    keepsInbox?: boolean;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1404,6 +1437,7 @@ export function subject(
 
     const composer = yield* composeAgents({
       kernel,
+      ...(options.keepsInbox === undefined ? undefined : { keepsInbox: options.keepsInbox }),
       recordProductEvent: () => undefined,
       account,
       accountId,
@@ -1489,9 +1523,11 @@ export function subject(
       held: (transcript?: { readonly agentId: string; readonly callId?: string }) =>
         transcripts(transcript).map((each) => each.rows),
       asked: service.asked,
+      itemsAsked: service.itemsAsked,
       queueChanges: service.queueChanges,
       startCommits: service.startCommits,
       leaveStartsUnanswered: service.leaveStartsUnanswered,
+      leaveClosesUnanswered: service.leaveClosesUnanswered,
       answerRemoves: service.answerRemoves,
       answerForgets: service.answerForgets,
       answerRenames: service.answerRenames,

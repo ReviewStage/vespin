@@ -10,19 +10,19 @@ catalog:
   "@effect/platform-node": 4.0.4
   "@effect/sql-pg": 4.0.4
   "@effect/sql-pglite": 4.0.4
-  "@types/node": 26.6.9
+  "@types/node": 26.6.11
   tsx: 4.23.15
   react: 19.2.8
   react-dom: 19.2.8
   ws: 8.21.3
-  ai: 7.0.181
+  ai: 7.0.183
   drizzle-orm: 1.0.0-rc.4
   drizzle-kit: 1.0.0-rc.4
-  vitest: 5.1.1
+  vitest: 5.1.2
   "@effect/vitest": 4.0.4
   # Matches the Playwright the agent image installs (`PLAYWRIGHT_PIN`).
   "@playwright/test": 1.64.1
-  msw: 3.0.7
+  msw: 3.0.8
   "@orpc/client": 2.0.0-beta.44
   "@orpc/contract": 2.0.0-beta.44
   "@orpc/experimental-effect": 2.0.0-beta.44
@@ -48,6 +48,14 @@ catalog:
   "@tailwindcss/node": 4.3.5
   "@tailwindcss/vite": 4.3.5
   "@tanstack/db": 1.0.0-rc.1.5
+  # TanStack DB's own SQLite persistence, released with `@tanstack/db` at the
+  # same version: the core the sync package's tests keep a stored kind in, and
+  # the Expo adapter the iPhone keeps it in over `expo-sqlite`. The adapter's
+  # declared peer range stops at expo-sqlite 57 while the app is on SDK 58's;
+  # the async calls it makes are SDK 58's own, so the install warns of the
+  # range and nothing patches it.
+  "@tanstack/db-sqlite-persistence-core": 1.0.0-rc.1.5
+  "@tanstack/expo-db-sqlite-persistence": 1.0.0-rc.1.5
   "@tanstack/react-db": 1.0.0-rc.1.5
   "@tanstack/react-query": 5.106.1
   "@types/hast": 3.0.5
@@ -296,6 +304,26 @@ patchedDependencies:
 # keeps, a catalog image and inks on an empty state, a list's edit mode as a
 # binding, and a toolbar spacer.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
+#
+# `@shopify/flash-list` 2.3.2 keeps a reader's place as rows above them change
+# height by holding the first visible row where it stood, but looks for that
+# row only among the rows it has drawn, and searches the whole data only once
+# the data changed or a correction is settling. A transcript row far taller
+# than FlashList's estimate, such as an automation's 15k-character prompt,
+# held at about 80 pt until it is first drawn, grows by more than the drawn
+# window as it is measured and pushes the reader's row out of it, so the
+# correction was skipped: a scroll up left the offset inside the prompt, with
+# some 25,000 pt of rows suddenly above it, and the reader stood at its first
+# line (STAG-5272). The patch searches the whole data whenever the row is
+# not among those drawn, and so that the row it finds is one the reader
+# stands on, refreshes it on every scroll rather than once the scroll's
+# momentum ends, and holds the first visible row already measured, never one
+# still at its estimate. It patches `dist/`, which Metro reads, never `src/`.
+# Upstream tracks the missing estimate for an unmeasured row as
+# Shopify/flash-list#2526 (fix PR #2531, open), and rows misplaced as they
+# are measured during a fast scroll as #2175. Delete the patch when a release
+# finds the held row outside its drawn rows.
+  "@shopify/flash-list@2.3.2": patches/@shopify__flash-list@2.3.2.patch
 #
 # `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
 # lines by the marker's width less its `.` or `)`, so each line of a code

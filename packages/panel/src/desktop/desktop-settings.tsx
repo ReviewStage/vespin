@@ -25,7 +25,6 @@ import {
   NAV_CURRENT,
   NavItem,
   ResizeEdge,
-  SCROLL_FADE,
   ScrollArea,
   SettingsPage,
   Stack,
@@ -521,7 +520,7 @@ export function DesktopSettings({
         />
         <LinkWorkspaceProvider value={listed?.slug ?? listed?.id}>
           <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
-            <ScrollArea fade={SCROLL_FADE.BOTH}>
+            <ScrollArea>
               <div
                 className="sidebar-section-body flex min-h-full flex-col p-ring-reach pe-column-inset"
                 {...roving}

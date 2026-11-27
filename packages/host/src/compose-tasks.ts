@@ -1656,8 +1656,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* collections.cold(rows.value, mark);
     });
 
-  /** The sync id the list drawn from disk was kept at, which the next follow reads past once; none once it has. */
-  let listKeptAt: string | undefined;
+  /**
+   * The sync id the list drawn stands at: where the local database kept it
+   * at a launch, then where each answer the follow took left it, which every
+   * follow of the list started reads past; none before the list stands or
+   * after a sign-out.
+   */
+  let listAt: string | undefined;
 
   /**
    * The row writes waiting for the service sent again, one round at a time,
@@ -1679,11 +1684,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const followList = Effect.suspend(() => {
     // The account the follow starts for, which every seal names, so one under another's session is refused as signed out and ends.
     const userId = dependencies.accountId();
-    const from = listKeptAt;
-    listKeptAt = undefined;
 
     return followTaskList({
-      ...(from === undefined ? undefined : { from }),
+      from: () => listAt,
       dropped: (part, count) => countDropped(TASK_LIST_ROW_KIND[part], count),
       live: (sync) =>
         userId === undefined
@@ -1725,6 +1728,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                 };
 
           yield* collections.answer(rows, standing, liveSince, kept);
+
+          // Note that the list stands at the answer's id only once both its parts are taken, so a follow cut off between them reads past the id before, which answers a part taken again as well.
+          if (kept !== undefined) listAt = kept.at;
           const waiting = [...coldWaiting];
           coldWaiting.clear();
           yield* Effect.forEach(waiting, openedOutside, { discard: true });
@@ -1871,10 +1877,10 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* Scope.close(taskList.scope, Exit.void);
       taskList = yield* openTaskList;
       const stored = taskList.collections.stored();
+      listAt = stored?.kept?.at;
 
       if (stored !== undefined) {
         const { kept } = stored;
-        listKeptAt = kept?.at;
         const { collections, scope } = taskList;
 
         // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands. It is said ready only once its kept rows are drawn, which is just after it stands, so no window reads an empty list as one with no tasks; where the follow answered first, its answer said so already.
@@ -2959,9 +2965,19 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_FIND: (read) =>
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
-        const taskId = yield* served(client.find(read.workspace, read.number));
+        const found = yield* served(client.find(read.workspace, read.number));
 
-        if (taskId === undefined) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+        // Note that a number no task of the account's answers to is told apart from a service that did not answer, so a screen says the task is missing only where it is.
+        if (!found.ok) {
+          return {
+            failure:
+              found.failure === TASK_CALL_FAILURE.NOT_FOUND
+                ? TASK_CALL_FAILURE.NOT_FOUND
+                : TASK_CALL_FAILURE.UNANSWERED,
+          };
+        }
+
+        const taskId = found.answer;
         // A chip names a task the list may not hold, which is read beside it so the chip draws its name.
         yield* openedOutside(taskId);
 
@@ -3413,7 +3429,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* Scope.close(sidebar.scope, Exit.void);
       sidebar = yield* openSidebar;
       sidebarAnswered = false;
-      listKeptAt = undefined;
+      listAt = undefined;
       yield* serial(
         Effect.sync(() => {
           view = idleView();

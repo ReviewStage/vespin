@@ -1,3 +1,4 @@
+import { inboxRowOf, inboxRowsOf } from "@repo/features/inbox-digest";
 import {
   EVERYONES,
   INBOX_SHOW,
@@ -7,6 +8,8 @@ import {
   inboxAtNow,
   inboxCounts,
   inboxGroup,
+  inboxItemAtNow,
+  inboxSearchWordsOf,
   listedItems,
   NOTHING_HERE,
 } from "@repo/features/inbox-list-model";
@@ -146,25 +149,29 @@ export function AgentThreads({
   // Note that a reminder is weighed on the window's clock, as the Inbox weighs it.
   const now = useMinute();
 
+  // Note that the list draws the agent's items as rows, and the pane draws the chosen one whole, found by its id.
+  const posted = useMemo(
+    () => [...open, ...settled].filter((item) => item.agentId === agentId),
+    [open, settled, agentId],
+  );
+
+  const whole = useMemo(() => new Map(posted.map((item) => [item.id, item])), [posted]);
+
   const standing = useMemo(
-    () =>
-      inboxAtNow(
-        [
-          inboxGroup(
-            holder,
-            [...open, ...settled].filter((item) => item.agentId === agentId),
-          ),
-        ],
-        now,
-      ),
-    [holder, open, settled, agentId, now],
+    () => inboxAtNow([inboxGroup(holder, inboxRowsOf(posted))], now),
+    [holder, posted, now],
   );
 
   // Note that a Manager's Inbox tab lists as the window's Inbox's choices say, where a task's card lists every item.
   const choices = useInboxViewChoices();
   const { show, whose } = tabbed === true ? choices : AGENT_LISTS;
   const [query, setQuery] = useState("");
-  const search = useMemo(() => searchTokens(query), [query]);
+  const tokens = useMemo(() => searchTokens(query), [query]);
+
+  const search = useMemo(
+    () => ({ tokens, wordsOf: inboxSearchWordsOf((itemId) => whole.get(itemId)) }),
+    [tokens, whole],
+  );
 
   const filter = useMemo(() => ({ show, whose, search, readerId: me }), [show, whose, search, me]);
 
@@ -177,7 +184,7 @@ export function AgentThreads({
   );
 
   const counts = useMemo(() => inboxCounts(standing, me, whose), [standing, me, whose]);
-  const searched = search.length > 0 ? query : undefined;
+  const searched = tokens.length > 0 ? query : undefined;
 
   // Note that a scope leaving out every item the agent holds is said apart from an agent holding none, as the window's Inbox says it.
   const filteredOut =
@@ -218,6 +225,14 @@ export function AgentThreads({
     active,
     marks,
   });
+  const shownWhole = listed === undefined ? undefined : whole.get(listed.item.id);
+
+  // Note that the pane draws the whole item as the list stood its row at the minute (`inboxAtNow`), a reminder come due let go.
+  const shownItem = useMemo(
+    () => (shownWhole === undefined ? undefined : inboxItemAtNow(shownWhole, now)),
+    [shownWhole, now],
+  );
+
   // Note that the task's page holds its read with its cards' drafts, so the pane takes it whole.
   useNodOnOpen({ shown: opened, readerId: me, control: inbox });
 
@@ -271,7 +286,7 @@ export function AgentThreads({
           onRemind={marks.onRemind}
           onPointing={onPointing}
         />
-        {listed === undefined ? (
+        {listed === undefined || shownItem === undefined ? (
           <section className={INBOX_VIEW_ITEMS} hidden={columns.shown !== INBOX_COLUMNS.BOTH}>
             <Toolbar />
             {inbox.failed || inbox.reading ? null : (
@@ -281,7 +296,7 @@ export function AgentThreads({
         ) : (
           <InboxPane
             holder={listed.holder}
-            item={listed.item}
+            item={shownItem}
             control={inbox}
             agents={agents}
             hidden={columns.shown === INBOX_COLUMNS.LIST}
@@ -296,7 +311,7 @@ export function AgentThreads({
             }
             doors={{
               ...agentPaneDoors(tasks, listed, agentId, onBack),
-              onMark: marks.onMark,
+              onMark: (item, unread) => marks.onMark(inboxRowOf(item), unread),
               onClose: resolveItems,
               onRemind: marks.onRemind,
             }}

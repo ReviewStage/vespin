@@ -11,6 +11,7 @@ import { applySectionWrite } from "./task-section-writes.js";
 import {
   entryMoveWrites,
   NO_TASK_SECTIONS,
+  newSectionWrites,
   placeAllWrites,
   placeMemberWrites,
   placeWrites,
@@ -208,6 +209,25 @@ describe("a section", () => {
     );
 
     assert.equal(cleared.sections.find((section) => section.id === LAUNCH)?.icon, undefined);
+  });
+
+  it("made from a task's Move to stands in the task's own workspace, the task on its top", () => {
+    const task = { id: TASK(1), workspaceId: "another-workspace" };
+
+    const state = applyAll(
+      NO_TASK_SECTIONS,
+      newSectionWrites(LATER, "Later", WORKSPACE, task, 20),
+      20,
+    );
+
+    assert.deepEqual(
+      workspaceSections(state, "another-workspace").map((section) => section.id),
+      [LATER],
+    );
+    assert.deepEqual(
+      sectionOrder(state, LATER).map((entry) => entry.taskId),
+      [TASK(1)],
+    );
   });
 
   it("a task put in a section nobody holds stands in none", () => {

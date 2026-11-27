@@ -28,6 +28,12 @@ These rules are easy to miss, and nothing in CI holds them:
   reads breaks production: drop it in a later pull request, once no deployed
   code reads it. They also run in one transaction
   (`packages/database/README.md`), so never suggest `CONCURRENTLY`.
+- Session replay: a person's words (a member's, Manager's, or device's name, a
+  message) never stand under `ReplayUnmask` without a nearer `ReplayMask`
+  (`AGENTS.md`, "Never").
+- Experiments: a feature behind a workspace experiment stays hidden
+  everywhere it shows (lists, Recent, counts, links) while the experiment is
+  off.
 
 ## Severity
 

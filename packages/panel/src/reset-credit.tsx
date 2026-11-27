@@ -37,13 +37,13 @@ import {
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { type UsageLimitNotice as Notice, USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { createContext, type ReactNode, useContext, useRef } from "react";
+import { createContext, type ReactNode, useContext, useRef, useState } from "react";
 import { askAct } from "./act.js";
 import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "./confirm-act.js";
 import { confirmFailure } from "./failure-report.js";
 import { providerKeysQuery } from "./live-reads.js";
 import { TranscriptAgent } from "./tasks/line-cards.js";
-import { appStateQuery, selectAccount } from "./use-app-state.js";
+import { selectAccount, useAppStateSlice } from "./use-app-state.js";
 
 const WORDS = {
   VERB: "Use reset",
@@ -118,12 +118,22 @@ export interface ResetCreditOffer {
   readonly dialog: ReactNode;
 }
 
-/** The plan's credit offered, asked first, and spent under one key a press; none where it offers none. */
+/**
+ * The plan's credit offered, asked first, and spent under one key a press;
+ * none where it offers none.
+ *
+ * Note that the question stands only for the plan it was asked on, and its
+ * yes spends that plan's credit, because an agent's payer may move to
+ * another plan holding a credit while it is open: the question then goes,
+ * rather than redrawing to name the other plan and spending its credit for
+ * a press made while it named the first.
+ */
 export function useResetCreditOffer(
   plan: SubscriptionKeySummary | undefined,
 ): ResetCreditOffer | undefined {
   const offered = offers(plan);
   const key = useRef("");
+  const [askedOn, setAskedOn] = useState<string | undefined>(undefined);
 
   const spend = useMutation({
     mutationFn: (subscriptionId: string) =>
@@ -134,7 +144,7 @@ export function useResetCreditOffer(
   });
 
   const act = useConfirmAct(spend, {
-    send: () => (plan?.id === undefined ? Promise.resolve() : spend.mutateAsync(plan.id)),
+    send: () => (askedOn === undefined ? Promise.resolve() : spend.mutateAsync(askedOn)),
     answered: (answer): ActionResult =>
       "failure" in answer || answer.resetCredit === undefined
         ? { status: ACTION_RESULT_STATUS.REJECTED, reason: WORDS.NOT_SPENT }
@@ -145,7 +155,7 @@ export function useResetCreditOffer(
   });
 
   const asked = useConfirmDialog(
-    { subject: offered, surfaceOpen: true },
+    { subject: offered && askedOn !== undefined && plan.id === askedOn, surfaceOpen: true },
     act,
     confirmFailure(FAILURE_SURFACE.ACT),
   );
@@ -159,6 +169,7 @@ export function useResetCreditOffer(
     use: () => {
       // Note that the key is minted once a press, so the dialog's retry sends the same one.
       key.current = crypto.randomUUID();
+      setAskedOn(plan.id);
       asked.ask();
     },
     dialog: (
@@ -183,7 +194,7 @@ export function useResetCreditOffer(
 
 /** The reader's own plan of this id, from their keys; none for another's. */
 function useOwnPlan(planId: string | undefined): SubscriptionKeySummary | undefined {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const keys = useQuery(providerKeysQuery(accountId)).data;
 
   return planId === undefined ? undefined : keys?.subscriptions?.find((one) => one.id === planId);

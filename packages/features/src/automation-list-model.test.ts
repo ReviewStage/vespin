@@ -6,6 +6,7 @@ import {
   AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
   automationGroups,
+  automationManager,
   automationNext,
   automationNextRuns,
   automationRunLine,
@@ -22,6 +23,7 @@ import {
   AUTOMATION_RUN_REASON,
   AUTOMATION_RUN_STATUS,
   AUTOMATION_SCOPE,
+  AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
   type AutomationRunSummary,
   type AutomationSummary,
@@ -151,6 +153,26 @@ test("a one-time automation that ran and stands paused is finished, in no owner'
   ]);
   assert.deepEqual(finishedAutomations([ran, rearmed, turnedOff]), [ran]);
 });
+
+test.each([
+  { target: undefined, named: undefined },
+  { target: { kind: AUTOMATION_TARGET.NEW_AGENT }, named: undefined },
+  { target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: null }, named: undefined },
+  { target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: "agent-coder" }, named: undefined },
+  { target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: "agent-release" }, named: "Release" },
+] as const)(
+  "a row names the Manager its runs land on only where the workspace lists it: $target",
+  ({ target, named }) => {
+    const managers = [
+      { id: "agent-release", name: "Release" },
+      { id: "agent-triage", name: "Triage" },
+    ];
+
+    const listed = automation("a", target === undefined ? {} : { target });
+
+    assert.equal(automationManager(listed, managers)?.name, named);
+  },
+);
 
 test("a schedule the picker writes is said in words, naming its zone only where it is not the reader's, and any other as its cron", () => {
   const said = (cron: string, timezone = "America/New_York", reader = "Europe/Paris") =>

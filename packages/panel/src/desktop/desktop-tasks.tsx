@@ -1,6 +1,6 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { NO_ITEMS, taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
+import { taskHolder, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   LINK_DESTINATION,
@@ -97,12 +97,7 @@ import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
-import {
-  heldTaskMentions,
-  TaskMentions,
-  type TaskMentionsValue,
-  useMentionAgentsReader,
-} from "../tasks/task-mentions.js";
+import { TaskMentions, useHeldTaskMentions } from "../tasks/task-mentions.js";
 import { taskLinkDestination, useOfferTaskRename } from "../tasks/task-menu-items.js";
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
@@ -160,6 +155,7 @@ import {
   phoneFindGroups,
   type TaskHeadBack,
 } from "./phone-head.js";
+import { SHELL_MARK, useShellMark } from "./shell-marks.js";
 import {
   listedAgentOf,
   SIDE_PANEL_HOLDER,
@@ -237,6 +233,9 @@ import { useStandingDoor } from "./task-row-parts.js";
  * which, with the press that moves it there (`stranded-task-banner.tsx`).
  */
 
+/** No thread of an agent's waiting on the developer, one array so an agent with none hands down the same one. */
+const NO_WAITING: readonly InboxItem[] = [];
+
 /** No task open: what a task's relation menus offer while none is. */
 const NO_TASKS: readonly TaskSummary[] = [];
 
@@ -272,6 +271,8 @@ function TaskPage({
   column: React.ReactNode;
   children?: React.ReactNode;
 }): React.JSX.Element {
+  useShellMark(SHELL_MARK.TASK_PAGE);
+
   return (
     <div
       ref={areaRef}
@@ -306,6 +307,8 @@ function TaskTabsRow({
   hidden: boolean;
   children: React.ReactNode;
 }): React.JSX.Element {
+  useShellMark(hidden ? undefined : SHELL_MARK.AGENTS_ROW);
+
   return (
     <div className={hidden ? undefined : "task-tabs contents"} hidden={hidden}>
       {children}
@@ -680,12 +683,8 @@ function DescriptionDocument({
 
   const stranded = useStrandedTaskBanner(tasks, listedOpen);
 
-  // The workspace's agents an `@` offers after the task's own, named by the tasks the window lists.
-  const readMentionAgents = useMentionAgentsReader(
-    opened?.workspaceId,
-    useTaskNames(tasks.typedNames),
-    tasks.agents.models,
-  );
+  // The tasks the window lists, which name the workspace's agents an `@` offers after the task's own.
+  const taskNames = useTaskNames(tasks.typedNames);
 
   const openMention = tasks.onShowMention;
   const revealed = tasks.sectionReveal;
@@ -1027,7 +1026,7 @@ function DescriptionDocument({
       .filter((item) => item.agentId === tabAgent)
       .toSorted((a, b) => b.updatedAt - a.updatedAt);
 
-    const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
+    const waiting = waitingOf.get(tabAgent) ?? NO_WAITING;
 
     return posted.length === 0 ? undefined : { waiting, posted, onOpen: openWaitingThread };
   }, [tabAgent, boardOpen, boardSettled, waitingOf, openWaitingThread]);
@@ -1363,35 +1362,20 @@ function DescriptionDocument({
   );
 
   // What every place on the page that picks or draws a mention reads (`task-mentions.tsx`).
-  const mentions = useMemo<TaskMentionsValue | undefined>(() => {
-    if (opened === undefined || workspace === undefined) return undefined;
-
-    return heldTaskMentions(
-      opened,
-      workspace,
-      read?.description.body,
-      { pages, agents, readAgents: readMentionAgents },
-      {
-        onOpenTask: openMention,
-        onOpenFile: openMentionedFileDoor,
-        onOpenTurnChanges: openTurnChangesDoor,
-        agentOf: agentLookDoor,
-        pullRequestOf: pullRequestCardDoor,
-      },
-    );
-  }, [
+  const mentions = useHeldTaskMentions(
     opened,
-    read,
     workspace,
-    pages,
-    agents,
-    readMentionAgents,
-    openMention,
-    openMentionedFileDoor,
-    openTurnChangesDoor,
-    agentLookDoor,
-    pullRequestCardDoor,
-  ]);
+    read?.description.body,
+    { pages, agents },
+    { tasks: taskNames, models: tasks.agents.models },
+    {
+      onOpenTask: openMention,
+      onOpenFile: openMentionedFileDoor,
+      onOpenTurnChanges: openTurnChangesDoor,
+      agentOf: agentLookDoor,
+      pullRequestOf: pullRequestCardDoor,
+    },
+  );
 
   // Note that a task the list does not hold, as a link may open, waits on its description, which alone names it.
   if (region.kind === TASK_REGION.READING && opened === undefined) {

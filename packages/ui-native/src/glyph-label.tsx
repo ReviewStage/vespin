@@ -3,8 +3,10 @@
 import { Image, Label } from "@expo/ui/swift-ui";
 import { font, tag } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
+import { useColorScheme } from "react-native";
 import { type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { type ChoiceLook, MENU_ICON, type MenuPhotoFile } from "./row-menu-model.js";
+import { sectionInk } from "./section-ink.js";
 import { Text } from "./text.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import type { StatusTone } from "./tokens/status-tone.js";
@@ -100,7 +102,7 @@ function GlyphLabel({
 
 /**
  * A choice's head as a system menu draws it (`choiceLook`): its glyph in
- * its tone's ink, with a faint glyph under it where it has one; its photo,
+ * its section's color or its tone's ink, with a faint glyph under it where it has one; its photo,
  * drawn round; its emoji; or its integration's mark, each kept in its own
  * colors, which a menu would otherwise template in its ink.
  */
@@ -111,12 +113,20 @@ export function LookIcon({
   readonly look: ChoiceLook;
   readonly toneInk: (tone: StatusTone) => string;
 }) {
+  const dark = useColorScheme() === "dark";
+
   switch (look.kind) {
     case MENU_ICON.GLYPH:
       return (
         <GlyphImage
           glyph={look.glyph}
-          menuColor={look.tone === undefined ? undefined : toneInk(look.tone)}
+          menuColor={
+            look.section !== undefined
+              ? sectionInk(look.section, dark)
+              : look.tone === undefined
+                ? undefined
+                : toneInk(look.tone)
+          }
           under={look.under}
         />
       );

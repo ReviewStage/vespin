@@ -5,8 +5,8 @@
  * them, so they are the nearest layers and never reach the window. What the
  * window closes past them, nearest first: a sign-in waiting on the browser,
  * a standing selection of rows or cards, Settings, a description's version
- * history, a side panel filling the window, then an agent's threads back to
- * its transcript. Each is an app command its surface offers only while it
+ * history, a side panel filling the window, a Manager's thread open beside
+ * its chat, then an agent's threads back to its transcript. Each is an app command its surface offers only while it
  * stands (`app-commands.ts`), so a page that offers none of them takes no
  * Escape at all. Back and Forward are ⌘[ and ⌘], the toolbar's arrows, the
  * mouse's buttons, and the swipe, never Escape.
@@ -27,6 +27,7 @@ const ESCAPE_LAYERS: readonly AppCommand[] = [
   APP_COMMAND.EXIT_SETTINGS,
   APP_COMMAND.EXIT_VERSION_HISTORY,
   APP_COMMAND.EXIT_FULL_SCREEN,
+  APP_COMMAND.CLOSE_THREAD,
   APP_COMMAND.EXIT_AGENT_THREADS,
 ];
 

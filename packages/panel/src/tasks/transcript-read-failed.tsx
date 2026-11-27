@@ -4,7 +4,7 @@
 
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ERROR_STATE_PLACEMENT, ErrorState } from "@repo/ui";
-import { FLOATING_OVER_LOG_CLASS } from "../ai-elements/conversation.js";
+import { FLOATING_OVER_LOG_CLASS } from "@repo/ui/conversation";
 import { failureShown, unreadShown } from "../failure-report.js";
 
 /** What the tab says where its transcript could not be read. */

@@ -51,6 +51,8 @@ export const QUERY_ROOT = {
   MEMBER_MACHINES: "member-machines",
   /** The apps the account's own machines always allow, as an agent's `@` lists them off the agent's Mac. */
   MACHINE_ALLOWED_APPS: "machine-allowed-apps",
+  /** The place New task's Runs on picked in this window over the account's last pick, until the account's moves (`tasks/runs-on.tsx`). */
+  RUNS_ON_PICK: "runs-on-pick",
   INSTALLED_SKILL: "installed-skill",
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",
   TASK_NEWEST_REVISION: "task-newest-revision",
@@ -89,7 +91,7 @@ export const QUERY_ROOT = {
   TASK_REVISION: "task-revision",
   /** A picture the window reads (`picture-query.ts`'s `pictureQuery`), by what it belongs to and its id there. */
   PICTURE: "picture",
-  /** The section icon picker's wholes loaded on demand (`desktop/section-icon-picker.tsx`), Lucide's and the emoji, by which. */
+  /** The section icon picker's wholes loaded on demand (`desktop/section-icon-picker.tsx`), Lucide's, by which; the emoji are `@repo/ui`'s (`useEmojiGroups`). */
   SECTION_ICONS: "section-icons",
   /** A person's page: how many of their tasks and agents the service counts, their newest read into the task list (`desktop/person-page.tsx`). */
   PERSON_PAGE: "person-page",

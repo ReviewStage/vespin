@@ -13,7 +13,7 @@ import { TASK_STATUS, type TaskSummary } from "./task-wire.js";
  * name the words begin, then a name they only start a word of, then a
  * repository they name; a task they do not answer is left out. A scope
  * lists each kind's best five under All, as ⌘K does, and one kind alone
- * under its own.
+ * under its own; the agents, which no scope narrows to, under All alone.
  */
 
 /** A task of the Acme workspace, numbered `number`, in `repository`. */
@@ -55,26 +55,26 @@ test("a search ranks its tasks by what their rows say, best first", () => {
   expect(names("")).toEqual([]);
 });
 
-test("All lists each kind's best five, and a kind's scope lists that kind alone", () => {
+test("All lists each kind's best five, agents among them, and a kind's scope lists that kind alone", () => {
   const found = {
     tasks: Array.from({ length: 40 }, (_, at) => `task ${at + 1}`),
     inbox: ["thread 1", "thread 2"],
     agents: ["agent 1"],
+    people: ["Ada"],
+    automations: ["Weekly digest"],
   };
 
+  const none = { tasks: [], inbox: [], agents: [], people: [], automations: [] };
+
   expect(scopedFound(found, SEARCH_SCOPE.ALL)).toEqual({
+    ...found,
     tasks: ["task 1", "task 2", "task 3", "task 4", "task 5"],
-    inbox: ["thread 1", "thread 2"],
-    agents: ["agent 1"],
   });
-  expect(scopedFound(found, SEARCH_SCOPE.TASKS)).toEqual({
-    tasks: found.tasks,
-    inbox: [],
-    agents: [],
-  });
-  expect(scopedFound(found, SEARCH_SCOPE.INBOX)).toEqual({
-    tasks: [],
-    inbox: found.inbox,
-    agents: [],
+  expect(scopedFound(found, SEARCH_SCOPE.TASKS)).toEqual({ ...none, tasks: found.tasks });
+  // Note that no scope keeps the agents, as ⌘K has no Agents filter: they stand under All alone.
+  expect(scopedFound(found, SEARCH_SCOPE.PEOPLE)).toEqual({ ...none, people: found.people });
+  expect(scopedFound(found, SEARCH_SCOPE.AUTOMATIONS)).toEqual({
+    ...none,
+    automations: found.automations,
   });
 });

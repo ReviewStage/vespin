@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { BACK_BUTTON_LOOK, BackButton, type BackButtonLook, NO_BACK_KEY } from "./back-button.js";
 
 /**
- * back-button.test.ts -- a way back, in a bar or at the top of a column, is
+ * back-button.test.ts -- a way back, in a bar, at the top of a column, or as its glyph alone, is
  * one button named by its words that goes back when pressed, and its hint,
  * raised by the keyboard's focus, says where it leads and names the key
  * that goes there too. Synthetic places.
@@ -19,7 +19,7 @@ declare global {
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-const LOOKS = [BACK_BUTTON_LOOK.HEADER, BACK_BUTTON_LOOK.COLUMN] as const;
+const LOOKS = [BACK_BUTTON_LOOK.HEADER, BACK_BUTTON_LOOK.COLUMN, BACK_BUTTON_LOOK.GLYPH] as const;
 
 const roots: Root[] = [];
 
@@ -87,9 +87,14 @@ function focusByKeyboard(button: HTMLButtonElement): void {
   vi.useRealTimers();
 }
 
+/** What a reader hears a button called: the name it is given, else its words. */
+function nameOf(button: HTMLButtonElement): string {
+  return button.getAttribute("aria-label") ?? button.textContent ?? "";
+}
+
 test.each(LOOKS)("a way back in a %s is named by its words and goes back once pressed", (look) => {
   const { button, backs } = wayBack(look);
-  expect(button.textContent).toContain("Inbox");
+  expect(nameOf(button)).toContain("Inbox");
   act(() => button.click());
   expect(backs()).toBe(1);
 });
