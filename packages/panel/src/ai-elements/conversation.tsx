@@ -339,14 +339,16 @@ export function ConversationRows({
     const room = Number.isFinite(said) ? said : 0;
     setEnd((was) => (was === room ? was : room));
   });
-  // Note that room floating over the log's end coming, changing, or going keeps a log that stood at its end there, since the room moves the end and not the reader.
-  const room = useRef(overEnd);
+  // Note that the room at the log's end changing keeps a log that stood at its end there, since the room moves the end and not the reader:
+  // room floating over it coming, changing, or going, and the theme's own, which is read only once the log has drawn and changes with its pane's class.
+  const padding = end + overEnd;
+  const room = useRef(padding);
   useLayoutEffect(() => {
     const was = room.current;
-    room.current = overEnd;
+    room.current = padding;
 
-    if (overEnd !== was && isAtBottom) run.current?.scrollToEnd();
-  }, [overEnd, isAtBottom]);
+    if (padding !== was && isAtBottom) run.current?.scrollToEnd();
+  }, [padding, isAtBottom]);
   // The reader's own line landing takes the log to its end; the line the log opened on does not, since the log opens there.
   const sent = useRef(ownLast);
   useLayoutEffect(() => {
@@ -385,7 +387,7 @@ export function ConversationRows({
       aria-label={label}
       handle={run}
       onAtEnd={atBottom}
-      paddingEnd={end + overEnd}
+      paddingEnd={padding}
     >
       {children}
     </VirtualRows>
