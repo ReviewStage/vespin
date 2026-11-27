@@ -6,11 +6,15 @@ import {
   AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
+  CHECK_SUMMARY,
   type ListedAgent,
+  PULL_REQUEST_STATE,
+  type PullRequestState,
 } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { type MacOffer, MODEL_PROVIDER } from "@repo/features/models-wire";
+import type { ListedPullRequest } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
@@ -114,6 +118,15 @@ const NOT_MANAGERS: readonly ListedAgent[] = [
 /** A second model, which a Manager's Settings picks. */
 const SONNET = "anthropic/claude-sonnet-5.5";
 
+/** The agents a Manager started, as the live list carries them, and the pull requests their rows name. */
+interface ManagerWork {
+  readonly agents: readonly ListedAgent[];
+  readonly pullRequests: readonly ListedPullRequest[];
+}
+
+/** No work of a Manager's beyond what the list carries already. */
+const NO_WORK: ManagerWork = { agents: [], pullRequests: [] };
+
 const roots: Root[] = [];
 
 beforeEach(() => {
@@ -144,18 +157,19 @@ async function mountSidebar(
   renamed: AgentRenameAsk[] = [],
   chosen: { agentId: string; model: string }[] = [],
   faced: { agentId: string; face: ManagerFace }[] = [],
-  started: readonly ListedAgent[] = [],
+  work: ManagerWork = NO_WORK,
 ): Promise<HTMLElement> {
   handState({ [EXPERIMENT.MANAGERS]: on });
   writeListedTasks({
     taskAgentPins: pinned.map((agentId) => ({ agentId, taskId: null, pinnedAt: 5 })),
+    agentPullRequests: work.pullRequests,
   });
   fakeActPort(fakeActPortCalls());
 
   const tasks = tasksControl({
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
-    listedAgents: [MANAGER, ...NOT_MANAGERS, BILLING, ...started],
+    listedAgents: [MANAGER, ...NOT_MANAGERS, BILLING, ...work.agents],
     agentView: { agentId: openId, onOpen: (agentId) => opened.push(agentId) },
     agents: taskAgentsOf(
       agentsControl({
@@ -235,27 +249,48 @@ test("Managers lists the workspace's unarchived Managers of the live list alone,
   assert.deepEqual(opened, [FRONTEND]);
 });
 
-test("a Manager's row hangs the Manager's card: where it stands, and how many of the agents it started are at work", async () => {
-  // Note that one agent it started works and one has ended, so the card counts the one at work alone.
-  const started: readonly ListedAgent[] = [
-    {
-      ...CODER,
-      id: "0a1b2c3d-0000-4000-8000-00000000000f",
-      taskId: "0a1b2c3d-0000-4000-8000-000000000010",
-      title: "Invitations",
-      status: AGENT_STATUS.RUNNING,
-      startedByAgentId: FRONTEND,
-    },
-    {
-      ...CODER,
-      id: "0a1b2c3d-0000-4000-8000-000000000011",
-      taskId: "0a1b2c3d-0000-4000-8000-000000000012",
-      title: "Digest",
-      startedByAgentId: FRONTEND,
-    },
-  ];
+test("a Manager's row hangs the Manager's card: where it stands, how many of the agents it started are at work, and how many of their pull requests are open", async () => {
+  const running: ListedAgent = {
+    ...CODER,
+    id: "0a1b2c3d-0000-4000-8000-00000000000f",
+    taskId: "0a1b2c3d-0000-4000-8000-000000000010",
+    title: "Invitations",
+    status: AGENT_STATUS.RUNNING,
+    startedByAgentId: FRONTEND,
+  };
 
-  const sidebar = await mountSidebar(true, [], undefined, [], [], [], [], started);
+  const ended: ListedAgent = {
+    ...CODER,
+    id: "0a1b2c3d-0000-4000-8000-000000000011",
+    taskId: "0a1b2c3d-0000-4000-8000-000000000012",
+    title: "Digest",
+    startedByAgentId: FRONTEND,
+  };
+
+  const pullRequest = (agent: ListedAgent, number: number, state: PullRequestState) => ({
+    agentId: agent.id,
+    taskId: agent.taskId ?? "",
+    pullRequest: {
+      number,
+      title: agent.title ?? "",
+      url: `https://github.com/${RELAY}/pull/${number}`,
+      state,
+      checks: CHECK_SUMMARY.PASSING,
+      additions: 1,
+      deletions: 1,
+      changedFiles: 1,
+    },
+  });
+
+  // Note that one agent it started works and one has ended, and one of their pull requests is open and one merged, so the card counts one of each.
+  const sidebar = await mountSidebar(true, [], undefined, [], [], [], [], {
+    agents: [running, ended],
+    pullRequests: [
+      pullRequest(running, 7, PULL_REQUEST_STATE.OPEN),
+      pullRequest(ended, 6, PULL_REQUEST_STATE.MERGED),
+    ],
+  });
+
   const list = sidebar.querySelector('nav[aria-label="Managers"]');
 
   const row = [...(list?.querySelectorAll("button") ?? [])].find((button) =>
@@ -268,6 +303,7 @@ test("a Manager's row hangs the Manager's card: where it stands, and how many of
 
   assert.ok(words?.includes("Idle"), "the card says its Manager is idle");
   assert.ok(words?.includes("Agents at work1"), "the card counts the one agent at work");
+  assert.ok(words?.includes("Open pull requests1"), "the card counts the one open pull request");
 });
 
 test("View options' Sort by › Recent activity lists the Manager that moved last first", async () => {

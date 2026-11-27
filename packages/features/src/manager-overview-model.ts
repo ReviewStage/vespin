@@ -78,6 +78,11 @@ export function agentAtWork(status: ListedAgent["status"]): boolean {
   return AT_WORK.has(status);
 }
 
+/** Whether a pull request is still open, a draft among them, as a Manager's overview and its card count it. */
+export function pullRequestOpen(state: AgentPullRequest["state"]): boolean {
+  return OPEN_PULL_REQUEST.has(state);
+}
+
 /** A task's status, Todo for one from a service before statuses. */
 function statusOf(task: TaskSummary): TaskStatus {
   return task.status ?? TASK_STATUS.TODO;
@@ -128,7 +133,7 @@ export function managerOverview({
     return pullRequest === undefined ? [] : [{ pullRequest, agent, task }];
   });
 
-  const open = opened.filter(({ pullRequest }) => OPEN_PULL_REQUEST.has(pullRequest.state));
+  const open = opened.filter(({ pullRequest }) => pullRequestOpen(pullRequest.state));
   const workedOn = new Set(started.map(({ task }) => task.id));
 
   const theirs = tasks
@@ -139,7 +144,7 @@ export function managerOverview({
     agents: ordered,
     pullRequests: [
       ...open,
-      ...opened.filter(({ pullRequest }) => !OPEN_PULL_REQUEST.has(pullRequest.state)),
+      ...opened.filter(({ pullRequest }) => !pullRequestOpen(pullRequest.state)),
     ],
     openTasks: theirs.filter((task) => OPEN_TASK.has(statusOf(task))),
     doneThisWeek: theirs.filter(
