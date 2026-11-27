@@ -174,6 +174,7 @@ import { SentWords } from "./skill-chip.js";
 import { TAB_KIND, tabLook } from "./tab-look.js";
 import { INERT_LINK_CLASS, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
+import { usePlainLinkNames } from "./use-link-standing.js";
 import { opensAsLink } from "./use-open-link.js";
 import {
   type InboxImageReads,
@@ -1297,6 +1298,8 @@ function Subject({
   /** The item's pager and ⋯ at the title's end, where no bar stands over the pane (`INBOX_PANE_ACTIONS.SUBJECT`); none where its bar holds them. */
   actions?: React.ReactNode;
 }): React.JSX.Element {
+  const links = usePlainLinkNames();
+
   return (
     <header
       className="inbox-subject flex flex-col gap-tight-gap border-b border-border pb-block-gap"
@@ -1310,7 +1313,7 @@ function Subject({
           className="inbox-subject-title min-w-0 flex-1"
           data-inbox-title=""
         >
-          {cardTitle(item.title)}
+          {cardTitle(item.title, links)}
         </Text>
         {actions === undefined ? null : (
           <div className="flex flex-none items-center gap-control-gap">{actions}</div>
@@ -1629,6 +1632,7 @@ export function InboxPane({
   actionsAt?: InboxPaneActions | undefined;
 }): React.JSX.Element {
   const now = useMinute();
+  const title = cardTitle(item.title, usePlainLinkNames());
   const board = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLElement>(null);
 
@@ -1737,7 +1741,7 @@ export function InboxPane({
       >
         <AskControls
           ask={openAsk}
-          title={cardTitle(item.title)}
+          title={title}
           doors={{ draft, disabled: !open, text: formText, onDraft }}
         />
       </DraftQuestion>
@@ -1812,12 +1816,7 @@ export function InboxPane({
   const barless = atSubject && onBack === undefined;
 
   return (
-    <section
-      ref={pane}
-      className={INBOX_VIEW_ITEMS}
-      aria-label={cardTitle(item.title)}
-      hidden={hidden}
-    >
+    <section ref={pane} className={INBOX_VIEW_ITEMS} aria-label={title} hidden={hidden}>
       {barless ? null : phoneHead ? (
         <PhoneHead
           place="inbox-item"
@@ -1829,7 +1828,7 @@ export function InboxPane({
               onBack={onBack}
             />
           }
-          title={cardTitle(item.title)}
+          title={title}
           end={
             <>
               <PhoneSteps pager={pager} />
@@ -1869,12 +1868,12 @@ export function InboxPane({
                 by={by}
                 doors={doors}
                 agents={agents}
-                title={cardTitle(item.title)}
+                title={title}
                 titleShown={headingAway}
               />
             )
           }
-          pickUp={within === true ? { name: cardTitle(item.title), shown: headingAway } : undefined}
+          pickUp={within === true ? { name: title, shown: headingAway } : undefined}
           actions={atSubject ? undefined : itemActions}
         />
       )}
@@ -1922,7 +1921,7 @@ export function InboxPane({
                         return (
                           <ThreadMessage
                             itemId={item.id}
-                            title={cardTitle(item.title)}
+                            title={title}
                             threadAddressedTo={inboxAddressedTo(item)}
                             message={row.message}
                             thread={thread}
@@ -1943,7 +1942,7 @@ export function InboxPane({
                             itemId={item.id}
                             readerId={readerId}
                             reply={row.reply}
-                            title={cardTitle(item.title)}
+                            title={title}
                             thread={thread}
                             now={now}
                             place={place}

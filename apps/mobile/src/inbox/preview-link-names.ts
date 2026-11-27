@@ -1,10 +1,10 @@
-// preview-link-names.ts -- what the app holds to say each place of ours an Inbox row's line spells bare by its chip's name, as the panel's row says it (`usePlainLinkNames`): read by key for the places that line names alone.
+// preview-link-names.ts -- what the app holds to say each place of ours a plain line spells bare by its chip's name, an Inbox row's preview and a thread's title, as the panel's row says it: read by key for the places those words name alone.
 
 import type { InboxRow } from "@repo/features/inbox-digest";
 import { inboxPreviewPlaces } from "@repo/features/inbox-list-model";
-import { LINK_DESTINATION, taskNumberOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink, taskNumberOf } from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
-import type { PlainLinkNames } from "@repo/features/place-chip-model";
+import { type PlainLinkNames, placesSpelledIn } from "@repo/features/place-chip-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import { windowRows } from "@repo/host/read-window";
@@ -28,7 +28,7 @@ interface LineIds {
 }
 
 /** The ids `places` names, each kind's apart. */
-function lineIdsOf(places: ReturnType<typeof inboxPreviewPlaces>): LineIds {
+function lineIdsOf(places: readonly ReadLink[]): LineIds {
   const tasks: string[] = [];
   const numbers: number[] = [];
   const agents: string[] = [];
@@ -49,17 +49,16 @@ function lineIdsOf(places: ReturnType<typeof inboxPreviewPlaces>): LineIds {
 }
 
 /**
- * The names an Inbox row's line says each place of ours it spells bare by
- * (`inboxPreview`'s `links`): a task's name by its id or by its number in
+ * The names plain words say each of `places`, places of ours they spell
+ * bare, by (`inboxPreview`'s and `cardTitle`'s `links`): a task's name by its id or by its number in
  * the workspace its link names, an agent's as its tab names it, and a
  * member's of the chosen workspace, read by key for the places the line
  * names alone, so a row naming none reads nothing. None where the line
  * spells no place of ours. A task the app does not list is said by its
  * kind, as the panel's row says one.
  */
-export function usePreviewLinkNames(item: InboxRow): PlainLinkNames | undefined {
+export function usePlainLinkNames(places: readonly ReadLink[]): PlainLinkNames | undefined {
   const { tasks, agents } = useTaskListCollections();
-  const places = useMemo(() => inboxPreviewPlaces(item), [item]);
   const ids = useMemo(() => lineIdsOf(places), [places]);
   const byId = useTaskListRowsOf(tasks, ids.tasks);
   const agentRows = useTaskListRowsOf(agents, ids.agents);
@@ -113,4 +112,21 @@ export function usePreviewLinkNames(item: InboxRow): PlainLinkNames | undefined 
       },
     };
   }, [places, byId, byNumber, agentRows, ids.people, member, workspaces]);
+}
+
+/** The names an Inbox row says each place of ours its title and its line spell bare by (`usePlainLinkNames`). */
+export function useRowLinkNames(item: InboxRow): PlainLinkNames | undefined {
+  const places = useMemo(
+    () => [...placesSpelledIn(item.title), ...inboxPreviewPlaces(item)],
+    [item],
+  );
+
+  return usePlainLinkNames(places);
+}
+
+/** The names a thread's title says each place of ours it spells bare by (`usePlainLinkNames`). */
+export function useTitleLinkNames(title: string): PlainLinkNames | undefined {
+  const places = useMemo(() => placesSpelledIn(title), [title]);
+
+  return usePlainLinkNames(places);
 }

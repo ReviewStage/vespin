@@ -523,13 +523,14 @@ export const InboxItemRow = memo(function InboxItemRow({
 }): React.JSX.Element {
   const { holder, item } = listed;
   const unread = isUnread(item);
-  const title = cardTitle(item.title);
+  const links = usePlainLinkNames();
+  const title = cardTitle(item.title, links);
   const directory = useMemberDirectory();
   const reader = directory.readerId ?? readerId;
   const { nameOf } = useInboxStanding(listed, readerId);
   const lineKind = inboxLineKind(item);
   const preview = useInboxLinePieces(item, nameOf, ticked);
-  const heard = inboxPreviewHeard(item, nameOf, ticked, usePlainLinkNames());
+  const heard = inboxPreviewHeard(item, nameOf, ticked, links);
   const addressedTo = inboxAddressedTo(item);
   const addressee = usePerson(addressedTo);
   const coarse = useCoarsePointer();

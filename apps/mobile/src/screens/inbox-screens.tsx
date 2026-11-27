@@ -134,7 +134,7 @@ import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/hos
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import { useInboxRunFolds } from "../inbox/inbox-runs.js";
-import { usePreviewLinkNames } from "../inbox/preview-link-names.js";
+import { useRowLinkNames, useTitleLinkNames } from "../inbox/preview-link-names.js";
 import {
   type InboxThreadHeld,
   useInboxActs,
@@ -454,8 +454,8 @@ function InboxRowView({
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
-  const title = cardTitle(item.title);
-  const links = usePreviewLinkNames(item);
+  const links = useRowLinkNames(item);
+  const title = cardTitle(item.title, links);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
   const keeping = useKeeping();
@@ -797,6 +797,7 @@ function ThreadDetail({
 }) {
   const colors = useColors();
   const { holder, item } = listed;
+  const title = cardTitle(item.title, useTitleLinkNames(item.title));
   // Note that a thread on no task, a Manager's, stands in its agent's workspace and names no task, as the panel's Inbox draws it under its agent alone.
   const task = holderTask(holder);
   const workspaceId = holderWorkspaceId(holder);
@@ -1116,7 +1117,7 @@ function ThreadDetail({
       status={task?.status}
       manager={"agent" in holder ? holder.agent.face : undefined}
       pathActions={pathActions}
-      title={cardTitle(item.title)}
+      title={title}
       messages={drawn}
       opening={events.get(-1)}
       repository={holderRepository(holder)}
@@ -1187,7 +1188,7 @@ function ThreadDetail({
       {/* Note that the stack's bar names the thread in the ink, as Messages names a conversation and the agent page names its agent, since the thread opens at its newest message with its heading out of sight; its path leads the ⋯ menu. */}
       <Stack.Screen
         options={{
-          title: cardTitle(item.title),
+          title,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         }}
       />
