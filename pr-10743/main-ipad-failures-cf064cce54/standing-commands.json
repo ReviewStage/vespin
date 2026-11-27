@@ -1,0 +1,4026 @@
+[ {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "P" : "standing",
+        "FLOATING_TABS" : "true",
+        "DYNAMIC_ISLAND" : "false",
+        "MAESTRO_DRIVER_STARTUP_TIMEOUT" : "180000",
+        "MAESTRO_FILENAME" : "fstand-open",
+        "MAESTRO_DEVICE_UDID" : "BB0F23AB-3D97-4DED-AF5D-40A183B41894",
+        "MAESTRO_SHARD_ID" : "1",
+        "MAESTRO_SHARD_INDEX" : "0"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735378205,
+    "duration" : 4,
+    "sequenceNumber" : 0,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "P" : "standing",
+          "FLOATING_TABS" : "true",
+          "DYNAMIC_ISLAND" : "false",
+          "MAESTRO_DRIVER_STARTUP_TIMEOUT" : "180000",
+          "MAESTRO_FILENAME" : "fstand-open",
+          "MAESTRO_DEVICE_UDID" : "BB0F23AB-3D97-4DED-AF5D-40A183B41894",
+          "MAESTRO_SHARD_ID" : "1",
+          "MAESTRO_SHARD_INDEX" : "0"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735378212,
+    "duration" : 5,
+    "sequenceNumber" : 1,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "launchAppCommand" : {
+      "appId" : "dev.vespin.ios",
+      "clearState" : true,
+      "launchArguments" : {
+        "fixture" : "inbox"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735378219,
+    "duration" : 4817,
+    "sequenceNumber" : 2,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "launchAppCommand" : {
+        "appId" : "dev.vespin.ios",
+        "clearState" : true,
+        "launchArguments" : {
+          "fixture" : "inbox"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "setOrientationCommand" : {
+      "orientation" : "LANDSCAPE_LEFT",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735383228,
+    "duration" : 1002,
+    "sequenceNumber" : 3,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "setOrientationCommand" : {
+        "orientation" : "LANDSCAPE_LEFT",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "TAB" : "Tasks"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "defineVariablesCommand" : {
+          "env" : {
+            "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "repeatCommand" : {
+              "times" : "10",
+              "condition" : {
+                "notVisible" : {
+                  "idRegex" : "${TAB.toLowerCase()}-tab",
+                  "optional" : false
+                }
+              },
+              "commands" : [ {
+                "runFlowCommand" : {
+                  "commands" : [ {
+                    "tapOnElement" : {
+                      "selector" : {
+                        "textRegex" : "Collapsed",
+                        "optional" : false
+                      },
+                      "retryIfNoChange" : false,
+                      "waitUntilVisible" : false,
+                      "longPress" : false,
+                      "optional" : false
+                    }
+                  } ],
+                  "condition" : {
+                    "visible" : {
+                      "textRegex" : "Collapsed",
+                      "optional" : false
+                    }
+                  },
+                  "optional" : false
+                }
+              }, {
+                "runFlowCommand" : {
+                  "commands" : [ {
+                    "tapOnElement" : {
+                      "selector" : {
+                        "idRegex" : "BackButton",
+                        "optional" : false
+                      },
+                      "retryIfNoChange" : false,
+                      "waitUntilVisible" : false,
+                      "longPress" : false,
+                      "optional" : false
+                    }
+                  } ],
+                  "condition" : {
+                    "visible" : {
+                      "idRegex" : "BackButton",
+                      "optional" : false
+                    },
+                    "notVisible" : {
+                      "idRegex" : "${TAB.toLowerCase()}-tab",
+                      "optional" : false
+                    }
+                  },
+                  "optional" : false
+                }
+              }, {
+                "waitForAnimationToEndCommand" : {
+                  "optional" : false
+                }
+              } ],
+              "optional" : false
+            }
+          }, {
+            "assertConditionCommand" : {
+              "condition" : {
+                "visible" : {
+                  "idRegex" : "${TAB.toLowerCase()}-tab",
+                  "optional" : false
+                }
+              },
+              "timeout" : "30000",
+              "optional" : false
+            }
+          }, {
+            "tapOnElement" : {
+              "selector" : {
+                "idRegex" : "${TAB.toLowerCase()}-tab",
+                "optional" : false
+              },
+              "retryIfNoChange" : false,
+              "waitUntilVisible" : false,
+              "longPress" : false,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${FLOATING_TABS != 'true'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "assertConditionCommand" : {
+              "condition" : {
+                "visible" : {
+                  "textRegex" : "${TAB}",
+                  "optional" : false
+                }
+              },
+              "timeout" : "30000",
+              "optional" : false
+            }
+          }, {
+            "tapOnElement" : {
+              "selector" : {
+                "textRegex" : "${TAB}",
+                "index" : "-1",
+                "optional" : false
+              },
+              "retryIfNoChange" : false,
+              "waitUntilVisible" : false,
+              "longPress" : false,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${FLOATING_TABS == 'true'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "waitForAnimationToEndCommand" : {
+          "optional" : false
+        }
+      } ],
+      "sourceDescription" : "subflows/tab.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735384233,
+    "duration" : 10775,
+    "sequenceNumber" : 4,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "TAB" : "Tasks"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "defineVariablesCommand" : {
+            "env" : {
+              "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "repeatCommand" : {
+                "times" : "10",
+                "condition" : {
+                  "notVisible" : {
+                    "idRegex" : "${TAB.toLowerCase()}-tab",
+                    "optional" : false
+                  }
+                },
+                "commands" : [ {
+                  "runFlowCommand" : {
+                    "commands" : [ {
+                      "tapOnElement" : {
+                        "selector" : {
+                          "textRegex" : "Collapsed",
+                          "optional" : false
+                        },
+                        "retryIfNoChange" : false,
+                        "waitUntilVisible" : false,
+                        "longPress" : false,
+                        "optional" : false
+                      }
+                    } ],
+                    "condition" : {
+                      "visible" : {
+                        "textRegex" : "Collapsed",
+                        "optional" : false
+                      }
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "runFlowCommand" : {
+                    "commands" : [ {
+                      "tapOnElement" : {
+                        "selector" : {
+                          "idRegex" : "BackButton",
+                          "optional" : false
+                        },
+                        "retryIfNoChange" : false,
+                        "waitUntilVisible" : false,
+                        "longPress" : false,
+                        "optional" : false
+                      }
+                    } ],
+                    "condition" : {
+                      "visible" : {
+                        "idRegex" : "BackButton",
+                        "optional" : false
+                      },
+                      "notVisible" : {
+                        "idRegex" : "${TAB.toLowerCase()}-tab",
+                        "optional" : false
+                      }
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "waitForAnimationToEndCommand" : {
+                    "optional" : false
+                  }
+                } ],
+                "optional" : false
+              }
+            }, {
+              "assertConditionCommand" : {
+                "condition" : {
+                  "visible" : {
+                    "idRegex" : "${TAB.toLowerCase()}-tab",
+                    "optional" : false
+                  }
+                },
+                "timeout" : "30000",
+                "optional" : false
+              }
+            }, {
+              "tapOnElement" : {
+                "selector" : {
+                  "idRegex" : "${TAB.toLowerCase()}-tab",
+                  "optional" : false
+                },
+                "retryIfNoChange" : false,
+                "waitUntilVisible" : false,
+                "longPress" : false,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${FLOATING_TABS != 'true'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "assertConditionCommand" : {
+                "condition" : {
+                  "visible" : {
+                    "textRegex" : "${TAB}",
+                    "optional" : false
+                  }
+                },
+                "timeout" : "30000",
+                "optional" : false
+              }
+            }, {
+              "tapOnElement" : {
+                "selector" : {
+                  "textRegex" : "${TAB}",
+                  "index" : "-1",
+                  "optional" : false
+                },
+                "retryIfNoChange" : false,
+                "waitUntilVisible" : false,
+                "longPress" : false,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${FLOATING_TABS == 'true'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "waitForAnimationToEndCommand" : {
+            "optional" : false
+          }
+        } ],
+        "sourceDescription" : "subflows/tab.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "TAB" : "Tasks"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735384253,
+    "duration" : 2,
+    "sequenceNumber" : 5,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "TAB" : "Tasks"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735384257,
+    "duration" : 3304,
+    "sequenceNumber" : 6,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "FLOATING_TABS" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735387563,
+    "duration" : 1,
+    "sequenceNumber" : 7,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "repeatCommand" : {
+          "times" : "10",
+          "condition" : {
+            "notVisible" : {
+              "idRegex" : "${TAB.toLowerCase()}-tab",
+              "optional" : false
+            }
+          },
+          "commands" : [ {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "tapOnElement" : {
+                  "selector" : {
+                    "textRegex" : "Collapsed",
+                    "optional" : false
+                  },
+                  "retryIfNoChange" : false,
+                  "waitUntilVisible" : false,
+                  "longPress" : false,
+                  "optional" : false
+                }
+              } ],
+              "condition" : {
+                "visible" : {
+                  "textRegex" : "Collapsed",
+                  "optional" : false
+                }
+              },
+              "optional" : false
+            }
+          }, {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "tapOnElement" : {
+                  "selector" : {
+                    "idRegex" : "BackButton",
+                    "optional" : false
+                  },
+                  "retryIfNoChange" : false,
+                  "waitUntilVisible" : false,
+                  "longPress" : false,
+                  "optional" : false
+                }
+              } ],
+              "condition" : {
+                "visible" : {
+                  "idRegex" : "BackButton",
+                  "optional" : false
+                },
+                "notVisible" : {
+                  "idRegex" : "${TAB.toLowerCase()}-tab",
+                  "optional" : false
+                }
+              },
+              "optional" : false
+            }
+          }, {
+            "waitForAnimationToEndCommand" : {
+              "optional" : false
+            }
+          } ],
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "idRegex" : "${TAB.toLowerCase()}-tab",
+              "optional" : false
+            }
+          },
+          "timeout" : "30000",
+          "optional" : false
+        }
+      }, {
+        "tapOnElement" : {
+          "selector" : {
+            "idRegex" : "${TAB.toLowerCase()}-tab",
+            "optional" : false
+          },
+          "retryIfNoChange" : false,
+          "waitUntilVisible" : false,
+          "longPress" : false,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${FLOATING_TABS != 'true'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735387565,
+    "duration" : 14,
+    "sequenceNumber" : 8,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "repeatCommand" : {
+            "times" : "10",
+            "condition" : {
+              "notVisible" : {
+                "idRegex" : "${TAB.toLowerCase()}-tab",
+                "optional" : false
+              }
+            },
+            "commands" : [ {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "tapOnElement" : {
+                    "selector" : {
+                      "textRegex" : "Collapsed",
+                      "optional" : false
+                    },
+                    "retryIfNoChange" : false,
+                    "waitUntilVisible" : false,
+                    "longPress" : false,
+                    "optional" : false
+                  }
+                } ],
+                "condition" : {
+                  "visible" : {
+                    "textRegex" : "Collapsed",
+                    "optional" : false
+                  }
+                },
+                "optional" : false
+              }
+            }, {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "tapOnElement" : {
+                    "selector" : {
+                      "idRegex" : "BackButton",
+                      "optional" : false
+                    },
+                    "retryIfNoChange" : false,
+                    "waitUntilVisible" : false,
+                    "longPress" : false,
+                    "optional" : false
+                  }
+                } ],
+                "condition" : {
+                  "visible" : {
+                    "idRegex" : "BackButton",
+                    "optional" : false
+                  },
+                  "notVisible" : {
+                    "idRegex" : "${TAB.toLowerCase()}-tab",
+                    "optional" : false
+                  }
+                },
+                "optional" : false
+              }
+            }, {
+              "waitForAnimationToEndCommand" : {
+                "optional" : false
+              }
+            } ],
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "idRegex" : "${TAB.toLowerCase()}-tab",
+                "optional" : false
+              }
+            },
+            "timeout" : "30000",
+            "optional" : false
+          }
+        }, {
+          "tapOnElement" : {
+            "selector" : {
+              "idRegex" : "${TAB.toLowerCase()}-tab",
+              "optional" : false
+            },
+            "retryIfNoChange" : false,
+            "waitUntilVisible" : false,
+            "longPress" : false,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "${TAB}",
+              "optional" : false
+            }
+          },
+          "timeout" : "30000",
+          "optional" : false
+        }
+      }, {
+        "tapOnElement" : {
+          "selector" : {
+            "textRegex" : "${TAB}",
+            "index" : "-1",
+            "optional" : false
+          },
+          "retryIfNoChange" : false,
+          "waitUntilVisible" : false,
+          "longPress" : false,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${FLOATING_TABS == 'true'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735387583,
+    "duration" : 6678,
+    "sequenceNumber" : 9,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "${TAB}",
+                "optional" : false
+              }
+            },
+            "timeout" : "30000",
+            "optional" : false
+          }
+        }, {
+          "tapOnElement" : {
+            "selector" : {
+              "textRegex" : "${TAB}",
+              "index" : "-1",
+              "optional" : false
+            },
+            "retryIfNoChange" : false,
+            "waitUntilVisible" : false,
+            "longPress" : false,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "${TAB}",
+          "optional" : false
+        }
+      },
+      "timeout" : "30000",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735387593,
+    "duration" : 4157,
+    "sequenceNumber" : 10,
+    "depth" : 2,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Tasks",
+            "optional" : false
+          }
+        },
+        "timeout" : "30000",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "${TAB}",
+        "index" : "-1",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735391753,
+    "duration" : 2507,
+    "sequenceNumber" : 11,
+    "depth" : 2,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Tasks",
+          "index" : "-1",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "waitForAnimationToEndCommand" : {
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735394264,
+    "duration" : 743,
+    "sequenceNumber" : 12,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "waitForAnimationToEndCommand" : {
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "scrollUntilVisible" : {
+      "selector" : {
+        "textRegex" : "Teammate invitations",
+        "optional" : false
+      },
+      "direction" : "DOWN",
+      "scrollDuration" : "40",
+      "visibilityPercentage" : 100,
+      "timeout" : "20000",
+      "centerElement" : false,
+      "originalSpeedValue" : "40",
+      "optional" : false,
+      "visibilityPercentageNormalized" : 1.0
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735395009,
+    "duration" : 503,
+    "sequenceNumber" : 13,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "scrollUntilVisible" : {
+        "selector" : {
+          "textRegex" : "Teammate invitations",
+          "optional" : false
+        },
+        "direction" : "DOWN",
+        "scrollDuration" : "601",
+        "visibilityPercentage" : 100,
+        "timeout" : "20000",
+        "centerElement" : false,
+        "originalSpeedValue" : "40",
+        "optional" : false,
+        "visibilityPercentageNormalized" : 1.0
+      }
+    }
+  }
+}, {
+  "command" : {
+    "waitForAnimationToEndCommand" : {
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735395513,
+    "duration" : 2179,
+    "sequenceNumber" : 14,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "waitForAnimationToEndCommand" : {
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Teammate invitations",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735397694,
+    "duration" : 1848,
+    "sequenceNumber" : 15,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Teammate invitations",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Created by .*",
+          "optional" : false
+        }
+      },
+      "timeout" : "15000",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735399546,
+    "duration" : 685,
+    "sequenceNumber" : 16,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Created by .*",
+            "optional" : false
+          }
+        },
+        "timeout" : "15000",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "ELEMENT" : "Status, .*",
+            "DIRECTION" : "UP",
+            "BESIDE" : "true"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "defineVariablesCommand" : {
+          "env" : {
+            "DIRECTION" : "${DIRECTION || 'DOWN'}",
+            "ABOVE" : "${ABOVE || ''}",
+            "BELOW" : "${BELOW || ''}",
+            "BESIDE" : "${BESIDE || 'false'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "repeatCommand" : {
+              "times" : "40",
+              "condition" : {
+                "notVisible" : {
+                  "textRegex" : "${ELEMENT}",
+                  "below" : {
+                    "idRegex" : "${BELOW}",
+                    "optional" : false
+                  },
+                  "optional" : false
+                }
+              },
+              "commands" : [ {
+                "swipeCommand" : {
+                  "startRelative" : "50%, 40%",
+                  "endRelative" : "50%, 54%",
+                  "duration" : 1500,
+                  "optional" : false
+                }
+              } ],
+              "optional" : false
+            }
+          }, {
+            "swipeCommand" : {
+              "startRelative" : "50%, 40%",
+              "endRelative" : "50%, 54%",
+              "duration" : 1500,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${BELOW != '' && BESIDE != 'true'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "repeatCommand" : {
+              "times" : "40",
+              "condition" : {
+                "notVisible" : {
+                  "textRegex" : "${ELEMENT}",
+                  "below" : {
+                    "idRegex" : "${BELOW}",
+                    "optional" : false
+                  },
+                  "optional" : false
+                }
+              },
+              "commands" : [ {
+                "swipeCommand" : {
+                  "startRelative" : "85%, 40%",
+                  "endRelative" : "85%, 54%",
+                  "duration" : 1500,
+                  "optional" : false
+                }
+              } ],
+              "optional" : false
+            }
+          }, {
+            "swipeCommand" : {
+              "startRelative" : "85%, 40%",
+              "endRelative" : "85%, 54%",
+              "duration" : 1500,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${BELOW != '' && BESIDE == 'true'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "scrollUntilVisible" : {
+              "selector" : {
+                "textRegex" : "${ELEMENT}",
+                "above" : {
+                  "idRegex" : "${ABOVE}",
+                  "optional" : false
+                },
+                "optional" : false
+              },
+              "direction" : "DOWN",
+              "scrollDuration" : "40",
+              "visibilityPercentage" : 100,
+              "timeout" : "60000",
+              "centerElement" : false,
+              "originalSpeedValue" : "40",
+              "optional" : false,
+              "visibilityPercentageNormalized" : 1.0
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${ABOVE != ''}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "scrollUntilVisible" : {
+              "selector" : {
+                "textRegex" : "${ELEMENT}",
+                "optional" : false
+              },
+              "direction" : "UP",
+              "scrollDuration" : "40",
+              "visibilityPercentage" : 100,
+              "timeout" : "60000",
+              "centerElement" : true,
+              "originalSpeedValue" : "40",
+              "optional" : false,
+              "visibilityPercentageNormalized" : 1.0
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "scrollUntilVisible" : {
+              "selector" : {
+                "textRegex" : "${ELEMENT}",
+                "optional" : false
+              },
+              "direction" : "DOWN",
+              "scrollDuration" : "40",
+              "visibilityPercentage" : 100,
+              "timeout" : "60000",
+              "centerElement" : true,
+              "originalSpeedValue" : "40",
+              "optional" : false,
+              "visibilityPercentageNormalized" : 1.0
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "defineVariablesCommand" : {
+                  "env" : {
+                    "ELEMENT" : "${ELEMENT}",
+                    "DIRECTION" : "${DIRECTION}",
+                    "BESIDE" : "true"
+                  },
+                  "optional" : false
+                }
+              }, {
+                "applyConfigurationCommand" : {
+                  "config" : {
+                    "appId" : "dev.vespin.ios"
+                  },
+                  "optional" : false
+                }
+              }, {
+                "defineVariablesCommand" : {
+                  "env" : {
+                    "DIRECTION" : "${DIRECTION || 'DOWN'}",
+                    "BESIDE" : "${BESIDE || 'false'}"
+                  },
+                  "optional" : false
+                }
+              }, {
+                "runFlowCommand" : {
+                  "commands" : [ {
+                    "scrollUntilVisible" : {
+                      "selector" : {
+                        "textRegex" : "${ELEMENT}",
+                        "optional" : false
+                      },
+                      "direction" : "UP",
+                      "scrollDuration" : "40",
+                      "visibilityPercentage" : 100,
+                      "timeout" : "20000",
+                      "centerElement" : false,
+                      "originalSpeedValue" : "40",
+                      "optional" : false,
+                      "visibilityPercentageNormalized" : 1.0
+                    }
+                  } ],
+                  "condition" : {
+                    "scriptCondition" : "${BESIDE != 'true' && DIRECTION == 'UP'}"
+                  },
+                  "optional" : false
+                }
+              }, {
+                "runFlowCommand" : {
+                  "commands" : [ {
+                    "scrollUntilVisible" : {
+                      "selector" : {
+                        "textRegex" : "${ELEMENT}",
+                        "optional" : false
+                      },
+                      "direction" : "DOWN",
+                      "scrollDuration" : "40",
+                      "visibilityPercentage" : 100,
+                      "timeout" : "20000",
+                      "centerElement" : false,
+                      "originalSpeedValue" : "40",
+                      "optional" : false,
+                      "visibilityPercentageNormalized" : 1.0
+                    }
+                  } ],
+                  "condition" : {
+                    "scriptCondition" : "${BESIDE != 'true' && DIRECTION != 'UP'}"
+                  },
+                  "optional" : false
+                }
+              }, {
+                "runFlowCommand" : {
+                  "commands" : [ {
+                    "repeatCommand" : {
+                      "times" : "40",
+                      "condition" : {
+                        "notVisible" : {
+                          "textRegex" : "${ELEMENT}",
+                          "optional" : false
+                        }
+                      },
+                      "commands" : [ {
+                        "swipeCommand" : {
+                          "startRelative" : "85%, 40%",
+                          "endRelative" : "85%, 65%",
+                          "duration" : 1200,
+                          "optional" : false
+                        }
+                      } ],
+                      "optional" : false
+                    }
+                  }, {
+                    "assertConditionCommand" : {
+                      "condition" : {
+                        "visible" : {
+                          "textRegex" : "${ELEMENT}",
+                          "optional" : false
+                        }
+                      },
+                      "optional" : false
+                    }
+                  } ],
+                  "condition" : {
+                    "scriptCondition" : "${BESIDE == 'true' && DIRECTION == 'UP'}"
+                  },
+                  "optional" : false
+                }
+              }, {
+                "runFlowCommand" : {
+                  "commands" : [ {
+                    "repeatCommand" : {
+                      "times" : "40",
+                      "condition" : {
+                        "notVisible" : {
+                          "textRegex" : "${ELEMENT}",
+                          "optional" : false
+                        }
+                      },
+                      "commands" : [ {
+                        "swipeCommand" : {
+                          "startRelative" : "85%, 65%",
+                          "endRelative" : "85%, 40%",
+                          "duration" : 1200,
+                          "optional" : false
+                        }
+                      } ],
+                      "optional" : false
+                    }
+                  }, {
+                    "assertConditionCommand" : {
+                      "condition" : {
+                        "visible" : {
+                          "textRegex" : "${ELEMENT}",
+                          "optional" : false
+                        }
+                      },
+                      "optional" : false
+                    }
+                  } ],
+                  "condition" : {
+                    "scriptCondition" : "${BESIDE == 'true' && DIRECTION != 'UP'}"
+                  },
+                  "optional" : false
+                }
+              } ],
+              "sourceDescription" : "scroll-in.yaml",
+              "config" : {
+                "appId" : "dev.vespin.ios"
+              },
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE == 'true'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "swipeCommand" : {
+              "startRelative" : "85%, 40%",
+              "endRelative" : "85%, 60%",
+              "duration" : 1200,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "swipeCommand" : {
+              "startRelative" : "85%, 60%",
+              "endRelative" : "85%, 40%",
+              "duration" : 1200,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "waitForAnimationToEndCommand" : {
+          "timeout" : "5000",
+          "optional" : false
+        }
+      } ],
+      "sourceDescription" : "subflows/scroll-to.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735400232,
+    "duration" : 12745,
+    "sequenceNumber" : 17,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "ELEMENT" : "Status, .*",
+              "DIRECTION" : "UP",
+              "BESIDE" : "true"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "defineVariablesCommand" : {
+            "env" : {
+              "DIRECTION" : "${DIRECTION || 'DOWN'}",
+              "ABOVE" : "${ABOVE || ''}",
+              "BELOW" : "${BELOW || ''}",
+              "BESIDE" : "${BESIDE || 'false'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "repeatCommand" : {
+                "times" : "40",
+                "condition" : {
+                  "notVisible" : {
+                    "textRegex" : "${ELEMENT}",
+                    "below" : {
+                      "idRegex" : "${BELOW}",
+                      "optional" : false
+                    },
+                    "optional" : false
+                  }
+                },
+                "commands" : [ {
+                  "swipeCommand" : {
+                    "startRelative" : "50%, 40%",
+                    "endRelative" : "50%, 54%",
+                    "duration" : 1500,
+                    "optional" : false
+                  }
+                } ],
+                "optional" : false
+              }
+            }, {
+              "swipeCommand" : {
+                "startRelative" : "50%, 40%",
+                "endRelative" : "50%, 54%",
+                "duration" : 1500,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${BELOW != '' && BESIDE != 'true'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "repeatCommand" : {
+                "times" : "40",
+                "condition" : {
+                  "notVisible" : {
+                    "textRegex" : "${ELEMENT}",
+                    "below" : {
+                      "idRegex" : "${BELOW}",
+                      "optional" : false
+                    },
+                    "optional" : false
+                  }
+                },
+                "commands" : [ {
+                  "swipeCommand" : {
+                    "startRelative" : "85%, 40%",
+                    "endRelative" : "85%, 54%",
+                    "duration" : 1500,
+                    "optional" : false
+                  }
+                } ],
+                "optional" : false
+              }
+            }, {
+              "swipeCommand" : {
+                "startRelative" : "85%, 40%",
+                "endRelative" : "85%, 54%",
+                "duration" : 1500,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${BELOW != '' && BESIDE == 'true'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "scrollUntilVisible" : {
+                "selector" : {
+                  "textRegex" : "${ELEMENT}",
+                  "above" : {
+                    "idRegex" : "${ABOVE}",
+                    "optional" : false
+                  },
+                  "optional" : false
+                },
+                "direction" : "DOWN",
+                "scrollDuration" : "40",
+                "visibilityPercentage" : 100,
+                "timeout" : "60000",
+                "centerElement" : false,
+                "originalSpeedValue" : "40",
+                "optional" : false,
+                "visibilityPercentageNormalized" : 1.0
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${ABOVE != ''}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "scrollUntilVisible" : {
+                "selector" : {
+                  "textRegex" : "${ELEMENT}",
+                  "optional" : false
+                },
+                "direction" : "UP",
+                "scrollDuration" : "40",
+                "visibilityPercentage" : 100,
+                "timeout" : "60000",
+                "centerElement" : true,
+                "originalSpeedValue" : "40",
+                "optional" : false,
+                "visibilityPercentageNormalized" : 1.0
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "scrollUntilVisible" : {
+                "selector" : {
+                  "textRegex" : "${ELEMENT}",
+                  "optional" : false
+                },
+                "direction" : "DOWN",
+                "scrollDuration" : "40",
+                "visibilityPercentage" : 100,
+                "timeout" : "60000",
+                "centerElement" : true,
+                "originalSpeedValue" : "40",
+                "optional" : false,
+                "visibilityPercentageNormalized" : 1.0
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "defineVariablesCommand" : {
+                    "env" : {
+                      "ELEMENT" : "${ELEMENT}",
+                      "DIRECTION" : "${DIRECTION}",
+                      "BESIDE" : "true"
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "applyConfigurationCommand" : {
+                    "config" : {
+                      "appId" : "dev.vespin.ios"
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "defineVariablesCommand" : {
+                    "env" : {
+                      "DIRECTION" : "${DIRECTION || 'DOWN'}",
+                      "BESIDE" : "${BESIDE || 'false'}"
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "runFlowCommand" : {
+                    "commands" : [ {
+                      "scrollUntilVisible" : {
+                        "selector" : {
+                          "textRegex" : "${ELEMENT}",
+                          "optional" : false
+                        },
+                        "direction" : "UP",
+                        "scrollDuration" : "40",
+                        "visibilityPercentage" : 100,
+                        "timeout" : "20000",
+                        "centerElement" : false,
+                        "originalSpeedValue" : "40",
+                        "optional" : false,
+                        "visibilityPercentageNormalized" : 1.0
+                      }
+                    } ],
+                    "condition" : {
+                      "scriptCondition" : "${BESIDE != 'true' && DIRECTION == 'UP'}"
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "runFlowCommand" : {
+                    "commands" : [ {
+                      "scrollUntilVisible" : {
+                        "selector" : {
+                          "textRegex" : "${ELEMENT}",
+                          "optional" : false
+                        },
+                        "direction" : "DOWN",
+                        "scrollDuration" : "40",
+                        "visibilityPercentage" : 100,
+                        "timeout" : "20000",
+                        "centerElement" : false,
+                        "originalSpeedValue" : "40",
+                        "optional" : false,
+                        "visibilityPercentageNormalized" : 1.0
+                      }
+                    } ],
+                    "condition" : {
+                      "scriptCondition" : "${BESIDE != 'true' && DIRECTION != 'UP'}"
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "runFlowCommand" : {
+                    "commands" : [ {
+                      "repeatCommand" : {
+                        "times" : "40",
+                        "condition" : {
+                          "notVisible" : {
+                            "textRegex" : "${ELEMENT}",
+                            "optional" : false
+                          }
+                        },
+                        "commands" : [ {
+                          "swipeCommand" : {
+                            "startRelative" : "85%, 40%",
+                            "endRelative" : "85%, 65%",
+                            "duration" : 1200,
+                            "optional" : false
+                          }
+                        } ],
+                        "optional" : false
+                      }
+                    }, {
+                      "assertConditionCommand" : {
+                        "condition" : {
+                          "visible" : {
+                            "textRegex" : "${ELEMENT}",
+                            "optional" : false
+                          }
+                        },
+                        "optional" : false
+                      }
+                    } ],
+                    "condition" : {
+                      "scriptCondition" : "${BESIDE == 'true' && DIRECTION == 'UP'}"
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "runFlowCommand" : {
+                    "commands" : [ {
+                      "repeatCommand" : {
+                        "times" : "40",
+                        "condition" : {
+                          "notVisible" : {
+                            "textRegex" : "${ELEMENT}",
+                            "optional" : false
+                          }
+                        },
+                        "commands" : [ {
+                          "swipeCommand" : {
+                            "startRelative" : "85%, 65%",
+                            "endRelative" : "85%, 40%",
+                            "duration" : 1200,
+                            "optional" : false
+                          }
+                        } ],
+                        "optional" : false
+                      }
+                    }, {
+                      "assertConditionCommand" : {
+                        "condition" : {
+                          "visible" : {
+                            "textRegex" : "${ELEMENT}",
+                            "optional" : false
+                          }
+                        },
+                        "optional" : false
+                      }
+                    } ],
+                    "condition" : {
+                      "scriptCondition" : "${BESIDE == 'true' && DIRECTION != 'UP'}"
+                    },
+                    "optional" : false
+                  }
+                } ],
+                "sourceDescription" : "scroll-in.yaml",
+                "config" : {
+                  "appId" : "dev.vespin.ios"
+                },
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE == 'true'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "swipeCommand" : {
+                "startRelative" : "85%, 40%",
+                "endRelative" : "85%, 60%",
+                "duration" : 1200,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "swipeCommand" : {
+                "startRelative" : "85%, 60%",
+                "endRelative" : "85%, 40%",
+                "duration" : 1200,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "waitForAnimationToEndCommand" : {
+            "timeout" : "5000",
+            "optional" : false
+          }
+        } ],
+        "sourceDescription" : "subflows/scroll-to.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "ELEMENT" : "Status, .*",
+        "DIRECTION" : "UP",
+        "BESIDE" : "true"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735400237,
+    "duration" : 0,
+    "sequenceNumber" : 18,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "ELEMENT" : "Status, .*",
+          "DIRECTION" : "UP",
+          "BESIDE" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "DIRECTION" : "${DIRECTION || 'DOWN'}",
+        "ABOVE" : "${ABOVE || ''}",
+        "BELOW" : "${BELOW || ''}",
+        "BESIDE" : "${BESIDE || 'false'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735400238,
+    "duration" : 18,
+    "sequenceNumber" : 19,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "DIRECTION" : "UP",
+          "BESIDE" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735400256,
+    "duration" : 3,
+    "sequenceNumber" : 20,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "repeatCommand" : {
+          "times" : "40",
+          "condition" : {
+            "notVisible" : {
+              "textRegex" : "${ELEMENT}",
+              "below" : {
+                "idRegex" : "${BELOW}",
+                "optional" : false
+              },
+              "optional" : false
+            }
+          },
+          "commands" : [ {
+            "swipeCommand" : {
+              "startRelative" : "50%, 40%",
+              "endRelative" : "50%, 54%",
+              "duration" : 1500,
+              "optional" : false
+            }
+          } ],
+          "optional" : false
+        }
+      }, {
+        "swipeCommand" : {
+          "startRelative" : "50%, 40%",
+          "endRelative" : "50%, 54%",
+          "duration" : 1500,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${BELOW != '' && BESIDE != 'true'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735400260,
+    "duration" : 6,
+    "sequenceNumber" : 21,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "repeatCommand" : {
+            "times" : "40",
+            "condition" : {
+              "notVisible" : {
+                "textRegex" : "${ELEMENT}",
+                "below" : {
+                  "idRegex" : "${BELOW}",
+                  "optional" : false
+                },
+                "optional" : false
+              }
+            },
+            "commands" : [ {
+              "swipeCommand" : {
+                "startRelative" : "50%, 40%",
+                "endRelative" : "50%, 54%",
+                "duration" : 1500,
+                "optional" : false
+              }
+            } ],
+            "optional" : false
+          }
+        }, {
+          "swipeCommand" : {
+            "startRelative" : "50%, 40%",
+            "endRelative" : "50%, 54%",
+            "duration" : 1500,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "repeatCommand" : {
+          "times" : "40",
+          "condition" : {
+            "notVisible" : {
+              "textRegex" : "${ELEMENT}",
+              "below" : {
+                "idRegex" : "${BELOW}",
+                "optional" : false
+              },
+              "optional" : false
+            }
+          },
+          "commands" : [ {
+            "swipeCommand" : {
+              "startRelative" : "85%, 40%",
+              "endRelative" : "85%, 54%",
+              "duration" : 1500,
+              "optional" : false
+            }
+          } ],
+          "optional" : false
+        }
+      }, {
+        "swipeCommand" : {
+          "startRelative" : "85%, 40%",
+          "endRelative" : "85%, 54%",
+          "duration" : 1500,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${BELOW != '' && BESIDE == 'true'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735400267,
+    "duration" : 3,
+    "sequenceNumber" : 22,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "repeatCommand" : {
+            "times" : "40",
+            "condition" : {
+              "notVisible" : {
+                "textRegex" : "${ELEMENT}",
+                "below" : {
+                  "idRegex" : "${BELOW}",
+                  "optional" : false
+                },
+                "optional" : false
+              }
+            },
+            "commands" : [ {
+              "swipeCommand" : {
+                "startRelative" : "85%, 40%",
+                "endRelative" : "85%, 54%",
+                "duration" : 1500,
+                "optional" : false
+              }
+            } ],
+            "optional" : false
+          }
+        }, {
+          "swipeCommand" : {
+            "startRelative" : "85%, 40%",
+            "endRelative" : "85%, 54%",
+            "duration" : 1500,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "scrollUntilVisible" : {
+          "selector" : {
+            "textRegex" : "${ELEMENT}",
+            "above" : {
+              "idRegex" : "${ABOVE}",
+              "optional" : false
+            },
+            "optional" : false
+          },
+          "direction" : "DOWN",
+          "scrollDuration" : "40",
+          "visibilityPercentage" : 100,
+          "timeout" : "60000",
+          "centerElement" : false,
+          "originalSpeedValue" : "40",
+          "optional" : false,
+          "visibilityPercentageNormalized" : 1.0
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${ABOVE != ''}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735400270,
+    "duration" : 3,
+    "sequenceNumber" : 23,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "scrollUntilVisible" : {
+            "selector" : {
+              "textRegex" : "${ELEMENT}",
+              "above" : {
+                "idRegex" : "${ABOVE}",
+                "optional" : false
+              },
+              "optional" : false
+            },
+            "direction" : "DOWN",
+            "scrollDuration" : "40",
+            "visibilityPercentage" : 100,
+            "timeout" : "60000",
+            "centerElement" : false,
+            "originalSpeedValue" : "40",
+            "optional" : false,
+            "visibilityPercentageNormalized" : 1.0
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "scrollUntilVisible" : {
+          "selector" : {
+            "textRegex" : "${ELEMENT}",
+            "optional" : false
+          },
+          "direction" : "UP",
+          "scrollDuration" : "40",
+          "visibilityPercentage" : 100,
+          "timeout" : "60000",
+          "centerElement" : true,
+          "originalSpeedValue" : "40",
+          "optional" : false,
+          "visibilityPercentageNormalized" : 1.0
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION == 'UP'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735400273,
+    "duration" : 3,
+    "sequenceNumber" : 24,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "scrollUntilVisible" : {
+            "selector" : {
+              "textRegex" : "${ELEMENT}",
+              "optional" : false
+            },
+            "direction" : "UP",
+            "scrollDuration" : "40",
+            "visibilityPercentage" : 100,
+            "timeout" : "60000",
+            "centerElement" : true,
+            "originalSpeedValue" : "40",
+            "optional" : false,
+            "visibilityPercentageNormalized" : 1.0
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "scrollUntilVisible" : {
+          "selector" : {
+            "textRegex" : "${ELEMENT}",
+            "optional" : false
+          },
+          "direction" : "DOWN",
+          "scrollDuration" : "40",
+          "visibilityPercentage" : 100,
+          "timeout" : "60000",
+          "centerElement" : true,
+          "originalSpeedValue" : "40",
+          "optional" : false,
+          "visibilityPercentageNormalized" : 1.0
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE != 'true' && DIRECTION != 'UP'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735400277,
+    "duration" : 1,
+    "sequenceNumber" : 25,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "scrollUntilVisible" : {
+            "selector" : {
+              "textRegex" : "${ELEMENT}",
+              "optional" : false
+            },
+            "direction" : "DOWN",
+            "scrollDuration" : "40",
+            "visibilityPercentage" : 100,
+            "timeout" : "60000",
+            "centerElement" : true,
+            "originalSpeedValue" : "40",
+            "optional" : false,
+            "visibilityPercentageNormalized" : 1.0
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "defineVariablesCommand" : {
+              "env" : {
+                "ELEMENT" : "${ELEMENT}",
+                "DIRECTION" : "${DIRECTION}",
+                "BESIDE" : "true"
+              },
+              "optional" : false
+            }
+          }, {
+            "applyConfigurationCommand" : {
+              "config" : {
+                "appId" : "dev.vespin.ios"
+              },
+              "optional" : false
+            }
+          }, {
+            "defineVariablesCommand" : {
+              "env" : {
+                "DIRECTION" : "${DIRECTION || 'DOWN'}",
+                "BESIDE" : "${BESIDE || 'false'}"
+              },
+              "optional" : false
+            }
+          }, {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "scrollUntilVisible" : {
+                  "selector" : {
+                    "textRegex" : "${ELEMENT}",
+                    "optional" : false
+                  },
+                  "direction" : "UP",
+                  "scrollDuration" : "40",
+                  "visibilityPercentage" : 100,
+                  "timeout" : "20000",
+                  "centerElement" : false,
+                  "originalSpeedValue" : "40",
+                  "optional" : false,
+                  "visibilityPercentageNormalized" : 1.0
+                }
+              } ],
+              "condition" : {
+                "scriptCondition" : "${BESIDE != 'true' && DIRECTION == 'UP'}"
+              },
+              "optional" : false
+            }
+          }, {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "scrollUntilVisible" : {
+                  "selector" : {
+                    "textRegex" : "${ELEMENT}",
+                    "optional" : false
+                  },
+                  "direction" : "DOWN",
+                  "scrollDuration" : "40",
+                  "visibilityPercentage" : 100,
+                  "timeout" : "20000",
+                  "centerElement" : false,
+                  "originalSpeedValue" : "40",
+                  "optional" : false,
+                  "visibilityPercentageNormalized" : 1.0
+                }
+              } ],
+              "condition" : {
+                "scriptCondition" : "${BESIDE != 'true' && DIRECTION != 'UP'}"
+              },
+              "optional" : false
+            }
+          }, {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "repeatCommand" : {
+                  "times" : "40",
+                  "condition" : {
+                    "notVisible" : {
+                      "textRegex" : "${ELEMENT}",
+                      "optional" : false
+                    }
+                  },
+                  "commands" : [ {
+                    "swipeCommand" : {
+                      "startRelative" : "85%, 40%",
+                      "endRelative" : "85%, 65%",
+                      "duration" : 1200,
+                      "optional" : false
+                    }
+                  } ],
+                  "optional" : false
+                }
+              }, {
+                "assertConditionCommand" : {
+                  "condition" : {
+                    "visible" : {
+                      "textRegex" : "${ELEMENT}",
+                      "optional" : false
+                    }
+                  },
+                  "optional" : false
+                }
+              } ],
+              "condition" : {
+                "scriptCondition" : "${BESIDE == 'true' && DIRECTION == 'UP'}"
+              },
+              "optional" : false
+            }
+          }, {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "repeatCommand" : {
+                  "times" : "40",
+                  "condition" : {
+                    "notVisible" : {
+                      "textRegex" : "${ELEMENT}",
+                      "optional" : false
+                    }
+                  },
+                  "commands" : [ {
+                    "swipeCommand" : {
+                      "startRelative" : "85%, 65%",
+                      "endRelative" : "85%, 40%",
+                      "duration" : 1200,
+                      "optional" : false
+                    }
+                  } ],
+                  "optional" : false
+                }
+              }, {
+                "assertConditionCommand" : {
+                  "condition" : {
+                    "visible" : {
+                      "textRegex" : "${ELEMENT}",
+                      "optional" : false
+                    }
+                  },
+                  "optional" : false
+                }
+              } ],
+              "condition" : {
+                "scriptCondition" : "${BESIDE == 'true' && DIRECTION != 'UP'}"
+              },
+              "optional" : false
+            }
+          } ],
+          "sourceDescription" : "scroll-in.yaml",
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE == 'true'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735400279,
+    "duration" : 7258,
+    "sequenceNumber" : 26,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "defineVariablesCommand" : {
+                "env" : {
+                  "ELEMENT" : "${ELEMENT}",
+                  "DIRECTION" : "${DIRECTION}",
+                  "BESIDE" : "true"
+                },
+                "optional" : false
+              }
+            }, {
+              "applyConfigurationCommand" : {
+                "config" : {
+                  "appId" : "dev.vespin.ios"
+                },
+                "optional" : false
+              }
+            }, {
+              "defineVariablesCommand" : {
+                "env" : {
+                  "DIRECTION" : "${DIRECTION || 'DOWN'}",
+                  "BESIDE" : "${BESIDE || 'false'}"
+                },
+                "optional" : false
+              }
+            }, {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "scrollUntilVisible" : {
+                    "selector" : {
+                      "textRegex" : "${ELEMENT}",
+                      "optional" : false
+                    },
+                    "direction" : "UP",
+                    "scrollDuration" : "40",
+                    "visibilityPercentage" : 100,
+                    "timeout" : "20000",
+                    "centerElement" : false,
+                    "originalSpeedValue" : "40",
+                    "optional" : false,
+                    "visibilityPercentageNormalized" : 1.0
+                  }
+                } ],
+                "condition" : {
+                  "scriptCondition" : "${BESIDE != 'true' && DIRECTION == 'UP'}"
+                },
+                "optional" : false
+              }
+            }, {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "scrollUntilVisible" : {
+                    "selector" : {
+                      "textRegex" : "${ELEMENT}",
+                      "optional" : false
+                    },
+                    "direction" : "DOWN",
+                    "scrollDuration" : "40",
+                    "visibilityPercentage" : 100,
+                    "timeout" : "20000",
+                    "centerElement" : false,
+                    "originalSpeedValue" : "40",
+                    "optional" : false,
+                    "visibilityPercentageNormalized" : 1.0
+                  }
+                } ],
+                "condition" : {
+                  "scriptCondition" : "${BESIDE != 'true' && DIRECTION != 'UP'}"
+                },
+                "optional" : false
+              }
+            }, {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "repeatCommand" : {
+                    "times" : "40",
+                    "condition" : {
+                      "notVisible" : {
+                        "textRegex" : "${ELEMENT}",
+                        "optional" : false
+                      }
+                    },
+                    "commands" : [ {
+                      "swipeCommand" : {
+                        "startRelative" : "85%, 40%",
+                        "endRelative" : "85%, 65%",
+                        "duration" : 1200,
+                        "optional" : false
+                      }
+                    } ],
+                    "optional" : false
+                  }
+                }, {
+                  "assertConditionCommand" : {
+                    "condition" : {
+                      "visible" : {
+                        "textRegex" : "${ELEMENT}",
+                        "optional" : false
+                      }
+                    },
+                    "optional" : false
+                  }
+                } ],
+                "condition" : {
+                  "scriptCondition" : "${BESIDE == 'true' && DIRECTION == 'UP'}"
+                },
+                "optional" : false
+              }
+            }, {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "repeatCommand" : {
+                    "times" : "40",
+                    "condition" : {
+                      "notVisible" : {
+                        "textRegex" : "${ELEMENT}",
+                        "optional" : false
+                      }
+                    },
+                    "commands" : [ {
+                      "swipeCommand" : {
+                        "startRelative" : "85%, 65%",
+                        "endRelative" : "85%, 40%",
+                        "duration" : 1200,
+                        "optional" : false
+                      }
+                    } ],
+                    "optional" : false
+                  }
+                }, {
+                  "assertConditionCommand" : {
+                    "condition" : {
+                      "visible" : {
+                        "textRegex" : "${ELEMENT}",
+                        "optional" : false
+                      }
+                    },
+                    "optional" : false
+                  }
+                } ],
+                "condition" : {
+                  "scriptCondition" : "${BESIDE == 'true' && DIRECTION != 'UP'}"
+                },
+                "optional" : false
+              }
+            } ],
+            "sourceDescription" : "scroll-in.yaml",
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "ELEMENT" : "${ELEMENT}",
+            "DIRECTION" : "${DIRECTION}",
+            "BESIDE" : "true"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "defineVariablesCommand" : {
+          "env" : {
+            "DIRECTION" : "${DIRECTION || 'DOWN'}",
+            "BESIDE" : "${BESIDE || 'false'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "scrollUntilVisible" : {
+              "selector" : {
+                "textRegex" : "${ELEMENT}",
+                "optional" : false
+              },
+              "direction" : "UP",
+              "scrollDuration" : "40",
+              "visibilityPercentage" : 100,
+              "timeout" : "20000",
+              "centerElement" : false,
+              "originalSpeedValue" : "40",
+              "optional" : false,
+              "visibilityPercentageNormalized" : 1.0
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${BESIDE != 'true' && DIRECTION == 'UP'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "scrollUntilVisible" : {
+              "selector" : {
+                "textRegex" : "${ELEMENT}",
+                "optional" : false
+              },
+              "direction" : "DOWN",
+              "scrollDuration" : "40",
+              "visibilityPercentage" : 100,
+              "timeout" : "20000",
+              "centerElement" : false,
+              "originalSpeedValue" : "40",
+              "optional" : false,
+              "visibilityPercentageNormalized" : 1.0
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${BESIDE != 'true' && DIRECTION != 'UP'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "repeatCommand" : {
+              "times" : "40",
+              "condition" : {
+                "notVisible" : {
+                  "textRegex" : "${ELEMENT}",
+                  "optional" : false
+                }
+              },
+              "commands" : [ {
+                "swipeCommand" : {
+                  "startRelative" : "85%, 40%",
+                  "endRelative" : "85%, 65%",
+                  "duration" : 1200,
+                  "optional" : false
+                }
+              } ],
+              "optional" : false
+            }
+          }, {
+            "assertConditionCommand" : {
+              "condition" : {
+                "visible" : {
+                  "textRegex" : "${ELEMENT}",
+                  "optional" : false
+                }
+              },
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${BESIDE == 'true' && DIRECTION == 'UP'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "repeatCommand" : {
+              "times" : "40",
+              "condition" : {
+                "notVisible" : {
+                  "textRegex" : "${ELEMENT}",
+                  "optional" : false
+                }
+              },
+              "commands" : [ {
+                "swipeCommand" : {
+                  "startRelative" : "85%, 65%",
+                  "endRelative" : "85%, 40%",
+                  "duration" : 1200,
+                  "optional" : false
+                }
+              } ],
+              "optional" : false
+            }
+          }, {
+            "assertConditionCommand" : {
+              "condition" : {
+                "visible" : {
+                  "textRegex" : "${ELEMENT}",
+                  "optional" : false
+                }
+              },
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${BESIDE == 'true' && DIRECTION != 'UP'}"
+          },
+          "optional" : false
+        }
+      } ],
+      "sourceDescription" : "scroll-in.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735400281,
+    "duration" : 7256,
+    "sequenceNumber" : 27,
+    "depth" : 2,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "ELEMENT" : "${ELEMENT}",
+              "DIRECTION" : "${DIRECTION}",
+              "BESIDE" : "true"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "defineVariablesCommand" : {
+            "env" : {
+              "DIRECTION" : "${DIRECTION || 'DOWN'}",
+              "BESIDE" : "${BESIDE || 'false'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "scrollUntilVisible" : {
+                "selector" : {
+                  "textRegex" : "${ELEMENT}",
+                  "optional" : false
+                },
+                "direction" : "UP",
+                "scrollDuration" : "40",
+                "visibilityPercentage" : 100,
+                "timeout" : "20000",
+                "centerElement" : false,
+                "originalSpeedValue" : "40",
+                "optional" : false,
+                "visibilityPercentageNormalized" : 1.0
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${BESIDE != 'true' && DIRECTION == 'UP'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "scrollUntilVisible" : {
+                "selector" : {
+                  "textRegex" : "${ELEMENT}",
+                  "optional" : false
+                },
+                "direction" : "DOWN",
+                "scrollDuration" : "40",
+                "visibilityPercentage" : 100,
+                "timeout" : "20000",
+                "centerElement" : false,
+                "originalSpeedValue" : "40",
+                "optional" : false,
+                "visibilityPercentageNormalized" : 1.0
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${BESIDE != 'true' && DIRECTION != 'UP'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "repeatCommand" : {
+                "times" : "40",
+                "condition" : {
+                  "notVisible" : {
+                    "textRegex" : "${ELEMENT}",
+                    "optional" : false
+                  }
+                },
+                "commands" : [ {
+                  "swipeCommand" : {
+                    "startRelative" : "85%, 40%",
+                    "endRelative" : "85%, 65%",
+                    "duration" : 1200,
+                    "optional" : false
+                  }
+                } ],
+                "optional" : false
+              }
+            }, {
+              "assertConditionCommand" : {
+                "condition" : {
+                  "visible" : {
+                    "textRegex" : "${ELEMENT}",
+                    "optional" : false
+                  }
+                },
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${BESIDE == 'true' && DIRECTION == 'UP'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "repeatCommand" : {
+                "times" : "40",
+                "condition" : {
+                  "notVisible" : {
+                    "textRegex" : "${ELEMENT}",
+                    "optional" : false
+                  }
+                },
+                "commands" : [ {
+                  "swipeCommand" : {
+                    "startRelative" : "85%, 65%",
+                    "endRelative" : "85%, 40%",
+                    "duration" : 1200,
+                    "optional" : false
+                  }
+                } ],
+                "optional" : false
+              }
+            }, {
+              "assertConditionCommand" : {
+                "condition" : {
+                  "visible" : {
+                    "textRegex" : "${ELEMENT}",
+                    "optional" : false
+                  }
+                },
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${BESIDE == 'true' && DIRECTION != 'UP'}"
+            },
+            "optional" : false
+          }
+        } ],
+        "sourceDescription" : "scroll-in.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "ELEMENT" : "${ELEMENT}",
+        "DIRECTION" : "${DIRECTION}",
+        "BESIDE" : "true"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735400282,
+    "duration" : 4,
+    "sequenceNumber" : 28,
+    "depth" : 2,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "ELEMENT" : "Status, .*",
+          "DIRECTION" : "UP",
+          "BESIDE" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "DIRECTION" : "${DIRECTION || 'DOWN'}",
+        "BESIDE" : "${BESIDE || 'false'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735400286,
+    "duration" : 5,
+    "sequenceNumber" : 29,
+    "depth" : 2,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "DIRECTION" : "UP",
+          "BESIDE" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735400293,
+    "duration" : 0,
+    "sequenceNumber" : 30,
+    "depth" : 3,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "scrollUntilVisible" : {
+          "selector" : {
+            "textRegex" : "${ELEMENT}",
+            "optional" : false
+          },
+          "direction" : "UP",
+          "scrollDuration" : "40",
+          "visibilityPercentage" : 100,
+          "timeout" : "20000",
+          "centerElement" : false,
+          "originalSpeedValue" : "40",
+          "optional" : false,
+          "visibilityPercentageNormalized" : 1.0
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${BESIDE != 'true' && DIRECTION == 'UP'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735400295,
+    "duration" : 7,
+    "sequenceNumber" : 31,
+    "depth" : 3,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "scrollUntilVisible" : {
+            "selector" : {
+              "textRegex" : "${ELEMENT}",
+              "optional" : false
+            },
+            "direction" : "UP",
+            "scrollDuration" : "40",
+            "visibilityPercentage" : 100,
+            "timeout" : "20000",
+            "centerElement" : false,
+            "originalSpeedValue" : "40",
+            "optional" : false,
+            "visibilityPercentageNormalized" : 1.0
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "scrollUntilVisible" : {
+          "selector" : {
+            "textRegex" : "${ELEMENT}",
+            "optional" : false
+          },
+          "direction" : "DOWN",
+          "scrollDuration" : "40",
+          "visibilityPercentage" : 100,
+          "timeout" : "20000",
+          "centerElement" : false,
+          "originalSpeedValue" : "40",
+          "optional" : false,
+          "visibilityPercentageNormalized" : 1.0
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${BESIDE != 'true' && DIRECTION != 'UP'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735400303,
+    "duration" : 6,
+    "sequenceNumber" : 32,
+    "depth" : 3,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "scrollUntilVisible" : {
+            "selector" : {
+              "textRegex" : "${ELEMENT}",
+              "optional" : false
+            },
+            "direction" : "DOWN",
+            "scrollDuration" : "40",
+            "visibilityPercentage" : 100,
+            "timeout" : "20000",
+            "centerElement" : false,
+            "originalSpeedValue" : "40",
+            "optional" : false,
+            "visibilityPercentageNormalized" : 1.0
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "repeatCommand" : {
+          "times" : "40",
+          "condition" : {
+            "notVisible" : {
+              "textRegex" : "${ELEMENT}",
+              "optional" : false
+            }
+          },
+          "commands" : [ {
+            "swipeCommand" : {
+              "startRelative" : "85%, 40%",
+              "endRelative" : "85%, 65%",
+              "duration" : 1200,
+              "optional" : false
+            }
+          } ],
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "${ELEMENT}",
+              "optional" : false
+            }
+          },
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${BESIDE == 'true' && DIRECTION == 'UP'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735400309,
+    "duration" : 7222,
+    "sequenceNumber" : 33,
+    "depth" : 3,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "repeatCommand" : {
+            "times" : "40",
+            "condition" : {
+              "notVisible" : {
+                "textRegex" : "${ELEMENT}",
+                "optional" : false
+              }
+            },
+            "commands" : [ {
+              "swipeCommand" : {
+                "startRelative" : "85%, 40%",
+                "endRelative" : "85%, 65%",
+                "duration" : 1200,
+                "optional" : false
+              }
+            } ],
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "${ELEMENT}",
+                "optional" : false
+              }
+            },
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "repeatCommand" : {
+      "times" : "40",
+      "condition" : {
+        "notVisible" : {
+          "textRegex" : "${ELEMENT}",
+          "optional" : false
+        }
+      },
+      "commands" : [ {
+        "swipeCommand" : {
+          "startRelative" : "85%, 40%",
+          "endRelative" : "85%, 65%",
+          "duration" : 1200,
+          "optional" : false
+        }
+      } ],
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735400314,
+    "duration" : 6719,
+    "sequenceNumber" : 34,
+    "depth" : 4,
+    "evaluatedCommand" : {
+      "repeatCommand" : {
+        "times" : "40",
+        "condition" : {
+          "notVisible" : {
+            "textRegex" : "${ELEMENT}",
+            "optional" : false
+          }
+        },
+        "commands" : [ {
+          "swipeCommand" : {
+            "startRelative" : "85%, 40%",
+            "endRelative" : "85%, 65%",
+            "duration" : 1200,
+            "optional" : false
+          }
+        } ],
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "${ELEMENT}",
+          "optional" : false
+        }
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735407033,
+    "duration" : 498,
+    "sequenceNumber" : 35,
+    "depth" : 4,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Status, .*",
+            "optional" : false
+          }
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "repeatCommand" : {
+          "times" : "40",
+          "condition" : {
+            "notVisible" : {
+              "textRegex" : "${ELEMENT}",
+              "optional" : false
+            }
+          },
+          "commands" : [ {
+            "swipeCommand" : {
+              "startRelative" : "85%, 65%",
+              "endRelative" : "85%, 40%",
+              "duration" : 1200,
+              "optional" : false
+            }
+          } ],
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "${ELEMENT}",
+              "optional" : false
+            }
+          },
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${BESIDE == 'true' && DIRECTION != 'UP'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735407531,
+    "duration" : 5,
+    "sequenceNumber" : 36,
+    "depth" : 3,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "repeatCommand" : {
+            "times" : "40",
+            "condition" : {
+              "notVisible" : {
+                "textRegex" : "${ELEMENT}",
+                "optional" : false
+              }
+            },
+            "commands" : [ {
+              "swipeCommand" : {
+                "startRelative" : "85%, 65%",
+                "endRelative" : "85%, 40%",
+                "duration" : 1200,
+                "optional" : false
+              }
+            } ],
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "${ELEMENT}",
+                "optional" : false
+              }
+            },
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "swipeCommand" : {
+          "startRelative" : "85%, 40%",
+          "endRelative" : "85%, 60%",
+          "duration" : 1200,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION == 'UP'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735407539,
+    "duration" : 3896,
+    "sequenceNumber" : 37,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "swipeCommand" : {
+            "startRelative" : "85%, 40%",
+            "endRelative" : "85%, 60%",
+            "duration" : 1200,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "swipeCommand" : {
+      "startRelative" : "85%, 40%",
+      "endRelative" : "85%, 60%",
+      "duration" : 1200,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735407550,
+    "duration" : 3883,
+    "sequenceNumber" : 38,
+    "depth" : 2,
+    "evaluatedCommand" : {
+      "swipeCommand" : {
+        "startRelative" : "85%, 40%",
+        "endRelative" : "85%, 60%",
+        "duration" : 1200,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "swipeCommand" : {
+          "startRelative" : "85%, 60%",
+          "endRelative" : "85%, 40%",
+          "duration" : 1200,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${ABOVE == '' && BELOW == '' && BESIDE == 'true' && DIRECTION != 'UP'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795735411436,
+    "duration" : 5,
+    "sequenceNumber" : 39,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "swipeCommand" : {
+            "startRelative" : "85%, 60%",
+            "endRelative" : "85%, 40%",
+            "duration" : 1200,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "waitForAnimationToEndCommand" : {
+      "timeout" : "5000",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735411442,
+    "duration" : 1534,
+    "sequenceNumber" : 40,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "waitForAnimationToEndCommand" : {
+        "timeout" : "5000",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "takeScreenshotCommand" : {
+      "path" : "standing-open",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735412977,
+    "duration" : 152,
+    "sequenceNumber" : 41,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "takeScreenshotCommand" : {
+        "path" : "standing-open",
+        "optional" : false
+      }
+    },
+    "artifacts" : [ {
+      "type" : "TAKE_SCREENSHOT",
+      "path" : "takeScreenshot/standing-open.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Status, .*",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735413129,
+    "duration" : 5043,
+    "sequenceNumber" : 42,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Status, .*",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "takeScreenshotCommand" : {
+      "path" : "standing-status-menu",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735418175,
+    "duration" : 128,
+    "sequenceNumber" : 43,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "takeScreenshotCommand" : {
+        "path" : "standing-status-menu",
+        "optional" : false
+      }
+    },
+    "artifacts" : [ {
+      "type" : "TAKE_SCREENSHOT",
+      "path" : "takeScreenshot/standing-status-menu.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "In progress",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735418305,
+    "duration" : 2659,
+    "sequenceNumber" : 44,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "In progress",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "waitForAnimationToEndCommand" : {
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735420965,
+    "duration" : 930,
+    "sequenceNumber" : 45,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "waitForAnimationToEndCommand" : {
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Status, In progress",
+          "optional" : false
+        }
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735421896,
+    "duration" : 540,
+    "sequenceNumber" : 46,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Status, In progress",
+            "optional" : false
+          }
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "takeScreenshotCommand" : {
+      "path" : "standing-status-in-progress",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735422437,
+    "duration" : 132,
+    "sequenceNumber" : 47,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "takeScreenshotCommand" : {
+        "path" : "standing-status-in-progress",
+        "optional" : false
+      }
+    },
+    "artifacts" : [ {
+      "type" : "TAKE_SCREENSHOT",
+      "path" : "takeScreenshot/standing-status-in-progress.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Status, .*",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735422570,
+    "duration" : 4237,
+    "sequenceNumber" : 48,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Status, .*",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Todo",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735426809,
+    "duration" : 2991,
+    "sequenceNumber" : 49,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Todo",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "waitForAnimationToEndCommand" : {
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735429801,
+    "duration" : 1226,
+    "sequenceNumber" : 50,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "waitForAnimationToEndCommand" : {
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Status, Todo",
+          "optional" : false
+        }
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735431029,
+    "duration" : 523,
+    "sequenceNumber" : 51,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Status, Todo",
+            "optional" : false
+          }
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "takeScreenshotCommand" : {
+      "path" : "standing-status-todo",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735431553,
+    "duration" : 149,
+    "sequenceNumber" : 52,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "takeScreenshotCommand" : {
+        "path" : "standing-status-todo",
+        "optional" : false
+      }
+    },
+    "artifacts" : [ {
+      "type" : "TAKE_SCREENSHOT",
+      "path" : "takeScreenshot/standing-status-todo.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Priority, .*",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735431703,
+    "duration" : 3408,
+    "sequenceNumber" : 53,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Priority, .*",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Urgent",
+          "optional" : false
+        }
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735435112,
+    "duration" : 330,
+    "sequenceNumber" : 54,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Urgent",
+            "optional" : false
+          }
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "takeScreenshotCommand" : {
+      "path" : "standing-priority-menu",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735435444,
+    "duration" : 134,
+    "sequenceNumber" : 55,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "takeScreenshotCommand" : {
+        "path" : "standing-priority-menu",
+        "optional" : false
+      }
+    },
+    "artifacts" : [ {
+      "type" : "TAKE_SCREENSHOT",
+      "path" : "takeScreenshot/standing-priority-menu.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "High",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735435580,
+    "duration" : 3760,
+    "sequenceNumber" : 56,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "High",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "waitForAnimationToEndCommand" : {
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735439341,
+    "duration" : 2347,
+    "sequenceNumber" : 57,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "waitForAnimationToEndCommand" : {
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Priority, High",
+          "optional" : false
+        }
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735441689,
+    "duration" : 436,
+    "sequenceNumber" : 58,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Priority, High",
+            "optional" : false
+          }
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "takeScreenshotCommand" : {
+      "path" : "standing-priority-high",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735442126,
+    "duration" : 122,
+    "sequenceNumber" : 59,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "takeScreenshotCommand" : {
+        "path" : "standing-priority-high",
+        "optional" : false
+      }
+    },
+    "artifacts" : [ {
+      "type" : "TAKE_SCREENSHOT",
+      "path" : "takeScreenshot/standing-priority-high.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Priority, .*",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735442250,
+    "duration" : 3998,
+    "sequenceNumber" : 60,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Priority, .*",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Low",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735446249,
+    "duration" : 4050,
+    "sequenceNumber" : 61,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Low",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "waitForAnimationToEndCommand" : {
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795735450300,
+    "duration" : 15762,
+    "sequenceNumber" : 62,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "waitForAnimationToEndCommand" : {
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "Priority, Low",
+          "optional" : false
+        }
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "FAILED",
+    "timestamp" : 1795735466070,
+    "duration" : 19443,
+    "error" : {
+      "message" : "Assertion is false: \"Priority, Low\" is visible",
+      "debugMessage" : "Assertion '\"Priority, Low\" is visible' failed. Check the UI hierarchy in debug artifacts to verify the element state and properties.\n\nPossible causes:\n- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.\n- Element may be temporarily unavailable due to loading state\n- This could be a real regression that needs to be addressed"
+    },
+    "sequenceNumber" : 63,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Priority, Low",
+            "optional" : false
+          }
+        },
+        "optional" : false
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-064-assertCondition-Priority,_Low.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-064-assertCondition-Priority,_Low.png"
+    } ]
+  }
+} ]
