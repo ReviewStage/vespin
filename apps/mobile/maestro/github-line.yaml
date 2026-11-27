@@ -35,6 +35,19 @@ env:
       ELEMENT: "gracehopper requested changes on #128, 2 comments"
       DIRECTION: UP
       BESIDE: ${FLOATING_TABS}
+# Note that on an iPad the page is drawn down one step more, because its
+# head shows first at the window's top edge, where it can stand under the
+# bar or above the window, and a tap there lands on the status bar, which
+# scrolls the transcript to its top.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - swipe:
+          start: "85%, 40%"
+          end: "85%, 65%"
+          duration: 1200
+      - assertVisible: "gracehopper requested changes on #128, 2 comments"
 # Closed as it lands: its head alone, none of the prompt the agent read.
 - assertNotVisible: "Close, but an invite to an address.*"
 - assertNotVisible: "Act on it as you judge best."

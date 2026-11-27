@@ -5,6 +5,10 @@
 # (`fixture-host.ts`'s `withInboxOff`), so no server is reached. The
 # screenshots land under the run's --test-output-dir (`takeScreenshot/`).
 appId: dev.vespin.ios
+# Note that an iPad is turned back upright however the flow ends, because a
+# run left in landscape fails every flow after it.
+onFlowComplete:
+  - setOrientation: PORTRAIT
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
@@ -40,6 +44,14 @@ env:
 - takeScreenshot: inbox-off-tasks
 # A thread a link names still opens, on Tasks' stack, since no Inbox tab
 # stands to open it on. The system asks before a custom scheme opens the app.
+# Note that an iPad is turned upright first, its sidebar already shot,
+# because in landscape XCTest names the system's ask in the upright screen's
+# points, so a tap on its Open lands beside it and the ask stays.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: PORTRAIT
 - openLink: "vespin://inbox/81e2a425-6d9f-4ab7-92df-000000000001"
 - tapOn:
     text: "Open"
