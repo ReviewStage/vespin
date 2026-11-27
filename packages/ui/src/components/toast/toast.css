@@ -126,7 +126,7 @@
   .ui-toast-row {
     transition:
       opacity var(--ui-duration-quick) var(--ui-motion-exit) var(--ui-duration-fast),
-      visibility 0s linear var(--ui-duration-fast);
+      visibility 0s var(--ui-duration-fast);
   }
 
   .ui-toast-row[data-behind]:not([data-expanded]) {
@@ -134,7 +134,7 @@
     visibility: hidden;
     transition:
       opacity var(--ui-duration-quick) var(--ui-motion-exit),
-      visibility 0s linear var(--ui-duration-quick);
+      visibility 0s var(--ui-duration-quick);
   }
 
   /* It rises in from a step below where it stands, fading in. */
