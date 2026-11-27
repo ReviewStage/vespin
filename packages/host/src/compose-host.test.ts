@@ -34,6 +34,7 @@ import {
   hostCapabilities,
   NOT_ON_THIS_PLATFORM,
 } from "./host-concerns.js";
+import { LocalStoreBackend } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { oauthAccountSourceLayer } from "./oauth-account-source.js";
@@ -350,7 +351,7 @@ describe("the account's local database", () => {
    * handed back.
    */
   const signedIn = (
-    driver: Layer.Layer<LocalDatabaseDriver>,
+    driver: Layer.Layer<LocalDatabaseDriver> | Layer.Layer<LocalStoreBackend>,
     launch: {
       readonly stateRoot?: string;
       readonly cipher?: SecretCipherType;
@@ -459,6 +460,45 @@ describe("the account's local database", () => {
         assert.equal(host.polled(), true);
       }),
     ).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
+  );
+
+  it.effect(
+    "keeps a list on the platform's own store that keeps no queues, and forgets it at a sign-out",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const kept: string[] = [];
+          const forgotten: string[] = [];
+
+          const host = yield* signedIn(
+            Layer.succeed(LocalStoreBackend, {
+              keepsCollections: false,
+              open: () =>
+                Effect.succeed({
+                  rows: {
+                    answered: (answer) =>
+                      Effect.sync(() => {
+                        if (answer.read === "workspaces" && "every" in answer.held)
+                          kept.push(...answer.held.every);
+                      }),
+                    loaded: () => Effect.undefined,
+                  },
+                  queues: undefined,
+                  collections: Effect.undefined,
+                }),
+              forget: (accountId) =>
+                Effect.sync(() => {
+                  forgotten.push(accountId);
+                }),
+            }),
+          );
+
+          assert.deepEqual(kept, ["workspace-acme"]);
+
+          yield* host.signOut;
+          assert.deepEqual(forgotten, [SIGNED_IN.id]);
+        }),
+      ).pipe(Effect.provide(Layer.merge(NodeFileSystem.layer, NodePath.layer))),
   );
 
   /** Lets the host run on the event loop until the service was sent a rename, or a thousand turns pass. */

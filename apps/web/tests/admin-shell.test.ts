@@ -3,9 +3,12 @@ import "@repo/panel/testing/match-media";
 import "@repo/ui/testing/resize-observer";
 import { withQueryClient } from "@repo/panel/testing/copy-feedback";
 import type { WireValue } from "@repo/wire";
+import { Effect } from "effect";
+import { IDBFactory, IDBKeyRange } from "fake-indexeddb";
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vitest";
+import { webLocalStore } from "../src/app/web-local-store";
 import { choose, menuItems, openViewOptions } from "./support/view-options";
 
 /**
@@ -143,6 +146,7 @@ afterEach(() => {
   vi.runOnlyPendingTimers();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   signOutStatus = 200;
   window.localStorage.clear();
   document.body.replaceChildren();
@@ -334,6 +338,28 @@ test("Sign out signs out on the press, with no question, and leaves for the sign
 
   expect(asked.some((url) => url.pathname === SIGN_OUT_PATH)).toBe(true);
   expect(window.localStorage.getItem("app-admin-sign-in-chosen")).toBeNull();
+});
+
+test("Sign out deletes the app's copy of the account this browser keeps", async () => {
+  const databases = new IDBFactory();
+  vi.stubGlobal("indexedDB", databases);
+
+  await Effect.runPromise(
+    Effect.scoped(
+      webLocalStore({ databases, keyRange: IDBKeyRange, locks: undefined }).open(SIGNED_IN.user.id),
+    ),
+  );
+
+  const page = await openAdmin();
+  const trigger = await accountButton(page);
+  await act(async () => {
+    trigger.click();
+  });
+  await act(async () => {
+    document.querySelector<HTMLElement>('[role="menu"] [role="menuitem"]')?.click();
+  });
+
+  await vi.waitFor(async () => expect(await databases.databases()).toEqual([]));
 });
 
 test("a quarter's address opens Reliability on the month, the longest window it reads", async () => {
