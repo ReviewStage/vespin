@@ -21,11 +21,17 @@
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
-import { threadComments } from "@repo/features/description-comment-model";
+import {
+  COMMENT_EVENT_WORDS,
+  type CommentEvent,
+  commentThreadLines,
+  threadComments,
+} from "@repo/features/description-comment-model";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
 import {
   DESCRIPTION_COMMENT_ACTION,
   DESCRIPTION_COMMENT_ACTOR,
+  DESCRIPTION_COMMENT_ENTRY,
   DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentEntry,
@@ -43,8 +49,10 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   BUZZ,
   buzz,
+  GLYPH,
   type PictureById,
   THREAD_MEDIA,
+  type ThreadEvent,
   type ThreadMedia,
   type ThreadMessage,
 } from "@repo/ui-native";
@@ -319,22 +327,59 @@ function commentMedia(entry: DescriptionCommentEntry, media: CommentMedia): read
   });
 }
 
-/** A thread's comments as its page draws them, each by its writer, its words typed line by line, and the files it carries after them. */
+/** The glyph leading each line of what happened to a thread, as the thread's bar marks the act: Resolve's check, and Reopen's turn back. */
+const EVENT_GLYPH = {
+  [DESCRIPTION_COMMENT_ENTRY.RESOLVED]: GLYPH.RESOLVED,
+  [DESCRIPTION_COMMENT_ENTRY.REOPENED]: GLYPH.RESTORE,
+} as const;
+
+/** A thread as its page draws it: the lines of what happened before any comment, then its comments as messages, each with the lines after it. */
+export interface ThreadDrawn {
+  readonly opening: readonly ThreadEvent[];
+  readonly messages: readonly ThreadMessage[];
+}
+
+/** A line of what happened to a thread, as its page draws it: who did it, what in the panel's words ("resolved this"), when, and its act's glyph. */
+function threadEvent(
+  entry: CommentEvent,
+  agents: ReadonlyMap<string, CommentAgent>,
+  pictureOf: PictureOf,
+): ThreadEvent {
+  const writer = commentWriter(entry, agents, pictureOf);
+
+  return {
+    key: entry.id,
+    who: { name: writer.name, agent: writer.agent },
+    did: COMMENT_EVENT_WORDS[entry.kind],
+    at: entry.at,
+    glyph: EVENT_GLYPH[entry.kind],
+  };
+}
+
+/** A thread's comments as its page draws them, each by its writer, its words typed line by line, the files it carries after them, whether it was edited, and the resolves and reopens after it, as the panel's thread stands them between its comments. */
 export function threadMessages(
   thread: DescriptionCommentThread,
   agents: ReadonlyMap<string, CommentAgent>,
   pictureOf: PictureOf,
   media: CommentMedia,
-): readonly ThreadMessage[] {
-  return threadComments(thread).map((entry) => ({
-    id: entry.id,
-    writer: commentWriter(entry, agents, pictureOf),
-    at: entry.at,
-    // Note that a marker naming one of its files is said as the file's name, since the file stands as its own picture or chip after the words.
-    words: markersAsNames(entry.words ?? ""),
-    typed: entry.writer.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER,
-    media: commentMedia(entry, media),
-  }));
+): ThreadDrawn {
+  const { opening, comments } = commentThreadLines(thread);
+  const event = (entry: CommentEvent) => threadEvent(entry, agents, pictureOf);
+
+  return {
+    opening: opening.map(event),
+    messages: comments.map(({ comment: entry, after }) => ({
+      id: entry.id,
+      writer: commentWriter(entry, agents, pictureOf),
+      at: entry.at,
+      // Note that a marker naming one of its files is said as the file's name, since the file stands as its own picture or chip after the words.
+      words: markersAsNames(entry.words ?? ""),
+      typed: entry.writer.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER,
+      media: commentMedia(entry, media),
+      edited: entry.editedAt !== undefined,
+      after: after.map(event),
+    })),
+  };
 }
 
 /**

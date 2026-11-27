@@ -29,6 +29,7 @@ import {
   monospacedDigit,
   padding,
   scrollDismissesKeyboard,
+  strikethrough,
 } from "@expo/ui/swift-ui/modifiers";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
@@ -42,7 +43,7 @@ import { AudioClip } from "./audio-clip.js";
 import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
-import { GLYPH, glyphImage } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { CopyWordsSwiftMenu, PictureOriginProvider, PictureSetProvider } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face } from "./marks.js";
@@ -64,6 +65,9 @@ import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
+
+/** What a message edited since it was sent says under its words, the panel's word for it. */
+const EDITED_WORDS = "edited";
 
 /** What a press on a message's writer is heard to do. */
 const WRITER_HINT = "Opens their page";
@@ -165,17 +169,21 @@ export type ThreadMessage = {
   readonly undelivered?: UndeliveredLine | undefined;
   /** The reactions it wears as one line, such as "👍 2  ❤️ 1", under its words; none where it wears none. */
   readonly reactions?: string | undefined;
+  /** Whether its words were edited since it was sent, which it says under them, as the panel's comment says it beside its time. */
+  readonly edited?: boolean | undefined;
   /** What its long press menu holds after Copy message, such as Add reaction; none where it offers nothing more. */
   readonly menu?: readonly LongPressGroup[] | undefined;
 };
 
 /** A line of what happened to a thread: who did it, what they did in the panel's words, when, and an agent's why for a withdrawn ask. */
-type ThreadEvent = {
+export type ThreadEvent = {
   readonly key: string;
   readonly who: { readonly name: string; readonly agent: boolean };
   readonly did: string;
   readonly at: number | undefined;
   readonly reason?: string | undefined;
+  /** The glyph leading it; the resolved glyph for a member's line and the undo glyph for an agent's where none is given, as an Inbox thread's resolve and withdrawn ask stand. */
+  readonly glyph?: Glyph | undefined;
 };
 
 type ThreadPageProps = {
@@ -212,6 +220,8 @@ type ThreadPageProps = {
   readonly now?: number | undefined;
   /** How a settled thread ended, in one word under its heading, as the panel's card says it: "Answered", "Resolved", "Withdrawn"; none while it stands open. */
   readonly standing?: string | undefined;
+  /** That the words a quoted title stands on were deleted since, said over it, led by the delete glyph, the title struck through under it, as the panel's thread says "Original content deleted" over its old quote; none while they stand. */
+  readonly gone?: string | undefined;
   /** The open ask's card, such as its options, steps, or fields, under the messages. */
   readonly ask?: ReactNode | undefined;
   /** The thread's main acts as glyphs before its ⋯ in a split view's detail bar, such as Resolve; none in a compact window, whose ⋯ holds them. */
@@ -227,8 +237,9 @@ function ThreadHead({
   title,
   quoted = false,
   standing,
+  gone,
   path,
-}: Pick<ThreadPageProps, "title" | "quoted" | "standing"> & {
+}: Pick<ThreadPageProps, "title" | "quoted" | "standing" | "gone"> & {
   readonly path?: ReactNode | undefined;
 }) {
   const colors = useColors();
@@ -248,7 +259,34 @@ function ThreadHead({
       modifiers={[padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT })]}
     >
       {path}
-      <Text modifiers={[...look, accessibilityAddTraits(["isHeader"])]}>{title}</Text>
+      {gone === undefined ? null : (
+        <HStack spacing={SPACE.TIGHT} modifiers={[accessibilityElement("combine")]}>
+          <Image
+            {...glyphImage(GLYPH.DELETE)}
+            size={MARK_SIZE.GLYPH - 2}
+            color={colors.TEXT_MUTED}
+            modifiers={[accessibilityHidden()]}
+          />
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+              foregroundStyle(colors.TEXT_MUTED),
+            ]}
+          >
+            {gone}
+          </Text>
+          <Spacer />
+        </HStack>
+      )}
+      <Text
+        modifiers={[
+          ...look,
+          ...(gone === undefined ? [] : [strikethrough({ isActive: true, pattern: "solid" })]),
+          accessibilityAddTraits(["isHeader"]),
+        ]}
+      >
+        {title}
+      </Text>
       {standing === undefined ? null : (
         <Text
           modifiers={[
@@ -361,7 +399,7 @@ function EventLine({
   readonly now?: number | undefined;
 }) {
   const colors = useColors();
-  const resolved = !event.who.agent;
+  const glyph = event.glyph ?? (event.who.agent ? GLYPH.UNDO : GLYPH.RESOLVED);
   const moment = now ?? Date.now();
   const when = event.at === undefined ? undefined : sinceText(event.at, moment);
   const heard = `${event.who.name} ${event.did}${event.at === undefined ? "" : `, ${sinceHeard(event.at, moment)}`}${event.reason === undefined ? "" : `. ${event.reason}`}`;
@@ -378,7 +416,7 @@ function EventLine({
     >
       <HStack spacing={WRITER_GAP} alignment="firstTextBaseline">
         <Image
-          {...glyphImage(resolved ? GLYPH.RESOLVED : GLYPH.UNDO)}
+          {...glyphImage(glyph)}
           size={MARK_SIZE.GLYPH - 2}
           color={colors.TEXT_MUTED}
           modifiers={[frame({ width: MARK_SIZE.WRITER }), accessibilityHidden()]}
@@ -629,6 +667,16 @@ function MessageView({
             <Spacer />
           </HStack>
         )}
+        {message.edited === true ? (
+          <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
+            <Text
+              modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}
+            >
+              {EDITED_WORDS}
+            </Text>
+            <Spacer />
+          </HStack>
+        ) : null}
       </VStack>
     </CopyWordsSwiftMenu>
   );
@@ -662,6 +710,7 @@ export function ThreadPage(props: ThreadPageProps) {
     menu,
     foot,
     standing,
+    gone,
     ...drawing
   } = props;
 
@@ -715,6 +764,7 @@ export function ThreadPage(props: ThreadPageProps) {
                 title={title}
                 quoted={quoted}
                 standing={standing}
+                gone={gone}
                 path={pathInHead ? pathTitle : undefined}
               />
               {(opening ?? []).map((event) => (
