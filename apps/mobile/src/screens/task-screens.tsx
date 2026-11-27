@@ -10,6 +10,7 @@ import { PRODUCT_STANDING_FIELD, PRODUCT_SURFACE } from "@repo/features/analytic
 import { descriptionHead } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
+import { COPY_DESCRIPTION, descriptionMarkdown } from "@repo/features/description-markdown";
 import { agentGlyphState, GLYPH_STATE } from "@repo/features/glyph-state";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import {
@@ -124,6 +125,7 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  type BarMenuEntry,
   BUTTON_LOOK,
   BUZZ,
   buzz,
@@ -1609,6 +1611,10 @@ function headPicture(group: TaskTreeGroup): string | undefined {
 /** What a task's ⋯ asks first, what opens New task for a sub-task of it, and what opens its Task relation sheet. */
 interface TaskMenuDoors extends TaskRowDoors {
   readonly askDelete: (task: TaskSummary) => void;
+  /** Copies words to the pasteboard, a failure said in the failure notice with Try again (`useKeeping`). */
+  readonly copyWords: (words: string) => void;
+  /** Whether the task's workspace has descriptions on, which Copy description stands by. */
+  readonly descriptions: boolean;
   /** Opens Edit description, where the workspace's descriptions stand on; none where they stand off. */
   readonly editDescription: ((task: TaskSummary) => void) | undefined;
   readonly newSubTask: (task: TaskSummary) => void;
@@ -1649,9 +1655,56 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
 }
 
 /**
+ * Where the task is, as a task's ⋯ leads with it: Copy, a menu of Copy
+ * description and Copy link, where the workspace's descriptions stand on
+ * and the description is read, else Copy link alone; then Open in browser.
+ * Note that the two copies share one row, at the developer's word (Nov 26),
+ * because Copy description standing as a row of its own pushed Permanently
+ * delete past the ⋯'s height on an iPhone 18 Pro.
+ */
+function whereEntries(
+  overview: TaskOverview,
+  descriptions: boolean,
+  copyWords: TaskMenuDoors["copyWords"],
+): readonly BarMenuEntry[] {
+  const { task, document } = overview;
+
+  const copyLink = {
+    label: WORDS.COPY_LINK,
+    symbol: GLYPH.LINK,
+    onPress: () => copyTaskLink(task, overview.workspace),
+  };
+
+  const openInBrowser = {
+    label: VERB.OPEN_IN_BROWSER,
+    symbol: GLYPH.OPEN_EXTERNALLY,
+    onPress: () => openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, overview.workspace),
+  };
+
+  if (!descriptions || document === undefined) return [copyLink, openInBrowser];
+
+  const copy: BarMenu = {
+    label: VERB.COPY,
+    symbol: GLYPH.COPY,
+    choices: [],
+    actions: [
+      {
+        label: COPY_DESCRIPTION,
+        symbol: GLYPH.COPY,
+        onPress: () => copyWords(descriptionMarkdown(document)),
+      },
+      copyLink,
+    ],
+  };
+
+  return [copy, openInBrowser];
+}
+
+/**
  * What a task's ⋯ holds, the panel's acts in four groups set apart by the
  * system's rule, as Reminders and Mail group a list's ⋯: where the task is
- * (Copy link, Open in browser); the task itself (Rename, Edit description and
+ * (Copy, holding Copy description and Copy link, then Open in browser,
+ * `whereEntries`); the task itself (Rename, Edit description and
  * Version history where the workspace's descriptions stand on, Move to workspace where the
  * reader may move it); where it stands among tasks (New sub-task, Remove
  * parent where it has one, Task relation, its section and its repository);
@@ -1664,20 +1717,9 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   return {
     ...WORDS.MORE,
     choices: [],
-    actions: [
-      {
-        label: WORDS.COPY_LINK,
-        symbol: GLYPH.LINK,
-        onPress: () => copyTaskLink(task, overview.workspace),
-      },
-      {
-        label: VERB.OPEN_IN_BROWSER,
-        symbol: GLYPH.OPEN_EXTERNALLY,
-        onPress: () =>
-          openOnWeb({ kind: LINK_DESTINATION.TASK, taskId: task.id }, overview.workspace),
-      },
-    ],
+    actions: [],
     groups: [
+      { items: whereEntries(overview, doors.descriptions, doors.copyWords) },
       {
         items: [
           {
@@ -1759,18 +1801,23 @@ function useNewAgent(): (task: TaskSummary) => void {
   return (task) => router.push({ pathname: "/start-agent", params: { task: task.id } });
 }
 
+/** Whether a workspace's descriptions stand on, which a task's Copy description, Edit description and Version history each stand by. */
+function useDescriptionsOn(workspaceId: string | undefined): boolean {
+  const { data: descriptions = false } = useQuery({
+    ...appStateQuery,
+    select: selectWorkspaceExperiment(workspaceId, EXPERIMENT.DESCRIPTIONS),
+  });
+
+  return descriptions;
+}
+
 /** Opens Edit description over a task where its workspace's descriptions stand on, as the panel's description opens to edit in place; none where they stand off. */
 function useEditDescriptionDoor(
   workspaceId: string | undefined,
 ): ((task: TaskSummary) => void) | undefined {
   const router = useRouter();
 
-  const { data: descriptions = false } = useQuery({
-    ...appStateQuery,
-    select: selectWorkspaceExperiment(workspaceId, EXPERIMENT.DESCRIPTIONS),
-  });
-
-  if (!descriptions) return undefined;
+  if (!useDescriptionsOn(workspaceId)) return undefined;
 
   return (task) => router.push({ pathname: EDIT_DESCRIPTION_ROUTE, params: { task: task.id } });
 }
@@ -3580,6 +3627,8 @@ function useTaskDetail(
   const editDoor = useEditDescriptionDoor(overview?.task.workspaceId);
   const read = useTasksRead();
   const asking = useAgentRowAsk();
+  const keeping = useKeeping();
+  const descriptions = useDescriptionsOn(overview?.task.workspaceId);
   const { refreshTasks } = useInboxActs();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -3621,6 +3670,8 @@ function useTaskDetail(
           menu: menuWithout(
             taskMenu(overview, {
               askDelete,
+              copyWords: keeping.copyWords,
+              descriptions,
               newSubTask,
               history,
               editDescription,
@@ -3881,6 +3932,8 @@ export function TaskScreen() {
   const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
   const asking = useAgentRowAsk();
+  const keeping = useKeeping();
+  const descriptions = useDescriptionsOn(overview?.task.workspaceId);
   const read = useTasksRead();
   const history = useHistoryDoor(overview?.task.workspaceId);
   const editDoor = useEditDescriptionDoor(overview?.task.workspaceId);
@@ -3900,6 +3953,8 @@ export function TaskScreen() {
       ? undefined
       : taskMenu(overview, {
           askDelete: deletion.askDelete,
+          copyWords: keeping.copyWords,
+          descriptions,
           newSubTask,
           history,
           editDescription,
