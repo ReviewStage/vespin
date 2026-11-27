@@ -81,9 +81,11 @@ test("a rail's tile is still named by its words and its count, though it draws i
   );
 
   expect(button(container).textContent).toBe("Inbox3 waiting on you");
+
   const unheard = [...button(container).querySelectorAll("[aria-hidden='true']")].map(
     (hidden) => hidden.textContent,
   );
+
   expect(unheard.join("")).not.toContain("Inbox");
 });
 

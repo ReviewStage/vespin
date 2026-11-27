@@ -195,6 +195,8 @@ export type NavItemProps = HintProps & {
   ref?: Ref<HTMLButtonElement> | undefined;
   /** Its name, where the words drawn do not say the whole of it. */
   "aria-label"?: string | undefined;
+  /** Its name as a tile's hint, which a tile raises since it draws no words; a row draws its words instead. */
+  hint?: string | undefined;
   /** The id of the words that say more of it, as an app's hint names its own. */
   "aria-describedby"?: string | undefined;
 };
@@ -348,13 +350,9 @@ export function NavItem({
 }: NavItemProps): React.JSX.Element {
   // Note that a row standing in a frame beside its ⋯ carries its menu on the frame, so a right-click on either opens it too.
   const framed = said(actions);
-  // A tile's hint: its name where the name is words, else the name it is given.
-  const tiled =
-    variant !== NAV_ITEM_VARIANT.TILE
-      ? undefined
-      : typeof children === "string"
-        ? children
-        : props["aria-label"];
+  // A tile draws its glyph alone, so it raises its name as its hint.
+  const tile = variant === NAV_ITEM_VARIANT.TILE;
+
   // Note that a place in a list that chooses rows is a row that cannot be chosen, so going there lets the set go where a plain press does; dropping a menu goes nowhere.
   const selecting = useContext(ListSelectionContext);
 
@@ -392,7 +390,7 @@ export function NavItem({
       onKeyDown={props.onKeyDown}
       {...(roving === true ? rovingItem() : undefined)}
     >
-      {said(icon) ? <Glyph icon={icon} tile={tiled !== undefined} /> : null}
+      {said(icon) ? <Glyph icon={icon} tile={tile} /> : null}
       {variant === NAV_ITEM_VARIANT.STEP ? (
         <StepWords name={children} detail={detail} />
       ) : variant === NAV_ITEM_VARIANT.TILE ? (
@@ -403,15 +401,15 @@ export function NavItem({
           {said(detail) ? <span className="ui-nav-item-detail">{detail}</span> : null}
         </>
       )}
-      <AtRest mark={mark} count={count} tile={tiled !== undefined} />
-      {said(shortcut) && tiled === undefined ? (
+      <AtRest mark={mark} count={count} tile={tile} />
+      {said(shortcut) && !tile ? (
         <span className="ui-nav-item-shortcut ml-auto">{shortcut}</span>
       ) : null}
     </button>
   );
 
   // A tile names its place in its hint, since its words are not drawn.
-  if (tiled !== undefined) return <Tooltip label={tiled}>{press}</Tooltip>;
+  if (tile) return <Tooltip label={props.hint}>{press}</Tooltip>;
 
   if (!framed) return press;
 
