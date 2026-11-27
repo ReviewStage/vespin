@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { act, createElement, createRef, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, test, vi } from "vitest";
+import { afterEach, test } from "vitest";
+import { relayout as reportResize } from "../../testing/resize-observer.js";
 import { type EndAnchor, useEndAnchor } from "./end-anchor.js";
 
 /**
@@ -22,40 +23,14 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const roots: Root[] = [];
 
-/** The resize observers standing, each reported to as a test says the layout changed. */
-const observers = new Set<() => void>();
-
-/** Stands in for the browser's ResizeObserver, which jsdom lacks: silent until `relayout`. */
-class StandInResizeObserver implements ResizeObserver {
-  readonly #heard: () => void;
-
-  constructor(callback: ResizeObserverCallback) {
-    this.#heard = () => callback([], this);
-  }
-
-  observe(): void {
-    observers.add(this.#heard);
-  }
-
-  unobserve(): void {}
-
-  disconnect(): void {
-    observers.delete(this.#heard);
-  }
-}
-
 /** Reports a resize to every observer, as the window does once a layout has changed. */
 function relayout(): void {
-  act(() => {
-    for (const heard of [...observers]) heard();
-  });
+  act(() => reportResize());
 }
 
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
-  observers.clear();
-  vi.unstubAllGlobals();
 });
 
 /** A box `view` pixels tall over `length` pixels of lines, which a test lengthens, scrolling where it is written to. */
@@ -100,7 +75,6 @@ interface DrawnLog {
 
 /** Draws a log of 2000px of lines in a 600px box. */
 function drawLog(): DrawnLog {
-  vi.stubGlobal("ResizeObserver", StandInResizeObserver);
   const laid: LaidOut = { length: 2000, view: 600 };
   let latest: EndAnchor | undefined;
   const scroller = createRef<HTMLDivElement>();

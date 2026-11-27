@@ -1,20 +1,4 @@
 import {
-  BUTTON_CORNERS,
-  BUTTON_VARIANT,
-  cn,
-  cssCustomProperties,
-  Fill,
-  IconButton,
-  SCROLL_FADE,
-  ScrollArea,
-  type ScrollFade,
-  type ScrollFadeInset,
-  Tooltip,
-} from "@repo/ui";
-import { useEndAnchor } from "@repo/ui/end-anchor";
-import { type VirtualRowPlace, VirtualRows, type VirtualRowsHandle } from "@repo/ui/virtual-rows";
-import { ArrowDownIcon } from "lucide-react";
-import {
   type ComponentProps,
   createContext,
   type ReactNode,
@@ -28,6 +12,25 @@ import {
   useRef,
   useState,
 } from "react";
+import { cn } from "../../cn.js";
+import { cssCustomProperties } from "../../css.js";
+import { ArrowDownIcon } from "../../icons/icons.js";
+import { BUTTON_CORNERS, BUTTON_VARIANT, IconButton } from "../button/button.js";
+import { useEndAnchor } from "../end-anchor/end-anchor.js";
+import { Fill } from "../layout/layout.js";
+import {
+  SCROLL_FADE,
+  ScrollArea,
+  type ScrollFade,
+  type ScrollFadeInset,
+} from "../scroll-area/scroll-area.js";
+import { Tooltip } from "../tooltip/hint.js";
+import {
+  VIRTUAL_ROWS_ANCHOR,
+  type VirtualRowPlace,
+  VirtualRows,
+  type VirtualRowsHandle,
+} from "../virtual-rows/virtual-rows.js";
 
 /**
  * conversation.tsx -- AI Elements' Conversation: a log of messages that keeps to its newest line while the reader is there.
@@ -67,7 +70,7 @@ import {
  * inside it.
  */
 
-/** The theme's room at a log's end (tasks.css), registered as a length so it reads in pixels. */
+/** The theme's room at a log's end (`conversation.css`), registered as a length so it reads in pixels. */
 const LOG_END_PROPERTY = "--conversation-log-end";
 
 /** How near its top, in screens of the box, a log asks for the lines older than its first (`onNearTop`): one, so they land before the reader reaches them. */
@@ -347,6 +350,7 @@ export function ConversationRows({
   return (
     <VirtualRows
       scroller={list}
+      anchor={VIRTUAL_ROWS_ANCHOR.END}
       keys={keys}
       estimate={estimate}
       gap={gap}

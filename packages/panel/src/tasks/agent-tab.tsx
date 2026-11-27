@@ -166,6 +166,14 @@ import {
   UsageLimitNotice,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationLead,
+  ConversationRows,
+  ConversationScrollButton,
+} from "@repo/ui/conversation";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
@@ -200,14 +208,6 @@ import {
   automationActor,
   namedAutomationActor,
 } from "../actor-ref.js";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationEmptyState,
-  ConversationLead,
-  ConversationRows,
-  ConversationScrollButton,
-} from "../ai-elements/conversation.js";
 import { Fold, FoldBody } from "../ai-elements/fold.js";
 import {
   Message,

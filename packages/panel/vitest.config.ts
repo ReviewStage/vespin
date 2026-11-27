@@ -35,7 +35,7 @@ export default defineConfig({
     setupFiles: [
       "../wire/src/testing/file-time-cap.ts",
       "../wire/src/testing/duplicate-keys.ts",
-      "src/testing/resize-observer.ts",
+      "../ui/src/testing/resize-observer.ts",
       "src/testing/match-media.ts",
       "src/testing/range-layout.ts",
     ],

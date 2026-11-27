@@ -39,7 +39,7 @@ import {
 } from "../roving-keys/roving-keys.js";
 
 /**
- * virtual-rows.tsx -- a long run of rows in a scroller of the caller's, drawing only those near the view, anchored to its last.
+ * virtual-rows.tsx -- a long run of rows in a scroller of the caller's, drawing only those near the view, anchored to its first or, as a log's, its last.
  *
  * A row is drawn while it stands within the view or `overscan` rows of it,
  * the rows past the view waiting, where the caller names no `overscan` of
@@ -60,7 +60,9 @@ import {
  * whose rows stay drawn there rather than leave and be drawn again as it
  * comes back.
  *
- * The run is anchored to its end (`anchorTo: "end"`), as the docs' chat
+ * A log's run is anchored to its end (`VIRTUAL_ROWS_ANCHOR.END`, `anchorTo:
+ * "end"`), which only `@repo/ui/conversation` asks for
+ * (`vespin/end-anchored-run-in-conversation`), as the docs' chat
  * guide anchors a log: rows put before the first leave the row the reader
  * is on where it stood, and a row growing at the end keeps a run standing
  * at its very end there. The run opens on its last rows (`scrollToEnd()`
@@ -77,7 +79,7 @@ import {
  * the handle rather than writing the scroller's position beside it.
  *
  * A run read from its top, as a list of items is, is anchored to its start
- * instead (`VIRTUAL_ROWS_ANCHOR.START`): it opens wherever its scroller
+ * (`VIRTUAL_ROWS_ANCHOR.START`, unless said): it opens wherever its scroller
  * stands, and rows growing or shrinking above the view move the scroll by
  * as much, as the end-anchored run's do. Several runs may stand in one
  * scroller, a list's groups each a run, each counting its rows from where
@@ -473,7 +475,7 @@ export function VirtualRows({
   estimate,
   gap = 0,
   overscan,
-  anchor = VIRTUAL_ROWS_ANCHOR.END,
+  anchor = VIRTUAL_ROWS_ANCHOR.START,
   listItems = false,
   options = false,
   holdsFocus = false,
@@ -501,7 +503,7 @@ export function VirtualRows({
   gap?: number;
   /** How many rows past each edge of the view are drawn, from the run's first frame on; unsaid, none until that frame has painted, and a few from then on. */
   overscan?: number | undefined;
-  /** Which end keeps the reader's place: the last row, as a log's, unless said. */
+  /** Which end keeps the reader's place: the first row unless said, or the last, as a log's. */
   anchor?: VirtualRowsAnchor;
   /** Whether each row is a list item of the caller's own, wearing the place it is handed, in a run that is a `<ul>` wrapping none. */
   listItems?: boolean;

@@ -26,6 +26,7 @@ import {
   type DescriptionCommentsControl,
   DescriptionCommentsProvider,
 } from "@repo/ui/description-comments";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { Effect, Match } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -53,7 +54,6 @@ import { withQueryClient } from "../testing/copy-feedback.js";
 import { AGENT } from "../testing/desktop-inbox.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
-import { relayout } from "../testing/resize-observer.js";
 import { listedAgent } from "../testing/tasks-control.js";
 import { DescriptionBody } from "./description-body.js";
 import { COMMENTS_FILTER, CommentFocusScope, PageComments } from "./description-comments.js";
