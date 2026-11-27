@@ -1,6 +1,6 @@
-import { Schema, SchemaTransformation } from "effect";
+import { Option, Schema, SchemaTransformation } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { readKept, readKeptText, writeKept } from "./kept-storage.js";
+import { forgetKept, readKept, readKeptOption, readKeptText, writeKept } from "./kept-storage.js";
 
 /**
  * use-kept.ts -- a view choice this window remembers across launches (a fold, a filter, a sort, where a list stood scrolled), read and written through one hook.
@@ -108,4 +108,23 @@ export function useKept<A>(
   );
 
   return [value, choose, change];
+}
+
+/**
+ * What an earlier build kept under `key` for a choice that has since moved
+ * onto the account (`view-choices.ts`), read once as the surface is first
+ * drawn, none where nothing reads; and the door that forgets it here, after
+ * which it answers none.
+ */
+export function useKeptLeaving<A>(key: KeptKey<A>): readonly [A | undefined, () => void] {
+  const [left, setLeft] = useState(() =>
+    Option.getOrUndefined(readKeptOption(key.name, key.schema)),
+  );
+
+  const forget = useCallback(() => {
+    forgetKept(key.name);
+    setLeft(undefined);
+  }, [key.name]);
+
+  return [left, forget];
 }
