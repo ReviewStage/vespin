@@ -229,6 +229,10 @@ keep it, or a replay of its transcript where we don't, and the branch the
 agent pushed. Nothing is read from your machine, and a continue only stops the
 agent there. To tell your machines apart, each sends us a keyed hash of its
 hardware or machine id, never the id itself, and a Mac sends its model name.
+We keep **where you last chose to run an agent**, the cloud or which of your
+machines, with your account, so New task starts there in each of your
+signed-in apps; only apps signed in to your account read it, and it is
+deleted with your account.
 
 When such an agent starts, it runs on the Claude Code or Codex login already
 set up on that machine, never on a credential you saved in Vespin: we send that

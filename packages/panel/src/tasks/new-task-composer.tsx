@@ -110,7 +110,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * agent runs, its glyph alone where the card is too narrow for its words:
  * Cloud and the member's
  * devices, which the agent it starts runs on (`runs-on.tsx`); an automation's
- * card draws none. Note that the card reads the member's devices as it opens and, where the last
+ * card draws none. Note that the card holds Start while the account's last pick is unread, and
+ * reads the member's devices as it opens and, where the last
  * pick is a device, holds Start, saying so, until that read lands, a list read before it opened not
  * counting, and says a read that failed, or one still out past its bound,
  * with Retry, because a start sent before the list is read names no device, and
@@ -544,15 +545,15 @@ export function NewTaskComposer({
     if (runsOnStands) readModels.current();
   }, [runsOnStands]);
   const devices = (runsOnStands ? newTask.devices : undefined) ?? NO_DEVICES;
-  const [device, chooseDevice, keptDevice] = useNewTaskRunsOn(devices);
+  const runsOnPick = useNewTaskRunsOn(devices);
+  const { device, choose: chooseDevice } = runsOnPick;
 
   // Start is held until a read made since the card opened lands, where the member's last pick is a device (`useDevicesRead`).
   const { modelsRead } = useNewTaskShown();
-
-  const { unread: devicesUnread, failed: devicesFailed } = useDevicesRead(
-    modelsRead,
-    runsOnStands && keptDevice,
-  );
+  const devicesRead = useDevicesRead(modelsRead, runsOnStands && runsOnPick.onDevice);
+  // Note that Start waits on the account's last pick too, since it may name a device.
+  const devicesUnread = devicesRead.unread || (runsOnStands && runsOnPick.unread);
+  const devicesFailed = devicesRead.failed;
 
   // Note that a model nothing of the account's pays for runs all the same on a picked device that runs its harness, on the device's own sign-in.
   const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);

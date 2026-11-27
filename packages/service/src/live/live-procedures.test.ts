@@ -26,6 +26,7 @@ import { writeManagerChatMessage } from "@repo/database/models/manager-chat-mess
 import { MEMORY_SCOPE, rememberMemory } from "@repo/database/models/memory-store";
 import { claimChapterGeneration } from "@repo/database/models/pull-request-chapters-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { keepRunsOnPick } from "@repo/database/models/runs-on-pick";
 import {
   linkSlackInstallation,
   writeSlackChannelRepository,
@@ -63,7 +64,7 @@ import { AGENT_FOLLOWERS_READ } from "@repo/features/agent-followers-live";
 import { AGENT_ORIGIN_READ, agentOriginOfLive } from "@repo/features/agent-origin-live";
 import { SANDBOX_STATE } from "@repo/features/agent-sandbox-wire";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
-import { AGENT_CURSOR_START, AGENT_KIND } from "@repo/features/agent-wire";
+import { AGENT_CURSOR_START, AGENT_KIND, AGENT_MACHINE } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { BROWSER_CURSOR_KIND } from "@repo/features/browser-agent-actions";
 import { TASK_BROWSER_TABS_READ } from "@repo/features/browser-tabs-live";
@@ -388,6 +389,8 @@ it.layer(getTestDB())("the account's live reads", (it) => {
 
         const danaSound = yield* addSound(dana, "Glass", clipOf(1), SOUND_CLIP_SLOT.ASK);
         yield* addSound(eli, "Knock", clipOf(2), SOUND_CLIP_SLOT.FINISH);
+        yield* keepRunsOnPick(dana, { machine: AGENT_MACHINE.VERCEL });
+        yield* keepRunsOnPick(eli, { machine: AGENT_MACHINE.DEVICE, deviceId: randomUUID() });
 
         const answered = yield* ask({ bearer: dana, path: "/api/live/account-preferences" });
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
@@ -414,8 +417,9 @@ it.layer(getTestDB())("the account's live reads", (it) => {
               list: [danaSound],
               choices: { [SOUND_CLIP_SLOT.FINISH]: undefined, [SOUND_CLIP_SLOT.ASK]: danaSound.id },
             },
+            runsOn: { machine: AGENT_MACHINE.VERCEL },
           },
-          "dana's own row and clip alone",
+          "dana's own row, clip, and last Runs on pick alone",
         );
       }),
   );

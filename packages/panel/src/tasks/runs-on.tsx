@@ -29,12 +29,13 @@ import {
 } from "@repo/ui";
 import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
-import { Schema } from "effect";
-import { useState } from "react";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
+import { useAccountPreferences } from "../account-choices.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
 import { useThisMac } from "../machine-name.js";
+import { QUERY_ROOT } from "../query-keys.js";
 import { Picker } from "../settings/picker-row.js";
-import { keptKey, useKept } from "../use-kept.js";
 import { MODELS_READ, type ModelsRead } from "./use-agents.js";
 
 /**
@@ -60,9 +61,13 @@ import { MODELS_READ, type ModelsRead } from "./use-agents.js";
  * picker's narrow one, so a device's whole name fits. A
  * device offline or not ready is listed but not picked, since the service
  * refuses a task set to one that has not beat lately or is not set up yet.
- * New task's chip starts on the member's last pick, kept in this window, and
- * on Cloud only where nothing is kept or that device is no longer listed. A
- * kept device that is offline, as a Mac is while the app restarts on it, or
+ * New task's chip starts on the member's last pick, the place the account's
+ * last Start named, which the service keeps (`runs-on-pick.ts`) and every
+ * client follows on the account's preferences, and on Cloud only where no
+ * Start named one or that device is no longer listed. A pick made in this
+ * window draws on every chip of it at once, until the account's pick moves
+ * from where it was made, by a Start here or on another device. A
+ * picked device that is offline, as a Mac is while the app restarts on it, or
  * still getting ready or not set up, stays picked and says so, so its start
  * is refused by name rather than sent quietly to the cloud. It stands on
  * every New task but an automation's or a child's, and lists Cloud alone
@@ -74,9 +79,6 @@ import { MODELS_READ, type ModelsRead } from "./use-agents.js";
 
 /** The id the Cloud row is picked by, which no device's id is. */
 export const CLOUD_ROW = "cloud";
-
-/** Where New task keeps the member's last pick: Cloud's id, or a device's. */
-const KEPT = { PICK: keptKey("app.newTaskRunsOn", Schema.String) } as const;
 
 /** The cloud, as a request names it. */
 const RUNS_ON_CLOUD: TaskRunsOnRequest = { machine: AGENT_MACHINE.VERCEL };
@@ -191,27 +193,93 @@ export function runsOnRows(
   ];
 }
 
+/** A pick made in this window: the row picked, and the account's pick it was made over, which it stands over only while the account's stays there. */
+interface WindowPick {
+  readonly over: string;
+  readonly row: string;
+}
+
+/**
+ * This window's pick, held in the window's Query client, so every chip of
+ * the window draws it and it lives as long as the window does. Note that
+ * nothing is fetched: a pick is laid here as it is made, and none stands
+ * until one is.
+ */
+const windowPickQuery = queryOptions({
+  queryKey: [QUERY_ROOT.RUNS_ON_PICK],
+  queryFn: (): WindowPick | null => null,
+  staleTime: Infinity,
+  gcTime: Infinity,
+});
+
+/** A place's Runs on row: Cloud's id, or its device's. */
+function requestRow(runsOn: AgentRunsOnRequest): string {
+  return runsOn.machine === AGENT_MACHINE.DEVICE ? runsOn.deviceId : CLOUD_ROW;
+}
+
+/** The member's last pick as a Runs on row, and the door that picks another, with whether the account's is still unread. */
+interface LastPick {
+  readonly row: string;
+  readonly choose: (row: string) => void;
+  readonly unread: boolean;
+}
+
+/**
+ * The member's last pick: this window's, where one was made over the
+ * account's pick as it stands, else the account's, else Cloud. Note that a
+ * window's pick gives way once the account's moves, because a Start here
+ * moves it to what was picked, and one on another device is newer.
+ */
+function useLastPick(): LastPick {
+  const preferences = useAccountPreferences();
+  const stored = preferences.data?.runsOn;
+  const account = stored === undefined ? CLOUD_ROW : requestRow(stored);
+  const queries = useQueryClient();
+  const mine = useQuery(windowPickQuery).data;
+
+  const choose = useCallback(
+    (row: string) => {
+      const pick: WindowPick = { over: account, row };
+      queries.setQueryData(windowPickQuery.queryKey, pick);
+    },
+    [queries, account],
+  );
+
+  return {
+    row: mine?.over === account ? mine.row : account,
+    choose,
+    unread: preferences.isLoading,
+  };
+}
+
+/** New task's pick and the door that changes it, with what a start waits on. */
+export interface NewTaskRunsOn {
+  /** The device picked; none for the cloud, or a device no longer listed. */
+  readonly device: MacOffer | undefined;
+  readonly choose: (deviceId: string | undefined) => void;
+  /** Whether the pick is a device, listed or not, which a start waits on the devices' read for. */
+  readonly onDevice: boolean;
+  /** Whether the account's last pick is still unread, which a start waits on, since it may name a device. */
+  readonly unread: boolean;
+}
+
 /**
  * New task's pick, starting on the member's last where that device is
- * listed, ready or not, else Cloud, and kept as it changes. Answers the
- * device picked, none for the cloud, the setter, and whether the pick kept
- * is a device, listed or not, which a start waits on the devices' read for.
- * Note that an offline device, or one still getting ready, stays picked
- * rather than falling back to Cloud, because a task's Runs on is fixed as it
- * starts, and one sent to the cloud while its Mac was away for a moment could
- * never be moved back.
+ * listed, ready or not, else Cloud (`useLastPick`). Note that an offline
+ * device, or one still getting ready, stays picked rather than falling back
+ * to Cloud, because a task's Runs on is fixed as it starts, and one sent to
+ * the cloud while its Mac was away for a moment could never be moved back;
+ * and a start waits on the account's pick for the same reason.
  */
-export function useNewTaskRunsOn(
-  devices: readonly MacOffer[],
-): readonly [MacOffer | undefined, (deviceId: string | undefined) => void, boolean] {
-  const [kept, keep] = useKept(KEPT.PICK, CLOUD_ROW);
-  const picked = devices.find((each) => each.deviceId === kept);
+export function useNewTaskRunsOn(devices: readonly MacOffer[]): NewTaskRunsOn {
+  const last = useLastPick();
 
-  return [
-    picked,
-    (deviceId: string | undefined) => keep(deviceId ?? CLOUD_ROW),
-    kept !== CLOUD_ROW,
-  ];
+  return {
+    device: devices.find((each) => each.deviceId === last.row),
+    choose: (deviceId: string | undefined) => last.choose(deviceId ?? CLOUD_ROW),
+    onDevice: last.row !== CLOUD_ROW,
+    unread: last.unread,
+  };
 }
 
 /** Where an agent runs, by the id its Runs on row is picked by: Cloud's, or its device's; none for one on a device the service no longer names. */
@@ -239,13 +307,12 @@ interface StartPlaceSeed {
  * service gives a Start naming none (`machineOfStart`) as far as the window
  * can tell it, where the source runs for a fork or a continue, else where
  * the member's newest agent on the task runs, else the member's last pick
- * kept in this window, which a pick here keeps too, else Cloud. Answers the
- * device it shows, none for the cloud, and the setter, which hands `onPick` the place picked. Note that the last pick is
- * this window's, while the service keeps the account's (`runs-on-pick.ts`),
- * so a pick made in another window, or a task's own place where no pick was
- * ever made, can run an untouched draft elsewhere than its chip says; a
- * Start sends a place only once one is picked, so the service still decides
- * the rest. A default device the member's list does not name, a teammate's
+ * (`useLastPick`), which a pick here makes too, else Cloud. Answers the
+ * device it shows, none for the cloud, and the setter, which hands `onPick`
+ * the place picked. Note that a pick made in this window stands over the
+ * account's until a Start, so an untouched draft can run elsewhere than its
+ * chip says; a Start sends a place only once one is picked, so the service
+ * still decides the rest. A default device the member's list does not name, a teammate's
  * a fork's source runs on, or one before the list is read, is named as the
  * agent it came from names it, rather than said to be Cloud.
  */
@@ -255,7 +322,7 @@ export function useStartRunsOn(
   seed: StartPlaceSeed,
   onPick: (runsOn: AgentRunsOnRequest) => void,
 ): readonly [MacOffer | undefined, (deviceId: string | undefined) => void] {
-  const [kept, keep] = useKept(KEPT.PICK, CLOUD_ROW);
+  const last = useLastPick();
 
   const newest = seed.agents
     .filter((agent) => seed.me !== undefined && agent.startedBy?.userId === seed.me)
@@ -268,10 +335,8 @@ export function useStartRunsOn(
 
   const row =
     picked === undefined
-      ? ((seeded === undefined ? undefined : placeRow(seeded)) ?? kept)
-      : picked.machine === AGENT_MACHINE.DEVICE
-        ? picked.deviceId
-        : CLOUD_ROW;
+      ? ((seeded === undefined ? undefined : placeRow(seeded)) ?? last.row)
+      : requestRow(picked);
 
   // Note that the agent names its device by its name alone, so it stands as an offer of no model, its standing unread.
   const unlisted =
@@ -283,7 +348,7 @@ export function useStartRunsOn(
     devices.find((each) => each.deviceId === row) ?? unlisted,
     (deviceId: string | undefined) => {
       const chosen = deviceId ?? CLOUD_ROW;
-      keep(chosen);
+      last.choose(chosen);
       onPick(rowRequest(chosen));
     },
   ];

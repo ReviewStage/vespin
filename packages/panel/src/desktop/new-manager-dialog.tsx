@@ -310,11 +310,14 @@ export function useNewManagerDialog({
   const drawnDefault = useAgentDefault();
   const choice = picked ?? drawnDefault.choice;
   const devices = newTask.devices ?? NO_DEVICES;
-  const [device, chooseDevice, keptDevice] = useNewTaskRunsOn(devices);
+  const runsOnPick = useNewTaskRunsOn(devices);
+  const { device, choose: chooseDevice } = runsOnPick;
   // Note that the card stays mounted between openings, so each waits on a devices' read made since it opened.
   const [openedOn, setOpenedOn] = useState<number | undefined>(undefined);
   const { modelsRead } = useNewTaskShown();
-  const devicesUnread = useDevicesRead(modelsRead, keptDevice, openedOn).unread;
+  const devicesRead = useDevicesRead(modelsRead, runsOnPick.onDevice, openedOn);
+  // Note that Create waits on the account's last pick too, since it may name a device.
+  const devicesUnread = devicesRead.unread || runsOnPick.unread;
   // Note that a model nothing of the account's pays for runs all the same on a picked device that runs its harness, on the device's own sign-in.
   const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
 

@@ -17,7 +17,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { useSteadyDoors } from "../steady-door.js";
 import { fakeActPort } from "../testing/app-bridge.js";
-import { handBeats, handState } from "../testing/app-state.js";
+import { handBeats, handHostReads, handState, heldPreferences } from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout, pressInComposer } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -37,7 +37,9 @@ import type { NewTaskStart } from "./use-new-task.js";
  * a device picked in another card; and nothing starts on a last pick of a
  * device before the card's own read of the devices lands, a read that failed
  * saying so with a Retry that reads them again, while a member whose last pick
- * is the cloud is not held, the chip standing on Cloud alone. A card opened as a sub-task
+ * is the cloud is not held, the chip standing on Cloud alone. The last pick is
+ * the account's, where its last Start ran: nothing starts before it is read,
+ * and a device picked in this window gives way once a Start moves it. A card opened as a sub-task
  * of another names no repository, which it takes from its parent, but draws
  * Runs on as any card does, since a task holds no place to run.
  * Synthetic throughout.
@@ -76,6 +78,16 @@ beforeEach(() => {
   handState(experimentsOn());
   fakeActPort({});
 });
+
+beforeEach(() => handLastPick());
+
+/** The Studio, as a Start names it. */
+const ON_STUDIO: TaskRunsOnRequest = { machine: AGENT_MACHINE.DEVICE, deviceId: STUDIO };
+
+/** The account's preferences as the host holds them, its last Start having run where `runsOn` names, none where it names none. */
+function handLastPick(runsOn?: TaskRunsOnRequest): void {
+  handHostReads({ preferences: heldPreferences(runsOn === undefined ? {} : { runsOn }) });
+}
 
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
@@ -315,7 +327,7 @@ test.each([
 ])(
   "a last pick $standing as the card opens stays picked and says so, and the task starts on it, never in the cloud",
   async ({ studio, chip: label }) => {
-    window.localStorage.setItem("app.newTaskRunsOn", STUDIO);
+    handLastPick(ON_STUDIO);
     const [online, builder] = devicesWith();
     assert.ok(online !== undefined && builder !== undefined);
     const { container, starts } = await mount({ devices: [{ ...online, ...studio }, builder] });
@@ -333,7 +345,7 @@ test.each([
 );
 
 test("a device picked in another card reaches this one", async () => {
-  window.localStorage.setItem("app.newTaskRunsOn", STUDIO);
+  handLastPick(ON_STUDIO);
   const offered = { devices: devicesWith(0, Date.now()) };
   const welcome = await mount(offered);
   const dialog = await mount(offered);
@@ -350,7 +362,7 @@ test("a device picked in another card reaches this one", async () => {
 });
 
 test("nothing starts before the card's own read of the devices lands, and one that failed says so, with a Retry that reads them again", async () => {
-  window.localStorage.setItem("app.newTaskRunsOn", STUDIO);
+  handLastPick(ON_STUDIO);
   // A list read before the card opened, here one with no device, is no read of the card's own.
   const reading = await mount({ devices: [], reads: READS.HOLD });
   pressInComposer(reading.container, "Enter", { metaKey: true });
@@ -375,6 +387,39 @@ test("nothing starts before the card's own read of the devices lands, and one th
   await settle();
 
   assert.deepEqual(failed.starts, [{ machine: AGENT_MACHINE.DEVICE, deviceId: STUDIO }]);
+});
+
+test("nothing starts before the account's last pick is read, and the task starts on it once it lands", async () => {
+  handState(experimentsOn());
+  const held = handHostReads({});
+  const { container, starts } = await mount();
+  pressInComposer(container, "Enter", { metaKey: true });
+  await settle();
+  assert.deepEqual(starts, []);
+
+  act(() => held.deliverPreferences(heldPreferences({ runsOn: ON_STUDIO })));
+  await settle();
+  pressInComposer(container, "Enter", { metaKey: true });
+  await settle();
+
+  assert.deepEqual(starts, [ON_STUDIO]);
+});
+
+test("a device picked in this window gives way once the account's last Start runs elsewhere", async () => {
+  const held = handHostReads({ preferences: heldPreferences({ runsOn: ON_STUDIO }) });
+  const { container } = await mount({ devices: devicesWith(Date.now(), Date.now()) });
+  act(() => runsOnChip(container).click());
+  await settle();
+  act(() => row("Build host").click());
+  await settle();
+  assert.equal(runsOnChip(container).getAttribute("aria-label"), "Machine: Build host");
+
+  act(() =>
+    held.deliverPreferences(heldPreferences({ runsOn: { machine: AGENT_MACHINE.VERCEL } })),
+  );
+  await settle();
+
+  assert.equal(runsOnChip(container).getAttribute("aria-label"), "Machine: Cloud");
 });
 
 test("a member whose last pick is the cloud, as every member's with no device is, starts while the card's read of the devices is still out", async () => {

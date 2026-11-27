@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { CONTEXT_WINDOW } from "./agent-wire.js";
+import { AGENT_MACHINE, CONTEXT_WINDOW } from "./agent-wire.js";
 import { type ChaptersPick, chaptersModelFrom } from "./chapters-model-choice.js";
 import {
   LIVE_MODE,
@@ -21,14 +21,16 @@ import {
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber } from "./service-wire.js";
 import { SOUND_CLIP_SLOT, type Sound, type SoundClipSlot } from "./sound-clip-wire.js";
+import type { TaskRunsOnRequest } from "./task-wire.js";
 
 /**
  * account-preferences-live.ts -- the account's preferences row as the host follows it over the service's held poll: the read declared, and the choices every surface draws from it.
  *
  * The service answers one statement, the account's own row as stored, or
  * none for an account that stored nothing: the coding agents' default as
- * its three columns stand, the chapters model, and whether our Slack bot
- * writes the account; and beside it the sounds the account keeps of its
+ * its three columns stand, the chapters model, whether our Slack bot
+ * writes the account, and where its last Start chose to run an agent
+ * (`runs-on-pick.ts`); and beside it the sounds the account keeps of its
  * own, by id, name, and hash, and which of them each of its two sounds
  * plays. Each is read here as the preferences snapshot reads
  * it (`account-store.ts`'s `snapshotOf` calls `storedAgentChoice`), so the
@@ -41,6 +43,8 @@ import { SOUND_CLIP_SLOT, type Sound, type SoundClipSlot } from "./sound-clip-wi
  * The account's preferences as the host follows them: the account's own
  * row, none for an account that stored nothing; the sounds it keeps of its
  * own, never their bytes; and which of them each of its two sounds plays. Note that the
+ * runs-on pick is optional, because a service before it never answered it,
+ * which reads as no pick; and that the
  * context window and the chapters model are read as text, because a value a
  * later build adds or an older one dropped reads as the default rather than
  * failing the row. The row has no id of its own, since it is the account's
@@ -60,6 +64,8 @@ export const ACCOUNT_PREFERENCES_READ = liveRead({
         agentContextWindow: Schema.NullOr(Schema.String),
         chaptersModel: Schema.NullOr(Schema.String),
         slackNotifications: Schema.NullOr(Schema.Boolean),
+        runsOnMachine: Schema.optionalKey(Schema.NullOr(Schema.String)),
+        runsOnDeviceId: Schema.optionalKey(Schema.NullOr(Schema.String)),
       }),
       key: "agentModel",
       order: [["agentModel", ORDER.ASC]],
@@ -134,6 +140,8 @@ export interface AccountPreferencesLive {
   readonly slackNotifications: boolean;
   /** The sounds the account keeps of its own, each named by the hash of its bytes so a client fetches it again only once it changed, and the one each of its two sounds plays. */
   readonly sounds: AccountSounds;
+  /** Where the account's last Start chose to run an agent, which New task starts on; none until a Start named a place. */
+  readonly runsOn?: TaskRunsOnRequest | undefined;
 }
 
 /** The models as a read of them stands, as the host holds it: its answer once it answered, and whether it said it could not before it ever had. */
@@ -163,6 +171,26 @@ export function storedAgentChoice(
   };
 }
 
+/**
+ * Where the account last chose to run an agent, as its row holds it: the
+ * cloud, or one of its devices by id. None where no Start named a place, a
+ * device's row lost its id, or the row names a machine no build lists.
+ */
+export function storedRunsOn(row: {
+  readonly runsOnMachine?: string | null | undefined;
+  readonly runsOnDeviceId?: string | null | undefined;
+}): TaskRunsOnRequest | undefined {
+  if (row.runsOnMachine === AGENT_MACHINE.VERCEL) return { machine: AGENT_MACHINE.VERCEL };
+
+  const deviceId = row.runsOnDeviceId ?? undefined;
+
+  if (row.runsOnMachine === AGENT_MACHINE.DEVICE && deviceId !== undefined) {
+    return { machine: AGENT_MACHINE.DEVICE, deviceId };
+  }
+
+  return undefined;
+}
+
 /** The account's choices as its row holds them; each choice's default where the account stored no row. */
 export function accountPreferencesOfLiveRows(
   rows: readonly AccountPreferencesLiveRow[],
@@ -177,6 +205,7 @@ export function accountPreferencesOfLiveRows(
     // Note that a switch never chosen reads as on, as the Slack bot reads it (`slackNotificationsOn`).
     slackNotifications: row?.slackNotifications !== false,
     sounds,
+    runsOn: row === undefined ? undefined : storedRunsOn(row),
   };
 }
 

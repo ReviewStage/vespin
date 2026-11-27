@@ -11,11 +11,10 @@ import {
   PULL_REQUEST_STATE,
   type PullRequestState,
 } from "@repo/features/agent-wire";
-import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { type MacOffer, MODEL_PROVIDER } from "@repo/features/models-wire";
-import type { ListedPullRequest } from "@repo/features/task-wire";
+import type { ListedPullRequest, TaskRunsOnRequest } from "@repo/features/task-wire";
 import type { ViewChoiceLiveRow } from "@repo/features/view-choice-live";
 import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { MANAGER_SORT, type ManagerSort } from "@repo/features/workspace-managers-model";
@@ -34,7 +33,13 @@ import {
 } from "../tasks/use-agents.js";
 import { NEW_TASK_UNSHOWN, type NewTask } from "../tasks/use-new-task.js";
 import { fakeActPort, fakeActPortCalls, refusedOnPort } from "../testing/app-bridge.js";
-import { handHostReads, handState, signedInAs, writeListedTasks } from "../testing/app-state.js";
+import {
+  handHostReads,
+  handState,
+  heldPreferences,
+  signedInAs,
+  writeListedTasks,
+} from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { hoveredCard } from "../testing/desktop-inbox.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
@@ -597,6 +602,9 @@ const MAC: MacOffer = {
   providers: [MODEL_PROVIDER.ANTHROPIC],
 };
 
+/** Ada's Mac, as a Start names it. */
+const ON_MAC: TaskRunsOnRequest = { machine: AGENT_MACHINE.DEVICE, deviceId: MAC.deviceId };
+
 /** New Task's control as New Manager reads it: the recent repository, and the devices as `modelsRead` stands. */
 /** New task as New Manager reads it: its doors, and where the newest read of the models stands, which the window provides apart (`NewTaskShown.modelsRead`). */
 interface ManagerNewTask {
@@ -619,11 +627,11 @@ function newManagerTask({
 
 /**
  * The sidebar over the workspace with Managers on, the account's default
- * model read, each Create the service hears kept in `created` and answered
+ * model read and its last Runs on pick where `lastPick` names one, each Create the service hears kept in `created` and answered
  * unanswered; answers how to draw it again over another New Task, press a
  * button by its name, and type the Manager's name.
  */
-async function mountNewManager(newTask: ManagerNewTask) {
+async function mountNewManager(newTask: ManagerNewTask, lastPick?: TaskRunsOnRequest) {
   handState({ [EXPERIMENT.MANAGERS]: true });
   handHostReads({
     models: {
@@ -638,14 +646,10 @@ async function mountNewManager(newTask: ManagerNewTask) {
         ],
       },
     },
-    preferences: {
-      rows: {
-        agent: { model: MANAGER.model, effort: "high" },
-        chaptersModel: CHAPTERS_MODEL.HAIKU,
-        slackNotifications: true,
-        sounds: { list: [], choices: { finish: undefined, ask: undefined } },
-      },
-    },
+    preferences: heldPreferences({
+      agent: { model: MANAGER.model, effort: "high" },
+      ...(lastPick === undefined ? undefined : { runsOn: lastPick }),
+    }),
   });
 
   const created: { idempotencyKey: string; name: string; runsOn: unknown }[] = [];
@@ -730,8 +734,6 @@ test("a Create sent again after an edit is a request of its own, under a key of 
 });
 
 test("where the last pick is a device, Create waits on the read of the devices New Manager asks as it opens, and stands once that read lands", async () => {
-  window.localStorage.setItem("app.newTaskRunsOn", MAC.deviceId);
-
   // Note that the ask stamps its generation at once, in the press that opens the card, as the agents control does.
   let asked: () => void = () => undefined;
 
@@ -743,7 +745,7 @@ test("where the last pick is a device, Create waits on the read of the devices N
     });
 
   const reading = { ...standing(MODELS_READ.READING) };
-  const { draw, button, press, name } = await mountNewManager(standing(MODELS_READ.READ));
+  const { draw, button, press, name } = await mountNewManager(standing(MODELS_READ.READ), ON_MAC);
 
   asked = () => draw(reading);
   press("New Manager");
@@ -759,12 +761,10 @@ test("where the last pick is a device, Create waits on the read of the devices N
 });
 
 test("a Create sent again after its device left the list, nothing else changed, is a request of its own on the cloud", async () => {
-  window.localStorage.setItem("app.newTaskRunsOn", MAC.deviceId);
-
   const listed = (devices: readonly MacOffer[]) =>
     newManagerTask({ devices, modelsRead: { state: MODELS_READ.READ, generation: 1 } });
 
-  const { created, draw, press, name } = await mountNewManager(listed([MAC]));
+  const { created, draw, press, name } = await mountNewManager(listed([MAC]), ON_MAC);
 
   press("New Manager");
   act(() => draw({ ...listed([MAC]), modelsRead: { state: MODELS_READ.READ, generation: 2 } }));

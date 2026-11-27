@@ -9,7 +9,12 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
-import { handHostReads, holdRepositoryLists, type RepositoriesRead } from "../testing/app-state.js";
+import {
+  handHostReads,
+  heldPreferences,
+  holdRepositoryLists,
+  type RepositoriesRead,
+} from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout, pressInComposer } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { overEveryTask } from "../testing/history-rows.js";
@@ -91,7 +96,10 @@ async function settle(): Promise<void> {
 
 /** The card in Acme on acme/web, each start's repository and relations written down. */
 async function mount() {
-  holdRepositoryLists(handHostReads({}).deliverRepositoryLists, LISTING);
+  holdRepositoryLists(
+    handHostReads({ preferences: heldPreferences() }).deliverRepositoryLists,
+    LISTING,
+  );
   const control = tasksControl();
 
   const starts: {
