@@ -97,6 +97,7 @@ import {
 import { DEVICE_AGENT_LINE_KIND, DEVICE_CAPABILITY } from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { INBOX_ASK, INBOX_STATUS } from "@repo/features/inbox-wire";
+import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import {
@@ -4619,7 +4620,7 @@ test("create_section, update_task's sectionId, and delete_section keep the calle
   });
 });
 
-test("update_agent renames a teammate's agent on the retired runtime, moves it to a model the catalog offers as the catalog reads the choice, and switches its servers, pins an agent on a task, refuses a model the catalog refuses with nothing written, and changes no agent of another workspace", async () => {
+test("update_agent renames a teammate's agent on the retired runtime, moves it to a model the catalog offers as the catalog reads the choice, and switches its servers, pins an agent on a task, refuses a model the catalog refuses with nothing written, changes no agent of another workspace, and changes a Manager's face but refuses a coder one", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const { caller, otherWorkspaces } = agents;
   // Note that only an agent on the retired runtime moves to another provider's model and takes a window, so the teammate's is one.
@@ -4720,6 +4721,36 @@ test("update_agent renames a teammate's agent on the retired runtime, moves it t
   );
 
   assert.equal(theirs.title, null);
+
+  // A Manager's face is changed as its Settings change it, and a coder asked for one is refused with nothing written.
+  const manager = await managerOn(teammates.userId, workspaceId);
+
+  const face = {
+    character: MANAGER_FACE_CHARACTER.CAT,
+    color: MANAGER_FACE_COLOR.TEAL,
+    emoji: "🚀",
+  };
+
+  const [managerRow] = await database.run(
+    Database.use((db) =>
+      db
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(eq(agentTable.conversationId, manager.conversationId)),
+    ),
+  );
+
+  assert.ok(managerRow !== undefined);
+  const faced = await call(AGENT_TOOL.UPDATE_AGENT, { agentId: managerRow.id, face });
+  assert.equal(faced.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(faced));
+  const managerAfter = await database.run(readAgent(teammates.userId, managerRow.id));
+  assert.deepEqual(Option.getOrThrow(managerAfter).face, face);
+
+  assert.deepEqual(
+    await call(AGENT_TOOL.UPDATE_AGENT, { agentId: teammates.id, title: "Not this", face }),
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: UPDATE_AGENT_REFUSAL.NOT_A_MANAGER },
+  );
+  assert.equal((await stored()).title, null);
 });
 
 /**

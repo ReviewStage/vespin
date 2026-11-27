@@ -80,6 +80,7 @@ import {
 import { deviceAgentRegisterRequestSchema } from "@repo/features/device-agent-wire";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
 import { cleanMachineName } from "@repo/features/machine-name";
+import { type ManagerFace, managerFacePickSchema } from "@repo/features/manager-face";
 import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
 import { contextWindowsOf, windowOf } from "@repo/features/model-effort";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
@@ -1287,9 +1288,12 @@ export const UPDATE_AGENT_REFUSAL = {
   UNREADABLE:
     `Not changed: name the agent by the id ${AGENT_TOOL.LIST_AGENTS} answered and at least one ` +
     `change: a title of at most ${AGENT_BOUNDS.MAX_TITLE_CHARS} characters (empty clears ` +
-    "it), a model with its effort, both or neither, a contextWindow only with them, pinned, or " +
-    `disabledServers as connection names; archive it with ${AGENT_TOOL.ARCHIVE_AGENT}.`,
+    "it), a model with its effort, both or neither, a contextWindow only with them, pinned, " +
+    "disabledServers as connection names, or a Manager's face; archive it with " +
+    `${AGENT_TOOL.ARCHIVE_AGENT}.`,
   UNAVAILABLE: "Not changed: the models could not be read just now. The call may be made again.",
+  NOT_A_MANAGER:
+    "Not changed: only a Manager wears a face, and that agent is a coding agent; leave face out.",
 } as const;
 
 /** Why an archive or a bring-back changed nothing, in words the model can act on; one refused for its starter's subscription names the starter (`archiveRefusalWords`). */
@@ -1349,9 +1353,10 @@ function updateNamesAChange(update: {
   readonly contextWindow?: string;
   readonly pinned?: boolean;
   readonly disabledServers?: readonly string[];
+  readonly face?: ManagerFace;
 }): boolean {
-  const { title, model, effort, contextWindow, pinned, disabledServers } = update;
-  const changes = [title, model, pinned, disabledServers];
+  const { title, model, effort, contextWindow, pinned, disabledServers, face } = update;
+  const changes = [title, model, pinned, disabledServers, face];
 
   if ((model === undefined) !== (effort === undefined)) return false;
 
@@ -1363,9 +1368,10 @@ function updateNamesAChange(update: {
 /**
  * A change names the agent and at least one of: a title, the model with its
  * effort and, at most, its context window, which the catalog then checks,
- * whether the member pins it, and the MCP servers switched off for it, the
- * whole list. Each is the change a member makes from the agent's own menu, model chip,
- * or composer.
+ * whether the member pins it, the MCP servers switched off for it, the
+ * whole list, and a Manager's face, as `create_manager` and the face picker
+ * take it. Each is the change a member makes from the agent's own menu, model
+ * chip, or composer, or from a Manager's Settings › General.
  */
 const UPDATE_AGENT_INPUT = Schema.Struct({
   agentId: AGENT_ID,
@@ -1409,6 +1415,13 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
         "replaces the one standing; empty switches every server back on. Its next turn reads it.",
     ),
   ),
+  face: Schema.optionalKey(
+    describeWire(
+      managerFacePickSchema,
+      "A Manager's face, the whole of it, as its Settings pick it: a character and a color, " +
+        "and one emoji worn in the character's place or none. Refused for a coding agent.",
+    ),
+  ),
 }).check(Schema.makeFilter(updateNamesAChange));
 
 const readUpdateAsked = Schema.decodeUnknownResult(UPDATE_AGENT_INPUT);
@@ -1420,7 +1433,8 @@ export const UPDATE_AGENT_TOOL = {
     "composer would, for the developer you work for: rename it, move it to another model, effort, " +
     "and context window from its next step, the window named wherever the model's " +
     `${AGENT_TOOL.LIST_MODELS} contextWindows are not empty, pin it, or replace the MCP servers ` +
-    "switched off for it; the changes land together or not at all. Change a teammate's agent " +
+    "switched off for it, or change a Manager's face as its Settings would; the changes land " +
+    "together or not at all. Change a teammate's agent " +
     "still in use only where the developer asked for it. A rejected model or effort lists the " +
     "choices. Then say which agent you changed and how.",
   inputSchema: UPDATE_AGENT_INPUT,
@@ -1676,6 +1690,21 @@ export function callerAgent(caller: AgentCaller): Agent | undefined {
 /** The member a call acts for: the starter of the coding agent calling, or the member calling. */
 export function callerUserId(caller: AgentCaller): string {
   return caller.kind === AGENT_CALLER.AGENT ? caller.agent.userId : caller.userId;
+}
+
+/**
+ * The member a write acts as: a Manager's, the member who asked for its turn
+ * under way (`turnAsker`), its owner standing in where no member did, since a
+ * Manager is shared across its workspace; any other caller's own member.
+ */
+export function askingMember(
+  caller: AgentCaller,
+): Effect.Effect<string, StoreFailure, DatabaseServices> {
+  const agent = callerAgent(caller);
+
+  if (agent?.kind !== AGENT_KIND.MANAGER) return Effect.succeed(callerUserId(caller));
+
+  return turnAsker({ userId: agent.userId, conversationId: agent.conversationId });
 }
 
 /** The workspace a call is in, whose experiments it reads: the coding agent's own, or the one the member's call is about. */
@@ -3474,11 +3503,12 @@ export function runUnarchiveAgent(
 /**
  * One call of `update_agent`: an agent of the caller's workspace renamed,
  * moved to another choice the catalog takes, pinned or unpinned for the
- * caller's member, or given another list of servers switched off, by the
- * one operation the app's menu runs (`agent-change.ts`). A choice is
- * checked before anything is written, so one refused changes nothing, and
- * every change asked is written in one transaction, so none stands where
- * another failed.
+ * caller's member, given another list of servers switched off, or, a
+ * Manager alone, given another face, by the one operation the app's menu and
+ * a Manager's Settings run (`agent-change.ts`), as the member who asked
+ * (`askingMember`). A choice and a face are checked before anything is
+ * written, so one refused changes nothing, and every change asked is written
+ * in one transaction, so none stands where another failed.
  */
 export function runUpdateAgent(
   call: AgentCall,
@@ -3490,9 +3520,10 @@ export function runUpdateAgent(
     return Effect.succeed(agentToolRejected(UPDATE_AGENT_REFUSAL.UNREADABLE));
   }
 
-  const { agentId, title, model, effort, contextWindow, pinned, disabledServers } = asked.success;
+  const { agentId, title, model, effort, contextWindow, pinned, disabledServers, face } =
+    asked.success;
+
   const { caller } = call;
-  const userId = callerUserId(caller);
 
   return orStoreRefusal(
     Effect.gen(function* () {
@@ -3500,6 +3531,13 @@ export function runUpdateAgent(
 
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       const { task } = found.value;
+
+      // Note that only a Manager wears a face, so a coder asked for one is refused rather than not found.
+      if (face !== undefined && found.value.agent.kind !== AGENT_KIND.MANAGER) {
+        return agentToolRejected(UPDATE_AGENT_REFUSAL.NOT_A_MANAGER);
+      }
+
+      const userId = yield* askingMember(caller);
       const choices = yield* Effect.result(accountModelChoices(userId));
 
       if (Result.isFailure(choices)) return agentToolRejected(UPDATE_AGENT_REFUSAL.UNAVAILABLE);
@@ -3546,6 +3584,7 @@ export function runUpdateAgent(
         choice,
         pinned,
         disabledServers,
+        face,
       });
 
       if (Option.isNone(written)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
@@ -3565,6 +3604,9 @@ export function runUpdateAgent(
           onYourTask: task.onYourTask,
           archived: agent.archivedAt !== null,
           ...(pinned === undefined ? undefined : { pinned }),
+          ...(face === undefined
+            ? undefined
+            : { face: agent.face == null ? null : { ...agent.face } }),
         },
       };
     }),
