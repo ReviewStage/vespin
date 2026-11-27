@@ -336,6 +336,8 @@ class InboxWorld {
   startRead: ((taskId: string) => Promise<ReadOutcome> | undefined) | undefined;
   /** The workspace the Inbox lists, and its automations as a read of them answers. */
   listedWorkspace: Workspace | undefined;
+  /** Tasks of another workspace than the one listed, which the account's list holds beside its own, as a member of two holds both. */
+  otherWorkspaceTasks: readonly TaskSummary[] = [];
   automations: readonly AutomationSummary[] = [];
   /** What the window copied, in order. */
   copied: string[] = [];
@@ -597,6 +599,7 @@ beforeEach(() => {
   world.deliverFeed = () => undefined;
   world.agentListHeld = false;
   world.listedWorkspace = undefined;
+  world.otherWorkspaceTasks = [];
   world.automations = [];
   world.copied = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(world.copied), ...DESKTOP_LINKS, pageFrameUrl });
@@ -853,14 +856,16 @@ export function mount({
     // Note that the agents on a task are laid on the document too, over whatever else it holds of the list, as the host lays the list it follows, which an item's agent is read from (`useTaskAgent`).
     const onTasks = world.agentListHeld ? undefined : liveAgents;
     // Note that the tasks stand in the workspace listed, where one is, as the window lists that workspace's tasks, and its Inbox their items alone.
-    const { listedWorkspace } = world;
+    const { listedWorkspace, otherWorkspaceTasks } = world;
 
     const inListed = useMemo(
-      () =>
-        listedWorkspace === undefined
+      () => [
+        ...(listedWorkspace === undefined
           ? listed
-          : listed.map((task) => ({ ...task, workspaceId: listedWorkspace.id })),
-      [listed, listedWorkspace],
+          : listed.map((task) => ({ ...task, workspaceId: listedWorkspace.id }))),
+        ...otherWorkspaceTasks,
+      ],
+      [listed, listedWorkspace, otherWorkspaceTasks],
     );
 
     // Note that the list is laid only once the window read its own document, since the test's Query client may still hold an earlier test's.

@@ -750,11 +750,13 @@ export function inboxWithOlder(live: AppInboxItems, older: AppInboxItems): AppIn
   const onTasks = live[INBOX_SCOPE_KIND.TASK];
   const onAgents = live.agents ?? {};
   const liveIds = idsIn([...Object.values(onTasks), ...Object.values(onAgents)]);
+
   const plans = listsWithOlder(
     new Map(Object.entries(onTasks)),
     older[INBOX_SCOPE_KIND.TASK],
     liveIds,
   );
+
   const agents = listsWithOlder(new Map(Object.entries(onAgents)), older.agents, liveIds);
 
   return agents.size === 0

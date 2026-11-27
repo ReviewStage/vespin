@@ -422,20 +422,25 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     [held, holdings, older],
   );
 
+  const workspaceId = tasks.workspace?.id;
+
   const everyListed: readonly InboxGroup<InboxAnyHolder>[] = useMemo(() => {
     if (withOlder === undefined) return everyItem;
 
+    // Note that the older items are the account's, every workspace's, so a task of another workspace than the one listed groups none, as the live holdings are listed (`use-inbox-slices.ts`).
     const holders = withOlder.tasks.flatMap(({ taskId }) => {
       const task = holderRows.task(taskId);
 
-      return task === undefined ? [] : [task];
+      return task === undefined || (workspaceId !== undefined && task.workspaceId !== workspaceId)
+        ? []
+        : [task];
     });
 
     return [
       ...inboxGroups(inboxReadRows(withOlder.read), { tasks: withOlder.tasks, listed: holders }),
       ...tasklessListed,
     ];
-  }, [withOlder, everyItem, holderRows, tasklessListed]);
+  }, [withOlder, everyItem, holderRows, tasklessListed, workspaceId]);
 
   // Note that the list draws rows, and the pane and the search read each item whole, found by its id in the reads the rows are made from.
   const whole = useMemo(
@@ -517,6 +522,14 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
 
   // Note that a scope leaving out every item listed is said apart from an Inbox holding none.
   const searched = tokens.length > 0 ? query : undefined;
+
+  // Note that All drawing no row, as Addressed to leaves out every item read so far, reads the next older page, since an empty run has no end to come to; a search drawing none reads none, as the service's search finds what the pages do not.
+  const { onDrawn: olderDrawn } = olderPages;
+  const drawsOlder = listedRows.length > 0 || searched !== undefined;
+
+  useEffect(() => {
+    if (listsOlder) olderDrawn(drawsOlder);
+  }, [listsOlder, drawsOlder, olderDrawn]);
 
   const filteredOut =
     searched === undefined &&

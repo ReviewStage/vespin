@@ -7,7 +7,9 @@
  * whose All is shown, or none while another view, a narrowed task, or no
  * Inbox is, so All shown anew reads from the newest page. The page lands on
  * app state (`LIVE_READ.INBOX_OLDER`), never here; the list's last run tells
- * the paging as it comes to its end (`onAtEnd`). Beside the paging it
+ * the paging as it comes to its end (`onAtEnd`), and the list whether it
+ * draws any row (`onDrawn`), since a list drawing none has no end to come
+ * to. Beside the paging it
  * keeps whether a page is out, which the list's end draws a placeholder row
  * for while the next page is read, and whether the last was read.
  */
@@ -18,9 +20,10 @@ import { ACT_KIND } from "@repo/host/acts";
 import { useEffect, useMemo, useState } from "react";
 import { askAct } from "../act.js";
 
-/** What All's list reads of the paging: the door its end tells, and whether a page is out now. */
+/** What All's list reads of the paging: the door its end tells, the door told whether it draws any row, and whether a page is out now. */
 export interface InboxOlderPages {
   readonly onAtEnd: (atEnd: boolean) => void;
+  readonly onDrawn: (drawsAny: boolean) => void;
   readonly reading: boolean;
 }
 
@@ -49,5 +52,8 @@ export function useInboxOlderPages(accountId: string | undefined, shown: boolean
   // Note that a list let go stops paging, so an answer landing after it reads no page more.
   useEffect(() => () => paging.show(undefined), [paging]);
 
-  return useMemo(() => ({ onAtEnd: paging.onRunEnd, reading }), [paging, reading]);
+  return useMemo(
+    () => ({ onAtEnd: paging.onRunEnd, onDrawn: paging.onDrawn, reading }),
+    [paging, reading],
+  );
 }
