@@ -76,9 +76,12 @@ function linesInView(
 ): readonly string[] {
   const view = box.getBoundingClientRect();
   const drawn = drawnMessages(box);
+  // Note that a row is looked up only where it is drawn, because a line of a row out of view stands in no view, and a lookup of each of a long log's lines searched the rows once per line on every write.
+  const drawnRows = new Set(rows.drawnKeys());
 
   return lines.flatMap(({ rowKey, line }) => {
-    const element = drawn.get(line.messageId) ?? rows.rowElement(rowKey);
+    const element =
+      drawn.get(line.messageId) ?? (drawnRows.has(rowKey) ? rows.rowElement(rowKey) : undefined);
 
     return element !== undefined && standsIn(element, view) ? [line.messageId] : [];
   });
