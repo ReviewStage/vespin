@@ -525,7 +525,7 @@ test("a teammate's task the reader follows stands under Following, which it leav
   assert.deepEqual(namesIn(container, "My tasks"), ["Retry audit"]);
 });
 
-test("a section whose only task is done still says Drag tasks here", async () => {
+test("a section whose only task is done still stands, as its header alone", async () => {
   const sidebar = await mountSidebar([], SECTIONS, {
     tasks: [
       { ...INVITES, status: TASK_STATUS.DONE },
@@ -533,17 +533,10 @@ test("a section whose only task is done still says Drag tasks here", async () =>
     ],
   });
 
-  assert.ok(
-    sidebar.querySelector('nav[aria-label="Sections"]')?.textContent?.includes("Drag tasks here"),
+  assert.equal(
+    sidebar.querySelector('nav[aria-label="Sections"]')?.textContent?.trim(),
+    "🚀Launch",
   );
-});
-
-test("a section draws no Drag tasks here before the tasks are read", async () => {
-  const sidebar = await mountSidebar([], SECTIONS, { tasks: [], listRead: false });
-  const sections = sidebar.querySelector('nav[aria-label="Sections"]');
-
-  assert.ok(sections);
-  assert.equal(sections.textContent?.includes("Drag tasks here"), false);
 });
 
 test("a task's Move to puts it on top of the section chosen", async () => {

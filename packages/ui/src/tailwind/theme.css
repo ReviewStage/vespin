@@ -845,15 +845,10 @@
   /* A sidebar row's end (`task-card.tsx`'s `SIDEBAR_ROW_TIME`): its time's
      own slot, as wide as its longest count, so the marks before it line up; the repository
      it names before its marks, cut short past a few words; the attention
-     mark's glyph a size under the row's; the empty group's slot past its header's glyph; and the
+     mark's glyph a size under the row's; and the
      offline pill, its height, glyph, tint, and arrival. */
   --spacing-sidebar-row-age: 3.5ch; /* off-scale: a time's longest count, "59m", in its tabular figures */
   --spacing-sidebar-row-repository: 7em; /* off-scale: a few words of a repository's name */
-  --spacing-sidebar-slot-start: calc(
-    var(--ui-row-inset) +
-    var(--ui-control-icon) +
-    var(--ui-icon-gap)
-  );
   --spacing-offline-mark: 24px; /* off-scale: the offline pill, a compact button's height */
   --spacing-offline-glyph: 13px; /* off-scale: the offline pill's glyph */
   --animate-offline-arrive: ui-menu-arrive var(--ui-duration-quick) var(--ui-motion-exit) backwards;
