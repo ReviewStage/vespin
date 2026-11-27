@@ -52,7 +52,12 @@ import {
   inboxAttachmentAddress,
   inboxPictureDestination,
 } from "@repo/features/inbox-attachment-link";
-import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, SCOPE_INBOX_PARTS } from "@repo/features/inbox-live";
+import {
+  ACCOUNT_INBOX_READ,
+  INBOX_ITEMS_READ,
+  INBOX_OLDER_PAGE_SIZE,
+  SCOPE_INBOX_PARTS,
+} from "@repo/features/inbox-live";
 import {
   INBOX_ASK_STATUS,
   INBOX_ASK_STATUS_MOVES,
@@ -1891,20 +1896,131 @@ export function accountItemsCarried({ userId, settledSince, taskless }: AccountI
       itemVisibleTo(userId),
       // Note that an item on no task is carried only where the build reads one, because a build before `HOSTED_API_VERSION` 6 fails its whole answer on one null task.
       taskless ? undefined : isNotNull(inboxItem.taskId),
-      // Note that a settled item stands by the latest of its last change, its settling, and the time the reader's reminder brings it back, since a nod on an old notice settles it without moving its last change, and a reminder must find it still carried when it comes back.
-      or(
-        eq(inboxItem.status, INBOX_STATUS.OPEN),
-        sql`greatest(${inboxItem.updatedAt}, ${inboxItem.settledAt}, ${remindAtFor(userId)}) >= ${settledSince}`,
-      ),
+      withinWindow(userId, settledSince),
     ) ?? sql`true`
   );
+}
+
+/**
+ * Whether an account-wide read carries an item by its standing: open, or
+ * settled and moved at or after `settledSince`. Note that a settled item
+ * stands by the latest of its last change, its settling, and the time the
+ * reader's reminder brings it back, since a nod on an old notice settles it
+ * without moving its last change, and a reminder must find it still carried
+ * when it comes back.
+ */
+function withinWindow(userId: string, settledSince: Date): SQL {
+  return (
+    or(
+      eq(inboxItem.status, INBOX_STATUS.OPEN),
+      sql`greatest(${inboxItem.updatedAt}, ${inboxItem.settledAt}, ${remindAtFor(userId)}) >= ${settledSince}`,
+    ) ?? sql`true`
+  );
+}
+
+/**
+ * Where a page of the account's older items ends, past which the next
+ * reads: its last item's last change, as the text Postgres reads it as so
+ * an instant keeps its microseconds, and its id, which breaks a tie.
+ */
+export interface OlderItemsPast {
+  readonly updatedAt: string;
+  readonly id: string;
+}
+
+/**
+ * The items an account-wide read leaves out by the clock alone: those the
+ * account may read, on no task only where `taskless`, that its window does
+ * not carry (`withinWindow`), so every item the reader may read stands in
+ * exactly one of the two.
+ */
+function accountOlderItems({ userId, settledSince, taskless }: AccountItemsReader): SQL {
+  return (
+    and(
+      itemVisibleTo(userId),
+      taskless ? undefined : isNotNull(inboxItem.taskId),
+      not(withinWindow(userId, settledSince)),
+    ) ?? sql`false`
+  );
+}
+
+/** The account's older items past `past`, where it names one. */
+function olderItemsPast(reader: AccountItemsReader, past: OlderItemsPast | undefined): SQL {
+  const beyond =
+    past === undefined
+      ? undefined
+      : sql`(${inboxItem.updatedAt}, ${inboxItem.id}) < (${past.updatedAt}::timestamptz, ${past.id}::uuid)`;
+
+  return and(accountOlderItems(reader), beyond) ?? sql`false`;
+}
+
+/** The order a page of older items stands in: the latest changed first, and by id between those changed at one instant. */
+const OLDER_FIRST = [desc(inboxItem.updatedAt), desc(inboxItem.id)] as const;
+
+/** An older item's place in that order, its last change as the text Postgres reads it as. */
+const OLDER_PLACE = {
+  id: inboxItem.id,
+  updatedAt: sql<string>`${inboxItem.updatedAt}::text`.as("updated_at_text"),
+};
+
+/**
+ * Where the page of the account's older items past `past` ends, which the
+ * page after it reads past; none where it is the last, so no item stands
+ * past it. It reads one more item than a page holds, so a page that leaves
+ * more is told by its length.
+ */
+export function accountOlderItemsPageEnd(
+  reader: AccountItemsReader,
+  past: OlderItemsPast | undefined,
+): InboxStoreEffect<OlderItemsPast | undefined> {
+  const read = Database.use((db) =>
+    db
+      .select(OLDER_PLACE)
+      .from(inboxItem)
+      .where(olderItemsPast(reader, past))
+      .orderBy(...OLDER_FIRST)
+      .limit(INBOX_OLDER_PAGE_SIZE + 1),
+  );
+
+  return Effect.map(read, (rows) => {
+    const last = rows.length > INBOX_OLDER_PAGE_SIZE ? rows[INBOX_OLDER_PAGE_SIZE - 1] : undefined;
+    return last === undefined ? undefined : { updatedAt: last.updatedAt, id: last.id };
+  });
+}
+
+/**
+ * One page of the account's older items (`INBOX_OLDER_READ`), past `past`
+ * where it names one: each whole, its stamp, its row, and the messages and
+ * files its thread draws, as the account-wide read answers an item, so an
+ * item the account may not read reads no row.
+ */
+export function accountOlderItemsPageStatements(
+  reader: AccountItemsReader,
+  past: OlderItemsPast | undefined,
+) {
+  const page = queryBuilder
+    .select({ id: inboxItem.id })
+    .from(inboxItem)
+    .where(olderItemsPast(reader, past))
+    .orderBy(...OLDER_FIRST)
+    .limit(INBOX_OLDER_PAGE_SIZE);
+
+  return stampsAndItemsOf(reader.userId, inArray(inboxItem.id, page));
 }
 
 /** The account's items `narrowed` keeps, as `accountItemsLiveStatements` reads them, those `changed` keeps among them whole. */
 function accountItemsOf(reader: AccountItemsReader, narrowed: SQL, changed: SQL) {
   const { userId } = reader;
   const carried = and(accountItemsCarried(reader), narrowed);
+  return stampsAndItemsOf(userId, carried, and(carried, changed));
+}
 
+/** The stamps of the items `stamped` names, and those `whole` names whole, with their threads and files, each as the reader reads it. */
+function stampsAndItemsOf(
+  userId: string,
+  stamped: SQL | undefined,
+  whole: SQL | undefined = stamped,
+) {
   const stamps = liveRowsStatement(
     INBOX_ITEMS_READ.parts.stamps,
     {
@@ -1923,10 +2039,10 @@ function accountItemsOf(reader: AccountItemsReader, narrowed: SQL, changed: SQL)
       },
       instants: { updatedAt: inboxItem.updatedAt, ...liveReminderFor(userId) },
     },
-    (selection) => queryBuilder.select(selection).from(inboxItem).where(carried),
+    (selection) => queryBuilder.select(selection).from(inboxItem).where(stamped),
   );
 
-  return { stamps, ...itemsLiveStatements(userId, and(carried, changed)) };
+  return { stamps, ...itemsLiveStatements(userId, whole) };
 }
 
 /** The tables whose moved rows name the tasks and agents whose items they move. */
