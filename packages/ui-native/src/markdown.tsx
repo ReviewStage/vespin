@@ -9,7 +9,15 @@ import { heldChipName } from "@repo/features/place-chip-model";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
-import { type ComponentRef, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ComponentRef,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   type AccessibilityActionEvent,
   ActivityIndicator,
@@ -200,6 +208,15 @@ const styles = StyleSheet.create({
   measured: { alignSelf: "stretch" },
 });
 
+/** What VoiceOver hears of each chip by the name the app found for it, by chip, for the blocks the chips were read from. */
+interface NamedChips {
+  readonly blocks: readonly MarkdownBlock[];
+  readonly chips: ReadonlyMap<MarkdownChip, string>;
+}
+
+/** No chip named yet. */
+const NO_NAMED_CHIPS: ReadonlyMap<MarkdownChip, string> = new Map();
+
 /** What drawing a run needs beyond the run: the colors, the reader's text scale, and the doors a press opens. */
 interface Drawing {
   readonly colors: BrandColors;
@@ -221,6 +238,10 @@ interface Drawing {
   readonly linkStanding: (page: string) => LinkStanding | undefined;
   /** The mark the app holds for the entity a chip names (`ChipMarkProvider`); none where it holds nothing. */
   readonly markOf: ChipMarkOf;
+  /** What VoiceOver hears of a chip by the name the app now holds for it, as the chip reported it (`useNamedChip`); none until it does, or where it holds none. */
+  readonly heardNamed: (chip: MarkdownChip) => string | undefined;
+  /** Hands the words what VoiceOver hears of a chip by the name the app now holds, so its line's label and actions say what the chip shows. */
+  readonly onNamed: (chip: MarkdownChip, heard: string) => void;
   /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
   readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
   /** The picture the words name by its marker, by its name, which its chip draws; none for a marker of no picture the message carries. */
@@ -282,7 +303,7 @@ function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | unde
 
 /** A chip as VoiceOver hears it: as its standing shows it once GitHub has answered, else by its kind and written name. */
 function chipHeard(chip: MarkdownChip, drawing: Drawing): string {
-  return standingLook(chip, drawing)?.heard ?? chip.heard;
+  return standingLook(chip, drawing)?.heard ?? drawing.heardNamed(chip) ?? chip.heard;
 }
 
 /**
@@ -365,6 +386,14 @@ function MentionChip({
   const size = ROLE_SIZE.ROW_LINE;
   const standing = standingLook(chip, drawing);
   const named = useNamedChip(chip);
+  const { onNamed } = drawing;
+
+  // Note that the name the app holds is handed up to the words, since VoiceOver hears the chip through its line's label and actions, never the chip itself.
+  const heardNow = named.heard;
+
+  useEffect(() => {
+    if (heardNow !== chip.heard) onNamed(chip, heardNow);
+  }, [chip, heardNow, onNamed]);
   const heard = standing?.heard ?? named.heard;
   const name = standing?.name ?? named.name;
   const menu = useChipMenu(chip.target, onPress);
@@ -1679,6 +1708,21 @@ export function Markdown({
     [words, repository, typed, hidesHtml, diagrams, wordPictures],
   );
 
+  // The names the words' chips found as they drew, by chip, for the blocks they were read from, so a line's label and actions say what each chip shows; the words read again start none.
+  const [named, setNamed] = useState<NamedChips>({ blocks, chips: NO_NAMED_CHIPS });
+
+  const onNamed = useCallback(
+    (chip: MarkdownChip, heard: string) =>
+      setNamed((held) =>
+        held.chips.get(chip) === heard
+          ? held
+          : { blocks: held.blocks, chips: new Map(held.chips).set(chip, heard) },
+      ),
+    [],
+  );
+
+  if (named.blocks !== blocks) setNamed({ blocks, chips: NO_NAMED_CHIPS });
+
   const drawing: Drawing = {
     colors,
     fontScale,
@@ -1691,6 +1735,8 @@ export function Markdown({
     headings,
     linkStanding,
     markOf,
+    heardNamed: (chip) => named.chips.get(chip),
+    onNamed,
     suggestion,
     wordPicture,
     viewPictures,
