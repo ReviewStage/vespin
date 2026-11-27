@@ -210,6 +210,7 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
           team,
           [TOPIC.WORKSPACE_PEOPLE, teamId],
           [TOPIC.ACCOUNT, userId],
+          [TOPIC.ACCOUNT_INBOX, userId],
         ];
 
         yield* wakesTheTaskList(joinWorkspace(teamId, userId), notified, userId);

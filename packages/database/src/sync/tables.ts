@@ -286,6 +286,7 @@ export const memberSync = defineSyncTable(member, {
     { kind: TOPIC.WORKSPACE, column: member.organizationId },
     { kind: TOPIC.WORKSPACE_PEOPLE, column: member.organizationId },
     { kind: TOPIC.ACCOUNT, column: member.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: member.userId },
   ],
   log: LOG.EVERY,
 });
@@ -424,7 +425,10 @@ export const githubInstallationSync = defineSyncTable(githubInstallation, {
 
 /** A member's own GitHub token, on the member's topic. */
 export const githubPersonalTokenSync = defineSyncTable(githubPersonalToken, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: githubPersonalToken.userId }],
+  topics: [
+    { kind: TOPIC.ACCOUNT, column: githubPersonalToken.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: githubPersonalToken.userId },
+  ],
   log: LOG.EVERY,
 });
 
@@ -435,7 +439,10 @@ export const githubPersonalTokenSync = defineSyncTable(githubPersonalToken, {
  * mostly stands, and no read gates on it.
  */
 export const githubRepositoryReadSync = defineSyncTable(githubRepositoryRead, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: githubRepositoryRead.userId }],
+  topics: [
+    { kind: TOPIC.ACCOUNT, column: githubRepositoryRead.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: githubRepositoryRead.userId },
+  ],
   ignore: [githubRepositoryRead.checkedAt],
   log: LOG.EVERY,
 });
@@ -656,7 +663,10 @@ export const inboxItemSync = defineSyncTable(inboxItem, {
       through: member,
       key: member.organizationId,
       by: inboxItem.organizationId,
-      topics: [{ kind: TOPIC.ACCOUNT, column: member.userId }],
+      topics: [
+        { kind: TOPIC.ACCOUNT, column: member.userId },
+        { kind: TOPIC.ACCOUNT_INBOX, column: member.userId },
+      ],
     },
   ],
   log: LOG.EVERY,
@@ -683,6 +693,7 @@ export const inboxMessageSync = defineSyncTable(inboxMessage, {
 export const inboxItemReadSync = defineSyncTable(inboxItemRead, {
   topics: [
     { kind: TOPIC.ACCOUNT, column: inboxItemRead.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: inboxItemRead.userId },
     {
       through: inboxItem,
       key: inboxItem.id,
@@ -726,6 +737,7 @@ export const automationSync = defineSyncTable(automation, {
   topics: [
     { kind: TOPIC.WORKSPACE, column: automation.organizationId },
     { kind: TOPIC.ACCOUNT, column: automation.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: automation.userId },
   ],
   log: LOG.ROWS,
 });
@@ -741,6 +753,7 @@ export const automationSync = defineSyncTable(automation, {
 export const automationRunSync = defineSyncTable(automationRun, {
   topics: [
     { kind: TOPIC.ACCOUNT, column: automationRun.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: automationRun.userId },
     {
       through: automation,
       key: automation.id,

@@ -86,6 +86,8 @@ const itemTopics = (world: InboxWorld): readonly SyncTopic[] => [
   [TOPIC.WORKSPACE, world.workspaceId],
   [TOPIC.ACCOUNT, world.owner],
   [TOPIC.ACCOUNT, world.teammate],
+  [TOPIC.ACCOUNT_INBOX, world.owner],
+  [TOPIC.ACCOUNT_INBOX, world.teammate],
 ];
 
 /** A read as one reader follows it: its definition, and the params its procedure binds. */
@@ -215,6 +217,7 @@ it.layer(SUITE)("what moves an inbox notifies", (it) => {
           markInboxItemRead(world.teammate, itemId),
           [
             [TOPIC.ACCOUNT, world.teammate],
+            [TOPIC.ACCOUNT_INBOX, world.teammate],
             [TOPIC.TASK, world.taskId],
             [TOPIC.AGENT, world.agentId],
           ],
@@ -236,6 +239,7 @@ it.layer(SUITE)("what moves an inbox notifies", (it) => {
         const ownerTopics: readonly SyncTopic[] = [
           [TOPIC.WORKSPACE, world.workspaceId],
           [TOPIC.ACCOUNT, world.owner],
+          [TOPIC.ACCOUNT_INBOX, world.owner],
         ];
 
         const made = yield* wakes(

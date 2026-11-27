@@ -39,6 +39,15 @@ export const TOPIC = {
    * wakes only the account's open skills reads.
    */
   ACCOUNT_SKILLS: "account-skills",
+  /**
+   * What waits on a user across their workspaces, by user id: narrower than
+   * the account's own topic, which their Macs' beats, commands, and lines,
+   * their sections, pins, read marks, and preferences all name, so an inbox
+   * item, a read mark of one, an automation or its run, or what admits the
+   * account to a workspace or a repository wakes their open account inbox
+   * reads and nothing else of the account's does.
+   */
+  ACCOUNT_INBOX: "account-inbox",
   /** A workspace, by organization id. */
   WORKSPACE: "workspace",
   /**
