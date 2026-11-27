@@ -1746,12 +1746,14 @@ const REVEAL_POSITION = 0.35;
 /**
  * An agent's transcript as one lazy list, the app's one React Native list,
  * since SwiftUI has no piece for its rows: FlashList's own chat list, which
- * opens at its newest row (`startRenderingFromBottom`) and keeps it in view
+ * opens at its newest row (`initialScrollIndex`) and keeps it in view
  * as rows land while the reader stands near it (`autoscrollToBottomThreshold`),
  * while one that lands as they read back holds their place; a line the reader
  * sends brings it into view wherever they stood, just over the composer's
  * stack, as Messages' does; a reader scrolled back is offered Jump to latest.
  * Only the rows near the screen are drawn, however long the transcript runs.
+ * One too short to fill the screen stands from the top, as the panel's log
+ * stands one, never set at the foot by the composer.
  */
 export function AgentTranscript({
   items,
@@ -2013,8 +2015,8 @@ export function AgentTranscript({
             revealOpening >= 0 ? OPEN_AT_REVEAL : { viewOffset: OPEN_PAST_NEWEST }
           }
           // Note that the list opens at its newest row, keeps it in view as rows land while the reader stands near it, and, as an older page lands before the oldest row, leaves the row the reader reads where it stood, as FlashList's chat lists do.
+          // Note that FlashList's start from the bottom is left off, since it sets a few rows at the foot, where the panel's log stands them from the top; `initialScrollIndex` still opens a long one at its newest row.
           maintainVisibleContentPosition={{
-            startRenderingFromBottom: true,
             autoscrollToBottomThreshold: AUTOSCROLL_SHARE,
             animateAutoScrollToBottom: false,
           }}
