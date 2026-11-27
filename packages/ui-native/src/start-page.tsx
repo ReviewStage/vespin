@@ -216,8 +216,8 @@ export function MenuChip(props: MenuChipProps) {
       modifiers={[...chipStyle(look), menuIndicator("visible"), tint(colors.TEXT), ...found]}
     >
       {menu.groups.map((group, at) => (
-        // Note that a group is keyed by its place, since a group may have no heading.
-        <Section key={at} {...(group.title === undefined ? {} : { title: group.title })}>
+        // Note that a group is keyed by its place, since a group may have no heading, which its picker's label draws (`GroupPicker`).
+        <Section key={at}>
           <GroupPicker group={group} />
         </Section>
       ))}
@@ -241,7 +241,9 @@ export function MenuChip(props: MenuChipProps) {
 /**
  * A capsule menu's group as SwiftUI's own single choice: an inline picker,
  * its options standing in the menu with the one chosen checked, as the
- * system checks it, its label left to the group's section. Note that each
+ * system checks it, under its label as the group's heading, since in a menu
+ * the inline picker is its own section, and a title on the section around
+ * it drew nothing over a hidden label (#11171's shots). Note that each
  * option is tagged by its place in the group, never its label or id, so two
  * choices of one name, such as two Macs both called MacBook Pro, stay two;
  * and that a pick of the option already chosen sends nothing, as the
@@ -256,7 +258,7 @@ function GroupPicker({ group }: { readonly group: ChipMenuGroup }) {
       label={group.title ?? ""}
       {...(chosen === -1 ? {} : { selection: String(chosen) })}
       onSelectionChange={(value: string) => group.choices[Number(value)]?.onPress()}
-      modifiers={[pickerStyle("inline"), labelsHidden()]}
+      modifiers={[pickerStyle("inline"), ...(group.title === undefined ? [labelsHidden()] : [])]}
     >
       {group.choices.map((choice, at) => (
         <PickOption
