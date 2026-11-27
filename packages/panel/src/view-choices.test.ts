@@ -7,15 +7,17 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, expect, test } from "vitest";
 import { fakeActPort, fakeActPortCalls, refusedOnPort } from "./testing/app-bridge.js";
+import { handState, signedInAs } from "./testing/app-state.js";
 import { settleQueries, withQueryClient } from "./testing/copy-feedback.js";
-import { keepViewChoices } from "./testing/view-choices.js";
+import { hearViewChoices, keepViewChoices } from "./testing/view-choices.js";
 import { type AccountChoice, useAccountChoice } from "./view-choices.js";
 
 /**
  * view-choices.test.ts -- a choice made on the account is drawn in the
  * frame it is pressed, as a choice kept on the window was, so what a press
  * changes beside it (a list's rows, where the keyboard lands) changes with
- * it; and a write the account refused gives way to the account's choice.
+ * it; a write the account refused gives way to the account's choice; and
+ * a change made before the account's choices are read waits for them.
  */
 
 declare global {
@@ -88,4 +90,37 @@ test("a choice the account refused gives way to the account's", async () => {
   expect(sort().value).toBe(MANAGER_SORT.NAME);
   await settleQueries();
   expect(sort().value).toBe(DEFAULT_MANAGER_SORT);
+});
+
+test("a change made before the account's choices are read writes nothing until they are, then is laid over the account's", async () => {
+  fakeActPort({});
+  handState(
+    {},
+    { account: signedInAs({ id: "user-ada", email: "ada@example.com", name: "Ada" }).account },
+  );
+
+  const early = hearViewChoices();
+  const sort = drawSort();
+  await settleQueries();
+
+  // A change read off the choice standing, as a fold toggled is: from Recent activity it turns to Name, from anything else to Recent activity.
+  const toggled = (standing: string) =>
+    standing === MANAGER_SORT.RECENT_ACTIVITY ? MANAGER_SORT.NAME : MANAGER_SORT.RECENT_ACTIVITY;
+
+  act(() => sort().change(toggled));
+  await settleQueries();
+  expect(early).toEqual([]);
+
+  const written = keepViewChoices([
+    {
+      id: "0a1b2c3d-0000-4000-8000-0000000000f0",
+      key: VIEW_CHOICE_KEY.MANAGER_SORT,
+      workspaceId: WORKSPACE_ID,
+      value: MANAGER_SORT.RECENT_ACTIVITY,
+    },
+  ]);
+
+  await settleQueries();
+  expect(written.map(({ value }) => value)).toEqual([MANAGER_SORT.NAME]);
+  expect(sort().value).toBe(MANAGER_SORT.NAME);
 });
