@@ -6,22 +6,27 @@
  * (`ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW`), kept open while the screen is in
  * focus, lays them on the document under the workspace, the repository,
  * and the number, so any member's claim, finish, or failure draws within a
- * moment. A Generate (`ACT_KIND.CHAPTERS_REPOSITORY_GENERATE`) stands as
- * being made until it answers, and its answer is drawn as soon as it lands
- * and stands until the held read moves, so the chapters made never give way
- * to what was there before.
+ * moment. A Generate (`ACT_KIND.CHAPTERS_REPOSITORY_GENERATE`) is a write
+ * (`useWrite`): it stands as being made until it answers, the chapters it
+ * answers are drawn as soon as they land and stand until the held read
+ * moves, so the chapters made never give way to what was there before, and
+ * a refusal says why in the failure notice.
  */
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { CHAPTERS_FAILURE_WORDS } from "@repo/features/pull-request-chapters-shown";
 import type { PullRequestChaptersAnswerView } from "@repo/features/pull-request-chapters-view";
+import { PULL_REQUEST_CHAPTERS_FAILURE_KIND } from "@repo/features/pull-request-chapters-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
+import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useHostFollow } from "../host/host-provider.js";
+import { useWrite } from "../use-write.js";
 import type { PullRequestKey } from "./use-pull-request.js";
 
 /** A read that failed before it ever answered, drawn as any other failed read. */
@@ -91,22 +96,35 @@ export function usePullRequestChapters(key: PullRequestKey): PullRequestChapters
   // Note that whether a Generate is out is a ref too, because two presses in one frame both read the state as none.
   const out = useRef(false);
 
+  const write = useWrite();
+
+  // Note that only chapters answered are held to draw: a refused Generate says why in the failure notice, with Try again, over the read as it stands.
   const generate = useCallback(() => {
     if (out.current) return;
     out.current = true;
     setGenerating(Date.now());
-    acts[ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]({ workspaceId, repository, number })
-      .catch((cause: unknown): PullRequestChaptersAnswerView => {
-        refused("A Generate of the chapters")(cause);
+    void write(
+      () =>
+        acts[ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]({ workspaceId, repository, number }).then(
+          (answer) => {
+            if (!("failure" in answer)) setGenerated({ of: latest.current, answer });
 
-        return UNANSWERED;
-      })
-      .then((answer) => {
-        out.current = false;
-        setGenerating(undefined);
-        setGenerated({ of: latest.current, answer });
-      });
-  }, [acts, workspaceId, repository, number]);
+            return answer;
+          },
+        ),
+      {
+        refused: (answer) =>
+          "failure" in answer
+            ? CHAPTERS_FAILURE_WORDS[PULL_REQUEST_CHAPTERS_FAILURE_KIND.UNEXPECTED]
+            : undefined,
+        retry: true,
+        went: BUZZ.SUCCESS,
+      },
+    ).then(() => {
+      out.current = false;
+      setGenerating(undefined);
+    });
+  }, [acts, write, workspaceId, repository, number]);
 
   // Note that Try again lets a Generate's answer go, because a read that answers as before keeps its identity and would leave a failed Generate drawn over it.
   const retry = useCallback(() => {
