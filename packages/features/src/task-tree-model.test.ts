@@ -2,13 +2,18 @@ import { expect, test } from "vitest";
 import { ASSIGNED_TO } from "./task-list-model.js";
 import {
   DEFAULT_TASK_TREE_VIEW,
+  keptTreeViews,
+  readTreeViews,
   searchedTasks,
   TASK_ROW_FACE,
   type TaskBranch,
   type TaskTree,
+  type TaskTreeView,
   taskBranches,
   taskRowFace,
   taskTree,
+  treeDrawsSettled,
+  treeViewIn,
 } from "./task-tree-model.js";
 import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 import { COMPLETED_WINDOW, TASKS_GROUPING, TASKS_ORDER } from "./tasks-page-model.js";
@@ -21,6 +26,8 @@ import { COMPLETED_WINDOW, TASKS_GROUPING, TASKS_ORDER } from "./tasks-page-mode
  * Following; a search finds a settled task by its key;
  * a row nests under the nearest shallower row above it, however deep;
  * the view the reader chose stands their tasks as the Tasks page would;
+ * a view kept at All reads back at All, and a settled task only Pinned holds
+ * is no row a page of older settled tasks would stand beside;
  * a row wears a teammate's face, the unassigned mark, or none for the reader's own.
  */
 
@@ -233,6 +240,43 @@ test("the view the reader chose stands their tasks: whose, grouped, ordered, fin
     ["Todo", "Billing", "Invite copy"],
     ["Done", "Rounding"],
   ]);
+});
+
+test("a view kept at All reads back at All, so the phone opens on the finished tasks it pages in", () => {
+  const all: TaskTreeView = { ...DEFAULT_TASK_TREE_VIEW, completed: COMPLETED_WINDOW.ALL };
+  const kept = readTreeViews(keptTreeViews({}, WORKSPACE, all));
+
+  expect(treeViewIn(kept, WORKSPACE).completed).toBe(COMPLETED_WINDOW.ALL);
+});
+
+test("a settled task only Pinned holds draws no row the view's groups stand older settled tasks beside, so the paging reads on until one does", () => {
+  const day = 24 * 60 * 60 * 1000;
+  const now = 200 * day;
+
+  const tasks = [
+    task("Digest", TASK_STATUS.CANCELED, "ada/relay", 40, {
+      pinnedAt: 1,
+      completedAt: now - 3 * day,
+    }),
+    task("Rounding", TASK_STATUS.DONE, "ada/ledger", 70, { completedAt: now - 90 * day }),
+  ];
+
+  const treeUnder = (treeView: TaskTreeView) =>
+    taskTree({
+      view: { tasks },
+      workspaceId: WORKSPACE,
+      readerId: READER,
+      noRepository: "No repository",
+      tasksHead: "My tasks",
+      treeView,
+      personName: (userId) => userId,
+      now,
+    });
+
+  const canceled = treeUnder({ ...DEFAULT_TASK_TREE_VIEW, statuses: [TASK_STATUS.CANCELED] });
+  const all = treeUnder({ ...DEFAULT_TASK_TREE_VIEW, completed: COMPLETED_WINDOW.ALL });
+
+  expect([treeDrawsSettled(canceled), treeDrawsSettled(all)]).toEqual([false, true]);
 });
 
 test("a search finds the workspace's tasks whatever their status, by name or key", () => {
