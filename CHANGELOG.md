@@ -80,14 +80,15 @@ published.
 
 The Mac app is now signed and notarized by Stage Incorporated, the company
 that makes it, rather than a personal Apple developer account. macOS treats a
-build signed by another team as a new app, so on first launch it may ask once
-whether Vespin may use the Keychain item that protects your sign-in (Always
-Allow keeps you signed in; Deny signs you out, and you sign in again once), and
-it asks again for any permission the app held, such as the microphone or a
-folder. An install older than 0.33.0 cannot take this update: download
-Vespin.dmg from vespin.dev once.
+build signed by another team as a new app, so on first launch it asks once
+whether Vespin may use the Keychain item that protects your sign-in: Always
+Allow keeps you signed in, and Deny signs you out, so you sign in again once.
+Any permission the app held, such as the microphone or a folder, is asked for
+again the next time it is needed. An install older than 0.33.0 cannot take
+this update: download Vespin.dmg from vespin.dev once.
 
-[#8683](https://github.com/ReviewStage/vespin/pull/8683)
+[#8683](https://github.com/ReviewStage/vespin/pull/8683),
+[#11272](https://github.com/ReviewStage/vespin/pull/11272)
 
 ### Improvements
 
@@ -117,6 +118,8 @@ Vespin.dmg from vespin.dev once.
 
 ### Fixes
 
+- Fixed agents on this Mac keeping the previous version's host running after
+  an update ([#11272](https://github.com/ReviewStage/vespin/pull/11272))
 - Fixed a link the app refuses showing as "[blocked]" instead of its words
   ([#11148](https://github.com/ReviewStage/vespin/pull/11148))
 - Fixed a date chip with seconds in its time drawing as a plain link
