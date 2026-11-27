@@ -1,5 +1,9 @@
 /** usage-limit-notice.tsx -- the warning kept in a conversation where its agent moved to its next plan or key, paused, or stopped at its usage limit. */
-import { dueText } from "@repo/features/time-format";
+import {
+  RESET_CREDIT_WORDS,
+  usageLimitNext,
+  usageLimitTitle,
+} from "@repo/features/usage-limit-words";
 import type { UsageLimitNotice as Notice } from "@repo/wire/ui-messages";
 import { GLYPH } from "../../icons/icons.js";
 import { STATUS_TONE } from "../../status-tone.js";
@@ -19,15 +23,6 @@ export interface UsageLimitReset {
   readonly busy: boolean;
 }
 
-/** What the card's muted line says: the payer the turn went on with, when it resumes, or that it waits on the reader. */
-function nextWords(notice: Notice): string {
-  if (notice.moved !== undefined) return `Continuing on ${notice.moved.to}`;
-
-  if (notice.resetsAt === null) return "Send a message to continue";
-
-  return `Resumes at ${dueText(notice.resetsAt, Date.now())}`;
-}
-
 export function UsageLimitNotice({
   notice,
   look = USAGE_LIMIT_NOTICE_LOOK.FULL,
@@ -39,8 +34,6 @@ export function UsageLimitNotice({
   /** The reset credit a pause offers, drawn as Use reset; none where it offers none. */
   reset?: UsageLimitReset | undefined;
 }): React.JSX.Element {
-  const on = notice.moved === undefined ? "" : ` on ${notice.moved.from}`;
-
   return (
     <Banner
       look={BANNER_LOOK.CARD}
@@ -52,20 +45,20 @@ export function UsageLimitNotice({
           <Button
             variant={BUTTON_VARIANT.OUTLINE}
             busy={reset.busy}
-            busyLabel="Using reset"
+            busyLabel={RESET_CREDIT_WORDS.RUNNING}
             onClick={reset.use}
           >
-            Use reset
+            {RESET_CREDIT_WORDS.VERB}
           </Button>
         )
       }
     >
       <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.LABEL}>
-        {`${notice.agent} usage limit reached${on}`}
+        {usageLimitTitle(notice)}
       </Text>
       {look === USAGE_LIMIT_NOTICE_LOOK.TITLE ? null : (
         <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          {nextWords(notice)}
+          {usageLimitNext(notice)}
         </Text>
       )}
     </Banner>

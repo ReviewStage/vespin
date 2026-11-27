@@ -18,6 +18,7 @@
     "./admin-overview-vocabulary": "./src/admin-overview-vocabulary.js",
     "./admin-wire": "./src/admin-wire.js",
     "./agent-notice-words": "./src/agent-notice-words.js",
+    "./usage-limit-words": "./src/usage-limit-words.js",
     "./agent-queue-words": "./src/agent-queue-words.js",
     "./agent-refusal-words": "./src/agent-refusal-words.js",
     "./agent-todos": "./src/agent-todos.js",

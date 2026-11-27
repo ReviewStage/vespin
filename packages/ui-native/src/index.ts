@@ -553,6 +553,7 @@ export {
   shownMediaIds,
   shownPictureIds,
   shownRecordingIds,
+  standsUsagePause,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptToggles,
@@ -562,6 +563,8 @@ export {
   withSending,
   withWaitingLine,
 } from "./transcript-model.js";
+
+export type { UsageLimitReset } from "./transcript-notice.js";
 
 export { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 

@@ -106,13 +106,14 @@ function heldKeys(accountId: string) {
 
 /**
  * The account's credentials, followed while the screen that reads them
- * stands: the answer once read, whether the read failed, and Try again.
+ * stands and `followed` says it needs them: the answer once read, whether
+ * the read failed, and Try again.
  */
-export function useAgentKeys(): AgentKeysRead {
+export function useAgentKeys(followed = true): AgentKeysRead {
   const acts = useHostActs();
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const key = accountId ?? "";
-  useLiveFollow(accountId, () => acts[ACT_KIND.PROVIDER_KEYS_FOLLOW]());
+  useLiveFollow(followed ? accountId : undefined, () => acts[ACT_KIND.PROVIDER_KEYS_FOLLOW]());
   const held = useQuery({ ...appStateQuery, select: useCallback(heldKeys(key), [key]) }).data;
 
   return {

@@ -156,7 +156,7 @@ const IOS = {
   PRESENCE: byDesign("The phone isn't a desk; presence comes from the desktop and the web only"),
   SETTINGS: byDesign("iOS's Settings opens this page on vespin.dev in Safari"),
   AGENT_KEYS: notYet(
-    "iOS's Agents page adds and removes plans and keys; renaming, ordering, a plan's default and its reset credits are the desktop's and the web's for now",
+    "iOS's Agents page adds and removes plans and keys; renaming, ordering, a plan's default and its usage are the desktop's and the web's for now",
   ),
   SIGN_IN_SHEET: byDesign("The system's authentication sheet cancels its own sign-in"),
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
@@ -235,7 +235,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.PROVIDER_KEYS_SAVE]: EVERYWHERE,
   [PORT_ACT_KIND.PROVIDER_KEYS_REMOVE]: EVERYWHERE,
   [PORT_ACT_KIND.PROVIDER_KEYS_FOR_AGENTS]: panel(IOS.AGENT_KEYS),
-  [PORT_ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT]: panel(IOS.AGENT_KEYS),
+  [PORT_ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT]: EVERYWHERE,
   [PORT_ACT_KIND.PROVIDER_KEYS_REFRESH_USAGE]: panel(IOS.AGENT_KEYS),
   [PORT_ACT_KIND.SUBSCRIPTION_RENAME]: panel(IOS.AGENT_KEYS),
   [PORT_ACT_KIND.SUBSCRIPTIONS_REORDER]: panel(IOS.AGENT_KEYS),

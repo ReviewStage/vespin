@@ -1,0 +1,73 @@
+# agent-usage-limit.yaml -- where a Codex agent met its usage limit, as the panel's warning card says it: a pause still standing at its newest turn, with Use reset and the question it asks first; a stop; a worker the limit stopped, its card in its answer's place; and a move from the plan to an API key in its first turn.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+#
+# Note that an iPad stands in landscape, where the transcript stands in the
+# detail column beside the list, so it is scrolled well inside that column
+# (`BESIDE`), and that the window is turned back upright however the flow
+# ends, because a run left in landscape fails every flow after it.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose usage-limit agent holds each
+# way it met the limit (`@repo/host/fixture-usage-limit-agent`), its account
+# holding the ChatGPT plan it runs on with two reset credits
+# (`-resetCredits true`), and opened on its page by `-agent <id>`; nothing
+# reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 3b1f9c2e-6a4d-4e8b-9f17-2c5d8e0a7b43
+      resetCredits: "true"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+# Note that the launch waits up to half a minute for its first words, as
+# `agent.yaml`'s does.
+- extendedWaitUntil:
+    visible: "Try again on the plan."
+    timeout: 30000
+# The newest turn paused until the plan's reset, offering one of its two
+# credits; the turn before it stopped.
+- assertVisible: "Codex usage limit reached. Resumes at.*"
+- assertVisible: "Use 1 of 2 resets"
+- assertVisible: "Codex usage limit reached. Send a message to continue"
+- waitForAnimationToEnd
+- takeScreenshot: agent-usage-limit-paused
+# Use reset asks first, in red, since a credit spent is not given back.
+- tapOn: "Use 1 of 2 resets"
+- assertVisible: "Use 1 of 2 resets?"
+- assertVisible: "Resets the 5-hour and weekly limits on ChatGPT Pro."
+- waitForAnimationToEnd
+- takeScreenshot: agent-usage-limit-reset-ask
+- runFlow:
+    file: subflows/dismiss-ask.yaml
+    env:
+      QUESTION: "Use 1 of 2 resets?"
+# The worker the limit stopped: its card says the limit alone, in its
+# answer's place.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Check the ledger columns"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- assertVisible: "Codex usage limit reached"
+- waitForAnimationToEnd
+- takeScreenshot: agent-usage-limit-worker
+# The first turn moved from the plan to the API key.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Codex usage limit reached on ChatGPT Pro. Continuing on OpenAI API key"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: agent-usage-limit-moved

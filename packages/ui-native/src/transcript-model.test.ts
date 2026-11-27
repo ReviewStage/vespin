@@ -11,6 +11,7 @@ import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features
 import { managerChatView } from "@repo/features/manager-chat-view";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
+import { USAGE_LIMIT_AGENT, USAGE_LIMIT_PART } from "@repo/wire/ui-messages";
 import { describe, expect, it } from "vitest";
 import {
   drawnCallIds,
@@ -22,7 +23,9 @@ import {
   SHOWN_MEDIA,
   shownFiles,
   shownMediaIds,
+  standsUsagePause,
   TRANSCRIPT_ITEM,
+  TRANSCRIPT_NOTICE,
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
@@ -80,6 +83,73 @@ describe("transcriptItems", () => {
         { id: "clip-1", caption: "The chime", label: "The chime", kind: SHOWN_MEDIA.AUDIO },
       ],
     });
+  });
+
+  it("draws a worker the usage limit stopped with the limit's card in its answer's place, and offers a reset only on a Codex pause still standing", () => {
+    const now = new Date(2026, 10, 27, 15, 0).getTime();
+    const stopped = { agent: USAGE_LIMIT_AGENT.CODEX, resetsAt: null };
+
+    const work = (resetsAt: number) => ({
+      id: "work",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        {
+          type: "tool-delegate",
+          toolCallId: "worker",
+          state: "output-available",
+          input: { description: "Check the columns", task: "List the columns." },
+          output: { usageLimit: stopped },
+        },
+        { type: USAGE_LIMIT_PART, data: stopped },
+        { type: USAGE_LIMIT_PART, data: { agent: USAGE_LIMIT_AGENT.CODEX, resetsAt } },
+      ],
+      finishedAt: 1,
+    });
+
+    const reading = {
+      writing: false,
+      readerId: undefined,
+      now,
+      pullRequests: [],
+      toggles: { ...NO_TOGGLES, calls: new Set(["worker"]) },
+    };
+
+    const paused = transcriptItems([work(now + 60 * 60_000)], reading);
+    const resumed = transcriptItems([work(now - 60_000)], reading);
+
+    const notices = paused.flatMap((item) =>
+      item.kind === TRANSCRIPT_ITEM.NOTICE ? [item.notice] : [],
+    );
+
+    expect(paused.map((item) => item.kind)).toEqual([
+      TRANSCRIPT_ITEM.CALL,
+      TRANSCRIPT_ITEM.NOTICE,
+      TRANSCRIPT_ITEM.NOTICE,
+      TRANSCRIPT_ITEM.NOTICE,
+    ]);
+    expect(paused[0]).toMatchObject({ body: [{ text: "List the columns." }] });
+    expect(notices).toEqual([
+      {
+        kind: TRANSCRIPT_NOTICE.USAGE_LIMIT,
+        title: "Codex usage limit reached",
+        next: undefined,
+        pause: false,
+      },
+      {
+        kind: TRANSCRIPT_NOTICE.USAGE_LIMIT,
+        title: "Codex usage limit reached",
+        next: "Send a message to continue",
+        pause: false,
+      },
+      {
+        kind: TRANSCRIPT_NOTICE.USAGE_LIMIT,
+        title: "Codex usage limit reached",
+        next: "Resumes at 4:00 PM",
+        pause: true,
+      },
+    ]);
+    expect(standsUsagePause(paused)).toBe(true);
+    expect(standsUsagePause(resumed)).toBe(false);
   });
 
   it("stands a computer call's window in its body once opened, never under its row, and reads it only then", () => {
