@@ -233,4 +233,13 @@
       opacity: 0;
     }
   }
+
+  /* The place a tile in the sidebar's rail stands for, while it is shown,
+     is filled in the primary ink rather than lifted as a card, so it reads
+     at a glance down the rail. */
+  .ui-nav-item[data-variant="tile"]:is([aria-current="page"], [aria-current="location"]) {
+    background: var(--ui-color-text);
+    box-shadow: none;
+    color: var(--ui-color-ink-inverse);
+  }
 }

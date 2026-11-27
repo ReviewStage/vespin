@@ -8,7 +8,8 @@ import { NAV_CURRENT, NAV_ITEM_VARIANT, NavItem, NavItemLink } from "./nav-item.
 
 /**
  * nav-item.test.ts -- a nav item is a button named by its words, its count
- * read with its noun and left out at none; the place shown is announced as
+ * read with its noun and left out at none, a rail's tile too, whose words
+ * are not drawn; the place shown is announced as
  * the page, a search's find as the location; a menu's trigger says the
  * menu it drops and whether it stands; a place's own ⋯ stands beside its
  * press, never inside it, so each is its own button; an unavailable item refuses its
@@ -67,6 +68,23 @@ test("a row is a button named by its words, its count read with its noun", () =>
   );
 
   expect(button(container).textContent).toBe("Inbox3 waiting on you");
+});
+
+test("a rail's tile is still named by its words and its count, though it draws its glyph alone", () => {
+  const container = mount(
+    createElement(NavItem, {
+      variant: NAV_ITEM_VARIANT.TILE,
+      icon: createElement("svg"),
+      count: { value: 3, noun: "waiting on you" },
+      children: "Inbox",
+    }),
+  );
+
+  expect(button(container).textContent).toBe("Inbox3 waiting on you");
+  const unheard = [...button(container).querySelectorAll("[aria-hidden='true']")].map(
+    (hidden) => hidden.textContent,
+  );
+  expect(unheard.join("")).not.toContain("Inbox");
 });
 
 test("a count of none is left out", () => {

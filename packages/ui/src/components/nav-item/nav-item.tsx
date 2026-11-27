@@ -14,6 +14,7 @@ import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js"
 import { ClippedLine, ONE_LINE_ELEMENT, ONE_LINE_END } from "../one-line/clipped-line.js";
 import { rovingItem } from "../roving-keys/roving-keys.js";
 import { ListSelectionContext } from "../selection/list-selection.js";
+import { Tooltip } from "../tooltip/hint.js";
 
 /**
  * nav-item.tsx -- a place in a column of places: its glyph, its name, and what stands at its end, a count, a mark, or its chord.
@@ -85,7 +86,7 @@ import { ListSelectionContext } from "../selection/list-selection.js";
  * and chord trade places under the pointer and the keyboard.
  */
 const ROW =
-  "ui-nav-item group/nav m-0 flex h-control w-full min-w-0 cursor-press items-center gap-icon-gap rounded-control border-0 px-row-inset data-[nested=true]:ps-nav-item-nest text-left font-sans text-body-size leading-label font-text no-underline transition-[background-color,color] duration-(--ui-duration-hover) ease-plain disabled:cursor-default disabled:opacity-disabled data-[variant=identity]:h-auto data-[variant=identity]:min-h-nav-identity data-[variant=identity]:py-ui-6 data-[variant=step]:h-auto data-[variant=step]:items-start data-[variant=step]:py-ui-6";
+  "ui-nav-item group/nav m-0 flex h-control w-full min-w-0 cursor-press items-center gap-icon-gap rounded-control border-0 px-row-inset data-[nested=true]:ps-nav-item-nest text-left font-sans text-body-size leading-label font-text no-underline transition-[background-color,color] duration-(--ui-duration-hover) ease-plain disabled:cursor-default disabled:opacity-disabled data-[variant=identity]:h-auto data-[variant=identity]:min-h-nav-identity data-[variant=identity]:py-ui-6 data-[variant=step]:h-auto data-[variant=step]:items-start data-[variant=step]:py-ui-6 data-[variant=tile]:relative data-[variant=tile]:size-rail-tile data-[variant=tile]:flex-none data-[variant=tile]:justify-center data-[variant=tile]:px-0 data-[variant=tile]:rounded-rail-tile";
 
 /** A name cut short fades out over its last few pixels, as a browser's tab ends a long title; unread, or naming who or where, it reads in the heavier weight. */
 const NAME =
@@ -101,11 +102,17 @@ const STEP_WORDS = "ui-nav-item-words flex min-w-0 flex-1 flex-col";
 const MARK =
   "ui-nav-item-mark inline-flex [&>svg.settings-chevron]:mx-ui-2 [&>svg.settings-chevron]:size-ui-12 [&>svg.settings-chevron]:text-muted-foreground";
 
-/** What a nav item is: a place, or who or where. A fold's head is `GroupHeader`. */
+/**
+ * What a nav item is: a place, or who or where; or a place standing as a
+ * tile in the sidebar's rail (`SidebarRail`), its glyph alone in a square,
+ * its name heard and raised as its hint, and its count a badge at its
+ * corner. A fold's head is `GroupHeader`.
+ */
 export const NAV_ITEM_VARIANT = {
   ROW: "row",
   IDENTITY: "identity",
   STEP: "step",
+  TILE: "tile",
 } as const;
 
 export type NavItemVariant = (typeof NAV_ITEM_VARIANT)[keyof typeof NAV_ITEM_VARIANT];
@@ -197,14 +204,22 @@ function preventFocusMove(event: MouseEvent<HTMLButtonElement>): void {
   event.preventDefault();
 }
 
-/** The glyph's cell. */
-function Glyph({ icon }: { icon: ReactNode }): React.JSX.Element {
+/** The glyph's cell, a tile's a size up. */
+function Glyph({ icon, tile }: { icon: ReactNode; tile: boolean }): React.JSX.Element {
   return (
     <span
       className="ui-nav-item-glyph grid min-h-control-icon min-w-control-icon flex-none place-items-center [&>*]:grid [&>*]:place-items-center"
       aria-hidden="true"
     >
-      <span className="ui-nav-item-icon [&>svg]:size-control-icon">{icon}</span>
+      <span
+        className={
+          tile
+            ? "ui-nav-item-icon [&>svg]:size-rail-icon"
+            : "ui-nav-item-icon [&>svg]:size-control-icon"
+        }
+      >
+        {icon}
+      </span>
     </span>
   );
 }
@@ -218,14 +233,26 @@ function Name({ children }: { children: ReactNode }): React.JSX.Element {
   );
 }
 
-/** What stands at rest: the mark, then the count, read with its noun. */
-function AtRest({ mark, count }: { mark: ReactNode; count: NavCount | undefined }) {
+/** What stands at rest: the mark, then the count, read with its noun; on a tile, a badge at its corner. */
+function AtRest({
+  mark,
+  count,
+  tile,
+}: {
+  mark: ReactNode;
+  count: NavCount | undefined;
+  tile: boolean;
+}) {
   const counted = count !== undefined && count.value > 0;
 
   if (!said(mark) && !counted) return null;
 
   return (
-    <span className="ui-nav-item-rest ml-auto">
+    <span
+      className={
+        tile ? "ui-nav-item-rest absolute top-ui-2 end-ui-4 m-0" : "ui-nav-item-rest ml-auto"
+      }
+    >
       {said(mark) ? <span className={MARK}>{mark}</span> : null}
       {counted ? (
         <span
@@ -293,7 +320,7 @@ export function NavItemLink({
       onClick={onClick}
       onAuxClick={onClick === undefined ? undefined : middlePressOf(onClick)}
     >
-      {said(icon) ? <Glyph icon={icon} /> : null}
+      {said(icon) ? <Glyph icon={icon} tile={false} /> : null}
       <Name>{children}</Name>
     </a>
   );
@@ -321,6 +348,13 @@ export function NavItem({
 }: NavItemProps): React.JSX.Element {
   // Note that a row standing in a frame beside its ⋯ carries its menu on the frame, so a right-click on either opens it too.
   const framed = said(actions);
+  // A tile's hint: its name where the name is words, else the name it is given.
+  const tiled =
+    variant !== NAV_ITEM_VARIANT.TILE
+      ? undefined
+      : typeof children === "string"
+        ? children
+        : props["aria-label"];
   // Note that a place in a list that chooses rows is a row that cannot be chosen, so going there lets the set go where a plain press does; dropping a menu goes nowhere.
   const selecting = useContext(ListSelectionContext);
 
@@ -358,19 +392,26 @@ export function NavItem({
       onKeyDown={props.onKeyDown}
       {...(roving === true ? rovingItem() : undefined)}
     >
-      {said(icon) ? <Glyph icon={icon} /> : null}
+      {said(icon) ? <Glyph icon={icon} tile={tiled !== undefined} /> : null}
       {variant === NAV_ITEM_VARIANT.STEP ? (
         <StepWords name={children} detail={detail} />
+      ) : variant === NAV_ITEM_VARIANT.TILE ? (
+        <span className="ui-visually-hidden">{children}</span>
       ) : (
         <>
           <Name>{children}</Name>
           {said(detail) ? <span className="ui-nav-item-detail">{detail}</span> : null}
         </>
       )}
-      <AtRest mark={mark} count={count} />
-      {said(shortcut) ? <span className="ui-nav-item-shortcut ml-auto">{shortcut}</span> : null}
+      <AtRest mark={mark} count={count} tile={tiled !== undefined} />
+      {said(shortcut) && tiled === undefined ? (
+        <span className="ui-nav-item-shortcut ml-auto">{shortcut}</span>
+      ) : null}
     </button>
   );
+
+  // A tile names its place in its hint, since its words are not drawn.
+  if (tiled !== undefined) return <Tooltip label={tiled}>{press}</Tooltip>;
 
   if (!framed) return press;
 

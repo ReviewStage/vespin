@@ -97,20 +97,92 @@ export function SidebarRule(): React.JSX.Element {
   );
 }
 
+/** Where the foot stands: at the column's end, its account a row, or at the rail's foot, its parts a stack of tiles. */
+export const SIDEBAR_FOOT_LOOK = {
+  ROW: "row",
+  RAIL: "rail",
+} as const;
+
+export type SidebarFootLook = (typeof SIDEBAR_FOOT_LOOK)[keyof typeof SIDEBAR_FOOT_LOOK];
+
 /** The foot of the column: what docks above the account's row, and the row. */
-export function SidebarFoot({ children }: { children?: ReactNode }): React.JSX.Element {
-  return <div className="sidebar-foot flex flex-col pt-ui-8">{children}</div>;
+export function SidebarFoot({
+  look = SIDEBAR_FOOT_LOOK.ROW,
+  children,
+}: {
+  look?: SidebarFootLook | undefined;
+  children?: ReactNode;
+}): React.JSX.Element {
+  return (
+    <div
+      className={
+        look === SIDEBAR_FOOT_LOOK.RAIL
+          ? "sidebar-foot flex flex-col items-center"
+          : "sidebar-foot flex flex-col pt-ui-8"
+      }
+      data-look={look}
+    >
+      {children}
+    </div>
+  );
 }
 
 /**
  * The foot's one row: the account at its start, taking what room is left,
  * and whatever stands after it. It is the container the foot's pills fold
- * in as the column narrows (`sidebar-foot`).
+ * in as the column narrows (`sidebar-foot`), so at the rail's foot, a stack
+ * a tile wide, they stand as their glyphs alone.
  */
-export function SidebarAccountRow({ children }: { children?: ReactNode }): React.JSX.Element {
+export function SidebarAccountRow({
+  look = SIDEBAR_FOOT_LOOK.ROW,
+  children,
+}: {
+  look?: SidebarFootLook | undefined;
+  children?: ReactNode;
+}): React.JSX.Element {
   return (
-    <div className="sidebar-account-row @container/sidebar-foot flex items-center gap-ui-4">
+    <div
+      className={
+        look === SIDEBAR_FOOT_LOOK.RAIL
+          ? "sidebar-account-row @container/sidebar-foot flex w-rail-tile flex-col items-center gap-ui-4"
+          : "sidebar-account-row @container/sidebar-foot flex items-center gap-ui-4"
+      }
+    >
       {children}
+    </div>
+  );
+}
+
+/**
+ * The sidebar's rail: a narrow column of places at the column's start, each a
+ * `NavItem` tile, under the `head` (whose the sidebar is) and over the `foot`
+ * (the account's), which stands at the rail's end. The places are a
+ * navigation landmark named `label`. The column beside it, and where the rail
+ * stands in it, stay the shell's.
+ */
+export function SidebarRail({
+  label,
+  head,
+  foot,
+  children,
+}: {
+  label: string;
+  head?: ReactNode;
+  foot?: ReactNode;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className="sidebar-rail flex w-rail flex-none flex-col items-center gap-ui-8 pb-ui-12">
+      {head === undefined ? null : <div className="sidebar-rail-head flex-none">{head}</div>}
+      <nav
+        aria-label={label}
+        className="sidebar-places flex flex-none flex-col items-center gap-ui-8"
+      >
+        {children}
+      </nav>
+      {foot === undefined ? null : (
+        <div className="sidebar-rail-foot mt-auto flex-none">{foot}</div>
+      )}
     </div>
   );
 }

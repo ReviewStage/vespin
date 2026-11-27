@@ -58,6 +58,12 @@
   ); /* off-scale: the panel's least width */
   --spacing-half-container: 50cqi;
   --spacing-control-icon: var(--ui-control-icon);
+  /* The sidebar's rail of places (`SidebarRail`): its width, a tile's square
+     and its glyph, and a tile's corner. */
+  --spacing-rail: var(--ui-rail-width);
+  --spacing-rail-tile: var(--ui-rail-tile);
+  --spacing-rail-icon: var(--ui-rail-icon);
+  --radius-rail-tile: var(--ui-rail-tile-radius);
   /* A large glyph-alone button (`components/button/`), a player's Play: a
      control's height and a step more, so it stands apart from the row. */
   --spacing-control-large: calc(var(--ui-control-height) + var(--ui-space-8));
