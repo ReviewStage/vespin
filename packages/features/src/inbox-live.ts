@@ -39,6 +39,7 @@ import {
 import { ACCOUNT_INBOX_ITEMS, LIVE_READ, LIVE_USER_QUERY } from "./live-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
+import { TASK_LIST_READ } from "./task-list-live.js";
 
 /** An item of an agent with no plan as its row delivers it: the workspace as the column holds it, null for none. Carried empty for a released desktop, which reads it; this build reads none. */
 const tasklessLiveRowSchema = EffectSchema.Struct({
@@ -581,10 +582,16 @@ export const INBOX_OLDER_PAGE_SIZE = 50;
  * which the service binds from its clock as the items read does and answers
  * beside the rows. They come the latest changed first (`updatedAt`, then
  * id), each whole as the items read answers it: its stamp, its row, and the
- * messages and files its thread draws. A page names the page it reads past
- * (`before`), the first page none, and answers the page after it beside
- * the rows (`next`), absent from the last; a `before` the service did not
- * answer is refused as invalid. Note that the pages read past a cursor, so
+ * messages and files its thread draws, beside what holds it as the task
+ * list answers it, on the list's rule of who reads it: each item's task
+ * with every agent of it, and the agent of an item on no task alone, so a
+ * reader draws the page under holders its list no longer holds.
+ *
+ * A page names the page it reads past (`before`), the first page none, and
+ * answers the page after it beside the rows (`next`), absent from the last;
+ * a `before` the service did not answer is refused as invalid. The service
+ * finds the page once, binding its items' ids (`pageKeys`) and the page
+ * after it (`pageNext`) itself. Note that the pages read past a cursor, so
  * an item that leaves the items read after the first page was read stands
  * before it, and only a read from the first page again finds it.
  */
@@ -596,11 +603,15 @@ export const INBOX_OLDER_READ = liveRead({
     before: LIVE_PARAM.OPTIONAL_TEXT,
     settledSince: LIVE_PARAM.SERVED,
     taskless: LIVE_PARAM.SERVED,
+    pageKeys: LIVE_PARAM.SERVED,
+    pageNext: LIVE_PARAM.SERVED,
   },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
     stamps: INBOX_ITEMS_READ.parts.stamps,
     ...SCOPE_INBOX_PARTS,
+    tasks: TASK_LIST_READ.parts.tasks,
+    agents: TASK_LIST_READ.parts.agents,
   },
   beside: {
     /** The page after this one, as the reader names it in `before`; absent where this was the last. */

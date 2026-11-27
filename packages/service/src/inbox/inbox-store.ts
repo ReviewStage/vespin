@@ -1963,16 +1963,22 @@ const OLDER_PLACE = {
   updatedAt: sql<string>`${inboxItem.updatedAt}::text`.as("updated_at_text"),
 };
 
+/** One page of the account's older items: their ids, in the order they stand, and where it ends, which the page after it reads past; none where it is the last. */
+export interface OlderItemsPage {
+  readonly keys: readonly string[];
+  readonly end: OlderItemsPast | undefined;
+}
+
 /**
- * Where the page of the account's older items past `past` ends, which the
- * page after it reads past; none where it is the last, so no item stands
- * past it. It reads one more item than a page holds, so a page that leaves
- * more is told by its length.
+ * The page of the account's older items past `past`, or from the first
+ * where it names none, at most `INBOX_OLDER_PAGE_SIZE` of them. It reads
+ * one more item than a page holds, so a page that leaves more is told by
+ * its length, and ends at its own last item.
  */
-export function accountOlderItemsPageEnd(
+export function accountOlderItemsPage(
   reader: AccountItemsReader,
   past: OlderItemsPast | undefined,
-): InboxStoreEffect<OlderItemsPast | undefined> {
+): InboxStoreEffect<OlderItemsPage> {
   const read = Database.use((db) =>
     db
       .select(OLDER_PLACE)
@@ -1983,30 +1989,50 @@ export function accountOlderItemsPageEnd(
   );
 
   return Effect.map(read, (rows) => {
-    const last = rows.length > INBOX_OLDER_PAGE_SIZE ? rows[INBOX_OLDER_PAGE_SIZE - 1] : undefined;
+    const page = rows.slice(0, INBOX_OLDER_PAGE_SIZE);
+    const last = rows.length > INBOX_OLDER_PAGE_SIZE ? page.at(-1) : undefined;
 
-    return last === undefined ? undefined : { updatedAt: last.updatedAt, id: last.id };
+    return {
+      keys: page.map((row) => row.id),
+      end: last === undefined ? undefined : { updatedAt: last.updatedAt, id: last.id },
+    };
   });
 }
 
 /**
- * One page of the account's older items (`INBOX_OLDER_READ`), past `past`
- * where it names one: each whole, its stamp, its row, and the messages and
- * files its thread draws, as the account-wide read answers an item, so an
- * item the account may not read reads no row.
+ * Whether an item is one `keys` names, the keys bound as one JSON value
+ * whatever their count. Note that it does not fold no keys into `false` as
+ * `liveKeysIn` does, so a page's statements plan alike for every page, an
+ * empty one included, and read every table they declare on each.
+ */
+function itemKeyedBy(keys: readonly string[]): SQL {
+  return sql`${inboxItem.id} in (select jsonb_array_elements_text(${JSON.stringify(keys)}::jsonb)::uuid)`;
+}
+
+/**
+ * The older items among `keys` the account may read, as a statement
+ * selects their ids. Note that the keys are a bookmark, never a grant: an
+ * item stands only where the rule that found it still keeps it.
+ */
+export function accountOlderItemsKeyed(reader: AccountItemsReader, keys: readonly string[]): SQL {
+  return sql`${queryBuilder
+    .select({ id: inboxItem.id })
+    .from(inboxItem)
+    .where(and(itemKeyedBy(keys), accountOlderItems(reader)))}`;
+}
+
+/**
+ * One page of the account's older items (`INBOX_OLDER_READ`), those among
+ * `keys` the account may read (`accountOlderItemsKeyed`): each whole, its
+ * stamp, its row, and the messages and files its thread draws, as the
+ * account-wide read answers an item, so an item the account may not read
+ * reads no row.
  */
 export function accountOlderItemsPageStatements(
   reader: AccountItemsReader,
-  past: OlderItemsPast | undefined,
+  keys: readonly string[],
 ) {
-  const page = queryBuilder
-    .select({ id: inboxItem.id })
-    .from(inboxItem)
-    .where(olderItemsPast(reader, past))
-    .orderBy(...OLDER_FIRST)
-    .limit(INBOX_OLDER_PAGE_SIZE);
-
-  return stampsAndItemsOf(reader.userId, inArray(inboxItem.id, page));
+  return stampsAndItemsOf(reader.userId, and(itemKeyedBy(keys), accountOlderItems(reader)));
 }
 
 /** The account's items `narrowed` keeps, as `accountItemsLiveStatements` reads them, those `changed` keeps among them whole. */

@@ -8,6 +8,7 @@ import { inboxItem } from "@repo/database/schemas/inbox";
 import { task as taskTable } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { fakeWorkspaceSeams, getTestDB, joinWorkspace, startTask } from "@repo/database/testing";
+import { CLIENT_HEADER, HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { INBOX_OLDER_PAGE_SIZE, INBOX_OLDER_READ } from "@repo/features/inbox-live";
 import { INBOX_STATUS } from "@repo/features/inbox-wire";
@@ -54,26 +55,31 @@ const openAgent = (userId: string) =>
       githubAccess: GITHUB_ACCESS.APP,
     });
 
-    const started = yield* createAgent(userId, {
-      taskId: task.id,
+    const agentId = yield* startAgentOn(userId, { taskId: task.id });
+    const agent: InboxAgent = { userId, taskId: task.id, agentId };
+
+    return { agent, workspaceId: task.workspaceId };
+  });
+
+/** An agent the account starts on the task named, or on no task in the workspace named; its id. */
+const startAgentOn = (
+  userId: string,
+  place: { readonly taskId: string } | { readonly taskId: null; readonly workspaceId: string },
+) =>
+  Effect.map(
+    createAgent(userId, {
+      ...place,
       idempotencyKey: randomUUID(),
       model: "anthropic/claude-opus-5.5",
       effort: "high",
       repository: "acme/relay",
       githubAccess: GITHUB_ACCESS.APP,
-      descriptionSnapshot: "# Teammate invitations\n",
-      prompt: null,
+      descriptionSnapshot: null,
+      prompt: "Watch the release.",
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-    });
-
-    const agent: InboxAgent = {
-      userId,
-      taskId: task.id,
-      agentId: Option.getOrThrow(started).agent.id,
-    };
-
-    return { agent, workspaceId: task.workspaceId };
-  });
+    }),
+    (started) => Option.getOrThrow(started).agent.id,
+  );
 
 /** The agent's notices under the keys given, each posted with a message opening its thread; their ids. */
 const postAll = (agent: InboxAgent, keys: readonly string[]) =>
@@ -95,8 +101,14 @@ const settleAt = (ids: readonly string[], at: Date) =>
       .where(inArray(inboxItem.id, [...ids]));
   });
 
-/** One page of the account's older items asked as `bearer`, past `before` where named: its answer decoded, or the status it was refused with. */
-const askOlder = (bearer: string, before?: string) =>
+/** The headers of a build at the hosted API version the clients ship, which reads items on no task. */
+const CURRENT_BUILD = {
+  [CLIENT_HEADER.CLIENT]: "desktop/1.0",
+  [CLIENT_HEADER.API_VERSION]: String(HOSTED_API_VERSION),
+};
+
+/** One page of the account's older items asked as `bearer`, past `before` where named, by a build that names itself by `build`, none where left out: its answer decoded, or the status it was refused with. */
+const askOlder = (bearer: string, before?: string, build: Readonly<Record<string, string>> = {}) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
@@ -119,7 +131,7 @@ const askOlder = (bearer: string, before?: string) =>
     const response = yield* hostedAnswer(
       { live: procedures },
       services,
-      new Request(url, { headers: { authorization: `Bearer ${bearer}` } }),
+      new Request(url, { headers: { authorization: `Bearer ${bearer}`, ...build } }),
     );
 
     const body: unknown = JSON.parse(yield* Effect.promise(() => response.text()));
@@ -134,7 +146,7 @@ const askOlder = (bearer: string, before?: string) =>
 const idsOf = (part: { readonly rows?: readonly unknown[] }) =>
   (part.rows ?? []).map((row) => (row as { readonly id: string }).id);
 
-/** A page's items, by the ids its stamps and its rows name, sorted, the item each message is of, and the page after it. */
+/** A page's items, by the ids its stamps and its rows name, sorted, the item each message is of, the tasks and agents holding them, and the page after it. */
 const pageOf = (answer: typeof INBOX_OLDER_READ.answer.Type) => ({
   stamps: idsOf(answer.queries.stamps).toSorted(),
   items: idsOf(answer.queries.items).toSorted(),
@@ -146,6 +158,8 @@ const pageOf = (answer: typeof INBOX_OLDER_READ.answer.Type) => ({
       ),
     ),
   ].toSorted(),
+  tasks: idsOf(answer.queries.tasks).toSorted(),
+  agents: idsOf(answer.queries.agents).toSorted(),
   next: answer.next,
 });
 
@@ -157,6 +171,9 @@ it.layer(getTestDB())("the account's older inbox items", (it) => {
         yield* TestClock.setTime(NOW);
         const userId = yield* openUser;
         const { agent } = yield* openAgent(userId);
+        assert.ok(agent.taskId !== null);
+        // An agent of the task that posted nothing, which the page answers as every agent of its holder.
+        const idle = yield* startAgentOn(userId, { taskId: agent.taskId });
         const now = yield* Clock.currentTimeMillis;
         const settledSince = now - ACCOUNT_INBOX_ITEMS.SETTLED_WINDOW_MILLIS;
         const keys = Array.from({ length: INBOX_OLDER_PAGE_SIZE + 2 }, (_, at) => `old-${at}`);
@@ -174,6 +191,8 @@ it.layer(getTestDB())("the account's older inbox items", (it) => {
         assert.deepEqual(first.items, first.stamps, "each item on the page comes whole");
         assert.deepEqual(first.threads, first.stamps, "with its thread");
         assert.ok(first.next !== undefined, "a page that leaves more names the next");
+        assert.deepEqual(first.tasks, [agent.taskId], "beside the task holding them");
+        assert.deepEqual(first.agents, [agent.agentId, idle].toSorted(), "and every agent of it");
 
         // The tied items stand by id, the greatest first, so the first page holds the greatest ids of them.
         const tiedByIdDesc = old.slice(0, -1).toSorted().toReversed();
@@ -236,11 +255,20 @@ it.layer(getTestDB())("the account's older inbox items", (it) => {
         const read = (userId: string) =>
           Effect.map(askOlder(userId), (answered) => pageOf(Result.getOrThrow(answered)));
 
-        assert.deepEqual((yield* read(owner)).stamps, [sharedItem, hiddenItem].toSorted());
+        const owned = yield* read(owner);
+        assert.deepEqual(owned.stamps, [sharedItem, hiddenItem].toSorted());
+        assert.deepEqual(owned.tasks, [shared.agent.taskId, hidden.agent.taskId].toSorted());
         assert.deepEqual(
           yield* read(teammate),
-          { stamps: [sharedItem], items: [sharedItem], threads: [sharedItem], next: undefined },
-          "a teammate reads the shared item alone",
+          {
+            stamps: [sharedItem],
+            items: [sharedItem],
+            threads: [sharedItem],
+            tasks: [shared.agent.taskId],
+            agents: [shared.agent.agentId],
+            next: undefined,
+          },
+          "a teammate reads the shared item and its holders alone",
         );
         assert.deepEqual(
           yield* read(outsider),
@@ -248,10 +276,38 @@ it.layer(getTestDB())("the account's older inbox items", (it) => {
             stamps: [elsewhereItem],
             items: [elsewhereItem],
             threads: [elsewhereItem],
+            tasks: [elsewhere.agent.taskId],
+            agents: [elsewhere.agent.agentId],
             next: undefined,
           },
           "another workspace's account reads its own alone",
         );
+      }),
+  );
+
+  it.effect(
+    "answer an item on no task beside its agent alone, only to a build that reads one",
+    () =>
+      Effect.gen(function* () {
+        yield* TestClock.setTime(NOW);
+        const userId = yield* openUser;
+        const { workspaceId } = yield* openAgent(userId);
+        const agentId = yield* startAgentOn(userId, { taskId: null, workspaceId });
+        const [item] = yield* postAll({ userId, taskId: null, agentId }, ["release"]);
+        assert.ok(item !== undefined);
+        const now = yield* Clock.currentTimeMillis;
+        yield* settleAt([item], new Date(now - ACCOUNT_INBOX_ITEMS.SETTLED_WINDOW_MILLIS - DAY));
+
+        const current = pageOf(
+          Result.getOrThrow(yield* askOlder(userId, undefined, CURRENT_BUILD)),
+        );
+
+        assert.deepEqual(
+          { stamps: current.stamps, tasks: current.tasks, agents: current.agents },
+          { stamps: [item], tasks: [], agents: [agentId] },
+        );
+        // A build before HOSTED_API_VERSION 6 fails its whole answer on a null task.
+        assert.deepEqual(pageOf(Result.getOrThrow(yield* askOlder(userId))).stamps, []);
       }),
   );
 });
