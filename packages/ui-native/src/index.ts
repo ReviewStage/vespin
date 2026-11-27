@@ -331,12 +331,12 @@ export {
 export {
   BotTag,
   githubFace,
-  MARK_FACE,
-  type MarkFace,
+  type HeadReviewer,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,
   PullRequestHead,
+  type RowCount,
   WriteNoteRow,
 } from "./pull-request-page.js";
 
@@ -377,6 +377,8 @@ export {
   unassignedChoice,
 } from "./row-menu-model.js";
 
+export { RowPickContext } from "./row-open.js";
+
 export {
   agentPreview,
   latestStep,
@@ -395,6 +397,8 @@ export { ScreenFailure } from "./screen-failure.js";
 export { SealedPage } from "./sealed-page.js";
 
 export { sectionGlyphColor, sectionInk } from "./section-ink.js";
+
+export { type SentPictures, sentPictures } from "./sent-pictures-model.js";
 
 export {
   AccountHead,

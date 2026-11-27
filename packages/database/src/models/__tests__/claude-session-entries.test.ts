@@ -5,10 +5,7 @@ import { eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
-import {
-  claudeSessionEntries,
-  claudeSessionMarkBackfill,
-} from "../../schemas/claude-session-entry.js";
+import { claudeSessionEntries } from "../../schemas/claude-session-entry.js";
 import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import { getTestDB, plansOf, startTask } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
@@ -310,24 +307,21 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
         yield* appendCompacted(userId, conversationId, compacted);
         const fromLatestCompaction = { fromLatestCompaction: true };
 
-        // A row from before the marks carries none, and its session stands in the backfill's queue.
+        // A row from before the marks carries none, and no queue names its session until the sweep's scan finds it.
         yield* Effect.flatMap(Database, (db) =>
-          Effect.andThen(
-            db
-              .update(claudeSessionEntries)
-              .set({ resumeRole: null, entryUuid: null, resumeFrom: null })
-              .where(eq(claudeSessionEntries.conversationId, conversationId)),
-            db
-              .insert(claudeSessionMarkBackfill)
-              .values({ conversationId, ...MAIN, newest: Number.MAX_SAFE_INTEGER }),
-          ),
+          db
+            .update(claudeSessionEntries)
+            .set({ resumeRole: null, entryUuid: null, resumeFrom: null })
+            .where(eq(claudeSessionEntries.conversationId, conversationId)),
         );
         assert.deepEqual(yield* paged(userId, conversationId, MAIN, fromLatestCompaction), [
           compacted.whole,
         ]);
 
-        // Note that each sweep takes a few rows, so the session is marked across several.
-        while ((yield* markSessionsForResume({ rowsPerSweep: 3, rowsPerBatch: 2 })) > 0);
+        // Note that each sweep scans one session and marks a few rows, so the session is found and marked across several.
+        const bounds = { sessionsPerSweep: 1, rowsPerSweep: 3, rowsPerBatch: 2 };
+
+        while ((yield* markSessionsForResume(bounds)) > 0);
 
         assert.deepEqual(yield* paged(userId, conversationId, MAIN, fromLatestCompaction), [
           compacted.resumed,

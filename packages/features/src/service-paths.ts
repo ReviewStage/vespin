@@ -307,11 +307,11 @@ export const HOSTED_SERVICE_PATH = {
   HOST_PAIRING_APPROVE: "/api/hosts/pairing/approve",
   /** A pending pairing denied by its code, so its box is answered denied (POST). */
   HOST_PAIRING_DENY: "/api/hosts/pairing/deny",
-  /** The machines one workspace owns, to a member of it (GET, `WORKSPACE_MACHINES_QUERY`). `workspace-machine-wire.ts` declares the bodies. */
+  /** The machines one workspace owns, to a member of it (GET, `WORKSPACE_MACHINES_QUERY`), answered with none to a released build until the floor reaches 11. `workspace-machine-wire.ts` declares the bodies. */
   WORKSPACE_MACHINES: "/api/workspaces/machines",
-  /** One of a workspace's machines renamed by an owner or an admin of it (POST). */
+  /** One of a workspace's machines renamed, as a released build asks, answered not found until the floor reaches 11 (POST). */
   WORKSPACE_MACHINE_RENAME: "/api/workspaces/machines/rename",
-  /** One of a workspace's machines removed by an owner or an admin of it, its secret refused at once (POST). */
+  /** One of a workspace's machines removed, as a released build asks, answered not found until the floor reaches 11 (POST). */
   WORKSPACE_MACHINE_REMOVE: "/api/workspaces/machines/remove",
   /**
    * The shell commands the account's agents asked to run on the developer's

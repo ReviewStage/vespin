@@ -46,6 +46,7 @@ import { failedUnderMark } from "../state-glyph.js";
 import { RENAME_FAILED } from "../tasks/agent-model.js";
 import type { AgentSubject } from "../tasks/agent-ref.js";
 import { changesAddressOf, useChangesPeople } from "../tasks/changes-people.js";
+import { useChatMarkedUnread } from "../tasks/manager-chat-looks.js";
 import { PullRequestCard, peopleOf } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { RunsOnPlace } from "../tasks/runs-on.js";
@@ -110,7 +111,8 @@ import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
  * Unarchive in Archive's place. A Manager's row stands unread, its name in
  * the heavier weight, while its chat said something after the reader's
  * mark of it (`managerChatUnread`), but on the Manager's own page standing open,
- * whose chat the reader sees as it lands, and in a staged run.
+ * whose chat the reader sees as it lands, unless they marked it unread
+ * there (`useChatMarkedUnread`), and in a staged run.
  *
  * In the sidebar (`AGENT_ROW_LOOK.SIDEBAR`), as its Managers and Pinned
  * draw it, the row is a sidebar task's row instead (`ListRow`, dense, in
@@ -253,6 +255,7 @@ export function AgentListRow({
   });
 
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+  const markedUnread = useChatMarkedUnread(agent.id);
   const selectPinned = useMemo(() => selectAgentPinned(agent.id), [agent.id]);
   const pinned = useQuery({ ...appStateQuery, select: selectPinned }).data === true;
   const onPin = useAgentPinWrite();
@@ -372,7 +375,7 @@ export function AgentListRow({
           true,
         );
 
-  const unread = !staged && !current && managerChatUnread(agent);
+  const unread = !staged && (!current || markedUnread) && managerChatUnread(agent);
   const hint = card === undefined || editing ? undefined : { Hint: RowHint, label: name };
 
   const row =

@@ -16,6 +16,8 @@
     "./app-state": "./src/app-state.js",
     "./app-state-reads": "./src/app-state-reads.js",
     "./inbox-rows": "./src/inbox-rows.js",
+    "./inbox-thread-standing": "./src/inbox-thread-standing.js",
+    "./read-window": "./src/read-window.js",
     "./fixture-stage": "./src/fixture-stage.js",
     "./fixture-inbox": "./src/fixture-inbox.js",
     "./bridge": "./src/bridge.js",

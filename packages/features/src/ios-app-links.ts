@@ -356,6 +356,36 @@ export function iosRouteTab(route: string): IosTab | undefined {
 }
 
 /**
+ * The routes no tab's split view lists, so a regular window has no list to
+ * select one beside: a person's page. Note that such a route is pushed onto
+ * the tab standing in every window, as a compact window pushes it, because
+ * on its own tab Back would land on that tab's empty detail rather than where
+ * it was opened from.
+ */
+const UNLISTED_ROUTES: readonly string[] = [IOS_ROUTE.PERSON];
+
+/** Whether a tab's split view lists the route's kind, as the Inbox's lists a thread and Tasks' a task or an agent; a person's page it lists nowhere. */
+function splitViewLists(route: string): boolean {
+  const path = route.split(/[?#]/u)[0] ?? "";
+
+  return !UNLISTED_ROUTES.some((unlisted) => path === unlisted || path.startsWith(`${unlisted}/`));
+}
+
+/**
+ * The tab a route is opened from, for `iosRouteOnTab`: the tab standing in a
+ * compact window; in a regular one, none for a route a split view lists, so
+ * it opens on its own tab, whose split view selects it beside its list, but
+ * the tab standing for one no split view lists, such as a person's page.
+ */
+export function iosRouteStanding(
+  route: string,
+  standing: IosTab | undefined,
+  compact: boolean,
+): IosTab | undefined {
+  return compact || !splitViewLists(route) ? standing : undefined;
+}
+
+/**
  * A route of the app's named on the tab whose stack opens it: `standing`,
  * the tab the person is on, for a page every tab mounts, a thread, a task,
  * an agent, or a page under them, so Back returns where it was opened from,

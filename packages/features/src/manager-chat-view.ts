@@ -61,6 +61,9 @@ export const CHAT_THREAD_WORDS = {
   GONE: "This thread is no longer in the chat.",
 } as const;
 
+/** What the rule over the first message after the reader's mark of the chat says, on every client, as Slack's New line does. */
+export const CHAT_NEW_WORDS = "New";
+
 /** What a thread's replies are counted in. */
 const REPLY_NOUN = { one: "reply", many: "replies" } as const;
 
@@ -228,6 +231,14 @@ export const MANAGER_CHAT_REACTION_FACES = {
 
 /** What a reaction the service would not take says, as it is taken back off. */
 export const CHAT_REACTION_REFUSED_WORDS = "Could not react to the message.";
+
+/** The words of a person's edit of their own message: the mark an edited message wears after its words, as Slack's, the edit box's presses, and what an edit the service would not take says as its words go back. */
+export const CHAT_EDIT_WORDS = {
+  EDITED: "(edited)",
+  SAVE: "Save",
+  CANCEL: "Cancel",
+  REFUSED: "Could not edit the message.",
+} as const;
 
 /** Who else gave a reaction beside the reader. */
 const OTHER_NOUN = { one: "other", many: "others" } as const;

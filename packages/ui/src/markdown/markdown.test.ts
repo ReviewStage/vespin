@@ -22,7 +22,8 @@ import { forgetMarkdownTrees } from "./markdown-trees.js";
  * reader may tick is named by its item, asks with its item's place, and
  * flips back when the change is not saved; and one a reader may not tick is
  * the same box, read-only; a box drawn from HTML asks by its place among the
- * boxes; and a quote opening on an alert's marker reads as that alert.
+ * boxes; a quote opening on an alert's marker reads as that alert; and a
+ * link a transcript's hardening refuses is drawn as its words alone.
  * Synthetic words.
  */
 
@@ -159,6 +160,16 @@ test("words drawn again draw as they first did, their addresses rewritten once, 
     assert.equal(again, first);
     assert.equal(again.match(/\?seen/gu)?.length, 1);
   }
+});
+
+test("a transcript draws a link its hardening refuses as the link's words alone, with nothing to press", () => {
+  const { container } = drawn({
+    look: MARKDOWN_LOOK.TRANSCRIPT,
+    words: "See [@Nov 26](mention://date:noon/2026-11-26) and [run it](javascript:alert(1)).",
+  });
+
+  assert.equal(container.textContent, "See @Nov 26 and run it.");
+  assert.equal(container.querySelector("a, button, [href], [role=link]"), null);
 });
 
 test("words drawn again are drawn from the tree kept until the trees are forgotten", () => {

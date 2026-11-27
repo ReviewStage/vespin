@@ -91,12 +91,16 @@ export const JOURNAL_IMAGE_MOVE = {
 /**
  * The one-off marking of the agents' stored CLI transcript rows from before
  * the resume marks (`@repo/database`'s `markSessionsForResume`). Note that
- * a row is read where it is stored and only its mark written, about a
- * second for a batch, so a sweep's worth keeps to seconds of its minute;
- * production's 3.3 million rows in 3,416 sessions are about 170 sweeps,
- * the sessions appended to latest marked first.
+ * the sweep finds the sessions itself, a probe of the key index each, so
+ * production's 3,416 are queued over about seven sweeps; and that a row is
+ * read where it is stored and only its mark written, about a second for a
+ * batch, so a sweep's worth keeps to seconds of its minute. Production's
+ * 3.3 million rows are about 170 sweeps, the sessions appended to latest
+ * marked first.
  */
 export const TRANSCRIPT_MARK_BACKFILL = {
+  /** How many stored sessions one sweep's scan reads at most. */
+  SESSIONS_PER_SWEEP: 500,
   /** How many rows one sweep reads at most. */
   ROWS_PER_SWEEP: 20_000,
   /** How many rows one statement reads and marks. */

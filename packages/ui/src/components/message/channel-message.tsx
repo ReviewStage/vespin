@@ -6,22 +6,33 @@
  * was sent in the muted ink over the words. A message that goes on its
  * sender's run (`continues`) draws neither, its words set at the gutter's
  * edge under the one before, so a run reads as one block. The row lights
- * under the pointer, and its actions (`actions`) float over its top end
- * corner while the pointer or the keyboard is on it, as a channel's do, so
- * they add nothing to its height.
+ * under the pointer, its wash reaching a step past the column's edge on
+ * either side, so its picture and words stand on the column's content edge,
+ * where the box under the log and the rules between its rows stand. It pads
+ * itself alike above and below, so a run's rows part by that padding alone,
+ * and its name, words, and what stands under them stand a step apart. Its
+ * actions (`actions`) float over its top end corner while the pointer or
+ * the keyboard is on it, as a channel's do, so they add nothing to its
+ * height.
+ *
+ * A message whose words were edited since it was sent says so right after
+ * its last word (`edited`), in the muted ink, as a channel's do.
  *
  * A message others answered in its thread says so under its words
  * (`ThreadReplies`): the faces of who answered and how many replies, in the
  * accent's ink, which opens the thread. The thread stands in a tab of the
  * side panel beside the channel: the message it answers, then the replies
- * under a rule that counts them (`ThreadRule`).
+ * under a rule that counts them (`ThreadRule`). The first message after
+ * the reader's mark of the channel stands under a rule in the accent's ink
+ * that says New (`NewMessagesRule`), as a channel's New line does.
  *
  * It is drawn in the Tailwind theme's utilities.
  */
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button";
-import { repliesWords } from "@repo/features/manager-chat-view";
+import { CHAT_EDIT_WORDS, CHAT_NEW_WORDS, repliesWords } from "@repo/features/manager-chat-view";
 import type { ReactNode } from "react";
+import { ReplayUnmask } from "../../session-replay-marks.js";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { OneLine } from "../one-line/one-line.js";
 import { MessageActions, MessageFrame } from "./message.js";
@@ -40,10 +51,12 @@ export function ChannelMessage({
   name,
   at,
   continues = false,
+  open = false,
   actions,
   contextMenu,
   under,
   messageId,
+  edited = false,
   children,
 }: {
   avatar: ReactNode;
@@ -52,26 +65,31 @@ export function ChannelMessage({
   at?: ReactNode;
   /** Whether it goes on its sender's run, drawn with no picture, name, or time. */
   continues?: boolean | undefined;
+  /** Whether its thread stands open beside the channel, which holds the row in a steady tint. */
+  open?: boolean | undefined;
   actions?: ReactNode;
   /** The menu a right-click or a long press on it opens; none where it has none. */
   contextMenu?: ContextMenuProps | undefined;
   under?: ReactNode;
   /** The message's id, which a reader finds its row by. */
   messageId?: string | undefined;
+  /** Whether its words were edited since it was sent, which a mark after them says. */
+  edited?: boolean | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
     <MessageFrame
       revealActionsOnTap
-      className={`ui-channel-message relative flex w-full min-w-0 gap-ui-8 rounded-ui-6 px-ui-8 hover:bg-muted ${continues ? "py-ui-2" : "pt-ui-6 pb-ui-2"}`}
+      className="ui-channel-message relative -mx-ui-8 flex min-w-0 gap-ui-8 rounded-ui-6 px-ui-8 py-ui-4 hover:bg-muted data-[open]:bg-message-open data-[open]:hover:bg-message-open"
       data-continues={continues ? "" : undefined}
+      data-open={open ? "" : undefined}
       data-message-id={messageId}
     >
       <span className="ui-channel-message-avatar inline-flex w-channel-avatar flex-none items-start justify-center">
         {continues ? null : avatar}
       </span>
       <div
-        className="ui-channel-message-body flex min-w-0 flex-1 flex-col gap-ui-2"
+        className="ui-channel-message-body flex min-w-0 flex-1 flex-col gap-ui-4"
         {...withContextMenu<HTMLDivElement>(contextMenu, {})}
       >
         {continues ? null : (
@@ -82,8 +100,16 @@ export function ChannelMessage({
             )}
           </div>
         )}
-        <div className="ui-channel-message-words min-w-0 text-body leading-reading text-foreground">
+        {/* Note that an edited message's mark runs on after its last paragraph, as Slack's does: the words' own block and that paragraph stand inline, so the mark follows the last word. */}
+        <div
+          className={`ui-channel-message-words min-w-0 text-body leading-reading text-foreground ${edited ? "[&>:nth-last-child(2)>p:last-child]:inline [&>:nth-last-child(2)]:inline" : ""}`}
+        >
           {children}
+          {edited ? (
+            <span className="ui-channel-message-edited ms-ui-4 text-caption text-muted-foreground">
+              <ReplayUnmask>{CHAT_EDIT_WORDS.EDITED}</ReplayUnmask>
+            </span>
+          ) : null}
         </div>
         {under}
       </div>
@@ -139,9 +165,19 @@ export function ThreadRule({ count }: { count: number }): React.JSX.Element | nu
   if (count === 0) return null;
 
   return (
-    <div className="ui-thread-rule flex items-center gap-ui-8 px-ui-8 py-ui-6 text-caption text-muted-foreground">
+    <div className="ui-thread-rule flex items-center gap-ui-8 py-ui-6 text-caption text-muted-foreground">
       <span className="flex-none">{repliesWords(count)}</span>
       <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+/** The rule over the first message after the reader's mark of the channel, in the accent's ink, saying New at its end. */
+export function NewMessagesRule(): React.JSX.Element {
+  return (
+    <div className="ui-new-messages-rule flex items-center gap-ui-8 pb-ui-6 text-caption font-ui-semibold text-accent-ink">
+      <span className="h-px flex-1 bg-accent-ink" />
+      <span className="flex-none">{CHAT_NEW_WORDS}</span>
     </div>
   );
 }

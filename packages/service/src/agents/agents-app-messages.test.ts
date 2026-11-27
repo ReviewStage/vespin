@@ -28,7 +28,7 @@ import { sentLineStands } from "@repo/database/models/message-reads";
 import { listTaskFollowers } from "@repo/database/models/task-follower-store";
 import { writePage } from "@repo/database/models/task-pages";
 import { createTask, readTask } from "@repo/database/models/task-store";
-import { agentPin } from "@repo/database/schemas";
+import { agentPin, agentRead } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { attachment } from "@repo/database/schemas/attachment";
 import { user } from "@repo/database/schemas/auth";
@@ -80,6 +80,8 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import {
   MANAGER_CHAT_AUTHOR,
   MANAGER_CHAT_REACTION,
+  type ManagerChatAuthor,
+  managerChatEditAnswerSchema,
   managerChatReactAnswerSchema,
 } from "@repo/features/manager-chat-live";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
@@ -116,6 +118,7 @@ import {
   AGENT_STOP,
   AGENT_WORKSPACE_TOOLS,
   agentStartedOn,
+  chatMessagePath,
   chatReactionPath,
   countedWith,
   fakeAgentSessions,
@@ -2077,6 +2080,75 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
+    "Mark unread from a person's message the Manager has not answered, the sender's own last line and a teammate's alike, marks each asker's chat unread by hand just before it, until their own next open; one naming no message of the chat is not found",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, agent, ask, task } = yield* messagedAgent(fakeAgentSessions(), {
+          running: false,
+        });
+
+        yield* joinWorkspace(task.workspaceId, other);
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const body = { text: "Ship the invites.", clientKey: randomUUID() };
+
+        const sent = readAnswer(
+          agentChatSendAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(request(AGENT_CHAT_MESSAGES, owner, { method: "POST", id: agent.id, body })),
+        );
+
+        const marked = (userId: string, mark: { readMark: string; unreadFrom?: string }) =>
+          ask(request(AGENT, userId, { method: "PATCH", id: agent.id, body: mark }));
+
+        const unread = (userId: string, unreadFrom: string) =>
+          marked(userId, { readMark: READ_MARK.UNREAD, unreadFrom });
+
+        const marks = Effect.map(
+          db
+            .select({
+              userId: agentRead.userId,
+              readThrough: agentRead.readThrough,
+              markedUnread: agentRead.markedUnread,
+            })
+            .from(agentRead)
+            .where(eq(agentRead.agentId, agent.id)),
+          (rows) =>
+            new Map(rows.map((row) => [row.userId, [row.readThrough.getTime(), row.markedUnread]])),
+        );
+
+        const stored = Option.getOrThrow(
+          yield* readManagerChatMessage(owner, agent.id, sent.messageId),
+        );
+
+        const before = stored.createdAt.getTime() - 1;
+
+        // The owner marks their own last line unread, and their teammate the same line, a teammate's the Manager has not answered.
+        assert.equal((yield* unread(owner, sent.messageId)).status, HOSTED_HTTP_STATUS.OK);
+        assert.equal((yield* unread(other, sent.messageId)).status, HOSTED_HTTP_STATUS.OK);
+        const asked = yield* marks;
+        // Leaving the chat leaves the mark by hand standing; only the owner's own next open takes theirs back.
+        yield* marked(other, { readMark: READ_MARK.SEEN });
+        yield* marked(owner, { readMark: READ_MARK.READ });
+        const after = yield* marks;
+
+        assert.deepEqual(
+          [asked.get(owner), asked.get(other), after.get(owner)?.[1], after.get(other)?.[1]],
+          [[before, true], [before, true], false, true],
+        );
+        assert.deepEqual(
+          yield* unread(owner, "no-such-message"),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+        );
+      }),
+  );
+
+  it.effect(
     "a person's message to a Manager's chat lands in the chat on the line it is written beside, the line keeping their plain words while the Manager is handed them under the label naming them, its starter as much as a teammate, and a header naming them and the message; a send again under its key answers the same message and hands nothing",
     () =>
       Effect.gen(function* () {
@@ -2516,6 +2588,94 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.deepEqual(yield* react(owner, "nope", true), notFound);
         assert.equal((yield* readManagerChatReactions(owner, agent.id, ["m1"])).size, 0);
         assert.equal(agentSessions.sent.length, sends);
+      }),
+  );
+
+  it.effect(
+    "a member's edit of their own Manager chat message changes it in place and tells the Manager its words before and after in a turn of their own, dropping nothing; none edits another's message",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const opened = yield* openTask({ agentSessions });
+        const { owner, other, ask } = opened;
+        const { agent } = yield* agentStartedOn(opened, agentSessions, { running: false });
+        const db = yield* Database;
+
+        yield* db
+          .update(agentTable)
+          .set({ kind: AGENT_KIND.MANAGER })
+          .where(eq(agentTable.id, agent.id));
+
+        const now = new Date(yield* Clock.currentTimeMillis);
+
+        const write = (id: string, author: ManagerChatAuthor, text: string) =>
+          writeManagerChatMessage(owner, {
+            agentId: agent.id,
+            id,
+            clientKey: randomUUID(),
+            authorKind: author,
+            authorUserId: author === MANAGER_CHAT_AUTHOR.PERSON ? owner : null,
+            authorName: author === MANAGER_CHAT_AUTHOR.PERSON ? "Ada" : "Manager",
+            text,
+            attachments: [],
+            inReplyTo: null,
+            broadcast: false,
+            turnId: null,
+            lineId: null,
+            now,
+          });
+
+        yield* write("m1", MANAGER_CHAT_AUTHOR.PERSON, "Send the invites Friday.");
+        yield* write("m2", MANAGER_CHAT_AUTHOR.AGENT, "Will do.");
+        const handed = () => agentSessions.sent.length;
+        const before = handed();
+
+        const edit = (bearer: string, messageId: string, text: string, clientKey = randomUUID()) =>
+          ask(
+            request(chatMessagePath(messageId), bearer, {
+              method: "PATCH",
+              id: agent.id,
+              body: { text, clientKey },
+            }),
+          );
+
+        const changed = (text: string) =>
+          Effect.map(
+            edit(owner, "m1", text),
+            (answered) =>
+              readAnswer(managerChatEditAnswerSchema, HOSTED_HTTP_STATUS.OK, answered).changed,
+          );
+
+        const edited = yield* changed("Send the invites Monday.");
+        const told = handed();
+        const again = yield* changed("Send the invites Monday.");
+
+        assert.deepEqual([edited, again], [true, false]);
+        assert.equal(told, before + 1, "the edit opens the Manager a turn");
+        assert.equal(handed(), told, "words as they stand tell the Manager nothing");
+
+        const words = JSON.stringify(agentSessions.sent.at(-1)?.message);
+        assert.ok(words.includes("edited message m1"), words);
+        assert.ok(words.includes("Before:\\nSend the invites Friday."), words);
+        assert.ok(words.includes("After:\\nSend the invites Monday."), words);
+
+        const chat = yield* readManagerChatPage(owner, agent.id, { limit: 10 });
+
+        assert.deepEqual(
+          chat.map((message) => [message.id, message.text, message.editedAt !== null]),
+          [
+            ["m2", "Will do.", false],
+            ["m1", "Send the invites Monday.", true],
+          ],
+        );
+        assert.deepEqual(
+          yield* edit(owner, "m2", "Won't do."),
+          refusal(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
+        );
+        assert.deepEqual(
+          yield* edit(other, "m1", "Never mind."),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+        );
       }),
   );
 });

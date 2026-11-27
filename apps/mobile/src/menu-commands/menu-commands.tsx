@@ -40,8 +40,9 @@ import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectAgentPinned, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
+import { windowRows } from "@repo/host/read-window";
 import { BUZZ, ConfirmAsk, useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
-import { and, type Collection, eq, isUndefined, useLiveQuery } from "@tanstack/react-db";
+import { and, type Collection, eq, isUndefined } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import {
@@ -55,6 +56,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAgentRowActs } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useWindow } from "../host/use-window.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useFrontSteps, useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
@@ -302,15 +304,19 @@ function useWorkingAgents(taskId: string | undefined): number {
   const { agents } = useTaskListCollections();
 
   // Note that the query's identity is the values it captures, as TanStack DB 1.0 derives it, so it is made again only for another task.
-  const { data: onTask } = useLiveQuery((q) =>
-    taskId === undefined
-      ? undefined
-      : q
-          .from({ agent: agents })
-          .where(({ agent }) => and(eq(agent.taskId, taskId), isUndefined(agent.archivedAt))),
+  const onTask = windowRows(
+    useWindow((q) =>
+      taskId === undefined
+        ? undefined
+        : q
+            .from({ agent: agents })
+            .where(({ agent }) => and(eq(agent.taskId, taskId), isUndefined(agent.archivedAt))),
+    ),
   );
 
-  return (onTask ?? []).filter((agent) => agentStillWriting(agent.status)).length;
+  // Note that the rows are matched to the task again, since a read rebuilt for another task holds the last task's rows until it answers.
+  return onTask.filter((agent) => agent.taskId === taskId && agentStillWriting(agent.status))
+    .length;
 }
 
 /** The question a command asks before it acts. */

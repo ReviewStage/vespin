@@ -110,8 +110,22 @@ export const POOL_LIMITS = {
 } as const;
 
 /**
+ * How many connections the process-wide pool keeps open past its idle
+ * timeout, once a query has opened them: one, as Vercel's Fluid guidance
+ * asks (https://vercel.com/guides/connection-pooling-with-functions). Note
+ * that it is kept because this pool is the auth service's
+ * (`auth/auth-database.ts`), and a caller the instance resolved a minute
+ * ago is asked again of it with every connection closed: 3,820 such asks a
+ * day opened a connection first, at p50 41 ms and p95 158 ms, where one with
+ * a connection standing took 11 ms and 25 ms. `POOL_LIMITS` stays as the
+ * Effect pool reads it (`sql-client.ts`), whose minimum is its own.
+ */
+const POOL_KEPT_OPEN = 1;
+
+/**
  * Builds a pool for an explicit connection string. Opens nothing: `pg.Pool`
- * connects lazily on first query, which makes this testable offline.
+ * connects lazily on first query, which makes this testable offline, and
+ * keeps `POOL_KEPT_OPEN` of the connections it opened past the idle timeout.
  *
  * An idle client whose connection the database or the network ends is
  * reported through the pool's `error` event, and Node throws an `error` event
@@ -121,10 +135,13 @@ export const POOL_LIMITS = {
  * opens a fresh connection. `attachDatabasePool` is Vercel's guard against the
  * usual cause, a client left idle while the instance is suspended: it keeps
  * the instance up after each release until the idle timeout has closed the
- * pool's idle clients.
+ * pool's idle clients past the one it keeps open. That one may stand through
+ * a suspension; a connection the database ended meanwhile is dropped by the
+ * listener above, or fails the one statement that finds it, which a caller's
+ * resolution answers as unavailable and its client retries.
  */
 function createPool(connectionString: string): Pool {
-  const created = new Pool({ connectionString, ...POOL_LIMITS });
+  const created = new Pool({ connectionString, ...POOL_LIMITS, min: POOL_KEPT_OPEN });
   created.on("error", (error) => {
     console.warn(`An idle database client was dropped: ${error.message}`);
   });

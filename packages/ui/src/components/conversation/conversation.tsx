@@ -1,19 +1,4 @@
 import {
-  BUTTON_CORNERS,
-  BUTTON_VARIANT,
-  cn,
-  cssCustomProperties,
-  Fill,
-  IconButton,
-  SCROLL_FADE,
-  ScrollArea,
-  type ScrollFade,
-  type ScrollFadeInset,
-  Tooltip,
-} from "@repo/ui";
-import { type VirtualRowPlace, VirtualRows, type VirtualRowsHandle } from "@repo/ui/virtual-rows";
-import { ArrowDownIcon } from "lucide-react";
-import {
   type ComponentProps,
   createContext,
   type ReactNode,
@@ -21,13 +6,31 @@ import {
   type UIEvent,
   useCallback,
   useContext,
-  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { cn } from "../../cn.js";
+import { cssCustomProperties } from "../../css.js";
+import { ArrowDownIcon } from "../../icons/icons.js";
+import { BUTTON_CORNERS, BUTTON_VARIANT, IconButton } from "../button/button.js";
+import { useEndAnchor } from "../end-anchor/end-anchor.js";
+import { Fill } from "../layout/layout.js";
+import {
+  SCROLL_FADE,
+  ScrollArea,
+  type ScrollFade,
+  type ScrollFadeInset,
+} from "../scroll-area/scroll-area.js";
+import { Tooltip } from "../tooltip/hint.js";
+import {
+  VIRTUAL_ROWS_ANCHOR,
+  type VirtualRowPlace,
+  VirtualRows,
+  type VirtualRowsHandle,
+} from "../virtual-rows/virtual-rows.js";
 
 /**
  * conversation.tsx -- AI Elements' Conversation: a log of messages that keeps to its newest line while the reader is there.
@@ -37,14 +40,13 @@ import {
  * Conversation scrolls on `use-stick-to-bottom`, which animates the scroll
  * on timings of its own, where docs/DESIGN.md has content land at once. So
  * the log here draws its lines through `ConversationRows`, TanStack
- * Virtual's run (`@repo/ui/virtual-rows`), which keeps to the newest line
- * as the library's chat guide does: it opens at the end, a line appended
- * follows on to it while the reader stands near the end, as does a line put
- * before a last line that stands still, a reply box's, a line growing at
- * the end keeps them there, and lines put before the first leave the
- * reader's place where it was. The context the children read is the
- * registry's: whether the log is at its bottom (`isAtEnd()`), and a way to
- * go there (`scrollToEnd()`).
+ * Virtual's run (`@repo/ui/virtual-rows`), and keeps to its newest line
+ * through `@repo/ui/end-anchor`, the registry's contract without its
+ * animation: the log opens at its end and keeps to it, whatever lands,
+ * grows, or moves it, until the reader scrolls away, and lines put before
+ * the first leave the reader's place where it was. The context the children
+ * read is the registry's: whether the log keeps to its end (`stuck`), and a
+ * way back there (`stick`).
  *
  * As the guide's log does, the log's scroll box holds nothing after the
  * rows: a line that stands after the messages, as an agent's working line
@@ -53,10 +55,10 @@ import {
  * reply box is; and the log's room at its end is the virtualizer's own (`paddingEnd`), read from the theme (`--conversation-log-end`, a
  * length the stylesheet registers), and, where something floats over the
  * log's end, as the apps' windows an agent is using do, that much more
- * (`overEnd`): a log standing at its end keeps to it as that room comes,
- * grows, shrinks, and goes, and the way back to the newest line stands
- * above it. The log goes to its end as the reader's own line lands
- * (`ownLast`), as the guide's example does on a send.
+ * (`overEnd`), above which the way back to the newest line stands. The log
+ * goes back to its end as the reader's own line lands (`ownLast`), as the
+ * guide's example does on a send, and lets go of it as it is scrolled for
+ * the reader to one of its lines (its handle's `bringIn` and `scrollBy`).
  *
  * The log scrolls in `@repo/ui`'s `ScrollArea`, which fades its edges as
  * the caller asks, and holds its lines in one block of its own inside it
@@ -68,22 +70,21 @@ import {
  * inside it.
  */
 
-/** The theme's room at a log's end (tasks.css), registered as a length so it reads in pixels. */
+/** The theme's room at a log's end (`conversation.css`), registered as a length so it reads in pixels. */
 const LOG_END_PROPERTY = "--conversation-log-end";
-
-/** How near its end, in pixels, a log must stand to keep to it as its box shrinks: the rounding of a scroll that reached it. */
-const SHRINK_END_PX = 8;
 
 /** How near its top, in screens of the box, a log asks for the lines older than its first (`onNearTop`): one, so they land before the reader reaches them. */
 const NEAR_TOP_SCREENS = 1;
 
 interface ConversationScroll {
-  readonly isAtBottom: boolean;
+  /** Whether the log keeps to its end (`@repo/ui/end-anchor`). */
+  readonly stuck: boolean;
+  /** Takes the log to its end and keeps it there. */
+  readonly stick: () => void;
+  /** Lets go of the end, as the log is scrolled for the reader to one of its lines. */
+  readonly release: () => void;
   /** The room, in pixels, what floats over the log's end takes (`overEnd`). */
   readonly overEnd: number;
-  /** Hears whether the log stands at its end, as its run of lines says (`isAtEnd()`). */
-  readonly atBottom: (atEnd: boolean) => void;
-  readonly scrollToBottom: () => void;
   /** The scroll box, which `ConversationContent` is. */
   readonly list: RefObject<HTMLDivElement | null>;
   /** The block the lines stand in inside the scroll box, which says the log's room at its end (`--conversation-log-end`). */
@@ -136,17 +137,33 @@ export function Conversation({
   const own = useRef<HTMLDivElement>(null);
   const list = handed ?? own;
   const log = useRef<HTMLDivElement>(null);
-  const [isAtBottom, setAtBottom] = useState(true);
   // The log's run of lines, while one stands.
   const rows = useRef<RefObject<VirtualRowsHandle | null> | undefined>(undefined);
 
-  const hold = useCallback((run: RefObject<VirtualRowsHandle | null>) => {
-    rows.current = run;
+  // The log is taken to its end by its run where one stands, so the virtualizer stays the one writer of its place.
+  const toEnd = useCallback(() => {
+    const run = rows.current?.current;
 
-    return () => {
-      if (rows.current === run) rows.current = undefined;
-    };
+    if (run === null || run === undefined) return false;
+    run.scrollToEnd();
+
+    return true;
   }, []);
+
+  const { stuck, stick, release } = useEndAnchor({ scroller: list, content: log, toEnd });
+
+  // Note that a run standing anew opens at its end, as an Inbox item's thread does in the box the item before it was scrolled in.
+  const hold = useCallback(
+    (run: RefObject<VirtualRowsHandle | null>) => {
+      rows.current = run;
+      stick();
+
+      return () => {
+        if (rows.current === run) rows.current = undefined;
+      };
+    },
+    [stick],
+  );
 
   // Where the log last stood, so a scroll is read as up or down from there.
   const lastTop = useRef(0);
@@ -161,31 +178,6 @@ export function Conversation({
     const top = element.scrollTop;
 
     if (top >= 0 && top <= element.clientHeight * NEAR_TOP_SCREENS) nearTop.current?.();
-  }, [list]);
-
-  const scrollToBottom = useCallback(() => {
-    rows.current?.current?.scrollToEnd();
-  }, []);
-
-  // Note that a log standing at its end keeps to it as its box shrinks, as a phone's keyboard shrinks it, because the box's foot would otherwise rise over the newest line, an Inbox thread's reply box being typed in among it, and leave it under the keyboard. Where it stood is read against the box's height before the shrink, since the scroll has not moved.
-  useEffect(() => {
-    const box = list.current;
-
-    if (box === null) return;
-    let height = box.clientHeight;
-
-    const heard = new ResizeObserver(() => {
-      const was = height;
-      height = box.clientHeight;
-
-      if (height < was && box.scrollHeight - box.scrollTop - was <= SHRINK_END_PX) {
-        rows.current?.current?.scrollToEnd();
-      }
-    });
-
-    heard.observe(box);
-
-    return () => heard.disconnect();
   }, [list]);
 
   // Note that the log asks as it opens too, since lines drawn before its scroll box stood asked of no box,
@@ -206,18 +198,8 @@ export function Conversation({
   );
 
   const scroll = useMemo<ConversationScroll>(
-    () => ({
-      isAtBottom,
-      overEnd,
-      atBottom: setAtBottom,
-      list,
-      log,
-      hold,
-      askOlder,
-      scrollToBottom,
-      onScroll,
-    }),
-    [isAtBottom, overEnd, list, hold, askOlder, scrollToBottom, onScroll],
+    () => ({ stuck, stick, release, overEnd, list, log, hold, askOlder, onScroll }),
+    [stuck, stick, release, overEnd, list, hold, askOlder, onScroll],
   );
 
   return (
@@ -280,8 +262,8 @@ export function ConversationContent({
 
 /**
  * The log's lines, drawn only near the view (`@repo/ui/virtual-rows`), in
- * the log's own scroll box. The run keeps to the newest line as the log's
- * header says, and keeps the reader's place as lines land before its first.
+ * the log's own scroll box. The log keeps to its newest line as its header
+ * says, and the run keeps the reader's place as lines land before its first.
  */
 export function ConversationRows({
   keys,
@@ -316,19 +298,9 @@ export function ConversationRows({
   /** Draws the line at an index, which wears `place` where the lines are list items of the caller's own. */
   children: (index: number, place: VirtualRowPlace) => ReactNode;
 }): ReactNode {
-  const { list, log, hold, askOlder, isAtBottom, atBottom, overEnd } = useConversation();
+  const { list, log, hold, askOlder, stick, release, overEnd } = useConversation();
   const run = useRef<VirtualRowsHandle>(null);
   useLayoutEffect(() => hold(run), [hold]);
-  // Note that the run follows a line appended only where the last line is new, so a line put before a last line that stands still, as the reply box at an Inbox thread's end, is followed here while the reader stood at the end.
-  const drawn = useRef(keys);
-  useLayoutEffect(() => {
-    const was = drawn.current;
-    drawn.current = keys;
-
-    if (isAtBottom && keys.length > was.length && keys.at(-1) === was.at(-1)) {
-      run.current?.scrollToEnd();
-    }
-  }, [keys, isAtBottom]);
   // The log's room at its end, as the theme says it, in pixels: a registered length, so it reads as one.
   const [end, setEnd] = useState(0);
   useLayoutEffect(() => {
@@ -339,34 +311,37 @@ export function ConversationRows({
     const room = Number.isFinite(said) ? said : 0;
     setEnd((was) => (was === room ? was : room));
   });
-  // Note that room floating over the log's end coming, changing, or going keeps a log that stood at its end there, since the room moves the end and not the reader.
-  const room = useRef(overEnd);
-  useLayoutEffect(() => {
-    const was = room.current;
-    room.current = overEnd;
-
-    if (overEnd !== was && isAtBottom) run.current?.scrollToEnd();
-  }, [overEnd, isAtBottom]);
-  // The reader's own line landing takes the log to its end; the line the log opened on does not, since the log opens there.
+  // The reader's own line landing takes the log back to its end; the line the log opened on does not, since the log opens there.
   const sent = useRef(ownLast);
   useLayoutEffect(() => {
     const was = sent.current;
     sent.current = ownLast;
 
-    if (ownLast !== undefined && was !== undefined && ownLast !== was) run.current?.scrollToEnd();
-  }, [ownLast]);
+    if (ownLast !== undefined && was !== undefined && ownLast !== was) stick();
+  }, [ownLast, stick]);
+  // Note that a scroll the caller asks for away from the end lets go of it first, so the log stays where it was taken; one to the end keeps to it.
   useImperativeHandle(handle, () => {
     const now = () => run.current;
 
     return {
-      bringIn: (key, then) => now()?.bringIn(key, then) ?? false,
+      bringIn: (key, then) => {
+        const lines = now();
+
+        if (lines === null || !lines.keys().includes(key)) return false;
+        release();
+
+        return lines.bringIn(key, then);
+      },
       rowElement: (key) => now()?.rowElement(key),
       drawnKeys: () => now()?.drawnKeys() ?? [],
       keys: () => now()?.keys() ?? [],
-      scrollToEnd: () => now()?.scrollToEnd(),
-      scrollBy: (delta) => now()?.scrollBy(delta),
+      scrollToEnd: stick,
+      scrollBy: (delta) => {
+        release();
+        now()?.scrollBy(delta);
+      },
     };
-  }, []);
+  }, [stick, release]);
   // Note that the lines changing may leave the box unfilled, which no scroll would say.
   useLayoutEffect(() => {
     askOlder();
@@ -375,6 +350,7 @@ export function ConversationRows({
   return (
     <VirtualRows
       scroller={list}
+      anchor={VIRTUAL_ROWS_ANCHOR.END}
       keys={keys}
       estimate={estimate}
       gap={gap}
@@ -384,7 +360,6 @@ export function ConversationRows({
       rowClassName={rowClassName}
       aria-label={label}
       handle={run}
-      onAtEnd={atBottom}
       paddingEnd={end + overEnd}
     >
       {children}
@@ -456,9 +431,9 @@ const SCROLL_LABEL = "Scroll to the newest line";
  * its center over the composer's send button below it.
  */
 export function ConversationScrollButton(): ReactNode {
-  const { isAtBottom, scrollToBottom } = useConversation();
+  const { stuck, stick } = useConversation();
 
-  if (isAtBottom) return null;
+  if (stuck) return null;
 
   return (
     // Its ground is the button's own (`--ui-button-ground`), which the button's lit fill is laid over as a title bar's is.
@@ -469,7 +444,7 @@ export function ConversationScrollButton(): ReactNode {
           corners={BUTTON_CORNERS.ROUND}
           variant={BUTTON_VARIANT.OUTLINE}
           icon={<ArrowDownIcon aria-hidden="true" />}
-          onClick={scrollToBottom}
+          onClick={stick}
         />
       </Tooltip>
     </div>

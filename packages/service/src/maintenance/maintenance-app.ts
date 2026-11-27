@@ -75,6 +75,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
     moveJournalImages: () => Effect.provideService(moveJournalImages(), BlobStore, blobs),
     markTranscriptsForResume: () =>
       markSessionsForResume({
+        sessionsPerSweep: TRANSCRIPT_MARK_BACKFILL.SESSIONS_PER_SWEEP,
         rowsPerSweep: TRANSCRIPT_MARK_BACKFILL.ROWS_PER_SWEEP,
         rowsPerBatch: TRANSCRIPT_MARK_BACKFILL.ROWS_PER_BATCH,
       }),

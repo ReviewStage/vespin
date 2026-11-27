@@ -458,9 +458,13 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
-  its checks and reviewers as rows, each glyph the panel's own
-  (`pull-request-look.ts`); its Description and Conversation folding under
-  their headings (`ListSection`'s `foldable`), as the panel's do; the merge's press under the heading in every
+  its checks and files changed as rows counting them as the panel's tabs
+  do ("✓ 5", "4"), each glyph the panel's own (`pull-request-look.ts`), the
+  lines it changes after its branches; its reviewers as faces in its heading after who
+  opened it, each wearing where they stand at its corner, as the panel's
+  people line draws them; its Description and Conversation folding under
+  their headings (`ListSection`'s `foldable`), as the panel's do; the merge's
+  press under the heading in every
   window, as the panel's head stands Merge under the title, a large button
   as wide as its words (`MergeActRow`), and a split button where the
   repository merges more than one way, its chevron choosing the way as the

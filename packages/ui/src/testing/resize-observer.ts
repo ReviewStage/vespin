@@ -3,8 +3,10 @@
  *
  * jsdom lays out nothing, so nothing it holds ever resizes of its own accord:
  * an observer here is silent until a test that has staged a layout calls
- * `relayout`, as the window would report a resize. Installed for every test
- * file by the suite's setup wherever the environment has none of its own.
+ * `relayout`, as the window would report a resize. Installed wherever the
+ * environment has none of its own: for every test file by the panel's
+ * setup, and for a test of `@repo/ui`'s by importing it, since a chart there
+ * measures itself differently where one stands.
  */
 
 /** Every observer still watching something, across the window. */

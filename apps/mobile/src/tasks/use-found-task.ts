@@ -21,11 +21,13 @@ import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
-import { eq, useLiveQuery } from "@tanstack/react-db";
+import { WINDOW_READ } from "@repo/host/read-window";
+import { eq } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useWindow } from "../host/use-window.js";
 
 /** The key a number's find is held under, by the account, the workspace and the number. */
 const TASK_BY_NUMBER_QUERY = "task-by-number";
@@ -99,7 +101,7 @@ export function useHeldTasksNamed(named: string | undefined): readonly HeldTaskN
     [byIdId, byIdWorkspace],
   );
 
-  const { data } = useLiveQuery((q) =>
+  const read = useWindow((q) =>
     number === undefined
       ? undefined
       : q
@@ -110,7 +112,10 @@ export function useHeldTasksNamed(named: string | undefined): readonly HeldTaskN
           .select(({ task }) => ({ id: task.id, workspaceId: task.workspaceId })),
   );
 
-  return number === undefined ? heldById : (data ?? NONE_NAMED);
+  // Note that only a settled read names a number's tasks, since one rebuilt for another number holds the last number's rows until it answers, and a route must never open one of those.
+  const data = read.status === WINDOW_READ.ROWS && read.settled ? read.rows : NONE_NAMED;
+
+  return number === undefined ? heldById : data;
 }
 
 /**

@@ -1,6 +1,11 @@
 // tab-route.ts -- which tab's stack a thread, a task, or an agent opens on: the tab standing in a compact window, so Back returns where it was opened from, and the item's own tab in a regular one, whose split view selects it beside its list.
 
-import { type IosTab, iosRouteOnTab, iosTabOfGroup } from "@repo/features/ios-app-links";
+import {
+  type IosTab,
+  iosRouteOnTab,
+  iosRouteStanding,
+  iosTabOfGroup,
+} from "@repo/features/ios-app-links";
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { useSegments } from "expo-router";
 import { createContext, useCallback, useContext, useLayoutEffect } from "react";
@@ -43,7 +48,9 @@ export function useKeepStandingTab(): void {
  * window opens it on the tab standing, as Mail and Messages push a related
  * page onto the stack the person is in, while a regular window opens it on
  * its own tab, because that tab's split view selects it beside its list, as
- * it always has. Note that a route named by no tab, such as one opened from
+ * it always has, but for a page no split view lists, such as a person's,
+ * which a regular window pushes onto the tab standing too
+ * (`iosRouteStanding`). Note that a route named by no tab, such as one opened from
  * a sheet over the tabs, opens on its own tab too, but for a thread while
  * the Inbox is off, which opens on Tasks' (`standingWithoutInbox`). The tab
  * standing is read as the route is named (`useKeepStandingTab`), so a
@@ -58,7 +65,7 @@ export function useOnTab(): (route: string) => string {
     (route) =>
       iosRouteOnTab(
         route,
-        standingWithoutInbox(compact ? iosTabOfGroup(standingGroup) : undefined, shown),
+        standingWithoutInbox(iosRouteStanding(route, iosTabOfGroup(standingGroup), compact), shown),
       ),
     [compact, shown],
   );

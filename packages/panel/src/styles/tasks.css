@@ -307,36 +307,15 @@
   margin: var(--ui-item-gap) 0 0;
 }
 
-/* The rhythm of a transcript's log (../ai-elements/conversation.tsx) and of
-   a message's blocks (../ai-elements/message.tsx): its lines a step apart,
-   and a message's blocks a control's gap. They sit in the components layer,
-   under every utility and every surface's own rule, so a line's own margin
-   (a working line's, a finished turn's) still says the last word, and a
-   message's weighs nothing at all, so a block's own margin wins wherever it
-   is set. */
+/* The rhythm of a message's blocks (../ai-elements/message.tsx): a
+   control's gap. It sits in the components layer, under every utility and
+   every surface's own rule, and weighs nothing at all, so a block's own
+   margin wins wherever it is set. A log's own rhythm is its component's
+   (`@repo/ui/conversation`'s `conversation.css`). */
 @layer components {
-  .conversation-log {
-    --conversation-log-end: var(--ui-space-20);
-  }
-
-  .conversation-log > :not(:last-child) {
-    margin-block-end: var(--ui-block-gap);
-  }
-
   :where(:is(.message-content, .ui-chat-bubble) > :not(:last-child)) {
     margin-block: 0 var(--ui-control-gap);
   }
-}
-
-/* A log's room at its end (../ai-elements/conversation.tsx), which the log
-   hands its virtualizer as its own (`paddingEnd`) rather than wearing it, so
-   nothing the virtualizer does not measure stands after the rows, as
-   TanStack Virtual's chat guide has a log. It is registered as a length, so
-   the log reads it in pixels whatever it is written in. */
-@property --conversation-log-end {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
 }
 
 /* A message's actions, their glyphs the control icon whichever way each is
@@ -1097,14 +1076,13 @@
   clip-path: inset(var(--pull-request-fold, 0px) -100vmax -100vmax);
 }
 
-/* Note that the tabs' own fill is translucent, so it is laid over the
-   panel's ground, or what scrolls under them would show through. */
+/* Note that the bar stands on the panel's ground here, as the header does,
+   or what scrolls under it would show through. */
 .pull-request-tab[data-header-fold] > .ui-pane-bar {
   position: relative;
   z-index: 2;
   margin-bottom: calc(-1 * var(--pull-request-fold-room, 0px));
-  background: linear-gradient(var(--ui-color-fill-hover), var(--ui-color-fill-hover))
-    var(--side-panel-ground);
+  background: var(--side-panel-ground);
 }
 
 /* The room stands at the top of what the shown view's scroller holds where
@@ -1900,6 +1878,24 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue
   user-select: text;
 }
 
+/* A box that writes words again where they stand (`AgentComposer`'s
+   `inPlace`, a Manager chat message's edit) takes no dock's room. Its field
+   sits a step in from the card's edge, not a box's full inset, and the card
+   overhangs the words by that edge and that step on the start, the top, and
+   the end, so the words open at the very place, line, and width they stood
+   at, as a row's editor overhangs its glyph by a step (#11095). The step
+   is small enough that the card stays clear of the row above it in a
+   sender's run. */
+.agent-composer-in-place {
+  margin-block-start: calc(-1 * (var(--ui-space-4) + 1px));
+  margin-inline: calc(-1 * (var(--ui-space-6) + 1px));
+}
+
+.agent-composer-in-place .agent-composer-input {
+  padding-block-start: var(--ui-space-4);
+  padding-inline: var(--ui-space-6);
+}
+
 .agent-composer-input[aria-disabled="true"] {
   opacity: 0.6;
 }
@@ -1966,7 +1962,8 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] .agent-queue
   container: composer / inline-size;
 }
 
-.agent-composer > .message-box {
+.agent-composer > .message-box,
+.agent-composer-in-place > .message-box {
   container-name: composer ui-room;
 }
 
@@ -2715,13 +2712,6 @@ svg.lucide {
 
 .agent-log-row-continued {
   padding-block-start: var(--ui-control-gap);
-}
-
-/* A message of a Manager's chat that goes on its sender's run
-   (`managerChatView`) stands close under the one before it, as a chat app
-   stands one sender's bubbles, so the run reads as one. */
-.agent-log-row-run {
-  padding-block-start: var(--ui-tight-gap);
 }
 
 /* A comment's quote line wears every quote's face (`@repo/ui/quote-face`),

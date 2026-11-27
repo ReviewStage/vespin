@@ -53,6 +53,24 @@ export function useInboxGroupsIn(
   workspaceId: string | undefined,
   reach: InboxReach = INBOX_ATTENTION,
 ): readonly InboxGroup<InboxAnyHolder, InboxItem>[] {
+  return useInboxGroupsRead(workspaceId, reach).groups;
+}
+
+/** The holders `useInboxGroupsIn` groups, and whether they were read: the document landed and, where the phone keeps the items on disk, the screen's query of them answered. */
+interface InboxGroupsRead {
+  readonly groups: readonly InboxGroup<InboxAnyHolder, InboxItem>[];
+  readonly read: boolean;
+}
+
+/**
+ * The same holders (`useInboxGroupsIn`), with whether they were read, so a
+ * screen tells none read yet from none held, as a thread opened by its id
+ * must before it says the thread is missing.
+ */
+export function useInboxGroupsRead(
+  workspaceId: string | undefined,
+  reach: InboxReach = INBOX_ATTENTION,
+): InboxGroupsRead {
   const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
   const rows = useInboxRows(told?.stored === true ? reach : undefined);
 
@@ -84,13 +102,15 @@ export function useInboxGroupsIn(
     if (read) noteLaunchPhase(LAUNCH_PHASE.INBOX);
   }, [read]);
 
-  return useMemo(
+  const groups = useMemo(
     () =>
       holdings === undefined
         ? NO_GROUPS
         : inboxGroupsIn(holdings, listed, workspaceId, listedAgents),
     [holdings, listed, workspaceId, listedAgents],
   );
+
+  return useMemo(() => ({ groups, read }), [groups, read]);
 }
 
 /** The same holders (`useInboxGroupsIn`) as the list reads them, each item as its row (`inboxRowGroups`), for a screen that draws no send of the reader's on them. */

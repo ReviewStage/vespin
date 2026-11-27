@@ -111,6 +111,23 @@ function streamdownStep(name: "raw" | "sanitize" | "harden"): MarkdownStep {
   return step;
 }
 
+/** How the link hardening draws a link it refuses (rehype-harden's `BlockPolicy`): its words alone, with no address and nothing to press. */
+const REFUSED_LINK_LOOK = { TEXT_ONLY: "text-only" } as const;
+
+/**
+ * Streamdown's link hardening, a refused link drawn as its words alone
+ * rather than the library's "[blocked]" after them. Note that the step stays
+ * the library's own, so what it refuses is unchanged; only the words drawn
+ * in a refused link's place are.
+ */
+function hardenStep(): MarkdownStep {
+  // SAFETY: Streamdown's harden step is the hardening and the options it is attached with.
+  const [harden, options] = streamdownStep("harden") as [unknown, object];
+
+  // SAFETY: a step's tuple is the step, then the options it is attached with.
+  return [harden, { ...options, linkBlockPolicy: REFUSED_LINK_LOOK.TEXT_ONLY }] as MarkdownStep;
+}
+
 /** The Markdown steps a transcript is read with where it names none: GitHub's dialect and a fence's meta, as Streamdown reads them. */
 export const TRANSCRIPT_REMARK_STEPS: MarkdownSteps = Object.values(defaultRemarkPlugins);
 
@@ -130,7 +147,7 @@ interface MarkdownHtmlSteps {
 export const MARKDOWN_HTML_STEP: MarkdownHtmlSteps = {
   PARSE: streamdownStep("raw"),
   SANITIZE: streamdownStep("sanitize"),
-  HARDEN: streamdownStep("harden"),
+  HARDEN: hardenStep(),
 } as const;
 
 /** The sanitizer's schema as a transcript's steps extend it: the elements it keeps, and each one's attributes. */

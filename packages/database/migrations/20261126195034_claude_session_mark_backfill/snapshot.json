@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "0ace3231-3d9c-4166-a20a-c3eea1963876",
+  "id": "d16d0008-f75b-4a1d-9f62-ad07cd9e179a",
   "prevIds": ["a3bf2de0-45e1-4b4e-8d2d-20f5e0e328c5"],
   "ddl": [
     {
@@ -277,6 +277,12 @@
     {
       "isRlsEnabled": false,
       "name": "claude_session_mark_backfill",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "claude_session_mark_scan",
       "entityType": "tables",
       "schema": "public"
     },
@@ -6733,6 +6739,71 @@
       "entityType": "columns",
       "schema": "public",
       "table": "claude_session_mark_backfill"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "scan",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_scan"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "after_conversation_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_scan"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "after_project_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_scan"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "after_session_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_scan"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "done",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_scan"
     },
     {
       "type": "uuid",
@@ -21567,19 +21638,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["conversation_id"],
-      "schemaTo": "public",
-      "tableTo": "conversations",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "claude_session_mark_backfill_isJzS0yD1CYD_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "claude_session_mark_backfill"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["thread_id"],
       "schemaTo": "public",
       "tableTo": "description_comment_thread",
@@ -24221,6 +24279,14 @@
       "name": "claude_session_entries_pkey",
       "schema": "public",
       "table": "claude_session_entries",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["scan"],
+      "nameExplicit": false,
+      "name": "claude_session_mark_scan_pkey",
+      "schema": "public",
+      "table": "claude_session_mark_scan",
       "entityType": "pks"
     },
     {

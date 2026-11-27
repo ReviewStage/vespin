@@ -1,6 +1,6 @@
 // inbox-answer.e2e.ts -- a member answers the agent's ask from the Inbox and the agent's next turn hears it.
 
-import { expect, test } from "../support/signed-in.js";
+import { expect, test } from "../support/held-turn.js";
 
 const TASK_NAME = "Pick a color";
 
@@ -16,8 +16,9 @@ test.use({ memberAsk: { taskName: TASK_NAME, credential: true, setupFinished: tr
  * The regression this catches: an agent's thread that never reaches the
  * member's Inbox, or an answer given there that is never routed back to
  * the agent, so it waits on it for good. The member starts an agent on a
- * prompt holding the ask script's cue; its first turn posts a decide ask
- * with Blue and Green to them and ends. They go to the Inbox from the
+ * prompt holding the ask script's cue; its first turn, held running until
+ * the journey lets it go (`heldTurn`), posts a decide ask with Blue and
+ * Green to them and ends. They go to the Inbox from the
  * sidebar, find the thread by its question, choose Blue, and send it.
  * Then they follow the item's path to the agent, where the script's
  * second turn stands. Only the scripted session writes that turn, and it
@@ -27,6 +28,7 @@ test.use({ memberAsk: { taskName: TASK_NAME, credential: true, setupFinished: tr
 test("a member answers the agent's ask from the Inbox and the agent goes on", async ({
   page,
   signedIn,
+  heldTurn,
 }) => {
   expect(signedIn.taskId).toBeDefined();
 
@@ -44,10 +46,16 @@ test("a member answers the agent's ask from the Inbox and the agent goes on", as
 
   const transcript = page.getByRole("log");
 
+  const asking = transcript
+    .getByRole("listitem")
+    .filter({ hasText: "I need one decision before I go on." });
+
+  // Note that the turn is held before its ask, because on CI the Start, the agent's boot, and the poll that delivers its end took longer than one 5s `expect`: its words beside "Working…" say it reached the panel, and the fold is waited on only once it is let go.
+  await expect(asking).toContainText("Working…");
+  await heldTurn.letGo();
+
   // The ask's turn ended is the thread posted, so the Inbox can be read for it.
-  await expect(
-    transcript.getByRole("listitem").filter({ hasText: "I need one decision before I go on." }),
-  ).toContainText("Worked for");
+  await expect(asking).toContainText("Worked for");
 
   await page
     .getByRole("complementary")
@@ -67,7 +75,8 @@ test("a member answers the agent's ask from the Inbox and the agent goes on", as
     .getByRole("navigation", { name: "Path" })
     .getByRole("button", { name: "Opus 5.5" })
     .click();
-  await expect(transcript.getByRole("listitem").filter({ hasText: ASK.HEARD })).toContainText(
-    "Worked for",
-  );
+  const heard = transcript.getByRole("listitem").filter({ hasText: ASK.HEARD });
+
+  await expect(heard).toBeVisible();
+  await expect(heard).toContainText("Worked for");
 });

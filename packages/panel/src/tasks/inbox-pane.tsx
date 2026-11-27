@@ -98,6 +98,12 @@ import {
   memberActor,
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationRows,
+  ConversationScrollButton,
+} from "@repo/ui/conversation";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
@@ -106,12 +112,6 @@ import { useQuery } from "@tanstack/react-query";
 import { CheckIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationRows,
-  ConversationScrollButton,
-} from "../ai-elements/conversation.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import {
   AgentCrumbMenu,
@@ -1882,9 +1882,7 @@ export function InboxPane({
         {/* Note that the item's words stand around the thread and the docked box alike, so an ask's pictures in the box read and open as the thread's do. */}
         <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
           <Conversation list={board}>
-            <ConversationContent
-              className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
-            >
+            <ConversationContent className={`inbox-board ${LOG_OVER_COMPOSER_CLASS}`}>
               <Subject
                 item={item}
                 heading={setHeading}
