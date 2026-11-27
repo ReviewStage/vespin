@@ -253,20 +253,15 @@ buttons now open, close, and respond the moment you press them.
 
 ## 0.42.0 — 2026-11-25
 
-### Vespin in your phone's browser
-
-On a phone, Vespin's web app now has a tab bar with Inbox, Tasks,
-Automations, and Search, opens New task as a full-height sheet, and puts
-New agent in a task's bar.
-
-[#10928](https://github.com/ReviewStage/vespin/pull/10928),
-[#10941](https://github.com/ReviewStage/vespin/pull/10941),
-[#10929](https://github.com/ReviewStage/vespin/pull/10929),
-[#10942](https://github.com/ReviewStage/vespin/pull/10942),
-[#10933](https://github.com/ReviewStage/vespin/pull/10933)
-
 ### Improvements
 
+- On a phone, the web app's tab bar adds Automations and Search, and New task
+  opens full height
+  ([#10928](https://github.com/ReviewStage/vespin/pull/10928),
+  [#10941](https://github.com/ReviewStage/vespin/pull/10941),
+  [#10929](https://github.com/ReviewStage/vespin/pull/10929),
+  [#10942](https://github.com/ReviewStage/vespin/pull/10942),
+  [#10933](https://github.com/ReviewStage/vespin/pull/10933))
 - Opening a task, New task, and typing in a message box are faster
   ([#10857](https://github.com/ReviewStage/vespin/pull/10857),
   [#10882](https://github.com/ReviewStage/vespin/pull/10882),
