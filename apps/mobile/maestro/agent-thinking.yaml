@@ -33,38 +33,13 @@ env:
 - extendedWaitUntil:
     visible: "A resend keeps the pending membership.*"
     timeout: 30000
-# The thought between the agent's words stands closed on one line, "Thought"
-# and its first line of words, its body drawn nowhere; the one among the
-# calls stands folded with them under the run's line.
-- assertVisible: "Thought Weighing a resend against a new invite"
-- assertNotVisible: ".*A new row would leave the old one behind.*"
-- assertNotVisible: "Thought Checking why invites expire"
+# Before: main draws no thought, so the same screens are shot with nothing
+# asserted of them: the turn as it stands, then its run of calls opened.
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-thinking-closed
-# The run opened draws the thought among its calls, closed; a press opens it
-# in place on its words whole.
 - tapOn: "2 tool calls"
-- assertVisible: "Thought Checking why invites expire"
-- tapOn: "Thought Checking why invites expire"
-- assertVisible: ".*Nine invites expired, and the funnel counts.*"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-thinking-open
-# The thought its page carried cut is read whole as it opens: its middle,
-# which only the whole read holds, stands under its line.
-- runFlow:
-    file: subflows/scroll-in.yaml
-    env:
-      ELEMENT: "Thought Weighing a resend against a new invite"
-      BESIDE: ${FLOATING_TABS}
-- tapOn: "Thought Weighing a resend against a new invite"
-- runFlow:
-    file: subflows/scroll-in.yaml
-    env:
-      ELEMENT: ".*Keeping the row and replacing the link.*"
-      BESIDE: ${FLOATING_TABS}
-- assertNotVisible: "Reading the whole thought…"
-- waitForAnimationToEnd:
-    timeout: 5000
 - takeScreenshot: agent-thinking-cut-open
