@@ -87,6 +87,7 @@ import {
 import {
   GRAPHQL_REACTION_OF,
   NO_VIEWER_RIGHTS,
+  type OverviewPull,
   type PullRequestReadFailure,
   pullRequestChecks,
   pullRequestConversation,
@@ -157,7 +158,10 @@ const reachedAndAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /** What an overview's read takes of the pull request it reads: its number, where it stood as last read, and its page; an agent's published pull request, or the one a repository's number reached. */
-export type OverviewSubject = Pick<AgentPullRequest, "number" | "state" | "url">;
+export type OverviewSubject = Pick<AgentPullRequest, "number" | "state" | "url"> & {
+  /** The pull request as the read that reached it read it whole, which the pull request's own part reads rather than ask again; none where it was reached by another read. */
+  readonly read?: OverviewPull;
+};
 
 /** One of the overview's reads of a pull request, on the token minted for its repository; null where GitHub holds no such pull request. */
 export type OverviewRead<A, R> = (
@@ -244,7 +248,7 @@ export const overviewPullRequestRead = (
     // Note that an open pull request's merge box rides in its stack's listing, one GraphQL request for both; one no longer open lists no stack, so its merge box is asked on its own beside it, and one whose listing GitHub refused asks it on its own after, so a failed stack never costs the page its merge.
     const [read, apart, rights] = yield* Effect.all(
       [
-        pullRequestOverview(bearer, repository, pullRequest.number, stacked),
+        pullRequestOverview(bearer, repository, pullRequest.number, stacked, pullRequest.read),
         stacked ? Effect.succeed(undefined) : mergingOrNone(bearer, repository, pullRequest.number),
         memberRights(userId, repository, pullRequest.number),
       ],

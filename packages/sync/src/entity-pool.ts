@@ -508,14 +508,13 @@ export interface StandingRows<Row extends object> {
   readonly collection: RowCollection<Row, string>;
   readonly pending: ReadonlyMap<string, Row | typeof ROW_GONE>;
   /**
-   * For a kind kept on disk, the rows the writes standing draw, those they
-   * take away left out, in one collection held in memory for as long as
-   * the kind's: made once with it, and moved before the pool's watchers hear
-   * each moving of `pending`, so a query over it is declared once and sees
-   * what `pending` names. None for a kind held in memory, whose reads draw
-   * the writes themselves.
+   * The rows the writes standing draw, those they take away left out, in
+   * one collection held in memory for as long as the kind's: made once with
+   * it, and moved before the pool's watchers hear each moving of `pending`,
+   * so a query over it is declared once and sees what `pending` names,
+   * wherever the kind's rows are held.
    */
-  readonly drawn: RowCollection<Row, string> | undefined;
+  readonly drawn: RowCollection<Row, string>;
 }
 
 /** Every row the reads hold, and the writes drawn over them. */
@@ -670,8 +669,8 @@ interface KindRows<Row extends object, Change> {
   readonly lastWrites: Map<string, Turn>;
   /** The sync id each key's row was taken at, where an answer named one. */
   readonly takenAt: Map<string, bigint>;
-  /** For a kind kept on disk, the rows the writes standing draw, held in memory beside its collection (`StandingRows.drawn`). */
-  readonly drawn: SyncedCollection<Row, string> | undefined;
+  /** The rows the writes standing draw, held in memory beside the kind's collection (`StandingRows.drawn`). */
+  readonly drawn: SyncedCollection<Row, string>;
   /** Tells the pool's watchers that the writes standing over the kind, or the rows they draw, moved, once `drawn` holds them. */
   readonly heard: () => void;
 }
@@ -715,9 +714,8 @@ function pendingOf<Row extends object, Change>(
   return pending;
 }
 
-/** Takes the rows the writes standing draw into the kind's `drawn` collection, where it keeps one, writing only those that moved. */
+/** Takes the rows the writes standing draw into the kind's `drawn` collection, writing only those that moved. */
 function drawnTaken<Row extends object, Change>(rows: KindRows<Row, Change>): void {
-  if (rows.drawn === undefined) return;
   const drawn = new Map<string, Row>();
 
   for (const [key, row] of pendingOf(rows)) if (row !== ROW_GONE) drawn.set(key, row);
@@ -1792,8 +1790,8 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
           Scope.provide(place.scope)(
             Effect.gen(function* () {
               const synced = yield* syncedCollection(kind.key, place.keep);
-              // Note that only a kept kind holds its drawn rows in a collection, made once with it, because a screen's query reads its rows from disk beside the pool's reads and lays the writes over them itself.
-              const drawn = synced.kept ? yield* syncedCollection(kind.key) : undefined;
+              // Note that every kind holds its drawn rows in a collection, made once with it, wherever its rows are held, so a screen whose query lays the writes over the kind's rows itself reads one overlay, as a phone whose database would not open reads its kind from memory.
+              const drawn = yield* syncedCollection(kind.key);
 
               return { synced, drawn };
             }),
@@ -1854,7 +1852,7 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
         return {
           collection: rows.synced.collection,
           pending: pendingOf(rows),
-          drawn: rows.drawn?.collection,
+          drawn: rows.drawn.collection,
         };
       },
       watch: (watcher) => {

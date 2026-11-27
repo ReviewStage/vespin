@@ -41,7 +41,6 @@ import {
   MINE,
   settledOnRead,
   taskHolder,
-  waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
 import {
   INBOX_REPLY,
@@ -106,7 +105,7 @@ import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { useInboxGroupsIn, useInboxGroupsRead, useInboxWholeGroupsIn } from "./inbox-groups.js";
+import { useInboxGroupsRead, useInboxWaiting, useInboxWholeGroupsIn } from "./inbox-groups.js";
 import { useSearchedWords, useThreadMessages } from "./inbox-rows.js";
 import { useInboxRunFolds } from "./inbox-runs.js";
 import { useInboxShown } from "./inbox-shown.js";
@@ -144,6 +143,8 @@ type UseChosenInboxResult = {
   readonly groups: readonly InboxGroup<InboxAnyHolder>[];
   /** The same holders' whole items, the reader's sends drawn on them, which a search reads every word of, where the document holds them; none where the phone keeps them on disk. */
   readonly whole: readonly InboxGroup<InboxAnyHolder, InboxItem>[];
+  /** Whether the holders were read, so a screen never says the Inbox is empty before its rows answered. */
+  readonly read: boolean;
   readonly chosen: Workspace | undefined;
   readonly workspaces: number;
 };
@@ -159,17 +160,11 @@ export function useChosenInbox(reach: InboxReach = INBOX_ATTENTION): UseChosenIn
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
 
-  const groups = useSendsDrawnOnRows(useInboxGroupsIn(chosen?.id, reach));
+  const { groups: read, read: answered } = useInboxGroupsRead(chosen?.id, reach);
+  const groups = useSendsDrawnOnRows(read);
   const whole = useSendsDrawn(useInboxWholeGroupsIn(chosen?.id));
 
-  return { groups, whole, chosen, workspaces: workspaces.length };
-}
-
-/** The holders of the chosen workspace's Inbox items alone (`useChosenInbox`), as far as `reach` reads. */
-function useInboxGroups(
-  reach: InboxReach = INBOX_ATTENTION,
-): readonly InboxGroup<InboxAnyHolder>[] {
-  return useChosenInbox(reach).groups;
+  return { groups, whole, read: answered, chosen, workspaces: workspaces.length };
 }
 
 /** The scope kept, or Open, the panel's own first scope, where none was ever chosen. */
@@ -205,6 +200,8 @@ export interface InboxListing {
   /** Where the pinned tasks' threads stand first, Pinned and Everything else, each under its heading (`inboxPinnedRuns`); none where every row stands in one run. */
   readonly runs: readonly InboxPinnedRun<InboxAnyHolder>[] | undefined;
   readonly feed: InboxFeed;
+  /** Whether the listed holders were read, so a screen never says the Inbox is empty before its rows answered. */
+  readonly read: boolean;
   readonly counts: InboxCounts;
   readonly readerId: string | undefined;
   /** Every line of words each thread's row says, read from its whole item, as the list's search reads them (`inboxSearchWordsOf`). */
@@ -242,7 +239,7 @@ export function useInboxListing(view: {
     [view.show, view.chosen],
   );
 
-  const { groups, whole } = useChosenInbox(reach);
+  const { groups, whole, read } = useChosenInbox(reach);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
   const { data: feed = INBOX_FEED.READING } = useQuery({
@@ -287,11 +284,12 @@ export function useInboxListing(view: {
       shown: inboxShownItems(list, chosen),
       runs: inboxPinnedRuns(list),
       feed,
+      read,
       counts: inboxCounts(standing, readerId, MINE),
       readerId,
       wordsOf,
     });
-  }, [keep, groups, wordsOf, readerId, feed, show, search, chosen, pinnedFirst, folded]);
+  }, [keep, groups, wordsOf, readerId, feed, read, show, search, chosen, pinnedFirst, folded]);
 }
 
 /** A thread as its screen draws it: its whole item, its sends drawn on it, with what holds it. */
@@ -372,18 +370,11 @@ export function useFrontSteps(): FrontSteps {
  * since no Inbox stands to carry it.
  */
 export function useInboxBadge(): number {
-  const groups = useInboxGroups();
-  const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const shown = useInboxShown();
-  const now = Date.now();
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const { chosen } = useChosenWorkspace(workspaces);
+  const waiting = useInboxWaiting(chosen?.id).total;
 
-  if (!shown) return 0;
-
-  return groups.reduce(
-    (count, { items }) =>
-      count + items.filter((item) => waitsOnReaderNow(item, readerId, now)).length,
-    0,
-  );
+  return useInboxShown() ? waiting : 0;
 }
 
 type UseInboxThreadResult = {

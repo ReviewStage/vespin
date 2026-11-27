@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import assert from "node:assert/strict";
 import "@repo/panel/testing/match-media";
-import "@repo/panel/testing/resize-observer";
+import "@repo/ui/testing/resize-observer";
 import { LINK_PLATFORM } from "@repo/features/link-open";
 import { afterEach, test, vi } from "vitest";
 import { mountWebApp, type WebApp } from "../src/app/web-root";

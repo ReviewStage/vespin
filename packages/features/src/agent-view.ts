@@ -1,4 +1,4 @@
-import { CommandPrefixSchema } from "@repo/wire";
+import { CommandPrefixSchema, literalsReadingUnknown } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { accountInboxAnswerSchema } from "./account-inbox-wire.js";
 import {
@@ -1550,13 +1550,19 @@ export const agentPartViewSchema = answerView(messagesContract.agentPart);
 
 export type AgentPartView = typeof agentPartViewSchema.Type;
 
-/** The type a served file stands under: a transcript's picture may be a WebM an agent recorded, its MP4 copy to a window that plays MP4, or a sound clip, as well as a picture or a file. */
-const servedFileTypeSchema = EffectSchema.Literals([
-  ...Object.values(AGENT_ATTACHMENT_TYPE),
-  CONVERSATION_MEDIA_TYPE.WEBM,
-  MP4_TYPE,
-  ...Object.values(AUDIO_TYPE),
-]);
+/**
+ * The type a served file stands under: a transcript's picture may be a WebM an agent recorded, its MP4 copy to a window that plays MP4, or a sound clip, as well as a picture or a file.
+ * Note that a type this build does not know reads as a file of any other kind, whose chip saves its bytes, so a type a later build serves is never a failed read.
+ */
+const servedFileTypeSchema = literalsReadingUnknown(
+  [
+    ...Object.values(AGENT_ATTACHMENT_TYPE),
+    CONVERSATION_MEDIA_TYPE.WEBM,
+    MP4_TYPE,
+    ...Object.values(AUDIO_TYPE),
+  ],
+  AGENT_ATTACHMENT_TYPE.OTHER,
+);
 
 /**
  * The image, or the file an inbox answer carried, as the window hears it:

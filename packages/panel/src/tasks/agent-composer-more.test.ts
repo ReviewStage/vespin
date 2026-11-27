@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_STATUS, type AgentContext, type AgentStatus } from "@repo/features/agent-wire";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -11,7 +12,6 @@ import { editorBundleLanded, installEditorLayout, QUIET_COMPOSER } from "../test
 import { layContainersAt } from "../testing/container-width.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
-import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { AgentComposer } from "./agent-composer.js";
 import { useAgentComposer } from "./use-agent-composer.js";

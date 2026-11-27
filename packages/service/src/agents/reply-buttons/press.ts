@@ -216,7 +216,10 @@ const runPressed = (
           ? undefined
           : { permissionMode: sent.permissionMode }),
       },
-      { summaryModel, suggestedBy },
+      summaryModel,
+      undefined,
+      undefined,
+      suggestedBy,
     );
 
     return started.agent.id;

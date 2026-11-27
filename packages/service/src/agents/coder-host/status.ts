@@ -7,7 +7,7 @@ import {
   agentBriefOf,
   agentLineOf,
 } from "@repo/database/models/agent-store";
-import type { NamedMachine } from "@repo/database/models/device-store";
+import type { Device } from "@repo/database/models/device-store";
 import type { StoredArchive, StoredAutomationOrigin } from "@repo/database/schemas/agent";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import type { BootPhase } from "@repo/features/agent-boot";
@@ -396,22 +396,15 @@ function archivedByOf(archive: StoredArchive, names: ReadonlyMap<string, string>
   };
 }
 
-/** The machine an agent is pinned to, a device or a workspace's machine, as its summary says it; none for one in a sandbox. */
-function pinnedMachineOf(agent: Pick<AgentLine, "machine">): AgentSummary["machine"] {
-  return agent.machine === AGENT_MACHINE.DEVICE || agent.machine === AGENT_MACHINE.WORKSPACE
-    ? agent.machine
-    : undefined;
-}
-
 /** No Mac read: a summary built from it names no Mac. */
-const NO_MACS: ReadonlyMap<string, NamedMachine> = new Map();
+const NO_MACS: ReadonlyMap<string, Device> = new Map();
 
-/** The Mac a local agent, or the workspace's machine an agent on one, runs on as its summary names it, by its name and when it last beat; none for an agent in a sandbox or whose machine was not read. */
+/** The Mac a local agent runs on as its summary names it, by its name and when it last beat; none for an agent in a sandbox or whose Mac was not read. */
 function macOf(
   agent: Pick<AgentLine, "machine" | "deviceId">,
-  macs: ReadonlyMap<string, NamedMachine>,
+  macs: ReadonlyMap<string, Device>,
 ): AgentSummary["mac"] {
-  if (pinnedMachineOf(agent) === undefined || agent.deviceId == null) return undefined;
+  if (agent.machine !== AGENT_MACHINE.DEVICE || agent.deviceId == null) return undefined;
   const device = macs.get(agent.deviceId);
 
   return device === undefined
@@ -419,12 +412,12 @@ function macOf(
     : { name: device.name, seenAt: device.lastSeenAt.getTime(), deviceId: device.id };
 }
 
-/** The Macs and workspaces' machines a read's agents are pinned to, by id, which `devicesNamed` reads. */
+/** The Macs a read's local agents are pinned to, by id, which `devicesNamed` reads. */
 export function summaryDevices(
   agents: readonly Pick<AgentLine, "machine" | "deviceId">[],
 ): readonly string[] {
   return agents.flatMap((agent) =>
-    pinnedMachineOf(agent) !== undefined && agent.deviceId != null ? [agent.deviceId] : [],
+    agent.machine === AGENT_MACHINE.DEVICE && agent.deviceId != null ? [agent.deviceId] : [],
   );
 }
 
@@ -435,10 +428,9 @@ function summaryFields(
   now: number,
   names: ReadonlyMap<string, string>,
   continuedBy: readonly AgentStartedFromIt[],
-  macs: ReadonlyMap<string, NamedMachine>,
+  macs: ReadonlyMap<string, Device>,
 ): Omit<AgentSummary, "id" | "taskId"> {
   const starter = names.get(agent.userId);
-  const machine = pinnedMachineOf(agent);
   const mac = macOf(agent, macs);
 
   // Every agent stands on a task, which owns it, so the run's automation is never asked.
@@ -460,10 +452,10 @@ function summaryFields(
     title: agent.title,
     ...(agent.kind === AGENT_KIND.MANAGER ? { kind: AGENT_KIND.MANAGER } : undefined),
     ...(agent.kind === AGENT_KIND.MANAGER && agent.face != null ? { face: agent.face } : undefined),
-    // Note that only an agent on a device or a workspace's machine says where it runs, so a sandboxed agent's summary is as it was.
-    ...(machine === undefined
-      ? { sandboxVcpus: standing.sandboxVcpus ?? SANDBOX_SIZE.VCPUS }
-      : { machine }),
+    // Note that only a local agent says where it runs, so a sandboxed agent's summary is as it was.
+    ...(agent.machine === AGENT_MACHINE.DEVICE
+      ? { machine: agent.machine }
+      : { sandboxVcpus: standing.sandboxVcpus ?? SANDBOX_SIZE.VCPUS }),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: agent.createdAt.getTime(),
     status: agentStatusOf(standing.turn, {
@@ -523,7 +515,7 @@ export function agentSummary(
   now: number,
   names: ReadonlyMap<string, string>,
   continuedBy: readonly AgentStartedFromIt[] = [],
-  macs: ReadonlyMap<string, NamedMachine> = NO_MACS,
+  macs: ReadonlyMap<string, Device> = NO_MACS,
 ): AgentSummary {
   const line = "brief" in agent ? agent : agentLineOf(agent);
 
@@ -583,7 +575,7 @@ export function agentPage(
   now: number,
   names: ReadonlyMap<string, string>,
   continuedBy: readonly AgentStartedFromIt[] = [],
-  macs: ReadonlyMap<string, NamedMachine> = NO_MACS,
+  macs: ReadonlyMap<string, Device> = NO_MACS,
   repositories: readonly string[] = agent.repository === null ? [] : [agent.repository],
 ): AgentPage {
   return {

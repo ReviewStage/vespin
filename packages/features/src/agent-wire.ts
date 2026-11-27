@@ -284,20 +284,12 @@ export type AgentSource = typeof agentSourceSchema.Type;
 
 /**
  * Where an agent's runner and checkout live: a Vercel Sandbox, as every
- * agent from before the column does, one of the starter's devices, or a
- * machine the agent's workspace owns, each agent in its own VM there; a
- * device and a workspace's machine both take their work as rows their host
- * follows (`@repo/features/device-agent-wire`).
- *
- * Note that a build before `HOSTED_API_VERSION` 7 reads an agent's machine
- * only as the cloud or a device, so the service answers it no agent on a
- * workspace's machine (`workspace-machine-reads.ts`), and an automation's
- * place still names the cloud or a device alone (`personalRunsOnSchema`).
+ * agent from before the column does, or one of the starter's devices, which
+ * takes its work as rows it follows (`@repo/features/device-agent-wire`).
  */
 export const AGENT_MACHINE = {
   VERCEL: "vercel",
   DEVICE: "device",
-  WORKSPACE: "workspace",
 } as const;
 
 export type AgentMachineKind = (typeof AGENT_MACHINE)[keyof typeof AGENT_MACHINE];
@@ -574,13 +566,7 @@ export const AGENT_ATTACHMENT_TYPE = {
   PNG: "image/png",
   JPEG: "image/jpeg",
   WEBP: "image/webp",
-  /**
-   * A still GIF (`gif-frames.ts`). Note that no client sends one yet, but
-   * re-encodes it as it does any other picture, because a message box's file
-   * may be kept and served back as its type (a comment's, an Inbox reply's,
-   * a queued message's), which a client released before this reads under
-   * types without it.
-   */
+  /** A still GIF (`gif-frames.ts`); a message box sends an animated one as its first frame. */
   GIF: "image/gif",
   PDF: "application/pdf",
   TEXT: "text/plain",
@@ -588,10 +574,7 @@ export const AGENT_ATTACHMENT_TYPE = {
    * Any other file, a document, a spreadsheet, an archive, or a binary,
    * whatever type its machine gave it, since its name says what it is and a
    * file is served back under the type it travels as, which this one names
-   * no reader to run. Note that no client sends one yet, but refuses it as
-   * it always has, because a message box's file may be kept and served back
-   * as its type (a comment's, an Inbox reply's, a queued message's), which a
-   * client released before this reads under types without it.
+   * no reader to run.
    */
   OTHER: "application/octet-stream",
 } as const;
@@ -602,8 +585,19 @@ export type AgentAttachmentType =
 const AGENT_ATTACHMENT_TYPES: ReadonlySet<string> = new Set(Object.values(AGENT_ATTACHMENT_TYPE));
 
 /** Whether a type read off the wire is one a message's file may be. */
-export function isAgentAttachmentType(type: string): type is AgentAttachmentType {
+function isAgentAttachmentType(type: string): type is AgentAttachmentType {
   return AGENT_ATTACHMENT_TYPES.has(type);
+}
+
+/**
+ * The type a message's file read back off the wire is carried as: its own
+ * where this build knows it, and a file of any other kind otherwise
+ * (`AGENT_ATTACHMENT_TYPE.OTHER`). Note that a type a later build adds is
+ * read so, because its file still opens and travels as bytes to save, where
+ * refusing it would drop the file or close the edit that holds it.
+ */
+export function agentAttachmentTypeOf(type: string): AgentAttachmentType {
+  return isAgentAttachmentType(type) ? type : AGENT_ATTACHMENT_TYPE.OTHER;
 }
 
 /** The most bytes one file of each type may hold. */
@@ -788,15 +782,12 @@ const agentStartFromSchema = EffectSchema.Struct({
 export type AgentStartFrom = typeof agentStartFromSchema.Type;
 
 /**
- * A place of the cloud or of one member's own: the cloud, or one of their
- * devices by its id. It is where an automation's runs start
- * (`automation-wire.ts`) and the place a member's last pick keeps
- * (`runs-on-pick.ts`), neither of which names a machine a workspace owns:
- * an automation's place is read by every build in its list, one before
- * `HOSTED_API_VERSION` 7 reads no such machine, and a pick is read by a
- * Start in any of the member's workspaces.
+ * Where a Start's agent runs, as a request names it: the cloud, or one of
+ * the starting member's own devices (a Mac's desktop app or a host) by its
+ * id, which the service checks is theirs, registered, and not away before
+ * it makes the agent there.
  */
-export const personalRunsOnSchema = EffectSchema.Union([
+export const agentRunsOnRequestSchema = EffectSchema.Union([
   EffectSchema.Struct({ machine: EffectSchema.Literal(AGENT_MACHINE.VERCEL) }),
   EffectSchema.Struct({
     machine: EffectSchema.Literal(AGENT_MACHINE.DEVICE),
@@ -804,27 +795,9 @@ export const personalRunsOnSchema = EffectSchema.Union([
   }),
 ]);
 
-export type PersonalRunsOn = typeof personalRunsOnSchema.Type;
-
-/**
- * Where a Start's agent runs, as a request names it: the cloud, one of the
- * starting member's own devices (a Mac's desktop app or a host) by its id,
- * which the service checks is theirs, registered, and not away, or a
- * machine the agent's workspace owns by its id, which the service checks
- * that workspace owns and is ready to run agents in VMs, before it makes
- * the agent there.
- */
-export const agentRunsOnRequestSchema = EffectSchema.Union([
-  ...personalRunsOnSchema.members,
-  EffectSchema.Struct({
-    machine: EffectSchema.Literal(AGENT_MACHINE.WORKSPACE),
-    deviceId: wireUuidSchema,
-  }),
-]);
-
 export type AgentRunsOnRequest = typeof agentRunsOnRequestSchema.Type;
 
-/** A move of an agent to another place in the same agent: the cloud, one of its starter's own devices, or a machine its workspace owns (`coder-host/move.ts`). */
+/** A move of an agent to another place in the same agent: the cloud, or one of its starter's own devices (`coder-host/move.ts`). */
 export const agentMoveRequestSchema = EffectSchema.Struct({ runsOn: agentRunsOnRequestSchema });
 
 /** A branch a Start names for a checkout to be cloned at: a name git takes, with no space and none of the characters a ref refuses. */
@@ -1378,15 +1351,13 @@ export const agentSummarySchema = EffectSchema.Struct({
   markedUnread: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   /** When a Manager last sent its chat a message (`send_to_user`), which reads unread past `readThrough`; absent before its first, for a coder, and from a service older than it. */
   saidAt: EffectSchema.optionalKey(countedNumber),
-  /** Where its runner runs, said only of an agent on its starter's device or on a machine its workspace owns; absent for one in a sandbox, and from a service older than it. */
-  machine: EffectSchema.optionalKey(
-    EffectSchema.Literals([AGENT_MACHINE.DEVICE, AGENT_MACHINE.WORKSPACE]),
-  ),
+  /** Where its runner runs, said only of a local agent on its starter's device; absent for one in a sandbox, and from a service older than it. */
+  machine: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_MACHINE.DEVICE)),
   /** The vCPUs its sandbox opens with (`@repo/features/sandbox-size`), each with its memory; absent for a local agent, and from a service older than it. */
   sandboxVcpus: EffectSchema.optionalKey(countedNumber),
   /**
-   * The Mac a local agent runs on, or the workspace's machine an agent on
-   * one runs on, by its own name, and the epoch milliseconds it last beat, which a reader holds against its own clock
+   * The Mac a local agent runs on, by its own name, and the epoch
+   * milliseconds it last beat, which a reader holds against its own clock
    * (`deviceStanding`), though a window judges a device by its shared presence
    * read (`hosts.presence`) rather than by this; absent for an agent in a sandbox,
    * for one whose Mac is gone, from a read that does not name it, and from a

@@ -43,6 +43,7 @@ import { grantWindowPermissions } from "../window/window-permissions";
 import { windowPushes } from "../window/window-pushes";
 import { PanelWindows, zoomFactorOf, zoomSteer } from "../window/zoom";
 import type { DesktopConfig } from "./desktop-config";
+import { hostedConnection } from "./hosted-connection";
 import { reportUnresponsivePanel } from "./telemetry-service";
 
 /** How long a display change is let settle before the panels are laid out over it. */
@@ -367,6 +368,9 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
   // Named one at a time because Electron's `on` is typed per event name.
   const wake = (eventName: "resume" | "unlock-screen" | "user-did-become-active") => () => {
     handleDisplayChange();
+
+    // The connection to the service may have died in the sleep without a word, so the calls on it are asked again on a new one.
+    if (eventName === "resume") hostedConnection.reconnect();
 
     // A terminal's socket may have died in the sleep without a word, and one waiting out a backoff need not wait on.
     if (eventName === "resume") void run(operator.host.terminalWake());

@@ -2,7 +2,6 @@ import {
   AGENT_MACHINE,
   type AgentRunsOnRequest,
   type AgentSummary,
-  agentMachineOf,
   DEVICE_STANDING,
   type DeviceStanding,
 } from "@repo/features/agent-wire";
@@ -12,10 +11,6 @@ import { machineName, type ThisMac } from "@repo/features/machine-name";
 import type { MacOffer } from "@repo/features/models-wire";
 import { agentRunsOnWords, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
-import {
-  type WorkspaceMachineLine,
-  workspaceMachineStanding,
-} from "@repo/features/workspace-machine-view";
 import {
   CHIP_LOOK,
   CHIP_WIDTH,
@@ -34,13 +29,10 @@ import {
 } from "@repo/ui";
 import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
-import { useQuery } from "@tanstack/react-query";
 import { Schema } from "effect";
 import { useState } from "react";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
-import { workspaceOwnedMachinesQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
-import { useMemberDirectory } from "../member-directory.js";
 import { Picker } from "../settings/picker-row.js";
 import { keptKey, useKept } from "../use-kept.js";
 import { MODELS_READ, type ModelsRead } from "./use-agents.js";
@@ -78,18 +70,6 @@ import { MODELS_READ, type ModelsRead } from "./use-agents.js";
  * the task, each agent's row in its plan's head says Cloud, or the device
  * that agent runs on, named the same way, or that the device was removed
  * (`overview-agents.tsx`).
- *
- * After the member's devices, under Workspace machines, stand the machines
- * the workspace owns (`LIVE_READ.WORKSPACE_MACHINES`), which every member's
- * agents may run on, each in a VM of its own: each by its name under its
- * platform's glyph wearing its standing's dot, read off its own row
- * (`workspaceMachineStanding`), since the window's presence read names the
- * member's own devices alone, and one that takes no agent now dimmed and
- * unpicked, as a device is. A pick of one is a place of its own kind
- * (`OfferedPlace`), never a device: a Start sends it as the workspace's
- * machine, and the model menu reads it as the cloud, since its agents run
- * on the starter's own credentials. A pick kept in this window that the
- * workspace no longer lists falls back to Cloud.
  */
 
 /** The id the Cloud row is picked by, which no device's id is. */
@@ -100,79 +80,6 @@ const KEPT = { PICK: keptKey("app.newTaskRunsOn", Schema.String) } as const;
 
 /** The cloud, as a request names it. */
 const RUNS_ON_CLOUD: TaskRunsOnRequest = { machine: AGENT_MACHINE.VERCEL };
-
-/** No machines of the workspace's, held steady for a workspace that owns none or before they are read. */
-const NO_OWNED: readonly WorkspaceMachineLine[] = [];
-
-/**
- * A place a Runs on chip offers beyond the cloud: one of the member's own
- * devices, or a machine the workspace owns, by its id and name, and as the
- * workspace's read lists it, none where that read does not, as before it
- * lands for a fork of an agent on one.
- */
-export type OfferedPlace =
-  | { readonly machine: typeof AGENT_MACHINE.DEVICE; readonly device: MacOffer }
-  | {
-      readonly machine: typeof AGENT_MACHINE.WORKSPACE;
-      readonly deviceId: string;
-      readonly name: string;
-      readonly owned: WorkspaceMachineLine | undefined;
-    };
-
-/** The device a place picked names, none for the cloud or a workspace's machine. */
-export function deviceOfPlace(place: OfferedPlace | undefined): MacOffer | undefined {
-  return place?.machine === AGENT_MACHINE.DEVICE ? place.device : undefined;
-}
-
-/** The id of the device or the workspace's machine a place picked names, none for the cloud: what a press compares a later one by. */
-export function placeIdOf(place: OfferedPlace | undefined): string | undefined {
-  return place === undefined ? undefined : placeRowOf(place);
-}
-
-/** The id the Runs on row of a place is picked by: Cloud's, or the device's or the workspace's machine's. */
-function placeRowOf(place: OfferedPlace | undefined): string {
-  switch (place?.machine) {
-    case undefined:
-      return CLOUD_ROW;
-    case AGENT_MACHINE.DEVICE:
-      return place.device.deviceId;
-    case AGENT_MACHINE.WORKSPACE:
-      return place.deviceId;
-  }
-}
-
-/** A workspace's machine as a chip offers it. */
-function ownedPlace(machine: WorkspaceMachineLine): OfferedPlace {
-  return {
-    machine: AGENT_MACHINE.WORKSPACE,
-    deviceId: machine.id,
-    name: machine.name,
-    owned: machine,
-  };
-}
-
-/** The place a Runs on row's id names among those offered: a device of the member's, or a machine of the workspace's; none for Cloud or an id neither lists. */
-function placeOfRow(
-  row: string,
-  devices: readonly MacOffer[],
-  owned: readonly WorkspaceMachineLine[],
-): OfferedPlace | undefined {
-  const device = devices.find((each) => each.deviceId === row);
-
-  if (device !== undefined) return { machine: AGENT_MACHINE.DEVICE, device };
-  const machine = owned.find((each) => each.id === row);
-
-  return machine === undefined ? undefined : ownedPlace(machine);
-}
-
-/**
- * The machines the workspace owns, which a Runs on chip offers after the
- * member's devices, followed while a chip draws them; none while they are
- * read, where the read failed, or where no workspace is named.
- */
-export function useOwnedMachines(workspaceId: string | undefined): readonly WorkspaceMachineLine[] {
-  return useQuery(workspaceOwnedMachinesQuery(workspaceId)).data ?? NO_OWNED;
-}
 
 /** A device's glyph by its platform (`devicePlatformOf`): a server's for Linux, a Mac's otherwise. */
 export function DeviceGlyph({
@@ -266,32 +173,11 @@ function offerMarks(
   return unready === undefined ? { icon } : { icon, disabled: unready, why: MENU_ROW_WHY.MARK };
 }
 
-/** A workspace's machine as a list of places draws it: its platform's glyph wearing its standing's dot, read off its own row, and why it takes no agent now, none where it does. */
-export function ownedMark(machine: WorkspaceMachineLine): DeviceMarkResult {
-  const standing = workspaceMachineStanding(machine);
-  const icon = <DeviceStandingGlyph device={machine} standing={standing} />;
-
-  return { icon, unready: TAKES_NO_AGENT.has(standing) ? STANDING_WORDS[standing] : undefined };
-}
-
-/** A workspace's machine's row past its name (`ownedMark`); one that takes no agent is dimmed and unpicked too, its dot saying why. */
-function ownedMarks(machine: WorkspaceMachineLine): Pick<MenuRow, "icon" | "disabled" | "why"> {
-  const { icon, unready } = ownedMark(machine);
-
-  return unready === undefined ? { icon } : { icon, disabled: unready, why: MENU_ROW_WHY.MARK };
-}
-
-/**
- * Cloud, then each device by what the list calls it, its platform's glyph
- * wearing its standing's dot, one that takes no agent muted and unpicked,
- * then under Workspace machines each machine the workspace owns, drawn the
- * same way; an agent's place chip lists the same (`agent-place.tsx`).
- */
+/** Cloud, then each device by what the list calls it, its platform's glyph wearing its standing's dot, one that takes no agent muted and unpicked; an agent's place chip lists the same (`agent-place.tsx`). */
 export function runsOnRows(
   devices: readonly MacOffer[],
   book: PresenceBook,
   thisMac: ThisMac,
-  owned: readonly WorkspaceMachineLine[] = NO_OWNED,
 ): readonly MenuRow[] {
   return [
     { id: CLOUD_ROW, label: RUNS_ON_WORDS.CLOUD, icon: <GLYPH.CLOUD /> },
@@ -302,24 +188,14 @@ export function runsOnRows(
         ...offerMarks(device, book),
       }),
     ),
-    ...owned.map(
-      (machine): MenuRow => ({
-        id: machine.id,
-        label: machine.name,
-        section: RUNS_ON_WORDS.WORKSPACE_MACHINES,
-        replayMasked: true,
-        ...ownedMarks(machine),
-      }),
-    ),
   ];
 }
 
 /**
- * New task's pick, starting on the member's last where that device, or that
- * machine of the workspace's, is listed, ready or not, else Cloud, and kept
- * as it changes. Answers the place picked, none for the cloud, the setter,
- * and whether the pick kept is a device or a machine, listed or not, which a
- * start waits on the devices' read for.
+ * New task's pick, starting on the member's last where that device is
+ * listed, ready or not, else Cloud, and kept as it changes. Answers the
+ * device picked, none for the cloud, the setter, and whether the pick kept
+ * is a device, listed or not, which a start waits on the devices' read for.
  * Note that an offline device, or one still getting ready, stays picked
  * rather than falling back to Cloud, because a task's Runs on is fixed as it
  * starts, and one sent to the cloud while its Mac was away for a moment could
@@ -327,38 +203,25 @@ export function runsOnRows(
  */
 export function useNewTaskRunsOn(
   devices: readonly MacOffer[],
-  owned: readonly WorkspaceMachineLine[] = NO_OWNED,
-): readonly [OfferedPlace | undefined, (row: string | undefined) => void, boolean] {
+): readonly [MacOffer | undefined, (deviceId: string | undefined) => void, boolean] {
   const [kept, keep] = useKept(KEPT.PICK, CLOUD_ROW);
+  const picked = devices.find((each) => each.deviceId === kept);
 
   return [
-    placeOfRow(kept, devices, owned),
-    (row: string | undefined) => keep(row ?? CLOUD_ROW),
+    picked,
+    (deviceId: string | undefined) => keep(deviceId ?? CLOUD_ROW),
     kept !== CLOUD_ROW,
   ];
 }
 
-/** Where an agent runs, by the id its Runs on row is picked by: Cloud's, or its device's or its workspace's machine's; none for one on a machine the service no longer names. */
+/** Where an agent runs, by the id its Runs on row is picked by: Cloud's, or its device's; none for one on a device the service no longer names. */
 function placeRow(agent: Pick<AgentSummary, "machine" | "mac">): string | undefined {
-  switch (agentMachineOf(agent)) {
-    case AGENT_MACHINE.VERCEL:
-      return CLOUD_ROW;
-    case AGENT_MACHINE.DEVICE:
-    case AGENT_MACHINE.WORKSPACE:
-      return agent.mac?.deviceId;
-  }
+  return agent.machine === AGENT_MACHINE.DEVICE ? agent.mac?.deviceId : CLOUD_ROW;
 }
 
-/** A Start's place by its Runs on row's id: the cloud, a machine of the workspace's where `owned` lists it, or else the device it names. */
-export function rowRequest(
-  row: string,
-  owned: readonly WorkspaceMachineLine[] = NO_OWNED,
-): AgentRunsOnRequest {
-  if (row === CLOUD_ROW) return RUNS_ON_CLOUD;
-
-  return owned.some((machine) => machine.id === row)
-    ? { machine: AGENT_MACHINE.WORKSPACE, deviceId: row }
-    : { machine: AGENT_MACHINE.DEVICE, deviceId: row };
+/** A Start's place by its Runs on row's id: the cloud, or the device it names. */
+export function rowRequest(row: string): AgentRunsOnRequest {
+  return row === CLOUD_ROW ? RUNS_ON_CLOUD : { machine: AGENT_MACHINE.DEVICE, deviceId: row };
 }
 
 /** What a draft's Runs on starts on before a pick: where its source runs, else the member's newest agent on the task. */
@@ -377,23 +240,21 @@ interface StartPlaceSeed {
  * can tell it, where the source runs for a fork or a continue, else where
  * the member's newest agent on the task runs, else the member's last pick
  * kept in this window, which a pick here keeps too, else Cloud. Answers the
- * place it shows, none for the cloud, and the setter, which hands `onPick` the place picked. Note that the last pick is
+ * device it shows, none for the cloud, and the setter, which hands `onPick` the place picked. Note that the last pick is
  * this window's, while the service keeps the account's (`runs-on-pick.ts`),
  * so a pick made in another window, or a task's own place where no pick was
  * ever made, can run an untouched draft elsewhere than its chip says; a
  * Start sends a place only once one is picked, so the service still decides
  * the rest. A default device the member's list does not name, a teammate's
  * a fork's source runs on, or one before the list is read, is named as the
- * agent it came from names it, rather than said to be Cloud, as is a
- * workspace's machine before the workspace's machines are read.
+ * agent it came from names it, rather than said to be Cloud.
  */
 export function useStartRunsOn(
   devices: readonly MacOffer[],
   picked: AgentRunsOnRequest | undefined,
   seed: StartPlaceSeed,
   onPick: (runsOn: AgentRunsOnRequest) => void,
-  owned: readonly WorkspaceMachineLine[] = NO_OWNED,
-): readonly [OfferedPlace | undefined, (row: string | undefined) => void] {
+): readonly [MacOffer | undefined, (deviceId: string | undefined) => void] {
   const [kept, keep] = useKept(KEPT.PICK, CLOUD_ROW);
 
   const newest = seed.agents
@@ -408,45 +269,24 @@ export function useStartRunsOn(
   const row =
     picked === undefined
       ? ((seeded === undefined ? undefined : placeRow(seeded)) ?? kept)
-      : picked.machine === AGENT_MACHINE.VERCEL
-        ? CLOUD_ROW
-        : picked.deviceId;
+      : picked.machine === AGENT_MACHINE.DEVICE
+        ? picked.deviceId
+        : CLOUD_ROW;
+
+  // Note that the agent names its device by its name alone, so it stands as an offer of no model, its standing unread.
+  const unlisted =
+    picked === undefined && seeded?.mac?.deviceId !== undefined && seeded.mac.deviceId === row
+      ? { deviceId: row, name: seeded.mac.name, providers: [] }
+      : undefined;
 
   return [
-    placeOfRow(row, devices, owned) ?? unlistedSeed(picked === undefined ? seeded : undefined, row),
-    (chosen: string | undefined) => {
-      const pickedRow = chosen ?? CLOUD_ROW;
-      keep(pickedRow);
-      onPick(rowRequest(pickedRow, owned));
+    devices.find((each) => each.deviceId === row) ?? unlisted,
+    (deviceId: string | undefined) => {
+      const chosen = deviceId ?? CLOUD_ROW;
+      keep(chosen);
+      onPick(rowRequest(chosen));
     },
   ];
-}
-
-/**
- * The place a draft's source or the member's newest agent runs on where no
- * list names it yet, as the agent names it, by its name alone: a device as
- * an offer of no model, its standing unread, or a workspace's machine not
- * yet read; none where the seed runs elsewhere than `row`.
- */
-function unlistedSeed(
-  seeded: Pick<AgentSummary, "machine" | "mac"> | undefined,
-  row: string,
-): OfferedPlace | undefined {
-  const mac = seeded?.mac;
-
-  if (seeded === undefined || mac === undefined || mac.deviceId !== row) return undefined;
-
-  switch (agentMachineOf(seeded)) {
-    case AGENT_MACHINE.VERCEL:
-      return undefined;
-    case AGENT_MACHINE.DEVICE:
-      return {
-        machine: AGENT_MACHINE.DEVICE,
-        device: { deviceId: row, name: mac.name, providers: [] },
-      };
-    case AGENT_MACHINE.WORKSPACE:
-      return { machine: AGENT_MACHINE.WORKSPACE, deviceId: row, name: mac.name, owned: undefined };
-  }
 }
 
 /** What New task's chip says of the device picked, by what the list calls it: that alone while it takes an agent, and why it does not, or that its standing cannot be told, otherwise. */
@@ -497,33 +337,17 @@ export function useDevicesRead(
   return { unread, failed: unread && readSince && modelsRead.state === MODELS_READ.FAILED };
 }
 
-/** What a start sends of New task's pick: the device or the workspace's machine it names, or the cloud. */
-export function newTaskRunsOn(place: OfferedPlace | undefined): TaskRunsOnRequest {
-  switch (place?.machine) {
-    case undefined:
-      return RUNS_ON_CLOUD;
-    case AGENT_MACHINE.DEVICE:
-      return { machine: AGENT_MACHINE.DEVICE, deviceId: place.device.deviceId };
-    case AGENT_MACHINE.WORKSPACE:
-      return { machine: AGENT_MACHINE.WORKSPACE, deviceId: place.deviceId };
-  }
+/** What a start sends of New task's pick: the device it names, or the cloud. */
+export function newTaskRunsOn(device: MacOffer | undefined): TaskRunsOnRequest {
+  return device === undefined
+    ? RUNS_ON_CLOUD
+    : { machine: AGENT_MACHINE.DEVICE, deviceId: device.deviceId };
 }
 
-/** What New task's chip says of a workspace's machine picked: its name alone while it takes an agent, and why it does not otherwise; its name alone before the workspace's machines are read. */
-function ownedStateWords(place: Extract<OfferedPlace, { machine: "workspace" }>): string {
-  if (place.owned === undefined) return place.name;
-  const standing = workspaceMachineStanding(place.owned);
-
-  return standing === DEVICE_STANDING.ONLINE
-    ? place.name
-    : `${place.name} · ${STANDING_WORDS[standing]}`;
-}
-
-/** New task's Runs on chip: Cloud, the device, or the workspace's machine picked, its glyph alone in a card too narrow for its words, dropping the menu. */
+/** New task's Runs on chip: Cloud or the device picked, its glyph alone in a card too narrow for its words, dropping the menu. */
 export function NewTaskRunsOnChip({
   devices,
-  owned = NO_OWNED,
-  place,
+  device,
   disabled,
   narrow,
   look = CHIP_LOOK.TOOLBAR,
@@ -531,9 +355,7 @@ export function NewTaskRunsOnChip({
   onChoose,
 }: {
   devices: readonly MacOffer[];
-  /** The machines the workspace owns, offered after the member's devices. */
-  owned?: readonly WorkspaceMachineLine[] | undefined;
-  place: OfferedPlace | undefined;
+  device: MacOffer | undefined;
   disabled: boolean;
   /** The chip's look: a composer's toolbar chip, or a form row's field. */
   look?: typeof CHIP_LOOK.FIELD | typeof CHIP_LOOK.TOOLBAR;
@@ -541,7 +363,7 @@ export function NewTaskRunsOnChip({
   width?: ChipWidth;
   /** Whether the card is too narrow for its words, so it draws its glyph alone. */
   narrow: boolean;
-  onChoose: (row: string | undefined) => void;
+  onChoose: (deviceId: string | undefined) => void;
 }): React.JSX.Element {
   // Note that the clock only redraws the chip as a beat ages, since the standing is read off the book's own monotonic clock.
   useSecond();
@@ -552,12 +374,15 @@ export function NewTaskRunsOnChip({
   return (
     <Picker
       label={RUNS_ON_WORDS.LABEL}
-      value={placeRowOf(place)}
-      valueLabel={placeWords(place, book, devices, thisMac)}
-      valueReplayMasked={place?.machine === AGENT_MACHINE.WORKSPACE}
-      valueIcon={placeIcon(place)}
+      value={device?.deviceId ?? CLOUD_ROW}
+      valueLabel={
+        device === undefined
+          ? RUNS_ON_WORDS.CLOUD
+          : offerStateWords(device, book, machineName(device, devices, thisMac))
+      }
+      valueIcon={device === undefined ? <GLYPH.CLOUD /> : <DeviceGlyph device={device} />}
       iconOnly={narrow}
-      rows={runsOnRows(devices, book, thisMac, owned)}
+      rows={runsOnRows(devices, book, thisMac)}
       noMatch={RUNS_ON_WORDS.NO_MATCH}
       align={POPOVER_ALIGN.START}
       width={width}
@@ -570,43 +395,12 @@ export function NewTaskRunsOnChip({
   );
 }
 
-/** What New task's chip says of the place picked: Cloud, or the device's or the workspace's machine's name and, where it takes no agent now, why. */
-function placeWords(
-  place: OfferedPlace | undefined,
-  book: PresenceBook,
-  devices: readonly MacOffer[],
-  thisMac: ThisMac,
-): string {
-  switch (place?.machine) {
-    case undefined:
-      return RUNS_ON_WORDS.CLOUD;
-    case AGENT_MACHINE.DEVICE:
-      return offerStateWords(place.device, book, machineName(place.device, devices, thisMac));
-    case AGENT_MACHINE.WORKSPACE:
-      return ownedStateWords(place);
-  }
-}
-
-/** The glyph New task's chip wears for the place picked: the cloud's, or the platform's of the device or the workspace's machine. */
-function placeIcon(place: OfferedPlace | undefined): React.JSX.Element {
-  switch (place?.machine) {
-    case undefined:
-      return <GLYPH.CLOUD />;
-    case AGENT_MACHINE.DEVICE:
-      return <DeviceGlyph device={place.device} />;
-    case AGENT_MACHINE.WORKSPACE:
-      return <DeviceGlyph device={place.owned} />;
-  }
-}
-
 /**
  * Where an agent runs, as its row says it: the cloud's glyph and Cloud, or
  * the device's glyph by its platform, where the member's devices list it,
- * and what every list of machines calls it, or that the device was removed;
- * or the workspace's machine's glyph by its platform, where the
- * workspace's read of its machines lists it, a Linux server's otherwise, and
- * its name, or that it was removed. Note that it is the agent's own, read
- * off its summary, since each agent is placed as it starts.
+ * and what every list of machines calls it, or that the device was removed.
+ * Note that it is the agent's own, read off its summary, since each agent
+ * is placed as it starts.
  */
 export function RunsOnPlace({
   agent,
@@ -618,42 +412,25 @@ export function RunsOnPlace({
 }): React.JSX.Element {
   const thisMac = useThisMac();
   const { mac } = agent;
-  const machine = agentMachineOf(agent);
-  // Note that the workspace's machines are the directory's around the row, read only for an agent on one.
-  const { workspaceId } = useMemberDirectory();
-  const owned = useOwnedMachines(machine === AGENT_MACHINE.WORKSPACE ? workspaceId : undefined);
+  const cloud = agent.machine !== AGENT_MACHINE.DEVICE;
 
   // Note that the agent names its device alone, so This Mac is told by its device and no name is twinned.
   const words = agentRunsOnWords(agent, (named) =>
     machineName({ deviceId: named.deviceId, name: named.name }, [], thisMac),
   );
 
-  const placed = (each: { readonly id: string } | { readonly deviceId: string }) =>
-    mac?.deviceId !== undefined && ("id" in each ? each.id : each.deviceId) === mac.deviceId;
-
-  const glyph = (() => {
-    switch (machine) {
-      case AGENT_MACHINE.VERCEL:
-        return <GLYPH.CLOUD />;
-      case AGENT_MACHINE.DEVICE:
-        return <DeviceGlyph device={devices?.find(placed)} />;
-      case AGENT_MACHINE.WORKSPACE:
-        return (
-          <DeviceGlyph
-            device={{ platform: owned.find(placed)?.platform ?? DEVICE_PLATFORM.LINUX }}
-          />
-        );
-    }
-  })();
+  const device = devices?.find(
+    (each) => mac?.deviceId !== undefined && each.deviceId === mac.deviceId,
+  );
 
   return (
     <Inline gap={GAP.ICON} wrap={false}>
-      <GlyphSlot size={ICON_SIZE.SMALL}>{glyph}</GlyphSlot>
-      {/* Note that a machine is named as its owner or its admins named it, so only Cloud and a removed one show. */}
+      <GlyphSlot size={ICON_SIZE.SMALL}>
+        {cloud ? <GLYPH.CLOUD /> : <DeviceGlyph device={device} />}
+      </GlyphSlot>
+      {/* Note that a device is named as its owner named it, so only Cloud and a removed device show, a teammate's device among the masked though the member's own list names it not. */}
       <span>
-        <ReplayWords unmasked={machine === AGENT_MACHINE.VERCEL || mac === undefined}>
-          {words}
-        </ReplayWords>
+        <ReplayWords unmasked={cloud || mac === undefined}>{words}</ReplayWords>
       </span>
     </Inline>
   );

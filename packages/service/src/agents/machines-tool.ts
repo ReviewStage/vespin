@@ -2,14 +2,12 @@
  * machines-tool.ts -- `list_machines`: the places a start may run an agent on, and the machines the Mac tools may reach, so a caller names one rather than learning them from a refusal.
  *
  * Two lists, each read by the rule its own call keeps. `runsOn` is where
- * `start_agent` may run an agent: the cloud, each Mac and host of the
+ * `start_agent` may run an agent: the cloud, and each Mac and host of the
  * member the call acts for, the agent's starter or the member the MCP
  * server admitted, as a start's runsOn reads them (`devicesSeenSince`),
  * each with the runsOn to pass and whether it beat lately
- * (`MAC_PRESENCE.FRESH_MS`). Note that of the members' devices only that
- * member's own are read, since a start runs on no one else's; and that no
- * machine a workspace owns is listed, since `start_agent` offers none until
- * one can run an agent (`OFFERED_START_RUNS_ON`).
+ * (`MAC_PRESENCE.FRESH_MS`). Note that only that member's own devices are
+ * read, since a start runs on no one else's.
  *
  * `macTools`, for a coding agent alone, is where `run_on_mac` and
  * `computer` may go from its conversation: the machines `routeOf` would
@@ -20,12 +18,12 @@
  * since the member MCP server has no Mac tools.
  */
 
-import { devicesSeenSince, workspaceOwnedMachinesOf } from "@repo/database/models/device-store";
+import { devicesSeenSince } from "@repo/database/models/device-store";
 import { commandMachinesOf } from "@repo/database/models/machine-command-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_MACHINE, MAC_PRESENCE } from "@repo/features/agent-wire";
-import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { Clock, Effect, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue, type WireRecord } from "../core.js";
 import { agentToolRejected, orStoreRefusal } from "./agent-tools.js";
@@ -83,25 +81,11 @@ function computerUseOf(switched: boolean | null) {
   return switched ? COMPUTER_USE.ON : COMPUTER_USE.OFF;
 }
 
-/** What kind of machine a device is, by its platform. */
-function kindOf(platform: DevicePlatform) {
-  return platform === DEVICE_PLATFORM.DARWIN ? MACHINE_KIND.MAC : MACHINE_KIND.HOST;
-}
-
-/**
- * The places a start may run an agent for the member given: the cloud
- * first, then each of their devices, the latest seen first, then, where a
- * workspace is given, each machine it owns, by name.
- */
-const runsOnOf = (userId: string, workspaceId?: string) =>
+/** The places a start may run an agent for the member given: the cloud first, then each of their devices, the latest seen first. */
+const runsOnOf = (userId: string) =>
   Effect.gen(function* () {
     const devices = yield* devicesSeenSince(userId, new Date(0));
-
-    const owned =
-      workspaceId === undefined ? [] : yield* workspaceOwnedMachinesOf(userId, workspaceId);
-
     const now = yield* Clock.currentTimeMillis;
-    const online = (seenAt: Date) => seenAt.getTime() >= now - MAC_PRESENCE.FRESH_MS;
 
     return [
       { runsOn: { machine: AGENT_MACHINE.VERCEL }, name: "Cloud", online: true },
@@ -109,15 +93,8 @@ const runsOnOf = (userId: string, workspaceId?: string) =>
         runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: device.id },
         id: device.id,
         name: device.name,
-        kind: kindOf(device.platform),
-        online: online(device.lastSeenAt),
-      })),
-      ...owned.map((machine) => ({
-        runsOn: { machine: AGENT_MACHINE.WORKSPACE, deviceId: machine.id },
-        id: machine.id,
-        name: machine.name,
-        kind: kindOf(machine.platform),
-        online: online(machine.lastSeenAt),
+        kind: device.platform === DEVICE_PLATFORM.DARWIN ? MACHINE_KIND.MAC : MACHINE_KIND.HOST,
+        online: device.lastSeenAt.getTime() >= now - MAC_PRESENCE.FRESH_MS,
       })),
     ];
   });
@@ -145,7 +122,7 @@ const macToolsOf = (target: ConversationTarget) =>
 
 /** One call of `list_machines` by a coding agent: where a start may run, as its starter's, and where its Mac tools may go. */
 export function runAgentListMachines(
-  agent: { readonly userId: string; readonly organizationId: string },
+  starterId: string,
   target: ConversationTarget,
   input: UnparsedWireValue,
 ) {
@@ -157,8 +134,7 @@ export function runAgentListMachines(
     Effect.gen(function* () {
       const answer: WireRecord = {
         status: ACTION_RESULT_STATUS.ACCEPTED,
-        // Note that PR 8 of the workspace-hosts rollout (STAG-3712) passes agent.organizationId again, listing the workspace's machines once start_agent offers them.
-        runsOn: yield* runsOnOf(agent.userId),
+        runsOn: yield* runsOnOf(starterId),
         macTools: yield* macToolsOf(target),
       };
 

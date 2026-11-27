@@ -352,9 +352,13 @@ A flow is written one way throughout:
   `composer-field`), and a row or a line by its words. A tab is opened
   through `maestro/subflows/tab.yaml`, by its id (`inbox-tab`, `tasks-tab`,
   `search-tab`), since a list's title and a back button share its name; an
-  iPad's floating bar carries no id, so `simulator-screenshots.sh` passes
-  `FLOATING_TABS=true` there and the tab is found by name. A flow chooses its
-  way by the device it runs on, never by what is on screen a moment.
+  iPad stands no tabs, so `simulator-screenshots.sh` passes
+  `FLOATING_TABS=true` there and the place is its sidebar's row, found by
+  its words beside the row's kind (`place-row`), the sidebar shown first
+  where it is hidden (`show-sidebar.yaml`), as a reader picks it; the
+  workspace switcher, which heads that sidebar, is opened through
+  `switcher.yaml` the same way. A flow chooses its way by the device it
+  runs on, never by what is on screen a moment.
 - **A repeated step is a subflow** under `maestro/subflows/`, run with
   `runFlow` and its `env`: `open-row.yaml` and `row-menu.yaml` scroll to a
   row (`to-row.yaml`, which draws an iPad's list column itself), move it clear of the tab bar (`clear-of-tabs.yaml`), and let the list

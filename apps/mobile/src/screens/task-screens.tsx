@@ -1,6 +1,11 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
-import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
+import {
+  AGENT_MACHINE,
+  AGENT_STATUS,
+  type AgentStatus,
+  type ListedAgent,
+} from "@repo/features/agent-wire";
 import { PRODUCT_STANDING_FIELD, PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionHead } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
@@ -137,6 +142,7 @@ import {
   LINK_ROW_TONE,
   LIST_LOOK,
   LinkRow,
+  ListColumn,
   type ListLook,
   ListRow,
   ListSection,
@@ -166,8 +172,8 @@ import {
   type RowSubmenu,
   type RowSwipe,
   repositoryChoice,
+  runsOnGlyph,
   Screen,
-  SplitView,
   STATUS_MARK_SYMBOL,
   StackBarMenu,
   type StandingMenus,
@@ -192,8 +198,10 @@ import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
   type ComponentProps,
+  createContext,
   type ReactElement,
   type ReactNode,
+  useContext,
   useDeferredValue,
   useMemo,
   useRef,
@@ -201,7 +209,6 @@ import {
 } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { useAgentPlaceGlyph } from "../agents/use-agent-place.js";
 import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useWholeListRead } from "../host/host-provider.js";
@@ -216,12 +223,20 @@ import { usePushStarted, usePushStood } from "../push-stood.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
-import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
+import { APP_SIDEBAR } from "../sidebar-shown.js";
+import { SidebarTasksContext } from "../sidebar-tasks.js";
+import { TabColumns } from "../split-columns.js";
+import {
+  SPLIT_TAB,
+  useHandToSplit,
+  usePickInPlace,
+  useSplitPicked,
+  useSplitSelection,
+} from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useTabDrawnCount } from "../tab-drawn.js";
-
-import { useOnOwnTab } from "../tab-route.js";
+import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { standingPressed, useStandingDrawnCount } from "../tasks/standing-drawn.js";
 import {
   threadComments,
@@ -245,6 +260,7 @@ import {
 } from "../tasks/use-inline-description.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
+import { useDevicePlatform } from "../tasks/use-start.js";
 import {
   type ReadListing,
   type RowAsks,
@@ -1435,6 +1451,37 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
 
   return (
     <RowList look={look} selected={selected} onSelect={open} onRefresh={onRefresh}>
+      <TreeSections
+        listing={listing}
+        hold={hold}
+        managers={managers}
+        managersListed={managersListed}
+      />
+    </RowList>
+  );
+}
+
+/**
+ * The tree's sections inside a list: Managers, Pinned, Following, the
+ * member's sections, and the repository groups, as the Tasks list and an
+ * iPad's sidebar both draw them, as the panel's sidebar does.
+ */
+function TreeSections({
+  listing,
+  hold,
+  managers,
+  managersListed,
+}: {
+  readonly listing: TasksListing;
+  readonly hold: TreeHold;
+  readonly managers: readonly ListedAgent[];
+  /** Whether the workspace has the Managers experiment on. */
+  readonly managersListed: boolean;
+}) {
+  const { tree } = listing;
+
+  return (
+    <>
       <ManagersSection listed={managersListed} managers={managers} hold={hold} />
       {tree.pinned === undefined ? null : (
         <GroupSection group={tree.pinned} listing={listing} hold={hold} />
@@ -1448,7 +1495,7 @@ function TasksTree({ listing, hold, look, search, selected, onSelect, onRefresh 
       {tree.tasks.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
-    </RowList>
+    </>
   );
 }
 
@@ -2578,8 +2625,8 @@ export function TaskAgentRow({
   const runsOn = agentRunsOnWords(agent);
   const { acts } = useAgentRowParts(agent, name, asking);
 
-  // Note that a machine's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac, whether it is the member's device or the workspace's.
-  const placeGlyph = useAgentPlaceGlyph(agent);
+  // Note that a device's mark is its platform's, as Start's Runs on and the panel draw it: a server for a Linux machine, a laptop for a Mac.
+  const platform = useDevicePlatform(agent.mac?.deviceId);
 
   return (
     <AgentRow
@@ -2589,7 +2636,7 @@ export function TaskAgentRow({
       face={agent.face}
       state={agentState(agent.status)}
       runsOn={runsOn}
-      runsOnGlyph={placeGlyph}
+      runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform })}
       waiting={waiting}
       depth={nest?.depth}
       fold={nest?.fold}
@@ -3249,7 +3296,7 @@ function InlineSplitView({
   chrome,
   detailBar,
   ...split
-}: ComponentProps<typeof SplitView> & { readonly chrome: InlineChrome }) {
+}: ComponentProps<typeof TabColumns> & { readonly chrome: InlineChrome }) {
   const editing = useInlineEditing(chrome);
 
   const bar =
@@ -3262,7 +3309,7 @@ function InlineSplitView({
         }
       : detailBar;
 
-  return <SplitView {...split} detailBar={bar} />;
+  return <TabColumns {...split} detailBar={bar} />;
 }
 
 /** What an `@` typed in the page's description offers, docked over the keyboard over the page, read from its `chrome` so only the dock draws again. */
@@ -3537,15 +3584,12 @@ function useTaskDetail(
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
 
-  // Note that the menu's Edit description edits it in place, as the pushed page's does, but for a description too long to, which it opens in the sheet.
+  // Note that a description edited in place offers no Edit description, since its words are the way in, a press on them taking the keyboard there, as Notion's and Linear's are; one too long to stands read as its rows, and the menu opens it in the sheet.
   const inPlace =
     overview?.document !== undefined &&
     overview.document.description.body.length <= INLINE_EDIT_MOST_CHARS;
 
-  const editDescription =
-    editDoor === undefined
-      ? undefined
-      : (task: TaskSummary) => (inPlace ? chrome.start() : editDoor(task));
+  const editDescription = inPlace ? undefined : editDoor;
 
   const detail =
     overview !== undefined ? (
@@ -3594,28 +3638,20 @@ function useTaskDetail(
   return { detail, detailBar };
 }
 
-// A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
-// and the picked task side by side in the tab's own split view, beside the
-// system's tab sidebar. The Stack's header steps aside, since the split view
-// draws each column's navigation bar itself.
-function TasksSplitScreen({
-  selected,
-  select,
-  screen,
-  hold,
-}: {
-  readonly selected: string | undefined;
-  readonly select: (id: string) => void;
-  readonly screen: TasksScreenState;
-  readonly hold: TreeHold;
-}) {
+/**
+ * The task tree as a regular window's list column draws it, under the
+ * column's title, its View options and its search, the task picked standing
+ * selected.
+ */
+function tasksListColumn(
+  screen: TasksScreenState,
+  hold: TreeHold,
+  selected: string | undefined,
+  select: (id: string) => void,
+) {
   const { search, setSearch, listing, refreshTasks, viewMenu } = screen;
 
-  // What the detail holds of its description edited in place, so its Done stands in the detail's bar and what an `@` offers docks over the keyboard in its column.
-  const chrome = useInlineChrome();
-  const { detail, detailBar } = useTaskDetail(selected, listing, chrome);
-
-  const list = {
+  return {
     chosen: selected !== undefined,
     view: (
       <TasksTree
@@ -3634,6 +3670,27 @@ function TasksSplitScreen({
       search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
     },
   };
+}
+
+// A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
+// and the picked task side by side in the tab's own split view, beside the
+// system's tab sidebar. The Stack's header steps aside, since the split view
+// draws each column's navigation bar itself.
+function TasksSplitScreen({
+  selected,
+  select,
+  screen,
+  hold,
+}: {
+  readonly selected: string | undefined;
+  readonly select: (id: string) => void;
+  readonly screen: TasksScreenState;
+  readonly hold: TreeHold;
+}) {
+  // What the detail holds of its description edited in place, so its Done stands in the detail's bar and what an `@` offers docks over the keyboard in its column.
+  const chrome = useInlineChrome();
+  const { detail, detailBar } = useTaskDetail(selected, screen.listing, chrome);
+  const list = tasksListColumn(screen, hold, selected, select);
 
   const first = useListColumn(list);
   const firstDetailBar = useDetailColumnBar(detailBar);
@@ -3642,22 +3699,127 @@ function TasksSplitScreen({
   return (
     <>
       {/* Note that the root keeps its title while its bar is hidden, because a page pushed over the split view names its back button by it, which iPadOS 26 shows and VoiceOver says as the route's name otherwise. */}
-      <Stack.Screen options={{ headerShown: false, title: TASKS_TITLE }} />
-      <Screen key={build}>
-        <InlineSplitView {...first} detail={detail} detailBar={firstDetailBar} chrome={chrome} />
-      </Screen>
+      {/* Note that an iPad's page column stands its screen's own header instead, which its columns draw (`TabColumns`). */}
+      {APP_SIDEBAR ? null : <Stack.Screen options={{ headerShown: false, title: TASKS_TITLE }} />}
+      <InlineSplitView
+        build={build}
+        {...first}
+        detail={detail}
+        detailBar={firstDetailBar}
+        chrome={chrome}
+      />
     </>
   );
 }
 
 /**
+ * The task tree in an iPad's middle column, beside the sidebar and the
+ * picked task: the list read once above the split view
+ * (`SidebarTasksProvider`), the task Tasks' root picked standing selected,
+ * and a pick handed to that root.
+ */
+export function TasksListColumn() {
+  const shared = useContext(SharedTasksContext);
+  const selected = useSplitPicked(SPLIT_TAB.TASKS);
+  const pick = usePickInPlace(SPLIT_TAB.TASKS);
+
+  if (shared === undefined)
+    throw new Error("An iPad's task list stands under SidebarTasksProvider.");
+
+  const list = tasksListColumn(shared.screen, shared.hold, selected, pick);
+
+  return <ListColumn view={list.view} bar={list.bar} />;
+}
+
+/** The Tasks list's state an iPad reads once for every tab, its sidebar's tasks and the Tasks tab alike. */
+type SharedTasks = { readonly screen: TasksScreenState; readonly hold: TreeHold };
+
+/** The Tasks list's state the tabs' layout holds on an iPad; none elsewhere, where the Tasks tab holds its own. */
+const SharedTasksContext = createContext<SharedTasks | undefined>(undefined);
+
+/**
+ * The task list an iPad reads once, above its tabs: the Tasks tab's search,
+ * listing, and the parents opened and groups folded, which every tab's
+ * sidebar lists under its places (`SidebarTasksContext`) and the Tasks tab
+ * draws whole, so an account's thousands of tasks are read once rather than
+ * once for each tab, and a group folded in one tab's sidebar stands folded
+ * in every tab's; and the questions a row's status or delete asks, asked
+ * once for all. A Manager's row pressed in a sidebar opens its page; a
+ * task's opens on Tasks (`AppSidebarPane`).
+ */
+export function SidebarTasksProvider({ children }: { readonly children: ReactNode }) {
+  const router = useRouter();
+  const onTab = useOnTab();
+  const [search, setSearch] = useState("");
+  const screen = useTasksScreen({ search, setSearch });
+  const hold = useTreeHoldState();
+  const workspaceId = screen.listing.workspace?.id;
+  const managers = useWorkspaceManagers(workspaceId);
+  const managersListed = useManagersListed(workspaceId);
+  const shared = useMemo(() => ({ screen, hold }), [screen, hold]);
+
+  const tasks = {
+    sections: (
+      <TreeSections
+        listing={screen.listing}
+        hold={hold}
+        managers={managers}
+        managersListed={managersListed}
+      />
+    ),
+    opens: (id: string) => {
+      if (!managers.some((agent) => agent.id === id)) return false;
+
+      router.push(onTab(iosAgentRoute(id)));
+
+      return true;
+    },
+  };
+
+  return (
+    <SharedTasksContext value={shared}>
+      <SidebarTasksContext value={tasks}>{children}</SidebarTasksContext>
+      <StatusQuestionAsk question={screen.status} />
+      <StatusQuestionAsk question={screen.deletion} />
+    </SharedTasksContext>
+  );
+}
+
+/**
+ * The Tasks tab's root screen on an iPad: the list the tabs' layout reads
+ * once (`SidebarTasksProvider`), laid out by the window's size class, its
+ * questions asked by the layout.
+ */
+function TasksSharedRoot() {
+  const shared = useContext(SharedTasksContext);
+  const sizeClass = useWindowSizeClass();
+  const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
+
+  if (shared === undefined) throw new Error("An iPad's Tasks stands under SidebarTasksProvider.");
+
+  const { screen, hold } = shared;
+
+  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+    <TasksSplitScreen selected={selected} select={select} screen={screen} hold={hold} />
+  ) : (
+    <TasksStackList screen={screen} hold={hold} />
+  );
+}
+
+/**
  * The Tasks tab's root screen: its tree, laid out by the window's size
- * class. Note that what the reader set is held here, above the two layouts,
+ * class, from the list the tabs' layout reads once on an iPad, whose
+ * sidebar lists it too, or its own elsewhere. Note that what the reader set is held here, above the two layouts,
  * so a rotation or a fold of the iPhone Duo, which swaps one layout for the
  * other, keeps it: the search, the parents opened and the groups folded
  * (`TreeHold`), and a status or a delete question standing open.
  */
 export function TasksListScreen() {
+  return APP_SIDEBAR ? <TasksSharedRoot /> : <TasksOwnRoot />;
+}
+
+/** The Tasks tab's root screen where it holds its own list, as on an iPhone. */
+function TasksOwnRoot() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
   const [search, setSearch] = useState("");
@@ -3726,15 +3888,12 @@ export function TaskScreen() {
   // What the page holds of its description edited in place, its section editing it, so its Done stands in the bar and what an `@` offers docks over the keyboard.
   const chrome = useInlineChrome();
 
-  // Note that the menu's Edit description edits it in place too, the caret at its start, but for a description too long to, which it opens in the sheet.
+  // Note that a description edited in place offers no Edit description, since its words are the way in, a press on them taking the keyboard there, as Notion's and Linear's are; one too long to stands read as its rows, and the menu opens it in the sheet.
   const inPlace =
     overview?.document !== undefined &&
     overview.document.description.body.length <= INLINE_EDIT_MOST_CHARS;
 
-  const editDescription =
-    editDoor === undefined
-      ? undefined
-      : (task: TaskSummary) => (inPlace ? chrome.start() : editDoor(task));
+  const editDescription = inPlace ? undefined : editDoor;
 
   const menu =
     overview === undefined

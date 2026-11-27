@@ -320,7 +320,12 @@ recording was, or match the Service's counts to a recording by their shared
 workspace and timing; we do not do this. While a maintainer is signed in as
 your account with your support access (section 4), their use of the web app is
 recorded the same way, under your account, and counted under that browser's
-own ID. The iOS app records nothing.
+own ID.
+
+The Vespin iOS app records your sessions too, to help us find and fix bugs.
+Text, images, and what you type are masked on your iPhone or iPad before a
+recording leaves it; recordings are sent to Sentry, filed under no account,
+and stop when "Share usage data" is off.
 
 Turning off Settings › Account › "Share usage data" stops the counts, the
 recordings, and the Sentry reports described below from that Mac or browser,
@@ -389,10 +394,10 @@ show, and of each tap, naming the screen it landed on and how long the app
 took to draw its next frame. Reports may also list your last taps and screens
 before an error, by the screen and the app's own component names. None of
 this names a task, an agent, or anything else by its id, or carries the words
-on your screen, and the app's requests are not traced. It sends no
-screenshots or recordings of the screen. It sends Sentry nothing while
-Settings › Account › "Share usage data" is off on that iPhone or iPad, a crash as the app starts included, and starts
-again when you turn it back on. Once, on the first launch after the update
+on your screen, and the app's requests are not traced. It sends Sentry
+nothing while Settings › Account › "Share usage data" is off on that iPhone or
+iPad, a crash as the app starts included, and starts again when you turn it
+back on. Once, on the first launch after the update
 that brought this, it may start Sentry for a moment before it has read the
 switch, so a crash or error in that moment can still be reported.
 

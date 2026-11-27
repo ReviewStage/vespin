@@ -7,8 +7,6 @@ import {
   deviceSetupSchema,
   HOST_UPDATE_FAILURE_MAX_CHARS,
   hostUpdateSchema,
-  MACHINE_OWNER,
-  machineNetworkSchema,
 } from "./device-agent-wire.js";
 import {
   allowedAppLookSchema,
@@ -122,16 +120,6 @@ export function hostVersionMeets(version: string, floor: string): boolean {
 }
 
 /**
- * The first daemon version that does each thing the service asks of a host
- * beyond what the floor admits, so a pairing from an older daemon is never
- * offered it.
- */
-export const HOST_VERSION_FOR = {
-  /** Running a workspace's agents, each in a VM of its own, as a machine the workspace owns. */
-  WORKSPACE_MACHINE: "0.14.0",
-} as const;
-
-/**
  * How often a GitHub token handed for an agent's repository is renewed: the
  * cloud's sandbox credential (`CODER.GITHUB_TOKEN_REFRESH`). Fifty minutes,
  * since an installation token lasts an hour and a turn can last a day.
@@ -150,15 +138,9 @@ function secretOf(prefix: string) {
   );
 }
 
-/** The most characters a machine's name may hold, as it names itself or a workspace's admin names it. */
-export const MACHINE_NAME_MAX_CHARS = 200;
-
 /** What a joining machine names itself as: its name (its hostname), and its platform and architecture. */
 const enrollingMachineFields = {
-  name: EffectSchema.String.check(
-    EffectSchema.isMinLength(1),
-    EffectSchema.isMaxLength(MACHINE_NAME_MAX_CHARS),
-  ),
+  name: EffectSchema.String.check(EffectSchema.isMinLength(1), EffectSchema.isMaxLength(200)),
   platform: EffectSchema.Literals(Object.values(DEVICE_PLATFORM)),
   arch: EffectSchema.Literals(Object.values(DEVICE_ARCH)),
 };
@@ -200,10 +182,9 @@ export type OwnDeviceEnrollRequest = typeof ownDeviceEnrollRequestSchema.Type;
  * it read it (`deviceMachineFields`), its daemon's version riding in
  * `HOST_WIRE.VERSION_HEADER` as on every call of a host's. The service
  * mints the device's id once a member approves; the box never names one.
- * The service keeps the start's machine id on the pairing and makes the
- * host row with it, so an approve can tell a machine that already stands
- * as another owner's host; the model it leaves to the box's first
- * register, which follows its approve at once and names it again.
+ * Note that the service keeps no machine of the start's yet, since the
+ * box's first register follows its approve at once and names it again; it
+ * rides here so a service that does keep it needs no newer host.
  */
 export const hostPairingStartRequestSchema = EffectSchema.Struct({
   ...enrollingMachineFields,
@@ -228,31 +209,6 @@ export const hostPairingStartAnswerSchema = EffectSchema.Struct({
 
 export type HostPairingStartAnswer = typeof hostPairingStartAnswerSchema.Type;
 
-/** The most characters of a workspace's id a pairing names, as a task names one. */
-const WORKSPACE_ID_MAX_CHARS = 200;
-
-/** A workspace's id as a pairing names it. Note that it is not `task-wire.ts`'s, which reaches this module back through the link grammar. */
-const workspaceIdSchema = EffectSchema.String.check(
-  EffectSchema.isNonEmpty(),
-  EffectSchema.isMaxLength(WORKSPACE_ID_MAX_CHARS),
-);
-
-/**
- * Whose a paired box is, as its poll names it once approved: the member's
- * who approved it, their own machine, or a workspace's, which every member's
- * agents may run on. The box keeps it, and runs its agents as that owner's
- * machine does. A member's own names no account, since the box needs none.
- */
-const pairedHostOwnerSchema = EffectSchema.Union([
-  EffectSchema.Struct({ kind: EffectSchema.Literal(MACHINE_OWNER.USER) }),
-  EffectSchema.Struct({
-    kind: EffectSchema.Literal(MACHINE_OWNER.WORKSPACE),
-    workspaceId: workspaceIdSchema,
-  }),
-]);
-
-export type PairedHostOwner = typeof pairedHostOwnerSchema.Type;
-
 /** Where a pairing stands as its poll answers it. */
 export const HOST_PAIRING_POLL_STATUS = {
   /** No member has approved or denied the code yet; poll again after the interval. */
@@ -270,8 +226,7 @@ export const HOST_PAIRING_POLL_STATUS = {
 /**
  * What a poll answers (POST, on the poll secret as its bearer and no body):
  * where the pairing stands, and once approved, the device's id and its
- * secret, which the box calls on from then on, and whose it is, absent from
- * a service older than the field, whose every box is its member's own.
+ * secret, which the box calls on from then on.
  */
 export const hostPairingPollAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
@@ -286,7 +241,6 @@ export const hostPairingPollAnswerSchema = EffectSchema.Union([
     status: EffectSchema.Literal(HOST_PAIRING_POLL_STATUS.APPROVED),
     deviceId: wireUuidSchema,
     deviceSecret: secretOf(HOST_WIRE.DEVICE_SECRET_PREFIX),
-    owner: EffectSchema.optionalKey(pairedHostOwnerSchema),
   }),
 ]);
 
@@ -308,47 +262,11 @@ export const hostPairingCodeRequestSchema = EffectSchema.Struct({
 });
 
 /**
- * Who an approve connects the box for (`hostPairingApproveRequestSchema`):
- * the member alone, as their own machine, or a workspace they own or admin,
- * every member's agents running on it, kept to the networks chosen
- * (`MACHINE_NETWORK`).
- */
-export const hostPairingTargetSchema = EffectSchema.Union([
-  EffectSchema.Struct({ kind: EffectSchema.Literal(MACHINE_OWNER.USER) }),
-  EffectSchema.Struct({
-    kind: EffectSchema.Literal(MACHINE_OWNER.WORKSPACE),
-    workspaceId: workspaceIdSchema,
-    network: machineNetworkSchema,
-  }),
-]);
-
-export type HostPairingTarget = typeof hostPairingTargetSchema.Type;
-
-/**
- * A pairing approved by its code (POST), as a read or a deny names it
- * (`hostPairingCodeRequestSchema`), and who it connects the box for, the
- * member alone where it names none, as every approve before the field did.
- */
-export const hostPairingApproveRequestSchema = EffectSchema.Struct({
-  ...hostPairingCodeRequestSchema.fields,
-  target: EffectSchema.optionalKey(hostPairingTargetSchema),
-});
-
-/** A workspace an approve may connect a box to, as the approve screen names it. */
-const hostPairingWorkspaceSchema = EffectSchema.Struct({
-  id: workspaceIdSchema,
-  name: EffectSchema.String,
-});
-
-/**
  * A pending pairing as the approve screen shows it, so a member sees what
  * they would let run their agents: the box's name, platform, and
  * architecture as it named them, the address its start came from, none
  * where the service read none, and when its code lapses, in epoch
- * milliseconds; and the workspaces the member owns or admins that it may
- * connect the box to instead of their own, none where its daemon is older
- * than `HOST_VERSION_FOR.WORKSPACE_MACHINE` or named no machine, and absent
- * from a service older than the field.
+ * milliseconds.
  */
 export const hostPairingAnswerSchema = EffectSchema.Struct({
   name: EffectSchema.String,
@@ -356,7 +274,6 @@ export const hostPairingAnswerSchema = EffectSchema.Struct({
   arch: EffectSchema.Literals(Object.values(DEVICE_ARCH)),
   ip: EffectSchema.NullOr(EffectSchema.String),
   expiresAt: countedNumber,
-  workspaces: EffectSchema.optionalKey(EffectSchema.Array(hostPairingWorkspaceSchema)),
 });
 
 export type HostPairingAnswer = typeof hostPairingAnswerSchema.Type;

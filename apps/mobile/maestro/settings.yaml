@@ -18,8 +18,8 @@ appId: dev.vespin.ios
     timeout: 30000
 # The workspace switcher leads the Inbox's bar, and its menu's account,
 # heard as Settings and its address, opens it.
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 - tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 # The account heads the list, pushing to Account.
@@ -92,8 +92,8 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 30000
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 - tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 - tapOn:
@@ -145,8 +145,8 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 30000
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 - tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 - scrollUntilVisible:
