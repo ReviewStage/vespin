@@ -207,3 +207,87 @@ it.effect(
       });
     }),
 );
+
+/** One page of the account's inbox items as the service answers a page: each part's rows as text, where the whole answer stands, and the next page where one follows. */
+function inboxItemsPage(
+  ids: readonly string[],
+  standing: { readonly next: string; readonly page?: string; readonly snapshot?: string },
+) {
+  const sealed = { capability: "cap-1", queryFingerprint: "fp-1", expiresAt: 1 };
+  const sync = {
+    next: standing.next,
+    ...(standing.page === undefined ? {} : { page: standing.page }),
+  };
+
+  const part = (rows: readonly object[]) => ({
+    ...sealed,
+    rows: JSON.stringify(rows),
+    sync,
+    ...(standing.snapshot === undefined ? {} : { snapshot: standing.snapshot }),
+  });
+
+  return {
+    url: `${BASE_URL}/poll`,
+    queries: {
+      stamps: part(ids.map((id) => ({ id }))),
+      items: part(ids.map((id) => ({ id }))),
+      messages: part([]),
+      files: part([]),
+    },
+  };
+}
+
+it.effect(
+  "a whole answer sent in pages is asked page by page and answered as one, standing at the sync id and snapshot of its last page",
+  () =>
+    Effect.gen(function* () {
+      const recording = recordingHttpClient((request) =>
+        jsonResponse(
+          request.searchParams.get(LIVE_POLL.PAGE) === "page-2"
+            ? inboxItemsPage(["item-3"], { next: "70", snapshot: "70:70:" })
+            : inboxItemsPage(["item-1", "item-2"], { next: "70", page: "page-2" }),
+        ),
+      );
+
+      const hosted = hostedClient({ baseUrl: BASE_URL, credential: account("token-1") });
+
+      const answer = yield* Effect.provide(
+        askLiveRead(hosted.live, INBOX_ITEMS_READ, { [LIVE_USER_QUERY]: "user-1", sync: "" }, {}),
+        recording.layer,
+      );
+
+      assert.ok(!("failure" in answer));
+      assert.deepEqual(answer.queries.stamps.rows, [
+        { id: "item-1" },
+        { id: "item-2" },
+        { id: "item-3" },
+      ]);
+      assert.deepEqual(answer.queries.stamps.sync, { next: "70" });
+      assert.equal(answer.queries.items.snapshot, "70:70:");
+      assert.deepEqual(
+        recording.requests.map((request) => request.searchParams.get(LIVE_POLL.PAGE)),
+        [null, "page-2"],
+      );
+    }),
+);
+
+it.effect(
+  "a whole answer whose later page fails is answered as no answer, never as the pages before it",
+  () =>
+    Effect.gen(function* () {
+      const recording = recordingHttpClient((request) =>
+        request.searchParams.get(LIVE_POLL.PAGE) === "page-2"
+          ? jsonResponse({ error: HOSTED_API_ERROR.UNAVAILABLE }, SERVICE_UNAVAILABLE)
+          : jsonResponse(inboxItemsPage(["item-1"], { next: "70", page: "page-2" })),
+      );
+
+      const hosted = hostedClient({ baseUrl: BASE_URL, credential: account("token-1") });
+
+      const answer = yield* Effect.provide(
+        askLiveRead(hosted.live, INBOX_ITEMS_READ, { [LIVE_USER_QUERY]: "user-1", sync: "" }, {}),
+        recording.layer,
+      );
+
+      assert.ok("failure" in answer);
+    }),
+);

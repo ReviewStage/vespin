@@ -16,7 +16,9 @@
  * where they last stood (`after`), held until they move, under the held
  * deadline. `askLiveRead` asks a declared live read (`live-read.ts`) so,
  * past a sync id it names (`LIVE_POLL.SYNC`) under the held deadline too,
- * and a sync-followed read asked whole under the whole deadline.
+ * and a sync-followed read asked whole under the whole deadline, its pages
+ * followed to the last and joined into the one whole answer it stands for
+ * (`pagesJoined`).
  */
 
 import type { ORPCError } from "@orpc/client";
@@ -48,8 +50,15 @@ import {
   type LiveReadAnswer,
   type LiveReadAsked,
 } from "./live-read.js";
-import { LIVE_POLL, LIVE_SIGNED_OUT } from "./live-wire.js";
+import { LIVE_POLL, LIVE_SIGNED_OUT, type SealedLiveQueryWire } from "./live-wire.js";
 import { HOSTED_API_ERROR, type HostedApiError } from "./service-wire.js";
+
+/**
+ * The most pages a whole answer is followed through, so a service that
+ * named a next page forever never holds the read: past it the read is
+ * answered as no answer, and asked whole again as any failed read is.
+ */
+const MOST_PAGES = 1_000;
 
 /** How a live read is polled: its rows inline, held until they move past `after` where it names where they last stood. */
 export interface HostedPoll {
@@ -171,10 +180,84 @@ export function askLiveRead<Read extends AnyLiveRead, As extends HostedRenames =
   const whole = !past && read.mode === LIVE_MODE.DELTA && poll?.after === undefined;
   const deadline = past ? HOSTED_DEADLINE.HELD : whole ? HOSTED_DEADLINE.WHOLE : undefined;
 
-  return hostedCall(procedure, input, {
+  const asked = hostedCall(procedure, input, {
     live: true,
     ...(poll !== undefined && { poll }),
     ...(deadline !== undefined && { deadline }),
     ...(as !== undefined && { as }),
+  });
+
+  // Note that only a polled read carries its rows inline, so only its pages can be joined.
+  if (read.mode !== LIVE_MODE.DELTA || poll === undefined) return asked;
+
+  const page = (word: string) =>
+    hostedCall(
+      procedure,
+      { ...input, [LIVE_POLL.PAGE]: word },
+      { live: true, poll: {}, ...(as !== undefined && { as }) },
+    );
+
+  return Effect.flatMap(asked, (first) =>
+    // SAFETY: a delta read's answer is its parts' sealed statements and the fields beside them (`AnswerFields`), as each of its pages is, and a page's failure is one this read declares; `pagesJoined` answers one of those or the two joined.
+    isFailed(first)
+      ? Effect.succeed(first)
+      : (pagesJoined(first as PagedAnswer, page) as typeof asked),
+  );
+}
+
+/** Whether a live read answered how it failed rather than its rows. */
+function isFailed(answered: unknown): answered is { readonly failure: string } {
+  return Predicate.isObject(answered) && "failure" in answered;
+}
+
+/** A read's answer as its pages are joined: its parts' sealed statements, and the fields beside them. */
+type PagedAnswer = { readonly queries: Readonly<Record<string, SealedLiveQueryWire>> };
+
+/** The page an answer names to ask for next: its parts all name the same one; none on an answer that is whole or the last of its pages. */
+function nextPageOf(answer: PagedAnswer): string | undefined {
+  return Object.values(answer.queries).find((query) => query.sync?.page !== undefined)?.sync?.page;
+}
+
+/** Two pages of one whole answer as one: each part's rows of both, in order, and the later page's standing (its sync, its snapshot), so the last page's names where the whole answer stands. */
+function joinedPage<Answer extends PagedAnswer>(joined: Answer, page: Answer): Answer {
+  const queries = Object.fromEntries(
+    Object.entries(page.queries).map(([part, query]) => [
+      part,
+      { ...query, rows: [...(joined.queries[part]?.rows ?? []), ...(query.rows ?? [])] },
+    ]),
+  );
+
+  return { ...page, queries };
+}
+
+/**
+ * A whole answer the service sent in pages (`LIVE_POLL.PAGE`), each page
+ * asked for in turn until one names none, joined into the one answer they
+ * stand for: every part's rows of every page, and the last page's sync id
+ * and snapshot, so a reader takes the rows, and stands at that id, only
+ * once it holds them all. A page that fails fails the whole answer, so a
+ * reader never takes some pages for the whole and asks again from the
+ * start; so does one past `MOST_PAGES`.
+ */
+function pagesJoined<R>(
+  first: PagedAnswer,
+  page: (word: string) => Effect.Effect<unknown, never, R>,
+): Effect.Effect<unknown, never, R> {
+  return Effect.gen(function* () {
+    let joined = first;
+    let next = nextPageOf(first);
+
+    for (let asked = 1; next !== undefined; asked += 1) {
+      if (asked >= MOST_PAGES) return { failure: HOSTED_CALL_FAILURE.UNANSWERED };
+      const answered = yield* page(next);
+
+      if (isFailed(answered)) return answered;
+      // SAFETY: an answer that is no failure is the read's own, as the first was.
+      const paged = answered as PagedAnswer;
+      joined = joinedPage(joined, paged);
+      next = nextPageOf(paged);
+    }
+
+    return joined;
   });
 }

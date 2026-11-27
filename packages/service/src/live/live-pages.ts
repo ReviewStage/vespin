@@ -36,11 +36,10 @@ import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
 
 /**
  * The first hosted API version whose builds read a whole answer in pages
- * (`client-identity.ts`'s `HOSTED_API_VERSION`). Note that it stands above
- * every version a build sends today, because no client follows a page yet:
- * a build that takes the first page for the whole answer holds only its
- * newest parents, and the rest never come back to it. The client that
- * learns to follow pages ships at this version.
+ * (`client-identity.ts`'s `HOSTED_API_VERSION`), following each page to the
+ * last (`@repo/features/hosted-call`'s `askLiveRead`). Note that a build
+ * before it takes the first page for the whole answer, holding only its
+ * newest parents, so it is answered whole in one answer.
  */
 const PAGED_API_VERSION = 12;
 

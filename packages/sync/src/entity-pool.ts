@@ -1053,7 +1053,7 @@ function keptWhole<Row extends object, Change>(
 
     for (const key of synced.keys()) if (!next.has(key)) rows.takenAt.delete(key);
 
-    // Note that the truncate a replace writes reaches no reader as every row moving: TanStack's persistence takes it as the authoritative set, and a live query hears only the rows that moved. Once whole reads come in pages, the first page's truncate would empty a list until the last lands, so a paged read will mark its rows with its generation and sweep the older ones after its last page instead.
+    // Note that the truncate a replace writes reaches no reader as every row moving: TanStack's persistence takes it as the authoritative set, and a live query hears only the rows that moved. A whole read that comes in pages is joined into one answer before it reaches here (`@repo/features/hosted-call`'s `askLiveRead`), so its replace is still one, and no page's truncate empties a list before the last lands.
     return Effect.succeed(rows.synced.replace(next, mark));
   });
 

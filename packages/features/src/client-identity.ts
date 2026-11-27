@@ -41,9 +41,12 @@ import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
  * build from 11 on never asks for the machines a workspace owns
  * (`workspaceMachines.*`, `LIVE_READ.WORKSPACE_MACHINES`) or approves a host
  * for a workspace, so a service may stop serving those once the floor
- * reaches 11.
+ * reaches 11. A build from 12 on follows a whole answer's pages
+ * (`LIVE_POLL.PAGE`) to the last and takes them as one answer
+ * (`hosted-call.ts`'s `askLiveRead`), so a service may answer a whole answer
+ * in pages to it alone until the floor reaches 12.
  */
-export const HOSTED_API_VERSION = 11;
+export const HOSTED_API_VERSION = 12;
 
 /** The headers a client names itself in: which app and version, as `platform/version`, and the hosted API version it was built against. */
 export const CLIENT_HEADER = {

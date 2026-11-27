@@ -2675,14 +2675,14 @@ const askHeld = (
     return body;
   });
 
-/** The headers of a build that reads a whole answer in pages: an iPhone's at the first hosted API version that does. */
-const PAGED_BUILD = { [CLIENT_HEADER.CLIENT]: "ios/1.0", [CLIENT_HEADER.API_VERSION]: "12" };
-
-/** The headers of a build at the hosted API version the clients ship, none of which follows a page. */
-const SHIPPED_BUILD = {
-  [CLIENT_HEADER.CLIENT]: "desktop/1.0",
+/** The headers of a build that reads a whole answer in pages: an iPhone's at the hosted API version the clients ship. */
+const PAGED_BUILD = {
+  [CLIENT_HEADER.CLIENT]: "ios/1.0",
   [CLIENT_HEADER.API_VERSION]: String(HOSTED_API_VERSION),
 };
+
+/** The headers of a build at the last hosted API version before builds followed pages, which took a first page for the whole answer. */
+const UNPAGED_BUILD = { [CLIENT_HEADER.CLIENT]: "desktop/1.0", [CLIENT_HEADER.API_VERSION]: "11" };
 
 /** The task list asked as a build that reads pages, as `bearer`, past `sync`, or the page `page` names, its parts decoded. */
 const askTaskPage = (bearer: string, sync: string, page?: string) =>
@@ -2837,7 +2837,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
   );
 
   it.effect(
-    "a build at the hosted API version the clients ship is answered the task list whole in one answer, past a page's length",
+    "a build before builds followed pages is answered the task list whole in one answer, past a page's length",
     () =>
       Effect.gen(function* () {
         const dana = yield* openUser;
@@ -2852,7 +2852,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         );
 
         const answer = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(
-          yield* askHeld(dana, "/api/live/tasks", "", undefined, { build: SHIPPED_BUILD }),
+          yield* askHeld(dana, "/api/live/tasks", "", undefined, { build: UNPAGED_BUILD }),
         ).queries;
 
         assert.equal(answer.tasks.sync?.page, undefined);
@@ -2870,7 +2870,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         assert.ok(past !== undefined);
 
         const answer = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(
-          yield* askHeld(dana, "/api/live/tasks", past, undefined, { build: SHIPPED_BUILD }),
+          yield* askHeld(dana, "/api/live/tasks", past, undefined, { build: UNPAGED_BUILD }),
         ).queries;
 
         assert.equal(answer.tasks.sync?.past, undefined);
