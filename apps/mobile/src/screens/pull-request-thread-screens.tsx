@@ -2,7 +2,10 @@
 
 import { PULL_REQUEST_PART } from "@repo/features/agent-view";
 import type { ReviewThread } from "@repo/features/agent-wire";
+import { CODE_ROW } from "@repo/features/code-fence";
+import { DIFF_ROW } from "@repo/features/diff-hunks";
 import {
+  moreRepliesWords,
   PULL_REQUEST_READ_WORDS,
   reactionsLine,
   THREAD_ACT_WORDS,
@@ -10,12 +13,15 @@ import {
   threadLineSpan,
 } from "@repo/features/pull-request-model";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
+import { threadLines } from "@repo/features/review-thread-lines";
 import { answerFailed, landedAnswer } from "@repo/host/app-state-reads";
 import {
   AskNote,
   BAR_TITLE,
   Composer,
+  DiffExcerpt,
   EmptyState,
+  type ExcerptRow,
   GLYPH,
   GlassDock,
   githubFace,
@@ -91,6 +97,21 @@ function threadMessagesOf(
   }));
 }
 
+/** The lines a thread is on as its excerpt draws them, its own range lit, as the panel's card draws its hunk (`threadLines`); none where its hunk does not read as a diff. Note that git's note on the line above it stands as context. */
+function excerptRowsOf(thread: ReviewThread): readonly ExcerptRow[] | undefined {
+  const lines = threadLines(thread);
+
+  if (lines === undefined) return undefined;
+  const own = new Set(lines.own);
+
+  return lines.kept.map((row) => ({
+    kind:
+      row.kind === DIFF_ROW.ADDED || row.kind === DIFF_ROW.REMOVED ? row.kind : CODE_ROW.CONTEXT,
+    text: row.text,
+    lit: own.has(row),
+  }));
+}
+
 /** A field's words held while it is written, sent once by `send` as Send took them out of the field, and laid back, ahead of anything typed since, where the send did not go. */
 function useField(send: (body: string) => Promise<boolean>, busy: boolean) {
   const [words, setWords] = useState("");
@@ -139,6 +160,13 @@ export function PullRequestThreadScreen() {
     conversation === undefined ? undefined : threadById(conversation.conversation, threadId);
 
   const lines = thread === undefined ? undefined : threadLineSpan(thread);
+  const excerpt = thread === undefined ? undefined : excerptRowsOf(thread);
+  const lastComment = thread?.comments.at(-1);
+
+  const more =
+    thread === undefined || thread.more === 0 || lastComment === undefined
+      ? undefined
+      : { words: moreRepliesWords(thread.more), onPress: () => openLink(lastComment.url) };
 
   const field = useField(
     (body) => writes.write({ action: PULL_REQUEST_ACTION.REPLY_TO_THREAD, threadId, body }),
@@ -214,6 +242,8 @@ export function PullRequestThreadScreen() {
               path={path}
               title={lines === undefined ? thread.path : `${thread.path} ${lines}`}
               messages={threadMessagesOf(thread, writes)}
+              excerpt={excerpt === undefined ? undefined : <DiffExcerpt rows={excerpt} />}
+              more={more}
               repository={key.repository}
               onOpenLink={openLink}
               standing={thread.resolved ? THREAD_STATE_WORDS.RESOLVED : undefined}

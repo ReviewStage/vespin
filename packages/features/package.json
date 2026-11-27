@@ -45,6 +45,7 @@
     "./queue-edit-model": "./src/queue-edit-model.js",
     "./replay-card-model": "./src/replay-card-model.js",
     "./reply-quote": "./src/reply-quote.js",
+    "./review-thread-lines": "./src/review-thread-lines.js",
     "./skills-settings-words": "./src/skills-settings-words.js",
     "./task-move-model": "./src/task-move-model.js",
     "./time-zone-wire": "./src/time-zone-wire.js",
