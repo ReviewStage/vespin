@@ -1,0 +1,14 @@
+pinned to 955233778f
+== bundle PJjnewtask5147f base 955233778f
+  built 955233778f base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app, pin 955233778f
+iphone-light-form:  
+iphone-light-form: no shot, retry once
+iphone-light-form retry:  
+iphone-dark-form:  
+iphone-dark-form: no shot, retry once
+iphone-dark-form retry:  
