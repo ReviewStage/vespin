@@ -84,7 +84,7 @@ database="$host/accounts/$ACCOUNT/local.sqlite"
 rm -f "$database-wal" "$database-shm"
 if ((empty)); then
     # Note that a store reset leaves the stored kinds' database gone too, which the signed-in launch may have made.
-    rm -f "$database" "$host/accounts/$ACCOUNT/collections.sqlite"*
+    rm -f "$database" "$host/accounts/$ACCOUNT/collections.sqlite"* "$host/accounts/$ACCOUNT/words.sqlite"*
 else
     cp "$seed/accounts/$ACCOUNT/local.sqlite" "$database"
     # Note that a build that keeps its Inbox stored reads it from the database of stored kinds beside the local copy, which the seed keeps whole at its sync id, so the launch catches up past it.
@@ -92,6 +92,11 @@ else
     rm -f "$collections" "$collections-wal" "$collections-shm"
     cp "$seed/accounts/$ACCOUNT/collections.sqlite" "$collections"
     chmod 600 "$collections"
+    # Note that the kept messages' words stand beside them, as a phone that kept the Inbox keeps them, so its launch rebuilds none.
+    words="$host/accounts/$ACCOUNT/words.sqlite"
+    rm -f "$words" "$words-wal" "$words-shm"
+    cp "$seed/accounts/$ACCOUNT/words.sqlite" "$words"
+    chmod 600 "$words"
 fi
 rm -rf "$host/busy-account"
 cp -R "$seed/busy-account" "$host/busy-account"

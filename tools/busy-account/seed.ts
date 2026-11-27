@@ -14,6 +14,7 @@
  * It writes, under `--out`:
  * - `accounts/<account>/local.sqlite`: the local copy, the task list kept at
  *   a sync id and the Inbox to the host's 1 MB cut, as a phone keeps them;
+ * - `accounts/<account>/words.sqlite`: the words its kept messages say, as a search reads them;
  * - `accounts/<account>/collections.sqlite`: the Inbox kept on disk whole,
  *   at its sync id, as a phone whose Inbox kind is stored keeps it, so a
  *   catch-up launch reads past that id rather than whole.
@@ -34,6 +35,7 @@
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { parseArgs } from "node:util";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { AGENT_ARCHIVER, AGENT_BRIEF } from "@repo/features/agent-wire";
@@ -67,6 +69,11 @@ import { Effect, Exit, Layer, Schema, Scope } from "effect";
 import { INBOX_THREAD, placedRow } from "../../packages/host/src/inbox-collections.js";
 import { INBOX_MESSAGE, threadMessagesOf } from "../../packages/host/src/inbox-messages.js";
 import { KEPT_LIST } from "../../packages/host/src/kept-lists.js";
+import {
+  type KeptWordsDatabase,
+  keptWordsIn,
+  messageWordsOf,
+} from "../../packages/host/src/kept-words.js";
 import type { AgentRow, PlanRow } from "../../packages/host/src/task-list-rows.js";
 
 const { values: ARGS } = parseArgs({
@@ -848,6 +855,38 @@ function tasksDeltaBody(agents: readonly AgentRow[]): string {
   return JSON.stringify(body);
 }
 
+/** The words database over one `node:sqlite` connection, as the phone's driver opens `words.sqlite` (`kept-words.ts`). */
+function nodeWordsDatabase(file: string): KeptWordsDatabase {
+  const database = new DatabaseSync(file);
+
+  return {
+    exec: async (sql) => {
+      database.exec(sql);
+    },
+    run: async (sql, params) => {
+      database.prepare(sql).run(...params);
+    },
+    all: async (sql, params) => database.prepare(sql).all(...params),
+    close: async () => {
+      database.close();
+    },
+  };
+}
+
+/**
+ * The words every kept message says (`words.sqlite`, beside the stored
+ * kinds), written through the host's own writer, as a phone that kept the
+ * Inbox whole keeps them, so a launch's search finds its messages before
+ * any answer and opens no rebuild of them.
+ */
+const keepWords = (file: string, inbox: readonly SeededThread[]) =>
+  Effect.promise(async () => {
+    const database = nodeWordsDatabase(file);
+    const words = await keptWordsIn(database);
+    await words.replaced(inbox.flatMap(({ item }) => messageWordsOf(item)));
+    await database.close();
+  });
+
 /**
  * The account's Inbox kept whole in its database of stored kinds
  * (`collections.sqlite`), at the sync id the stub answers the Inbox past, as
@@ -1014,6 +1053,7 @@ const seed = Effect.gen(function* () {
   );
 
   yield* keepInboxWhole(`${root}/accounts/${ARGS.account}/collections.sqlite`, inbox);
+  yield* keepWords(`${root}/accounts/${ARGS.account}/words.sqlite`, inbox);
 
   const answers = `${root}/busy-account`;
   mkdirSync(`${answers}/task-rows`, { recursive: true });
