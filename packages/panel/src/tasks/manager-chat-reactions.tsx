@@ -21,6 +21,7 @@
  * and where it did not, the press goes and a toast says so.
  */
 
+import type { EmojiGroup } from "@repo/features/emoji-model";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   MANAGER_CHAT_REACTION,
@@ -57,7 +58,6 @@ import {
   useEmojiGroups,
 } from "@repo/ui";
 import { SmilePlusIcon } from "@repo/ui/icons";
-import type { EmojiGroup } from "@repo/ui/section-icon-model";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, type RefObject, useCallback, useRef, useState } from "react";
@@ -78,7 +78,9 @@ export type ChatReact = (press: ManagerChatReactionPress) => void;
 const slackEmojiQuery = queryOptions({
   queryKey: [QUERY_ROOT.SLACK_EMOJI],
   queryFn: () =>
-    import("@repo/features/slack-emoji-data").then((module) => slackEmojiIndex(module.SLACK_EMOJI)),
+    import("@repo/features/slack-emoji-names").then((module) =>
+      slackEmojiIndex(module.SLACK_EMOJI_NAMES),
+    ),
   staleTime: Number.POSITIVE_INFINITY,
   gcTime: Number.POSITIVE_INFINITY,
   retry: false,
@@ -183,6 +185,9 @@ const QUICK: EmojiGroup = {
   emojis: OFFERED.map((kind) => ({
     emoji: MANAGER_CHAT_REACTION_FACES[kind].emoji,
     name: MANAGER_CHAT_REACTION_FACES[kind].name,
+    // Note that a lead is drawn only while nothing is searched, so it carries nothing a search reads.
+    terms: [],
+    words: [],
   })),
 };
 

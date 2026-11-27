@@ -9,7 +9,7 @@
 
 import { reactionOfName } from "@repo/features/manager-chat-live";
 import { type SlackEmoji, type SlackEmojiIndex, slackEmojiIndex } from "@repo/features/slack-emoji";
-import { SLACK_EMOJI } from "@repo/features/slack-emoji-data";
+import { SLACK_EMOJI_NAMES } from "@repo/features/slack-emoji-names";
 
 /** A name's colons, which Slack writes it between. */
 const COLONS = /^:|:$/gu;
@@ -19,7 +19,7 @@ let index: SlackEmojiIndex | undefined;
 
 /** The reaction `name` is kept as, its colons and ends trimmed; none where Slack gives no emoji the name. */
 export function reactionNamed(name: string): SlackEmoji | undefined {
-  index ??= slackEmojiIndex(SLACK_EMOJI);
+  index ??= slackEmojiIndex(SLACK_EMOJI_NAMES);
 
   return reactionOfName(index, name.trim().replace(COLONS, ""));
 }

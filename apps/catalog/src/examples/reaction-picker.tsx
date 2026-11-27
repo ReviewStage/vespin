@@ -1,5 +1,6 @@
+import { EMOJI_DATA } from "@repo/features/emoji-data";
+import { type EmojiGroup, emojiGroups } from "@repo/features/emoji-model";
 import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
-import { SLACK_EMOJI } from "@repo/features/slack-emoji-data";
 import {
   BUTTON_SIZE,
   ChannelMessage,
@@ -16,7 +17,6 @@ import {
 } from "@repo/ui";
 import { SmilePlusIcon } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
-import { type EmojiGroup, emojiGroups } from "@repo/ui/section-icon-model";
 import { type RefObject, useRef, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -32,14 +32,14 @@ import { CatalogSection } from "../section";
 const SENT_AT = new Date(2026, 10, 26, 10, 42).getTime();
 
 /** Every emoji, from the app's one table of them, as the picker loads them. */
-const EMOJI = emojiGroups(SLACK_EMOJI);
+const EMOJI = emojiGroups(EMOJI_DATA);
 
 /** 👍 and 👎, leading the picker as they lead a message's actions. */
 const QUICK: EmojiGroup = {
   name: "Quick reactions",
   emojis: [
-    { emoji: "👍", name: "thumbs up" },
-    { emoji: "👎", name: "thumbs down" },
+    { emoji: "👍", name: "thumbs up", terms: [], words: [] },
+    { emoji: "👎", name: "thumbs down", terms: [], words: [] },
   ],
 };
 
