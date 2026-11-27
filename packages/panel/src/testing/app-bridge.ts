@@ -40,7 +40,7 @@ import {
 } from "@repo/host/contract";
 import type { WireBoundaryInput } from "@repo/wire";
 import { installActPortClient, installAppBridge } from "../app-bridge.js";
-import { appStateQuery, drawAhead } from "../use-app-state.js";
+import { drawAhead } from "../use-app-state.js";
 import { testQueryClientNow } from "./copy-feedback.js";
 
 let answering: Partial<AppBridge> = {};
@@ -228,18 +228,17 @@ const NEVER_SETTLED = new Promise<never>(() => undefined);
  * (`@repo/host`'s `viewChoiceWritten`): over the test's document and over
  * every document the window is handed after it (`drawAhead`), so a later
  * push or a window drawn anew still reads it, as the host goes on holding
- * it. A window with no account signed in draws nothing, as the host keeps
- * nothing for it.
+ * it, under the account each document names. A document with no account
+ * signed in draws nothing, as the host keeps nothing for it.
  */
 export function drawnViewChoice(write: ViewChoiceWriteParams): Promise<ViewChoiceWrittenView> {
-  const client = testQueryClientNow();
-  const document = client.getQueryData<AppStateSnapshot>(appStateQuery.queryKey);
-  const accountId = document === undefined ? undefined : signedInAccountId(document.account);
-
-  if (accountId === undefined) return Promise.resolve({});
   const { id, key, workspaceId, value } = write;
 
+  // Note that the choice is drawn under each document's own account as it is drawn, since a test may hand the window's account, and its id, after the write.
   const drawn = (snapshot: AppStateSnapshot): AppStateSnapshot => {
+    const accountId = signedInAccountId(snapshot.account);
+
+    if (accountId === undefined) return snapshot;
     const held = snapshot[LIVE_READ.VIEW_CHOICES][accountId]?.rows ?? [];
     const others = held.filter((row) => row.key !== key || row.workspaceId !== workspaceId);
     const rows = value === null ? others : [...others, { id, key, workspaceId, value }];
@@ -250,7 +249,7 @@ export function drawnViewChoice(write: ViewChoiceWriteParams): Promise<ViewChoic
     };
   };
 
-  drawAhead(client, drawn, NEVER_SETTLED);
+  drawAhead(testQueryClientNow(), drawn, NEVER_SETTLED);
 
   return Promise.resolve({});
 }
@@ -472,5 +471,6 @@ export function fakeActs(
     });
   }
 
-  fakeActPort(procedures);
+  // Note that a view choice is drawn as the host draws it, as `fakeActPort` draws one, rather than asked of the switch, since a surface reads its own choice back; a test that answers it otherwise hands it to `fakeActPort` after.
+  fakeActPort({ ...procedures, [ACCOUNT_ASK_ACT_KIND.VIEW_CHOICE_WRITE]: drawnViewChoice });
 }
