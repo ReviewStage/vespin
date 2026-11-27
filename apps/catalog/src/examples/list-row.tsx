@@ -8,6 +8,7 @@ import {
   IconButton,
   Inline,
   LIST_DENSITY,
+  LIST_HEADS_ACTS,
   LIST_ROW_ACTIONS,
   LIST_ROW_CURRENT,
   LIST_ROW_CURRENT_LOOK,
@@ -18,6 +19,8 @@ import {
   LIST_VARIANT,
   List,
   type ListDensity,
+  ListHead,
+  ListHeads,
   ListRow,
   type MenuEntry,
   MoreButton,
@@ -101,6 +104,35 @@ function Automations(): React.JSX.Element {
         />
       ))}
     </List>
+  );
+}
+
+/** The same rows under heads naming their columns, each head standing over its column with room kept for the switch. */
+function HeadedAutomations(): React.JSX.Element {
+  const [on, setOn] = useState<Record<string, boolean>>({ sweep: true, review: false });
+
+  return (
+    <>
+      <ListHeads title="Name" acts={LIST_HEADS_ACTS.SWITCH} meta={<ListHead>Next run</ListHead>} />
+      <List label="Automations">
+        {AUTOMATIONS.map((automation) => (
+          <ListRow
+            key={automation.id}
+            title={automation.name}
+            description={automation.trigger}
+            meta={on[automation.id] === true ? automation.next : "Off"}
+            onPress={() => undefined}
+            actions={
+              <Switch
+                checked={on[automation.id] === true}
+                label={`Turn on ${automation.name}`}
+                onChange={(checked) => setOn((all) => ({ ...all, [automation.id]: checked }))}
+              />
+            }
+          />
+        ))}
+      </List>
+    </>
   );
 }
 
@@ -288,6 +320,11 @@ function ListRows(): React.JSX.Element {
       <CatalogSection id="list-row-rows" title="Rows that open, with their acts">
         <div className="catalog-column">
           <Members />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="list-row-heads" title="Heads over the rows' columns">
+        <div className="catalog-column">
+          <HeadedAutomations />
         </div>
       </CatalogSection>
       <CatalogSection id="list-row-foot" title="A line under the description">
