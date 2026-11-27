@@ -8,7 +8,8 @@
  * tasks with none by null; and the one list no heading names, which My
  * tasks heads, the sidebar's Tasks head. A parent's sub-tasks stand open
  * by the parent's id wherever it stands, as the sidebar opens them, the
- * latest `MAX_OPENED_TASKS` kept (`openedTasksToggled`). The groups only
+ * latest `MAX_OPENED_TASKS` kept (`openedTasksBounded`). A press on a list
+ * made before the account's list is read waits for it (`useFoldList`). The groups only
  * the Tasks page's groupings draw (a status, a priority, an assignee) have
  * no fold on the sidebar, so the phone holds theirs in memory alone.
  */
@@ -18,14 +19,15 @@ import {
   TASK_TREE_GROUP,
   type TaskTreeGroup,
 } from "@repo/features/task-tree-model";
+import { type FoldPress, foldsPressed, foldsToWrite } from "@repo/features/view-choice-folds";
 import {
-  openedTasksToggled,
+  openedTasksBounded,
   VIEW_CHOICE_KEY,
   type ViewChoiceKey,
   type ViewChoiceValue,
 } from "@repo/features/view-choice-wire";
 import { Option } from "effect";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useViewChoice } from "../view-choices.js";
 
 /** What a fold that did not keep says in the failure notice. */
@@ -33,6 +35,20 @@ const FOLD_REFUSED = "Couldn't keep that fold.";
 
 /** No group folded, and no parent opened. */
 const NONE: readonly never[] = [];
+
+/** The keys the account keeps a list of sidebar folds under, each by its ids. */
+type ListFoldKey =
+  | typeof VIEW_CHOICE_KEY.SIDEBAR_FOLDED_SECTIONS
+  | typeof VIEW_CHOICE_KEY.SIDEBAR_FOLDED_GROUPS
+  | typeof VIEW_CHOICE_KEY.SIDEBAR_OPENED_TASKS;
+
+/** What a list of folds keeps each fold by: a section's or a task's id, or a repository's full name, null for none. */
+type FoldId<Key extends ListFoldKey> = ViewChoiceValue<Key>[number];
+
+/** A list kept as it is, its key bounding nothing. */
+function unbounded<Id>(ids: readonly Id[]): readonly Id[] {
+  return ids;
+}
 
 /** What the tree holds of its own reading: the groups folded shut, Managers among them, and the parents opened. */
 export interface TreeHold {
@@ -55,15 +71,44 @@ function useFold<Key extends ViewChoiceKey>(
   return [Option.getOrElse(value, () => initial), choose];
 }
 
-/** `ids` with `id` in it where `folded`, and out of it where not. */
-function foldedIn<Id extends string | null>(
-  ids: readonly Id[],
-  id: Id,
-  folded: boolean,
-): readonly Id[] {
-  const without = ids.filter((each) => each !== id);
+/** One of the account's lists of sidebar folds, and the press that folds one id in or out of it. */
+type FoldList<Id> = readonly [readonly Id[], (id: Id, on: boolean) => void];
 
-  return folded ? [...without, id] : without;
+/**
+ * One of the account's lists of sidebar folds (`key`), and the press that
+ * folds one id in or out. Note that a press made before the account's list
+ * is read waits for it, drawn meanwhile, and is then laid over it
+ * (`foldsToWrite`), since the list is kept whole and one written then would
+ * stand over every fold another device kept; `bounded` holds what is
+ * written within the key's bound.
+ */
+function useFoldList<Key extends ListFoldKey>(
+  key: Key,
+  bounded: (ids: readonly FoldId<Key>[]) => readonly FoldId<Key>[],
+): FoldList<FoldId<Key>> {
+  const { value, answered, choose } = useViewChoice(key, null, FOLD_REFUSED);
+  const [waiting, setWaiting] = useState<readonly FoldPress<FoldId<Key>>[]>(NONE);
+  // SAFETY: each list key's value is a list of its ids (`ListFoldKey`).
+  const saved = Option.getOrElse(value, () => NONE) as readonly FoldId<Key>[];
+  const drawn = useMemo(() => foldsPressed(saved, waiting), [saved, waiting]);
+
+  // Note that the presses that waited are laid over the account's list as it is first read, and written once.
+  useEffect(() => {
+    const written = foldsToWrite({ answered, saved }, waiting);
+
+    if (written === undefined) return;
+    setWaiting(NONE);
+    choose(bounded(written));
+  }, [answered, saved, waiting, choose, bounded]);
+
+  const press = (id: FoldId<Key>, on: boolean) => {
+    const written = foldsToWrite({ answered, saved }, [{ id, on }]);
+
+    if (written === undefined) setWaiting((was) => [...was, { id, on }]);
+    else choose(bounded(written));
+  };
+
+  return [drawn, press];
 }
 
 /** The repository a group folds by, as the sidebar keeps it: its full name, or null for the tasks with none. */
@@ -85,9 +130,9 @@ export function useTreeHold(): TreeHold {
   const [following, keepFollowing] = useFold(KEY.SIDEBAR_FOLLOWING_FOLDED, false);
   const [tasks, keepTasks] = useFold(KEY.SIDEBAR_TASKS_FOLDED, false);
   const [managers, keepManagers] = useFold(KEY.SIDEBAR_MANAGERS_FOLDED, false);
-  const [sections, keepSections] = useFold(KEY.SIDEBAR_FOLDED_SECTIONS, NONE);
-  const [groups, keepGroups] = useFold(KEY.SIDEBAR_FOLDED_GROUPS, NONE);
-  const [opened, keepOpened] = useFold(KEY.SIDEBAR_OPENED_TASKS, NONE);
+  const [sections, foldSection] = useFoldList(KEY.SIDEBAR_FOLDED_SECTIONS, unbounded);
+  const [groups, foldGroup] = useFoldList(KEY.SIDEBAR_FOLDED_GROUPS, unbounded);
+  const [opened, openTask] = useFoldList(KEY.SIDEBAR_OPENED_TASKS, openedTasksBounded);
   const [inMemory, setInMemory] = useState<readonly string[]>(NONE);
   const openedSet = useMemo(() => new Set(opened), [opened]);
 
@@ -123,13 +168,13 @@ export function useTreeHold(): TreeHold {
         keepFollowing(shut);
         break;
       case TASK_TREE_GROUP.SECTION:
-        keepSections(foldedIn(sections, group.key, shut));
+        foldSection(group.key, shut);
         break;
       case TASK_TREE_GROUP.REPOSITORY:
-        keepGroups(foldedIn(groups, repositoryOf(group), shut));
+        foldGroup(repositoryOf(group), shut);
         break;
       default:
-        setInMemory((was) => foldedIn(was, group.key, shut));
+        setInMemory((was) => foldsPressed(was, [{ id: group.key, on: shut }]));
     }
   };
 
@@ -139,6 +184,6 @@ export function useTreeHold(): TreeHold {
     managersFolded: managers,
     setManagersFolded: keepManagers,
     opened: openedSet,
-    toggleParent: (taskId) => keepOpened(openedTasksToggled(opened, taskId)),
+    toggleParent: (taskId) => openTask(taskId, !openedSet.has(taskId)),
   };
 }
