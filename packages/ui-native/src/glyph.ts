@@ -336,6 +336,45 @@ export const GLYPH = {
   PRODUCT: productMark(PRODUCT_MARK_SYMBOL),
 } as const;
 
+/**
+ * The glyph each kind of an agent's tool call leads its transcript line
+ * with, where the call is an act: the panel's own Lucide glyph, as the
+ * desktop's transcript draws it (`transcript-blocks.tsx`'s `CALL_ICON`).
+ * Note that it is its own table rather than `GLYPH`'s acts, because an
+ * agent's record of its work is ours while a menu's act is the system's
+ * (the developer, Nov 27, 2026), so turning a menu's act to an SF Symbol
+ * never turns a transcript line with it.
+ */
+export const CALL_GLYPH = {
+  SEARCH: lucide(LUCIDE_SYMBOL.SEARCH),
+  GLOBE: lucide(LUCIDE_SYMBOL.GLOBE),
+  STOP: lucide(LUCIDE_SYMBOL.CIRCLE_STOP),
+  ARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE),
+  UNARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE_RESTORE),
+  EDIT: lucide(LUCIDE_SYMBOL.PENCIL_LINE),
+  WRITE: lucide(LUCIDE_SYMBOL.FILE_PEN),
+  ADD_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_PLUS),
+  REMOVE_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_MINUS),
+  MOVE: lucide(LUCIDE_SYMBOL.FOLDER_INPUT),
+  LINK: lucide(LUCIDE_SYMBOL.LINK),
+  UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),
+  CHECK: lucide(LUCIDE_SYMBOL.CHECK),
+  RESOLVED: lucide(LUCIDE_SYMBOL.CIRCLE_CHECK),
+  RUN: lucide(LUCIDE_SYMBOL.PLAY),
+  WAIT: lucide(LUCIDE_SYMBOL.HOURGLASS),
+  SLEEP: lucide(LUCIDE_SYMBOL.TIMER),
+  WAKE: lucide(LUCIDE_SYMBOL.ALARM_CLOCK_CHECK),
+  WAKE_OFF: lucide(LUCIDE_SYMBOL.ALARM_CLOCK_OFF),
+  SUGGEST: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
+  MESSAGE: lucide(LUCIDE_SYMBOL.SEND),
+  READ: lucide(LUCIDE_SYMBOL.SCROLL_TEXT),
+  LIST: lucide(LUCIDE_SYMBOL.LAYOUT_LIST),
+  TODOS: lucide(LUCIDE_SYMBOL.LIST_CHECKS),
+  NEW_FILE: lucide(LUCIDE_SYMBOL.FILE_PLUS),
+  NEW_ISSUE: lucide(LUCIDE_SYMBOL.CIRCLE_PLUS),
+  TOOL: lucide(LUCIDE_SYMBOL.WRENCH),
+} as const;
+
 /** Each glyph the panel's section icon picker suggests (`TASK_SECTION_GLYPH`), as its Lucide glyph, so a section wears on the phone the icon its member chose. */
 const SECTION_GLYPH: Readonly<Record<TaskSectionGlyph, Glyph>> = {
   [TASK_SECTION_GLYPH.FOLDER]: lucide(LUCIDE_SYMBOL.FOLDER),
