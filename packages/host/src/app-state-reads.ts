@@ -33,7 +33,7 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import type { TaskSummary } from "@repo/features/task-wire";
+import type { TaskRunsOnRequest, TaskSummary } from "@repo/features/task-wire";
 import type { TaskListParts } from "@repo/features/tasks-view";
 import { HOST_LIVE, TASKS_READ } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
@@ -978,6 +978,15 @@ export function selectAgentDefault(state: AppStateSnapshot): ModelChoice | undef
   const stored = state[LIVE_READ.ACCOUNT_PREFERENCES][accountId]?.rows?.agent;
 
   return agentDefaultOf(stored, state[LIVE_READ.MODELS][accountId] ?? {});
+}
+
+/** Where the account's last Start chose to run an agent, which New task's Runs on starts on (`runs-on-pick.ts`), as a `select`; none before the preferences are read, or where no Start named a place. */
+export function selectRunsOnPick(state: AppStateSnapshot): TaskRunsOnRequest | undefined {
+  const accountId = signedInAccountId(state.account);
+
+  return accountId === undefined
+    ? undefined
+    : state[LIVE_READ.ACCOUNT_PREFERENCES][accountId]?.rows?.runsOn;
 }
 
 /** The repositories a workspace's GitHub reaches, or every workspace's under `EVERY_WORKSPACE`, as the host holds their read (`ACT_KIND.TASKS_REPOSITORIES_FOLLOW`), as a `select`; none before it is read. */
