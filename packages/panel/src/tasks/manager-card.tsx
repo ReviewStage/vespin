@@ -18,9 +18,10 @@
  * Everything is read from what the window already holds: the task list's
  * agents, followed live, the account's Inbox feed, which holds the threads
  * of every agent on no task, and the Manager's own read by its id, which
- * its page already holds and which names every repository it works in,
- * read once, since those are fixed as it is made. Until that read answers,
- * the card names the repository its row carries. Its latest step is no part
+ * its page and its Settings already hold and which names every repository
+ * it works in, taken again as the card hangs, as Settings takes it, so a
+ * change to them reads current. Until that read answers, the card names
+ * what it last answered, or the repository its row carries. Its latest step is no part
  * of it: the window holds a Manager's transcript only while its page is open.
  */
 
@@ -105,11 +106,8 @@ function useManagerRepositories(agentId: string): readonly string[] {
     (row) => row?.repository,
   );
 
-  // Note that a Manager's repositories are fixed as it is made, so its read is never taken again once it answered.
-  const answer = useQuery({
-    ...agentPageQueryOptions(agentId),
-    staleTime: Number.POSITIVE_INFINITY,
-  }).data;
+  // Note that the read is taken as its Settings takes it, again as each card hangs, since a Manager's repositories may change after it is made.
+  const answer = useQuery(agentPageQueryOptions(agentId)).data;
 
   const page = answer === undefined || "failure" in answer ? undefined : answer.agent;
 
