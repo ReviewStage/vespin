@@ -1,0 +1,56 @@
+# agent-notices.yaml -- BEFORE (main plus the fixture, no drawing change): the turns that hold the quiet notices an agent's transcript keeps between its stretches of work, as the panel draws them: a new session and a connection still waited on at its newest turn; a goal judged not met as a card that opens on its reason, the agent's move to a Mac, and the goal paused, resumed, and met as trails; and the conversation compacted and a connection lost and restored in its first turn.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+#
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the agent is still at work, whose mark never stops moving. Note
+# too that an iPad stands in landscape, where the transcript stands in the
+# detail column beside the list, so it is scrolled well inside that column
+# (`BESIDE`), and that the window is turned back upright however the flow
+# ends, because a run left in landscape fails every flow after it.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose notices agent holds one of each
+# notice (`@repo/host/fixture-notices-agent`), with the Goals experiment on,
+# and opened on its page by `-agent <id>`; nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 7cce5db7-d11b-47b2-8dea-066b80cb21f8
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+# Note that the launch waits up to half a minute for its first words, as
+# `agent.yaml`'s does.
+- extendedWaitUntil:
+    visible: "Do the same for the weekly run."
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-notices-newest
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Matching by date first brings the run to 8 minutes."
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-notices-goal
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Matching takes most of the run.*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-notices-first-turn
