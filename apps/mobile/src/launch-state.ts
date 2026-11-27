@@ -1,5 +1,11 @@
-// launch-state.ts -- whether this launch began in the background or has spent any time there since, when it last came to the front since, and when it first came active, watched from the bundle's first run, before expo-router loads the screens.
+// launch-state.ts -- whether this launch began in the background or has spent any time there since, when it last came to the front since, when it first came active, and the app's foreground clock, watched from the bundle's first run, before expo-router loads the screens.
 
+import {
+  type ForegroundClock,
+  type ForegroundMillis,
+  foregroundAfter,
+  foregroundClockOver,
+} from "@repo/runtime/effect";
 import { AppState } from "react-native";
 import { sinceLaunch } from "./launch-phases.js";
 
@@ -31,17 +37,41 @@ let frontAt: number | undefined;
  */
 let activeAt = AppState.currentState === "active" ? sinceLaunch() : undefined;
 
+/**
+ * The app's foreground clock (`@repo/runtime`'s `ForegroundClock`), which
+ * every deadline of the host and the screens is measured on: the runtime's
+ * monotonic time, which runs on while iOS keeps the app suspended in the
+ * background, stopped from its going there to its coming active again.
+ */
+const foreground = foregroundClockOver(() => performance.now(), !beganAway);
+
+/** How long the launch had stood in front before the bundle first ran (`sinceLaunch`): none where it began away. */
+const frontBeforeBundle = beganAway ? 0 : (sinceLaunch() ?? 0);
+
+/** The foreground clock as the bundle first ran. */
+const bundleRanAt = foreground.now();
+
 AppState.addEventListener("change", (state) => {
   if (state === "active") activeAt ??= sinceLaunch();
 
   if (state === "background") {
     leftFront = true;
     awayNow = true;
+    foreground.away();
   } else if (state === "active" && awayNow) {
     awayNow = false;
     frontAt = sinceLaunch();
+    foreground.back();
   }
 });
+
+/** The app's foreground clock, which stands still while the app is in the background. */
+export const foregroundClock: ForegroundClock = foreground;
+
+/** The instant on the foreground clock `ms` of the launch's time in front after its start, or the bundle's first run where that was later. */
+export function launchForegroundAfter(ms: number): ForegroundMillis {
+  return foregroundAfter(bundleRanAt, Math.max(0, ms - frontBeforeBundle));
+}
 
 /** Whether this launch began in the background, the system having woken the app with nothing on screen, as a push does. */
 export function launchBeganAway(): boolean {

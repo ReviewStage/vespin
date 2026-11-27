@@ -5,9 +5,10 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import type { AppBridge } from "@repo/host/bridge";
 import type { ActPortClient } from "@repo/host/contract";
 import type { InboxRowsSource } from "@repo/host/inbox-rows";
+import { windowRows } from "@repo/host/read-window";
 import type { TaskListCollections } from "@repo/host/task-list-following";
 import { listenToRow } from "@repo/host/task-list-row-readers";
-import { type Collection, useLiveQuery } from "@tanstack/react-db";
+import type { Collection } from "@tanstack/react-db";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Effect } from "effect";
 import Constants from "expo-constants";
@@ -41,6 +42,7 @@ import {
   launchFixtureProfile,
   launchInboxOff,
   launchMachineAsk,
+  launchMediaOrigin,
   launchRefusesWrites,
   launchSetupOwed,
   launchStubsAuthServer,
@@ -54,6 +56,7 @@ import {
 } from "./mobile-runtime.js";
 import { followQueryLifecycle } from "./query-lifecycle.js";
 import { standStubAuthServer, stubAuthSession } from "./stub-auth-server.js";
+import { useWindow } from "./use-window.js";
 
 /** The version a build that names none reports, which no shipped build is. */
 const UNVERSIONED = "0.0.0";
@@ -229,9 +232,6 @@ export function useTaskListRowsOf<Row extends object>(
   });
 }
 
-/** No row: what a list read while it is not asked for answers. */
-const NOT_READ: readonly never[] = [];
-
 /**
  * Whether a place reads the task list whole: once the tab it stands on has
  * come in front, and from then on. Note that every tab mounts at launch, so
@@ -265,7 +265,7 @@ export function useTaskListRows<Row extends object>(
   collection: Collection<Row, string>,
   reading = true,
 ): readonly Row[] {
-  return useLiveQuery((q) => (reading ? q.from({ row: collection }) : undefined)).data ?? NOT_READ;
+  return windowRows(useWindow((q) => (reading ? q.from({ row: collection }) : undefined)));
 }
 
 /**
@@ -274,15 +274,15 @@ export function useTaskListRows<Row extends object>(
 export function useListedTasks(reading = true): readonly TaskSummary[] {
   const { tasks } = useTaskListCollections();
 
-  return (
-    useLiveQuery((q) =>
+  return windowRows(
+    useWindow((q) =>
       reading
         ? q
             .from({ task: tasks })
             .orderBy(({ task }) => task.createdAt, "desc")
             .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" })
         : undefined,
-    ).data ?? NOT_READ
+    ),
   );
 }
 
@@ -292,15 +292,15 @@ export function useListedTasks(reading = true): readonly TaskSummary[] {
 export function useListedAgents(reading = true): readonly ListedAgent[] {
   const { agents } = useTaskListCollections();
 
-  return (
-    useLiveQuery((q) =>
+  return windowRows(
+    useWindow((q) =>
       reading
         ? q
             .from({ agent: agents })
             .orderBy(({ agent }) => agent.createdAt)
             .orderBy(({ agent }) => agent.id, { stringSort: "lexical" })
         : undefined,
-    ).data ?? NOT_READ
+    ),
   );
 }
 
@@ -321,6 +321,7 @@ function launchOptions(): MobileHostStartOptions {
     fixtureSetupOwed: launchSetupOwed(),
     fixtureInboxOff: launchInboxOff(),
     fixtureRefusesWrites: launchRefusesWrites(),
+    fixtureMediaOrigin: launchMediaOrigin(),
     appVersion: APP_VERSION,
     stateRoot: hostStateRoot(),
   };

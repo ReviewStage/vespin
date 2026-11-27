@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import "@repo/panel/testing/match-media";
-import "@repo/panel/testing/resize-observer";
+import "@repo/ui/testing/resize-observer";
 import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import { type AppBridge, bridgeEntries } from "@repo/host/bridge";
 import { initialAppState } from "@repo/host/client";

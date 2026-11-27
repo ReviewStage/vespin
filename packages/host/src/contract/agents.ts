@@ -80,6 +80,8 @@ import {
   machineAskAnsweredViewSchema,
   machineAskAnswerParamsSchema,
   machineChangeParamsSchema,
+  managerChatEditAnswerViewSchema,
+  managerChatEditParamsSchema,
   managerChatOlderParamsSchema,
   managerChatReactAnswerViewSchema,
   managerChatReactParamsSchema,
@@ -93,7 +95,6 @@ import {
 } from "@repo/features/agent-view";
 import {
   HOST_PAIRING_CALL_FAILURE,
-  hostPairingApproveParamsSchema,
   hostPairingApproveViewSchema,
   hostPairingDenyViewSchema,
   hostPairingParamsSchema,
@@ -225,7 +226,7 @@ export const AGENT_ACTS = declaredActs({
     unanswered: PAIRING_UNANSWERED,
   }),
   HOSTS_PAIRING_APPROVE: hostAct({
-    input: hostPairingApproveParamsSchema,
+    input: hostPairingParamsSchema,
     output: hostPairingApproveViewSchema,
     refusal: "Could not connect the host on this system.",
     panelOnly: true,
@@ -328,6 +329,14 @@ export const AGENT_ACTS = declaredActs({
     input: managerChatReactParamsSchema,
     output: managerChatReactAnswerViewSchema,
     refusal: "Could not react to the message on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_CHAT_EDIT: hostAct({
+    input: managerChatEditParamsSchema,
+    output: managerChatEditAnswerViewSchema,
+    refusal: "Could not edit the message on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,

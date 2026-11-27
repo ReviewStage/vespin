@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import { useStageRoom } from "./stage-room.js";
-import { relayout } from "./testing/resize-observer.js";
 
 /**
  * stage-room.test.ts -- what the panel's root reads off a stage that has not

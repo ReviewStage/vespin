@@ -70,7 +70,7 @@ import { type TabMove, useTabDrag } from "./use-tab-drag.js";
  * tab's hint, or in the card a tab with more to say hangs in its hint's
  * place. Past holding every tab, the strip scrolls along with no bar drawn,
  * a wheel turned up and down running it sideways, with the chosen tab pinned
- * at whichever edge it would pass and a fade where tabs go on. All of that
+ * at whichever edge it would pass. All of that
  * is the stylesheet's (tabs.css): the strip measures nothing, and asks only
  * for its tabs' count, as `--ui-tab-count`, so it may ask for room for
  * every tab at its widest. A narrow tab other than the chosen one stands as
@@ -133,7 +133,7 @@ const WHEEL_LINE = 16;
 /** What an unread tab says in its hint and to a reader beyond its label. */
 const UNREAD_TAB_NOTE = "New result";
 
-/** The ground a strip stands on, which its fades and its pinned tab paint over the tabs passing beneath. */
+/** The ground a strip stands on, which its pinned tab paints over the tabs passing beneath it. */
 export const TABS_GROUND = {
   /** A side panel's well. */
   WELL: "well",

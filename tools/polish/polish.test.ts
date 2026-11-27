@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { flattenPng } from "./png.ts";
 import { READY_SCRIPT } from "./ready.ts";
 import { CLIENT, type Client, pressedOn, SCENES, STEP } from "./scenes.ts";
-import { PIN_SCROLL_FADES_SCRIPT, scrollScript } from "./scroll.ts";
+import { scrollScript } from "./scroll.ts";
 import { sizedScript } from "./viewport.ts";
 
 // jsdom lays nothing out, so a box is given the rectangle it would stand in.
@@ -78,36 +78,6 @@ describe("the scroll script", () => {
     const html = '<div data-box role="region"></div>';
 
     expect(scrolledWith(html, 900, "log", -600)).toEqual({ found: false, tops: [900], wheels: [] });
-  });
-});
-
-describe("the scroll fade pin", () => {
-  it("holds the depths a faded box rests at as important lengths, and leaves a box with no fade be", () => {
-    const dom = new JSDOM('<body><div id="faded"></div><div id="plain"></div></body>', {
-      runScripts: "outside-only",
-    });
-
-    const { document } = dom.window;
-
-    // jsdom runs no scroll timeline, so the box is given the depths one would have eased it to.
-    const depths: ReadonlyMap<string, string> = new Map([
-      ["--ui-scroll-area-fade-start", "0px"],
-      ["--ui-scroll-area-fade-end", "24px"],
-    ]);
-
-    // SAFETY: the scripts read only these few fields of a computed style.
-    dom.window.getComputedStyle = ((box: Element) => ({
-      animationName:
-        box.id === "faded" ? "ui-scroll-area-fade-start, ui-scroll-area-fade-end" : "none",
-      getPropertyValue: (name: string) => depths.get(name) ?? "",
-    })) as typeof dom.window.getComputedStyle;
-
-    dom.window.eval(PIN_SCROLL_FADES_SCRIPT);
-
-    const faded = document.getElementById("faded")?.style;
-    expect(faded?.getPropertyValue("--ui-scroll-area-fade-end")).toBe("24px");
-    expect(faded?.getPropertyPriority("--ui-scroll-area-fade-end")).toBe("important");
-    expect(document.getElementById("plain")?.style.length).toBe(0);
   });
 });
 

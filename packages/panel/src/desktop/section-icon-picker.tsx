@@ -7,6 +7,12 @@ import {
   type TaskSectionIconColor,
   taskSectionIconSchema,
 } from "@repo/features/task-section-wire";
+import {
+  REMOVE_SECTION_ICON,
+  SECTION_ICON_COLOR_WORDS,
+  sectionGlyphWords,
+  textInkWords,
+} from "@repo/features/task-sections-model";
 import { noMatchWords, readingWords } from "@repo/features/words";
 import {
   BUTTON_SIZE,
@@ -34,7 +40,6 @@ import {
   findGlyphs,
   glyphChoices,
   glyphKey,
-  glyphLabel,
   isSuggestedGlyph,
   recentIcons,
 } from "@repo/ui/section-icon-model";
@@ -135,18 +140,6 @@ const COLOR_INK = {
 function inkOf(color: TaskSectionIconColor | undefined): string {
   return color === undefined ? "text-foreground" : COLOR_INK[color];
 }
-
-/** What each color of the palette is called. */
-const COLOR_LABEL = {
-  [TASK_SECTION_ICON_COLOR.RED]: "Red",
-  [TASK_SECTION_ICON_COLOR.ORANGE]: "Orange",
-  [TASK_SECTION_ICON_COLOR.YELLOW]: "Yellow",
-  [TASK_SECTION_ICON_COLOR.GREEN]: "Green",
-  [TASK_SECTION_ICON_COLOR.TEAL]: "Teal",
-  [TASK_SECTION_ICON_COLOR.BLUE]: "Blue",
-  [TASK_SECTION_ICON_COLOR.PURPLE]: "Purple",
-  [TASK_SECTION_ICON_COLOR.PINK]: "Pink",
-} as const satisfies Record<TaskSectionIconColor, string>;
 
 /** The picker's two tabs. */
 const ICON_TAB = {
@@ -312,7 +305,7 @@ function glyphIcon(glyph: string, color: TaskSectionIconColor | undefined): Task
 
 /** What an icon is called for a reader. */
 function iconLabel(icon: TaskSectionIcon): string {
-  return icon.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : glyphLabel(icon.glyph);
+  return icon.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : sectionGlyphWords(icon.glyph);
 }
 
 /** A glyph whose colors stand open over the grid: the group it was pressed in, and the color they start on. */
@@ -330,7 +323,7 @@ const GLYPH_COLORS: readonly (TaskSectionIconColor | undefined)[] = [
 
 /** What the text's own ink is called as the window draws it: white over a dark ground, black over a light one. */
 function textInkLabel(): string {
-  return drawnDark() ? "White" : "Black";
+  return textInkWords(drawnDark());
 }
 
 /**
@@ -346,7 +339,10 @@ function glyphColors(
   onColor: (color: TaskSectionIconColor | undefined) => void,
 ): React.JSX.Element {
   const colors: readonly IconPickerColor<TaskSectionIconColor | undefined>[] = GLYPH_COLORS.map(
-    (value) => ({ value, label: value === undefined ? textInkLabel() : COLOR_LABEL[value] }),
+    (value) => ({
+      value,
+      label: value === undefined ? textInkLabel() : SECTION_ICON_COLOR_WORDS[value],
+    }),
   );
 
   return (
@@ -808,7 +804,7 @@ function SectionIconPicker({
             />
             {icon === undefined ? null : (
               <Button variant={BUTTON_VARIANT.SUBTLE} onClick={() => onIcon(undefined)}>
-                Remove icon
+                {REMOVE_SECTION_ICON}
               </Button>
             )}
           </div>

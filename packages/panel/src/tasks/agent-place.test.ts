@@ -122,15 +122,6 @@ test("a device the account does not own, which the read does not name, shows its
   assert.equal(label, "Machine: Charles's MacBook Air");
 });
 
-test("an agent on a machine its workspace owns names that machine, never the cloud", async () => {
-  const label = await placeOf(
-    { machine: AGENT_MACHINE.WORKSPACE, mac: { name: "build-01", deviceId: DEVICE } },
-    {},
-  );
-
-  assert.equal(label, "Machine: build-01");
-});
-
 /** The chip whose press opens where the agent works, which a reader hears as its label says. */
 function placeChip(): HTMLButtonElement {
   return (

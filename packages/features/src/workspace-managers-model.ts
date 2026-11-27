@@ -90,11 +90,15 @@ export function workspaceManagersOf<Agent extends ListedManager>(
     .toSorted(newestFirst);
 }
 
-/** Whether a Manager's chat said something after the reader's mark of it (`read-mark.ts`); never a coder's, whose row carries no mark. */
+/** Whether a Manager's chat reads unread for the reader (`read-mark.ts`): marked so by hand (Mark as unread), or said something after their mark of it; never a coder's, whose row carries no mark. */
 export function managerChatUnread(
-  agent: Pick<AgentSummary, "kind" | "saidAt" | "readThrough">,
+  agent: Pick<AgentSummary, "kind" | "saidAt" | "readThrough" | "markedUnread">,
 ): boolean {
-  if (agent.kind !== AGENT_KIND.MANAGER || agent.saidAt === undefined) return false;
+  if (agent.kind !== AGENT_KIND.MANAGER) return false;
+
+  if (agent.markedUnread === true) return true;
+
+  if (agent.saidAt === undefined) return false;
 
   return readsUnread(
     { ...(agent.readThrough === undefined ? undefined : { readThrough: agent.readThrough }) },

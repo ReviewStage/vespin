@@ -1,5 +1,6 @@
 import { agentParts, WHOLE_PART } from "@repo/features/agent-parts";
 import {
+  AGENT_ATTACHMENT_TYPE,
   AGENT_SENDER,
   CHECK_SUMMARY,
   PART_CUT_FIELD,
@@ -25,6 +26,7 @@ import {
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  withSending,
   withWaitingLine,
 } from "./transcript-model.js";
 
@@ -707,6 +709,49 @@ describe("transcriptItems", () => {
   });
 });
 
+describe("withSending", () => {
+  it("draws a line on its way with the pictures this phone holds of it, each its words name as its chip where they name it", () => {
+    const line = {
+      id: "line",
+      clientKey: "key",
+      text: "The button is cut off in [Picture 1].",
+      files: [{ name: "Picture 1", mediaType: "image/png" }],
+      sentAt: 1,
+      steers: false,
+    };
+
+    const held = (lineId: string) =>
+      lineId === "line"
+        ? [{ name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: "iVBORw0KGgo=" }]
+        : [];
+
+    const items = transcriptItems(withSending([], [line], held), {
+      writing: false,
+      readerId: undefined,
+      toggles: NO_TOGGLES,
+      now: 2,
+      pullRequests: [],
+    });
+
+    expect(items[0]).toMatchObject({
+      kind: TRANSCRIPT_ITEM.SAID,
+      words: "The button is cut off in [Picture 1].",
+      pictures: [],
+      wordPictures: new Map([
+        [
+          "Picture 1",
+          {
+            key: "0",
+            name: "Picture 1",
+            url: "data:image/png;base64,iVBORw0KGgo=",
+            pictureId: undefined,
+          },
+        ],
+      ]),
+    });
+  });
+});
+
 describe("withWaitingLine", () => {
   it("stops a fold's spinner while the agent waits on the reader", () => {
     const done = (id: string) => ({
@@ -981,6 +1026,38 @@ describe("managerChatItems", () => {
       pictures: [{ name: "signup.png", pictureId: "kept-shot", url: undefined }],
       files: [{ name: "notes.txt", base64: "YQpi", size: "2 lines" }],
     });
+  });
+
+  it("stands New over the first message after the reader's mark, skipping their own unless they marked the chat unread", () => {
+    // Note that the chat's rows stand newest first, as the slice holds them.
+    const rows = [
+      row("m2", 4, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, text: "Shipped." }),
+      row("a1", 3, { authorKind: MANAGER_CHAT_AUTHOR.PERSON, authorUserId: "u1", text: "Go." }),
+      row("m1", 2, { authorKind: MANAGER_CHAT_AUTHOR.AGENT, text: "Ready?" }),
+    ];
+
+    const view = managerChatView(rows, [], { running: undefined });
+
+    /** The chat's items as words, a rule as its kind and words, read with New after the mark, over the reader's own or not. */
+    const drawn = (newOverOwn: boolean) =>
+      managerChatItems(view, [], {
+        writing: false,
+        readerId: "u1",
+        toggles: NO_TOGGLES,
+        now: 5 * minute,
+        pullRequests: [],
+        newAfter: 2.5 * minute,
+        newOverOwn,
+      }).map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? item.words
+          : [item.kind, "words" in item && item.words],
+      );
+
+    expect([drawn(false), drawn(true)]).toEqual([
+      ["Ready?", "Go.", [TRANSCRIPT_ITEM.RULE, "New"], "Shipped."],
+      ["Ready?", [TRANSCRIPT_ITEM.RULE, "New"], "Go.", "Shipped."],
+    ]);
   });
 
   it("stands a thread's replies on its own page, the channel summing them under the message they answer: the root alone, a rule counting them, the replies, and the reader's reply on its way", () => {

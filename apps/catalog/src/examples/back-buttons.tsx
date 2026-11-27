@@ -3,8 +3,10 @@ import {
   BackButton,
   BUTTON_VARIANT,
   Button,
+  IconButton,
   NAV_CURRENT,
   NavItem,
+  PaneBar,
   Toolbar,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
@@ -13,7 +15,8 @@ import { CatalogSection } from "../section";
 
 /**
  * back-buttons.tsx -- the one way back: in a bar, its words drawn, and
- * folded away to its glyph where the bar folds its acts; at the top of a column of places; and a
+ * folded away to its glyph where the bar folds its acts; its glyph alone at
+ * a pane bar's start, before the title it leads back from; at the top of a column of places; and a
  * page with a parent, whose bar leads with its trail, the page's own name
  * last.
  */
@@ -42,6 +45,20 @@ function BackButtons(): React.JSX.Element {
             }
           />
         </div>
+      </CatalogSection>
+      <CatalogSection id="back-button-glyph" title="Its glyph alone at a bar's start">
+        <PaneBar
+          start={
+            <BackButton
+              look={BACK_BUTTON_LOOK.GLYPH}
+              label="Messages"
+              place="messages"
+              onBack={stay}
+            />
+          }
+          title="Thread"
+          end={<IconButton icon={<GLYPH.CLOSE />} label="Close thread" onClick={stay} />}
+        />
       </CatalogSection>
       <CatalogSection id="back-button-column" title="At the top of a column">
         <div className="catalog-narrow">

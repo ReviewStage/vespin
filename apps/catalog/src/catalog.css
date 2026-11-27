@@ -906,21 +906,6 @@ body {
   padding: var(--ui-space-8) var(--ui-space-12);
 }
 
-/* A log whose groups each open on a band stuck to the area's top, the
-   band's height the role the area's fade inset begins beneath. */
-.catalog-scroll-banded {
-  padding: 0 var(--ui-space-12) var(--ui-space-8);
-}
-
-.catalog-scroll-band {
-  position: sticky;
-  top: 0;
-  display: flex;
-  height: var(--ui-scroll-band);
-  align-items: center;
-  background: var(--ui-color-ground);
-}
-
 .catalog-scroll-board {
   display: flex;
   gap: var(--ui-space-12);
@@ -1209,6 +1194,29 @@ body {
 
 .catalog-edged-work {
   flex: 1 1 auto;
+}
+
+/* A view and a pane beside it (`SideSplit`): wide enough for both, or
+   narrower than the view's least and the pane's together (360), where the
+   pane stands alone. */
+.catalog-side-split {
+  display: flex;
+  width: min(560px, 100%);
+  height: 200px;
+  border: 1px dashed var(--ui-color-border-strong);
+  border-radius: var(--ui-radius-8);
+}
+
+.catalog-side-split-narrow {
+  width: min(320px, 100%);
+}
+
+.catalog-side-split-view {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ui-space-8);
+  padding: var(--ui-space-12);
 }
 
 /* The frame a zoomed picture (`ZoomImage`) stands in, which clips what

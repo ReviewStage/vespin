@@ -22,6 +22,7 @@ import {
   TASK_SECTION_ICON_KIND,
   type TaskSectionIcon,
 } from "@repo/features/task-section-wire";
+import { sectionGlyphWords } from "@repo/features/task-sections-model";
 
 /** The newest emoji version offered: one newer is not yet drawn by every macOS a Mac may run. */
 const NEWEST_EMOJI_VERSION = 15.1;
@@ -85,13 +86,6 @@ export function glyphKey(glyph: string): string {
     .join("");
 }
 
-/** What a glyph is called where it is named, its words in sentence case: `flask-conical` as "Flask conical". */
-export function glyphLabel(glyph: string): string {
-  const words = glyph.split("-").join(" ");
-
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
 /** Whether a glyph is one the picker suggests. */
 export function isSuggestedGlyph(glyph: string): boolean {
   return SUGGESTED_GLYPHS.includes(glyph);
@@ -120,7 +114,7 @@ export function glyphChoices(keys: readonly string[]): GlyphChoice[] {
   const choices = keys.map((key): GlyphChoice => {
     const glyph = glyphName(key);
 
-    return { glyph, label: glyphLabel(glyph), words: [glyph.split("-").join(" ")] };
+    return { glyph, label: sectionGlyphWords(glyph), words: [glyph.split("-").join(" ")] };
   });
 
   const rank = (choice: GlyphChoice) => {

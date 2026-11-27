@@ -5,10 +5,12 @@ import { archiveThroughAgentChangeRule } from "./rules/archive-through-agent-cha
 import { askBesideScreenRule } from "./rules/ask-beside-screen.ts";
 import { asyncPressNeedsBusyRule } from "./rules/async-press-needs-busy.ts";
 import { barItemTitledRule } from "./rules/bar-item-titled.ts";
+import { endAnchoredRunInConversationRule } from "./rules/end-anchored-run-in-conversation.ts";
 import { enforceDeleteWithWhereRule } from "./rules/enforce-delete-with-where.ts";
 import { enforceUpdateWithWhereRule } from "./rules/enforce-update-with-where.ts";
 import { entityChoiceThroughHelperRule } from "./rules/entity-choice-through-helper.ts";
 import { githubThroughModuleRule } from "./rules/github-through-module.ts";
+import { liveQueryThroughWindowRule } from "./rules/live-query-through-window.ts";
 import { noBrowserFormValidationRule } from "./rules/no-browser-form-validation.ts";
 import { noDirectViewStorageRule } from "./rules/no-direct-view-storage.ts";
 import { noDocumentPressListenerRule } from "./rules/no-document-press-listener.ts";
@@ -54,10 +56,12 @@ const antiSlopPlugin = eslintCompatPlugin({
     "ask-beside-screen": askBesideScreenRule,
     "async-press-needs-busy": asyncPressNeedsBusyRule,
     "bar-item-titled": barItemTitledRule,
+    "end-anchored-run-in-conversation": endAnchoredRunInConversationRule,
     "enforce-delete-with-where": enforceDeleteWithWhereRule,
     "entity-choice-through-helper": entityChoiceThroughHelperRule,
     "enforce-update-with-where": enforceUpdateWithWhereRule,
     "github-through-module": githubThroughModuleRule,
+    "live-query-through-window": liveQueryThroughWindowRule,
     "no-browser-form-validation": noBrowserFormValidationRule,
     "no-direct-view-storage": noDirectViewStorageRule,
     "no-document-press-listener": noDocumentPressListenerRule,

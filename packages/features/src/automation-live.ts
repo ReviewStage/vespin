@@ -3,8 +3,8 @@ import { agentStatusAt, type StatusTurn, statusClockEdge } from "./agent-status.
 import {
   AGENT_MACHINE,
   AGENT_STATUS,
+  type AgentRunsOnRequest,
   agentFailureSchema,
-  type PersonalRunsOn,
 } from "./agent-wire.js";
 import {
   AUTOMATION_TARGET,
@@ -311,7 +311,7 @@ export function withWebhookUrl(
 function runsOnOfRow(row: {
   readonly runsOnMachine?: string | null;
   readonly runsOnDeviceId?: string | null;
-}): PersonalRunsOn | null {
+}): AgentRunsOnRequest | null {
   if (row.runsOnMachine === AGENT_MACHINE.VERCEL) return { machine: AGENT_MACHINE.VERCEL };
 
   if (

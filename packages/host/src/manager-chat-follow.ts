@@ -3,6 +3,8 @@ import {
   type AgentChatSendAnswerView,
   type AgentChatSendParams,
   type AgentTranscriptOlderAnswer,
+  type ManagerChatEditAnswerView,
+  type ManagerChatEditParams,
   type ManagerChatReactAnswerView,
   type ManagerChatReactParams,
   type ManagerChatSending,
@@ -14,9 +16,10 @@ import {
   MANAGER_CHAT_READ,
   type ManagerChatPageView,
   managerChatPageOf,
+  withEditPress,
   withReactionPress,
 } from "@repo/features/manager-chat-live";
-import { Effect, Option, Schema, type Scope } from "effect";
+import { Clock, Effect, Option, Schema, type Scope } from "effect";
 import { type AppManagerChat, type AppManagerChats, NO_KEYS_HELD } from "./app-state.js";
 import { type HeldAnswers, type HeldRows, type HeldSlice, heldSlice } from "./live-collection.js";
 import type { LiveFailure, SealedRead } from "./live-follow.js";
@@ -52,7 +55,8 @@ import { pushLive } from "./live-push.js";
  * the chat held as the service takes it (`reacting`), as a read would
  * carry it, so it stands from the answer rather than from the next read;
  * the window draws it before that, while it is asked. One refused writes
- * nothing.
+ * nothing. An edit of the reader's own message is written into the chat
+ * held the same way (`editing`), its words those given and marked edited.
  */
 
 /** A read the service did not answer, as the client and the gate tell it, with what failed beneath it where the client said. */
@@ -99,6 +103,9 @@ type ChatSend = (params: AgentChatSendParams) => Effect.Effect<AgentChatSendAnsw
 /** A member's reaction to a message of a Manager's chat, as the service is asked it. */
 type ChatReact = (params: ManagerChatReactParams) => Effect.Effect<ManagerChatReactAnswerView>;
 
+/** A member's edit of their own message of a Manager's chat, as the service is asked it. */
+type ChatEdit = (params: ManagerChatEditParams) => Effect.Effect<ManagerChatEditAnswerView>;
+
 /** The held chats, the read of an older page of one laid on them, and the reader's messages on their way to one drawn over it. */
 export type HeldManagerChats = HeldSlice<string> &
   HeldRows<string, AppManagerChat> & {
@@ -110,6 +117,8 @@ export type HeldManagerChats = HeldSlice<string> &
     readonly unsend: (params: ManagerChatUnsendParams) => Effect.Effect<void>;
     /** `react` written into the chat held as the reaction it gives or takes off, once the service takes it. */
     readonly reacting: (react: ChatReact) => ChatReact;
+    /** `edit` written into the chat held as the words it gives the message, marked edited, once the service takes it. */
+    readonly editing: (edit: ChatEdit) => ChatEdit;
   };
 
 const decodePage = Schema.decodeUnknownOption(MANAGER_CHAT_READ.rows);
@@ -351,12 +360,28 @@ export function heldManagerChats(
           return answer;
         });
 
+    const editing =
+      (edit: ChatEdit): ChatEdit =>
+      (params) =>
+        Effect.gen(function* () {
+          const answer = yield* edit(params);
+          const { agentId, messageId, text } = params;
+          const chat = slice.rowsOf(agentId);
+
+          if ("failure" in answer || !answer.changed || chat === undefined) return answer;
+          const editedAt = yield* Clock.currentTimeMillis;
+          const messages = withEditPress(chat.messages, { messageId, text, editedAt });
+          slice.lay(agentId, { ...chat, messages });
+
+          return answer;
+        });
+
     // Note that a sign-out lets every message on its way go with the chats, since they are the signed-out account's words.
     const end = Effect.andThen(
       Effect.sync(() => sendings.clear()),
       slice.end,
     );
 
-    return { ...slice, end, older, sending, unsend, reacting };
+    return { ...slice, end, older, sending, unsend, reacting, editing };
   });
 }

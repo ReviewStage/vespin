@@ -4,7 +4,11 @@ import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
-import { CHAT_THREAD_WORDS, chatWorkWords } from "@repo/features/manager-chat-view";
+import {
+  CHAT_EDIT_WORDS,
+  CHAT_THREAD_WORDS,
+  chatWorkWords,
+} from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
@@ -32,6 +36,7 @@ import {
   CHANNEL_SEAT,
   type ChannelFaces,
   ChannelMessage,
+  NewRule,
   SenderPress,
   ThreadReplies,
   ThreadRule,
@@ -74,6 +79,7 @@ import {
   type CallStanding,
   type ChatSender,
   type OriginPart,
+  RULE_LOOK,
   type SaidFile,
   type SaidPicture,
   SHOWN_MEDIA,
@@ -293,9 +299,10 @@ function bubbleWordsWidth(column: number, room = 0): number {
  * A message of a Manager's chat as a channel's row (`ChannelMessage`): its
  * sender's face, name, and time where it opens their run, then what it
  * carried, its pictures and files, then its words, held for its menu,
- * which leads with Reply in thread where the channel opens threads, and
- * under them the summary of its thread's replies, which opens it, as the
- * panel's channel stands each message whoever sent it.
+ * which leads with Reply in thread where the channel opens threads, the
+ * mark of words edited since it was sent run on after them, and under them the
+ * summary of its thread's replies, which opens it, as the panel's channel
+ * stands each message whoever sent it.
  */
 function ChannelSaid({
   item,
@@ -380,6 +387,7 @@ function ChannelSaid({
                 width={width}
                 wordPictures={item.wordPictures}
                 wordPicture={(name) => wordPictureOf(drawing, item.wordPictures?.get(name))}
+                after={item.edited === true ? CHAT_EDIT_WORDS.EDITED : undefined}
               />
             </MessageWords>
           </View>
@@ -1224,7 +1232,11 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.RULE:
       return (
         <View style={[styles.row, { paddingVertical: SPACE.ROW }]}>
-          <ThreadRule words={item.words} />
+          {item.look === RULE_LOOK.NEW ? (
+            <NewRule words={item.words} />
+          ) : (
+            <ThreadRule words={item.words} />
+          )}
         </View>
       );
     case TRANSCRIPT_ITEM.WORDS:
@@ -1831,7 +1843,13 @@ export function AgentTranscript({
   return (
     <View
       style={[styles.list, { backgroundColor: colors.GROUND }]}
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      onLayout={(event) => {
+        const next = event.nativeEvent.layout.width;
+
+        // Note that a new width under a reader at the newest row keeps the end in view as the rows reflow taller, as an iPad's page column narrows once the split view stands its sidebar and list beside it, which left a page just opened above its end.
+        if (next !== width && anchored.current) following.current = true;
+        setWidth(next);
+      }}
     >
       {measured ? (
         <FlashList

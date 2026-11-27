@@ -56,9 +56,14 @@ type EntryEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
  * never less than the JSON a page is answered as. Note that the bytes are
  * held well under the platform's 4.5 MB bound on a function's response; a
  * page holds its first entry however large, which an append's own bound on
- * its request already keeps under it.
+ * its request already keeps under it. The bytes are the bound a page meets:
+ * the count only stops the walk short on entries of under about 100 bytes,
+ * since a resume from a compaction keeps every small entry of other kinds
+ * from before it, a long session's tens of thousands of them at a median of
+ * 122 bytes, which a count of 1,000 split into a page each of about 120 KB.
+ * A page of 20,000 is a walk of about 90 ms on the largest session.
  */
-const PAGE_ENTRIES = 1_000;
+const PAGE_ENTRIES = 20_000;
 const PAGE_BYTES = 2 * 1024 * 1024;
 
 /** The projects Codex's and Cursor's runners keep their stores under, as they key them (`@repo/agent-runner`'s `RUNNER_TRANSCRIPTS`), whose rows are no Claude Code conversation. */

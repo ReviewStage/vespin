@@ -61,7 +61,6 @@ import {
   Pager,
   PaneBar,
   RowHint,
-  SCROLL_FADE,
   SCROLL_OVERSCROLL,
   SCROLL_SIZE,
   ScrollArea,
@@ -1016,11 +1015,7 @@ function ChaptersReading({
           />
           <div className="flex max-h-1/2 min-h-0 flex-initial flex-col border-b border-border">
             {/* Note that a brief cut short by its share fades at the cut, never slicing a line through its letters, and a swipe past its end scrolls the Pull request tab, which a short window scrolls to the foot. */}
-            <ScrollArea
-              size={SCROLL_SIZE.CONTENT}
-              fade={SCROLL_FADE.BOTH}
-              overscroll={SCROLL_OVERSCROLL.CHAIN}
-            >
+            <ScrollArea size={SCROLL_SIZE.CONTENT} overscroll={SCROLL_OVERSCROLL.CHAIN}>
               <div className="chapter-brief pb-list-inset">
                 <Section
                   title={CHAPTERS_WORDS.BRIEF}

@@ -1,0 +1,7 @@
+# switcher.yaml -- opens the workspace switcher's menu: on an iPad, at the head of its sidebar, shown first where it is hidden; elsewhere, at the leading edge of a list's bar.
+appId: dev.vespin.ios
+---
+- runFlow:
+    file: show-sidebar.yaml
+- tapOn:
+    id: "workspace-switcher"

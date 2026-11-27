@@ -166,6 +166,14 @@ import {
   UsageLimitNotice,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationLead,
+  ConversationRows,
+  ConversationScrollButton,
+} from "@repo/ui/conversation";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
@@ -200,14 +208,6 @@ import {
   automationActor,
   namedAutomationActor,
 } from "../actor-ref.js";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationEmptyState,
-  ConversationLead,
-  ConversationRows,
-  ConversationScrollButton,
-} from "../ai-elements/conversation.js";
 import { Fold, FoldBody } from "../ai-elements/fold.js";
 import {
   Message,
@@ -226,6 +226,7 @@ import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
+import { STEADY_DOORS, useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import {
   useTaskListCollections,
   useTaskListRow,
@@ -308,7 +309,15 @@ import { EditComposer } from "./edit-composer.js";
 import { FollowOfferDock } from "./follow-offer-dock.js";
 import { ForkedToLine, useForkOffered } from "./fork-action.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
-import { sameEntries, sameFields, sameIds, sameSet, useKept, useSteady } from "./kept-draws.js";
+import {
+  sameComputerApps,
+  sameEntries,
+  sameFields,
+  sameIds,
+  sameSet,
+  useKept,
+  useSteady,
+} from "./kept-draws.js";
 import {
   CommentLineHead,
   GitHubLineCard,
@@ -414,7 +423,7 @@ import { WorkedFor, WorkingLine } from "./working-time.js";
  * the developer sent it after the description is the developer's bubble, each skill it
  * names the chip that opens the skill's file (`skill-chip.tsx`), as a
  * "Loaded skill" row opens it too, hanging the same card; and while
- * the agent may still write, a shimmering line stands at the end saying
+ * the agent may still write, a quiet line stands at the end saying
  * what its newest turn's record says it is doing (`tabTurnOf`): "Starting…"
  * until a runner opens the turn, whatever its start waits on, "Working…"
  * while it runs, and "Stopping…" once a Stop was asked of it,
@@ -2824,7 +2833,7 @@ function AgentTranscriptView({
   approvals?: AgentApprovalsControl | undefined;
   /** The current turn, whose own native notice replaces its generic failure line. */
   turnId?: string | null | undefined;
-  /** When the run under way began, which the working line counts from; none where unknown, when the line only shimmers. */
+  /** When the run under way began, which the working line counts from; none where unknown, when the line says its words alone. */
   startedAt?: number | undefined;
   /** The line the transcript ends on once its turn was stopped or failed (`endLineParts`); nothing otherwise. */
   ended?: EndLineParts | undefined;
@@ -3449,8 +3458,18 @@ function AgentTabView({
 
   const queue = useAgentQueue(agent.id, transcript.queue);
   const pictures = useAgentPictureDoor(agent.id);
-  const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
-  const queueEditing = useQueueEditing(composer, queue, pictures);
+
+  // Note that the apps are kept while they say the same, because a reading made afresh on each write handed every call's row a new context, and drew each again.
+  const computerApps = useKept(
+    useMemo(() => computerAppsOf(lines), [lines]),
+    sameComputerApps,
+  );
+
+  const queueEditing = useSteadyDoors(
+    useQueueEditing(composer, queue, pictures),
+    STEADY_DOORS.OWN_FUNCTIONS,
+  );
+
   const startedByReader = starter === undefined;
   // Any member who may message the agent changes its queue, every message in it, as the service holds (`controlsAgent`): an
   // agent on its starter's Mac is theirs alone. Note that one on the starter's own GitHub token is theirs alone too, which the
@@ -3667,6 +3686,26 @@ function AgentTabView({
     [lines],
   );
 
+  // Note that what the dock is handed is the same from write to write while what it reads is, so the box under the transcript holds while the transcript moves.
+  const { usage, payer, payerSubscriptionId, context } = transcript;
+
+  const dockTranscript = useMemo(
+    () => ({ usage, payer, payerSubscriptionId, context }),
+    [usage, payer, payerSubscriptionId, context],
+  );
+
+  const dockQueue = useMemo(
+    () => ({ controls: controlsQueue, working: standing.working, editing: queueEditing }),
+    [controlsQueue, standing.working, queueEditing],
+  );
+
+  const dockPlace = useMemo(
+    () => ({ owner: macOwner, route: callRoute, pictures, computerApps }),
+    [macOwner, callRoute, pictures, computerApps],
+  );
+
+  const stop = useSteadyDoor(onStop);
+
   return (
     <AgentTabFrame ref={tab} label={name}>
       <CallPlaceProvider owner={macOwner} route={callRoute}>
@@ -3838,9 +3877,9 @@ function AgentTabView({
           agent={agent}
           box={box}
           composer={composer}
-          transcript={transcript}
+          transcript={dockTranscript}
           approvalsWaiting={approvals.waiting}
-          onStop={onStop}
+          onStop={stop}
           onUnarchive={onUnarchive}
           continuedNote={continuedNote}
           cards={cards}
@@ -3849,8 +3888,8 @@ function AgentTabView({
           replyDoor={replyDoor}
           closedRemedy={closedRemedy}
           onMoveToCloud={onMoveToCloud}
-          queue={{ controls: controlsQueue, working: standing.working, editing: queueEditing }}
-          place={{ owner: macOwner, route: callRoute, pictures, computerApps }}
+          queue={dockQueue}
+          place={dockPlace}
         />
       </AgentTabFoot>
       {replies ? <ReplyToSelection scope={tab} onReply={replyThroughBox} /> : null}
@@ -4179,7 +4218,13 @@ export function AgentSubagentTab({
   const callRoute = useCallRoute(agentId);
   // The worker's lines, its task first, and what its rows draw from, kept from draw to draw while none of it moved.
   const lines = useMemo(() => workerLines(task, transcript.messages), [task, transcript.messages]);
-  const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
+
+  // Note that the apps are kept while they say the same, because a reading made afresh on each write handed every call's row a new context, and drew each again.
+  const computerApps = useKept(
+    useMemo(() => computerAppsOf(lines), [lines]),
+    sameComputerApps,
+  );
+
   const models = control.models;
   // The press is the same door from draw to draw, so a message kept as it was opens what the window opens now.
   const openTarget = useSteady(onOpenTarget);

@@ -1,4 +1,3 @@
-import { MACHINE_NETWORK, MACHINE_OWNER } from "@repo/features/device-agent-wire";
 import {
   HOST_CONNECT_WORDS,
   hostBoxFacts,
@@ -12,20 +11,13 @@ import {
   HOST_PAIRING_CALL_FAILURE,
   type HostPairingFailed,
 } from "@repo/features/host-pairing-view";
-import {
-  type HostPairingAnswer,
-  type HostPairingTarget,
-  shownHostUserCode,
-} from "@repo/features/host-wire";
+import { type HostPairingAnswer, shownHostUserCode } from "@repo/features/host-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ANNOUNCE,
   BUTTON_VARIANT,
   Button,
-  CHOICE_LOOK,
-  ChoiceList,
-  type ChoiceOption,
   Dialog,
   DialogActions,
   ErrorLine,
@@ -50,7 +42,6 @@ import { actMutation } from "../act-mutations.js";
 import { unreadShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { DeviceGlyph } from "../tasks/runs-on.js";
-import { SwitchRow } from "./switch-row.js";
 
 /**
  * host-connect-dialog.tsx -- a box's pairing approved or denied over Settings › Hosts, by the code its link named: the box as it named itself and the address its start came from, the code to hold against its terminal, and Connect or Deny.
@@ -63,13 +54,7 @@ import { SwitchRow } from "./switch-row.js";
  * address its start came from, since those are what tell a member their own
  * box from one a stranger started and sent them the link to, as a device
  * code's approval shows the device (RFC 8628); nothing is pressed for them,
- * so focus rests on the card. Where the service offers the member a
- * workspace for the box, which it does only for one they own or admin and a
- * daemon that can be a workspace's machine, the card asks who it is for:
- * Just me, picked until another is, or one of those workspaces, under which
- * stands whether its agents may reach the box's private network, off until
- * switched on; where it offers none, nothing is asked and the box is the
- * member's own. Connect makes the host at once and closes onto the list, which
+ * so focus rests on the card. Connect makes the host at once and closes onto the list, which
  * reads it; Deny ends the pairing and says so. A code no pending pairing has,
  * lapsed, used, mistyped, or held after too many such codes, reads as that,
  * with what to do: run the command on the machine again for a new code.
@@ -105,9 +90,6 @@ const SENDING = {
 } as const;
 
 type Sending = (typeof SENDING)[keyof typeof SENDING];
-
-/** The pick that keeps the box the member's own. Note that it is the empty string, which no workspace's id is (`hostPairingTargetSchema`), so it never stands for one. */
-const JUST_ME = "";
 
 type Standing =
   | { readonly kind: typeof STANDING.READING | typeof STANDING.UNREAD }
@@ -183,24 +165,11 @@ function AskDialog({
   box: HostPairingAnswer;
   sending: Sending | undefined;
   connected: boolean;
-  onAnswer: (answer: Answer, target: HostPairingTarget | undefined) => void;
+  onAnswer: (answer: Answer) => void;
   onClose: () => void;
 }): React.JSX.Element {
   const inFlight = sending === SENDING.CONNECT || sending === SENDING.DENY;
   const settled = inFlight || connected;
-  const [picked, setPicked] = useState<string>(JUST_ME);
-  const [privateNetwork, setPrivateNetwork] = useState(false);
-
-  const workspace = box.workspaces?.find((each) => each.id === picked);
-
-  const target: HostPairingTarget | undefined =
-    workspace === undefined
-      ? undefined
-      : {
-          kind: MACHINE_OWNER.WORKSPACE,
-          workspaceId: workspace.id,
-          network: privateNetwork ? MACHINE_NETWORK.PRIVATE_ALLOWED : MACHINE_NETWORK.PUBLIC_ONLY,
-        };
 
   return (
     <Dialog
@@ -219,7 +188,7 @@ function AskDialog({
             disabled={settled}
             busy={sending === SENDING.DENY}
             busyLabel={WORDS.DENYING}
-            onClick={() => onAnswer(ANSWER.DENY, undefined)}
+            onClick={() => onAnswer(ANSWER.DENY)}
           >
             <ReplayUnmask>{WORDS.DENY}</ReplayUnmask>
           </Button>
@@ -230,7 +199,7 @@ function AskDialog({
             busyLabel={WORDS.CONNECTING}
             done={connected}
             onDone={onClose}
-            onClick={() => onAnswer(ANSWER.CONNECT, target)}
+            onClick={() => onAnswer(ANSWER.CONNECT)}
           >
             <ReplayUnmask>{WORDS.CONNECT}</ReplayUnmask>
           </Button>
@@ -256,14 +225,6 @@ function AskDialog({
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
           {hostCodeExpiryText(box.expiresAt)}
         </Text>
-        <OwnerChoice
-          box={box}
-          picked={picked}
-          privateNetwork={privateNetwork}
-          disabled={settled}
-          onPick={setPicked}
-          onPrivateNetwork={setPrivateNetwork}
-        />
         <ErrorLine
           level={ANNOUNCE.ALERT}
           error={
@@ -277,69 +238,6 @@ function AskDialog({
         />
       </Stack>
     </Dialog>
-  );
-}
-
-/**
- * Who the box is for, where the service offers the member a workspace for
- * it: Just me, or each workspace offered, and under a workspace picked, the
- * switch for its agents' private network. Nothing where none is offered.
- */
-function OwnerChoice({
-  box,
-  picked,
-  privateNetwork,
-  disabled,
-  onPick,
-  onPrivateNetwork,
-}: {
-  box: HostPairingAnswer;
-  picked: string;
-  privateNetwork: boolean;
-  disabled: boolean;
-  onPick: (picked: string) => void;
-  onPrivateNetwork: (on: boolean) => void;
-}): React.JSX.Element | null {
-  const workspaces = box.workspaces ?? [];
-
-  if (workspaces.length === 0) return null;
-
-  const options: readonly ChoiceOption<string>[] = [
-    { value: JUST_ME, label: WORDS.JUST_ME, detail: WORDS.JUST_ME_DETAIL },
-    ...workspaces.map((workspace) => ({
-      value: workspace.id,
-      label: workspace.name,
-      detail: WORDS.WORKSPACE_DETAIL,
-      // Note that a workspace's name is the member's words, kept masked in a screen recording.
-      replayMasked: true,
-    })),
-  ];
-
-  return (
-    <>
-      <ChoiceList
-        legend={WORDS.FOR}
-        look={CHOICE_LOOK.MARKED}
-        options={options}
-        value={[picked]}
-        disabled={disabled}
-        onChange={([next]) => {
-          if (next !== undefined) onPick(next);
-        }}
-      />
-      {picked === JUST_ME ? null : (
-        <SettingsSection>
-          <SwitchRow
-            label={WORDS.PRIVATE_NETWORK}
-            labelReplayUnmasked
-            detail={WORDS.PRIVATE_NETWORK_DETAIL}
-            checked={privateNetwork}
-            disabled={disabled}
-            onChange={onPrivateNetwork}
-          />
-        </SettingsSection>
-      )}
-    </>
   );
 }
 
@@ -431,12 +329,12 @@ export function HostConnectDialog({
   const standing = afterPress?.code === code ? afterPress.standing : readStanding(pairing);
 
   const answer = useCallback(
-    (box: HostPairingAnswer, pressed: Answer, target: HostPairingTarget | undefined) => {
+    (box: HostPairingAnswer, pressed: Answer) => {
       setAfterPress({ code, standing: { kind: STANDING.ASKING, box, sending: pressed } });
 
       const sent =
         pressed === ANSWER.CONNECT
-          ? sendHostsPairingApprove(target === undefined ? { code } : { code, target })
+          ? sendHostsPairingApprove({ code })
           : sendHostsPairingDeny({ code });
 
       sent
@@ -459,13 +357,11 @@ export function HostConnectDialog({
     case STANDING.CONNECTED:
       return (
         <AskDialog
-          // Note that the pick is the code's own, so a dialog handed another code asks afresh.
-          key={code}
           code={code}
           box={standing.box}
           sending={standing.kind === STANDING.ASKING ? standing.sending : undefined}
           connected={standing.kind === STANDING.CONNECTED}
-          onAnswer={(pressed, target) => answer(standing.box, pressed, target)}
+          onAnswer={(pressed) => answer(standing.box, pressed)}
           onClose={onClose}
         />
       );

@@ -14,7 +14,7 @@ import {
 } from "../automation-directory.js";
 import { heldTaskQuery, pagesQuery } from "../live-reads.js";
 import { MemberDirectory, useMemberDirectory, usePerson } from "../member-directory.js";
-import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
 import { useMentionedReader } from "./mentioned-place.js";
 import { PageCard } from "./page-card.js";
 import { useTaskMentions } from "./task-mentions.js";
@@ -211,7 +211,7 @@ export function PageChipCard({
 
 /** The workspace a link was written under, by its slug, one it stood under before, or its id where it has none, as the account holds it; none where it holds no such workspace. */
 function useLinkWorkspace(written: string): Workspace | undefined {
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const workspaces = useAppStateSlice(selectWorkspaces);
 
   return workspaces === undefined ? undefined : workspaceOfSlug(workspaces, written);
 }
@@ -360,9 +360,7 @@ export function AutomationChipCard({
 }): ReactNode {
   const named = useLinkWorkspace(slug);
 
-  const words = useQuery({ ...appStateQuery, select: selectWorkspaces }).data?.find(
-    (each) => each.id === wordsWorkspaceId,
-  );
+  const words = useAppStateSlice(selectWorkspaces)?.find((each) => each.id === wordsWorkspaceId);
 
   const workspace = named ?? words;
 

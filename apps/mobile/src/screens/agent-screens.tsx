@@ -162,6 +162,7 @@ import { useAgentActions } from "../agents/use-agent-actions.js";
 import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-approvals.js";
 import {
   type AgentComposer,
+  heldFiles,
   type SuggestedSend,
   type UndeliveredActs,
   undeliveredWhole,
@@ -620,7 +621,11 @@ function AgentComposerArea({
  */
 function agentAddMenu(composer: AgentComposer, submenus: readonly BarMenu[]): ComposerMenu {
   return {
-    actions: [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
+    // Note that Photos steps aside while the field holds a Manager chat message's words to save, which takes no file.
+    actions:
+      composer.attach === undefined
+        ? []
+        : [{ label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach }],
     submenus,
   };
 }
@@ -875,7 +880,7 @@ const AgentConversation = memo(function AgentConversation({
 
   // Note that a Manager's page is its chat, never its transcript, as the panel draws it: the chat's own rows (`managerChat`), its transcript read only for the work each turn did.
   const chat = shown?.kind === AGENT_KIND.MANAGER;
-  useManagerChatLooks(shown);
+  const chatMark = useManagerChatLooks(shown);
   const chatFaces = useChatFaces(chat ? shown : undefined, readerId);
   const chatHeld = useManagerChat(id, chat);
   const chatPage = chatHeld?.rows;
@@ -922,6 +927,8 @@ const AgentConversation = memo(function AgentConversation({
             sending: chatPage.sending,
             managerName: chatFaces?.managerName,
             readerName: chatFaces?.readerName,
+            newAfter: chatMark.newAfter,
+            newOverOwn: chatMark.newOverOwn,
             // Note that the greeting stands over the chat's first message, so it waits until no older page is left to read, as the panel draws it above its first message.
             greeting:
               shown !== undefined && chatPage.before === undefined
@@ -942,6 +949,8 @@ const AgentConversation = memo(function AgentConversation({
       waitingCalls,
       shown,
       chatFaces,
+      chatMark.newAfter,
+      chatMark.newOverOwn,
     ],
   );
 
@@ -950,7 +959,7 @@ const AgentConversation = memo(function AgentConversation({
     () =>
       chat
         ? undefined
-        : transcriptItems(withSending(messages ?? [], sending ?? []), {
+        : transcriptItems(withSending(messages ?? [], sending ?? [], heldFiles), {
             writing,
             readerId,
             toggles,
@@ -1199,12 +1208,9 @@ const AgentConversation = memo(function AgentConversation({
   const talk = useAgentTalk(id, taskId);
   const otherCall = useStandingCallCard(id);
 
-  // Each chat message by its row, to the line it went as, which its Edit rewinds to; null for the Manager's own, which went as none.
-  const chatLines = useMemo(
-    () =>
-      chat
-        ? new Map((chatPage?.messages ?? []).map((message) => [message.id, message.lineId]))
-        : undefined,
+  // Note that only a message the chat holds is edited in place, never one still on its way or refused, which goes by its send's key.
+  const chatMessages = useMemo(
+    () => (chat ? new Set((chatPage?.messages ?? []).map((message) => message.id)) : undefined),
     [chat, chatPage?.messages],
   );
 
@@ -1215,7 +1221,8 @@ const AgentConversation = memo(function AgentConversation({
     readerId,
     composer,
     calling: talk.call?.kind === COMPOSER_CALL.ON_CALL,
-    chatLines,
+    chatMessages,
+    markUnread: chatMark.markUnread,
   });
 
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;

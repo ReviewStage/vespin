@@ -2,9 +2,9 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AUTOMATION_SCOPE, type AutomationScope } from "@repo/features/automation-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACTOR_KIND, accountActor, SOMEONE_REASON } from "@repo/ui/actor-model";
-import { useQuery } from "@tanstack/react-query";
+
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import { TILE_SIZE, WorkspaceTile } from "./workspace-tile.js";
 
 /**
@@ -39,7 +39,7 @@ export function OwnerMark({
   mine: boolean;
   size: OwnerMarkSize;
 }): React.JSX.Element | null {
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
 
   if (owner === AUTOMATION_SCOPE.WORKSPACE) {
     if (workspace === undefined) return null;

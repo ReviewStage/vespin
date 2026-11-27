@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import "@repo/panel/testing/resize-observer";
+import "@repo/ui/testing/resize-observer";
 import type {
   AdminDayAccount,
   AdminDayActiveAccount,

@@ -2,7 +2,6 @@ import {
   type MovedAgent,
   moveDetail,
   movePlaces,
-  movesPushedOnly,
   TO_THE_CLOUD,
 } from "@repo/features/agent-move-model";
 import {
@@ -20,9 +19,8 @@ import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import type { MenuAction, MenuSubmenu } from "../desktop/action-menu.js";
 import { useDevicePresence } from "../device-presence.js";
 import { useThisMac } from "../machine-name.js";
-import { useMemberDirectory } from "../member-directory.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
-import { deviceMark, ownedMark, useOwnedMachines } from "./runs-on.js";
+import { deviceMark } from "./runs-on.js";
 import type { AgentsControl } from "./use-agents.js";
 
 /**
@@ -159,10 +157,8 @@ export function useMoveToCloud(
   const offered = useMoveOffered(agent, agents);
   const { continueAgent } = agents;
 
-  if (!offered || continueAgent === undefined || !movePlaces(agent, NO_DEVICES).cloud) {
+  if (!offered || continueAgent === undefined || agent.machine !== AGENT_MACHINE.DEVICE)
     return undefined;
-  }
-
   const move = movedBy(agent, { continueAgent, onStop: agents.onStop });
 
   return (carry) => void move(TO_THE_CLOUD, carry);
@@ -172,7 +168,7 @@ export function useMoveToCloud(
 export interface PlaceMove {
   readonly devices: readonly MacOffer[];
   readonly moveTo: (runsOn: AgentRunsOnRequest) => void;
-  /** Whether the agent runs on a device or a workspace's machine, so a move takes only what it pushed. */
+  /** Whether the agent runs on a device, so a move takes only what it pushed. */
   readonly pushedOnly: boolean;
   /** What the chip's menu says under each place but the agent's own (`moveDetail`); none where it says nothing. */
   readonly detail: string | undefined;
@@ -199,7 +195,7 @@ export function useMovePlace(
   return {
     devices: agents.macs ?? NO_DEVICES,
     moveTo: (runsOn) => void move(runsOn),
-    pushedOnly: movesPushedOnly(agent),
+    pushedOnly: agent.machine === AGENT_MACHINE.DEVICE,
     detail: moveDetail(agent),
   };
 }
@@ -212,9 +208,6 @@ export function useMoveToEntry(agent: MovedAgent, agents: MoveDoors): MenuSubmen
   // Note that the beats are read only while a device is listed, so a member with none reads nothing.
   const book = useDevicePresence(devices.length > 0);
   const thisMac = useThisMac();
-  // Note that the workspace's machines are the directory's around the agent's page, offered after the member's devices.
-  const { workspaceId } = useMemberDirectory();
-  const owned = useOwnedMachines(offered ? workspaceId : undefined);
 
   if (!offered) return undefined;
   const said = moveDetail(agent);
@@ -247,20 +240,6 @@ export function useMoveToEntry(agent: MovedAgent, agents: MoveDoors): MenuSubmen
         onSelect: moveTo({ machine: AGENT_MACHINE.DEVICE, deviceId: device.deviceId }),
       };
     }),
-    ...owned
-      .filter((machine) => machine.id !== agent.mac?.deviceId)
-      .map((machine): MenuAction => {
-        const { icon, unready } = ownedMark(machine);
-
-        return {
-          label: machine.name,
-          key: machine.id,
-          icon,
-          detail: unready ?? said,
-          disabled: unready !== undefined,
-          onSelect: moveTo({ machine: AGENT_MACHINE.WORKSPACE, deviceId: machine.id }),
-        };
-      }),
   ];
 
   return items.length === 0 ? undefined : { ...commandHead(PANEL_COMMAND.MOVE_AGENT), items };

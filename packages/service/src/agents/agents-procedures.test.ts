@@ -13,15 +13,8 @@ import {
 } from "@repo/database/models/workspace-sandbox-script-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import {
-  connectWorkspaceMachine,
-  getTestDB,
-  joinWorkspace,
-  openWorkspace,
-  startTask,
-} from "@repo/database/testing";
+import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { CLIENT_HEADER, CLIENT_PLATFORM, clientHeaders } from "@repo/features/client-identity";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import {
@@ -700,64 +693,6 @@ it.layer(SUITE)("an agent on no task", (it) => {
           read: 200,
         });
         assert.deepEqual(yield* seenBy(older), { listed: [], read: 404 });
-      }),
-  );
-});
-
-it.layer(SUITE)("an agent on a workspace's machine", (it) => {
-  it.effect.each([
-    { apiVersion: "6", answered: false },
-    { apiVersion: "7", answered: true },
-  ])(
-    "is answered on its machine to a build of version $apiVersion only from 7, and before it is left out of the workspace's and the task's lists and not found by its id",
-    ({ apiVersion, answered }) =>
-      Effect.gen(function* () {
-        const { userId, agent } = yield* openAgent;
-        const box = yield* connectWorkspaceMachine(agent.organizationId, userId);
-        yield* Effect.flatMap(Database, (db) =>
-          db
-            .update(agentTable)
-            .set({ machine: AGENT_MACHINE.WORKSPACE, deviceId: box })
-            .where(eq(agentTable.id, agent.id)),
-        );
-
-        const call = yield* standing(
-          new Map([["Bearer owner", userId]]),
-          scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
-        );
-
-        const headers = {
-          ...clientHeaders({ platform: CLIENT_PLATFORM.DESKTOP, version: "1.0.0" }),
-          [CLIENT_HEADER.API_VERSION]: apiVersion,
-        };
-
-        // SAFETY: the router answers JSON; the test reads the ids and machines it compares.
-        const agentsOf = (text: string) =>
-          (JSON.parse(text) as { agents: readonly { id: string; machine?: string }[] }).agents;
-
-        const ofWorkspace = yield* call.bytes(
-          `/api/agents?workspaceId=${agent.organizationId}`,
-          "Bearer owner",
-          { headers },
-        );
-
-        const ofTask = yield* call.bytes(`/api/tasks/${agent.taskId}/agents`, "Bearer owner", {
-          headers,
-        });
-
-        const read = yield* call.bytes(agentOf(agent.id), "Bearer owner", { headers });
-        const onBox = [{ id: agent.id, machine: AGENT_MACHINE.WORKSPACE }];
-
-        assert.deepEqual(
-          {
-            ofWorkspace: agentsOf(ofWorkspace.text).map(({ id, machine }) => ({ id, machine })),
-            ofTask: agentsOf(ofTask.text).map(({ id, machine }) => ({ id, machine })),
-            read: read.status,
-          },
-          answered
-            ? { ofWorkspace: onBox, ofTask: onBox, read: 200 }
-            : { ofWorkspace: [], ofTask: [], read: 404 },
-        );
       }),
   );
 });

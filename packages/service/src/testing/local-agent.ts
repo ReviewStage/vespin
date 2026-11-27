@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { type Agent, createAgent } from "@repo/database/models/agent-store";
-import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/device-agent-store";
+import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
@@ -195,9 +195,9 @@ export const warmLocalAgentOn = Effect.fnUntraced(function* (harness: LocalHarne
     .update(conversations)
     .set({ runtimeSessionId: sessionId })
     .where(eq(conversations.id, agent.conversationId));
-  const [launch] = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
+  const [launch] = yield* deviceAgentLinesWaiting(userId, deviceId);
   assert.equal(launch?.kind, DEVICE_AGENT_LINE_KIND.LAUNCH);
-  yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), launch.id);
+  yield* claimedDeviceAgentLine(userId, deviceId, launch.id);
   const settledAt = yield* DateTime.nowAsDate;
 
   const [settled] = yield* db
@@ -224,7 +224,7 @@ export type WarmLocalAgent = Effect.Success<typeof warmLocalAgent>;
 
 /** What the agent's Mac has yet to take, line by line: a message line by the text it carries, any other by its kind. */
 export const linesWaiting = (warm: WarmLocalAgent) =>
-  Effect.map(deviceAgentLinesWaiting(ownDeviceHost(warm.userId, warm.deviceId)), (lines) =>
+  Effect.map(deviceAgentLinesWaiting(warm.userId, warm.deviceId), (lines) =>
     lines.map((line) =>
       line.kind === DEVICE_AGENT_LINE_KIND.MESSAGE ? String(line.payload.text) : line.kind,
     ),
@@ -233,16 +233,11 @@ export const linesWaiting = (warm: WarmLocalAgent) =>
 /** Whether the newest launch line waiting for the agent's Mac carries the text given among its first lines, which its sealed secrets hold and its Mac's claim opens. */
 export const launchCarries = (warm: WarmLocalAgent, text: string) =>
   Effect.gen(function* () {
-    const waiting = yield* deviceAgentLinesWaiting(ownDeviceHost(warm.userId, warm.deviceId));
+    const waiting = yield* deviceAgentLinesWaiting(warm.userId, warm.deviceId);
     const launch = waiting.filter((line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH).at(-1);
 
     if (launch === undefined) return false;
-
-    const claimed = yield* claimedDeviceAgentLine(
-      ownDeviceHost(warm.userId, warm.deviceId),
-      launch.id,
-    );
-
+    const claimed = yield* claimedDeviceAgentLine(warm.userId, warm.deviceId, launch.id);
     const opened = Option.map(claimed, (line) => ("secrets" in line ? line.secrets : null));
 
     return JSON.stringify(Option.getOrNull(opened)).includes(text);
