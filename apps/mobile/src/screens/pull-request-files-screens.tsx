@@ -228,14 +228,19 @@ export function PullRequestFileScreen() {
           disabled={at <= 0}
           icon={glyphSymbol(GLYPH.PREVIOUS_ITEM)}
           onPress={() => stepTo(ordered[at - 1]?.path)}
-        />
+        >
+          {FILE_WORDS.PREVIOUS}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Button
           accessibilityLabel={FILE_WORDS.NEXT}
           disabled={at === -1 || at >= ordered.length - 1}
           icon={glyphSymbol(GLYPH.NEXT_ITEM)}
           onPress={() => stepTo(ordered[at + 1]?.path)}
-        />
+        >
+          {FILE_WORDS.NEXT}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={FILE_WORDS.MORE}>
+          <Stack.Toolbar.Label>{FILE_WORDS.MORE}</Stack.Toolbar.Label>
           <Stack.Toolbar.MenuAction isOn={wrap} onPress={() => setWrap(!wrap)}>
             {FILE_WORDS.WRAP}
           </Stack.Toolbar.MenuAction>
