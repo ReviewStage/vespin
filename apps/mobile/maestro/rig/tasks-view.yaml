@@ -1,0 +1,75 @@
+# tasks-view.yaml -- RIG SHIM (never merged): the iOS Tasks tab follows the Tasks page's view on the account (#11277). A fresh phone opens on the page's default, every status by status, Backlog among them; a grouping chosen and a group folded are kept on the account, so they still stand after a relaunch; and Reset view puts the page's own view back.
+#
+# It lives under maestro/rig/ rather than maestro/, so the screenshot run
+# never runs it. The rig's fixture keeps the view choices a run writes in the
+# app's defaults across launches (`fixture-host.ts`'s `keepViewChoice`), as
+# the service keeps them for a live run. Nothing reaches a server.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# 1. A fresh phone: the Tasks page's default, every status by status, the
+# most pressing first, Backlog among them. Note that a group's header is
+# found by its title and count, "Todo, 1", because a row's status mark is
+# heard as "Todo" too.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: ../subflows/tab.yaml
+    env:
+      TAB: Tasks
+- extendedWaitUntil:
+    visible: "Todo, [0-9]+"
+    timeout: 30000
+- assertVisible: "In progress, [0-9]+"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-view-default
+- scrollUntilVisible:
+    element: "Backlog, [0-9]+"
+    direction: DOWN
+- takeScreenshot: tasks-view-default-backlog
+# 2. View options: Status, Group by, Order by, Show sub-tasks, Show completed.
+- tapOn: "View options"
+- assertVisible: "Group by"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-view-menu
+# 3. Group by › Priority stands the tasks by priority at once.
+- tapOn: "Group by"
+- waitForAnimationToEnd
+- tapOn: "Priority"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "High, [0-9]+"
+    direction: UP
+- assertNotVisible: "Todo, [0-9]+"
+- takeScreenshot: tasks-view-priority
+# 4. A press on High's header folds it, its count still standing.
+- tapOn: "High, [0-9]+"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-view-folded
+# 5. After a relaunch: the grouping and the fold the account kept still stand.
+- stopApp
+- launchApp:
+    clearState: false
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: ../subflows/tab.yaml
+    env:
+      TAB: Tasks
+- extendedWaitUntil:
+    visible: "High, [0-9]+"
+    timeout: 30000
+- assertNotVisible: "Todo, [0-9]+"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-view-relaunch
+# 6. Reset view puts the page's own view back: by status again.
+- tapOn: "View options"
+- tapOn: "Reset view"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Todo, [0-9]+"
+    direction: UP
+- takeScreenshot: tasks-view-reset

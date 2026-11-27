@@ -327,6 +327,9 @@ const AGENT = {
   DIGEST: "6fc08203-4b7d-4e95-90bd-7c8d9eafb0c6",
   ROUNDING: "70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7",
   MANAGER: "81e2a425-6d3f-4a07-92df-9eafb0c1d2e8",
+  // RIG SHIM (never merged): two more Managers, so a sort's reorder shows.
+  TRIAGE_MANAGER: "92f3b536-7e4f-4b18-a3f0-afb0c1d2e3f9",
+  DOCS_MANAGER: "a304c647-8f5a-4c29-b401-b0c1d2e3f40a",
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
@@ -1145,6 +1148,20 @@ const MANAGER: AgentSummary = {
   saidAt: MANAGER_STARTED + 4 * MINUTE,
 };
 
+/** RIG SHIM (never merged): the rig's two more Managers, newest started first being Triage, Release, Docs, and by name Docs, Release, Triage. */
+const RIG_MANAGERS: readonly AgentSummary[] = [
+  {
+    ...agentOn(AGENT.TRIAGE_MANAGER, "", "Triage manager", AGENT_STATUS.COMPLETED, HOUR),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+  },
+  {
+    ...agentOn(AGENT.DOCS_MANAGER, "", "Docs manager", AGENT_STATUS.COMPLETED, 5 * HOUR),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+  },
+];
+
 /** A task's agents as its row in the list counts them. */
 function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
   const agent = AGENTS.get(taskId);
@@ -1900,6 +1917,12 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
       ),
       ...followed,
       manager,
+      ...RIG_MANAGERS.map((rig) => ({
+        ...rig,
+        workspaceId: FIXTURE_IDS.WORKSPACE,
+        repository: MANAGER_REPOSITORIES[0],
+        settledAt: rig.createdAt,
+      })),
     ],
     taskSections: LISTED_SECTIONS,
     workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)

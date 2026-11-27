@@ -83,6 +83,7 @@ import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { SETUP_AUDIENCE, setupPlaceStored } from "@repo/settings";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Predicate } from "effect";
+import { Settings } from "react-native";
 
 /** The one workspace a fixture run's account is in. */
 const FIXTURE_WORKSPACE_IDS: readonly string[] = [FIXTURE_IDS.WORKSPACE];
@@ -226,9 +227,6 @@ const NO_READ_MARKS: KeptReadMarks = new Map();
 
 /** The view choices each run made, by the store the run stages, as the account's read carries them. */
 const VIEW_CHOICES = new WeakMap<object, readonly ViewChoiceLiveRow[]>();
-
-/** No view choice made yet. */
-const NO_VIEW_CHOICES: readonly ViewChoiceLiveRow[] = [];
 
 /** What the store is handed: whole slices of the document. */
 type StorePatch = Parameters<AppStateStore["update"]>[0];
@@ -523,7 +521,8 @@ export function stageFixture(
     tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
     [LIVE_READ.PROVIDER_KEYS]: stagedKeys(inbox),
-    [LIVE_READ.VIEW_CHOICES]: stagedViewChoices(held, VIEW_CHOICES.get(state) ?? NO_VIEW_CHOICES),
+    // RIG SHIM (never merged): the view choices the rig kept across launches, until the run makes one.
+    [LIVE_READ.VIEW_CHOICES]: stagedViewChoices(held, VIEW_CHOICES.get(state) ?? rigViewChoices),
   };
 
   state.update(stagedPatch(held, staged), listed.lists);
@@ -540,6 +539,21 @@ function stagedViewChoices(
 
   return { ...held[LIVE_READ.VIEW_CHOICES], [accountId]: { rows } };
 }
+
+/** RIG SHIM (never merged): where the rig's view choices are kept across launches, as the service keeps them for a live run. */
+const RIG_VIEW_CHOICES_KEY = "rigViewChoices";
+
+/** RIG SHIM (never merged): the view choices a rig run kept, read once at launch. */
+const rigViewChoices: readonly ViewChoiceLiveRow[] = (() => {
+  const kept: unknown = Settings.get(RIG_VIEW_CHOICES_KEY);
+
+  try {
+    // SAFETY: only this shim writes the key, as the rows it laid.
+    return Predicate.isString(kept) ? (JSON.parse(kept) as ViewChoiceLiveRow[]) : [];
+  } catch {
+    return [];
+  }
+})();
 
 /**
  * Keeps a reply with pictures the fixture took and lays it over the
@@ -681,11 +695,14 @@ function keepViewChoice(
   const write = payload as PortActPayload<typeof ACT_KIND.VIEW_CHOICE_WRITE>;
   const { id, key, workspaceId, value } = write;
 
-  const others = (VIEW_CHOICES.get(state) ?? NO_VIEW_CHOICES).filter(
+  const others = (VIEW_CHOICES.get(state) ?? rigViewChoices).filter(
     (row) => row.key !== key || row.workspaceId !== workspaceId,
   );
 
-  VIEW_CHOICES.set(state, value === null ? others : [...others, { id, key, workspaceId, value }]);
+  const kept = value === null ? others : [...others, { id, key, workspaceId, value }];
+  VIEW_CHOICES.set(state, kept);
+  // RIG SHIM (never merged): kept across launches too.
+  Settings.set({ [RIG_VIEW_CHOICES_KEY]: JSON.stringify(kept) });
   stageFixture(state);
 
   return true;
@@ -984,6 +1001,7 @@ export function fixtureActs(
           : undefined;
 
         if (startRefused !== undefined) return Promise.resolve(startRefused);
+
         // SAFETY: the port is keyed by act kind.
         const older = olderRead(state, profile, kind as PortActKind, payload);
 
