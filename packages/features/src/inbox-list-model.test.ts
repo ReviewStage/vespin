@@ -4,10 +4,9 @@ import { type InboxRow, inboxRowOf } from "./inbox-digest.js";
 import {
   agentThreadsLine,
   INBOX_MEDIA,
-  inboxNextReminderDue,
   inboxThreadEventsShown,
   inboxThreadMessages,
-  inboxWaitingIn,
+  inboxWaitingAt,
   inboxWaitingKept,
 } from "./inbox-list-model.js";
 import {
@@ -273,7 +272,7 @@ describe("agentThreadsLine", () => {
   });
 });
 
-describe("inboxWaitingIn", () => {
+describe("inboxWaitingAt", () => {
   it("counts what waits on the reader by task, by agent, and in all, in each workspace and across them, a Manager's thread toward its agent alone", () => {
     const task = {
       id: "task-1",
@@ -304,7 +303,7 @@ describe("inboxWaitingIn", () => {
       { holder: { agent: manager }, items: [posted("asks", "manager-1", INBOX_STATUS.OPEN, 3, 3)] },
     ];
 
-    const waiting = inboxWaitingIn(groups, undefined, 100);
+    const { waiting } = inboxWaitingAt(groups, undefined, 100);
 
     expect(waiting.get("acme")).toEqual({
       byTask: new Map([["task-1", 1]]),
@@ -319,7 +318,7 @@ describe("inboxWaitingIn", () => {
     expect(waiting.get(undefined)?.total).toBe(2);
 
     // Counted again with nothing moved, each workspace's counts are the very object held, so their readers draw nothing again.
-    const kept = inboxWaitingKept(waiting, inboxWaitingIn(groups, undefined, 100));
+    const kept = inboxWaitingKept(waiting, inboxWaitingAt(groups, undefined, 100).waiting);
 
     expect(kept.get("acme")).toBe(waiting.get("acme"));
 
@@ -331,8 +330,14 @@ describe("inboxWaitingIn", () => {
       },
     ];
 
-    expect(inboxWaitingIn(reminded, undefined, 100).get("acme")).toBeUndefined();
-    expect(inboxNextReminderDue(reminded, 100)).toBe(500);
-    expect(inboxWaitingIn(reminded, undefined, 500).get("acme")?.total).toBe(1);
+    const before = inboxWaitingAt(reminded, undefined, 100);
+
+    expect(before.waiting.get("acme")).toBeUndefined();
+    expect(before.nextReminderDue).toBe(500);
+
+    const due = inboxWaitingAt(reminded, undefined, 500);
+
+    expect(due.waiting.get("acme")?.total).toBe(1);
+    expect(due.nextReminderDue).toBeUndefined();
   });
 });

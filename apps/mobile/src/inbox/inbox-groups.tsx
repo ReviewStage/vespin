@@ -30,9 +30,8 @@ import {
   type InboxAnyHolder,
   type InboxGroup,
   type InboxWaiting,
-  inboxNextReminderDue,
   inboxRowGroups,
-  inboxWaitingIn,
+  inboxWaitingAt,
   inboxWaitingKept,
   NO_INBOX_WAITING,
 } from "@repo/features/inbox-list-model";
@@ -49,7 +48,6 @@ import {
   useLayoutEffect,
   useMemo,
   useReducer,
-  useRef,
   useState,
 } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -180,30 +178,27 @@ export function InboxAttentionProvider({ children }: { readonly children: ReactN
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   // Note that the counts are made again as the soonest reminder comes due, since an item it put away comes back with no write to say so.
   const [dueTurns, dueCame] = useReducer((turns: number) => turns + 1, 0);
-  // The moment the counts standing were made at, which the next reminder is looked for after, so one that comes due between the count and the timer is never passed over.
-  const countedAt = useRef(0);
 
-  // Note that the store moves before the frame paints, so no screen draws a frame of the read before.
+  // Note that the store moves before the frame paints, so no screen draws a frame of the read before; and that the next count is set from the same moment this one was made at (`inboxWaitingAt`).
   useLayoutEffect(() => {
-    countedAt.current = Date.now();
-    const counted = inboxWaitingIn(inboxRowGroups(drawn), readerId, countedAt.current);
+    const { waiting, nextReminderDue } = inboxWaitingAt(
+      inboxRowGroups(drawn),
+      readerId,
+      Date.now(),
+    );
 
     store.set({
       all,
-      waiting: inboxWaitingKept(store.read().waiting, counted),
+      waiting: inboxWaitingKept(store.read().waiting, waiting),
       inWorkspace: new Map(),
     });
-  }, [store, all, drawn, readerId, dueTurns]);
 
-  useEffect(() => {
-    const due = inboxNextReminderDue(inboxRowGroups(drawn), countedAt.current);
-
-    if (due === undefined) return;
+    if (nextReminderDue === undefined) return;
     // Note that a reminder already due by now counts again at once.
-    const timer = setTimeout(dueCame, Math.max(0, due - Date.now()));
+    const timer = setTimeout(dueCame, Math.max(0, nextReminderDue - Date.now()));
 
     return () => clearTimeout(timer);
-  }, [drawn, dueTurns]);
+  }, [store, all, drawn, readerId, dueTurns]);
 
   return <InboxAttention.Provider value={store}>{children}</InboxAttention.Provider>;
 }

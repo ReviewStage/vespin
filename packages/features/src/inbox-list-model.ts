@@ -1073,13 +1073,20 @@ export interface InboxWaiting {
 /** No thread waits. */
 export const NO_INBOX_WAITING: InboxWaiting = { byTask: new Map(), byAgent: new Map(), total: 0 };
 
+/** What waits on the reader at one moment, in each workspace and across them, and when that next changes with no write to say so. */
+export interface InboxWaitingAt {
+  readonly waiting: ReadonlyMap<string | undefined, InboxWaiting>;
+  /** The soonest reminder still ahead of that moment, when an item it put away comes back; none where no reminder stands ahead. */
+  readonly nextReminderDue: number | undefined;
+}
+
 /**
  * How many of the reader's threads wait on them at `now` (`waitsOnReaderNow`)
  * in each workspace their holders stand in, by task, by agent, and in all;
  * and, under no workspace (`undefined`), across every workspace. A
  * Manager's thread, on no task, counts toward its agent and the total alone.
  */
-export function inboxWaitingIn(
+function inboxWaitingIn(
   groups: readonly InboxGroup<InboxAnyHolder>[],
   readerId: string | undefined,
   now: number,
@@ -1116,7 +1123,7 @@ export function inboxWaitingIn(
 }
 
 /** The soonest reminder among `groups` still ahead at `now`, when what waits must be counted again since an item comes back; none where no reminder stands ahead. */
-export function inboxNextReminderDue(
+function inboxNextReminderDue(
   groups: readonly InboxGroup<InboxAnyHolder>[],
   now: number,
 ): number | undefined {
@@ -1131,6 +1138,24 @@ export function inboxNextReminderDue(
   }
 
   return next;
+}
+
+/**
+ * What waits on the reader at `now` (`inboxWaitingIn`), and the next
+ * reminder due after that same moment (`inboxNextReminderDue`). Note that
+ * both are read at the one `now`, because a reminder that came due between
+ * a count and a later look for the next would be passed over, its item left
+ * uncounted until some write.
+ */
+export function inboxWaitingAt(
+  groups: readonly InboxGroup<InboxAnyHolder>[],
+  readerId: string | undefined,
+  now: number,
+): InboxWaitingAt {
+  return {
+    waiting: inboxWaitingIn(groups, readerId, now),
+    nextReminderDue: inboxNextReminderDue(groups, now),
+  };
 }
 
 /** Whether two counts of what waits say the same. */
