@@ -5,6 +5,7 @@ import { ENTITY_KIND, entityWordHeard } from "@repo/features/entity-kind";
 import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
+import { heldChipName } from "@repo/features/place-chip-model";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
@@ -25,6 +26,7 @@ import {
 import { AudioClip } from "./audio-clip.js";
 import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
 import type { ChipMarkOf } from "./chip-mark-model.js";
+import { useChipNames } from "./chip-names.js";
 import { ContextMenu } from "./context-menu.js";
 import { DiagramBlock, DiagramRenderer } from "./diagram.js";
 import { DraftCard } from "./draft-card.js";
@@ -328,6 +330,28 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
+/** A chip's name and what VoiceOver hears of it. */
+type ChipWords = Pick<MarkdownChip, "name" | "heard">;
+
+/**
+ * A chip's name and what VoiceOver hears of it, by the name the app holds
+ * now for what it names (`useChipNames`, `heldChipName`): a bare task
+ * link's title, as the panel's chip says it, and its words or its kind
+ * where the app holds none.
+ */
+function useNamedChip(chip: MarkdownChip): ChipWords {
+  const workspace = chip.target.kind === LINK_TARGET.PLACE ? chip.target.workspace : undefined;
+  const known = useChipNames(chip.of, workspace);
+
+  if (known === undefined || chip.of === undefined) return chip;
+  const name = heldChipName(chip.of, chip.name, chip.bare === true, known);
+
+  if (name === chip.name) return chip;
+  const word = entityWordHeard(chip.entity, name);
+
+  return { name, heard: word === undefined ? name : `${word} ${name}` };
+}
+
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere, and held for Open link and Copy link (`useChipMenu`). */
 function MentionChip({
   chip,
@@ -340,8 +364,9 @@ function MentionChip({
   const onPress = open(chip.target, drawing);
   const size = ROLE_SIZE.ROW_LINE;
   const standing = standingLook(chip, drawing);
-  const heard = standing?.heard ?? chip.heard;
-  const name = standing?.name ?? chip.name;
+  const named = useNamedChip(chip);
+  const heard = standing?.heard ?? named.heard;
+  const name = standing?.name ?? named.name;
   const menu = useChipMenu(chip.target, onPress);
 
   // Note that a GitHub page's standing wins over the entity's mark, since only the provider's answer says where it stands.
