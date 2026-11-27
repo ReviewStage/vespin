@@ -124,7 +124,7 @@ function colorRow(dark: boolean) {
  * emoji by category, read the first time it is shown, each in the row's
  * color. A face's press shows it in the preview, a recent one bringing its
  * color to the row, and a color chosen recolors it; Done hands the face on
- * where it changed and Cancel, or a swipe down, drops it. The caller keeps
+ * where it changed from the one the sheet opened on and Cancel, or a swipe down, drops it. The caller keeps
  * Recent (`recent`).
  */
 export function ManagerFaceSheet({
@@ -145,6 +145,7 @@ export function ManagerFaceSheet({
   const dark = useColorScheme() === "dark";
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<FaceTab>(() => openingTab(face));
+  const [opened, setOpened] = useState(face);
   const [draft, setDraft] = useState(face);
   const [color, setColor] = useState<ManagerFaceColor>(face?.color ?? OPENING_COLOR);
   const [shown, setShown] = useState(presented);
@@ -155,6 +156,7 @@ export function ManagerFaceSheet({
 
     if (presented) {
       setTab(openingTab(face));
+      setOpened(face);
       setDraft(face);
       setColor(face?.color ?? OPENING_COLOR);
     }
@@ -215,7 +217,8 @@ export function ManagerFaceSheet({
       colors={{ label: WORDS.COLORS, options: colors, chosen: color, onChoose: choose }}
       onCancel={dismiss}
       onDone={() => {
-        if (draft !== undefined && !sameManagerFace(draft, face)) onPick(draft);
+        // Note that Done keeps what was picked here, so it measures the draft against the face the sheet opened on, never the live one another client may have changed since.
+        if (draft !== undefined && !sameManagerFace(draft, opened)) onPick(draft);
         dismiss();
       }}
       onQuery={setQuery}
