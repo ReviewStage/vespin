@@ -32,7 +32,10 @@ env:
       true: ${FLOATING_TABS == 'true'}
       visible: "Hide Sidebar"
     commands:
-      - tapOn: "Hide Sidebar"
+      # Note that the sidebar's own toggle is the last of the two named Hide Sidebar, since the list column's stands under the sidebar first in the tree (vjipadrest2's inbox lane).
+      - tapOn:
+          text: "Hide Sidebar"
+          index: -1
       - waitForAnimationToEnd
 # The ⋯ menu: the scopes, Open checked, then Mark all as read. A tap off the
 # menu closes it.
