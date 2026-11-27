@@ -350,7 +350,7 @@ interface ReadParts<Part extends string> {
   readonly queries: Record<Part, SealedLiveQueryWire>;
 }
 
-/** Which of the sealer's reads answers a part: its digest alone, or its rows with it. */
+/** Which of the sealer's reads answers a part: its digest alone, its rows with it, or its rows alone. */
 type PartRead = (sealer: LiveSealer) => LiveSealer["seal"];
 
 /** Each part read now at the poll address (`pollSealer`), as `how` reads it; unavailable where it could not be read. */
@@ -736,7 +736,7 @@ const narrowedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends 
   const statements = delta.statements(params, syncMovedOf(rows));
 
   if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-  const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+  const read = yield* readParts(statements.value, (sealer) => sealer.rows);
   const gone = new Map<PartOf<Read>, readonly string[]>();
 
   for (const [part, keys] of ownMovedKeys(delta.own, rows)) {
@@ -891,7 +891,7 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
     const statements = query.statements(params);
 
     if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-    const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+    const read = yield* readParts(statements.value, (sealer) => sealer.rows);
 
     return { ...read, queries: syncedParts(read.queries, { next }, new Map()) };
   }
@@ -935,7 +935,7 @@ const pagedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   const statements = page.statements(params, { keys: parents.keys, first: after === undefined });
 
   if (Option.isNone(statements)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-  const read = yield* readParts(statements.value, (sealer) => sealer.seal);
+  const read = yield* readParts(statements.value, (sealer) => sealer.rows);
 
   const sync = {
     next: String(at),
