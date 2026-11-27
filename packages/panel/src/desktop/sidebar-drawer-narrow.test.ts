@@ -135,10 +135,10 @@ test("a narrow window worked by a mouse draws no empty Pinned either", async () 
   assert.equal(pinnedStands(sidebar), false);
 });
 
-test("beside the work the pages' rows scroll with the tasks too, and an empty Pinned stands nowhere", async () => {
+test("beside the work the places stand in the rail while the tasks scroll, and an empty Pinned stands nowhere", async () => {
   const sidebar = await mountIn(SHELL_ROOM.WIDE);
 
-  assert.deepEqual(scrolled(sidebar), { home: true, tasks: true });
+  assert.deepEqual(scrolled(sidebar), { home: false, tasks: true });
   assert.equal(pinnedStands(sidebar), false, "no Pinned");
   assert.doesNotMatch(sidebar.textContent ?? "", /Pinned/u);
 });

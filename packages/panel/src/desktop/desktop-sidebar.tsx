@@ -84,7 +84,9 @@ import {
   joinRefs,
   MoreButton,
   NAV_CURRENT,
+  NAV_ITEM_VARIANT,
   NavItem,
+  type NavItemVariant,
   NOTE_LINE_LOOK,
   NoRepositoryGlyph,
   NoteLine,
@@ -103,8 +105,8 @@ import {
   SearchIcon,
   SelectionRegion,
   Shortcut,
-  SidebarPlaces,
-  SidebarRule,
+  SIDEBAR_FOOT_LOOK,
+  SidebarRail,
   STATUS_TONE,
   TEXT_ELEMENT,
   TEXT_VARIANT,
@@ -275,6 +277,7 @@ import { ChosenTasksContext, useTasksSelection } from "./tasks-selection.js";
 import { useWorkspaceRuns } from "./use-automation-runs.js";
 import { useRunRowDrag } from "./use-row-drag.js";
 import { WorkspaceSwitcher } from "./workspace-switcher.js";
+import { TILE_SIZE, WorkspaceTile } from "./workspace-tile.js";
 
 /**
  * What the sidebar leaves the work column beside it, in CSS pixels: the
@@ -1982,9 +1985,18 @@ function useFloatingSidebar(sidebar: SidebarCollapse): FloatingSidebar {
 }
 
 /** Search, a second door to the command palette, heading the list. */
-function SidebarSearchRow({ onOpen }: { onOpen: () => void }): React.JSX.Element {
+function SidebarSearchRow({
+  variant,
+  onOpen,
+}: {
+  /** Whether it stands as a row or as a tile in the rail. */
+  variant: NavItemVariant;
+  onOpen: () => void;
+}): React.JSX.Element {
   return (
     <NavItem
+      variant={variant}
+      hint="Search"
       icon={<SearchIcon />}
       aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.COMMAND_PALETTE)}
       shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.COMMAND_PALETTE].chord} />}
@@ -1997,11 +2009,14 @@ function SidebarSearchRow({ onOpen }: { onOpen: () => void }): React.JSX.Element
 
 /** Home's row, between Search and the Inbox. A press goes to Home from wherever the window stands. */
 function SidebarHomeRow({
+  variant,
   current,
   disabled,
   onOpen,
   onOpenInTab,
 }: {
+  /** Whether it stands as a row or as a tile in the rail. */
+  variant: NavItemVariant;
   current: boolean;
   disabled: boolean;
   onOpen: () => void;
@@ -2010,6 +2025,8 @@ function SidebarHomeRow({
 }): React.JSX.Element {
   return (
     <NavItem
+      variant={variant}
+      hint="Home"
       icon={<EntityGlyph kind={ENTITY_KIND.HOME} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.HOME)}
@@ -2030,12 +2047,15 @@ function SidebarHomeRow({
  * the row, so the first press finds it landed.
  */
 function SidebarTasksRow({
+  variant,
   current,
   disabled,
   onOpen,
   onOpenInTab,
   onPreload,
 }: {
+  /** Whether it stands as a row or as a tile in the rail. */
+  variant: NavItemVariant;
   current: boolean;
   disabled: boolean;
   onOpen: () => void;
@@ -2050,6 +2070,8 @@ function SidebarTasksRow({
 
   return (
     <NavItem
+      variant={variant}
+      hint="Tasks"
       icon={<EntityGlyph kind={ENTITY_KIND.BOARD} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.TASKS)}
@@ -2074,6 +2096,7 @@ function SidebarTasksRow({
  * them in the working tone beside that mark, as the Runs tab does.
  */
 function SidebarAutomationsRow({
+  variant,
   current,
   failed,
   running,
@@ -2081,6 +2104,8 @@ function SidebarAutomationsRow({
   onOpen,
   onOpenInTab,
 }: {
+  /** Whether it stands as a row or as a tile in the rail. */
+  variant: NavItemVariant;
   current: boolean;
   failed: boolean;
   /** How many runs of the listed workspace's automations still have an agent at work. */
@@ -2092,6 +2117,8 @@ function SidebarAutomationsRow({
 }): React.JSX.Element {
   return (
     <NavItem
+      variant={variant}
+      hint="Automations"
       icon={<EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       count={{ value: running, noun: RUNNING_NOUN, tone: STATUS_TONE.WORKING }}
@@ -2113,16 +2140,21 @@ function SidebarAutomationsRow({
  * opens.
  */
 function SidebarMergeQueueRow({
+  variant,
   current,
   disabled,
   onOpen,
 }: {
+  /** Whether it stands as a row or as a tile in the rail. */
+  variant: NavItemVariant;
   current: boolean;
   disabled: boolean;
   onOpen: () => void;
 }): React.JSX.Element {
   return (
     <NavItem
+      variant={variant}
+      hint={MERGE_QUEUE_WORDS}
       icon={<GLYPH.QUEUED />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       disabled={disabled}
@@ -3043,57 +3075,83 @@ function SidebarColumn({
     onSignOut,
   });
 
-  // The pages' rows, then the rule under them, heading the tasks' scroller; on a phone, whose Tasks page this tree is, its bar holds the places and Search's Go to the rest (`mobile-bar.tsx`), so none stands.
-  const places = phone ? null : (
-    <>
-      <SidebarPlaces>
-        <HeldSearchRow onOpen={placeDoors.onSearch} />
-        <HeldHomeRow
-          current={atHome}
-          disabled={!tasks.signedIn}
-          onOpen={placeDoors.onHome}
-          onOpenInTab={placeDoors.onHomeInTab}
+  // The places stand as a rail of tiles at the column's start, the workspace's tile at its head and the account at its foot, beside the list of tasks; on a phone, whose Tasks page this tree is, its bar holds the places and Search's Go to the rest (`mobile-bar.tsx`), so none stands.
+  const tile = NAV_ITEM_VARIANT.TILE;
+
+  const rail = phone ? null : (
+    <SidebarRail
+      label="Sidebar places"
+      head={
+        tasks.signedIn && tasks.workspace !== undefined ? (
+          <ReplayMask>
+            <WorkspaceTile workspace={tasks.workspace} size={TILE_SIZE.RAIL} />
+          </ReplayMask>
+        ) : undefined
+      }
+      foot={
+        <HeldSidebarFoot
+          look={SIDEBAR_FOOT_LOOK.RAIL}
+          account={account}
+          updates={updates}
+          shown={overlay.inSight}
+          settingsOpen={tab === PANEL_TAB.SETTINGS}
+          callDocked={false}
+          onSettings={placeDoors.onSettings}
+          onSignOut={placeDoors.onSignOut}
         />
-        {inboxOn ? (
-          <HeldInboxRow
-            count={inboxCount}
-            current={inInbox}
-            disabled={!tasks.signedIn}
-            onOpen={placeDoors.onInbox}
-            onOpenInTab={placeDoors.onInboxInTab}
-          />
-        ) : null}
-        <HeldTasksRow
-          current={inBoard}
+      }
+    >
+      <HeldSearchRow variant={tile} onOpen={placeDoors.onSearch} />
+      <HeldHomeRow
+        variant={tile}
+        current={atHome}
+        disabled={!tasks.signedIn}
+        onOpen={placeDoors.onHome}
+        onOpenInTab={placeDoors.onHomeInTab}
+      />
+      {inboxOn ? (
+        <HeldInboxRow
+          variant={tile}
+          count={inboxCount}
+          current={inInbox}
           disabled={!tasks.signedIn}
-          onOpen={placeDoors.onBoard}
-          onOpenInTab={placeDoors.onBoardInTab}
-          onPreload={placeDoors.onBoardPreload}
+          onOpen={placeDoors.onInbox}
+          onOpenInTab={placeDoors.onInboxInTab}
         />
-        <HeldAutomationsRow
-          current={inAutomations}
-          failed={automationFailed}
-          running={automationsRunning}
+      ) : null}
+      <HeldTasksRow
+        variant={tile}
+        current={inBoard}
+        disabled={!tasks.signedIn}
+        onOpen={placeDoors.onBoard}
+        onOpenInTab={placeDoors.onBoardInTab}
+        onPreload={placeDoors.onBoardPreload}
+      />
+      <HeldAutomationsRow
+        variant={tile}
+        current={inAutomations}
+        failed={automationFailed}
+        running={automationsRunning}
+        disabled={!tasks.signedIn}
+        onOpen={placeDoors.onAutomations}
+        onOpenInTab={placeDoors.onAutomationsInTab}
+      />
+      {mergeQueueOn ? (
+        <HeldMergeQueueRow
+          variant={tile}
+          current={inMergeQueue}
           disabled={!tasks.signedIn}
-          onOpen={placeDoors.onAutomations}
-          onOpenInTab={placeDoors.onAutomationsInTab}
+          onOpen={placeDoors.onMergeQueue}
         />
-        {mergeQueueOn ? (
-          <HeldMergeQueueRow
-            current={inMergeQueue}
-            disabled={!tasks.signedIn}
-            onOpen={placeDoors.onMergeQueue}
-          />
-        ) : null}
-      </SidebarPlaces>
-      <SidebarRule />
-    </>
+      ) : null}
+    </SidebarRail>
   );
 
   return (
     <PanePin
       ref={overlay.ref}
       className="desktop-sidebar"
+      data-rail={rail === null ? undefined : ""}
       data-row-drop-scope=""
       inert={!overlay.inSight}
       onPin={onPressWithin}
@@ -3148,6 +3206,7 @@ function SidebarColumn({
       ) : tasks.signedIn && tasks.workspace !== undefined ? (
         <WorkspaceSwitcher
           tasks={tasks}
+          tiled={false}
           inSight={overlay.inSight}
           newTask={{ home: homeComposer, onOpen: chosen(newTask) }}
           admin={{ onOpen: chosen(openAdmin), onPreload: preloadAdmin }}
@@ -3163,6 +3222,7 @@ function SidebarColumn({
           It reaches the column's end edge and its body pads the rows back in, so the strip its fade keeps
           for the scroll bar stands in the column's inset rather than over the rows' ends. */}
       <ReplayUnmask>
+        {rail}
         <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
           <ScrollArea ref={scroller}>
             <ChosenTasksContext value={selection.chosenOf}>
@@ -3178,7 +3238,6 @@ function SidebarColumn({
                   ref={bodyRef}
                   className="sidebar-section-body flex min-h-full flex-col p-ring-reach pe-column-inset [&_.sidebar-group+.sidebar-group]:mt-section-gap"
                 >
-                  {places}
                   {/* Managers stands above everything the workspace's tasks fill, where the workspace has them on. */}
                   <SidebarManagers
                     tasks={tasks}
@@ -3393,18 +3452,6 @@ function SidebarColumn({
             </ChosenTasksContext>
           </ScrollArea>
         </Fill>
-
-        {phone ? null : (
-          <HeldSidebarFoot
-            account={account}
-            updates={updates}
-            shown={overlay.inSight}
-            settingsOpen={tab === PANEL_TAB.SETTINGS}
-            callDocked={!sidebar.collapsed}
-            onSettings={placeDoors.onSettings}
-            onSignOut={placeDoors.onSignOut}
-          />
-        )}
       </ReplayUnmask>
       {sectionDialogs.dialog}
       {selection.dialog}

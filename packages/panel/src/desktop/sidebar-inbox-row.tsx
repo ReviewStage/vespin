@@ -1,6 +1,13 @@
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
-import { commandKeyshortcuts, NAV_CURRENT, type NavCount, NavItem, Shortcut } from "@repo/ui";
+import {
+  commandKeyshortcuts,
+  NAV_CURRENT,
+  type NavCount,
+  NavItem,
+  type NavItemVariant,
+  Shortcut,
+} from "@repo/ui";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 
 /**
@@ -16,12 +23,15 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
  * on the Inbox's own head, where its reader looks for it.
  */
 export function SidebarInboxRow({
+  variant,
   count,
   current,
   disabled,
   onOpen,
   onOpenInTab,
 }: {
+  /** Whether it stands as a row or as a tile in the rail. */
+  variant: NavItemVariant;
   /** What the Inbox's chosen view lists (`useInboxViewCount`). */
   count: NavCount;
   current: boolean;
@@ -32,6 +42,8 @@ export function SidebarInboxRow({
 }): React.JSX.Element {
   return (
     <NavItem
+      variant={variant}
+      hint="Inbox"
       icon={<EntityGlyph kind={ENTITY_KIND.INBOX} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       count={count}
