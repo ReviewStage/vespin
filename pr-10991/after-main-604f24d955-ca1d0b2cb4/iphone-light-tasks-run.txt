@@ -1,0 +1,62 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow .kbd-tasks
+  > On Flow Complete
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Assert that "Pinned" is visible... COMPLETED
+Assert that "Weekly digest email" is visible... COMPLETED
+Assert that "Experiments" is visible... COMPLETED
+Assert that "Ideas" is visible... COMPLETED
+Assert that "New task in Ideas" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot tasks-list... COMPLETED
+Run subflows/to-row.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run clear-of-tabs.yaml...
+    Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+    Run flow when "Launch, [0-9]+", Above id: search-tab is not visible and true is true... SKIPPED
+    Wait for animation to end... COMPLETED
+  Run clear-of-tabs.yaml... COMPLETED
+Run subflows/to-row.yaml... COMPLETED
+Tap on "Launch", Child of: "Launch, [0-9]+"... COMPLETED
+Assert that "Launch checklist" is not visible... COMPLETED
+Tap on "Launch", Child of: "Launch, [0-9]+"... FAILED
+Set orientation PORTRAIT... COMPLETED
+
+Parent element not found: Text matching regex: Launch, [0-9]+ (looking for Text matching regex: Launch inside it)
+
+The childOf parent (Text matching regex: Launch, [0-9]+) matched no element, so its children were never searched. Nothing matched Text matching regex: Launch anywhere on screen either.
+
+Possible causes:
+- The childOf selector may be incorrect - check the UI hierarchy in debug artifacts for elements with slightly different names/properties.
+- The parent may not have rendered within the 16175ms this lookup waited.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjp10991r/iphone-light-tasks/2026-11-27_082154
