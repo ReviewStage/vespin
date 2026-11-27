@@ -162,6 +162,7 @@ async function mountView(
       filter: drawing.filter ?? NO_TASKS_FILTER,
       display: drawing.display ?? display,
       onDisplay: () => undefined,
+      staged: false,
     };
 
     // Note that the collections hear the list before the tab does, as the window's follow commits them before its Query client tells its readers.
