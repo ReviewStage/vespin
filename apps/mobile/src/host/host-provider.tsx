@@ -42,6 +42,7 @@ import {
   launchFixtureProfile,
   launchInboxOff,
   launchMachineAsk,
+  launchMediaOrigin,
   launchRefusesWrites,
   launchSetupOwed,
   launchStubsAuthServer,
@@ -320,6 +321,7 @@ function launchOptions(): MobileHostStartOptions {
     fixtureSetupOwed: launchSetupOwed(),
     fixtureInboxOff: launchInboxOff(),
     fixtureRefusesWrites: launchRefusesWrites(),
+    fixtureMediaOrigin: launchMediaOrigin(),
     appVersion: APP_VERSION,
     stateRoot: hostStateRoot(),
   };

@@ -301,6 +301,37 @@ test("two files of one name, and one whose name holds brackets, each stand in th
   });
 });
 
+test("a file that is no picture, PDF, or text is held as a file of any other kind, whatever its name and type say", async () => {
+  let composer: ReturnType<typeof useAgentComposer> | undefined;
+
+  const container = await drawn(
+    createElement(HandedBox, {
+      hand: (each) => {
+        composer = each;
+      },
+    }),
+  );
+
+  const zip = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00])], "bundle.zip", {
+    type: "application/zip",
+  });
+
+  // Note that bytes with a NUL in them are no text, though the file is named and typed as one.
+  const binary = new File([new Uint8Array([0x68, 0x00, 0x69])], "notes.txt", {
+    type: "text/plain",
+  });
+
+  await drop(container, [zip, binary]);
+  assert.equal(held(container).note, null);
+  assert.deepEqual(
+    composer?.held.attachments.map((file) => [file.name, file.mediaType]),
+    [
+      ["bundle.zip", AGENT_ATTACHMENT_TYPE.OTHER],
+      ["notes.txt", AGENT_ATTACHMENT_TYPE.OTHER],
+    ],
+  );
+});
+
 test("a picture and a PDF pasted into the agent's box are held as their chips in the words, the paste writing no words of its own", async () => {
   // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {

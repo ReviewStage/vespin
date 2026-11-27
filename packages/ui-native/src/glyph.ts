@@ -297,6 +297,8 @@ export const GLYPH = {
   GOES_OUT: system("arrow.up.forward"),
   MENU_OPENS: system("chevron.up.chevron.down"),
   STOP_TURN: system("stop.fill"),
+  // A video still's play mark, the system's own, as Messages and Photos mark a video at rest.
+  VIDEO_PLAY: system("play.circle.fill"),
   // A sheet's confirm, the system's checkmark in its prominent bar button, as iOS 26's own sheets close on it.
   CONFIRM: system("checkmark"),
   // A task's status ring, the panel's own mark.

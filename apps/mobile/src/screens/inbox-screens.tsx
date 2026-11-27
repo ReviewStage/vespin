@@ -1403,9 +1403,15 @@ function InboxStackList(held: InboxHeld) {
   const placement = useHeldSearchPlacement(search);
 
   // Note that Select mode names how many are chosen in the title's place, stands Select all where the switcher stood and Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
+  // Note that the count stands inline in the bar, as Photos' Select Items does, rather than in the large title, because iOS left the large title blank once its words changed under it.
   return (
     <>
-      <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }}>
+      <Stack.Screen
+        options={{
+          title: choosing?.title ?? INBOX_TITLE,
+          headerLargeTitleEnabled: choosing === undefined,
+        }}
+      >
         {choosing !== undefined ? null : (
           <Stack.SearchBar
             ref={field}

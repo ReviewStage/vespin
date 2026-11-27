@@ -16,6 +16,7 @@ import { Stack, useIsFocused } from "expo-router";
 import type { ReactElement, ReactNode } from "react";
 import { useComposerDraftsSignOut } from "../../agents/composer-drafts.js";
 import { MachineAsks } from "../../agents/machine-asks.js";
+import { useHeldSendsSignOut } from "../../agents/use-agent-composer.js";
 import { useAppNotReadyCount } from "../../app-ready.js";
 import { useCrashReports } from "../../crash-reports.js";
 import { appStateQuery } from "../../host/app-state-query.js";
@@ -160,6 +161,7 @@ export default function GuardedScreens() {
   useRecentOpenedSignOut(signedIn);
   useComposerDraftsSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
+  useHeldSendsSignOut(signedIn);
   useCrashReports();
   useOfflineNotice();
   useNoticeForAccount();

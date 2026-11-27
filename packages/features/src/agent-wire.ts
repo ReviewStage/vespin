@@ -566,13 +566,7 @@ export const AGENT_ATTACHMENT_TYPE = {
   PNG: "image/png",
   JPEG: "image/jpeg",
   WEBP: "image/webp",
-  /**
-   * A still GIF (`gif-frames.ts`). Note that no client sends one yet, but
-   * re-encodes it as it does any other picture, because a message box's file
-   * may be kept and served back as its type (a comment's, an Inbox reply's,
-   * a queued message's), which a client released before this reads under
-   * types without it.
-   */
+  /** A still GIF (`gif-frames.ts`); a message box sends an animated one as its first frame. */
   GIF: "image/gif",
   PDF: "application/pdf",
   TEXT: "text/plain",
@@ -580,10 +574,7 @@ export const AGENT_ATTACHMENT_TYPE = {
    * Any other file, a document, a spreadsheet, an archive, or a binary,
    * whatever type its machine gave it, since its name says what it is and a
    * file is served back under the type it travels as, which this one names
-   * no reader to run. Note that no client sends one yet, but refuses it as
-   * it always has, because a message box's file may be kept and served back
-   * as its type (a comment's, an Inbox reply's, a queued message's), which a
-   * client released before this reads under types without it.
+   * no reader to run.
    */
   OTHER: "application/octet-stream",
 } as const;
@@ -594,8 +585,19 @@ export type AgentAttachmentType =
 const AGENT_ATTACHMENT_TYPES: ReadonlySet<string> = new Set(Object.values(AGENT_ATTACHMENT_TYPE));
 
 /** Whether a type read off the wire is one a message's file may be. */
-export function isAgentAttachmentType(type: string): type is AgentAttachmentType {
+function isAgentAttachmentType(type: string): type is AgentAttachmentType {
   return AGENT_ATTACHMENT_TYPES.has(type);
+}
+
+/**
+ * The type a message's file read back off the wire is carried as: its own
+ * where this build knows it, and a file of any other kind otherwise
+ * (`AGENT_ATTACHMENT_TYPE.OTHER`). Note that a type a later build adds is
+ * read so, because its file still opens and travels as bytes to save, where
+ * refusing it would drop the file or close the edit that holds it.
+ */
+export function agentAttachmentTypeOf(type: string): AgentAttachmentType {
+  return isAgentAttachmentType(type) ? type : AGENT_ATTACHMENT_TYPE.OTHER;
 }
 
 /** The most bytes one file of each type may hold. */
