@@ -1085,8 +1085,11 @@ function placeIn(
     };
   }
 
-  const sectionId = group.kind === TASK_TREE_GROUP.SECTION ? group.key : null;
+  return placeInto(group.kind === TASK_TREE_GROUP.SECTION ? group.key : null, listing);
+}
 
+/** A task dropped into the section `sectionId`, or under null out of every section and back among the reader's tasks, unpinned once the move is taken (`placeIn`). */
+function placeInto(sectionId: string | null, listing: ReadListing): (task: TaskSummary) => void {
   return (task) => {
     const newest = countDrop(task.id);
     void listing.place(task.id, sectionId).then((landed) => {
@@ -1095,17 +1098,20 @@ function placeIn(
   };
 }
 
-/** What a link dropped on a group, its header or its sidebar row, does: puts the task it names there (`placeIn`); none where nothing is dropped there. */
-function dropOnto(group: TaskTreeGroup, listing: ReadListing): ((url: string) => void) | undefined {
-  const place = placeIn(group, listing);
-
-  if (place === undefined) return undefined;
-
+/** What a link dropped somewhere does: `place` the task it names, where the list holds it. */
+function dropTask(place: (task: TaskSummary) => void, listing: ReadListing): (url: string) => void {
   return (url) => {
     const task = droppedTask(listing.tree, url);
 
     if (task !== undefined) place(task);
   };
+}
+
+/** What a link dropped on a group, its header or its sidebar row, does: puts the task it names there (`placeIn`); none where nothing is dropped there. */
+function dropOnto(group: TaskTreeGroup, listing: ReadListing): ((url: string) => void) | undefined {
+  const place = placeIn(group, listing);
+
+  return place === undefined ? undefined : dropTask(place, listing);
 }
 
 /** Which parents stand open, and the toggle a parent's chevron calls. */
@@ -1521,11 +1527,14 @@ function MyTasksSection({
   listing,
   hold,
   count,
+  foldable,
 }: {
   readonly listing: TasksListing;
   readonly hold: TreeHold;
   /** How many tasks stand under it, its sections' and its groups'. */
   readonly count: number;
+  /** Whether anything stands under it to fold away, an empty section of the member's included, so a fold shut while it counted nothing can still be opened. */
+  readonly foldable: boolean;
 }) {
   const make = listing.placing.newSection;
 
@@ -1543,9 +1552,11 @@ function MyTasksSection({
       title={listing.tree.tasksHead}
       menu={act === undefined ? undefined : [[{ ...act, tone: ROW_ACTION_TONE.NEUTRAL }]]}
       count={count}
-      foldable={count > 0}
-      folded={hold.tasksFolded}
+      foldable={foldable}
+      folded={foldable && hold.tasksFolded}
       onFold={(shut) => hold.setTasksFolded(shut)}
+      // Note that a task dropped on it, as an iPad drags, leaves its section and its pin for the reader's tasks, as a drop on one of their groups does.
+      onDropLink={dropTask(placeInto(null, listing), listing)}
       add={act === undefined ? undefined : { label: NEW_SECTION, acts: [act] }}
     >
       {null}
@@ -1747,7 +1758,8 @@ function TreeSections({
     0,
   );
 
-  const myTasksFolded = hold.tasksFolded;
+  const underMyTasksAny = tree.sections.length + tree.tasks.length > 0;
+  const myTasksFolded = underMyTasksAny && hold.tasksFolded;
 
   return (
     <>
@@ -1763,7 +1775,12 @@ function TreeSections({
       {tree.following === undefined ? null : (
         <GroupSection group={tree.following} listing={listing} hold={hold} />
       )}
-      <MyTasksSection listing={listing} hold={hold} count={underMyTasks} />
+      <MyTasksSection
+        listing={listing}
+        hold={hold}
+        count={underMyTasks}
+        foldable={underMyTasksAny}
+      />
       {myTasksFolded
         ? null
         : [...tree.sections, ...tree.tasks].map((group) => (
