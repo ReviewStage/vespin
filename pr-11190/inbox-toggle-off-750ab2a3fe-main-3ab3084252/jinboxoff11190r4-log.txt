@@ -1,0 +1,33 @@
+-- jinboxoff11190r4: main pinned to 3ab3084252: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to 0c18cfc263
+== bundle PJjinboxoff11190r4 base 0c18cfc263
+  built 0c18cfc263 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+p11190-ipad27-light-r4 1-open: fails 0 shots 1 
+  p11190-ipad27-light-r4: try 0: below 127 275 707 935 143 1107 691 1159 647 1133 (status, sheet x1 y1 x2 y2, row x1 y1 x2 y2, point)
+  p11190-ipad27-light-r4: try 1: ok 127 275 707 935 143 863 691 915 647 889 (status, sheet x1 y1 x2 y2, row x1 y1 x2 y2, point)
+p11190-ipad27-light-r4 2-toggle: fails 0 shots 1 
+p11190-ipad27-light-r4 3-close: fails 2 shots 2   Assert that "Search tasks" is visible... FAILED
+  p11190-ipad27-light-r4: FAIL
+p11190-iphone-light-r4 1-open: fails 0 shots 1 
+row bounds [16,768][386,820]
+  p11190-iphone-light-r4: switch point 356,794
+p11190-iphone-light-r4 2-toggle: fails 0 shots 1 
+p11190-iphone-light-r4 3-close: fails 0 shots 1 
+  p11190-iphone-light-r4: PASS
+== bundle PJjr4d base 9ce6c7dcc6
+  built 9ce6c7dcc6 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+p11190-ipad27-light-r4-diag 1-open: fails 0 shots 1 
+  p11190-ipad27-light-r4-diag: try 0: below 127 275 707 935 143 1107 691 1159 647 1133 (status, sheet x1 y1 x2 y2, row x1 y1 x2 y2, point)
+  p11190-ipad27-light-r4-diag: try 1: ok 127 275 707 935 143 863 691 915 647 889 (status, sheet x1 y1 x2 y2, row x1 y1 x2 y2, point)
+p11190-ipad27-light-r4-diag 2-toggle: fails 0 shots 1 
+p11190-ipad27-light-r4-diag 3-close: fails 0 shots 1 
+  p11190-ipad27-light-r4-diag: PASS
+  diag: 5 placesSlot lines,        5 VESPIN-DIAG lines
