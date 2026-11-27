@@ -1,0 +1,11 @@
+pinned to 7dd8835266
+== bundle PJjsd5008m base 7dd8835266
+  built 7dd8835266 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-inbox: fails 0 shots 16 
+iphone-light-tasks:  
+iphone-dark-inbox: fails 0 shots 16 
+iphone-dark-tasks: fails 0 shots 35 
