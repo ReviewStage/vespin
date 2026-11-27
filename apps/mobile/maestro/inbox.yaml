@@ -90,26 +90,16 @@ env:
 - tapOn: "invite-test-plan.pdf, PDF.*"
 # The PDF opens in the system's Quick Look, titled with its name, and its
 # close button closes it. Note that the button is found by Quick Look's own
-# id, since it reads "Done" on an iPhone and "close" on an iPad, and that an
-# iPad's Quick Look hides its bar a moment after it opens, so a tap on the
-# page brings the bar back first where the button no longer stands.
+# id, since it reads "Done" on an iPhone and "close" on an iPad, and that the
+# flow waits for Quick Look's Markup button first, which it draws only once
+# the PDF has loaded, because the close button stands from the moment Quick
+# Look opens, and a press on it while the PDF still loads closes nothing.
 - extendedWaitUntil:
     visible:
-      id: "QLOverlayDoneButtonAccessibilityIdentifier"
+      id: "QLOverlayMarkupButtonAccessibilityIdentifier"
     timeout: 15000
 - waitForAnimationToEnd
 - takeScreenshot: inbox-pdf
-- runFlow:
-    when:
-      notVisible:
-        id: "QLOverlayDoneButtonAccessibilityIdentifier"
-    commands:
-      - tapOn:
-          point: "50%, 50%"
-      - extendedWaitUntil:
-          visible:
-            id: "QLOverlayDoneButtonAccessibilityIdentifier"
-          timeout: 5000
 - tapOn:
     id: "QLOverlayDoneButtonAccessibilityIdentifier"
 - waitForAnimationToEnd
@@ -128,10 +118,23 @@ env:
 - assertVisible: "Pick a date and time…"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-thread-remind
-- tapOn:
-    point: "50%, 90%"
-- waitForAnimationToEnd
+# Note that the menu is put away by a tap off it at a point, through the
+# flows' own `dismiss.yaml`, as keep.yaml puts its menus away, because iOS
+# takes everything under an open menu out of the accessibility tree, so no
+# named control exists to tap. The point is the window's trailing margin
+# beside the thread's PDF, three quarters down, where nothing presses even
+# with no menu standing, and below the menu on every window: an iPhone's ⋯
+# drops Remind me's times to two thirds of the way down, where a tap at 60%
+# pressed Pick a date and time…, while a regular window's clock stands its
+# menu under the bar. The flow then asserts the menu gone and the thread as
+# it stood, its PDF's chip still there, so a tap that ever lands on
+# something fails here.
+- runFlow:
+    file: subflows/dismiss.yaml
+    env:
+      POINT: "94%, 75%"
 - assertNotVisible: "Pick a date and time…"
+- assertVisible: "invite-test-plan.pdf, PDF.*"
 # Back on the list, from the thread.
 - runFlow:
     file: subflows/tab.yaml
@@ -172,9 +175,16 @@ env:
       - waitForAnimationToEnd
       - assertVisible: "Resolve"
       - takeScreenshot: inbox-swipe-trailing
-      - tapOn:
-          point: "10%, 27%"
+      # Note that the tap is on the row itself, its words drawn across from
+      # its actions, and that the flow then asserts the actions gone and the
+      # list still standing, no thread opened, so a tap that ever presses the
+      # row fails here.
+      - tapOn: "Recorded the invite flow"
       - waitForAnimationToEnd
+      - assertNotVisible: "Resolve"
+      - assertVisible: "Recorded the invite flow"
+      - assertNotVisible:
+          id: "composer-field"
 # A long press lifts the thread's preview, its newest messages under its
 # task and title, over the row's menu, which leads with Open, since a tap on
 # the preview only closes it.
