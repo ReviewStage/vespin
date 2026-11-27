@@ -1,0 +1,12 @@
+-- jprloada: main pinned to 604f24d955: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to e8c5eca4ff
+== bundle PJjprloada base e8c5eca4ff
+  built e8c5eca4ff base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-pr-load-probe: fails 3 shots 3     Assert that "Ready to merge" is visible... FAILED
+  iphone-light-pr-load-probe failed step:     Open ${LINK}... COMPLETED|    Tap on (Optional) "Open"... COMPLETED|    Assert that "Ready to merge" is visible... FAILED|
+  [prprobe] lines: 16; recordings: 
+  renamed the after run's recordings: 
