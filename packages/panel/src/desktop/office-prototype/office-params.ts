@@ -17,7 +17,13 @@ export const OFFICE_VARIANT = {
   RAILS: "rails",
   LETTER: "letter",
   RIVER: "river",
+  HILLTOP: "hilltop",
+  BOARD: "board",
+  STANDUP: "standup",
 } as const;
+
+/** The round-five ideas, each after a product people already read at a glance. */
+export const REFERENCE_IDEAS = new Set<string>(["hilltop", "board", "standup"]);
 
 /** The round-four ideas: goals and what moved toward them. */
 export const PROGRESS_IDEAS = new Set<string>(["rails", "letter", "river"]);

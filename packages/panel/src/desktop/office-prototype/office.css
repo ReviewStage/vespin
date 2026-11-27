@@ -594,3 +594,122 @@
     border-radius: 0 6px 6px 0;
   }
 }
+
+/* Round five: after references. */
+.ref-hills {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  padding: 8px 0 32px;
+}
+.ref-hill-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+.ref-hill {
+  position: relative;
+  align-self: center;
+}
+.ref-hill svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+.ref-hill-line {
+  fill: none;
+  stroke: var(--ui-color-border-strong);
+  stroke-width: 2;
+}
+.ref-hill-crest {
+  stroke: var(--ui-color-border);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+.ref-hill-was {
+  fill: none;
+  stroke: var(--ui-color-text-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 2;
+}
+.ref-hill-face {
+  position: absolute;
+  transform: translate(-50%, -88%);
+}
+.ref-hill-end {
+  position: absolute;
+  bottom: 0;
+  font-size: 11px;
+  color: var(--ui-color-text-muted);
+}
+.ref-hill-end[data-end="start"] {
+  left: 0;
+}
+.ref-hill-end[data-end="end"] {
+  right: 0;
+}
+
+.ref-board {
+  padding: 8px 0 32px;
+}
+.ref-board-goal {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+.ref-board-time {
+  font-family: var(--ui-font-mono);
+  font-size: 12px;
+  color: var(--ui-color-text-muted);
+}
+.ref-board-status {
+  font-weight: 650;
+  white-space: nowrap;
+}
+.ref-board-status[data-status="Moving"] {
+  color: var(--ui-color-working);
+}
+.ref-board-status[data-status="Your turn"] {
+  color: var(--ui-color-attention);
+}
+.ref-board-status[data-status="Quiet"] {
+  color: var(--ui-color-text-muted);
+  font-weight: 500;
+}
+
+.ref-standup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0 32px;
+  max-width: 760px;
+}
+.ref-standup-goal {
+  margin: 0;
+  font-weight: 600;
+}
+.ref-standup-line {
+  margin: 0;
+  color: var(--ui-color-text);
+}
+
+@media (max-width: 700px) {
+  .ref-hills {
+    grid-template-columns: 1fr;
+  }
+}
+.ref-board-phone {
+  display: none;
+}
+@media (max-width: 700px) {
+  .ref-board {
+    display: none;
+  }
+  .ref-board-phone {
+    display: block;
+    padding: 8px 0 24px;
+  }
+}
