@@ -524,6 +524,11 @@ test("a new automation is created only once it is named and told its task, and t
     "New automation",
     "a page not yet made stands as New automation until it is named",
   );
+  assert.equal(
+    promptEditor(page).getAttribute("aria-placeholder"),
+    "Tell the agent what to do each run",
+    "the empty prompt asks for one rather than reading as one already written",
+  );
   assert.equal(crumbs(page), "Automations");
 
   act(() => button("Create automation").click());
