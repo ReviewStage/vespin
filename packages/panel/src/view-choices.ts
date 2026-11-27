@@ -9,7 +9,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createStore, type Store, useSelector } from "@tanstack/react-store";
 import { Option } from "effect";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { actMutation, pressMutation } from "./act-mutations.js";
 import { viewChoicesQuery } from "./live-reads.js";
 import { selectAccount, useAppStateSlice } from "./use-app-state.js";
@@ -179,18 +179,61 @@ const HELD = new WeakMap<QueryClient, Store<HeldChoices>>();
 /** Each window's choices made on the account whose writes are still out, drawn over the account's until they settle. */
 const PENDING = new WeakMap<QueryClient, Store<HeldChoices>>();
 
-/** The choices `client`'s window holds in `stores`, one store for the window. */
-function windowChoices(
-  stores: WeakMap<QueryClient, Store<HeldChoices>>,
+/** Changes made before the account's read answered, in the order made, laid over `base` where the account keeps no choice in their place; each over the value of the key it waits under. */
+interface WaitingChanges {
+  readonly base: ViewChoiceValue<ViewChoiceKey>;
+  readonly changes: readonly ChoiceChange<ViewChoiceKey>[];
+}
+
+/** A window's waiting changes, by the account they were made under, then by key, then by place. */
+type Waiting = ReadonlyMap<
+  string,
+  ReadonlyMap<ViewChoiceKey, ReadonlyMap<string | null, WaitingChanges>>
+>;
+
+/** Each window's changes waiting on the account's read, kept apart from the surfaces that made them, which may be gone by the time it answers. */
+const WAITING = new WeakMap<QueryClient, Store<Waiting>>();
+
+/** The store `client`'s window holds in `stores`, one for the window, made holding `empty` where none stands yet. */
+function windowStore<S>(
+  stores: WeakMap<QueryClient, Store<S>>,
   client: QueryClient,
-): Store<HeldChoices> {
+  empty: () => S,
+): Store<S> {
   const standing = stores.get(client);
 
   if (standing !== undefined) return standing;
-  const made = createStore<HeldChoices>(new Map());
+  const made = createStore<S>(empty());
   stores.set(client, made);
 
   return made;
+}
+
+/** `all` with `changed` waiting on `accountId`'s read for `key` in `place`, over `base`, and no other account's changes, since one made under another account is never its to keep. */
+function waitingWith(
+  all: Waiting,
+  accountId: string,
+  key: ViewChoiceKey,
+  place: string | null,
+  base: ViewChoiceValue<ViewChoiceKey>,
+  changed: ChoiceChange<ViewChoiceKey>,
+): Waiting {
+  const inAccount = all.get(accountId);
+  const inKey = new Map(inAccount?.get(key));
+  const was = inKey.get(place);
+  inKey.set(place, { base: was?.base ?? base, changes: [...(was?.changes ?? []), changed] });
+
+  return new Map([[accountId, new Map(inAccount).set(key, inKey)]]);
+}
+
+/** The changes waiting for `key` in `place` under `accountId`, none where none wait. */
+function waitingIn(
+  all: Waiting,
+  accountId: string | undefined,
+  key: ViewChoiceKey,
+  place: string | null,
+): WaitingChanges | undefined {
+  return accountId === undefined ? undefined : all.get(accountId)?.get(key)?.get(place);
 }
 
 /** `all` with the choice of `key` in `place` held as `value`, or let go where it is undefined. */
@@ -232,7 +275,10 @@ function heldIn<Key extends ViewChoiceKey>(
  * an earlier draw (a menu standing open) never undoes one made since; and
  * that a change made before the account's read answered waits for it,
  * drawn meanwhile, and is then laid over the account's choice, so a list
- * kept whole is never written over with one built on the default.
+ * kept whole is never written over with one built on the default; it
+ * waits in the window, so it outlives the surface that made it (a picker
+ * put away), and under the account it was made under, never written under
+ * another signed in since.
  */
 export function useAccountChoice<Key extends ViewChoiceKey>(
   key: Key,
@@ -245,14 +291,16 @@ export function useAccountChoice<Key extends ViewChoiceKey>(
   const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const onAccount = staged || accountId === undefined ? undefined : place;
   const choice = useViewChoice(key, onAccount);
-  const held = windowChoices(HELD, client);
-  const pending = windowChoices(PENDING, client);
+  const held = windowStore<HeldChoices>(HELD, client, () => new Map());
+  const pending = windowStore<HeldChoices>(PENDING, client, () => new Map());
   const where = place ?? null;
   const heldNow = useSelector(held, (all) => heldIn(all, key, where));
   const pendingNow = useSelector(pending, (all) => heldIn(all, key, where));
   const [left, forgetLeft] = earlier;
 
-  const [waiting, setWaiting] = useState<readonly ChoiceChange<Key>[]>([]);
+  const waiting = windowStore<Waiting>(WAITING, client, () => new Map());
+  const waitingNow = useSelector(waiting, (all) => waitingIn(all, accountId, key, where));
+  const writing = useMutation(pressMutation(ACT_KIND.VIEW_CHOICE_WRITE));
 
   useKeptMovedUp(key, onAccount, choice, left, forgetLeft);
 
@@ -263,7 +311,13 @@ export function useAccountChoice<Key extends ViewChoiceKey>(
       ? (heldNow ?? own ?? fallback)
       : (pendingNow ?? Option.getOrElse(choice.value, () => own ?? fallback));
 
-  const value = waiting.reduce((was, changed) => changed(was), drawn);
+  const laid = (waitingNow?.changes ?? []).reduce<ViewChoiceValue<ViewChoiceKey>>(
+    (was, changed) => changed(was),
+    drawn,
+  );
+
+  // SAFETY: the changes waiting under this key were made over its value, so what they make is one.
+  const value = laid as ViewChoiceValue<Key>;
 
   // Note that a choice made on the account is drawn at once, in the frame it is pressed, and stands until its write settles, by when the account's read carries it, or has taken it back where it was refused.
   const choose = (next: ViewChoiceValue<Key>) => {
@@ -299,18 +353,49 @@ export function useAccountChoice<Key extends ViewChoiceKey>(
   const { answered } = choice;
   const unread = onAccount !== undefined && !answered;
 
-  // Note that the changes made before the account's read answered are laid over the account's choice once it does, and written once, since one written over the default then would stand over the choice another device kept.
+  // Note that the changes made before the account's read answered wait in the window, under the account they were made under, and are laid over the account's choice once it answers, by whichever surface reading one of its choices stands then, the one that made them perhaps gone; and written once, since one written over the default then would stand over the choice another device kept.
   useEffect(() => {
-    if (unread || waiting.length === 0) return;
-    setWaiting([]);
-    choose(waiting.reduce((was, changed) => changed(was), standing()));
+    if (staged || accountId === undefined) return;
+    const rows = client.getQueryData(viewChoicesQuery(accountId).queryKey);
+
+    if (rows === undefined) return;
+    const all = waiting.state;
+
+    if (all.size === 0) return;
+    // Note that changes another account made are let go here with the rest, never written under this one.
+    waiting.setState(() => new Map());
+    const mine = all.get(accountId);
+
+    for (const [waitingKey, places] of mine ?? []) {
+      for (const [waitingPlace, { base, changes }] of places) {
+        const stood = heldIn(pending.state, waitingKey, waitingPlace);
+        const kept = Option.getOrUndefined(viewChoiceOf(rows, waitingKey, waitingPlace));
+        const made = changes.reduce((was, changed) => changed(was), stood ?? kept ?? base);
+        pending.setState((held) => heldWith(held, waitingKey, waitingPlace, made));
+
+        const settled = () =>
+          pending.setState((held) =>
+            heldIn(held, waitingKey, waitingPlace) === made
+              ? heldWith(held, waitingKey, waitingPlace, undefined)
+              : held,
+          );
+
+        writing
+          .mutateAsync(viewChoiceWrite(rows, waitingKey, waitingPlace, made, crypto.randomUUID()))
+          .then(settled, settled);
+      }
+    }
   });
 
   const change = (changed: ChoiceChange<Key>) => {
     if (place === undefined) return;
 
-    if (unread) {
-      setWaiting((was) => [...was, changed]);
+    if (unread && accountId !== undefined) {
+      // SAFETY: what waits under this key is only ever laid over this key's value.
+      const over: ChoiceChange<ViewChoiceKey> = (standing) =>
+        changed(standing as ViewChoiceValue<Key>);
+
+      waiting.setState((all) => waitingWith(all, accountId, key, place, own ?? fallback, over));
 
       return;
     }

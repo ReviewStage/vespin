@@ -11,8 +11,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, expect, test } from "vitest";
 import { fakeActPort, fakeActPortCalls, refusedOnPort } from "./testing/app-bridge.js";
-import { handState, signedInAs } from "./testing/app-state.js";
-import { settleQueries, withQueryClient } from "./testing/copy-feedback.js";
+import { handState, signedInAs, stateWith } from "./testing/app-state.js";
+import { settleQueries, withQueryClient, writeAppState } from "./testing/copy-feedback.js";
 import { hearViewChoices, keepViewChoices } from "./testing/view-choices.js";
 import { type AccountChoice, useAccountChoice } from "./view-choices.js";
 
@@ -43,30 +43,58 @@ afterEach(() => {
 /** The workspace whose Managers sort a test chooses. */
 const WORKSPACE_ID = "workspace-acme";
 
+/** The Managers sort of `workspaceId` as a surface reads it, which hands what it drew to `drew`. */
+function SortSurface({
+  workspaceId,
+  drew,
+}: {
+  readonly workspaceId: string;
+  readonly drew: (choice: AccountChoice<typeof VIEW_CHOICE_KEY.MANAGER_SORT>) => void;
+}): null {
+  drew(
+    useAccountChoice(VIEW_CHOICE_KEY.MANAGER_SORT, workspaceId, DEFAULT_MANAGER_SORT, false, [
+      undefined,
+      () => undefined,
+    ]),
+  );
+
+  return null;
+}
+
 /** Draws the Managers sort as a surface reads it, and answers what it last drew. */
 function drawSort(): () => AccountChoice<typeof VIEW_CHOICE_KEY.MANAGER_SORT> {
   let latest: AccountChoice<typeof VIEW_CHOICE_KEY.MANAGER_SORT> | undefined;
 
-  function Surface(): null {
-    latest = useAccountChoice(
-      VIEW_CHOICE_KEY.MANAGER_SORT,
-      WORKSPACE_ID,
-      DEFAULT_MANAGER_SORT,
-      false,
-      [undefined, () => undefined],
-    );
-
-    return null;
-  }
-
   root = createRoot(document.body.appendChild(document.createElement("div")));
-  act(() => root?.render(withQueryClient(createElement(Surface))));
+  act(() =>
+    root?.render(
+      withQueryClient(
+        createElement(SortSurface, {
+          workspaceId: WORKSPACE_ID,
+          drew: (choice) => {
+            latest = choice;
+          },
+        }),
+      ),
+    ),
+  );
 
   return () => {
     if (latest === undefined) throw new Error("the surface has not drawn");
 
     return latest;
   };
+}
+
+/** Signs Ada in, her account's choices not yet read, the window's writes heard. */
+function signedInUnread(): ReturnType<typeof hearViewChoices> {
+  fakeActPort({});
+  handState(
+    {},
+    { account: signedInAs({ id: "user-ada", email: "ada@example.com", name: "Ada" }).account },
+  );
+
+  return hearViewChoices();
 }
 
 test("a choice made on the account is drawn in the frame it is pressed, and stands once kept", async () => {
@@ -97,13 +125,7 @@ test("a choice the account refused gives way to the account's", async () => {
 });
 
 test("a change made before the account's choices are read writes nothing until they are, then is laid over the account's", async () => {
-  fakeActPort({});
-  handState(
-    {},
-    { account: signedInAs({ id: "user-ada", email: "ada@example.com", name: "Ada" }).account },
-  );
-
-  const early = hearViewChoices();
+  const early = signedInUnread();
   const sort = drawSort();
   await settleQueries();
 
@@ -158,4 +180,69 @@ test("a surface moved to another workspace moves that workspace's kept choice up
     { workspaceId: "a", value: MANAGER_SORT.NAME },
     { workspaceId: "b", value: MANAGER_SORT.CREATED },
   ]);
+});
+
+test("a change made before the account's choices are read is kept once they are, though the surface that made it has gone", async () => {
+  signedInUnread();
+  let picker: AccountChoice<typeof VIEW_CHOICE_KEY.MANAGER_SORT> | undefined;
+
+  // A picker made the change and is put away before the choices are read; a sidebar reading another workspace's sort stands throughout.
+  const draw = (pickerOpen: boolean) =>
+    act(() =>
+      root?.render(
+        withQueryClient(
+          createElement(
+            "div",
+            null,
+            createElement(SortSurface, { workspaceId: "workspace-other", drew: () => undefined }),
+            pickerOpen
+              ? createElement(SortSurface, {
+                  workspaceId: WORKSPACE_ID,
+                  drew: (choice) => {
+                    picker = choice;
+                  },
+                })
+              : null,
+          ),
+        ),
+      ),
+    );
+
+  root = createRoot(document.body.appendChild(document.createElement("div")));
+  draw(true);
+  await settleQueries();
+  act(() => picker?.change(() => MANAGER_SORT.NAME));
+  draw(false);
+  await settleQueries();
+
+  const written = keepViewChoices();
+  await settleQueries();
+
+  expect(written.map(({ workspaceId, value }) => ({ workspaceId, value }))).toEqual([
+    { workspaceId: WORKSPACE_ID, value: MANAGER_SORT.NAME },
+  ]);
+});
+
+test("a change made before the account's choices are read is let go once another account signs in", async () => {
+  signedInUnread();
+  const sort = drawSort();
+  await settleQueries();
+  act(() => sort().change(() => MANAGER_SORT.NAME));
+  await settleQueries();
+
+  // Grace signs in with no frame signed out between, and her choices are read.
+  writeAppState(
+    stateWith(
+      {},
+      {
+        account: signedInAs({ id: "user-grace", email: "grace@example.com", name: "Grace" })
+          .account,
+      },
+    ),
+  );
+  const written = keepViewChoices();
+  await settleQueries();
+
+  expect(written).toEqual([]);
+  expect(sort().value).toBe(DEFAULT_MANAGER_SORT);
 });
