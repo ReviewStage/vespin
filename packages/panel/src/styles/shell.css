@@ -862,10 +862,16 @@
   padding-inline-start: calc(var(--ui-rail-width) + var(--column-inset));
 }
 
+/* Note that a window too short for the rail's tiles and foot scrolls the rail
+   alone, with no bar of its own, so Send feedback and Settings stay in reach. */
 .desktop-sidebar .sidebar-rail {
   position: absolute;
   inset-block: 0;
   inset-inline-start: 0;
+  overflow-x: clip;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
   padding-top: var(--desktop-bar-height);
   background: var(--ui-color-fill-hover);
 }
