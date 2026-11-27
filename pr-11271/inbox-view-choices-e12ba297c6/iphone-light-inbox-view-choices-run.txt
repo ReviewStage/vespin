@@ -1,0 +1,74 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow inbox-view-choices
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-view-before... COMPLETED
+Run ../subflows/more.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Tap on "More"... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run ../subflows/more.yaml... COMPLETED
+Assert that "Addressed to" is visible... COMPLETED
+Assert that "Pinned tasks first" is visible... COMPLETED
+Take screenshot inbox-view-menu... COMPLETED
+Tap on "Addressed to"... COMPLETED
+Assert that "Anyone" is visible... COMPLETED
+Assert that "Me" is visible... COMPLETED
+Take screenshot inbox-view-addressed-to... COMPLETED
+Tap on "Me"... COMPLETED
+Wait for animation to end... COMPLETED
+Run ../subflows/more.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Tap on "More"... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run ../subflows/more.yaml... COMPLETED
+Tap on "Addressed to"... COMPLETED
+Assert that "Anyone" is visible... COMPLETED
+Tap on "Anyone"... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot inbox-view-anyone... COMPLETED
+Run ../subflows/more.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Tap on "More"... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run ../subflows/more.yaml... COMPLETED
+Tap on "Pinned tasks first"... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Assert that "Everything else" is not visible... COMPLETED
+Take screenshot inbox-view-pinned-off... COMPLETED
+Stop dev.vespin.ios... COMPLETED
+Launch app "dev.vespin.ios" (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Assert that "Everything else" is not visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-view-relaunch... COMPLETED
+Run ../subflows/more.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Tap on "More"... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run ../subflows/more.yaml... COMPLETED
+Assert that "Pinned tasks first" is visible... COMPLETED
+Take screenshot inbox-view-relaunch-menu... COMPLETED
+Tap on "Addressed to"... COMPLETED
+Assert that "Anyone" is visible... COMPLETED
+Take screenshot inbox-view-relaunch-addressed-to... COMPLETED
