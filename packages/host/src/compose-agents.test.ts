@@ -2537,6 +2537,24 @@ const keptPlatform = Layer.mergeAll(
   ).pipe(Layer.provide(nodeSqliteDriverLayer)),
 );
 
+/** The platform `keptPlatform` is, but that the words' database will not open, as a file the platform refuses would. */
+const unopenedWordsPlatform = Layer.mergeAll(
+  NodeFileSystem.layer,
+  NodePath.layer,
+  Layer.effect(
+    LocalDatabaseDriver,
+    Effect.gen(function* () {
+      const driver = yield* LocalDatabaseDriver;
+
+      return {
+        ...driver,
+        collections: async (file: string) => nodeKeptCollections(file),
+        words: () => Promise.reject(new Error("the words' database would not open")),
+      };
+    }),
+  ).pipe(Layer.provide(nodeSqliteDriverLayer)),
+);
+
 /** The ids of every item the Inbox kind's collection keeps now, as a live query loads them from the account's database. */
 function keptItemIds(pool: EntityPool) {
   return Effect.flatMap(pool.collection(INBOX_THREAD), (collection) =>
@@ -2664,7 +2682,7 @@ function messageRowOf(item: InboxItem, id: string, createdAt: number) {
   return {
     id,
     itemId: item.id,
-    author: "agent",
+    author: INBOX_MESSAGE_AUTHOR.AGENT,
     userId: null,
     name: null,
     text: `Said at ${createdAt}`,
@@ -2816,7 +2834,7 @@ it.effect(
       yield* settled;
       launch.live.scope.set({ messages: [], files: [], items: [ITEM_ROW] });
       yield* toldTimes(launch.told, 1);
-      launch.leaveClosesUnanswered(true);
+      launch.leaveWritesUnanswered(true);
 
       const answer = yield* launch.acts.AGENTS_INBOX_CLOSE({
         itemId: ITEM.id,
@@ -2826,6 +2844,29 @@ it.effect(
 
       assert.ok("item" in answer, "a close that waits is answered as taken, not unanswered");
       assert.deepEqual({ id: answer.item.id, taken: answer.taken }, { id: ITEM.id, taken: true });
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "where the account's database keeps the Inbox kind, a reminder on an unread thread a plan's read alone holds, sent while the service answers nothing, is answered unread as that read draws it",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-scope-remind-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      launch.sealScope(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+      yield* holding(launch.acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE));
+      yield* settled;
+      launch.live.scope.set({ messages: [], files: [], items: [{ ...ITEM_ROW, unread: true }] });
+      yield* toldTimes(launch.told, 1);
+      launch.leaveWritesUnanswered(true);
+
+      assert.deepEqual(yield* launch.acts.AGENTS_INBOX_REMIND({ itemId: ITEM.id, until: 5_000 }), {
+        id: ITEM.id,
+        unread: true,
+      });
     }).pipe(Effect.provide(keptPlatform)),
 );
 
@@ -2914,6 +2955,32 @@ it.effect(
 
       assert.deepEqual(yield* keptItemIds(next.pool), [settledItem.id]);
     }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "where the words' database will not open, the kept Inbox still stands and a search finds a thread by its messages' words, kept in memory for the launch",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-words-unopened-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+
+      launch.live.items.set({
+        stamps: [stampOf(HELD_ITEM, TASK_ID)],
+        items: [{ ...ITEM_ROW, ...HELD_ITEM }],
+        messages: [messageRowOf(HELD_ITEM, "0d1e2f3a-4b5c-4d6e-8f7a-8b9c0d1e2f3a", 1)],
+        files: [],
+      });
+
+      yield* toldTimes(launch.accountItems, 1);
+
+      assert.deepEqual(
+        { kept: yield* keptItemIds(launch.pool), said: yield* searchedThreads(launch, ["said"]) },
+        { kept: [HELD_ITEM.id], said: [HELD_ITEM.id] },
+      );
+    }).pipe(Effect.provide(unopenedWordsPlatform)),
 );
 
 it.effect(

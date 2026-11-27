@@ -21,7 +21,8 @@
  * rows the thread kind holds, so a row left for a thread gone names
  * nothing a list draws. A sign-out, and so an account switch, deletes the
  * file with the account's folder. Where the database will not open, the
- * words are kept in memory for the launch, as the kinds beside them are.
+ * words are kept in memory for the launch, as the kinds beside them are,
+ * read with the same cap on the words typed.
  */
 
 import { inboxMessageWords } from "@repo/features/inbox-list-model";
@@ -226,15 +227,16 @@ export function heardWords(now: () => KeptWords): HeardWords {
 /**
  * The words kept in the database `opening` answers once it has opened, so
  * the open stands off a launch's path, as the collections beside it are
- * read; each call waits on it, and one where it would not open fails as
- * the open failed, as a write the follow reports and a search finds
- * nothing by (`useSearchedWords`).
+ * read; each call waits on it, and where it would not open the words are
+ * kept in memory for the launch in its place, as where no database is.
  */
 export function keptWordsOnceOpen(opening: Promise<KeptWords>): KeptWords {
+  const kept = opening.catch(() => keptWordsInMemory());
+
   return {
-    replaced: (rows) => opening.then((words) => words.replaced(rows)),
-    rewritten: (threadIds, rows) => opening.then((words) => words.rewritten(threadIds, rows)),
-    threadsSaying: (tokens) => opening.then((words) => words.threadsSaying(tokens)),
+    replaced: (rows) => kept.then((words) => words.replaced(rows)),
+    rewritten: (threadIds, rows) => kept.then((words) => words.rewritten(threadIds, rows)),
+    threadsSaying: (tokens) => kept.then((words) => words.threadsSaying(tokens)),
   };
 }
 
@@ -257,7 +259,9 @@ export function keptWordsInMemory(): KeptWords {
       for (const [id, row] of kept) if (rewriting.has(row.threadId)) kept.delete(id);
       put(rows);
     },
-    threadsSaying: async (tokens) => {
+    threadsSaying: async (typed) => {
+      const tokens = typed.slice(0, MOST_TOKENS);
+
       if (tokens.length === 0) return NONE_SAYING;
       const saying = new Map<string, Set<string>>();
 

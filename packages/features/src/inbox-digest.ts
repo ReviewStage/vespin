@@ -19,6 +19,7 @@ import {
   type InboxItem,
   type InboxMessage,
   type InboxReadAsk,
+  inboxThreadOrder,
   inboxWaitsOn,
 } from "./inbox-wire.js";
 
@@ -169,11 +170,7 @@ function carriedThread(digest: InboxDigest): readonly InboxMessage[] {
     [...digest.openAsks, ...digest.tail].map((message) => [message.id, message] as const),
   );
 
-  return [...byId.values()].sort(
-    // Note that messages written at one instant stand by id, as a read orders a thread (`inbox-live.ts`).
-    (one, other) =>
-      one.createdAt - other.createdAt || (one.id < other.id ? -1 : one.id > other.id ? 1 : 0),
-  );
+  return [...byId.values()].sort(inboxThreadOrder);
 }
 
 /**

@@ -444,11 +444,18 @@ it.effect(
           const owner = yield* standing(pool, { owns: true, kept: KEPT });
           yield* owner.rows.answer([ADA, BO], { cursor: { at: "7" } });
 
-          return { stored: owner.rows.stored, loaded: owner.rows.loaded };
+          return {
+            stored: owner.rows.stored,
+            loaded: owner.rows.loaded,
+            held: owner.rows.rows().map((row) => row.id),
+          };
         }),
       );
 
-      assert.deepEqual({ ...reading, kept }, { stored: undefined, loaded: false, kept: [] });
+      assert.deepEqual(
+        { ...reading, kept },
+        { stored: undefined, loaded: false, held: [ADA.id, BO.id], kept: [] },
+      );
     }),
 );
 

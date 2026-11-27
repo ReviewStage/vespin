@@ -1294,9 +1294,12 @@ function composed(
       {
         name: INBOX_QUEUED_WRITE.REMIND,
         input: agentInboxRemindParamsSchema,
+        // Note that a thread a plan's read alone holds is read whole, as `settledAs` reads it.
         queued: ({ itemId }) => ({
           id: itemId,
-          unread: dependencies.pool.row(kind, itemId)?.unread === true,
+          unread:
+            (dependencies.pool.row(kind, itemId) ?? dependencies.pool.row(INBOX_ITEM, itemId))
+              ?.unread === true,
         }),
       },
     );

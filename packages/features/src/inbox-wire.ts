@@ -1088,6 +1088,16 @@ export const INBOX_MESSAGE_AUTHOR = {
 
 export type InboxMessageAuthor = (typeof INBOX_MESSAGE_AUTHOR)[keyof typeof INBOX_MESSAGE_AUTHOR];
 
+/** A thread's messages oldest first, those written at one instant by id in code-unit order, as every read of a thread orders it. */
+export function inboxThreadOrder(
+  one: { readonly createdAt: number; readonly id: string },
+  other: { readonly createdAt: number; readonly id: string },
+): number {
+  if (one.createdAt !== other.createdAt) return one.createdAt - other.createdAt;
+
+  return one.id < other.id ? -1 : one.id > other.id ? 1 : 0;
+}
+
 /**
  * One message on an item's thread as an item read carries it: who wrote it,
  * the member by id and name where a member did, and none for a member whose

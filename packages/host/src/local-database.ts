@@ -40,7 +40,7 @@ import { repositoryPinSchema } from "@repo/features/task-wire";
 import { WORKSPACE_INVITATIONS_READ, WORKSPACE_MEMBERS_READ } from "@repo/features/workspace-live";
 import { workspaceSchema } from "@repo/features/workspace-wire";
 import type { KeepCollection, StoredKind } from "@repo/sync";
-import { Context, Data, Effect, Path, Schema, type Scope } from "effect";
+import { Context, Data, Effect, Option, Path, Schema, type Scope } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { placedInboxItemSchema } from "./inbox-collections.js";
 import {
@@ -381,11 +381,14 @@ export const openKeptCollections = Effect.fn("host/openKeptCollections")(functio
   );
 
   if (words === undefined) return { keep: opened.keep, words: keptWordsInMemory() };
-  const wordsFile = yield* placedFile(WORDS_FILE);
+  // Note that a words file that cannot be placed costs the launch its search over messages alone, never the collections opened beside it.
+  const wordsFile = yield* placedFile(WORDS_FILE).pipe(Effect.option);
+
+  if (Option.isNone(wordsFile)) return { keep: opened.keep, words: keptWordsInMemory() };
 
   // Note that the words' database opens beside the launch rather than before it, since no first read waits on a search, so the kept Inbox is told as soon as the collections are.
-  const wordsDatabase = words(wordsFile);
-  // Note that a database that will not open is closed as nothing, its failure each call's own (`keptWordsOnceOpen`).
+  const wordsDatabase = words(wordsFile.value);
+  // Note that a database that will not open is closed as nothing, the words kept in memory in its place (`keptWordsOnceOpen`).
   wordsDatabase.catch(() => undefined);
 
   yield* Effect.addFinalizer(() =>
@@ -398,7 +401,6 @@ export const openKeptCollections = Effect.fn("host/openKeptCollections")(functio
   );
 
   const keptWords = wordsDatabase.then(keptWordsIn);
-  keptWords.catch(() => undefined);
 
   return { keep: opened.keep, words: keptWordsOnceOpen(keptWords) };
 });

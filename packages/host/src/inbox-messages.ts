@@ -9,7 +9,12 @@
  * anew, so the kind takes only what the account's read answers.
  */
 
-import { type InboxItem, type InboxMessage, inboxMessageSchema } from "@repo/features/inbox-wire";
+import {
+  type InboxItem,
+  type InboxMessage,
+  inboxMessageSchema,
+  inboxThreadOrder,
+} from "@repo/features/inbox-wire";
 import type { RowKind } from "@repo/sync";
 import { Schema } from "effect";
 
@@ -54,12 +59,7 @@ export function messageOf(row: ThreadMessage): InboxMessage {
 
 /** A thread's messages from its rows, oldest first, as an item read carries them. */
 export function threadOfRows(rows: readonly ThreadMessage[]): readonly InboxMessage[] {
-  return [...rows]
-    .sort(
-      (one, other) =>
-        one.createdAt - other.createdAt || (one.id < other.id ? -1 : one.id > other.id ? 1 : 0),
-    )
-    .map(messageOf);
+  return [...rows].sort(inboxThreadOrder).map(messageOf);
 }
 
 /** A message of a thread, by its id, kept on disk where the account's database keeps the Inbox. */

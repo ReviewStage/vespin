@@ -315,8 +315,8 @@ function fakeService() {
   let startTxid: string | undefined;
   // Whether a Start goes unanswered, as one sent offline does.
   let startsUnanswered = false;
-  /** Whether each close goes unanswered, as one sent offline does. */
-  let closesUnanswered = false;
+  /** Whether each close and reminder goes unanswered, as one sent offline does. */
+  let writesUnanswered = false;
   // The transaction the service says each inbox write committed in; none says it changed nothing.
   let committedIn: CommittedIn = {};
   /** The item as the agent changed it first, which a close is answered not taken with; none takes every close. */
@@ -970,6 +970,13 @@ function fakeService() {
       Effect.sync(() => {
         asked.push(`inbox-remind:${itemId}:${until ?? "none"}`);
 
+        if (writesUnanswered) {
+          return {
+            failure: AGENT_CALL_FAILURE.UNANSWERED,
+            cause: { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: CALL_FAULT.NETWORK },
+          };
+        }
+
         return { id: itemId, unread: false, ...committedIn };
       }),
     markInboxRead: (request) =>
@@ -1035,7 +1042,7 @@ function fakeService() {
         asked.push(`close:${itemId}:${request.revision}:${request.clientKey}`);
       }).pipe(
         Effect.map(() => {
-          if (closesUnanswered) {
+          if (writesUnanswered) {
             return {
               failure: AGENT_CALL_FAILURE.UNANSWERED,
               cause: { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: CALL_FAULT.NETWORK },
@@ -1160,9 +1167,9 @@ function fakeService() {
     leaveStartsUnanswered: (unanswered: boolean) => {
       startsUnanswered = unanswered;
     },
-    /** Whether each close from now on goes unanswered, as one sent offline does. */
-    leaveClosesUnanswered: (unanswered: boolean) => {
-      closesUnanswered = unanswered;
+    /** Whether each close and reminder from now on goes unanswered, as one sent offline does. */
+    leaveWritesUnanswered: (unanswered: boolean) => {
+      writesUnanswered = unanswered;
     },
     /** What each host's removal answers from now on, and what it waits on before it does. */
     answerRemoves: (answer: HostDoneAnswerView, gate: Effect.Effect<void> = Effect.void) => {
@@ -1523,7 +1530,7 @@ export function subject(
       queueChanges: service.queueChanges,
       startCommits: service.startCommits,
       leaveStartsUnanswered: service.leaveStartsUnanswered,
-      leaveClosesUnanswered: service.leaveClosesUnanswered,
+      leaveWritesUnanswered: service.leaveWritesUnanswered,
       answerRemoves: service.answerRemoves,
       answerForgets: service.answerForgets,
       answerRenames: service.answerRenames,

@@ -782,8 +782,8 @@ export function useThreadAnswer(
   );
 
   useEffect(() => {
-    // Note that nothing is settled until the reader is known, so a teammate's notice is never acknowledged.
-    if (readerId === undefined) return;
+    // Note that nothing is settled until the reader is known and the thread's messages are read, so neither a teammate's notice nor one whose open ask has not loaded is acknowledged.
+    if (readerId === undefined || reading) return;
     const was = noddedOn.current;
 
     if (was !== undefined && was.id === itemId && was.revision === item.revision) return;
@@ -791,7 +791,7 @@ export function useThreadAnswer(
 
     // Note that a notice opened while its box holds a draft is left waiting until it is opened again, so a box emptied of its draft never settles it under the reader's hands.
     if (settlesOnOpen && empty) nod(true);
-  }, [itemId, item.revision, readerId, settlesOnOpen]);
+  }, [itemId, item.revision, readerId, reading, settlesOnOpen]);
 
   const setAsNew = useCallback(
     (on: boolean) => hold(itemId, (was) => ({ ...was, asNew: on, note: undefined })),

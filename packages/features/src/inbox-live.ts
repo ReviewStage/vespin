@@ -26,6 +26,7 @@ import {
   inboxItemSchema,
   inboxMessageSchema,
   inboxReadAskSchema,
+  inboxThreadOrder,
   standingAsk,
 } from "./inbox-wire.js";
 import {
@@ -427,20 +428,13 @@ function threadOf(
   messages: readonly InboxLiveMessage[],
   openAskMessageId: string | null,
 ): readonly InboxLiveMessage[] {
-  const ordered = messages.toSorted(threadOrder);
+  const ordered = messages.toSorted(inboxThreadOrder);
   const latest = new Set(ordered.slice(-INBOX_BOUNDS.MAX_MESSAGES_READ).map((each) => each.id));
   const firstId = ordered[0]?.id;
 
   return ordered.filter(
     (each) => latest.has(each.id) || each.id === firstId || each.id === openAskMessageId,
   );
-}
-
-/** A thread's messages oldest first, as the held read orders them. */
-function threadOrder(one: InboxLiveMessage, other: InboxLiveMessage): number {
-  if (one.createdAt !== other.createdAt) return one.createdAt - other.createdAt;
-
-  return one.id < other.id ? -1 : one.id > other.id ? 1 : 0;
 }
 
 /** A row as the wire carries its item, its thread and its files joined to it, each absent field left out rather than null, as the held read writes it. */

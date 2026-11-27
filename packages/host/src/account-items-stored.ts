@@ -331,24 +331,25 @@ export function followStoredItems(
 
     /** Deletes every item kept that settled before the read's window now, but one a write stands over, which draws over it until it lands. */
     const agedOut = Effect.gen(function* () {
-      const found = yield* agedIds(pool, yield* Clock.currentTimeMillis);
+      /** Of `ids`, those still aged and no write stands over now, read again after each wait, since a write asked meanwhile draws over its item until it lands, and one taken in place reopens it in its row. */
+      const stillAged = (ids: readonly string[] | undefined) =>
+        Effect.gen(function* () {
+          const found = yield* agedIds(pool, yield* Clock.currentTimeMillis);
+          const asked = ids === undefined ? undefined : new Set(ids);
+          const pending = pool.standing(INBOX_THREAD)?.pending;
 
-      /** The aged items no write stands over now, read again after each wait, since a write asked meanwhile draws over its item until it lands. */
-      const unwritten = (ids: readonly string[]) => {
-        const pending = pool.standing(INBOX_THREAD)?.pending;
+          return found.filter((id) => asked?.has(id) !== false && pending?.has(id) !== true);
+        });
 
-        return ids.filter((id) => pending?.has(id) !== true);
-      };
-
-      const aged = unwritten(found);
+      const aged = yield* stillAged(undefined);
 
       if (aged.length === 0) return;
-      // Note that an item's words and messages go before it, so a launch never finds an item kept whose thread is gone, and one cut short deletes the rest again.
+      // Note that an item's words and messages go before it, so a launch never finds an item kept whose thread is gone, and one cut short deletes the rest again; one reopened between the two is answered again with its thread whole, which writes both back.
       yield* wordsWritten(follow.words.rewritten(aged, []));
-      const left = yield* threadMessageIds(pool, aged);
+      const left = yield* threadMessageIds(pool, yield* stillAged(aged));
 
       if (left.size > 0) yield* messages.answer([], { gone: [...left] });
-      const gone = unwritten(aged);
+      const gone = yield* stillAged(aged);
 
       if (gone.length > 0) yield* items.answer([], { gone });
     });
