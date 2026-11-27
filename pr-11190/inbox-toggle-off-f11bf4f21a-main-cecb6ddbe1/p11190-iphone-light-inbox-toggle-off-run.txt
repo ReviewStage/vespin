@@ -1,0 +1,44 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow inbox-toggle-off2
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Set orientation PORTRAIT... COMPLETED
+Assert that "Recorded the invite flow" is visible... COMPLETED
+Tap on "Recorded the invite flow"... COMPLETED
+Assert that "invite-test-plan\.pdf.*" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot before... COMPLETED
+Run subflows/show-sidebar.yaml...
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when "Show Sidebar" is visible...
+  Run flow when "Show Sidebar" is visible... SKIPPED
+Run subflows/show-sidebar.yaml... COMPLETED
+Run subflows/switcher.yaml...
+  Run show-sidebar.yaml...
+    Run flow when ${FLOATING_TABS == 'true'} is true...
+    Run flow when false is true... SKIPPED
+    Run flow when "Show Sidebar" is visible...
+    Run flow when "Show Sidebar" is visible... SKIPPED
+  Run show-sidebar.yaml... COMPLETED
+  Tap on id: workspace-switcher... FAILED
+Run subflows/switcher.yaml... FAILED
+
+Element not found: Id matching regex: workspace-switcher
+
+Element with Id matching regex: workspace-switcher not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjinboxoff11190/p11190-iphone-light-inbox-toggle-off/2026-11-27_123522
