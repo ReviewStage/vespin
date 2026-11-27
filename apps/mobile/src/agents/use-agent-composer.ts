@@ -92,6 +92,7 @@ import {
   type ComposerSaving,
   type ComposerSend,
   type QueuedLine,
+  sentPictures,
   wordsHandedBack,
 } from "@repo/ui-native";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -168,39 +169,7 @@ interface Sent {
  * never written anywhere, and a sign-out lets them all go
  * (`useHeldSendsSignOut`).
  */
-const heldSends = new Map<string, Sent>();
-
-/**
- * The lines sent to an agent whose pictures this phone lets go, by the id
- * each is drawn under, with the agent's id: answered, or let go by Edit or
- * Delete. Note that their pictures are let go only once the host drew the
- * line and then no longer draws it (`letGoUndrawn`), since a line answered
- * stands until its row lands and draws its pictures from them until then,
- * so its words never fall back to their markers' text between the two.
- */
-const goingSends = new Map<string, string>();
-
-/**
- * The lines this phone holds pictures of that the host has drawn, by the id
- * each is drawn under. Note that a send may be answered before the host's
- * first drawing of its line reaches the page, so a line never drawn yet is
- * not taken as one whose row landed.
- */
-const drawnSends = new Set<string>();
-
-/** Lets go of the pictures of each line of the agent's going that the host drew and no longer draws. */
-function letGoUndrawn(agentId: string, drawn: readonly SendingMessage[] | undefined) {
-  const ids = new Set((drawn ?? []).map((line) => line.id));
-
-  for (const lineId of ids) if (heldSends.has(lineId)) drawnSends.add(lineId);
-
-  for (const [lineId, owner] of goingSends) {
-    if (owner !== agentId || ids.has(lineId) || !drawnSends.has(lineId)) continue;
-    goingSends.delete(lineId);
-    drawnSends.delete(lineId);
-    heldSends.delete(lineId);
-  }
-}
+const heldSends = sentPictures<Sent>();
 
 /** Lets go of every line's pictures this phone holds when the account signs out, an account switch's sign-out among them, so they never outlive the account that sent them. */
 export function useHeldSendsSignOut(signedIn: boolean): void {
@@ -209,8 +178,6 @@ export function useHeldSendsSignOut(signedIn: boolean): void {
   useEffect(() => {
     if (wasSignedIn.current && !signedIn) {
       heldSends.clear();
-      goingSends.clear();
-      drawnSends.clear();
     }
 
     wasSignedIn.current = signedIn;
@@ -484,15 +451,14 @@ export function useAgentComposer(
   useEffect(() => {
     if (transcript === undefined) return;
     drawnNow.current = { lines: drawn };
-    letGoUndrawn(agentId, drawn);
+    heldSends.drawn(agentId, drawn ?? []);
   }, [agentId, transcript, drawn]);
 
   /** Lets go of a line's pictures once the host drew it and no longer draws it, at once where its row already landed. */
   const letGo = (lineId: string) => {
-    goingSends.set(lineId, agentId);
-
-    if (mounted.current && drawnNow.current !== undefined)
-      letGoUndrawn(agentId, drawnNow.current.lines);
+    // Note that what the page last drew stands for what the host draws only while the page stands.
+    const now = mounted.current ? drawnNow.current : undefined;
+    heldSends.letGo(agentId, lineId, now === undefined ? undefined : (now.lines ?? []));
   };
 
   // A Stop stands pressed until the agent stops writing.

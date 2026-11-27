@@ -394,6 +394,8 @@ export { SealedPage } from "./sealed-page.js";
 
 export { sectionGlyphColor, sectionInk } from "./section-ink.js";
 
+export { type SentPictures, sentPictures } from "./sent-pictures-model.js";
+
 export {
   AccountHead,
   AccountRow,
