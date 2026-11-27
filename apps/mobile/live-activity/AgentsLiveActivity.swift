@@ -43,16 +43,27 @@ struct AgentsLiveActivity: Widget {
       let state = context.state
       return DynamicIsland {
         // Note that the header stands in from the island's sides as far as the rows do, so its ends line up with the rows' titles and Stop.
-        // Note that once none works the header keeps the same regions, so the done mark and the asks stand where the count and the asks stood, as on the Lock Screen.
         DynamicIslandExpandedRegion(.leading) {
-          CountLabel(state: state).padding(.leading, ExpandedInset.side)
+          if state.running > 0 {
+            CountLabel(state: state).padding(.leading, ExpandedInset.side)
+          }
         }
         DynamicIslandExpandedRegion(.trailing) {
-          WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
+          if state.running > 0 {
+            WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
+          }
         }
+        // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
+        // Note that once none works the header stands alone in the rows' place, below the camera where the island centers it top to bottom, and in from the sides as far as the rows, so the done mark and the asks stand at the edges the count and the asks stood at.
         DynamicIslandExpandedRegion(.bottom) {
-          // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
-          AgentList(state: state).padding(.horizontal, ExpandedInset.side)
+          Group {
+            if state.running > 0 {
+              AgentList(state: state)
+            } else {
+              HeaderRow(state: state)
+            }
+          }
+          .padding(.horizontal, ExpandedInset.side)
         }
       } compactLeading: {
         CompactMark(state: state)
@@ -91,11 +102,7 @@ struct ActivityContentView: View {
     default:
       // Note that once none works the header stands alone, in the same row as while agents work, so the done mark and the asks stand where the count and the asks stood, centered top to bottom by the even padding.
       VStack(alignment: .leading, spacing: 10) {
-        HStack {
-          CountLabel(state: state)
-          Spacer()
-          WaitingLabel(state: state)
-        }
+        HeaderRow(state: state)
         if state.running > 0 {
           AgentList(state: state)
         }
@@ -119,6 +126,19 @@ struct CountLabel: View {
     .monospacedDigit()
     .foregroundStyle(state.tone)
     .lineLimit(1)
+  }
+}
+
+/// The header: the count or the done mark at the leading edge and any asks waiting at the trailing edge, the same row while agents work and once none does.
+struct HeaderRow: View {
+  let state: AgentsActivityAttributes.ContentState
+
+  var body: some View {
+    HStack {
+      CountLabel(state: state)
+      Spacer()
+      WaitingLabel(state: state)
+    }
   }
 }
 
