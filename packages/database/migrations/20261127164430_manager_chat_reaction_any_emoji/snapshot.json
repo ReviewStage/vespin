@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "05167e85-f24e-4548-915a-8257eac668fc",
-  "prevIds": ["a3bf2de0-45e1-4b4e-8d2d-20f5e0e328c5"],
+  "id": "c427d6c9-3020-4cc0-aadc-4c98b2453d8e",
+  "prevIds": ["ea32bf4a-39ad-48ae-8b7c-002adbe6d3b7"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -271,6 +271,18 @@
     {
       "isRlsEnabled": false,
       "name": "claude_session_entries",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "claude_session_mark_backfill",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "claude_session_mark_scan",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2941,6 +2953,19 @@
       "generated": null,
       "identity": null,
       "name": "read_through",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_read"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "marked_unread",
       "entityType": "columns",
       "schema": "public",
       "table": "agent_read"
@@ -6668,6 +6693,136 @@
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "conversation_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_backfill"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "project_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_backfill"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_backfill"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "newest",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_backfill"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "marked_through",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_backfill"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "scan",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_scan"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "after_conversation_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_scan"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "after_project_key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_scan"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "after_session_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_scan"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "done",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "claude_session_mark_scan"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
       "default": "gen_random_uuid()",
       "generated": null,
       "identity": null,
@@ -7173,51 +7328,12 @@
     {
       "type": "text",
       "typeSchema": null,
-      "notNull": false,
+      "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
       "name": "user_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "device"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "organization_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "device"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "connected_by",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "device"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "network",
       "entityType": "columns",
       "schema": "public",
       "table": "device"
@@ -8774,19 +8890,6 @@
       "generated": null,
       "identity": null,
       "name": "arch",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "host_pairing"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "machine_id",
       "entityType": "columns",
       "schema": "public",
       "table": "host_pairing"
@@ -17699,6 +17802,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "newest",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "claude_session_mark_backfill_newest_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "claude_session_mark_backfill"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "thread_id",
           "isExpression": false,
           "asc": true,
@@ -17824,48 +17948,6 @@
       "method": "btree",
       "concurrently": false,
       "name": "device_user_seen",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "device"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "organization_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": "\"organization_id\" is not null",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "device_workspace",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "device"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "connected_by",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": "\"connected_by\" is not null",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "device_connected_by",
       "entityType": "indexes",
       "schema": "public",
       "table": "device"
@@ -21618,32 +21700,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["organization_id"],
-      "schemaTo": "public",
-      "tableTo": "organization",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "device_organization_id_organization_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "device"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["connected_by"],
-      "schemaTo": "public",
-      "tableTo": "user",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "SET NULL",
-      "name": "device_connected_by_user_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "device"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["user_id"],
       "schemaTo": "public",
       "tableTo": "user",
@@ -23660,6 +23716,14 @@
       "table": "claude_broken_sessions"
     },
     {
+      "columns": ["conversation_id", "project_key", "session_id"],
+      "nameExplicit": false,
+      "name": "claude_session_mark_backfill_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "claude_session_mark_backfill"
+    },
+    {
       "columns": ["task_id", "seq"],
       "nameExplicit": false,
       "name": "plan_revision_plan_id_seq_pk",
@@ -24121,6 +24185,14 @@
       "name": "claude_session_entries_pkey",
       "schema": "public",
       "table": "claude_session_entries",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["scan"],
+      "nameExplicit": false,
+      "name": "claude_session_mark_scan_pkey",
+      "schema": "public",
+      "table": "claude_session_mark_scan",
       "entityType": "pks"
     },
     {
@@ -24830,20 +24902,6 @@
       "entityType": "checks",
       "schema": "public",
       "table": "description_comment_thread"
-    },
-    {
-      "value": "num_nonnulls(\"user_id\", \"organization_id\") = 1",
-      "name": "device_one_owner",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "device"
-    },
-    {
-      "value": "(\"organization_id\" is null) = (\"network\" is null) and (\"organization_id\" is not null or \"connected_by\" is null)",
-      "name": "device_workspace_fields",
-      "entityType": "checks",
-      "schema": "public",
-      "table": "device"
     },
     {
       "value": "(\"inbox_item_id\" is not null) <> (\"agent_id\" is not null and \"turn_id\" is not null)",

@@ -359,6 +359,7 @@ function ManagerMessage({
     reactionMenu,
     onMarkUnread,
   );
+
   const workAction = workToggle === undefined ? null : <WorkMessageAction toggle={workToggle} />;
   // Note that while a find stands open the closed work is drawn hidden until found, so ⌘F reaches it and a match there opens it, as a closed fold's body is.
   const finding = useFindOpen();
@@ -479,6 +480,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
     reactionMenu,
     onMarkUnread,
   );
+
   const [picking, setPicking] = useState(false);
 
   const reactions = (
@@ -489,6 +491,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
       onPicking={setPicking}
     />
   );
+
   const { edit } = doors;
 
   const editAction = own ? <EditChatMessageAction onEdit={() => edit.onOpen(message.id)} /> : null;
