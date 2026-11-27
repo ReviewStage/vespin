@@ -1,0 +1,15 @@
+-- jp10991: main pinned to 604f24d955: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to a6b7701c00
+== bundle PJjp10991 base a6b7701c00
+  built a6b7701c00 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-managers: fails 0 shots 11 
+iphone-light-tasks: fails 1 shots 2 Tap on "Launch", Child of: "Launch, [0-9]+"... FAILED
+  iphone-light-tasks around the failure: Wait for animation to end... COMPLETED|Take screenshot tasks-list... COMPLETED|Tap on "Launch", Child of: "Launch, [0-9]+"... COMPLETED|Assert that "Launch checklist" is not visible... COMPLETED|Tap on "Launch", Child of: "Launch, [0-9]+"... FAILED|Set orientation PORTRAIT... COMPLETED|
+iphone-light-tasks-headers: fails 1 shots 6 Assert that "Black" is visible... FAILED
+  iphone-light-tasks-headers around the failure: Take screenshot tasks-headers-section-icons... COMPLETED|Scrolling DOWN until "Remove icon" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, wit|Assert that "Emoji" is visible... COMPLETED|Tap on "Color"... COMPLETED|Assert that "Black" is visible... FAILED||
+iphone-dark-tasks: fails 1 shots 2 Tap on "Launch", Child of: "Launch, [0-9]+"... FAILED
+  iphone-dark-tasks around the failure: Wait for animation to end... COMPLETED|Take screenshot tasks-list... COMPLETED|Tap on "Launch", Child of: "Launch, [0-9]+"... COMPLETED|Assert that "Launch checklist" is not visible... COMPLETED|Tap on "Launch", Child of: "Launch, [0-9]+"... FAILED|Set orientation PORTRAIT... COMPLETED|
