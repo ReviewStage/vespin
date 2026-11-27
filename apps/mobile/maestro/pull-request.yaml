@@ -108,10 +108,13 @@ env:
     direction: DOWN
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-chapters-end
+# Note that Back finds the page still scrolled to the Chapters row, its
+# title under the bar, so it waits on the description beside the row and
+# then scrolls the title back.
 - tapOn:
     id: "BackButton"
 - extendedWaitUntil:
-    visible: "Invite a teammate by email #128"
+    visible: "Adds Invite by email.*"
     timeout: 10000
 - scrollUntilVisible:
     element: "Invite a teammate by email #128"
