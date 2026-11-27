@@ -44,6 +44,47 @@
       },
       "maxItems": 32,
       "description": "The MCP servers switched off for the agent, by connection name, the whole list, which replaces the one standing; empty switches every server back on. Its next turn reads it."
+    },
+    "face": {
+      "type": "object",
+      "properties": {
+        "character": {
+          "type": "string",
+          "enum": [
+            "ghost",
+            "planet",
+            "cat",
+            "backpack",
+            "mug",
+            "speech-bubble"
+          ]
+        },
+        "color": {
+          "type": "string",
+          "enum": [
+            "yellow",
+            "green",
+            "blue",
+            "pink",
+            "purple",
+            "peach",
+            "red",
+            "orange",
+            "teal",
+            "gray"
+          ]
+        },
+        "emoji": {
+          "type": "string",
+          "maxLength": 32
+        }
+      },
+      "required": [
+        "character",
+        "color"
+      ],
+      "additionalProperties": false,
+      "description": "A Manager's face, the whole of it, as its Settings pick it: a character and a color, and one emoji worn in the character's place or none. Refused for a coding agent."
     }
   },
   "required": [

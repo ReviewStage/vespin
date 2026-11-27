@@ -2254,7 +2254,8 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
     "chip, and composer would: rename it (empty clears the title), move it to another model " +
     `and effort, and context window, from its next step, as ${MEMBER_MCP_TOOL.LIST_MODELS} ` +
     "lists them, pin or unpin it in the member's sidebar, or replace the list of MCP servers " +
-    "switched off for it. Name at least one change, a model only with its effort and a " +
+    "switched off for it, or change a Manager's face. Name at least one change, a model only " +
+    "with its effort and a " +
     "contextWindow only with them, required where the model's " +
     `${MEMBER_MCP_TOOL.LIST_MODELS} contextWindows are not empty; the changes land together ` +
     `or not at all. Archive it with ${MEMBER_MCP_TOOL.ARCHIVE_AGENT}. Answers \`accepted\` with ` +
