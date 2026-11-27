@@ -1,0 +1,21 @@
+pinned to 604f24d955
+== bundle PJjipadrest3 base 604f24d955
+  built 604f24d955 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== bundle PJjipadrest3B base f49bf78b61
+  built f49bf78b61 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+p10743 hdr portrait: fails 0 shots 1 
+  portrait chrome rows: [('RNSSplitScreen', [0, 32, 340, 86]), ('RNSSplitScreen', [341, 32, 834, 86]), ('RNSScreen', [341, 86, 834, 140])] labeled items in the chrome: [('Show Sidebar', [14, 36, 50, 72]), ('Inbox', [148, 97, 192, 118]), ('More', [296, 104, 320, 112]), ('More', [299, 106, 317, 110]), ('New task', [355, 90, 391, 126]), ('More', [626, 92, 658, 124]), ('More', [635, 106, 649, 109]), ('Resolve', [676, 90, 714, 126]), ('Remind me', [732, 92, 764, 124]), ('Remind me', [739, 99, 756, 116]), ('Mark as unread', [782, 90, 820, 126])] sidebar toggles: 1 [('Show Sidebar', [14, 36, 50, 72])] New task items on screen: 1 [[355, 90, 391, 126]] 
+p10743 hdr landscape: fails 1 shots 1 Assert that "Recorded the invite flow" is visible... FAILED
+  landscape chrome rows: [] labeled items in the chrome: [] sidebar toggles: 0 [] New task items on screen: 0 [] 
+p10743-ipad27-light-inbox: fails 0 shots 13 
+p10743-ipad27-light-inbox: no inbox.yaml
+p10743-ipad27-light-signout-draft: fails 1 shots 2 Assert that "Sign in to Vespin" is visible... FAILED
+p10743-signout-draft: BLOCKED at Assert that "Sign in to Vespin" is visible... FAILED
