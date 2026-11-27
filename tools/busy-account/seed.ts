@@ -64,7 +64,8 @@ import { entityPool } from "@repo/sync";
 import { nodeKeptCollections } from "@repo/sync/testing";
 import type { WireRecord } from "@repo/wire";
 import { Effect, Exit, Layer, Schema, Scope } from "effect";
-import { INBOX_ITEM, placedItem } from "../../packages/host/src/inbox-collections.js";
+import { INBOX_THREAD, placedRow } from "../../packages/host/src/inbox-collections.js";
+import { INBOX_MESSAGE, threadMessagesOf } from "../../packages/host/src/inbox-messages.js";
 import { KEPT_LIST } from "../../packages/host/src/kept-lists.js";
 import type { AgentRow, PlanRow } from "../../packages/host/src/task-list-rows.js";
 
@@ -869,15 +870,24 @@ const keepInboxWhole = (file: string, inbox: readonly SeededThread[]) =>
           store: { collections: () => ({ keep: database.keep, scope }) },
         });
 
-        const items = yield* pool.stand(INBOX_ITEM, {
+        // Note that the iPhone keeps the Inbox lean: each thread's row under the kept list, and its messages as a kind of their own, written first as the host writes them (`account-items-stored.ts`).
+        const threads = yield* pool.stand(INBOX_THREAD, {
           owns: true,
-          kept: { name: "inbox", kind: INBOX_ITEM.stored?.name ?? "inboxItem" },
+          kept: KEPT_LIST.INBOX,
           redraw: () => Effect.void,
           confirmation: () => undefined,
         });
 
-        yield* items.answer(
-          inbox.map(({ item, taskId }) => placedItem(item, taskId)),
+        const messages = yield* pool.stand(INBOX_MESSAGE, {
+          owns: true,
+          redraw: () => Effect.void,
+          confirmation: () => undefined,
+        });
+
+        yield* messages.answer(inbox.flatMap(({ item }) => threadMessagesOf(item)));
+
+        yield* threads.answer(
+          inbox.map(({ item, taskId }) => placedRow(item, taskId)),
           { cursor: { at: String(BUSY_SYNC.INBOX) } },
         );
       }),
