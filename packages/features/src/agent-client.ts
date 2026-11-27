@@ -116,6 +116,8 @@ import {
   type SoundStateView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
+  type ViewChoiceWriteParams,
+  type ViewChoiceWrittenView,
   type VoiceSessionAnswerView,
   type VoiceSessionParams,
 } from "./agent-view.js";
@@ -700,6 +702,13 @@ export class HostedAgentClient {
     params: SoundChoiceParams,
   ): Effect.Effect<SoundChoiceAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.account.chooseSound, params);
+  }
+
+  /** One of the account's view choices kept, or forgotten with a null value. */
+  writeViewChoice(
+    params: ViewChoiceWriteParams,
+  ): Effect.Effect<ViewChoiceWrittenView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.writeViewChoice, params);
   }
 
   /** The account's own provider keys, as hints and statuses. */
