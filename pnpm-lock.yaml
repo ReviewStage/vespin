@@ -1215,6 +1215,9 @@ importers:
       '@types/ws':
         specifier: 'catalog:'
         version: 8.18.2
+      emojibase-data:
+        specifier: 18.0.0
+        version: 18.0.0(emojibase@18.0.0)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -1528,9 +1531,6 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
-      unicode-emoji-json:
-        specifier: 0.9.0
-        version: 0.9.0
       vitest:
         specifier: 'catalog:'
         version: 5.1.2(@opentelemetry/api@1.9.1)(@types/node@26.6.11)(jsdom@30.0.1)(msw@3.0.8)(vite@7.3.8)
@@ -1857,9 +1857,6 @@ importers:
       tailwind-merge:
         specifier: 3.7.1
         version: 3.7.1
-      unicode-emoji-json:
-        specifier: 0.9.0
-        version: 0.9.0
     devDependencies:
       '@effect/vitest':
         specifier: 'catalog:'
@@ -7681,6 +7678,15 @@ packages:
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
 
+  emojibase-data@18.0.0:
+    resolution: {integrity: sha512-TPPRRYv2zPd0jKI+pTpMquwWNZXYAsC3IVsCMeg2X8y8fEzKwOks4/5bz0YavF5r6d71aGPpb6oDnUEwSLLMoA==}
+    peerDependencies:
+      emojibase: '*'
+
+  emojibase@18.0.0:
+    resolution: {integrity: sha512-5PG+EEt5zQ9qvqdHZw61+T9iz96g+r621QS/w8jEzPg+3mjzAdjl8LPLc+e9ABv/yboNfMwEair7aK9qKnwAbQ==}
+    engines: {node: '>=20.0.0'}
+
   encodeurl@1.0.2:
     resolution: {integrity: sha512-TPJXq8JqFaVYm2CWmPvnP2Iyo4ZSM7/QKcSmuMLDObfpH5fi7RUGmd/rTDf+rut/saiDiQEeVTNgAmJEdAOx0w==}
     engines: {node: '>= 0.8'}
@@ -10817,9 +10823,6 @@ packages:
   unicode-canonical-property-names-ecmascript@2.0.1:
     resolution: {integrity: sha512-dA8WbNeb2a6oQzAQ55YlT5vQAWGV9WXOsi3SskE3bcCdM0P4SDd+24zS/OCacdRq5BkdsRj9q3Pg6YyQoxIGqg==}
     engines: {node: '>=4'}
-
-  unicode-emoji-json@0.9.0:
-    resolution: {integrity: sha512-HdrQW/7SdbXUsTd8uTATv7LvQJkCSgbAgRCDCtOhQ6xn3EAx+xZHQtRniOXWJK3ywIqPegkNhP4U4EbuFsiQng==}
 
   unicode-match-property-ecmascript@2.0.0:
     resolution: {integrity: sha512-5kaZCrbp5mmbz5ulBkDkbY0SsPOjKqVS35VpL9ulMPfSl0J0Xsm+9Evphv9CoIZFwre7aJoa94AY6seMKGVN5Q==}
@@ -16702,6 +16705,12 @@ snapshots:
 
   emoji-regex@8.0.0: {}
 
+  emojibase-data@18.0.0(emojibase@18.0.0):
+    dependencies:
+      emojibase: 18.0.0
+
+  emojibase@18.0.0: {}
+
   encodeurl@1.0.2: {}
 
   encodeurl@2.0.0: {}
@@ -20600,8 +20609,6 @@ snapshots:
     optional: true
 
   unicode-canonical-property-names-ecmascript@2.0.1: {}
-
-  unicode-emoji-json@0.9.0: {}
 
   unicode-match-property-ecmascript@2.0.0:
     dependencies:

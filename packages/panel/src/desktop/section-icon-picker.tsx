@@ -68,7 +68,7 @@ import { QUERY_ROOT } from "../query-keys.js";
  * section wearing one draws it at once; any other is drawn from the whole
  * of Lucide, a chunk of its own loaded the first time a section or the
  * picker needs it, and a name this Mac's Lucide does not know draws an
- * empty cell rather than failing. The emoji, `unicode-emoji-json`'s, load
+ * empty cell rather than failing. The emoji, `@repo/features/emoji-data`'s, load
  * the first time the picker's Emoji tab is shown or a search is typed;
  * `@repo/ui`'s `IconPickerEmoji` draws them and the emoji a search finds,
  * and its `IconPickerColors` draws a glyph's colors.

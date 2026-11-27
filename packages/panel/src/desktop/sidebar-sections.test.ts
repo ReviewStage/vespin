@@ -194,7 +194,7 @@ const GLYPHS: TaskSections = {
 /** Lets what the sidebar and the picker load on demand land: Lucide whole, and the emoji. */
 async function settleLoaded(): Promise<void> {
   await act(async () => {
-    await Promise.all([import("lucide-react"), import("unicode-emoji-json/data-by-group.json")]);
+    await Promise.all([import("lucide-react"), import("@repo/features/emoji-data")]);
   });
   // The picker reads them through the test's Query client, which hands each answer on a tick of its own.
   await vi.waitFor(() =>
