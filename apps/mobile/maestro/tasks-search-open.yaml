@@ -1,0 +1,33 @@
+# tasks-search-open.yaml -- a Tasks search's result opens its task again and again, two searches taking turns, each typed over the other's words, and the app stands through every open.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose read marks the fixture takes at
+# once, so each open's read hands the search new rows the moment its row is
+# picked; nothing reaches a server. Note that this crashed an iPad inside
+# SwiftUI's own List, as UIKit asked a search result's separator while the
+# pick's selection was applied (iOS simulators run 46074454724, the second
+# search of `transcript-switch.yaml`), so the two searches take turns several
+# times over, as a reader going back and forth between two tasks does.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- repeat:
+    times: 4
+    commands:
+      - runFlow:
+          file: subflows/search-open.yaml
+          env:
+            WORDS: digest
+            TASK: Weekly digest email
+      - runFlow:
+          file: subflows/search-open.yaml
+          env:
+            WORDS: rounding
+            TASK: Ledger rounding
+- takeScreenshot: tasks-search-open

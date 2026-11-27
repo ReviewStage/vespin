@@ -1,0 +1,39 @@
+# search-open.yaml -- searches the Tasks list for `WORDS` over whatever its field holds, and opens the task `TASK` names from what it finds, waiting for the task's page.
+#
+# Note that the field is reached as `tasks.yaml` reaches it: a compact
+# window's round button above the tab bar, and on an iPad the field itself
+# in the list's column, brought back by the system's Show Sidebar where an
+# upright window folded the list behind the task picked. The words before
+# are erased a key at a time, as a reader clears them, so the list stands
+# its whole tree again before the new words narrow it.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- runFlow:
+    file: tab.yaml
+    env:
+      TAB: Tasks
+- runFlow:
+    when:
+      notVisible: "Search tasks"
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn:
+          text: "Search"
+          above: "Tab Bar"
+- runFlow:
+    when:
+      notVisible: "Search tasks"
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: "Show Sidebar"
+      - waitForAnimationToEnd
+- tapOn: "Search tasks"
+- eraseText
+- inputText: "${WORDS}"
+- assertVisible: "${TASK}"
+- tapOn: "${TASK}"
+- extendedWaitUntil:
+    visible: "Created by .*"
+    timeout: 20000
