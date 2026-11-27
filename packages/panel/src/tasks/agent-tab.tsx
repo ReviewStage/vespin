@@ -226,6 +226,7 @@ import { agentOriginQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.js";
+import { STEADY_DOORS, useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import {
   useTaskListCollections,
   useTaskListRow,
@@ -3464,7 +3465,11 @@ function AgentTabView({
     sameComputerApps,
   );
 
-  const queueEditing = useQueueEditing(composer, queue, pictures);
+  const queueEditing = useSteadyDoors(
+    useQueueEditing(composer, queue, pictures),
+    STEADY_DOORS.OWN_FUNCTIONS,
+  );
+
   const startedByReader = starter === undefined;
   // Any member who may message the agent changes its queue, every message in it, as the service holds (`controlsAgent`): an
   // agent on its starter's Mac is theirs alone. Note that one on the starter's own GitHub token is theirs alone too, which the
@@ -3681,6 +3686,26 @@ function AgentTabView({
     [lines],
   );
 
+  // Note that what the dock is handed is the same from write to write while what it reads is, so the box under the transcript holds while the transcript moves.
+  const { usage, payer, payerSubscriptionId, context } = transcript;
+
+  const dockTranscript = useMemo(
+    () => ({ usage, payer, payerSubscriptionId, context }),
+    [usage, payer, payerSubscriptionId, context],
+  );
+
+  const dockQueue = useMemo(
+    () => ({ controls: controlsQueue, working: standing.working, editing: queueEditing }),
+    [controlsQueue, standing.working, queueEditing],
+  );
+
+  const dockPlace = useMemo(
+    () => ({ owner: macOwner, route: callRoute, pictures, computerApps }),
+    [macOwner, callRoute, pictures, computerApps],
+  );
+
+  const stop = useSteadyDoor(onStop);
+
   return (
     <AgentTabFrame ref={tab} label={name}>
       <CallPlaceProvider owner={macOwner} route={callRoute}>
@@ -3852,9 +3877,9 @@ function AgentTabView({
           agent={agent}
           box={box}
           composer={composer}
-          transcript={transcript}
+          transcript={dockTranscript}
           approvalsWaiting={approvals.waiting}
-          onStop={onStop}
+          onStop={stop}
           onUnarchive={onUnarchive}
           continuedNote={continuedNote}
           cards={cards}
@@ -3863,8 +3888,8 @@ function AgentTabView({
           replyDoor={replyDoor}
           closedRemedy={closedRemedy}
           onMoveToCloud={onMoveToCloud}
-          queue={{ controls: controlsQueue, working: standing.working, editing: queueEditing }}
-          place={{ owner: macOwner, route: callRoute, pictures, computerApps }}
+          queue={dockQueue}
+          place={dockPlace}
         />
       </AgentTabFoot>
       {replies ? <ReplyToSelection scope={tab} onReply={replyThroughBox} /> : null}
