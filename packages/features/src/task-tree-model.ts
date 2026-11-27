@@ -51,11 +51,14 @@ import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from ".
 import {
   COMPLETED_WINDOW,
   type CompletedWindow,
+  mayHoldSettled,
+  showsSettledInFull,
   standsCompleted,
   statusOf,
   TASKS_GROUP,
   TASKS_GROUPING,
   TASKS_ORDER,
+  type TasksDisplay,
   type TasksFilter,
   type TasksGroup,
   type TasksGroupHead,
@@ -145,14 +148,15 @@ export const TASK_TREE_GROUPINGS = [
 type TaskTreeGrouping = (typeof TASK_TREE_GROUPINGS)[number];
 
 /**
- * The completed windows the phone offers: the Tasks page's but All, since
- * the list a phone holds keeps only the tasks finished in the past month,
- * and pages in no older ones.
+ * The completed windows the phone offers, the Tasks page's: All reads the
+ * tasks finished before the list's live window from the service a page at a
+ * time, as the page's does (`settled-paging.ts`).
  */
 export const TASK_TREE_COMPLETED = [
   COMPLETED_WINDOW.NONE,
   COMPLETED_WINDOW.PAST_WEEK,
   COMPLETED_WINDOW.PAST_MONTH,
+  COMPLETED_WINDOW.ALL,
 ] as const satisfies readonly CompletedWindow[];
 
 type TaskTreeCompleted = (typeof TASK_TREE_COMPLETED)[number];
@@ -316,24 +320,34 @@ function inSidebarOrder(
   ];
 }
 
+/** The Tasks page's filter the view's statuses stand for: none where it names none. */
+function viewFilter(treeView: TaskTreeView): TasksFilter {
+  return treeView.statuses.length === 0 ? {} : { status: treeView.statuses };
+}
+
+/** The Tasks page's List display the view stands for. */
+function viewDisplay(treeView: TaskTreeView): TasksDisplay {
+  return {
+    grouping: treeView.grouping,
+    order: treeView.order,
+    emptyGroups: false,
+    completed: treeView.completed,
+    pinnedFirst: false,
+    subTasks: treeView.subTasks,
+    properties: [],
+  };
+}
+
 /** The reader's tasks no pin or section holds as the view groups, orders, and keeps them, through the Tasks page's own List (`tasksListGroups`), the repositories' groups in the sidebar's order. */
 function viewGroups(unplaced: readonly TaskSummary[], input: TaskTreeInput): readonly TasksGroup[] {
   const { treeView, readerId } = input;
-  const filter: TasksFilter = treeView.statuses.length === 0 ? {} : { status: treeView.statuses };
+  const filter = viewFilter(treeView);
 
   const groups = tasksListGroups(
     inViewStatuses(tasksAssignedTo(unplaced, treeView.assignedTo, readerId), treeView),
     {
       filter,
-      display: {
-        grouping: treeView.grouping,
-        order: treeView.order,
-        emptyGroups: false,
-        completed: treeView.completed,
-        pinnedFirst: false,
-        subTasks: treeView.subTasks,
-        properties: [],
-      },
+      display: viewDisplay(treeView),
       pinned: [],
       sections: [],
       readerId,
@@ -517,6 +531,18 @@ export function taskTree(input: TaskTreeInput): TaskTree {
       rows: drawn(group.at + 2 + sections.length),
     })),
   };
+}
+
+/** Whether the view shows settled tasks in full, as the Tasks page's does (`showsSettledInFull`): its completed window at All, or its statuses naming Done or Canceled, so the list reads those finished before its live window from the service. */
+export function treeShowsSettledInFull(treeView: TaskTreeView): boolean {
+  return showsSettledInFull(viewFilter(treeView), viewDisplay(treeView));
+}
+
+/** Whether any of the view's groups that may hold settled tasks draws a row, whose run has an end to come to (`settledRowsDrawn`); Pinned, Following, and a section hold none the paging reads. */
+export function treeDrawsSettled(tree: TaskTree): boolean {
+  return tree.tasks.some(
+    (group) => group.head !== undefined && mayHoldSettled(group.head) && group.rows.length > 0,
+  );
 }
 
 /**
