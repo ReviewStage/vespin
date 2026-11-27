@@ -1,0 +1,10 @@
+pinned to c3a66e72c0
+== bundle PJj11085c base c3a66e72c0
+  built c3a66e72c0 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app, pin c3a66e72c0
+iphone-light-sent-picture: fails 0 shots 2 
+iphone-dark-sent-picture: fails 0 shots 2 
