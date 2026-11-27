@@ -381,6 +381,10 @@ const EXPIRY_THREAD = {
       at: LANDED - 5 * MINUTE,
       url: `${REPOSITORY_URL}/pull/127#discussion_r19`,
       subject: "PRRC_expiry_19",
+      reactions: [
+        { content: REACTION.HEART, count: 2, by: [GRACE, ADA], mine: true },
+        { content: REACTION.ROCKET, count: 1, by: [GRACE] },
+      ],
     },
   ],
   more: 0,
