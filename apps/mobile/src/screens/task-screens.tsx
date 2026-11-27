@@ -1280,7 +1280,7 @@ function askNewSection(
     acts: [
       {
         label: SECTION_MENU_WORDS.CREATE_SECTION,
-        onWords: (title) => placing.newSection(title, task?.id),
+        onWords: (title) => placing.newSection(title, task),
       },
     ],
   });

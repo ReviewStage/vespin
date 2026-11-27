@@ -36,6 +36,7 @@ import {
 } from "@repo/features/task-section-wire";
 import {
   NO_TASK_SECTIONS,
+  newSectionWrites,
   placeWrites,
   SECTION_DELETED,
   SECTION_WRITE_FAILED_NOTE,
@@ -332,8 +333,10 @@ export interface TaskPlacing {
   readonly deleteSection: (section: TaskSection) => void;
   /** Gives one of the member's sections another icon, keeping its name, or none under null, as the panel's Change icon does. */
   readonly setSectionIcon: (section: TaskSection, icon: TaskSectionIcon | null) => void;
-  /** Makes a section of the workspace's named `title`, and puts `taskId` on top of it where one is given, as the panel's New section does from the Tasks head and from Move to section; none before the workspace is read. */
-  readonly newSection: ((title: string, taskId?: string) => void) | undefined;
+  /** Makes a section named `title`, and puts `task` on top of it where one is given, as the panel's New section does from the Tasks head and from Move to section: in the task's own workspace, else the listed one; none before the workspace is read. */
+  readonly newSection:
+    | ((title: string, task?: { readonly id: string; readonly workspaceId: string }) => void)
+    | undefined;
   /** The repositories the account keeps at the top of its list, the first kept first. */
   readonly pinnedRepositories: readonly string[];
   /** Keeps a repository's group at the top of the list, or stops, as the panel's Keep at top does. */
@@ -412,18 +415,14 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
       );
     };
 
-    const newSection = (inWorkspace: string, title: string, taskId?: string) => {
+    const newSection = (
+      inWorkspace: string,
+      title: string,
+      task?: { readonly id: string; readonly workspaceId: string },
+    ) => {
       const id = randomUUID();
-      // Note that a task moved into it lands on its top, as Move to section puts one, so nothing else of the section's moves.
-      const placed = taskId === undefined ? [] : placeWrites([], taskId, id, 0, Date.now());
 
-      void sendSections(
-        [
-          { kind: TASK_SECTION_WRITE.CREATE, id, workspaceId: inWorkspace, title: title.trim() },
-          ...placed,
-        ],
-        id,
-      );
+      void sendSections(newSectionWrites(id, title, inWorkspace, task, Date.now()), id);
     };
 
     const pinRepository = (repository: string, pinned: boolean) => {
@@ -502,7 +501,8 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
       newSection:
         workspaceId === undefined
           ? undefined
-          : (title: string, taskId?: string) => newSection(workspaceId, title, taskId),
+          : (title: string, task?: { readonly id: string; readonly workspaceId: string }) =>
+              newSection(workspaceId, title, task),
       pinnedRepositories,
       pinRepository,
     };

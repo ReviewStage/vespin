@@ -249,6 +249,25 @@ export function placeWrites(
   return placeMemberWrites(order, { taskId }, sectionId, to, now);
 }
 
+/**
+ * The writes that make a section `id` named `title` and, where `task` is
+ * given, put the task on its top, as the panel's New section does from Move
+ * to section: in the task's own workspace, since the service places a task
+ * only in a section of its workspace, and else in `listedWorkspaceId`.
+ */
+export function newSectionWrites(
+  id: string,
+  title: string,
+  listedWorkspaceId: string,
+  task: { readonly id: string; readonly workspaceId: string } | undefined,
+  now: number,
+): TaskSectionWrite[] {
+  const workspaceId = task?.workspaceId ?? listedWorkspaceId;
+  const placed = task === undefined ? [] : placeWrites([], task.id, id, 0, now);
+
+  return [{ kind: TASK_SECTION_WRITE.CREATE, id, workspaceId, title: title.trim() }, ...placed];
+}
+
 /** The writes that put each member, in its order, on top of a section, in an order of their own (`placeAllWrites`). */
 function placeAllMembers(
   state: TaskSections,
