@@ -50,6 +50,7 @@ import {
   automationSwitchOf,
   chosenTasksView,
   FIXTURE_RECORDING_ID,
+  fixtureResetPlan,
   type InboxReadMarks,
   type InboxReminders,
   type InboxSentReplies,
@@ -184,6 +185,9 @@ const SETUP_OWED = new WeakSet<object>();
 /** The runs whose account stands with its Inbox turned off, as `-inboxOff true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
 const INBOX_OFF = new WeakSet<object>();
 
+/** The runs whose account holds the ChatGPT plan the usage-limit agent runs on, with its reset credits, as `-resetCredits true` asks, by the store each stages, since a stage after a press is asked with none of the launch's own. */
+const RESET_CREDITS = new WeakSet<object>();
+
 /** Where an account owed setup stands until it moves: its first step, set up for itself. */
 const SETUP_START = setupPlaceStored({ audience: SETUP_AUDIENCE.ME, at: 0 });
 
@@ -281,17 +285,23 @@ function stagedNetwork(held: AppStateSnapshot, updateNeeded: boolean): AppStateS
 }
 
 /**
- * The account's saved keys as the fixture holds them: read, with none saved,
- * so Talk in a new agent's sheet answers a press as an account with no
- * OpenAI key does; the slice held where no account is signed in.
+ * The account's saved keys as the fixture holds them: read, with no key
+ * saved, so Talk in a new agent's sheet answers a press as an account with
+ * no OpenAI key does, and no plan but, where `resetCredits`, the ChatGPT
+ * plan the usage-limit agent runs on, so its pause offers Use reset; the
+ * slice held where no account is signed in.
  */
-function stagedKeys(held: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.PROVIDER_KEYS] {
+function stagedKeys(
+  held: AppStateSnapshot,
+  resetCredits: boolean,
+): AppStateSnapshot[typeof LIVE_READ.PROVIDER_KEYS] {
   const accountId = signedInAccountId(held.account);
   const keys = held[LIVE_READ.PROVIDER_KEYS];
 
   if (accountId === undefined || keys[accountId]?.rows !== undefined) return keys;
+  const subscriptions = resetCredits ? [fixtureResetPlan(Date.now())] : [];
 
-  return { ...keys, [accountId]: { rows: { keys: [], subscriptions: [] } } };
+  return { ...keys, [accountId]: { rows: { keys: [], subscriptions } } };
 }
 
 /** The messages to an agent the run sent, by the agent, in the order sent: on their way where the run took them, and left unanswered where `-refuseWrites` refused them, kept as the host keeps a refused line. */
@@ -447,7 +457,9 @@ function keepSend(
  * Where `machineAsk`, as `-machineAsk true` asks, the run holds an ask of
  * Ada's MacBook for an agent's command from then on (`maestro/machine-ask.yaml`).
  * Where `inboxOff`, as `-inboxOff true` asks, the account reads its Inbox
- * turned off until the run turns it on (`maestro/inbox-off.yaml`).
+ * turned off until the run turns it on (`maestro/inbox-off.yaml`). Where
+ * `resetCredits`, as `-resetCredits true` asks, the account holds the
+ * ChatGPT plan the usage-limit agent runs on (`maestro/agent-usage-limit.yaml`).
  */
 export function stageFixture(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
@@ -455,12 +467,15 @@ export function stageFixture(
   machineAsk = false,
   setupOwed = false,
   inboxOff = false,
+  resetCredits = false,
 ): void {
   if (machineAsk) MACHINE_ASKED.add(state);
 
   if (setupOwed) SETUP_OWED.add(state);
 
   if (inboxOff) INBOX_OFF.add(state);
+
+  if (resetCredits) RESET_CREDITS.add(state);
 
   const snapshot = state.snapshot();
 
@@ -515,7 +530,7 @@ export function stageFixture(
     ...withInboxOff(withSetupOwed(reminded, SETUP_OWED.has(state)), INBOX_OFF.has(state)),
     tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
-    [LIVE_READ.PROVIDER_KEYS]: stagedKeys(inbox),
+    [LIVE_READ.PROVIDER_KEYS]: stagedKeys(inbox, RESET_CREDITS.has(state)),
   };
 
   state.update(stagedPatch(held, staged), listed.lists);

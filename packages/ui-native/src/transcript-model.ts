@@ -47,6 +47,7 @@ import {
   agentRows,
   type ComputerApps,
   CUT_PART_WORDS,
+  callUsageLimit,
   computerAppsOf,
   cutPartText,
   messageWords,
@@ -153,9 +154,14 @@ import {
   TURN_ROW,
   type TurnRow,
 } from "@repo/features/turn-rows";
+import {
+  usageLimitNext,
+  usageLimitPauseStanding,
+  usageLimitTitle,
+} from "@repo/features/usage-limit-words";
 import { delegatedTurnsOf, isAgentTurn } from "@repo/features/voice-call-lines";
 import { isRecord, isWireNumber, isWireString, MESSAGE_ROLE } from "@repo/wire";
-import { GOAL_EVENT } from "@repo/wire/ui-messages";
+import { GOAL_EVENT, type UsageLimitNotice } from "@repo/wire/ui-messages";
 
 /** The kinds of item the transcript's list draws. */
 export const TRANSCRIPT_ITEM = {
@@ -190,6 +196,7 @@ export const TRANSCRIPT_NOTICE = {
   LINE: "line",
   CONNECTION_LOST: "connection-lost",
   GOAL_CARD: "goal-card",
+  USAGE_LIMIT: "usage-limit",
 } as const;
 
 /** What leads a notice's quiet line, as the panel's glyph for it does. */
@@ -231,6 +238,14 @@ export type TranscriptNotice =
       readonly blocked: boolean;
       /** Whether its reason stands open under its head. */
       readonly open: boolean;
+    }
+  | {
+      readonly kind: typeof TRANSCRIPT_NOTICE.USAGE_LIMIT;
+      readonly title: string;
+      /** What comes next: the payer the turn went on with, when it resumes, or that it waits on the reader; none on a worker's call, which goes on with no one, as the panel's title look says it. */
+      readonly next: string | undefined;
+      /** Whether it is a Codex pause still standing, which a reset credit on the agent's plan is offered on. */
+      readonly pause: boolean;
     };
 
 /** Which piece of a row an item draws: its line, the page it showed, or what it showed. */
@@ -242,6 +257,7 @@ export const TRANSCRIPT_PIECE = {
   FOOT: "foot",
   WORKING: "working",
   RULE: "rule",
+  NOTICE: "notice",
 } as const;
 
 type TranscriptPiece = (typeof TRANSCRIPT_PIECE)[keyof typeof TRANSCRIPT_PIECE];
@@ -1186,6 +1202,21 @@ function callItems(
     output: part.output,
   });
 
+  // A worker the plan's limit ended draws the limit's notice in its answer's place, as the panel's row does.
+  const limit = callUsageLimit(part);
+
+  const limited: readonly TranscriptItem[] =
+    limit === undefined
+      ? []
+      : [
+          {
+            ...base,
+            place: pieceOf(base.place, TRANSCRIPT_PIECE.NOTICE),
+            kind: TRANSCRIPT_ITEM.NOTICE,
+            notice: usageLimitNotice(limit, reading.now, false),
+          },
+        ];
+
   const call: TranscriptItem = {
     ...base,
     kind: TRANSCRIPT_ITEM.CALL,
@@ -1201,7 +1232,12 @@ function callItems(
     standing: standingOf(part.state, view.refused === true),
     open,
     body: open
-      ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
+      ? callBody(
+          view.input,
+          limit === undefined ? (read?.output ?? view.output) : undefined,
+          drawn.errorText,
+          read !== undefined,
+        )
       : [],
     cut: read?.reading === true ? part.cut : undefined,
     answered: open && inBody ? called : [],
@@ -1235,7 +1271,7 @@ function callItems(
   )
     return [...page, ...mediaItem];
 
-  return [call, ...page, ...mediaItem];
+  return [call, ...limited, ...page, ...mediaItem];
 }
 
 /** What leads a goal's trail, as the panel's glyph for each move of its standing. */
@@ -1321,6 +1357,8 @@ function noticeOf(
         caption: connectionLostCaption(part.notice, reading.now),
         waiting: part.notice.restoredAt === null,
       };
+    case AGENT_PART.USAGE_LIMIT:
+      return usageLimitNotice(part.notice, reading.now, true);
     case AGENT_PART.GOAL:
       return reading.goals === undefined
         ? undefined
@@ -1328,6 +1366,26 @@ function noticeOf(
     default:
       return undefined;
   }
+}
+
+/** The usage limit's notice as its item draws it: its title, and what comes next where `next` is said. */
+function usageLimitNotice(notice: UsageLimitNotice, now: number, next: boolean): TranscriptNotice {
+  return {
+    kind: TRANSCRIPT_NOTICE.USAGE_LIMIT,
+    title: usageLimitTitle(notice),
+    next: next ? usageLimitNext(notice, now) : undefined,
+    pause: next && usageLimitPauseStanding(notice, now),
+  };
+}
+
+/** Whether any item is a usage limit's pause still standing, which a reset credit on the agent's plan is offered on, so the page reads the reader's plans only while one stands. */
+export function standsUsagePause(items: readonly TranscriptItem[]): boolean {
+  return items.some(
+    (item) =>
+      item.kind === TRANSCRIPT_ITEM.NOTICE &&
+      item.notice.kind === TRANSCRIPT_NOTICE.USAGE_LIMIT &&
+      item.notice.pause,
+  );
 }
 
 /** One part as its items; none for what the agent thought, or a part with nothing to draw. */
@@ -1350,6 +1408,7 @@ function partItems(
     case AGENT_PART.AGENT_MOVED:
     case AGENT_PART.CONNECTION_LOST:
     case AGENT_PART.GOAL:
+    case AGENT_PART.USAGE_LIMIT:
       return noticeItems(part, base, reading);
     default:
       return [];

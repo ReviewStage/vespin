@@ -110,6 +110,7 @@ import {
   shownMediaIds,
   shownPictureIds,
   shownRecordingIds,
+  standsUsagePause,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptReveal,
@@ -176,6 +177,7 @@ import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useChatFaces, useManagerChatLooks, useManagersListed } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
+import { useResetCredit } from "../agents/use-reset-credit.js";
 import {
   type OpenedSuggestion,
   useOpenedSuggestion,
@@ -1000,6 +1002,10 @@ const AgentConversation = memo(function AgentConversation({
   const cuts = useMemo(() => openCuts(items), [items]);
   useEffect(() => whole.ask(cuts), [whole, cuts]);
 
+  // A Codex pause still standing offers a reset credit on the plan the agent runs on, as the panel's notice does.
+  const usagePause = useMemo(() => standsUsagePause(items), [items]);
+  const resetCredit = useResetCredit(transcript?.word?.payerSubscriptionId, usagePause);
+
   // The apps the agent uses on the reader's Mac this turn, which stand as capsules over its composer, as the panel's stack floats over its box; their icons and newest windows are read beside the rows'.
   const inUse = useMemo(
     () =>
@@ -1409,6 +1415,7 @@ const AgentConversation = memo(function AgentConversation({
             ? []
             : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
         }}
+        usageLimitReset={resetCredit.reset}
       />
     </PicturesProvider>
   );
@@ -1423,6 +1430,7 @@ const AgentConversation = memo(function AgentConversation({
           onDone={() => setMerging(undefined)}
         />
       )}
+      {resetCredit.ask}
       <ConfirmAsk destructive {...talk.switching} />
       <ConfirmAsk destructive {...messageActs.reverting} />
       <ConfirmAsk

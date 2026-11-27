@@ -188,6 +188,8 @@ export interface MobileHostOptions {
   readonly fixtureSetupOwed?: boolean | undefined;
   /** Whether a fixture run's account stands with its Inbox turned off, which `-inboxOff true` asks; never in a live run. */
   readonly fixtureInboxOff?: boolean | undefined;
+  /** Whether a fixture run's account holds the ChatGPT plan the usage-limit agent runs on, with its reset credits, which `-resetCredits true` asks; never in a live run. */
+  readonly fixtureResetCredits?: boolean | undefined;
   /** Whether a fixture run's act port refuses the writes a flow presses, which `-refuseWrites true` asks; never in a live run. */
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** Where a fixture run's agent recording is served over HTTP on the rig (`-mediaOrigin`), so its player takes the remote path a device's does; never in a live run. */
@@ -416,10 +418,11 @@ const stagedFixture = (
   machineAsk: boolean,
   setupOwed: boolean,
   inboxOff: boolean,
+  resetCredits: boolean,
 ) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      stageFixture(state, updateNeeded, machineAsk, setupOwed, inboxOff);
+      stageFixture(state, updateNeeded, machineAsk, setupOwed, inboxOff, resetCredits);
       yield* publishAppStateChanges(
         state,
         () => Effect.sync(() => stageFixture(state, updateNeeded)),
@@ -588,6 +591,7 @@ export function composeMobile(
               options.fixtureMachineAsk === true,
               options.fixtureSetupOwed === true,
               options.fixtureInboxOff === true,
+              options.fixtureResetCredits === true,
             );
 
       return Layer.provideMerge(staged, standing);

@@ -90,7 +90,7 @@ import {
   type TranscriptItem,
   type TranscriptPlace,
 } from "./transcript-model.js";
-import { NoticeRow } from "./transcript-notice.js";
+import { NoticeRow, type UsageLimitReset } from "./transcript-notice.js";
 import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
 
@@ -1060,6 +1060,8 @@ interface RowDrawing {
   readonly channel?: ChannelFaces | undefined;
   /** Opens a Manager chat message's thread, by the message it hangs on, from Reply in thread or the summary of its replies; none where the chat opens no thread, as on a thread's own page. */
   readonly onOpenChatThread?: ((root: string) => void) | undefined;
+  /** The reset credit the agent's plan offers, which a usage limit's pause still standing draws as Use reset; none where it offers none. */
+  readonly usageLimitReset?: UsageLimitReset | undefined;
 }
 
 /** A message whose acts the transcript draws: a sent line, held for its menu, and a finished turn's foot. */
@@ -1561,6 +1563,7 @@ function TranscriptRow({
             notice={item.notice}
             width={rowWidth(drawing.column, item.depth)}
             repository={drawing.repository}
+            reset={drawing.usageLimitReset}
             onToggle={() => drawing.onToggle(item)}
             onOpenLink={drawing.onOpenLink}
           />

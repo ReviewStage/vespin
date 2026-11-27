@@ -1,9 +1,11 @@
-// transcript-notice.tsx -- a quiet notice an agent's transcript keeps between its stretches of work, as the panel draws each: a line where the session was compacted, cleared, or moved, or where its goal moved; a card where the agent lost its connection; and a card that folds a goal's verdict.
+// transcript-notice.tsx -- a quiet notice an agent's transcript keeps between its stretches of work, as the panel draws each: a line where the session was compacted, cleared, or moved, or where its goal moved; a card where the agent lost its connection; a card that folds a goal's verdict; and the warning card where it reached its usage limit, offering Use reset on a pause.
 
 import { SymbolView } from "expo-symbols";
 import { StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
+import { InlineHost } from "./inline-host.js";
 import { Markdown } from "./markdown.js";
 import { NoteLine } from "./note-line.js";
 import { Press } from "./press.js";
@@ -60,6 +62,7 @@ const styles = StyleSheet.create({
     padding: CARD_PADDING,
   },
   lostWords: { flex: 1, gap: 2 },
+  limitPress: { alignSelf: "flex-start", marginTop: SPACE.TIGHT },
   body: { borderTopWidth: StyleSheet.hairlineWidth, padding: CARD_PADDING },
 });
 
@@ -97,6 +100,74 @@ function ConnectionLostCard({
           {words}
         </Text>
         <Text style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>{caption}</Text>
+      </View>
+    </View>
+  );
+}
+
+/** A reset credit a usage limit's pause offers, as the screen's press stands: its words, whether a spend is under way, and the press that asks first. */
+export interface UsageLimitReset {
+  readonly words: string;
+  /** What the press says while a spend is under way. */
+  readonly running: string;
+  readonly busy: boolean;
+  readonly use: () => void;
+}
+
+/**
+ * Where the agent reached its usage limit, as the panel's warning card: the
+ * clock in the attention tone, the limit reached, what comes next where it
+ * says (a worker's says its title alone), and Use reset where a pause
+ * offers a credit on the agent's plan.
+ */
+function UsageLimitCard({
+  title,
+  next,
+  reset,
+}: {
+  readonly title: string;
+  readonly next: string | undefined;
+  readonly reset: UsageLimitReset | undefined;
+}) {
+  const colors = useColors();
+  const glyph = useScaledSize(MARK_SIZE.GLYPH);
+
+  return (
+    <View
+      style={[
+        styles.card,
+        styles.lost,
+        { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
+      ]}
+    >
+      <SymbolView
+        name={glyphSymbol(GLYPH.TIME)}
+        size={glyph}
+        tintColor={toneColor(colors, STATUS_TONE.ATTENTION)}
+        accessibilityElementsHidden
+      />
+      <View style={styles.lostWords}>
+        <View accessible accessibilityLabel={next === undefined ? title : `${title}. ${next}`}>
+          <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "500", color: colors.TEXT }}>
+            {title}
+          </Text>
+          {next === undefined ? null : (
+            <Text style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>{next}</Text>
+          )}
+        </View>
+        {reset === undefined ? null : (
+          <View style={styles.limitPress}>
+            <InlineHost matchContents>
+              <Button
+                label={reset.busy ? reset.running : reset.words}
+                look={BUTTON_LOOK.BORDERED}
+                size={BUTTON_SIZE.SMALL}
+                disabled={reset.busy}
+                onPress={reset.use}
+              />
+            </InlineHost>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -199,6 +270,7 @@ export function NoticeRow({
   notice,
   width,
   repository,
+  reset,
   onToggle,
   onOpenLink,
 }: {
@@ -206,6 +278,8 @@ export function NoticeRow({
   /** How wide the row's words stand, known before it is laid out. */
   readonly width: number;
   readonly repository: string | null | undefined;
+  /** The reset credit the agent's plan offers, which a usage limit's pause still standing draws as its press; none where it offers none. */
+  readonly reset?: UsageLimitReset | undefined;
   /** Opens or closes a goal card's reason. */
   readonly onToggle: () => void;
   readonly onOpenLink: (address: string) => void;
@@ -232,6 +306,14 @@ export function NoticeRow({
           words={notice.words}
           caption={notice.caption}
           waiting={notice.waiting}
+        />
+      );
+    case TRANSCRIPT_NOTICE.USAGE_LIMIT:
+      return (
+        <UsageLimitCard
+          title={notice.title}
+          next={notice.next}
+          reset={notice.pause ? reset : undefined}
         />
       );
     case TRANSCRIPT_NOTICE.GOAL_CARD:

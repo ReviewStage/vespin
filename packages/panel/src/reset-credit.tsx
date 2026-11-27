@@ -15,12 +15,18 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
-  PROVIDER_KEY_KIND,
   RESET_CREDIT_OUTCOME,
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { dateOfText } from "@repo/features/time-format";
+import {
+  offersResetCredit,
+  RESET_CREDIT_WORDS,
+  resetCreditPressWords,
+  resetCreditQuestionBody,
+  usageLimitPauseStanding,
+} from "@repo/features/usage-limit-words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   CONFIRM_LOSS,
@@ -35,7 +41,7 @@ import {
   useConfirmDialog,
 } from "@repo/ui";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
-import { type UsageLimitNotice as Notice, USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
+import type { UsageLimitNotice as Notice } from "@repo/wire/ui-messages";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createContext, type ReactNode, useContext, useRef } from "react";
 import { askAct } from "./act.js";
@@ -46,29 +52,12 @@ import { TranscriptAgent } from "./tasks/line-cards.js";
 import { selectAccount, useAppStateSlice } from "./use-app-state.js";
 
 const WORDS = {
-  VERB: "Use reset",
-  RUNNING: "Using reset",
-  NOT_SPENT: "Couldn't use a reset. Try again.",
-  NO_CREDIT: "That reset is no longer available.",
+  ...RESET_CREDIT_WORDS,
   EACH: "Each resets your 5-hour and weekly limits.",
   USED_NEXT: "Used next",
   NO_EXPIRY: "Doesn't expire",
   LISTED: "Resets",
 } as const;
-
-/** The press, and the question it asks: "Use reset" for one, "Use 1 of 3 resets" for more. */
-function pressWords(credits: number): string {
-  return credits === 1 ? WORDS.VERB : `Use 1 of ${credits} resets`;
-}
-
-/** Whether the plan offers a credit: a ChatGPT plan that holds one. */
-function offers(plan: SubscriptionKeySummary | undefined): plan is SubscriptionKeySummary {
-  return (
-    plan !== undefined &&
-    plan.kind === PROVIDER_KEY_KIND.CHATGPT_OAUTH &&
-    (plan.resetCredits ?? 0) > 0
-  );
-}
 
 /** The plan's listed credits, each by when it expires, the one a spend uses first; nothing where ChatGPT listed none. */
 function ResetCreditRows({ plan }: { plan: SubscriptionKeySummary }): React.JSX.Element | null {
@@ -122,7 +111,7 @@ export interface ResetCreditOffer {
 export function useResetCreditOffer(
   plan: SubscriptionKeySummary | undefined,
 ): ResetCreditOffer | undefined {
-  const offered = offers(plan);
+  const offered = offersResetCredit(plan);
   const key = useRef("");
 
   const spend = useMutation({
@@ -151,7 +140,7 @@ export function useResetCreditOffer(
   );
 
   if (!offered) return undefined;
-  const words = pressWords(plan.resetCredits ?? 0);
+  const words = resetCreditPressWords(plan.resetCredits ?? 0);
 
   return {
     words,
@@ -168,7 +157,7 @@ export function useResetCreditOffer(
         question={{
           title: `${words}?`,
           replayUnmasked: true,
-          body: `Resets the 5-hour and weekly limits on ${plan.label ?? plan.email ?? "this plan"}.`,
+          body: resetCreditQuestionBody(plan),
           bodyReplayMasked: true,
           verb: WORDS.VERB,
           running: WORDS.RUNNING,
@@ -213,12 +202,7 @@ export function TranscriptAgentOn({
 export function TranscriptUsageLimitNotice({ notice }: { notice: Notice }): React.JSX.Element {
   const plan = useOwnPlan(useContext(TranscriptPlan));
 
-  const pause =
-    notice.agent === USAGE_LIMIT_AGENT.CODEX &&
-    notice.resetsAt !== null &&
-    notice.resetsAt > Date.now();
-
-  const offer = useResetCreditOffer(pause ? plan : undefined);
+  const offer = useResetCreditOffer(usageLimitPauseStanding(notice) ? plan : undefined);
 
   return (
     <>
