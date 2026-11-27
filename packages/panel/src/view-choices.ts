@@ -41,7 +41,8 @@ import { selectAccount, useAppStateSlice } from "./use-app-state.js";
 export interface ViewChoiceControl<Key extends ViewChoiceKey> {
   readonly value: Option.Option<ViewChoiceValue<Key>>;
   readonly answered: boolean;
-  readonly choose: (value: ViewChoiceValue<Key> | null) => void;
+  /** Keeps `value`, or forgets the choice with null, telling `settled` once the write has gone or been refused. */
+  readonly choose: (value: ViewChoiceValue<Key> | null, settled?: () => void) => void;
 }
 
 /** No choices, one list for every draw. */
@@ -71,9 +72,18 @@ export function useViewChoice<Key extends ViewChoiceKey>(
   return {
     value,
     answered: workspaceId !== undefined && read.data !== undefined,
-    choose: (value) => {
+    choose: (value, settled) => {
       if (workspaceId === undefined) return;
-      writing.mutate(viewChoiceWrite(rows, key, workspaceId, value, crypto.randomUUID()));
+      const write = viewChoiceWrite(rows, key, workspaceId, value, crypto.randomUUID());
+
+      if (settled === undefined) {
+        writing.mutate(write);
+
+        return;
+      }
+
+      // Note that the write is followed by its promise rather than a callback of the press's, which the library drops once the surface that pressed it goes, so `settled` is told either way.
+      writing.mutateAsync(write).then(settled, settled);
     },
   };
 }
@@ -142,15 +152,36 @@ type HeldChoices = ReadonlyMap<ViewChoiceKey, ReadonlyMap<string | null, unknown
 /** Each window's held choices, by the window's one Query client, so they go with the window. */
 const HELD = new WeakMap<QueryClient, Store<HeldChoices>>();
 
-/** The choices `client`'s window holds for itself. */
-function heldChoices(client: QueryClient): Store<HeldChoices> {
-  const standing = HELD.get(client);
+/** Each window's choices made on the account whose writes are still out, drawn over the account's until they settle. */
+const PENDING = new WeakMap<QueryClient, Store<HeldChoices>>();
+
+/** The choices `client`'s window holds in `stores`, one store for the window. */
+function windowChoices(
+  stores: WeakMap<QueryClient, Store<HeldChoices>>,
+  client: QueryClient,
+): Store<HeldChoices> {
+  const standing = stores.get(client);
 
   if (standing !== undefined) return standing;
   const made = createStore<HeldChoices>(new Map());
-  HELD.set(client, made);
+  stores.set(client, made);
 
   return made;
+}
+
+/** `all` with the choice of `key` in `place` held as `value`, or let go where it is undefined. */
+function heldWith<Key extends ViewChoiceKey>(
+  all: HeldChoices,
+  key: Key,
+  place: string | null,
+  value: ViewChoiceValue<Key> | undefined,
+): HeldChoices {
+  const inKey = new Map(all.get(key));
+
+  if (value === undefined) inKey.delete(place);
+  else inKey.set(place, value);
+
+  return new Map(all).set(key, inKey);
 }
 
 /** The choice of `key` the window holds for itself in `place`, none until one is made. */
@@ -187,8 +218,11 @@ export function useAccountChoice<Key extends ViewChoiceKey>(
   const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const onAccount = staged || accountId === undefined ? undefined : place;
   const choice = useViewChoice(key, onAccount);
-  const held = heldChoices(client);
-  const heldNow = useSelector(held, (all) => heldIn(all, key, place ?? null));
+  const held = windowChoices(HELD, client);
+  const pending = windowChoices(PENDING, client);
+  const where = place ?? null;
+  const heldNow = useSelector(held, (all) => heldIn(all, key, where));
+  const pendingNow = useSelector(pending, (all) => heldIn(all, key, where));
   const [left, forgetLeft] = earlier;
 
   useKeptMovedUp(key, onAccount, choice, left, forgetLeft);
@@ -198,26 +232,37 @@ export function useAccountChoice<Key extends ViewChoiceKey>(
   const value =
     onAccount === undefined
       ? (heldNow ?? own ?? fallback)
-      : Option.getOrElse(choice.value, () => own ?? fallback);
+      : (pendingNow ?? Option.getOrElse(choice.value, () => own ?? fallback));
 
+  // Note that a choice made on the account is drawn at once, in the frame it is pressed, and stands until its write settles, by when the account's read carries it, or has taken it back where it was refused.
   const choose = (next: ViewChoiceValue<Key>) => {
     if (place === undefined) return;
 
     if (onAccount === undefined) {
-      held.setState((all) => new Map(all).set(key, new Map(all.get(key)).set(place, next)));
+      held.setState((all) => heldWith(all, key, place, next));
 
       return;
     }
 
-    choice.choose(next);
+    pending.setState((all) => heldWith(all, key, place, next));
+
+    // Note that a press made since stands until its own write settles.
+    choice.choose(next, () =>
+      pending.setState((all) =>
+        heldIn(all, key, place) === next ? heldWith(all, key, place, undefined) : all,
+      ),
+    );
   };
 
   // The choice standing as a change is pressed: the window's own, or the account's as the window reads it now.
   const standing = (): ViewChoiceValue<Key> => {
-    if (onAccount === undefined) return heldIn(held.state, key, place ?? null) ?? own ?? fallback;
+    if (onAccount === undefined) return heldIn(held.state, key, where) ?? own ?? fallback;
     const rows = client.getQueryData(viewChoicesQuery(accountId).queryKey) ?? NO_CHOICES;
 
-    return Option.getOrElse(viewChoiceOf(rows, key, onAccount), () => own ?? fallback);
+    return (
+      heldIn(pending.state, key, where) ??
+      Option.getOrElse(viewChoiceOf(rows, key, onAccount), () => own ?? fallback)
+    );
   };
 
   return { value, choose, change: (changed) => choose(changed(standing())) };
