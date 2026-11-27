@@ -1,18 +1,27 @@
 /* toast.css -- the window's passing notices: up to three cards stacked in its
-   bottom-right corner, newest at the bottom, the window's step in from its
-   corner. The stack is an overlay alone: it stands in its corner whatever
-   docks at the window's foot under it, a composer or a phone's places bar,
-   and moves nothing under it.
+   bottom-right corner, the window's step in from its corner, newest in
+   front. At rest they stand collapsed, as a deck: the newest whole, and each
+   older one tucked behind it at its height, a step smaller and peeking a
+   step above it, its words faded. Under the pointer or focus the deck
+   fans out, each card whole at its own height, newest at the foot, a gap
+   between each. The stack is an overlay alone: it stands in its corner
+   whatever docks at the window's foot under it, a composer or a phone's
+   places bar, and moves nothing under it.
 
    The stack, the card, its glyph, words, and × disc are drawn in Tailwind
    utilities over the theme (`toast.tsx`, `toast-stack.tsx`,
    `toast-actions.tsx`). What stays here is what those cannot say: where the
    stack stands, which reads the window's keyboard inset; where each card
    stands in it and how it arrives, moves, and leaves, which read Base UI's
-   custom properties (`--toast-index`, `--toast-offset-y`,
-   `--toast-swipe-movement-x`) and states (`data-starting-style`,
+   custom properties (`--toast-index`, `--toast-offset-y`, `--toast-height`,
+   `--toast-frontmost-height`, `--toast-swipe-movement-x`) and states
+   (`data-expanded`, `data-behind`, `data-starting-style`,
    `data-ending-style`, `data-swipe-direction`, `data-limited`); and what
-   takes the pointer, which reads the screen's hover. */
+   takes the pointer, which reads the screen's hover.
+
+   Note that the place and motion are the slot's, Base UI's root, never the
+   card's, because the card is a `Card`, positioned by its own utility,
+   which a rule in this layer cannot outrank. */
 
 @layer components {
   /* The stack's corner, a step in from the window's, above the on-screen
@@ -44,38 +53,93 @@
     );
   }
 
-  /* Each card stands at the stack's foot, raised by the cards newer than it
-     and a gap for each, as Base UI measures them, and glides on the spring to
-     wherever a change puts it: one arriving under it, or one leaving. While it
-     is dragged Base UI writes its transform itself and plays nothing, so the
-     card stays under the finger. */
+  /* Each toast's slot stands at the stack's foot, older ones painted under
+     newer ones. At rest it is the newest one's height, tucked a peek higher
+     and a step smaller for each newer one, shrunk toward its foot so its
+     top edge shows that peek above the one in front. It glides on the
+     spring to wherever a change puts it: one arriving in front, one
+     leaving, or the deck fanning out. While it is dragged Base UI writes
+     its transform itself and plays nothing, so it stays under the finger. */
   .ui-toast {
+    --ui-toast-peek: var(--ui-space-8);
+    --ui-toast-scale: calc(1 - var(--toast-index, 0) * 0.05);
     --ui-toast-rise: calc(
       -1 *
-      (var(--toast-offset-y, 0px) + var(--toast-index, 0) * var(--ui-space-8))
+      (
+        var(--toast-index, 0) *
+        var(--ui-toast-peek) +
+        (1 - var(--ui-toast-scale)) *
+        var(--toast-frontmost-height, 0px)
+      )
     );
     position: absolute;
     right: 0;
     bottom: 0;
+    z-index: calc(-1 * var(--toast-index, 0));
     box-sizing: border-box;
     width: 100%;
+    height: var(--toast-frontmost-height, auto);
     pointer-events: auto;
-    transform: translateX(var(--toast-swipe-movement-x, 0px)) translateY(var(--ui-toast-rise));
+    transform-origin: bottom center;
+    transform: translateX(var(--toast-swipe-movement-x, 0px)) translateY(var(--ui-toast-rise))
+      scale(var(--ui-toast-scale));
     transition:
       transform var(--ui-duration-fast) var(--ui-spring-fast),
+      height var(--ui-duration-fast) var(--ui-spring-fast),
       opacity var(--ui-duration-quick) var(--ui-motion-exit);
+  }
+
+  /* Fanned out, each stands whole at its own height, raised by the toasts
+     newer than it and a gap for each, as Base UI measures them. */
+  .ui-toast[data-expanded] {
+    --ui-toast-scale: 1;
+    --ui-toast-rise: calc(
+      -1 *
+      (var(--toast-offset-y, 0px) + var(--toast-index, 0) * var(--ui-space-8))
+    );
+    height: var(--toast-height, auto);
+  }
+
+  /* The gap under a fanned-out toast still holds the pointer, so crossing
+     from one card to the next never folds the deck back up. */
+  .ui-toast[data-expanded]::after {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    height: var(--ui-space-8);
+    content: "";
+  }
+
+  /* The card fills its slot, at rest a newer one's height. */
+  .ui-toast-card {
+    height: 100%;
+  }
+
+  /* A toast tucked behind a newer one shows its card alone, its words and
+     controls faded out of sight and out of the pointer's way, until the
+     deck fans out. */
+  .ui-toast-row {
+    transition: opacity var(--ui-duration-quick) var(--ui-motion-exit);
+  }
+
+  .ui-toast-row[data-behind]:not([data-expanded]) {
+    opacity: 0;
+    pointer-events: none;
   }
 
   /* It rises in from a step below where it stands, fading in. */
   .ui-toast[data-starting-style] {
     opacity: 0;
-    transform: translateY(calc(var(--ui-toast-rise) + var(--ui-space-12)));
+    transform: translateY(calc(var(--ui-toast-rise) + var(--ui-space-12)))
+      scale(var(--ui-toast-scale));
   }
 
   /* It leaves first, fading a step toward the window's edge. */
   .ui-toast[data-ending-style] {
     opacity: 0;
-    transform: translateX(var(--ui-space-8)) translateY(var(--ui-toast-rise));
+    transform: translateX(var(--ui-space-8)) translateY(var(--ui-toast-rise))
+      scale(var(--ui-toast-scale));
     transition:
       opacity var(--ui-duration-exit) var(--ui-motion-exit),
       transform var(--ui-duration-exit) var(--ui-motion-exit);
@@ -85,12 +149,12 @@
      drag let go of it, rather than back past where it stood. */
   .ui-toast[data-ending-style][data-swipe-direction="right"] {
     transform: translateX(calc(var(--toast-swipe-movement-x, 0px) + 100% + var(--ui-space-16)))
-      translateY(var(--ui-toast-rise));
+      translateY(var(--ui-toast-rise)) scale(var(--ui-toast-scale));
   }
 
   .ui-toast[data-ending-style][data-swipe-direction="left"] {
     transform: translateX(calc(var(--toast-swipe-movement-x, 0px) - 100% - var(--ui-space-16)))
-      translateY(var(--ui-toast-rise));
+      translateY(var(--ui-toast-rise)) scale(var(--ui-toast-scale));
   }
 
   /* One past the stack's room waits aside, hidden and so out of the
