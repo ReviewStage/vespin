@@ -1,0 +1,36 @@
+pinned to 21c8a5869e
+== bundle PJjipadrest base 21c8a5869e
+  built 21c8a5869e base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== bundle PJjipadrestB base af999111a6
+  built af999111a6 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+p10743 hdr portrait:  
+  portrait chrome rows: [] labeled items in the chrome: [] sidebar toggles: 0 [] New task items on screen: 0 [] 
+p10743 hdr landscape:  
+  landscape chrome rows: [] labeled items in the chrome: [] sidebar toggles: 0 [] New task items on screen: 0 [] 
+p10743-ipad27-light-automations: fails 2 shots 13   Assert that "Fix failing checks", Right of "Search automations" is not visible... FAILED
+p10743-ipad27-light-failure-notice: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+p10743-ipad27-light-description-edit: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+p10743-ipad27-light-computer-use: fails 0 shots 3 
+p10743-ipad27-light-computer-use: no computer-use.yaml
+p10743-ipad27-light-inbox: fails 1 shots 2 Assert that "Mark all as read" is visible... FAILED
+p10743-ipad27-light-keep: fails 1 shots 3 Assert that "Copy message" is not visible... FAILED
+p10743-ipad27-light-manager-thread: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+p10743-ipad27-light-pinned-p: fails 0 shots 1 
+  hdr pinned p10743 portrait: Pinned: Pinned [28,204][71,220] count=2 | Everything else: Everything else [28,411][123,427] count=9 | Weekly digest email: [58,238][216,258] -> PASS
+p10743-ipad27-light-pinned-l: fails 0 shots 1 
+  hdr pinned p10743 landscape: Pinned: Pinned [81,559][124,575] count=1 | Everything else: MISSING | Weekly digest email: [74,611][222,632] -> FAIL
+p10743-ipad27-light-pinned-l: fails 1 (c006chk verdict: headers)
+p10743-ipad27-light-standing: fails 1 shots 7 Assert that "Priority, Low" is visible... FAILED
+  hdr stand p10743 chips: Status In progress then Todo, Priority High then Low: FAIL at Assert that "Priority, Low" is visible... FAILED
+p10743-ipad27-light-agent-not-delivered: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+p10743-ipad27-light-mt-before-10924:  
+p10743-ipad27-light-signout-draft: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+p10743-signout-draft: FAIL RIG: the software keyboard stands before the first inputText... FAILED
