@@ -1,4 +1,5 @@
 import type { GitHubPerson, PendingReviewComment, ReviewThread } from "@repo/features/agent-wire";
+import { PENDING_WORD } from "@repo/features/pending-review";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { IRREVERSIBLE_WORDS } from "@repo/features/words";
@@ -30,7 +31,7 @@ import { ReplyForm, type ReplyFormWords } from "./reply-form.js";
  * pending, read on their own token (`pendingReview.drafts`). Each is drawn
  * where a review thread is drawn, so it is placed as threads are, on its
  * line, a gap opened over it included, or above the diff, and counted in a
- * minimized line's chip (`pendingThreadsOf`): a reply on a published thread
+ * minimized line's chip (`@repo/features/pending-review`'s `pendingThreadsOf`): a reply on a published thread
  * as that thread's last comment, and one that starts a thread as a thread
  * of its own, keyed by the comment's own id, which no thread's page is. A
  * comment drawn so is told apart by that key (`PendingCommentsProvider`),
@@ -47,7 +48,7 @@ import { ReplyForm, type ReplyFormWords } from "./reply-form.js";
 
 /** What a pending comment says of itself and its presses. */
 export const PENDING_WORDS = {
-  PENDING: "Pending",
+  PENDING: PENDING_WORD,
   EDIT: "Edit",
   DELETE: "Delete",
 } as const;
@@ -70,62 +71,6 @@ const DELETE_QUESTION: DialogQuestion = {
   loss: CONFIRM_LOSS.IRREVERSIBLE,
   replayUnmasked: true,
 };
-
-/** A pending comment as the comment of a thread it is drawn as: keyed by its own id. */
-function commentOf(draft: PendingReviewComment): ReviewThread["comments"][number] {
-  return { by: draft.by, html: draft.html, body: draft.body, at: draft.at, url: draft.id };
-}
-
-/** A pending comment that starts a thread, as a thread of its own on its lines, open and current, with no id a reply or a resolve could name. */
-function threadOf(draft: PendingReviewComment): ReviewThread {
-  return {
-    path: draft.path,
-    line: draft.line,
-    startLine: draft.startLine,
-    originalLine: draft.line,
-    originalStartLine: draft.startLine,
-    side: draft.side,
-    startSide: draft.startSide,
-    diffHunk: "",
-    resolved: false,
-    outdated: false,
-    comments: [commentOf(draft)],
-    more: 0,
-  };
-}
-
-/**
- * The review threads with the member's pending comments among them: a reply
- * on a published thread as that thread's last comment, and every other
- * comment as a thread of its own after them, oldest first. The threads are
- * handed back as they are where no comment is pending.
- */
-export function pendingThreadsOf(
-  threads: readonly ReviewThread[],
-  drafts: readonly PendingReviewComment[],
-): readonly ReviewThread[] {
-  if (drafts.length === 0) return threads;
-  const replies = new Map<string, PendingReviewComment[]>();
-  const known = new Set(threads.flatMap((thread) => (thread.id === undefined ? [] : [thread.id])));
-  const starts: PendingReviewComment[] = [];
-
-  for (const draft of drafts) {
-    const threadId = draft.threadId;
-
-    if (threadId === undefined || !known.has(threadId)) starts.push(draft);
-    else replies.set(threadId, [...(replies.get(threadId) ?? []), draft]);
-  }
-
-  const replied = threads.map((thread) => {
-    const own = thread.id === undefined ? undefined : replies.get(thread.id);
-
-    return own === undefined
-      ? thread
-      : { ...thread, comments: [...thread.comments, ...own.map(commentOf)] };
-  });
-
-  return [...replied, ...starts.map(threadOf)];
-}
 
 /** The member's pending comments by the key each is drawn under, its own id. */
 export type PendingComments = ReadonlyMap<string, PendingReviewComment>;

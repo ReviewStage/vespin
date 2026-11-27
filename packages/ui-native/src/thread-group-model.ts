@@ -3,7 +3,7 @@
 /** How long after a message the same writer's next one still joins its run: five minutes, as Slack groups a speaker's lines. */
 const RUN_REACH_MS = 5 * 60 * 1000;
 
-/** What a message is grouped by: who wrote it, when, and what happened to the thread after it. */
+/** What a message is grouped by: who wrote it, when, whether it is the reader's own pending comment, and what happened to the thread after it. */
 type Grouped = {
   readonly writer: {
     readonly name: string;
@@ -11,6 +11,7 @@ type Grouped = {
     readonly id?: string | undefined;
   };
   readonly at: number;
+  readonly pending?: boolean | undefined;
   readonly after?: readonly unknown[] | undefined;
 };
 
@@ -23,9 +24,11 @@ function sameWriter(last: Grouped["writer"], next: Grouped["writer"]): boolean {
   return last.name === next.name;
 }
 
-/** Whether `next` joins the run `last` ends: the same writer within `RUN_REACH_MS` of it, with no line of what happened, such as a resolve, standing between them. */
+/** Whether `next` joins the run `last` ends: the same writer within `RUN_REACH_MS` of it, with no line of what happened, such as a resolve, standing between them, and both published or both pending, since a pending comment's head is what tags it Pending. */
 function joins(last: Grouped, next: Grouped): boolean {
   if ((last.after?.length ?? 0) > 0) return false;
+
+  if ((last.pending === true) !== (next.pending === true)) return false;
 
   return (
     sameWriter(last.writer, next.writer) && next.at >= last.at && next.at - last.at <= RUN_REACH_MS
@@ -34,7 +37,8 @@ function joins(last: Grouped, next: Grouped): boolean {
 
 /**
  * The messages in runs, in the order given: a new run starts at another
- * writer, after a line of what happened to the thread, or where the same
+ * writer, after a line of what happened to the thread, where a comment
+ * pending in the reader's review meets a published one, or where the same
  * writer comes back more than `RUN_REACH_MS` later, so each run's head names who wrote it and when once, and the
  * messages after its first stand under it with no head of their own.
  */

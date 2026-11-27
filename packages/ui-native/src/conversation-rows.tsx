@@ -18,7 +18,7 @@ import { useRowInset } from "./layout-margin.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Markdown } from "./markdown.js";
 import { Avatar, type Face, ToneGlyph } from "./marks.js";
-import { BotTag } from "./pull-request-page.js";
+import { BotTag, PendingTag } from "./pull-request-page.js";
 import type { RowAction, RowSubmenu } from "./row-menu-model.js";
 import { Text } from "./text.js";
 import { STATUS_TONE, useColors } from "./tokens/colors.js";
@@ -232,6 +232,8 @@ export type ThreadComment = {
   readonly by: Face;
   readonly at: number;
   readonly words: string;
+  /** Whether it is the reader's own, of a review they have not yet submitted, which nobody else sees, tagged Pending after their name. */
+  readonly pending?: boolean | undefined;
 };
 
 type ThreadRowProps = {
@@ -332,6 +334,7 @@ export function ThreadRow({
                     {comment.by.name}
                   </Text>
                   {comment.by.bot === true ? <BotTag /> : null}
+                  {comment.pending === true ? <PendingTag /> : null}
                   <Text
                     modifiers={[
                       font({ textStyle: TYPE_ROLE.TIME }),
