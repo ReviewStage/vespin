@@ -18,6 +18,7 @@ import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { keepViewChoices } from "../testing/view-choices.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 
@@ -67,6 +68,7 @@ beforeEach(() => {
   });
   fakeAppBridge({});
   handMembers(() => ({ rows: { members: MEMBERS } }));
+  keepViewChoices();
 });
 
 afterEach(() => {

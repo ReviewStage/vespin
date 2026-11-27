@@ -68,7 +68,7 @@ import {
   tasksControl,
   waitingOf,
 } from "../testing/tasks-control.js";
-import { hearViewChoices } from "../testing/view-choices.js";
+import { keepViewChoices } from "../testing/view-choices.js";
 import { windowRouter } from "../testing/window-router.js";
 import { type PersonRoute, usePersonRoute } from "../workspace-routes.js";
 import { PersonPage } from "./person-page.js";
@@ -906,7 +906,7 @@ async function keptAssignees(written: readonly ViewChoiceWriteParams[]): Promise
 test("Show their tasks in the sidebar lists the tasks assigned to them", async () => {
   const { page } = mount(CHARLES.userId);
   await settle();
-  const written = hearViewChoices();
+  const written = keepViewChoices();
 
   button(page, "Show their tasks in the sidebar").click();
   assert.deepEqual(await keptAssignees(written), [{ kind: "member", userId: CHARLES.userId }]);
@@ -933,7 +933,7 @@ test("a person's tasks assigned to them stand above those they created, a task b
   // Each section wears no face, the page's head saying whose they are.
   assert.equal(page.querySelector('section[aria-label="Assigned"] .actor-mark'), null);
 
-  const written = hearViewChoices();
+  const written = keepViewChoices();
   button(page, "Show 2 more").click();
   assert.deepEqual(await keptAssignees(written), [{ kind: "member", userId: CHARLES.userId }]);
 
