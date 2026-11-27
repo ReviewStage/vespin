@@ -314,7 +314,12 @@ patchedDependencies:
 # scroll up landed on its top, past everything between (STAG-5272). The patch
 # anchors on the first visible row already measured, falling back to the
 # first visible one. It patches `dist/`, which Metro reads, never `src/`.
-# Delete it when a FlashList release anchors on a measured row.
+# FlashList offers no option for it: v2's `overrideItemLayout` takes no size
+# estimate and `maintainVisibleContentPosition` no anchor; upstream tracks the
+# estimate as Shopify/flash-list#2526 (fix PR #2531, open) and rows overlapping
+# as they are measured during a fast scroll as #2175. Delete it when a release
+# anchors on a measured row, or takes an estimate for an unmeasured one
+# (#2531) and the transcript hands each row's from its words.
   "@shopify/flash-list@2.3.2": patches/@shopify__flash-list@2.3.2.patch
 #
 # `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
