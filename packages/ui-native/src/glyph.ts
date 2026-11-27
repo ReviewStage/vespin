@@ -84,19 +84,21 @@ const productMark = (name: typeof PRODUCT_MARK_SYMBOL): Glyph => name as Glyph;
 const system = (name: SfSymbol): Glyph => name as Glyph;
 
 /**
- * Every glyph the app draws, by what it marks. An act, a setting, or a
- * place iOS has its own symbol for (⋯, compose, search, copy, delete, pin,
+ * Every glyph the app draws, by what it marks. A standard act iOS has its
+ * own symbol for (⋯, compose, search, close, add, copy, delete, edit, pin,
  * mark read, archive, the composer's and a call's buttons) is the SF Symbol
  * Apple's own apps draw for the same job, so a bar, a menu, and a swipe
- * read as Mail's and Files' do (the developer, Nov 25, 2026, over the Nov 12
- * rule that the phone's icons are the desktop's). A thing of our own no
- * system symbol names (an agent, a task, a pull request, a branch, an ask's kind,
- * a skill, a memory) is the Lucide glyph the panel draws in the same place,
- * written into the asset catalog as a custom symbol by `@repo/brand`, so it
- * sizes with Dynamic Type and weighs with its words as an SF Symbol does;
- * so is an act SF Symbols has no symbol for, such as Unlink. Where the
- * panel draws a mark of its own rather than a Lucide glyph (a check box, a
- * face, an MCP server), its drawing is SF Symbols' nearest. A task's status ring is the panel's own mark,
+ * read as Mail's and Files' do. Our own places and things (the Inbox,
+ * Tasks, Automations and their runs and triggers, an agent, a Manager, a
+ * task, a pull request, an ask's kind, a status's and a priority's mark)
+ * keep the Lucide glyph the panel draws in the same place, so the brand
+ * reads the same on every client (the developer, Nov 27, 2026, refining
+ * the Nov 12 rule that the phone's icons are the desktop's); so does an act
+ * SF Symbols has no symbol for, such as Unlink. A Lucide glyph is written
+ * into the asset catalog as a custom symbol by `@repo/brand`, so it sizes
+ * with Dynamic Type and weighs with its words as an SF Symbol does. Where
+ * the panel draws a mark of its own rather than a Lucide glyph (a check
+ * box, a face, an MCP server), its drawing is SF Symbols' nearest. A task's status ring is the panel's own mark,
  * written into the asset catalog from the table `@repo/ui`'s
  * `TaskStatusMark` draws (the developer, Nov 13, 2026), and so is the
  * product's Keel, where the panel leads its MCP & CLI page with it.
@@ -248,7 +250,8 @@ export const GLYPH = {
   UNDO: system("arrow.uturn.backward"),
   RETRY: system("arrow.clockwise"),
   RESTORE: system("arrow.counterclockwise"),
-  HISTORY: system("clock.arrow.circlepath"),
+  /** An automation's runs and a page's versions, the panel's own, since Automations is a place of ours (the developer, Nov 27, 2026). */
+  HISTORY: lucide(LUCIDE_SYMBOL.ROTATE_CCW_CLOCK),
   // A message's acts, as the panel's message actions draw them: Edit a line of the member's, Rewind conversation to here, and Fork to new agent.
   EDIT_MESSAGE: system("pencil"),
   REWIND: system("arrow.counterclockwise"),
@@ -273,6 +276,8 @@ export const GLYPH = {
   SIGN_OUT: system("rectangle.portrait.and.arrow.right"),
   SIDEBAR: lucide(LUCIDE_SYMBOL.PANEL_LEFT),
   SCHEDULES: lucide(LUCIDE_SYMBOL.CALENDAR_CLOCK),
+  /** An automation's schedule as its trigger's mark, the panel's clock, where a reminder's time is the system's. */
+  SCHEDULE_TRIGGER: lucide(LUCIDE_SYMBOL.CLOCK),
   SCHEDULE_ADD: lucide(LUCIDE_SYMBOL.CALENDAR_PLUS),
   SCHEDULE_EDIT: lucide(LUCIDE_SYMBOL.CALENDAR_COG),
   SCHEDULE_DELETE: lucide(LUCIDE_SYMBOL.CALENDAR_X),
