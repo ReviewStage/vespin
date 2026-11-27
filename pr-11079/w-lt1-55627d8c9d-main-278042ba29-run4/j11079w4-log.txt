@@ -1,0 +1,47 @@
+pinned to b6a433d6e4
+== bundle PJj11079w4 base b6a433d6e4
+  built b6a433d6e4 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn-2947.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+main for A and B: 278042ba29; LT1 head 55627d8c9d; A = b6a433d6e4
+== bundle PJj11079w4B base 278042ba29
+  built 278042ba29 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn-2947.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+n2B-write-1x seed: rc 0
+  n2B settled pick: 360 open decide threads no move names
+  n2B close wait: no close logged by the stub in 20 s; outbox at terminate: 0 rows 
+n2B-write-1x fn2mark: 27 steps,  marked [Thread 218: decide how a partial cent rounds in the billing rounding] settled [Thread 2: decide how a partial cent rounds in the billing rounding]
+  n2B search: s1 [Thread 218] 11 steps ; s2 [Thread 2 on All] 12 steps Assert that "${SETTLED}" is visible... FAILED
+  n2B db after rows: at 1795770602423 file host/accounts/stub-account/collections.sqlite;tables: applied_tx collection_expected_keys leader_term c_bkeofrt_1i collection_metadata persisted_index_registry cache_generation collection_registry t_bkeofrt_1i cache_generation_claim collection_reset_epoch cache_generation_sequence collection_version ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:03d9db0f-7b2f-4a40-addc-dbb53b300c14|c_bkeofrt_1i|t_bkeofrt_1i|1|1795770245;
+  n2B written.json: NO status after 121 polls (246463 ms after the relaunch): {"5eed0004-0000-4000-8000-0000003d09d9":{"carried":true,"unread":true}}
+  n2B times: second_launch_T=1795770479357 terminate_T=1795770570576 mark_end_T=1795770570702 relaunch_T=1795770570728 s1_end_T=1795770593369 s2_end_T=1795770670166 written_status_T=1795770817191 tries=121 
+  n2B tap/kill times: 
+  n2B db at the end: at 1795770817507 file host/accounts/stub-account/collections.sqlite;tables: applied_tx collection_expected_keys leader_term c_bkeofrt_1i collection_metadata persisted_index_registry cache_generation collection_registry t_bkeofrt_1i cache_generation_claim collection_reset_epoch cache_generation_sequence collection_version ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:03d9db0f-7b2f-4a40-addc-dbb53b300c14|c_bkeofrt_1i|t_bkeofrt_1i|1|1795770245;
+  n2B mark target: read writes named ['5eed0004-0000-4000-8000-0000003d09d9'] | the marked thread is 5eed0004-0000-4000-8000-0000003d09d9 | match
+  n2B seed rows: Thread 218: -> Thread 218: decide how a partial cent ro: id 5eed0004-0000-4000-8000-0000003d09d9 open in inbox-moves.json, id 5eed0004-0000-4000-8000-0000003d09d9 open in inbox-whole.json; Thread 2: -> Thread 2: decide how a partial cent roun: id 5eed0004-0000-4000-8000-0000003d0901 open in inbox-whole.json; 
+ipad27-light-inbox-A: fails 0 shots 13 
+n2A-write-1x seed: rc 0
+  n2A settled pick: 360 open decide threads no move names
+  n2A close wait: close logged 49 ms after the flow ended; outbox at terminate: 0 rows 
+n2A-write-1x fn2mark: 27 steps,  marked [Thread 218: decide how a partial cent rounds in the billing rounding] settled [Thread 2: decide how a partial cent rounds in the billing rounding]
+  n2A search: s1 [Thread 218] 11 steps ; s2 [Thread 2 on All] 14 steps 
+  n2A db after rows: at 1795771440755 file host/accounts/stub-account/collections.sqlite;tables: applied_tx cache_generation_sequence collection_version c_bzieiq4_1i collection_expected_keys leader_term c_cnp3msd_1i collection_metadata persisted_index_registry cache_generation collection_registry t_bzieiq4_1i cache_generation_claim collection_reset_epoch t_cnp3msd_1i ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:751b122a-ab1e-4d33-bee8-7ce7129b8d8f|c_bzieiq4_1i|
+  n2A written.json: status present, polled until 70383 ms after the relaunch: {"5eed0004-0000-4000-8000-0000003d09d9":{"carried":true,"unread":true},"5eed0004-0000-4000-8000-0000003d0901":{"carried":true,"unread":false,"status":"closed","settledAt":1795771399511,"updatedAt":1795771399511,"revision":9}}
+  n2A times: second_launch_T=1795771336896 terminate_T=1795771411313 mark_end_T=1795771411444 relaunch_T=1795771411472 s1_end_T=1795771432262 s2_end_T=1795771470628 written_status_T=1795771481855 tries=0 
+  n2A tap/kill times: 
+  n2A db at the end: at 1795771482221 file host/accounts/stub-account/collections.sqlite;tables: applied_tx cache_generation_sequence collection_version c_bzieiq4_1i collection_expected_keys leader_term c_cnp3msd_1i collection_metadata persisted_index_registry cache_generation collection_registry t_bzieiq4_1i cache_generation_claim collection_reset_epoch t_cnp3msd_1i ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:751b122a-ab1e-4d33-bee8-7ce7129b8d8f|c_bzieiq4_1i|
+  n2A mark target: read writes named ['5eed0004-0000-4000-8000-0000003d09d9'] | the marked thread is 5eed0004-0000-4000-8000-0000003d09d9 | match
+  n2A seed rows: Thread 218: -> Thread 218: decide how a partial cent ro: id 5eed0004-0000-4000-8000-0000003d09d9 open in inbox-moves.json, id 5eed0004-0000-4000-8000-0000003d09d9 open in inbox-whole.json; Thread 2: -> Thread 2: decide how a partial cent roun: id 5eed0004-0000-4000-8000-0000003d0901 open in inbox-whole.json; 
+  write-check db: 
+  thread-open thread: Thread 309 (unmoved by inbox-moves.json: no moves file)
+  thread-open first launch: app-ready 
+  thread-open second launch: app-ready 
+thread-open: fails 1 shots 1 Assert that "Thread \d+: decide .*" is visible... FAILED
+  thread-open db: file host/accounts/stub-account/words.sqlite 233472 bytes;  message_words 235 rows, 196608 bytes;file host/accounts/stub-account/local.sqlite 28819456 bytes;  row 8244 rows, 27422720 bytes;  held 8244 rows, 618496 bytes;  cursor 4 rows, 143360 bytes;  outbox 0 rows, 4096 bytes;  sqlite_sequence 1 rows, 4096 bytes;  refused 0 rows, 4096 bytes;  meta 1 rows, 4096 bytes;file host/accounts/stub-account/collections.sqlite 3768320 bytes;  cache_generation 2 rows, 4096 bytes;  cache_generation_sequence 0 rows, 4096 bytes;  cache_generation_claim 6 rows, 4096 bytes;  collection_registry 2 rows, 4096 bytes;  persisted_index_registry 0 rows, 4096 bytes;  applied_tx 124 rows, 2908160 bytes;  collection_version 2 rows, 4096 bytes;  collection_expected_keys 316 rows, 40960 bytes;  collection_metadata 1 rows, 69632 bytes;  leader_term 2 rows, 4096 bytes;  collection_reset_epoch 2 rows, 4096 bytes;  c_
