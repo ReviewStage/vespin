@@ -3,7 +3,7 @@
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { RESOLVE } from "@repo/features/inbox-ask-words";
+import { NEWER_APP_ASK, RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
   type InboxFields,
@@ -39,6 +39,7 @@ import {
   inboxThreadMessages,
   isDone,
   isUnread,
+  knownAsk,
   MARK_ALL_READ,
   READING_INBOX,
   SEARCH_INBOX,
@@ -48,7 +49,7 @@ import {
   UNDELIVERED_FILES_LOST,
   type UndeliveredReply,
 } from "@repo/features/inbox-undelivered";
-import { INBOX_STATUS, inboxWaitsOn } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, type InboxItem, inboxWaitsOn, openAskOf } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
@@ -91,6 +92,7 @@ import {
   ListSection,
   type MarkdownVideo,
   menuWithout,
+  NewerAskCard,
   NoSelection,
   PATH_PART,
   previewMessages,
@@ -242,6 +244,13 @@ function askFileKind(mediaType: string) {
   if (isVideoType(mediaType)) return INBOX_MEDIA.VIDEO;
 
   return isAudioType(mediaType) ? INBOX_MEDIA.AUDIO : INBOX_MEDIA.PICTURE;
+}
+
+/** Whether the thread stands open on an ask of a type this build does not know, which its card says to answer in a newer app. */
+function newerAskOpen(item: InboxItem): boolean {
+  const asking = item.status === INBOX_STATUS.OPEN ? openAskOf(item.thread ?? []) : undefined;
+
+  return asking !== undefined && !knownAsk(asking.ask);
 }
 
 type InboxRowsProps = {
@@ -1107,6 +1116,10 @@ function ThreadDetail({
     workspaces.find((each) => each.id === workspaceId),
   );
 
+  // Note that an open ask of a type this build does not know says where to answer it, as the panel's card does, rather than vanishing; the box under it still replies.
+  const newerAsk =
+    newerAskOpen(item) && !answer.asNew ? <NewerAskCard words={NEWER_APP_ASK} /> : undefined;
+
   const page = (
     <ThreadPage
       path={path}
@@ -1126,27 +1139,29 @@ function ThreadDetail({
         item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(inboxRowOf(item))
       }
       ask={
-        <OpenAskCard
-          item={item}
-          answer={answer}
-          doors={{
-            source: (attachmentId) => sources.get(attachmentId),
-            retry,
-            openPage: (page) =>
-              openLink(
-                linkOf(
-                  {
-                    kind: LINK_DESTINATION.PAGE,
-                    taskId: page.place.taskId,
-                    pageId: page.pageId,
-                  },
-                  workspaceStep,
+        newerAsk ?? (
+          <OpenAskCard
+            item={item}
+            answer={answer}
+            doors={{
+              source: (attachmentId) => sources.get(attachmentId),
+              retry,
+              openPage: (page) =>
+                openLink(
+                  linkOf(
+                    {
+                      kind: LINK_DESTINATION.PAGE,
+                      taskId: page.place.taskId,
+                      pageId: page.pageId,
+                    },
+                    workspaceStep,
+                  ),
                 ),
-              ),
-            openLink,
-            openVideoElsewhere: openOnWeb,
-          }}
-        />
+              openLink,
+              openVideoElsewhere: openOnWeb,
+            }}
+          />
+        )
       }
       {...(inStack
         ? {}

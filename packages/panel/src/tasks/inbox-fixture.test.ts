@@ -36,6 +36,9 @@ import { loadedTasksFixture, loadTasksFixture } from "./tasks-fixture-loader.js"
 
 afterEach(() => {});
 
+/** The type of the fixture's one ask a newer writer stored, which this build does not know. */
+const NEWER_ASK_TYPE = "rank";
+
 /** Main's document for a fixture run on `profile`: signed out, nothing read, nothing waiting. */
 function fixtureRun(profile: string): AppStateSnapshot {
   const { run } = stateWith({}, {});
@@ -71,7 +74,7 @@ function fedItems(state: AppStateSnapshot, taskId: string): readonly InboxItem[]
 }
 
 it.effect(
-  "the Inbox profile signs in and its feed holds every task main names: an ask of each kind, a form, code, a long thread, answered and closed",
+  "the Inbox profile signs in and its feed holds every task main names: an ask of each kind and one of a newer kind, a form, code, a long thread, answered and closed",
   () =>
     Effect.gen(function* () {
       yield* standFixtureRun(RUN_PROFILE.INBOX);
@@ -106,7 +109,11 @@ it.effect(
       const options = asks.flatMap((ask) => ("options" in ask ? ask.options : []));
 
       assert.deepEqual(uncarried, []);
-      assert.deepEqual(kinds, new Set([INBOX_ASK.DECIDE, INBOX_ASK.DO, INBOX_ASK.ANSWER]));
+      // Note that one ask is of a type this build does not know, as a newer writer stores one, which the thread says to answer in a newer app.
+      assert.deepEqual(
+        kinds,
+        new Set([INBOX_ASK.DECIDE, INBOX_ASK.DO, INBOX_ASK.ANSWER, NEWER_ASK_TYPE]),
+      );
       assert.ok(
         asks.some((ask) => "fields" in ask && (ask.fields?.length ?? 0) > 1),
         "a form",

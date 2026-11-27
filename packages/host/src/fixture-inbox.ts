@@ -96,6 +96,7 @@ import {
   INBOX_WIRE_VERSION,
   type InboxItem,
   type InboxMessage,
+  inboxReadAskSchema,
 } from "@repo/features/inbox-wire";
 import {
   acknowledgedNow,
@@ -190,6 +191,7 @@ import {
   type WorkspaceMembersAnswer,
 } from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
+import { Schema } from "effect";
 import { ACT_KIND } from "./acts.js";
 import {
   type AppHeldById,
@@ -211,6 +213,11 @@ import {
   fixtureLongTranscript,
   fixtureManagerTranscript,
 } from "./fixture-agent-transcript.js";
+import {
+  FIXTURE_FALLBACKS_AGENT_ID,
+  fixtureFallbacksAgent,
+  fixtureFallbacksTranscript,
+} from "./fixture-fallbacks-agent.js";
 import {
   FIXTURE_PICTURE_PNG,
   FIXTURE_PLAN_PDF,
@@ -822,11 +829,30 @@ const ROUNDING_ITEMS: readonly InboxItem[] = [
   ]),
 ];
 
+/** An open ask of a type a newer writer stores that this build's list of ask types does not name, read as the wire reads one. */
+const NEWER_ASK = Schema.decodeUnknownSync(inboxReadAskSchema)({ type: "rank", ...OPEN });
+
+/** The rounding task's thread whose open ask is of a type this build does not know, which its card says to answer in a newer app, the box still replying. */
+const NEWER_ASK_ITEM = item(
+  24,
+  AGENT.ROUNDING,
+  "rank-currencies",
+  "Which currencies round first?",
+  [
+    agentSaid(
+      340,
+      4 * DAY,
+      "Three currencies settle on the same day. Rank them in the order their totals should round.",
+      NEWER_ASK,
+    ),
+  ],
+);
+
 /** Each task's inbox, by the task's id. */
 const INBOXES: ReadonlyMap<string, readonly InboxItem[]> = new Map([
   [TASK.INVITES, INVITES_ITEMS],
   [TASK.DIGEST, DIGEST_ITEMS],
-  [TASK.ROUNDING, ROUNDING_ITEMS],
+  [TASK.ROUNDING, [...ROUNDING_ITEMS, NEWER_ASK_ITEM]],
 ]);
 
 /**
@@ -2212,6 +2238,15 @@ const DIGEST_TRANSCRIPT = fixtureDigestTranscript(DIGEST_STARTED, ADA, "Send the
 /** The release Manager's run, whose turns' work its chat keeps a press away. */
 const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
 
+/** The agent whose turn holds what a build draws by a fallback, staged for its page and its transcript alone, in no task's list (`fixture-fallbacks-agent.ts`). */
+const FALLBACKS_AGENT_AGO = 7 * DAY;
+
+const FALLBACKS_AGENT = fixtureFallbacksAgent(
+  agentOn(AGENT.ROUNDING, TASK.ROUNDING, "", AGENT_STATUS.COMPLETED, FALLBACKS_AGENT_AGO),
+);
+
+const FALLBACKS_TRANSCRIPT = fixtureFallbacksTranscript(LANDED - FALLBACKS_AGENT_AGO, ADA);
+
 /** The release Manager's turn, which its two messages were sent in (`fixtureManagerTranscript`). */
 const MANAGER_TURN = "fixture-manager-turn";
 
@@ -2387,6 +2422,10 @@ function stagedTranscripts(
   const staged = {
     ...held,
     [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
+    [FIXTURE_FALLBACKS_AGENT_ID]: {
+      ...held[FIXTURE_FALLBACKS_AGENT_ID],
+      [OWN_TRANSCRIPT]: { rows: FALLBACKS_TRANSCRIPT },
+    },
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
     [AGENT.DIGEST]: { ...held[AGENT.DIGEST], [OWN_TRANSCRIPT]: { rows: DIGEST_TRANSCRIPT } },
     [AGENT.MANAGER]: { ...held[AGENT.MANAGER], [OWN_TRANSCRIPT]: { rows: MANAGER_TRANSCRIPT } },
@@ -3348,7 +3387,7 @@ function stagedItem(itemId: string): InboxItem | undefined {
 
 /** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER, FALLBACKS_AGENT].find((each) => each.id === agentId);
 }
 
 /* ----- The automations ----- */

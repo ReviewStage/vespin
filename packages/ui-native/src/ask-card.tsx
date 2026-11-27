@@ -53,7 +53,7 @@ const ASK_NOTE_ID = "ask-note";
 const HAIRLINE = 0.5;
 
 /** A row's inner margins, as a decide option's. */
-const ROW_PADDING = { horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 } as const;
+export const ROW_PADDING = { horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 } as const;
 
 /** Where a row's words start in the card: past its margin, and past its leading mark where it has one, as a step's round check. */
 export const CARD_WORDS_INSET = {
@@ -104,7 +104,7 @@ export type AskAct = {
 };
 
 /** The bordered card on its own fill (`CARD`), set off from the page's ground, the rows standing in it, a hairline between each from where their words start. */
-function Card({
+export function Card({
   inset,
   children,
 }: {

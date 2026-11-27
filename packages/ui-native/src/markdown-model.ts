@@ -807,5 +807,15 @@ export function markdownBlocks(words: string, reading: MarkdownReading): readonl
 
   const spelled = reading.pictures === undefined ? undefined : spelledMarkers(words);
 
-  return blocksOf(tree.children, { reading, definitions: definitionsIn(tree), spelled });
+  const blocks = blocksOf(tree.children, { reading, definitions: definitionsIn(tree), spelled });
+
+  // Note that words that read as no block, such as a link's definition alone, stand as they were written, rather than as an empty bubble or body; HTML hidden on purpose still draws nothing.
+  const unread =
+    blocks.length === 0 &&
+    tree.children.length > 0 &&
+    tree.children.every((node) => node.type === "definition" || node.type === "yaml");
+
+  return unread
+    ? [{ kind: MARKDOWN_BLOCK.PARAGRAPH, runs: wordsRun(words.trim(), PLAIN) }]
+    : blocks;
 }

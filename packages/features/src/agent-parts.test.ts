@@ -220,3 +220,23 @@ test("a CLI tool's answer the service settled with its runner's kept pictures dr
   ]);
   assert.deepEqual(drawnSet(settledToolPart(started, answered)), []);
 });
+
+test("a call in a state this build does not know reads as settled, failed where it carries an error and answered otherwise, never as still running", () => {
+  const unknown = (extra: WireRecord) =>
+    agentPart({
+      type: "tool-run_command",
+      toolCallId: "call-1",
+      state: "approval-responded",
+      input: { command: "ls" },
+      ...extra,
+    });
+
+  const failed = unknown({ errorText: "Denied by the reviewer" });
+  const answered = unknown({ output: "README.md" });
+
+  assert.equal(failed.kind === AGENT_PART.TOOL ? failed.state : failed.kind, "output-error");
+  assert.equal(
+    answered.kind === AGENT_PART.TOOL ? answered.state : answered.kind,
+    "output-available",
+  );
+});

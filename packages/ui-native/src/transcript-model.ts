@@ -236,7 +236,8 @@ function shownKindOf(mediaType: string): ShownMediaKind {
 
 /** One picture, recording, or sound clip a call showed, by the id the service kept it under. */
 export interface ShownMedia {
-  readonly id: string;
+  /** What its bytes are read by; none for a picture a set showed that was not kept, which stands as one still on its way, as the panel's set stands it. */
+  readonly id: string | undefined;
   /** The words drawn under it; empty for none. */
   readonly caption: string;
   /** What it is heard as: its caption, or where it has none its name among the call's (`screenshot-1`), as the panel's viewer names it. */
@@ -1052,18 +1053,13 @@ function callItems(
   );
 
   const media: readonly ShownMedia[] = [
-    ...pictures.flatMap(({ picture, caption, name }) =>
-      picture === undefined
-        ? []
-        : [
-            {
-              id: picture.id,
-              caption,
-              label: caption === "" ? name : caption,
-              kind: shownKindOf(picture.mediaType),
-            },
-          ],
-    ),
+    // Note that a picture a set showed that was not kept stands in its place as one still on its way, as the panel's set draws it, so the set never vanishes whole.
+    ...pictures.map(({ picture, caption, name }) => ({
+      id: picture?.id,
+      caption,
+      label: caption === "" ? name : caption,
+      kind: picture === undefined ? SHOWN_MEDIA.PICTURE : shownKindOf(picture.mediaType),
+    })),
     ...recordedVideosOf(part.tool, part.output).map(({ picture, caption, name }) => ({
       id: picture.id,
       caption,
@@ -1099,6 +1095,14 @@ function callItems(
     output: part.output,
   });
 
+  const standing = standingOf(part.state, view.refused === true);
+
+  const body = open
+    ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
+    : [];
+
+  const answered = open && inBody ? called : [];
+
   const call: TranscriptItem = {
     ...base,
     kind: TRANSCRIPT_ITEM.CALL,
@@ -1111,13 +1115,15 @@ function callItems(
     thread: calledThread(part),
     // Note that the row leads with the integration's mark, so it names only what the mark does not: the account among several, or a server of no integration's.
     runOn: callPlace(view, CALL_MARK.LEADS),
-    standing: standingOf(part.state, view.refused === true),
+    standing,
     open,
-    body: open
-      ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
-      : [],
+    // Note that a settled call given nothing and answering nothing to draw says so once opened, as the panel's "No output" line does, rather than opening on nothing.
+    body:
+      open && body.length === 0 && answered.length === 0 && standing !== CALL_STANDING.RUNNING
+        ? [{ title: BLOCK_TITLE.OUTPUT, text: NO_OUTPUT }]
+        : body,
     cut: read?.reading === true ? part.cut : undefined,
-    answered: open && inBody ? called : [],
+    answered,
   };
 
   const page: readonly TranscriptItem[] =
@@ -1956,10 +1962,15 @@ export function rowsNear(
   return items.slice(Math.max(0, Math.min(...places) - reach), Math.max(...places) + reach + 1);
 }
 
+/** The ids of the pieces whose bytes were kept, which the list reads; a picture a set showed that was not kept has none. */
+function keptIds(media: readonly ShownMedia[]): readonly string[] {
+  return media.flatMap(({ id }) => (id === undefined ? [] : [id]));
+}
+
 /** The ids of the pictures alone among those the items show (`shownMediaIds`): a call's app icon, a sent line's pictures, and each shown piece that is a picture, never a recording or a sound clip. */
 export function shownPictureIds(items: readonly TranscriptItem[]): readonly string[] {
   const pictures = (media: readonly ShownMedia[]) =>
-    media.flatMap(({ id, kind }) => (kind === SHOWN_MEDIA.PICTURE ? [id] : []));
+    media.flatMap(({ id, kind }) => (kind === SHOWN_MEDIA.PICTURE && id !== undefined ? [id] : []));
 
   return items.flatMap((item) => {
     if (item.kind === TRANSCRIPT_ITEM.MEDIA) return pictures(item.media);
@@ -1981,7 +1992,7 @@ export function shownPictureIds(items: readonly TranscriptItem[]): readonly stri
 /** The ids of the recordings alone among those the items show (`shownMediaIds`), each a shown piece or one a call answered. */
 export function shownRecordingIds(items: readonly TranscriptItem[]): readonly string[] {
   const recordings = (media: readonly ShownMedia[]) =>
-    media.flatMap(({ id, kind }) => (kind === SHOWN_MEDIA.VIDEO ? [id] : []));
+    media.flatMap(({ id, kind }) => (kind === SHOWN_MEDIA.VIDEO && id !== undefined ? [id] : []));
 
   return items.flatMap((item) => {
     if (item.kind === TRANSCRIPT_ITEM.MEDIA) return recordings(item.media);
@@ -1993,14 +2004,11 @@ export function shownRecordingIds(items: readonly TranscriptItem[]): readonly st
 /** The ids of every picture and recording the items show, an open call's body's among them, which the list reads the bytes of. */
 export function shownMediaIds(items: readonly TranscriptItem[]): readonly string[] {
   return items.flatMap((item) => {
-    if (item.kind === TRANSCRIPT_ITEM.MEDIA) return item.media.map(({ id }) => id);
+    if (item.kind === TRANSCRIPT_ITEM.MEDIA) return keptIds(item.media);
 
     // Note that an app's icon is read wherever its call's row stands, and what an open call's body holds as it opens, so a turn of many windows reads only the ones opened.
     if (item.kind === TRANSCRIPT_ITEM.CALL) {
-      return [
-        ...(item.appIcon === undefined ? [] : [item.appIcon]),
-        ...item.answered.map(({ id }) => id),
-      ];
+      return [...(item.appIcon === undefined ? [] : [item.appIcon]), ...keptIds(item.answered)];
     }
 
     // Note that a picture a sent line kept by its id is read as the agent's shown ones are, through the same door.

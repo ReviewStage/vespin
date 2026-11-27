@@ -164,8 +164,19 @@ export type AgentPart =
   | { readonly kind: typeof AGENT_PART.OTHER }
   | { readonly kind: typeof AGENT_PART.ARRIVED; readonly line: AgentTranscriptMessage };
 
-function toolState(value: WireValue | undefined): ToolState {
-  return isToolState(value) ? value : TOOL_STATE.INPUT_AVAILABLE;
+/**
+ * A tool part's state as the tab draws it. Note that a state this build does
+ * not know, such as one a newer writer stores, reads as settled by what the
+ * part carries, failed where it holds an error and answered otherwise, since
+ * read as running it would spin for good; a part with no state is still
+ * under way.
+ */
+function toolState(value: WireValue | undefined, errorText: WireValue | undefined): ToolState {
+  if (isToolState(value)) return value;
+
+  if (!isWireString(value)) return TOOL_STATE.INPUT_AVAILABLE;
+
+  return isWireString(errorText) ? TOOL_STATE.OUTPUT_ERROR : TOOL_STATE.OUTPUT_AVAILABLE;
 }
 
 /**
@@ -242,7 +253,7 @@ export function agentPart(part: WireValue): AgentPart {
       kind: AGENT_PART.TOOL,
       ...call,
       callId: isWireString(part.toolCallId) ? part.toolCallId : "",
-      state: toolState(part.state),
+      state: toolState(part.state, part.errorText),
       errorText: isWireString(part.errorText) ? part.errorText : undefined,
       ...(outOfMemory === undefined ? undefined : { outOfMemory }),
       ...(pictures === undefined ? undefined : { pictures }),

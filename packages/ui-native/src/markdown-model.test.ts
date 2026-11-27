@@ -231,6 +231,13 @@ describe("markdownBlocks", () => {
     ]);
   });
 
+  // Words that were only a link's definition drew no block, so their bubble or body stood empty.
+  it("draws words that read as no block, such as a link's definition alone, as they were written", () => {
+    expect(markdownBlocks("[docs]: https://example.com/docs\n", READING)).toEqual([
+      { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("[docs]: https://example.com/docs")] },
+    ]);
+  });
+
   it("draws words nested too deep to parse as one block of plain text", () => {
     const deep = `${">".repeat(8000)} **hi**`;
     expect(markdownBlocks(deep, READING)).toEqual([{ kind: MARKDOWN_BLOCK.CODE, text: deep }]);
