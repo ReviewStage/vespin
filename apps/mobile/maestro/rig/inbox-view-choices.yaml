@@ -1,0 +1,77 @@
+# inbox-view-choices.yaml -- RIG SHIM (never merged): the Inbox's ⋯ offers Addressed to and Pinned tasks first beside its scopes, each choice is drawn at once, and both are still chosen after a relaunch, as the account keeps them.
+#
+# It lives under maestro/rig/ rather than maestro/, so the screenshot run
+# never runs it. The rig's fixture keeps each view choice a run writes in the
+# app's defaults across launches (`fixture-host.ts`'s `keepViewChoice`), as
+# the service keeps it for a live run. The Inbox opens on Open, addressed to
+# the reader, the pinned tasks' items first. Nothing reaches a server.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# 1. Before: Open, addressed to the reader, the pinned tasks' items first.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: inbox-view-before
+# 2. The ⋯ menu: the scopes, then Addressed to and the Pinned tasks first switch, on.
+- runFlow:
+    file: ../subflows/more.yaml
+- assertVisible: "Addressed to"
+- assertVisible: "Pinned tasks first"
+- takeScreenshot: inbox-view-menu
+# 3. Addressed to: Anyone and Me, Me checked.
+- tapOn: "Addressed to"
+- extendedWaitUntil:
+    visible: "Anyone"
+    timeout: 10000
+- assertVisible: "Me"
+- takeScreenshot: inbox-view-addressed-to
+# 4. Me chosen again, then Anyone: the list lists anyone's items at once.
+- tapOn: "Me"
+- waitForAnimationToEnd
+- runFlow:
+    file: ../subflows/more.yaml
+- tapOn: "Addressed to"
+- extendedWaitUntil:
+    visible: "Anyone"
+    timeout: 10000
+- tapOn: "Anyone"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: inbox-view-anyone
+# 5. Pinned tasks first turned off: every item stands in one run, under no Pinned or Everything else heading.
+- runFlow:
+    file: ../subflows/more.yaml
+- tapOn: "Pinned tasks first"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertNotVisible: "Everything else"
+- takeScreenshot: inbox-view-pinned-off
+# 6. After a relaunch: anyone's items, in one run, as the account kept them.
+- stopApp
+- launchApp:
+    clearState: false
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- assertNotVisible: "Everything else"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-view-relaunch
+# 7. The ⋯ after the relaunch: Pinned tasks first still off, and Addressed to still on Anyone.
+- runFlow:
+    file: ../subflows/more.yaml
+- assertVisible: "Pinned tasks first"
+- takeScreenshot: inbox-view-relaunch-menu
+- tapOn: "Addressed to"
+- extendedWaitUntil:
+    visible: "Anyone"
+    timeout: 10000
+- takeScreenshot: inbox-view-relaunch-addressed-to
