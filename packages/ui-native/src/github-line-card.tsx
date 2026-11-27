@@ -99,7 +99,7 @@ function FoldBody({
           repository={repository}
           onOpenLink={onOpenLink}
           width={words}
-          githubHtml
+          githubWords
         />
       )}
       {fold.comments.map((comment, at) => (
@@ -139,7 +139,7 @@ function FoldBody({
               repository={repository}
               onOpenLink={onOpenLink}
               width={words}
-              githubHtml
+              githubWords
             />
           )}
         </View>

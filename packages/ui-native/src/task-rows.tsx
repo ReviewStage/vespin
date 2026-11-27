@@ -898,7 +898,7 @@ type WordsRowProps = {
   /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
   readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
   /** Whether the words are GitHub's, whose raw HTML is read as GitHub's page draws it, every other tag unseen. */
-  readonly githubHtml?: boolean | undefined;
+  readonly githubWords?: boolean | undefined;
   /** How the words stand against the version before them, where they are a version's section, which a bar at their leading edge marks; none where they are read alone. */
   readonly change?: VersionUnit["change"] | undefined;
   /** Takes a press on the words, by how far in from their start it landed, as a description edited in place puts the caret there; none where the words are read alone. A link or a chip pressed still opens. */
@@ -1089,7 +1089,7 @@ export function WordsRow({
   videoAt,
   fileAt,
   linkStanding,
-  githubHtml,
+  githubWords,
   change = VERSION_CHANGE.SAME,
   onPressAt,
   folded = false,
@@ -1118,7 +1118,7 @@ export function WordsRow({
             videoAt={videoAt}
             fileAt={fileAt}
             linkStanding={linkStanding}
-            githubHtml={githubHtml}
+            githubWords={githubWords}
             headings
             diagrams
           />

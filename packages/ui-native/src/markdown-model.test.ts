@@ -181,7 +181,7 @@ describe("markdownBlocks", () => {
       "Done<br>now <blink>really</blink>.",
     ].join("\n");
 
-    expect(markdownBlocks(body, { ...READING, githubHtml: true })).toEqual([
+    expect(markdownBlocks(body, { ...READING, githubWords: true })).toEqual([
       { kind: MARKDOWN_BLOCK.PICTURE, source: "https://example.com/shot.png", alt: "Shot" },
       {
         kind: MARKDOWN_BLOCK.TABLE,
@@ -221,7 +221,7 @@ describe("markdownBlocks", () => {
         ],
       },
     ]);
-    expect(markdownShows("<!-- What changed and why? -->\n", { githubHtml: true })).toBe(false);
+    expect(markdownShows("<!-- What changed and why? -->\n", { githubWords: true })).toBe(false);
   });
 
   it.each([
@@ -230,7 +230,7 @@ describe("markdownBlocks", () => {
     ['<img src="data:image/png;base64,AAAA" alt="x">'],
     ['<img src="javascript:alert(1)" alt="x">'],
   ])("draws only the words of a link or picture GitHub's HTML names off the web: %s", (html) => {
-    expect(markdownBlocks(`<p>${html}</p>`, { ...READING, githubHtml: true })).toEqual([
+    expect(markdownBlocks(`<p>${html}</p>`, { ...READING, githubWords: true })).toEqual([
       { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("x")] },
     ]);
   });
@@ -239,7 +239,7 @@ describe("markdownBlocks", () => {
   it("reads 100 kB of GitHub's tags left open in one pass, nesting no deeper than a few", () => {
     const blocks = markdownBlocks(`${"<details>".repeat(11_000)}end`, {
       ...READING,
-      githubHtml: true,
+      githubWords: true,
     });
 
     const detailsDepth = (within: readonly MarkdownBlock[]): number => {

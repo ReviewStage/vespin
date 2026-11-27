@@ -61,7 +61,7 @@ import { HTML_TOKEN, type HtmlToken, htmlTokens } from "./html-tokens.js";
  * other link as underlined words. Raw HTML is drawn as
  * the words it was written with, as a note draws it, but in GitHub's words,
  * where it is read as GitHub's page reads it (`MarkdownReading`'s
- * `githubHtml`).
+ * `githubWords`).
  */
 
 /** What a block is. */
@@ -228,7 +228,7 @@ export interface MarkdownReading {
    * Markdown, and every other tag, comment and template left unseen, never
    * printed. Elsewhere raw HTML is drawn as the words it was written with.
    */
-  readonly githubHtml?: boolean | undefined;
+  readonly githubWords?: boolean | undefined;
   /**
    * Whether a Mermaid fence is drawn as its diagram, as a description's are;
    * elsewhere, such as a transcript still being written, it stays its code,
@@ -562,7 +562,7 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
   switch (node.type) {
     case "text":
     case "html": {
-      if (node.type === "html" && reader.reading.githubHtml === true) {
+      if (node.type === "html" && reader.reading.githubWords === true) {
         return runsOnly(inlinesOf(piecesOf([node]), marks, reader));
       }
 
@@ -744,7 +744,7 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
     case "thematicBreak":
       return [{ kind: MARKDOWN_BLOCK.RULE }];
     case "html":
-      return reader.reading.githubHtml === true
+      return reader.reading.githubWords === true
         ? htmlBlocksOf(piecesOf([node]), reader)
         : [{ kind: MARKDOWN_BLOCK.PARAGRAPH, runs: wordsRun(node.value, PLAIN) }];
     case "footnoteDefinition":
@@ -888,7 +888,7 @@ function isHtml(node: { readonly type: string }): node is Html {
 
 /** Whether `nodes` hold raw HTML to read as GitHub's, which only GitHub's words do. */
 function readsHtmlIn(nodes: readonly { readonly type: string }[], reader: Reader): boolean {
-  return reader.reading.githubHtml === true && nodes.some(isHtml);
+  return reader.reading.githubWords === true && nodes.some(isHtml);
 }
 
 /** Nodes as pieces, each raw HTML node read as its tags and words. */
@@ -1323,9 +1323,9 @@ export function heardLine(
  */
 export function markdownShows(
   words: string,
-  { githubHtml }: Pick<MarkdownReading, "githubHtml">,
+  { githubWords }: Pick<MarkdownReading, "githubWords">,
 ): boolean {
-  return markdownBlocks(words, { repository: null, now: 0, zone: "UTC", githubHtml }).length > 0;
+  return markdownBlocks(words, { repository: null, now: 0, zone: "UTC", githubWords }).length > 0;
 }
 
 /** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */

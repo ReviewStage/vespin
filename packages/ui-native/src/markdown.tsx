@@ -1569,7 +1569,7 @@ type MarkdownProps = {
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
   /** Whether the words are GitHub's, whose raw HTML is read as GitHub's page draws it (a picture, a table, a folded section), every other tag unseen; it is drawn as written where none is given. */
-  readonly githubHtml?: boolean | undefined;
+  readonly githubWords?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** Reads a picture that could not be read again, by the address its words name it by; a picture that could not be read offers nothing where none is given. */
@@ -1667,7 +1667,7 @@ export function Markdown({
   repository = null,
   onOpenLink,
   typed,
-  githubHtml,
+  githubWords,
   pictureSource = namedSource,
   onRetryPicture,
   videoAt = noVideo,
@@ -1701,11 +1701,11 @@ export function Markdown({
         now: Date.now(),
         zone: readerZone(),
         typed,
-        githubHtml,
+        githubWords,
         diagrams,
         pictures: wordPictures,
       }),
-    [words, repository, typed, githubHtml, diagrams, wordPictures],
+    [words, repository, typed, githubWords, diagrams, wordPictures],
   );
 
   const drawing: Drawing = {

@@ -394,7 +394,7 @@ const githubBody = EffectSchema.String.check(
 );
 
 /** GitHub's own rendering of what its author wrote (`body_html`), as GitHub answered it. */
-const githubHtml = EffectSchema.String.check(
+const githubWords = EffectSchema.String.check(
   EffectSchema.isMaxLength(GITHUB_LINE_BOUNDS.HTML_CHARS),
 );
 
@@ -404,7 +404,7 @@ const GITHUB_LINE_COMMENT = EffectSchema.Struct({
   line: EffectSchema.optional(nonNegativeInteger),
   url: githubName(GITHUB_LINE_BOUNDS.URL_CHARS),
   body: githubBody,
-  body_html: EffectSchema.optional(githubHtml),
+  body_html: EffectSchema.optional(githubWords),
 });
 
 /** One finished check on a GitHub line's commit: its name, how it ended, and its page, where GitHub names one. */
@@ -440,7 +440,7 @@ const GITHUB_LINE_METADATA = EffectSchema.Struct({
   by_avatar: EffectSchema.optional(githubName(GITHUB_LINE_BOUNDS.URL_CHARS)),
   verdict: EffectSchema.optional(githubName(GITHUB_LINE_BOUNDS.NAME_CHARS)),
   words: EffectSchema.optional(githubBody),
-  words_html: EffectSchema.optional(githubHtml),
+  words_html: EffectSchema.optional(githubWords),
   comments: EffectSchema.optional(
     EffectSchema.Array(GITHUB_LINE_COMMENT).check(
       EffectSchema.isMaxLength(GITHUB_LINE_BOUNDS.COMMENTS),
