@@ -6,10 +6,10 @@ import {
   HStack,
   Image,
   Menu,
-  Picker,
   ScrollView,
   Section,
   Button as SwiftUIButton,
+  Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -23,12 +23,10 @@ import {
   font,
   foregroundStyle,
   frame,
-  labelsHidden,
   lineLimit,
   type ModifierConfig,
   menuIndicator,
   padding,
-  pickerStyle,
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -53,13 +51,12 @@ import {
 import type { ComposerSend } from "./composer-press.js";
 import { GlassDock } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent, PickOption } from "./glyph-label.js";
-import type { MenuChoice } from "./list-row.js";
+import { actContent } from "./glyph-label.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
 import { RepositoryPicture } from "./marks.js";
-import { choiceLook } from "./row-menu-model.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { Text } from "./text.js";
-import { toneColor, useColors } from "./tokens/colors.js";
+import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -216,10 +213,8 @@ export function MenuChip(props: MenuChipProps) {
       modifiers={[...chipStyle(look), menuIndicator("visible"), tint(colors.TEXT), ...found]}
     >
       {menu.groups.map((group, at) => (
-        // Note that a group is keyed by its place, since a group may have no heading, which its picker's label draws (`GroupPicker`).
-        <Section key={at}>
-          <GroupPicker group={group} />
-        </Section>
+        // Note that a group is keyed by its place, since a group may have no heading.
+        <GroupChoices key={at} group={group} />
       ))}
       {actions.length === 0 ? null : <Divider />}
       {actions.map((action) => (
@@ -239,38 +234,33 @@ export function MenuChip(props: MenuChipProps) {
 }
 
 /**
- * A capsule menu's group as SwiftUI's own single choice: an inline picker,
- * its options standing in the menu with the one chosen checked, as the
- * system checks it, under its label as the group's heading, since in a menu
- * the inline picker is its own section, and a title on the section around
- * it drew nothing over a hidden label (#11171's shots). Note that each
- * option is tagged by its place in the group, never its label or id, so two
- * choices of one name, such as two Macs both called MacBook Pro, stay two;
- * and that a pick of the option already chosen sends nothing, as the
- * system's picker answers only a change.
+ * A capsule menu's group, as a bar's menu stands one (`BarMenuButton`): a
+ * section under its heading, each choice the system's toggle, the one on
+ * checked. Note that the group is not an inline picker, since in a menu an
+ * inline picker is a section of its own, and the heading over it, on the
+ * section around it or as its label, drew nowhere (#11171's shots); that
+ * each choice is keyed by its place, so two of one name, such as two Macs
+ * both called MacBook Pro, stay two; and that a press on the choice already
+ * on sends nothing, as a pick of one already picked changes nothing.
  */
-function GroupPicker({ group }: { readonly group: ChipMenuGroup }) {
+function GroupChoices({ group }: { readonly group: ChipMenuGroup }) {
   const colors = useColors();
-  const chosen = group.choices.findIndex((choice) => choice.on);
 
-  return (
-    <Picker
-      label={group.title ?? ""}
-      {...(chosen === -1 ? {} : { selection: String(chosen) })}
-      onSelectionChange={(value: string) => group.choices[Number(value)]?.onPress()}
-      modifiers={[pickerStyle("inline"), ...(group.title === undefined ? [labelsHidden()] : [])]}
-    >
-      {group.choices.map((choice, at) => (
-        <PickOption
-          // Note that an option is keyed by its place, as it is tagged, since two may share a name.
-          key={at}
-          label={choice.label}
-          value={String(at)}
-          look={choiceLook(choice)}
-          toneInk={(tone) => toneColor(colors, tone)}
-        />
-      ))}
-    </Picker>
+  const choices = group.choices.map((choice, at) => (
+    <Toggle
+      key={at}
+      {...choiceContent(choice, colors)}
+      isOn={choice.on}
+      onIsOnChange={() => {
+        if (!choice.on) choice.onPress();
+      }}
+    />
+  ));
+
+  return group.title === undefined ? (
+    <Section>{choices}</Section>
+  ) : (
+    <Section title={group.title}>{choices}</Section>
   );
 }
 
