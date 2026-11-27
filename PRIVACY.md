@@ -420,6 +420,14 @@ settings, outside Vespin. Showing one sends nothing to us or anyone else. It is 
 turn it on. The notification that a command waits on your Mac, which the Mac
 app shows whatever this setting, names no command.
 
+How you choose to have diffs and files drawn in Settings › Appearance (line
+numbers, word wrap, the layout, how changes are marked, backgrounds, the
+light and dark syntax themes, the font and its ligatures, and whether inline
+comments stand minimized) is kept with your account, so each of your
+signed-in apps draws them the same way; the font size and line height stay on
+each device. Only apps signed in to your account read these choices, and they
+are deleted with your account.
+
 If you add your own sounds in Settings › Preferences › Notifications, to play when an
 agent finishes or something needs you, we keep **each sound's audio and the
 name you give it** with your account: its bytes, its audio type, a

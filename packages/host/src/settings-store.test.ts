@@ -1015,6 +1015,32 @@ test("a first link choice made before the first sync is kept to be written, whet
   }
 });
 
+test("a diff choice a Mac made before the account carried it gives way to the account's, and stands to be written where the account holds none", async (t) => {
+  for (const remote of [{ diffLayout: DIFF_LAYOUT.UNIFIED }, {}]) {
+    const directory = await temporaryDirectory(t, "settings-");
+    const mac = storeIn(directory);
+    await mac.setAccount(TEST_ACCOUNT);
+    await mac.set("diffLayout", DIFF_LAYOUT.SPLIT);
+    await mac.setAccountPreferencesSyncBaseline(TEST_ACCOUNT.email, {});
+    // The baseline as a build before the diff display joined the account kept it, naming no fields.
+    const file = path.join(directory, SETTINGS_FILE_NAME);
+    const stored = JSON.parse(await readSettingsFile(directory));
+    const { fields: _fields, ...older } = stored.accountPreferencesSync;
+    await fs.writeFile(file, JSON.stringify({ ...stored, accountPreferencesSync: older }));
+
+    const updated = storeIn(directory);
+    const baseline = await updated.accountPreferencesSyncBaseline(TEST_ACCOUNT.email);
+    assert.ok(baseline, "the older baseline did not read");
+
+    await updated.applyAccountPreferences(
+      snapshotAccountPreferences(remote, false, await updated.accountPreferences()),
+      { accountEmail: TEST_ACCOUNT.email, preferences: baseline },
+    );
+
+    assert.equal(await updated.get("diffLayout"), remote.diffLayout ?? DIFF_LAYOUT.SPLIT);
+  }
+});
+
 test("the experiments the service answered stand for the account signed in, across a reopen", async (t) => {
   const directory = await temporaryDirectory(t, "settings-");
   const store = storeIn(directory);
