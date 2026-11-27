@@ -41,7 +41,7 @@ import {
   strokeBorder,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
 import type { Glyph } from "./glyph.js";
 import { GlyphImage } from "./glyph-label.js";
@@ -111,8 +111,10 @@ type IconPickerSheetProps = {
   /** Hears the search's words as they are typed, which the caller narrows its groups by. */
   readonly onQuery: (query: string) => void;
   readonly groups: readonly IconPickerGroup[];
-  /** Hands on the key of the choice pressed. */
-  readonly onPick: (key: string) => void;
+  /** Hands on the key of the group the choice pressed stands in, and the choice's key, since one choice may stand in two groups (a reaction's 👍 among Quick reactions and Smileys & People). */
+  readonly onPick: (group: string, key: string) => void;
+  /** What stands over the grid and the bar of groups, under the search, such as a face's preview and its colors; nothing where none. */
+  readonly header?: ReactNode;
 };
 
 /** One choice to press: its picture or its emoji, ringed in copper while it is chosen, heard as its name and as selected where it is. */
@@ -320,14 +322,16 @@ function GridRowView({
   onPick,
 }: {
   readonly row: GridRow;
-  readonly onPick: (key: string) => void;
+  readonly onPick: (group: string, key: string) => void;
 }) {
   if (row.kind === GRID_ROW.NAME) return <GroupName name={row.name} />;
+
+  const pick = (key: string) => onPick(row.group, key);
 
   return (
     <HStack spacing={SPACE.ROW}>
       {row.choices.map((choice) => (
-        <Choice key={choice.key} choice={choice} onPick={onPick} />
+        <Choice key={choice.key} choice={choice} onPick={pick} />
       ))}
       <Spacer />
     </HStack>
@@ -340,7 +344,8 @@ function gridRowKey(_row: GridRow, at: number): string {
 }
 
 /**
- * The picker's page: its search in the bar's drawer, the bar of groups
+ * The picker's page: its search in the bar's drawer, its owner's header
+ * where it hands one, the bar of groups
  * while nothing is searched and it offers more than one, its groups under
  * their names in one lazy stack of recycled rows, the name of the group in
  * view standing at the top (`NameBand`), and Done. The group in view is the
@@ -396,6 +401,7 @@ function IconPickerPage(props: IconPickerSheetProps) {
             }),
           ]}
         >
+          {props.header}
           {groups.length > 1 && !searching ? (
             <>
               <GroupBar groups={groups} inView={inView?.key} onJump={jump} />

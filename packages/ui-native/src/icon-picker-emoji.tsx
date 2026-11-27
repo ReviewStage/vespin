@@ -150,7 +150,7 @@ export function IconPickerEmojiSheet({
           picked: ringed.has(bareEmoji(one.emoji)),
         })),
       }))}
-      onPick={onPick}
+      onPick={(_group, emoji) => onPick(emoji)}
     />
   );
 }
