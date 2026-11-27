@@ -135,6 +135,10 @@ test("a long log opens on its newest line, and offers the way back to it once th
   scroll(box, box.scrollTop);
   assert.equal(box.scrollTop, 1400, "the log stands at its end");
   assert.equal(container.querySelector(WAY_BACK), null, "at its end it offers no way back");
+  // The reader turns the wheel up, which is what lets go of the end.
+  act(() => {
+    box.dispatchEvent(new WheelEvent("wheel", { deltaY: -120 }));
+  });
   scroll(box, 300);
   const back = container.querySelector<HTMLButtonElement>(WAY_BACK) ?? assert.fail("the way back");
   act(() => back.click());
