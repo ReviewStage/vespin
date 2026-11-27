@@ -1,0 +1,9 @@
+pinned to 8ff95b012b
+== bundle PJjpk10923c base 8ff95b012b
+  built 8ff95b012b base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+lane 1: #10923 77de488d89 merged with main 55a74a7508 as 8ff95b012b, the branch's inbox.yaml, 27.2 iPad light, FLOATING_TABS true
+ipad27-light-inbox-10923: fails 0 shots 14 
