@@ -415,7 +415,10 @@ export function useAgentComposer(
     heldSends.drawn(agentId, drawn ?? []);
   }, [agentId, transcript, drawn]);
 
-  /** Lets go of a line's pictures once the host drew it and no longer draws it, at once where its row already landed. */
+  // Note that a page that leaves draws nothing more, so the pictures of each line of its agent let go go with it, a refused line's staying for its Retry.
+  useEffect(() => () => heldSends.left(agentId), [agentId]);
+
+  /** Lets go of a line's pictures once the host drew it and no longer draws it, at once where its row already landed or no page of its agent stands. */
   const letGo = (lineId: string) => {
     // Note that what the page last drew stands for what the host draws only while the page stands.
     const now = mounted.current ? drawnNow.current : undefined;

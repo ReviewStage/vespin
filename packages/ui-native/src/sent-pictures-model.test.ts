@@ -58,4 +58,21 @@ describe("sentPictures", () => {
 
     expect(sent.get(LINE.id)).toBeUndefined();
   });
+
+  it("lets an answered line's picture go once no page of its agent stands, and keeps a refused line's for its Retry", () => {
+    const sent = sentPictures<readonly AgentAttachment[]>();
+
+    for (const lineId of ["answered", "late", "refused"]) sent.set(lineId, [PICTURE]);
+    // The page leaves after one send was answered but before the host's drawing of its line reached it, another is answered after the page left, and the third was refused, so it stands for its Retry.
+    sent.drawn("agent", []);
+    sent.letGo("agent", "answered", []);
+    sent.left("agent");
+    sent.letGo("agent", "late", undefined);
+
+    expect({
+      answered: sent.get("answered"),
+      late: sent.get("late"),
+      refused: sent.get("refused"),
+    }).toEqual({ answered: undefined, late: undefined, refused: [PICTURE] });
+  });
 });

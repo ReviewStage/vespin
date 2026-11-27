@@ -7,7 +7,9 @@
  * lands and draws its pictures from them until then; and all of them on a
  * sign-out. Note that a send may be answered before the host's first drawing
  * of its line reaches the page, so a line never drawn yet is not taken for
- * one whose row landed.
+ * one whose row landed. A line let go while no page of its agent stands, or
+ * whose page leaves, goes at once, since nothing draws it; a refused line,
+ * never let go, stays for its Retry or Edit.
  */
 
 /** The messages a phone sent and holds, by the id each line is drawn under, and the lines it lets go once the host no longer draws them. */
@@ -16,12 +18,14 @@ export interface SentPictures<Sent> {
   readonly set: (lineId: string, sent: Sent) => void;
   /** Lets one go at once, such as a chat message's, whose line the host draws from its own bytes. */
   readonly delete: (lineId: string) => void;
-  /** Lets an agent's line go once the host no longer draws it: answered, or let go by Edit or Delete; `drawn` is what the host draws of the agent's lines now, where the page has read it. */
+  /** Lets an agent's line go once the host no longer draws it: answered, or let go by Edit or Delete; `drawn` is what the host draws of the agent's lines now, where a page of the agent stands and has read it, and none where no page stands, which lets it go at once. */
   readonly letGo: (
     agentId: string,
     lineId: string,
     drawn: readonly { readonly id: string }[] | undefined,
   ) => void;
+  /** Tells it that no page of the agent stands, letting go of each of its lines let go. */
+  readonly left: (agentId: string) => void;
   /** Tells it what the host draws of an agent's lines now, letting go of each line let go that it no longer draws. */
   readonly drawn: (agentId: string, drawn: readonly { readonly id: string }[]) => void;
   /** Lets every one go, as a sign-out does. */
@@ -36,17 +40,19 @@ export function sentPictures<Sent>(): SentPictures<Sent> {
   // The lines held that the host has drawn.
   const seen = new Set<string>();
 
+  const forget = (lineId: string) => {
+    going.delete(lineId);
+    seen.delete(lineId);
+    held.delete(lineId);
+  };
+
   const letGoUndrawn = (agentId: string, drawn: readonly { readonly id: string }[]) => {
     const ids = new Set(drawn.map((line) => line.id));
 
     for (const lineId of ids) if (held.has(lineId)) seen.add(lineId);
 
-    for (const [lineId, owner] of going) {
-      if (owner !== agentId || ids.has(lineId) || !seen.has(lineId)) continue;
-      going.delete(lineId);
-      seen.delete(lineId);
-      held.delete(lineId);
-    }
+    for (const [lineId, owner] of going)
+      if (owner === agentId && !ids.has(lineId) && seen.has(lineId)) forget(lineId);
   };
 
   return {
@@ -61,7 +67,11 @@ export function sentPictures<Sent>(): SentPictures<Sent> {
     letGo: (agentId, lineId, drawn) => {
       going.set(lineId, agentId);
 
-      if (drawn !== undefined) letGoUndrawn(agentId, drawn);
+      if (drawn === undefined) forget(lineId);
+      else letGoUndrawn(agentId, drawn);
+    },
+    left: (agentId) => {
+      for (const [lineId, owner] of going) if (owner === agentId) forget(lineId);
     },
     drawn: letGoUndrawn,
     clear: () => {
