@@ -40,12 +40,15 @@ import {
   strokeBorder,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import type { TaskSectionIconColor } from "@repo/features/task-section-wire";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useColorScheme } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { type ListScopes, ScopeControl } from "./button.js";
 import { headerMenu } from "./interactions.js";
 import { MANAGER_FACE_EDGE_WIDTH, MANAGER_FACE_EMOJI_SCALE } from "./manager-face-look.js";
 import { type ChoiceMark, choicePressAt, choiceTree, type MenuChoice } from "./row-menu-model.js";
+import { sectionInk } from "./section-ink.js";
 import { Text } from "./text.js";
 import { ElevatedGround, toneColor, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -189,6 +192,7 @@ const Choice = memo(function Choice({
   readonly onPick: PickChoice;
 }) {
   const colors = useColors();
+  const dark = useColorScheme() === "dark";
   const side = useScaledSize(CHOICE_SIDE);
   const ringed = side + 2 * (RING_GAP + RING_WIDTH);
   const options = choice.options;
@@ -200,10 +204,14 @@ const Choice = memo(function Choice({
       (option, at): MenuChoice => ({ ...option, onPress: () => onPick(choice.key, at) }),
     );
 
-    const inks = { act: colors.TEXT_MUTED, tone: (tone: StatusTone) => toneColor(colors, tone) };
+    const inks = {
+      act: colors.TEXT_MUTED,
+      tone: (tone: StatusTone) => toneColor(colors, tone),
+      section: (color: TaskSectionIconColor) => sectionInk(color, dark),
+    };
 
     return { choices, tree: JSON.stringify({ groups: choiceTree(choices, inks) }) };
-  }, [options, onPick, choice.key, colors]);
+  }, [options, onPick, choice.key, colors, dark]);
 
   const heard = [
     accessibilityLabel(choice.label),
