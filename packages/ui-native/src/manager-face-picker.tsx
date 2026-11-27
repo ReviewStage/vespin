@@ -91,7 +91,7 @@ export function ManagerFaceSheet({
       onDismiss={onDismiss}
       onQuery={setQuery}
       groups={groups}
-      onPick={(key) => {
+      onPick={(_group, key) => {
         const picked = MANAGER_FACES.find((each) => faceKey(each) === key);
 
         if (picked === undefined) return;

@@ -6,7 +6,7 @@ import { emojiGroups, findEmoji } from "./emoji-model.js";
 import { EMOJI_DATA } from "./generated/emoji-data.js";
 
 describe("emojiGroups", () => {
-  it("leaves out an emoji newer than every client draws, and a category left with none", () => {
+  it("leaves out an emoji newer than every client draws, and a category left with none, and joins Unicode's smileys and people as one", () => {
     const groups = emojiGroups([
       {
         name: "Travel & Places",
@@ -29,6 +29,10 @@ describe("emojiGroups", () => {
         ],
       },
       {
+        name: "People & Body",
+        emojis: [{ emoji: "👋", name: "waving hand", version: 0.6, keywords: [], shortcodes: [] }],
+      },
+      {
         name: "Newest",
         emojis: [{ emoji: "🫆", name: "fingerprint", version: 16, keywords: [], shortcodes: [] }],
       },
@@ -38,7 +42,7 @@ describe("emojiGroups", () => {
       groups.map((group) => [group.name, group.emojis.map((one) => one.emoji)]),
       [
         ["Travel & Places", ["🚀", "🛻"]],
-        ["Smileys & Emotion", ["😀"]],
+        ["Smileys & People", ["😀", "👋"]],
       ],
     );
   });

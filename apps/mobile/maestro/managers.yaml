@@ -1,4 +1,4 @@
-# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out, a message's reactions under it and any emoji given from its long press), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
+# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out, a message's reactions under it and any emoji given from its long press), its face changed from its row's Change face › and from its Settings' picker, each picker's bar of groups scrolling to one, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -80,6 +80,15 @@ env:
 - assertVisible: "Quick reactions"
 - waitForAnimationToEnd
 - takeScreenshot: managers-reaction-picker-open
+# Its bar of categories across the top, as the panel's, scrolls the grid to
+# one, ruled under it, its name standing at the top while its emoji scroll
+# under it; the bar's is the first "Animals & Nature" on screen.
+- tapOn:
+    text: "Animals & Nature"
+    index: 0
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: managers-reaction-picker-nature
 - tapOn: "Search emoji"
 - inputText: "heart"
 - extendedWaitUntil:
@@ -113,6 +122,20 @@ env:
     visible: "Pink planet"
     timeout: 10000
 - takeScreenshot: managers-face-picker
+# Its bar of characters scrolls the picker to one, as the emoji's bar of
+# categories does; the bar's is the first "Mug" on screen.
+- tapOn:
+    text: "Mug"
+    index: 0
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: managers-face-picker-mug
+- tapOn:
+    text: "Planet"
+    index: 0
+- extendedWaitUntil:
+    visible: "Pink planet"
+    timeout: 10000
 - tapOn: "Pink planet"
 - waitForAnimationToEnd:
     timeout: 5000

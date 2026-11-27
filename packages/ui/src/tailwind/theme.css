@@ -807,6 +807,7 @@
     --ui-icon-20
   ); /* an emoji in an icon picker's cell, as large as its glyphs */
   --text-icon-picker--line-height: 1;
+  --spacing-icon-picker-category-rule: 2px; /* off-scale: the rule under an icon picker's category in view, laid over its bar's hairline */
   --grid-template-columns-suggestion-cards: repeat(
     auto-fill,
     minmax(240px, 1fr)

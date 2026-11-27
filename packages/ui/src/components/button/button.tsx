@@ -289,8 +289,8 @@ type ButtonBase = LandingProps &
     "aria-haspopup"?: "menu" | "listbox" | "dialog" | undefined;
     "aria-expanded"?: boolean | undefined;
     "aria-controls"?: string | undefined;
-    /** Whether it goes to the page on show, which it is drawn and announced as. */
-    "aria-current"?: "page" | undefined;
+    /** Whether it goes to the page on show (`page`), or to the part of one in view (`true`), as an emoji picker's category bar does, which it is drawn and announced as. */
+    "aria-current"?: "page" | "true" | undefined;
   };
 
 /** The box a button is drawn in: the control's, a row mark's, a glyph alone in either, or a menu's row. */
