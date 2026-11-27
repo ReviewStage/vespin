@@ -3,6 +3,9 @@
  */
 
 import { ORPCError } from "@orpc/client";
+import { signedInAccountId } from "@repo/credentials/snapshot";
+import type { ViewChoiceWriteParams, ViewChoiceWrittenView } from "@repo/features/agent-view";
+import { LIVE_READ } from "@repo/features/live-wire";
 import type {
   RepositoryChangesAnswerView,
   RepositoryPullRequestParams,
@@ -15,7 +18,7 @@ import {
   type TasksFileAnswer,
   type TasksView,
 } from "@repo/features/tasks-view";
-import type { AppStateDelivery, AppStateRead } from "@repo/host/app-state";
+import type { AppStateDelivery, AppStateRead, AppStateSnapshot } from "@repo/host/app-state";
 import type { AppBridge } from "@repo/host/bridge";
 import {
   ACCOUNT_ASK_ACT_KIND,
@@ -37,6 +40,9 @@ import {
 } from "@repo/host/contract";
 import type { WireBoundaryInput } from "@repo/wire";
 import { installActPortClient, installAppBridge } from "../app-bridge.js";
+import { viewChoicesQuery } from "../live-reads.js";
+import { appStateQuery } from "../use-app-state.js";
+import { testQueryClientNow } from "./copy-feedback.js";
 
 let answering: Partial<AppBridge> = {};
 let answeringPort: Partial<FakeActPort> = {};
@@ -215,6 +221,42 @@ export function heldUntilClosed<Kind extends HoldKind>(
 }
 
 /**
+ * A view choice kept or forgotten, drawn over the account's choices in the
+ * test's document and its read at once, in its place, as the host draws it
+ * before the service answers (`@repo/host`'s `viewChoiceWritten`), and
+ * handed again with the document wherever the window reads it anew, as the
+ * host goes on holding it. A window with no account signed in draws
+ * nothing, as the host keeps nothing for it.
+ */
+export function drawnViewChoice(write: ViewChoiceWriteParams): Promise<ViewChoiceWrittenView> {
+  const client = testQueryClientNow();
+  const document = client.getQueryData<AppStateSnapshot>(appStateQuery.queryKey);
+  const accountId = document === undefined ? undefined : signedInAccountId(document.account);
+
+  if (document === undefined || accountId === undefined) return Promise.resolve({});
+  const { id, key, workspaceId, value } = write;
+  const held = document[LIVE_READ.VIEW_CHOICES][accountId]?.rows ?? [];
+  const others = held.filter((row) => row.key !== key || row.workspaceId !== workspaceId);
+  const rows = value === null ? others : [...others, { id, key, workspaceId, value }];
+
+  const drawn = (snapshot: AppStateSnapshot): AppStateSnapshot => ({
+    ...snapshot,
+    [LIVE_READ.VIEW_CHOICES]: { ...snapshot[LIVE_READ.VIEW_CHOICES], [accountId]: { rows } },
+  });
+
+  const handed = answering.requestAppState;
+
+  if (handed !== undefined) {
+    fakeAppBridge({ ...answering, requestAppState: () => handed().then(drawn) });
+  }
+
+  client.setQueryData(appStateQuery.queryKey, drawn(document));
+  client.setQueryData(viewChoicesQuery(accountId).queryKey, rows);
+
+  return Promise.resolve({});
+}
+
+/**
  * Installs an act port answering only the procedures given, each by its
  * kind, as a test's window calls them. A hold it does not answer, on a
  * task's or an agent's inbox or pages, an agent's or a worker's transcript, a pull request's chapters or parts,
@@ -244,6 +286,7 @@ export function fakeActPort(procedures: Partial<FakeActPort>): void {
     [AGENT_ACT_KIND.AGENTS_MODELS_RETRY]: () => Promise.resolve(),
     [AGENT_ACT_KIND.AGENTS_PREFERENCES_RETRY]: () => Promise.resolve(),
     [AGENT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: () => Promise.resolve(),
+    [ACCOUNT_ASK_ACT_KIND.VIEW_CHOICE_WRITE]: drawnViewChoice,
     ...procedures,
   };
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_CALL_FAILURE, type ViewChoiceWriteParams } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   AGENT_KIND,
   AGENT_MACHINE,
@@ -46,6 +46,7 @@ import {
   tasksControl,
   withNewTaskShown,
 } from "../testing/tasks-control.js";
+import { hearViewChoices } from "../testing/view-choices.js";
 
 /**
  * sidebar-managers.test.ts -- the sidebar's Managers: the workspace's
@@ -129,18 +130,6 @@ const sortChoice = (value: ManagerSort): ViewChoiceLiveRow => ({
   workspaceId: WORKSPACE.id,
   value,
 });
-
-/** Answers the account's view choices' writes, each as `written` hears it. */
-function hearViewChoices(written: ViewChoiceWriteParams[]): void {
-  fakeActPort({
-    ...fakeActPortCalls(),
-    [ACT_KIND.VIEW_CHOICE_WRITE]: (write) => {
-      written.push(write);
-
-      return Promise.resolve({});
-    },
-  });
-}
 
 /** A second model, which a Manager's Settings picks. */
 const SONNET = "anthropic/claude-sonnet-5.5";
@@ -343,9 +332,8 @@ test("a Manager's row hangs the Manager's card: where it stands, how many of the
 });
 
 test("View options' Sort by keeps the sort on the account, whose sort lists the Manager that moved last first", async () => {
-  const written: ViewChoiceWriteParams[] = [];
   const sidebar = await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, []);
-  hearViewChoices(written);
+  const written = hearViewChoices();
   const list = sidebar.querySelector('nav[aria-label="Managers"]') ?? assert.fail("Managers");
   const order = () => list.textContent?.indexOf("Frontend Manager") ?? -1;
 
@@ -395,12 +383,11 @@ test("View options' Sort by keeps the sort on the account, whose sort lists the 
 });
 
 test("a Managers sort this Mac kept itself moves up to the account once, and leaves the Mac", async () => {
-  const written: ViewChoiceWriteParams[] = [];
   window.localStorage.setItem(
     "app.sidebarManagerSorts",
     JSON.stringify({ [WORKSPACE.id]: MANAGER_SORT.NAME }),
   );
-  hearViewChoices(written);
+  const written = hearViewChoices();
   await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, []);
   await settleQueries();
 

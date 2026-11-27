@@ -6,9 +6,10 @@ import {
 } from "@repo/features/view-choice-live";
 import type { ViewChoiceKey, ViewChoiceValue } from "@repo/features/view-choice-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createStore, type Store, useSelector } from "@tanstack/react-store";
 import { Option } from "effect";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { actMutation, pressMutation } from "./act-mutations.js";
 import { viewChoicesQuery } from "./live-reads.js";
 import { selectAccount, useAppStateSlice } from "./use-app-state.js";
@@ -28,6 +29,12 @@ import { selectAccount, useAppStateSlice } from "./use-app-state.js";
  * none in its place, the window's is kept on the account, and the window's
  * own is let go either way, so the first device to read a choice it kept
  * hands it to every other.
+ *
+ * A surface reads a choice through `useAccountChoice`, which draws the
+ * account's choice, the window's own while it waits to move up, or the
+ * surface's default; and holds a choice in the window alone, never kept,
+ * where it keeps none on the account: in a fixture run, whose frames never
+ * wear a developer's choices, and in a window no account is signed in to.
  */
 
 /** One view choice as a surface reads it: its value, none where the account keeps none or keeps one this build cannot read; whether the read has answered; and the press that makes another, or forgets it with null. */
@@ -55,8 +62,14 @@ export function useViewChoice<Key extends ViewChoiceKey>(
   const writing = useMutation(pressMutation(ACT_KIND.VIEW_CHOICE_WRITE));
   const rows = read.data ?? NO_CHOICES;
 
+  // Note that the value is decoded once for the rows read, so a record or a list stands as one object across draws until the rows move, and an effect over it runs only then.
+  const value = useMemo(
+    () => (workspaceId === undefined ? Option.none() : viewChoiceOf(rows, key, workspaceId)),
+    [rows, key, workspaceId],
+  );
+
   return {
-    value: workspaceId === undefined ? Option.none() : viewChoiceOf(rows, key, workspaceId),
+    value,
     answered: workspaceId !== undefined && read.data !== undefined,
     choose: (value) => {
       if (workspaceId === undefined) return;
@@ -91,4 +104,101 @@ export function useKeptMovedUp<Key extends ViewChoiceKey>(
     if (unkept) moveUp(viewChoiceWrite(rows, key, workspaceId, kept, crypto.randomUUID()));
     forget();
   }, [answered, kept, unkept, key, workspaceId, rows, forget, moveUp]);
+}
+
+/** What this window kept of a choice in its own storage, waiting to move up to the account, read as the account reads it; and the door that lets it go here (`use-kept.ts`'s `useKeptLeaving`, for one kept whole under a name of its own). */
+export type KeptEarlier<Value> = readonly [Value | undefined, () => void];
+
+/** One view choice as a surface draws it: its value; the press that makes another; and the press that makes one over the choice standing as it is pressed. */
+export interface AccountChoice<Key extends ViewChoiceKey> {
+  readonly value: ViewChoiceValue<Key>;
+  readonly choose: (next: ViewChoiceValue<Key>) => void;
+  readonly change: (changed: (standing: ViewChoiceValue<Key>) => ViewChoiceValue<Key>) => void;
+}
+
+/** The choices a window holds for itself, by key and then place, none of them kept. */
+type HeldChoices = ReadonlyMap<ViewChoiceKey, ReadonlyMap<string | null, unknown>>;
+
+/** Each window's held choices, by the window's one Query client, so they go with the window. */
+const HELD = new WeakMap<QueryClient, Store<HeldChoices>>();
+
+/** The choices `client`'s window holds for itself. */
+function heldChoices(client: QueryClient): Store<HeldChoices> {
+  const standing = HELD.get(client);
+
+  if (standing !== undefined) return standing;
+  const made = createStore<HeldChoices>(new Map());
+  HELD.set(client, made);
+
+  return made;
+}
+
+/** The choice of `key` the window holds for itself in `place`, none until one is made. */
+function heldIn<Key extends ViewChoiceKey>(
+  all: HeldChoices,
+  key: Key,
+  place: string | null,
+): ViewChoiceValue<Key> | undefined {
+  // SAFETY: a choice is held under its key only as `useAccountChoice` holds it, a value of that key's.
+  return all.get(key)?.get(place) as ViewChoiceValue<Key> | undefined;
+}
+
+/**
+ * The choice of `key` in `place` (a workspace's id for a workspace's
+ * choice, null for the account's own, undefined while the surface has no
+ * place yet) as the surface draws it, and the presses that make another.
+ * Where an account is signed in and the run is not `staged` (a fixture
+ * run's), it is the account's choice, kept there as each is made; the
+ * window's own `earlier` choice while it waits to move up
+ * (`useKeptMovedUp`); and `fallback` where neither is. Otherwise the window
+ * holds it alone, drawn in every surface reading it until the window goes,
+ * and keeps nothing. Note that `change` reads the choice standing as it is
+ * pressed, rather than the one last drawn, so a press a surface held from
+ * an earlier draw (a menu standing open) never undoes one made since.
+ */
+export function useAccountChoice<Key extends ViewChoiceKey>(
+  key: Key,
+  place: string | null | undefined,
+  fallback: ViewChoiceValue<Key>,
+  staged: boolean,
+  earlier: KeptEarlier<ViewChoiceValue<Key>>,
+): AccountChoice<Key> {
+  const client = useQueryClient();
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
+  const onAccount = staged || accountId === undefined ? undefined : place;
+  const choice = useViewChoice(key, onAccount);
+  const held = heldChoices(client);
+  const heldNow = useSelector(held, (all) => heldIn(all, key, place ?? null));
+  const [left, forgetLeft] = earlier;
+
+  useKeptMovedUp(key, onAccount, choice, left, forgetLeft);
+
+  const own = staged ? undefined : left;
+
+  const value =
+    onAccount === undefined
+      ? (heldNow ?? own ?? fallback)
+      : Option.getOrElse(choice.value, () => own ?? fallback);
+
+  const choose = (next: ViewChoiceValue<Key>) => {
+    if (place === undefined) return;
+
+    if (onAccount === undefined) {
+      held.setState((all) => new Map(all).set(key, new Map(all.get(key)).set(place, next)));
+
+      return;
+    }
+
+    choice.choose(next);
+  };
+
+  // The choice standing as a change is pressed: the window's own, or the account's as the window reads it now.
+  const standing = (): ViewChoiceValue<Key> => {
+    if (onAccount === undefined) return heldIn(held.state, key, place ?? null) ?? own ?? fallback;
+    const rows = client.getQueryData(viewChoicesQuery(accountId).queryKey) ?? NO_CHOICES;
+
+    return Option.getOrElse(viewChoiceOf(rows, key, onAccount), () => own ?? fallback);
+  };
+
+  return { value, choose, change: (changed) => choose(changed(standing())) };
 }
