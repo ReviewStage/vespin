@@ -89,7 +89,8 @@ env:
 - assertVisible: "Emoji"
 - assertVisible: "Remove icon"
 - tapOn: "Color"
-- assertVisible: "Black"
+# The first color is the text's own ink, named as the appearance draws it.
+- assertVisible: "Black|White"
 - assertVisible: "Teal"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-headers-section-colors
