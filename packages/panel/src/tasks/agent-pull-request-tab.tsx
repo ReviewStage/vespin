@@ -2783,15 +2783,27 @@ function ConversationView({
 
   useVirtualFind({ root: scroller, rows: findRows, handle: entries, findable: viewShown });
   const asked = landing?.ask;
+  const target = landing?.target;
   const conversationOpen = filters.conversationOpen;
-  // The landing that last opened a folded Conversation, so each asks it once, however long the account's read takes to draw the choice.
-  const openedFor = useRef<number | undefined>(undefined);
+
+  // The landing that last opened a folded Conversation, by what it lands on and its ask, since a thread's and a comment's asks are counted apart; so each asks it once, however long the account's read takes to draw the choice, and the guard goes with the landing.
+  const openedFor = useRef<{ readonly target: string; readonly ask: number } | undefined>(
+    undefined,
+  );
 
   useEffect(() => {
-    if (asked === undefined || conversationOpen || openedFor.current === asked) return;
-    openedFor.current = asked;
+    if (asked === undefined || target === undefined) {
+      openedFor.current = undefined;
+
+      return;
+    }
+
+    const standing = openedFor.current;
+
+    if (conversationOpen || (standing?.target === target && standing.ask === asked)) return;
+    openedFor.current = { target, ask: asked };
     change({ conversationOpen: true });
-  }, [asked, conversationOpen, change]);
+  }, [asked, target, conversationOpen, change]);
 
   return (
     // Note that it is in the tab order, because it scrolls on its own, and a column of words holds nothing else a keyboard could reach to scroll it by.

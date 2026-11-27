@@ -2457,6 +2457,57 @@ test("a link in the pull request's words to one of its own comments on GitHub op
   );
 });
 
+test("a folded Conversation opens for each link that lands in it, a comment's after a thread's", async () => {
+  const links = [
+    `<a href="${PAGE}#discussion_r1">the thread</a>`,
+    `<a href="${PAGE}#issuecomment-2">the note</a>`,
+  ].join(" ");
+
+  const conversation = reviewWith([thread({ id: JUMPED })]);
+
+  const tab = await drawn(
+    createElement(Routed, {
+      control: controlAnswering({
+        pullRequest: () =>
+          Promise.resolve({ pullRequest: { ...PULL_REQUEST, html: `<p>See ${links}.</p>` } }),
+        conversation: () =>
+          Promise.resolve({
+            pullRequest: {
+              ...conversation,
+              conversation: [...conversation.conversation, ...CONVERSATION.conversation.slice(-1)],
+            },
+          }),
+      }),
+      heard: [],
+    }),
+  );
+
+  const opened = () => sectionHead(tab, "Conversation").getAttribute("aria-expanded");
+
+  const press = async (words: string) => {
+    const link =
+      [...tab.querySelectorAll<HTMLElement>(".pull-request-words a")].find(
+        (each) => each.textContent === words,
+      ) ?? assert.fail(`the description links ${words}`);
+
+    await act(async () => link.click());
+    await settle();
+    await frames();
+  };
+
+  act(() => sectionHead(tab, "Conversation").click());
+  assert.equal(opened(), "false");
+  await press("the thread");
+  assert.equal(opened(), "true", "the thread's link opens it");
+  ringEnds(tab.querySelector(".pull-request-thread") ?? assert.fail("the thread is drawn"));
+  await settle();
+
+  act(() => sectionHead(tab, "Conversation").click());
+  assert.equal(opened(), "false");
+  await press("the note");
+  assert.equal(opened(), "true", "the note's link opens it too");
+});
+
 test("a thread on a changed image a filter left out lands above its picture once the filter is cleared, the list scrolled to the file's header rather than a line the picture draws none of", async () => {
   const logo = {
     path: "assets/logo.svg",
