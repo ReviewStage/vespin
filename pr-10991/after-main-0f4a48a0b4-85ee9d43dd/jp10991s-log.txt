@@ -1,0 +1,14 @@
+pinned to d519cea2f3
+== bundle PJjp10991s base d519cea2f3
+  built d519cea2f3 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-tasks: fails 0 shots 36 
+iphone-light-managers: fails 0 shots 11 
+iphone-light-tasks-headers: fails 0 shots 11 
+ipad27-light-tasks: fails 2 shots 15   Tap on "Created by .*"... FAILED
+  ipad27-light-tasks around the failure: Run flow when "No task selected" is not visible...|  Swipe from (80%, 66%) to (45%, 66%) in 900 ms... COMPLETED|  Wait for animation to end... COMPLETED|  Take screenshot task-agent-swipe... COMPLETED|  Tap on "Created by .*"... FAILED|Run flow when "No task selected" is not visible... FAILED|
+ipad27-light-managers: fails 2 shots 12   Tap on "Search", Right of "Tasks"... FAILED
+  ipad27-light-managers around the failure:   Run flow when "Search", id: place-row is visible and true is true... SKIPPED|  Wait for animation to end... COMPLETED|Run subflows/tab.yaml... COMPLETED|Run flow when "Search Vespin" is not visible...|  Tap on "Search", Right of "Tasks"... FAILED|Run flow when "Search Vespin" is not visible... FAILED|
