@@ -1,0 +1,50 @@
+diff --git a/dist/recyclerview/RecyclerView.js b/dist/recyclerview/RecyclerView.js
+index 6799c8a61bff4607633196097da35c7a6975f0b6..759328206fa54776c5cce90525b99fe37e2f7a34 100644
+--- a/dist/recyclerview/RecyclerView.js
++++ b/dist/recyclerview/RecyclerView.js
+@@ -173,6 +173,8 @@ const RecyclerViewComponent = (props, ref) => {
+             if (recyclerViewManager.updateScrollOffset(scrollOffset, velocity)) {
+                 setRenderId((prev) => prev + 1);
+             }
++            // Note that the item held in place follows the scroll, rather than waiting for its momentum to end, so a correction always measures against an item the reader stands on, never one they scrolled away from.
++            computeFirstVisibleIndexForOffsetCorrection();
+         });
+         // Update sticky headers and check bounds
+         (_a = stickyHeaderRef.current) === null || _a === void 0 ? void 0 : _a.reportScrollEvent(event.nativeEvent);
+diff --git a/dist/recyclerview/hooks/useRecyclerViewController.js b/dist/recyclerview/hooks/useRecyclerViewController.js
+index 08724d1f33824ef563948cff17904d7f497739d4..295617f664f16f49f6e96bdbc6670d70f2a9e3bb 100644
+--- a/dist/recyclerview/hooks/useRecyclerViewController.js
++++ b/dist/recyclerview/hooks/useRecyclerViewController.js
+@@ -62,7 +62,16 @@ export function useRecyclerViewController(recyclerViewManager, ref, scrollViewRe
+             recyclerViewManager.getDataLength() > 0 &&
+             recyclerViewManager.shouldMaintainVisibleContentPosition()) {
+             // Update the tracked first visible item
+-            const firstVisibleIndex = Math.max(0, recyclerViewManager.computeVisibleIndices().startIndex);
++            const visibleIndices = recyclerViewManager.computeVisibleIndices();
++            let firstVisibleIndex = Math.max(0, visibleIndices.startIndex);
++            // Note that the item held is the first visible one already measured, so an item still at its estimated size, which grows as it is measured, never holds still while the items the reader stands on are pushed away below it.
++            for (let index = firstVisibleIndex; index <= visibleIndices.endIndex; index++) {
++                const layout = recyclerViewManager.getLayout(index);
++                if (recyclerViewManager.props.horizontal ? layout.isWidthMeasured : layout.isHeightMeasured) {
++                    firstVisibleIndex = index;
++                    break;
++                }
++            }
+             if (firstVisibleIndex !== undefined && firstVisibleIndex >= 0) {
+                 firstVisibleItemKey.current =
+                     recyclerViewManager.getDataKey(firstVisibleIndex);
+@@ -106,10 +115,10 @@ export function useRecyclerViewController(recyclerViewManager, ref, scrollViewRe
+                 const currentIndexOfFirstVisibleItem = (_a = recyclerViewManager
+                     .getEngagedIndices()
+                     .findValue((index) => recyclerViewManager.getDataKey(index) ===
+-                    firstVisibleItemKey.current)) !== null && _a !== void 0 ? _a : (hasDataChanged || recyclerViewManager.ignoreScrollEvents
+-                    ? data === null || data === void 0 ? void 0 : data.findIndex((item, index) => recyclerViewManager.getDataKey(index) ===
+-                        firstVisibleItemKey.current)
+-                    : undefined);
++                    firstVisibleItemKey.current)) !== null && _a !== void 0 ? _a : 
++                // Note that the item held is searched for in the whole data whenever it stands outside the engaged window, not only when the data changed or a correction is settling: items above it that grow by more than the window as they are first measured, such as a tall item scrolled into view from above, push it out on the very first pass. The item held follows the scroll (`onScrollHandler`), so it is one the reader stands on.
++                (data === null || data === void 0 ? void 0 : data.findIndex((item, index) => recyclerViewManager.getDataKey(index) ===
++                    firstVisibleItemKey.current));
+                 if (currentIndexOfFirstVisibleItem !== undefined &&
+                     currentIndexOfFirstVisibleItem >= 0) {
+                     // Calculate the difference in position and apply the offset
