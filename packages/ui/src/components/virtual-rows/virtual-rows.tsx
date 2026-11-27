@@ -540,15 +540,16 @@ export function VirtualRows({
   const [margin, setMargin] = useState(0);
   const painted = useFirstFramePainted();
   const drawnPast = overscan ?? (painted ? DEFAULT_OVERSCAN : FIRST_FRAME_OVERSCAN);
-  // Whether the run draws on to its last row, which a run anchored to its end does until its first frame has painted (`rangeExtractor`).
+  // Whether the run draws on to its last row, which a run anchored to its end does until its first frame has painted or it is taken from its end (`rangeExtractor`).
   const drawsToEnd = useRef(false);
+  const takenFromEnd = useRef(false);
   const latestKeys = useRef(keys);
   latestKeys.current = keys;
   // Note that the key reader changes as the keys do, because the virtualizer reads every row's key again only when it does: a row moved to another place, the run as long as before, would otherwise stand under the key of the row that stood there, and two rows under one key leave a row drawn that no row is any longer.
   const steady = useSteadyKeys(keys);
   const getItemKey = useCallback((index: number) => steady[index] ?? index, [steady]);
   const fromEnd = anchor === VIRTUAL_ROWS_ANCHOR.END;
-  drawsToEnd.current = fromEnd && overscan === undefined && !painted;
+  drawsToEnd.current = fromEnd && overscan === undefined && !painted && !takenFromEnd.current;
   // The row holding the keyboard, by its key, which is drawn wherever the run is scrolled.
   const focused = useRef<string | undefined>(undefined);
 
@@ -556,7 +557,10 @@ export function VirtualRows({
   // first frame has painted, because it opens there by the window's height
   // (`initialRect`), and once its scroller, shorter than the window, is
   // measured, the rows under the view it was first laid out in would be let
-  // go and drawn again as its scroll to its end is heard.
+  // go and drawn again as its scroll to its end is heard. A run taken from
+  // its end before then, as a find steps to a match far up a log just
+  // opened, draws only the rows near where it was taken, since every row
+  // between there and its end would otherwise be drawn at once.
   const rangeExtractor = useCallback((range: Range) => {
     const drawn = defaultRangeExtractor(
       drawsToEnd.current ? { ...range, endIndex: range.count - 1 } : range,
@@ -712,12 +716,19 @@ export function VirtualRows({
     [],
   );
 
+  // Note that the range is let go of its end before the scroll is written, because the virtualizer reads its range as it hears the scroll, ahead of any draw.
+  const takeFromEnd = useCallback(() => {
+    takenFromEnd.current = true;
+    drawsToEnd.current = false;
+  }, []);
+
   const runHandle = useMemo(
     (): VirtualRowsHandle => ({
       bringIn: (key, then) => {
         const index = latestKeys.current.indexOf(key);
 
         if (index === -1) return false;
+        takeFromEnd();
         virtualizer.scrollToIndex(index, { align: "center" });
         // Note that a row already drawn is handed on at once, since it may draw no more as the scroll moves it.
         const row = rowElement(key);
@@ -736,9 +747,12 @@ export function VirtualRows({
         }),
       keys: () => latestKeys.current,
       scrollToEnd: () => virtualizer.scrollToEnd(),
-      scrollBy: (delta) => virtualizer.scrollBy(delta),
+      scrollBy: (delta) => {
+        takeFromEnd();
+        virtualizer.scrollBy(delta);
+      },
     }),
-    [virtualizer, rowElement],
+    [virtualizer, rowElement, takeFromEnd],
   );
 
   useImperativeHandle(handle, () => runHandle, [runHandle]);
