@@ -25,6 +25,10 @@ tester.run("end-anchored-run-in-conversation", endAnchoredRunInConversationRule,
   valid: [
     // A list read from its top anchors to its start anywhere.
     { code: "const anchor = VIRTUAL_ROWS_ANCHOR.START;", filename: PANE },
+    {
+      code: 'import { VIRTUAL_ROWS_ANCHOR as ANCHOR } from "@repo/ui/virtual-rows";\nconst anchor = ANCHOR.START;',
+      filename: PANE,
+    },
     // The log anchors its lines to their end.
     {
       code: END,
@@ -46,6 +50,12 @@ tester.run("end-anchored-run-in-conversation", endAnchoredRunInConversationRule,
     { code: END, filename: PANE, errors: [{ messageId: "endAnchor" }] },
     {
       code: 'const anchor = VIRTUAL_ROWS_ANCHOR["END"];',
+      filename: PANE,
+      errors: [{ messageId: "endAnchor" }],
+    },
+    // The anchors imported under another name.
+    {
+      code: 'import { VIRTUAL_ROWS_ANCHOR as ANCHOR } from "@repo/ui/virtual-rows";\nconst anchor = ANCHOR.END;',
       filename: PANE,
       errors: [{ messageId: "endAnchor" }],
     },

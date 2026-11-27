@@ -2,6 +2,9 @@ import { defineRule } from "@oxlint/plugins";
 
 import { repositoryPathOf, TYPESCRIPT_SOURCE } from "../shared/repository-path.ts";
 
+/** The anchors' own name (`@repo/ui/virtual-rows`). */
+const ANCHORS = "VIRTUAL_ROWS_ANCHOR";
+
 /** The files that may anchor a run to its end: the log, and the run itself with its tests. */
 const ALLOWED = [
   "packages/ui/src/components/conversation/conversation.tsx",
@@ -29,14 +32,23 @@ export const endAnchoredRunInConversationRule = defineRule({
     },
   },
   createOnce(context) {
+    // The names the file reads the anchors by: their own, and any it imported them under.
+    let anchors = new Set<string>();
+
     return {
       before() {
         const file = repositoryPathOf(context.filename);
+        anchors = new Set([ANCHORS]);
         return TYPESCRIPT_SOURCE.test(file) && !ALLOWED.some((allowed) => file.startsWith(allowed));
+      },
+      ImportSpecifier(node) {
+        const { imported, local } = node;
+        const name = imported.type === "Identifier" ? imported.name : imported.value;
+        if (name === ANCHORS) anchors.add(local.name);
       },
       MemberExpression(node) {
         const { object, property } = node;
-        if (object.type !== "Identifier" || object.name !== "VIRTUAL_ROWS_ANCHOR") return;
+        if (object.type !== "Identifier" || !anchors.has(object.name)) return;
         const named =
           property.type === "Identifier" && !node.computed
             ? property.name
