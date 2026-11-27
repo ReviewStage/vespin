@@ -460,9 +460,12 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
   card and prompting "Required" or "Optional" while empty, a number field's
-  pad standing one Done over it for the card, a select's menu picker
-  under its label, reading "None" until a pick, a
-  boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
+  pad standing one Done over it for the card, a select's options as rows
+  under its label, the recommended one tagged as a decide's is and none
+  picked until the reader picks, as the panel's pills stand, and a yes or
+  no's round check beside its name, as a step's, never the system's switch,
+  since the panel's form draws a checkbox (the developer, Nov 27, 2026), the
+  rows a SwiftUI `Form` holds, drawn in a card because
   a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
   start where its rows' words do, as iOS insets a list's separator) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and

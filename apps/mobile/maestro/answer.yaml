@@ -101,8 +101,9 @@ appId: dev.vespin.ios
     notVisible: "Not delivered.*"
     timeout: 5000
 
-# An answer's fields: a select's menu with its recommended option said so, a
-# toggle, and a number on the decimal pad; Send submits what was filled.
+# An answer's fields: a select's options as rows, its recommended one tagged
+# and none picked, a yes or no's checkbox, and a number on the decimal pad;
+# Send submits what was filled.
 - launchApp:
     clearState: true
     arguments:
@@ -114,12 +115,12 @@ appId: dev.vespin.ios
     file: subflows/open-row.yaml
     env:
       ROW: "Invite limits"
-- assertVisible: "None"
+- assertVisible: "Every member, Recommended"
 - waitForAnimationToEnd
 - takeScreenshot: answer-fields
-- tapOn: "None"
-- tapOn: "Every member \\(recommended\\)"
-- tapOn: "Email the sender when an invite is accepted.*"
+- tapOn: "Every member, Recommended"
+- tapOn: "Email the sender when an invite is accepted, Optional"
+- assertVisible: "Email the sender when an invite is accepted, Optional, ticked"
 # The number comes last, since the decimal pad has no key that puts it away:
 # the composer rides above it, so Send is pressed with the pad still up.
 # Words that read as no number hold the answer back, rather than send it
@@ -160,7 +161,7 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Submitted"
     timeout: 5000
-- assertNotVisible: "None"
+- assertNotVisible: "Every member, Recommended"
 
 # A do: its steps as checkbox rows, one ticked by hand, then Mark done, which
 # sends at once with every step ticked.

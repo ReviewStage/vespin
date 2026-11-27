@@ -7,11 +7,9 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
-  fixedSize,
   font,
   foregroundStyle,
   frame,
-  lineLimit,
   padding,
   strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
@@ -20,7 +18,7 @@ import { linkLabels } from "@repo/features/mention-link";
 import { Fragment } from "react";
 import { Pressable } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { CARD_WORDS_INSET, CardDivider } from "./ask-card.js";
+import { CARD_WORDS_INSET, CardDivider, RecommendedTag } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { PickedCheck } from "./settings-form.js";
@@ -65,35 +63,8 @@ type ChoiceListProps = {
   readonly onOpenLink: (address: string) => void;
 };
 
-/** How thick the card's and the tag's edges are drawn. */
+/** How thick the card's edge is drawn. */
 const HAIRLINE = 0.5;
-
-/** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked; its one word on one line at every size, never broken inside the tag. */
-function RecommendedTag() {
-  const colors = useColors();
-
-  return (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
-        foregroundStyle(colors.TEXT_MUTED),
-        // Note that the tag keeps its own width, since at the largest sizes the row's column offered it less and SwiftUI broke its word as "Recommend-ed".
-        lineLimit(1),
-        fixedSize(),
-        padding({ horizontal: 5, vertical: 1 }),
-        strokeBorder({
-          content: colors.CHIP_EDGE,
-          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-          shape: "roundedRectangle",
-          cornerRadius: RADIUS.TAG,
-          style: { lineWidth: 1 },
-        }),
-      ]}
-    >
-      {RECOMMENDED}
-    </Text>
-  );
-}
 
 /** What pressing `label` leaves picked: it alone for one choice, or it toggled among several. */
 function nextPicked(
