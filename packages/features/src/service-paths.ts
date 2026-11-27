@@ -34,6 +34,8 @@ export const HOSTED_SERVICE_PATH = {
   ACCOUNT_SOUNDS: "/api/account/sounds",
   /** Which of the account's sounds one of its two sounds plays (PUT). */
   ACCOUNT_SOUND_CHOICE: "/api/account/sounds/choice",
+  /** One of the account's view choices kept, or forgotten with a null value (PUT). `view-choice-wire.ts` declares the body. */
+  ACCOUNT_VIEW_CHOICES: "/api/account/view-choices",
   /** One of the account's subscriptions named, or its name cleared (PUT). */
   ACCOUNT_SUBSCRIPTION_LABEL: "/api/account/provider-keys/label",
   /** One of a ChatGPT plan's rate-limit reset credits spent (POST). */
@@ -251,6 +253,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_INTEGRATION_STATUSES: "/api/live/integration-statuses",
   /** The account's preferences row, its default agent, chapters model, and Slack notifications as stored, sealed for following over Neon Realtime (GET), or its row inline where polled, none for an account that stored nothing. `account-preferences-live.ts` declares the answer. */
   LIVE_ACCOUNT_PREFERENCES: "/api/live/account-preferences",
+  /** The account's view choices, each by its key and the workspace it is kept for, sealed for following over Neon Realtime (GET), or their rows inline where polled. `view-choice-live.ts` declares the answer. */
+  LIVE_VIEW_CHOICES: "/api/live/view-choices",
   /**
    * A workspace's agents, on any task, newest started first and
    * the archived ones left out unless the query asks for them, narrowed to

@@ -272,6 +272,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     renameSound: SCREEN_ONLY,
     removeSound: SCREEN_ONLY,
     chooseSound: SCREEN_ONLY,
+    writeViewChoice: SCREEN_ONLY,
     allowedCommands: NOT_YET_BUILT,
     // Note that an agent never widens what its member's agents run unasked; only the member does, in the app.
     addAllowedCommand: SECURITY,
@@ -400,6 +401,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     workspaceMachines: SCREEN_ONLY,
     machines: SCREEN_ONLY,
     machineAsks: SCREEN_ONLY,
+    viewChoices: SCREEN_ONLY,
     workspaceMemories: SCREEN_ONLY,
     installedSkills: SCREEN_ONLY,
     workspaceIntegrations: SCREEN_ONLY,
