@@ -509,11 +509,17 @@ export function glyphSymbol(glyph: Glyph): SfSymbol {
 /**
  * A glyph as expo-router's bottom bar and tab bar take an icon: an SF Symbol
  * by `sf`, a custom symbol by its asset's name as `xcasset`, since each
- * loads only the one kind its prop names.
+ * loads only the one kind its prop names. Note that an asset is tinted as a
+ * template, because a bar handed no tint draws an asset in its artwork's
+ * own black, which vanished on a dark bar beside the system's symbols.
  */
-export function glyphIcon(glyph: Glyph): { readonly sf: SfSymbol } | { readonly xcasset: string } {
+export function glyphIcon(
+  glyph: Glyph,
+): { readonly sf: SfSymbol } | { readonly xcasset: string; readonly renderingMode: "template" } {
   // SAFETY: a glyph the asset catalog doesn't hold was minted by `system` from an SF Symbol's name.
-  return CATALOG_SYMBOLS.has(glyph) ? { xcasset: glyph } : { sf: glyph as SfSymbol };
+  return CATALOG_SYMBOLS.has(glyph)
+    ? { xcasset: glyph, renderingMode: "template" }
+    : { sf: glyph as SfSymbol };
 }
 
 /** A mark's glyph and the tone it is drawn in. */
