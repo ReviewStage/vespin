@@ -1,0 +1,30 @@
+-- jauto11281: main pinned to 3ab3084252: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to 3ab3084252
+== bundle PJjauto11281 base 3ab3084252
+  built 3ab3084252 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+before-main-light: fails 0 shots 12 
+  before-main-light shots: automation-page-more.png automation-page-runs.png automation-page-where.png automation-page.png automation-run-agent.png automations-by-name.png automations-delete-ask.png automations-list.png automations-menu.png automations-order.png automations-runs-failed.png automations-runs.png 
+Connection closed by 172.182.252.133 port 22
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.
+fatal: could not fetch 99341a779319b3f9e8bab9a946af91db7f353a1b from promisor remote
+  CHECKOUT FAILED: HEAD 457c21f5d6, wanted 5a15006e90
+== after-22687e9989-light bundle 5a15006e90 over Vmain-current.app
+after-22687e9989-light: build 5a15006e90 has no bundle or automations.yaml; not run
+before-main-dark: fails 0 shots 12 
+  before-main-dark shots: automation-page-more.png automation-page-runs.png automation-page-where.png automation-page.png automation-run-agent.png automations-by-name.png automations-delete-ask.png automations-list.png automations-menu.png automations-order.png automations-runs-failed.png automations-runs.png 
+== bundle PJjauto11281dark base 5a15006e90
+  built 5a15006e90 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== after-22687e9989-dark bundle 5a15006e90 over Vmain-current.app
+after-22687e9989-dark: fails 0 shots 12 
+  after-22687e9989-dark shots: automation-page-more.png automation-page-runs.png automation-page-where.png automation-page.png automation-run-agent.png automations-by-name.png automations-delete-ask.png automations-list.png automations-menu.png automations-order.png automations-runs-failed.png automations-runs.png 
