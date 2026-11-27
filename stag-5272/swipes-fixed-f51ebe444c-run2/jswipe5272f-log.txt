@@ -1,0 +1,9 @@
+pinned to f51ebe444c
+== bundle PJjswipe5272f base f51ebe444c
+  built f51ebe444c base app Vmain18.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-dark-transcript-open: fails 0 shots 55 
+  iphone-dark-transcript-open shots: repro-down-1.png repro-down-10.png repro-down-11.png repro-down-12.png repro-down-2.png repro-down-3.png repro-down-4.png repro-down-5.png repro-down-6.png repro-down-7.png repro-down-8.png repro-down-9.png repro-tapped-settled.png repro-up-1.png repro-up-10.png repro-up-11.png repro-up-12.png repro-up-13.png repro-up-14.png repro-up-15.png repro-up-16.png repro-up-17.png repro-up-18.png repro-up-19.png repro-up-2.png repro-up-20.png repro-up-21.png repro-up-22.png repro-up-23.png repro-up-24.png repro-up-25.png repro-up-26.png repro-up-27.png repro-up-28.png repro-up-29.png repro-up-3.png repro-up-30.png repro-up-31.png repro-up-32.png repro-up-33.png repro-up-34.png repro-up-35.png repro-up-36.png repro-up-37.png repro-up-38.png repro-up-39.png repro-up-4.png repro-up-40.png repro-up-5.png repro-up-6.png repro-up-7.png repro-up-8.png repro-up-9.png transcript-open-latest.png transcript-open-tapped.png 
