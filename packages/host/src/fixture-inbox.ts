@@ -329,6 +329,7 @@ const AGENT = {
   MANAGER: "81e2a425-6d3f-4a07-92df-9eafb0c1d2e8",
   DOCS_MANAGER: "93f4b637-7e5a-4b19-a3c4-0f1e2d3c4b5a",
   TRIAGE_MANAGER: "a4a5c748-8f6b-4c2a-b4d5-1a2b3c4d5e6f",
+  ALERTS_MANAGER: "b5b6d859-9a7c-4d3b-85e6-2b3c4d5e6f70",
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
@@ -1148,11 +1149,12 @@ const MANAGER: AgentSummary = {
 };
 
 /**
- * Two more Managers of the workspace, at rest and read, placed where the
- * reader put them: the docs one pinned, so it stands under Pinned alone,
- * and the triage one kept in the Experiments section, so it stands there
- * alone, each out of the Managers group, as the panel's sidebar places a
- * Manager pinned or put in a section.
+ * Three more Managers of the workspace, at rest and read, placed where the
+ * reader put them: the docs and alerts ones pinned, so they stand under
+ * Pinned, among its pinned task by when each was pinned, the docs one above
+ * it and the alerts one below; and the triage one kept in the Experiments
+ * section, so it stands there alone, each out of the Managers group, as the
+ * panel's sidebar places a Manager pinned or put in a section.
  */
 const PLACED_MANAGERS: readonly AgentSummary[] = [
   {
@@ -1167,10 +1169,19 @@ const PLACED_MANAGERS: readonly AgentSummary[] = [
     kind: AGENT_KIND.MANAGER,
     face: { character: MANAGER_FACE_CHARACTER.GHOST, color: MANAGER_FACE_COLOR.PURPLE },
   },
+  {
+    ...agentOn(AGENT.ALERTS_MANAGER, "", "Alerts manager", AGENT_STATUS.COMPLETED, 3 * DAY),
+    taskId: null,
+    kind: AGENT_KIND.MANAGER,
+    face: { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.ORANGE },
+  },
 ];
 
-/** The reader's pin of the docs Manager, which stands on no task. */
-const DOCS_MANAGER_PIN = { agentId: AGENT.DOCS_MANAGER, taskId: null, pinnedAt: LANDED - DAY };
+/** The reader's pins of the docs and alerts Managers, which stand on no task: the docs one pinned after the digest task, the alerts one before it. */
+const MANAGER_PINS = [
+  { agentId: AGENT.DOCS_MANAGER, taskId: null, pinnedAt: LANDED - DAY },
+  { agentId: AGENT.ALERTS_MANAGER, taskId: null, pinnedAt: LANDED - 12 * DAY },
+];
 
 /** A task's agents as its row in the list counts them. */
 function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
@@ -1942,8 +1953,10 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
       ...placedManagers,
     ],
     taskAgentPins: [
-      ...(list.taskAgentPins ?? []).filter((pin) => pin.agentId !== DOCS_MANAGER_PIN.agentId),
-      DOCS_MANAGER_PIN,
+      ...(list.taskAgentPins ?? []).filter(
+        (pin) => !MANAGER_PINS.some(({ agentId }) => agentId === pin.agentId),
+      ),
+      ...MANAGER_PINS,
     ],
     taskSections: LISTED_SECTIONS,
     workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)
