@@ -1,6 +1,7 @@
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
+  CORNER_DOT_PLACE,
   CORNER_DOT_TONE,
   CornerDot,
   cn,
@@ -140,7 +141,7 @@ export function WorkspaceRef({
       )}
       data-size={size}
     >
-      <CornerDot shown={marked} tone={CORNER_DOT_TONE.ATTENTION}>
+      <CornerDot shown={marked} tone={CORNER_DOT_TONE.ATTENTION} place={CORNER_DOT_PLACE.EDGE}>
         <ReplayMask>
           <WorkspaceTile workspace={workspace} size={TILE_OF_SIZE[size]} />
         </ReplayMask>

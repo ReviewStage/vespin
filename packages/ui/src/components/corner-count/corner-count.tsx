@@ -25,6 +25,21 @@ export const CORNER_DOT_TONE = {
 
 export type CornerDotTone = (typeof CORNER_DOT_TONE)[keyof typeof CORNER_DOT_TONE];
 
+/** Where a `CornerDot` stands on what it marks. */
+export const CORNER_DOT_PLACE = {
+  /** Set in from a press's top end corner, over its padding. */
+  INSIDE: "inside",
+  /** Astride a mark's own top end corner, on a ring of the window's ground, as an app icon's badge stands past its icon: a tile filled to its edge, whose middle a dot set in would land on. */
+  EDGE: "edge",
+} as const;
+
+export type CornerDotPlace = (typeof CORNER_DOT_PLACE)[keyof typeof CORNER_DOT_PLACE];
+
+const CORNER_DOT_PLACE_CLASS = {
+  [CORNER_DOT_PLACE.INSIDE]: "top-ui-4 right-ui-4",
+  [CORNER_DOT_PLACE.EDGE]: "-top-ui-2 -right-ui-2 shadow-corner-dot-ring",
+} as const satisfies Record<CornerDotPlace, string>;
+
 const CORNER_DOT_INK = {
   [CORNER_DOT_TONE.ACCENT]: "bg-accent-ink",
   [CORNER_DOT_TONE.ATTENTION]: "bg-attention",
@@ -66,12 +81,15 @@ export function CornerCount({
 export function CornerDot({
   shown,
   tone = CORNER_DOT_TONE.ACCENT,
+  place = CORNER_DOT_PLACE.INSIDE,
   children,
 }: {
   /** Whether the dot is drawn. */
   shown: boolean;
   /** The dot's ink: the accent's for a view's state, the attention's for what waits on the reader. */
   tone?: CornerDotTone | undefined;
+  /** Where it stands: set in from a press's corner, or astride a filled mark's edge, a workspace's tile while a thread waits in another workspace. */
+  place?: CornerDotPlace | undefined;
   /** The press the dot stands over. */
   children: ReactNode;
 }): React.JSX.Element {
@@ -80,7 +98,7 @@ export function CornerDot({
       {children}
       {shown ? (
         <span
-          className={`ui-corner-dot-mark pointer-events-none absolute top-ui-4 right-ui-4 size-corner-dot rounded-disc ${CORNER_DOT_INK[tone]}`}
+          className={`ui-corner-dot-mark pointer-events-none absolute ${CORNER_DOT_PLACE_CLASS[place]} size-corner-dot rounded-disc ${CORNER_DOT_INK[tone]}`}
           aria-hidden="true"
         />
       ) : null}

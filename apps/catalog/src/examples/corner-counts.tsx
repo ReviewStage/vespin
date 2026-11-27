@@ -1,8 +1,12 @@
 import {
+  AVATAR_OUTLINE,
+  AVATAR_SIZE,
+  Avatar,
   CHIP_LOOK,
   CHIP_WIDTH,
   Chip,
   ChipName,
+  CORNER_DOT_PLACE,
   CORNER_DOT_TONE,
   CommentsIcon,
   CornerBadge,
@@ -26,7 +30,8 @@ import { CatalogSection } from "../section";
  * review's pending comments, beside one with nothing waiting, and a count of
  * two figures; a press wearing a dot at its corner, a view filtered,
  * beside one that is not, and one in the attention tone, the folded
- * sidebar's toggle while something waits in the Inbox; a chip wearing the experiment's flask on a disc
+ * sidebar's toggle while something waits in the Inbox, and one astride a
+ * workspace's tile, a thread waiting in another workspace; a chip wearing the experiment's flask on a disc
  * at its corner; and a device's glyph wearing a status dot in a few of the
  * tones its standing takes.
  */
@@ -71,6 +76,15 @@ function CornerCounts(): React.JSX.Element {
         </CornerDot>
         <CornerDot shown tone={CORNER_DOT_TONE.ATTENTION}>
           <IconButton icon={<SidebarIcon />} label="Show sidebar, 3 need you" />
+        </CornerDot>
+        <CornerDot shown tone={CORNER_DOT_TONE.ATTENTION} place={CORNER_DOT_PLACE.EDGE}>
+          <Avatar
+            name="Acme"
+            id="workspace-acme"
+            size={AVATAR_SIZE.ROW}
+            outline={AVATAR_OUTLINE.TILE}
+            decorative
+          />
         </CornerDot>
       </Inline>
       <Inline gap={GAP.CONTROL}>
