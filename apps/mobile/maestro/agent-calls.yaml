@@ -1,0 +1,30 @@
+# agent-calls.yaml -- BEFORE ref only (throwaway): the orchestrating agent's calls to other agents as main draws them, with the same shot names as the change's flow, and no assertions on how they are drawn.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: d637f97a-b2e3-4f0c-a7ce-e3f4051627d3
+- extendedWaitUntil:
+    visible: "The digest agent is writing it.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-calls-rows
+- tapOn: "Messaged.*"
+- tapOn: "Started.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-calls-sent
+- scrollUntilVisible:
+    element: "Read.*"
+    direction: UP
+- tapOn: "Read.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-calls-opened
