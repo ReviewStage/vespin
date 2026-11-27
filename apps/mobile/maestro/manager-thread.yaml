@@ -49,6 +49,15 @@ env:
     text: "Send"
     enabled: true
 - tapOn: "Send"
+# Note that the field is read empty first, because the words stand in it
+# until Send takes them, so their showing alone said nothing of a send that
+# never went.
+- extendedWaitUntil:
+    notVisible:
+      text: "Thanks, reviewing it now."
+      childOf:
+        id: "composer-field"
+    timeout: 10000
 - extendedWaitUntil:
     visible: "Thanks, reviewing it now."
     timeout: 10000
