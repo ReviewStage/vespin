@@ -68,6 +68,21 @@ function inView(box: HTMLElement, shown: Element | Range): boolean {
   return at.bottom > view.top && at.top < view.bottom;
 }
 
+/** Where the window's selection stands: its anchor and its focus, each a node and an offset in it. */
+type SelectionAt = readonly [Node | null, number, Node | null, number];
+
+/** Where the window's selection stands now. */
+function selectionNow(): SelectionAt {
+  const range = document.getSelection();
+
+  return [
+    range?.anchorNode ?? null,
+    range?.anchorOffset ?? 0,
+    range?.focusNode ?? null,
+    range?.focusOffset ?? 0,
+  ];
+}
+
 /** Takes a box to its end itself, where the caller scrolls it no way of its own. */
 function boxToEnd(box: HTMLElement): void {
   box.scrollTop = box.scrollHeight - box.clientHeight;
@@ -151,9 +166,9 @@ export function useEndAnchor({
     let touchY: number | undefined;
     let pressed = false;
     let keyed = false;
-    // Whether focus or the selection moved inside the log since the last scroll was heard, as a screen reader or a find moves them.
+    // Whether focus moved inside the log since the last scroll was heard, and where the selection stood then, as a screen reader or a find moves them.
     let focusMoved = false;
-    let selectionMoved = false;
+    let selectionSeen = selectionNow();
 
     const away = () => {
       if (held.current) hold(false);
@@ -199,20 +214,26 @@ export function useEndAnchor({
       if (event.target !== box) focusMoved = true;
     };
 
-    const onSelectionChange = () => {
-      const at = document.getSelection()?.focusNode;
-
-      if (at !== null && at !== undefined && box.contains(at)) selectionMoved = true;
-    };
-
     // Note that a scroll that brings into view what was just focused or selected in the log, as a screen reader or a find does, is the reader's.
-    const broughtIn = (): boolean => {
+    // The selection is compared with where the last scroll found it rather than heard by its change event, because that event is a task of its own, which a frame's scroll may run ahead of.
+    const broughtIn = (selection: SelectionAt): boolean => {
       const focused = document.activeElement;
       const range = document.getSelection();
 
       if (focusMoved && focused !== null && focused !== box && box.contains(focused)) {
         return inView(box, focused);
       }
+
+      const [anchorNode, anchorOffset, focusNode, focusOffset] = selection;
+      const [wasAnchor, wasAnchorOffset, wasFocus, wasFocusOffset] = selectionSeen;
+
+      const selectionMoved =
+        focusNode !== null &&
+        box.contains(focusNode) &&
+        (anchorNode !== wasAnchor ||
+          anchorOffset !== wasAnchorOffset ||
+          focusNode !== wasFocus ||
+          focusOffset !== wasFocusOffset);
 
       return (
         selectionMoved && range !== null && range.rangeCount > 0 && inView(box, range.getRangeAt(0))
@@ -226,10 +247,11 @@ export function useEndAnchor({
       last = top;
       const reading = pressed || keyed || touchY !== undefined;
       const atEnd = gapOf(box) <= END_PX;
+      const selection = selectionNow();
 
-      if ((reading && up) || (!atEnd && !reading && broughtIn())) away();
+      if ((reading && up) || (!atEnd && !reading && broughtIn(selection))) away();
       focusMoved = false;
-      selectionMoved = false;
+      selectionSeen = selection;
 
       if (atEnd) {
         if (!held.current) hold(true);
@@ -247,7 +269,6 @@ export function useEndAnchor({
     box.addEventListener("keyup", onKeyUp);
     box.addEventListener("focusin", onFocusIn);
     box.addEventListener("scroll", onScroll, { passive: true });
-    document.addEventListener("selectionchange", onSelectionChange);
     globalThis.addEventListener("pointerup", onPointerUp);
     globalThis.addEventListener("pointercancel", onPointerUp);
 
@@ -261,7 +282,6 @@ export function useEndAnchor({
       box.removeEventListener("keyup", onKeyUp);
       box.removeEventListener("focusin", onFocusIn);
       box.removeEventListener("scroll", onScroll);
-      document.removeEventListener("selectionchange", onSelectionChange);
       globalThis.removeEventListener("pointerup", onPointerUp);
       globalThis.removeEventListener("pointercancel", onPointerUp);
     };
