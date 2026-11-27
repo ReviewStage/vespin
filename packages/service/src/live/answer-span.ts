@@ -21,17 +21,22 @@ export const LIVE_ANSWER_ATTRIBUTE = {
   WHOLE_BECAUSE: "live.answer.whole_because",
   /** Which app asked (`client-identity.ts`'s platform), beside why it was answered whole. */
   CLIENT: "live.client",
+  /** Whether the read answered whole was a held poll (past a sync id or a digest), beside why it was answered whole. */
+  HELD: "live.answer.held",
 } as const;
 
 /**
  * Why a read followed by sync id was answered whole rather than past the
  * reader's id: it named none, as a launch with nothing kept or a page load
- * does; its id stood past the settled one, or below the oldest the log kept,
- * or more than the log carries in one answer behind; its admission to the
- * rows moved; or it may hold a first page taken for the whole answer.
+ * does; it was asked with no sync id at all and answered as a snapshot, as
+ * a host asks around a sync id that stalled (`SYNC_STALL`); its id stood
+ * past the settled one, or below the oldest the log kept, or more than the
+ * log carries in one answer behind; its admission to the rows moved; or it
+ * may hold a first page taken for the whole answer.
  */
 export const WHOLE_REASON = {
   NO_SYNC: "no_sync",
+  ASKED_WITHOUT_SYNC: "asked_without_sync",
   PAST_SETTLED: "past_settled",
   BELOW_LOG: "below_log",
   TOO_FAR_BEHIND: "too_far_behind",

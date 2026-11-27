@@ -873,6 +873,7 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
     yield* Effect.annotateCurrentSpan({
       [LIVE_ANSWER_ATTRIBUTE.WHOLE_BECAUSE]: standing.because,
       [LIVE_ANSWER_ATTRIBUTE.CLIENT]: client,
+      [LIVE_ANSWER_ATTRIBUTE.HELD]: past !== undefined,
     });
   }
 
@@ -1015,6 +1016,8 @@ function boundParts<Read extends AnyLiveRead>(
   const sync = asked[LIVE_POLL.SYNC];
   const page = asked[LIVE_POLL.PAGE];
 
+  const client = presentedClient(request.headers)?.platform ?? UNNAMED_CLIENT;
+
   if (read.delta !== undefined && (sync !== undefined || page !== undefined)) {
     return liveDeltaParts(
       read,
@@ -1022,7 +1025,7 @@ function boundParts<Read extends AnyLiveRead>(
       { sync, page },
       readsPages(request),
       (past) => mayHoldFirstPage(request, past),
-      presentedClient(request.headers)?.platform ?? UNNAMED_CLIENT,
+      client,
     );
   }
 
@@ -1030,7 +1033,16 @@ function boundParts<Read extends AnyLiveRead>(
     return liveCursorParts(read, bound, asked, read.look, read.woken, older);
   }
 
-  return liveQueryParts(read, bound, asked, read.look, held, older);
+  const parts = liveQueryParts(read, bound, asked, read.look, held, older);
+
+  // Note that a read followed by sync id asked with none is read whole as a snapshot, as a host asks around a stalled sync id, so its span says so beside the delta path's whole answers.
+  return read.delta === undefined
+    ? parts
+    : Effect.annotateSpans(parts, {
+        [LIVE_ANSWER_ATTRIBUTE.WHOLE_BECAUSE]: WHOLE_REASON.ASKED_WITHOUT_SYNC,
+        [LIVE_ANSWER_ATTRIBUTE.CLIENT]: client,
+        [LIVE_ANSWER_ATTRIBUTE.HELD]: asked[LIVE_POLL.AFTER] !== undefined,
+      });
 }
 
 /**
