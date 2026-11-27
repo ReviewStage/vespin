@@ -305,21 +305,21 @@ patchedDependencies:
 # binding, and a toolbar spacer.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #
-# `@shopify/flash-list` 2.3.2 keeps a reader's place as rows change height by
-# holding its first visible row still, and picks that row where a scroll
-# settles, even while it stands at its estimated size, not yet measured. A
-# transcript's row far taller than the estimate, such as an automation's
-# 15k-character prompt, scrolled into view from below and still unmeasured,
-# became that anchor, then grew down over the rows the reader was on, so a
-# scroll up landed on its top, past everything between (STAG-5272). The patch
-# anchors on the first visible row already measured, falling back to the
-# first visible one. It patches `dist/`, which Metro reads, never `src/`.
-# FlashList offers no option for it: v2's `overrideItemLayout` takes no size
-# estimate and `maintainVisibleContentPosition` no anchor; upstream tracks the
-# estimate as Shopify/flash-list#2526 (fix PR #2531, open) and rows overlapping
-# as they are measured during a fast scroll as #2175. Delete it when a release
-# anchors on a measured row, or takes an estimate for an unmeasured one
-# (#2531) and the transcript hands each row's from its words.
+# `@shopify/flash-list` 2.3.2 keeps a reader's place as rows above them change
+# height by holding the first visible row where it stood, but looks for that
+# row only among the rows it has drawn, and searches the whole data only once
+# the data changed or a correction is settling. A transcript row far taller
+# than FlashList's estimate, such as an automation's 15k-character prompt,
+# held at about 80 pt until it is first drawn, grows by more than the drawn
+# window as it is measured and pushes the reader's row out of it, so the
+# correction was skipped: a scroll up left the offset inside the prompt, with
+# some 25,000 pt of rows suddenly above it, and the reader stood at its first
+# line (STAG-5272). The patch searches the whole data whenever the row is
+# not among those drawn. It patches `dist/`, which Metro reads, never `src/`.
+# Upstream tracks the missing estimate for an unmeasured row as
+# Shopify/flash-list#2526 (fix PR #2531, open), and rows misplaced as they
+# are measured during a fast scroll as #2175. Delete the patch when a release
+# finds the held row outside its drawn rows.
   "@shopify/flash-list@2.3.2": patches/@shopify__flash-list@2.3.2.patch
 #
 # `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
