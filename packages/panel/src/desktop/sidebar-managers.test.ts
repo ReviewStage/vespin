@@ -28,6 +28,7 @@ import { NEW_TASK_UNSHOWN, type NewTask } from "../tasks/use-new-task.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { handHostReads, handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { hoveredCard } from "../testing/desktop-inbox.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import {
   agentsControl,
@@ -45,7 +46,7 @@ import {
  * at all where it is off; its View options' sort; a Manager's row's Change
  * face, which opens its name's field with the face's picker and changes its
  * face, and Settings…, which renames it and
- * changes its model; and
+ * changes its model; the card a Manager's row hangs; and
  * New Manager, whose edited retry is a request of its own. Synthetic
  * throughout.
  */
@@ -143,6 +144,7 @@ async function mountSidebar(
   renamed: AgentRenameAsk[] = [],
   chosen: { agentId: string; model: string }[] = [],
   faced: { agentId: string; face: ManagerFace }[] = [],
+  started: readonly ListedAgent[] = [],
 ): Promise<HTMLElement> {
   handState({ [EXPERIMENT.MANAGERS]: on });
   writeListedTasks({
@@ -153,7 +155,7 @@ async function mountSidebar(
   const tasks = tasksControl({
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
-    listedAgents: [MANAGER, ...NOT_MANAGERS, BILLING],
+    listedAgents: [MANAGER, ...NOT_MANAGERS, BILLING, ...started],
     agentView: { agentId: openId, onOpen: (agentId) => opened.push(agentId) },
     agents: taskAgentsOf(
       agentsControl({
@@ -231,6 +233,42 @@ test("Managers lists the workspace's unarchived Managers of the live list alone,
   assert.ok(row, "the Manager's row is drawn");
   act(() => row.click());
   assert.deepEqual(opened, [FRONTEND]);
+});
+
+test("a Manager's row hangs the Manager's card: where it stands, how many of the agents it started are at work, and the repository it works in", async () => {
+  // Note that one agent it started works and one has ended, so the card counts the one at work alone.
+  const started: readonly ListedAgent[] = [
+    {
+      ...CODER,
+      id: "0a1b2c3d-0000-4000-8000-00000000000f",
+      taskId: "0a1b2c3d-0000-4000-8000-000000000010",
+      title: "Invitations",
+      status: AGENT_STATUS.RUNNING,
+      startedByAgentId: FRONTEND,
+    },
+    {
+      ...CODER,
+      id: "0a1b2c3d-0000-4000-8000-000000000011",
+      taskId: "0a1b2c3d-0000-4000-8000-000000000012",
+      title: "Digest",
+      startedByAgentId: FRONTEND,
+    },
+  ];
+
+  const sidebar = await mountSidebar(true, [], undefined, [], [], [], [], started);
+  const list = sidebar.querySelector('nav[aria-label="Managers"]');
+
+  const row = [...(list?.querySelectorAll("button") ?? [])].find((button) =>
+    button.textContent?.includes("Frontend Manager"),
+  );
+
+  assert.ok(row, "the Manager's row is drawn");
+
+  const words = hoveredCard(row, "[data-manager-card]");
+
+  assert.ok(words?.includes("Idle"), "the card says its Manager is idle");
+  assert.ok(words?.includes("Agents at work1"), "the card counts the one agent at work");
+  assert.ok(words?.includes(RELAY), "the card names the repository it works in");
 });
 
 test("View options' Sort by › Recent activity lists the Manager that moved last first", async () => {
