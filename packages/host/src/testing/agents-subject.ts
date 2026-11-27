@@ -249,6 +249,8 @@ type CommittedIn = { readonly txid?: string };
 /** The service as a script, writing down every ask in the order it was made. */
 function fakeService() {
   const asked: string[] = [];
+  /** The sync id each read of the account's items asked past, in order: empty for a read asked whole, none for one asked around a stall. */
+  const itemsAsked: (string | undefined)[] = [];
   /** Each change of a queue the service was asked, as it was asked. */
   const queueChanges: AgentQueueChange[] = [];
   let scope: typeof LIVE_ANSWERED | { readonly failure: "not-found" } | undefined;
@@ -277,7 +279,7 @@ function fakeService() {
     ),
     scope: polledLive(SCOPE_PARTS),
     account: polledLive(ACCOUNT_PARTS),
-    items: polledLive(ITEMS_PARTS),
+    items: polledLive<(typeof ITEMS_PARTS)[number], typeof LIVE_SIGNED_OUT>(ITEMS_PARTS),
     memories: polledLive(MEMORIES_PARTS),
     origin: polledLive(["origin"]),
     // A Manager's chat: its newest page, followed; and the older page a read before a `seq` is answered at once, whatever `seq` it names.
@@ -411,6 +413,8 @@ function fakeService() {
   /** The account's items as their live read answers them, by the sync id the follow asks past. */
   const accountItemsLive = (userId: string | undefined, sync: string | undefined) =>
     Effect.suspend((): Effect.Effect<unknown> => {
+      itemsAsked.push(sync);
+
       if (sync === "") asked.push(`account-items-live:${userId}`);
 
       if (sync === undefined) asked.push(`account-items-whole:${userId}`);
@@ -1071,6 +1075,7 @@ function fakeService() {
   return {
     client,
     asked,
+    itemsAsked,
     queueChanges,
     live,
     /** Whether the service answers a transcript's live read, or that the account reaches no such agent; none answers unanswered. */
@@ -1149,7 +1154,8 @@ function fakeService() {
     },
     /** Holds the account items' sync id where it stands, as a long transaction does, so each read past it is answered nothing moved. */
     stallItems: () => {
-      itemsStalledAt = live.items.first().queries.stamps.digest;
+      const first = live.items.first();
+      itemsStalledAt = "failure" in first ? undefined : first.queries.stamps.digest;
     },
     /** The transaction a Start answers it committed in; none answers none. */
     startCommits: (txid: string | undefined) => {
@@ -1209,6 +1215,9 @@ export const NOW = 1_800_000_100_000;
 /** A transcript's live read as the test scripts it. */
 export type TranscriptLive = PolledLive<(typeof TRANSCRIPT_PARTS)[number], typeof LIVE_SIGNED_OUT>;
 
+/** The account's items' live read as a test drives it, which may refuse the session as signed out. */
+export type ItemsLive = PolledLive<(typeof ITEMS_PARTS)[number], typeof LIVE_SIGNED_OUT>;
+
 /** That the service answers a live read, its rows polled from the test's script (`polledLive`). */
 export const LIVE_ANSWERED = "answered";
 
@@ -1247,10 +1256,7 @@ const MEMORIES_PARTS = ["memories"] as const;
 const INSTALL_SCRIPT = "https://app.test/install.sh";
 
 /** The account's items' read as the service answers it, before it is read by sync id. */
-type ItemsAnswer = Exclude<
-  ReturnType<PolledLive<(typeof ITEMS_PARTS)[number]>["first"]>,
-  { failure: string }
->;
+type ItemsAnswer = Exclude<ReturnType<ItemsLive["first"]>, { failure: string }>;
 
 /** A row's text field `name`; none where it carries none. */
 function textOf<Row>(row: Row, name: string): string | undefined {
@@ -1517,6 +1523,7 @@ export function subject(
       held: (transcript?: { readonly agentId: string; readonly callId?: string }) =>
         transcripts(transcript).map((each) => each.rows),
       asked: service.asked,
+      itemsAsked: service.itemsAsked,
       queueChanges: service.queueChanges,
       startCommits: service.startCommits,
       leaveStartsUnanswered: service.leaveStartsUnanswered,

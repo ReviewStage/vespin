@@ -59,23 +59,28 @@ import {
  * on it moved is ordered again, every other's list told as the very one
  * told before, so a change costs the plans it moved rather than the
  * feed's whole. A read the service refused, or a follow that stopped, is
- * read again after `LIVE_RESTART`, whole, keeping what it told; one refused
- * before it ever answered is told as failed.
+ * read again after `LIVE_RESTART`, keeping what it told, past the sync id
+ * the local database keeps where it keeps one, and whole otherwise; one
+ * refused before it ever answered is told as failed.
  *
  * Each answer is kept in the local database (`PoolRead.kept`): every item
  * as the follow took them from the service, never with a write drawn over
  * them, with the plan each is on and the sync id they were read at as the
- * read's cursor, each answer writing only the items that moved. The follow
- * draws what the database held as its read stands, before it reads, so a
- * launch draws the Inbox at once, and its first attempt reads past the sync
- * id kept where the database kept every item, since a read past an id
- * answers every item that moved since it; where it kept fewer, as one kept
- * by a build that kept only the first items, the first read is whole, since
- * an item left out that never moved would never be answered again. Note
- * that the items are kept however many there are, because the read the
- * kept Inbox spares, a busy account's whole Inbox, costs the service
- * seconds and carries the same items the launch would decode anyway; a
- * phone keeps its Inbox on disk row by row instead (`account-items-stored.ts`).
+ * read's cursor, each answer writing only the items that moved. Each
+ * attempt draws what the database holds as its read stands, before it
+ * reads, so a launch draws the Inbox at once, and reads past the sync id
+ * kept where the database kept every item, since a read past an id answers
+ * every item that moved since it; where it kept fewer, as one kept by a
+ * build that kept only the first items, the read is whole, since an item
+ * left out that never moved would never be answered again. Note that an
+ * attempt started again, after a refusal or a follow that stopped, reads
+ * past the id kept as a launch does, because each answer the follow took
+ * wrote its items and its id there together, and reading a busy account's
+ * Inbox whole for it cost the service seconds. Note that the items are
+ * kept however many there are, because the read the kept Inbox spares, a
+ * busy account's whole Inbox, costs the service seconds and carries the
+ * same items the launch would decode anyway; a phone keeps its Inbox on
+ * disk row by row instead (`account-items-stored.ts`).
  *
  * Beside them it keeps the tasks the items stand on as the task list summed
  * them up when the items were kept (`keptHolders`), the latest changed
@@ -383,15 +388,11 @@ export function followAccountItems(
 ): Effect.Effect<void> {
   /** Whether any read answered, so a later refusal keeps what was told. */
   let answered = false;
-  /** Whether no attempt has read yet, so the first alone reads past the sync id the local database kept. */
-  let firstAttempt = true;
   /** The tasks the local database kept beside the items it held as the follow stood, told beside every reading for as long as it stands; none where it kept none. */
   let keptHolders: readonly TaskSummary[] = [];
 
   const attempt = Effect.scoped(
     Effect.gen(function* () {
-      const resumes = firstAttempt;
-      firstAttempt = false;
       let wait: TxWait | undefined;
       /** Every item as the follow last took it, with its plan. */
       let held: Held | undefined;
@@ -451,7 +452,6 @@ export function followAccountItems(
           seal: (sync) => dependencies.seal(userId, sync),
           pool: dependencies.pool,
           items,
-          resumes,
           tasksListed: dependencies.tasksListed ?? noneListed,
           onTxWait: (handed) => {
             wait = handed;
@@ -511,9 +511,9 @@ export function followAccountItems(
         yield* toldNow;
       }
 
-      // Note that the first read goes past the sync id kept only where the local database kept every item, since one left out that never moved would never be answered again.
+      // Note that the read goes past the sync id kept only where the local database kept every item, since one left out that never moved would never be answered again.
       const every = kept !== undefined && stored.length === Object.keys(kept.plans).length;
-      const from = resumes && every ? (kept.at ?? "") : "";
+      const from = every ? (kept.at ?? "") : "";
 
       const first = yield* dependencies.seal(userId, from);
 
