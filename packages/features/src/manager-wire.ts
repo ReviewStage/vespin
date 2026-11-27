@@ -18,7 +18,7 @@ import { workspaceIdSchema } from "./task-wire.js";
 import { trimmedText } from "./text-schema.js";
 
 /** How much a Manager is made with: the repositories it works in, at most. */
-const MANAGER_BOUNDS = {
+export const MANAGER_BOUNDS = {
   MAX_REPOSITORIES: 10,
 } as const;
 

@@ -1791,7 +1791,7 @@ function withReset(words: string, refusal: HostedRefusal): string {
 }
 
 /** A start's refusal in the model's words. */
-function startRefusalWords(refusal: HostedRefusal): string {
+export function startRefusalWords(refusal: HostedRefusal): string {
   if (refusal.localAgentRefusal === LOCAL_AGENT_REFUSAL.NOT_OWNER) {
     return notOwnerWords(refusal.refusedDevice);
   }

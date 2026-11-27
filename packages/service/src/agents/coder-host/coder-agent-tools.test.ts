@@ -236,6 +236,7 @@ import {
   READ_CHAT_THREAD_TOOL,
   SEARCH_CHAT_TOOL,
 } from "./manager-chat-tools.js";
+import { CREATE_MANAGER_TOOL } from "./manager-create.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import type { SummaryModelOf } from "./replay-summary.js";
 import { NativeAgentSessions } from "./runtime-sessions.js";
@@ -1473,6 +1474,30 @@ test("start_agent from a Manager starts the agent as the member whose line opene
   });
 });
 
+test("create_manager makes the Manager in its caller's workspace as the member whose line opened its turn", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const owner = agents.caller.userId;
+  const asker = agents.teammates.userId;
+  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGERS, true);
+  const manager = await managerOn(owner, workspaceId);
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), manager, agentSessions.services);
+  await database.run(openRunningTurn(manager, [{ member: asker }]));
+
+  const made = await storedStart(
+    asker,
+    await call(
+      AGENT_TOOL.CREATE_MANAGER,
+      { name: "Billing", repositories: [RELAY_FULL_NAME], model: OPUS, effort: "low" },
+      "call-manager",
+    ),
+  );
+
+  assert.equal(made.userId, asker);
+  assert.equal(made.organizationId, workspaceId);
+  assert.equal(made.kind, AGENT_KIND.MANAGER);
+});
+
 test("start_agent leaves an unassigned backlog task's assignee and status as they stood", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
@@ -1963,6 +1988,14 @@ test("a Manager's chat reads show the model the recorded inputs", async () => {
 
 test("chat_react shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "react-chat-input", REACT_CHAT_TOOL.inputSchema);
+});
+
+test("create_manager shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "create-manager-input",
+    CREATE_MANAGER_TOOL.inputSchema,
+  );
 });
 
 test("send_slack_message shows the model the recorded input", async () => {
