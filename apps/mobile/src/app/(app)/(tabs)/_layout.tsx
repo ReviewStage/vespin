@@ -151,6 +151,8 @@ function PlacesSlot() {
 
   // Note that the Inbox turned off while it stands gives way to Tasks, as the iPhone's tab bar moves off a tab it hides, since the sidebar no longer offers it: by the same navigation the sidebar's Tasks row makes, heard only while a place's own route is focused, so never under a sheet such as Settings, only once it has gone.
   useEffect(() => {
+    // DIAGNOSTIC (not for merge).
+    console.warn(`VESPIN-DIAG placesSlot inboxShown=${inboxShown} onInbox=${onInbox} segments=${JSON.stringify(segments)}`);
     if (!inboxShown && onInbox) router.navigate(SPLIT_TAB.TASKS);
   }, [inboxShown, onInbox, router]);
 
