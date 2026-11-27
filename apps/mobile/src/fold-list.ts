@@ -25,7 +25,7 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { heldValue, useHeldValue } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Option } from "effect";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Settings } from "react-native";
 import { appStateQuery } from "./host/app-state-query.js";
 import { type DeviceKept, useViewChoice } from "./view-choices.js";
@@ -50,6 +50,9 @@ export interface FoldListOptions<Key extends ListFoldKey> {
   readonly kept?: DeviceKept<ViewChoiceValue<Key>> | undefined;
 }
 
+/** A value held outside React, which every screen reads and is told of as it changes. */
+type Held<T> = ReturnType<typeof heldValue<T>>;
+
 /** No fold. */
 const NONE: readonly never[] = [];
 
@@ -58,6 +61,22 @@ const NOTHING_WAITING: FoldsWaiting<never> = { accountId: undefined, presses: NO
 
 /** No list kept on the device, for a key no earlier build kept. */
 const NOTHING_KEPT = heldValue<undefined>(undefined);
+
+/**
+ * The presses waiting for each list, by its key: one queue for the phone,
+ * whatever screens read the list, so every screen draws a press made on
+ * any, and the first to see the account's list read writes them once.
+ */
+const WAITING = new Map<ListFoldKey, Held<FoldsWaiting<unknown>>>();
+
+/** The presses waiting for `key`'s list, one queue for every screen reading it. */
+function waitingFor<Key extends ListFoldKey>(key: Key): Held<FoldsWaiting<FoldId<Key>>> {
+  const standing = WAITING.get(key) ?? heldValue<FoldsWaiting<unknown>>(NOTHING_WAITING);
+  WAITING.set(key, standing);
+
+  // SAFETY: a key's queue is only ever filled with that key's ids (`useFoldList`'s `press`), so what it holds is a queue of them.
+  return standing as Held<FoldsWaiting<FoldId<Key>>>;
+}
 
 /** The account signed in, as a `select`; none while nobody is. */
 function selectAccountId(state: AppStateSnapshot): string | undefined {
@@ -75,7 +94,10 @@ function unbounded<Id>(ids: readonly Id[]): readonly Id[] {
  * it at once; and the press that folds one id in or out. A press made
  * before the account's list is read waits for it, and is then laid over it
  * (`foldsToWrite`), as is a list the device kept where the account keeps
- * none, in one write.
+ * none, in one write. Note that the presses and the device's list are one
+ * for the phone, and the first screen to see the account's list read takes
+ * both as they stand then, never as it last drew them, so two screens
+ * reading one list never write it twice, one over the other.
  */
 export function useFoldList<Key extends ListFoldKey>(
   key: Key,
@@ -84,42 +106,45 @@ export function useFoldList<Key extends ListFoldKey>(
   const { value, answered, choose } = useViewChoice(key, null, refused);
   const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
   const left = useHeldValue(kept?.left ?? NOTHING_KEPT);
-  const [waiting, setWaiting] = useState<FoldsWaiting<FoldId<Key>>>(NOTHING_WAITING);
+  const queue = waitingFor(key);
+  const waiting = useHeldValue(queue);
   const presses = pressesFor(waiting, accountId);
   // SAFETY: each list key's value is a list of its ids (`ListFoldKey`).
   const saved = Option.getOrElse(value, () => left ?? NONE) as readonly FoldId<Key>[];
   const unkept = Option.isNone(value);
   const drawn = useMemo(() => foldsPressed(saved, presses), [saved, presses]);
 
-  // Note that once the account's list is read, the device's earlier list moves up where the account keeps none and is let go either way, and the presses that waited are laid over the list standing then, in one write; those another account made, before a sign-out, are dropped.
+  // Note that once the account's list is read, the presses that waited and the device's earlier list are taken as they stand now and let go before the write, so a screen whose draw is older finds nothing left to write; presses another account made, before a sign-out, are dropped.
   useEffect(() => {
-    if (waiting.presses.length > 0 && presses.length === 0) {
-      setWaiting(NOTHING_WAITING);
+    const queued = queue.read();
+    const keptNow = kept?.left.read();
+    const pressed = pressesFor(queued, accountId);
+
+    if (queued.presses.length > 0 && pressed.length === 0) {
+      queue.set(NOTHING_WAITING);
 
       return;
     }
 
-    if (!answered) return;
+    if (!answered || (keptNow === undefined && pressed.length === 0)) return;
+    queue.set(NOTHING_WAITING);
 
-    if (kept !== undefined && left !== undefined) {
-      if (unkept || presses.length > 0) choose(bounded(foldsPressed(saved, presses)));
+    if (kept !== undefined && keptNow !== undefined) {
       Settings.set({ [kept.name]: null });
       kept.left.set(undefined);
-      setWaiting(NOTHING_WAITING);
-
-      return;
     }
 
-    const written = foldsToWrite({ answered, saved }, presses);
+    // SAFETY: each list key's value is a list of its ids (`ListFoldKey`).
+    const base = Option.getOrElse(value, () => keptNow ?? NONE) as readonly FoldId<Key>[];
 
-    if (written === undefined) return;
-    setWaiting(NOTHING_WAITING);
-    choose(bounded(written));
-  }, [answered, saved, unkept, left, kept, waiting, presses, choose, bounded]);
+    if (unkept || pressed.length > 0) choose(bounded(foldsPressed(base, pressed)));
+  }, [answered, value, unkept, kept, queue, accountId, waiting, left, choose, bounded]);
 
   const press = (id: FoldId<Key>, on: boolean) => {
     const written =
-      left === undefined ? foldsToWrite({ answered, saved }, [{ id, on }]) : undefined;
+      left === undefined && presses.length === 0
+        ? foldsToWrite({ answered, saved }, [{ id, on }])
+        : undefined;
 
     if (written !== undefined) {
       choose(bounded(written));
@@ -127,7 +152,8 @@ export function useFoldList<Key extends ListFoldKey>(
       return;
     }
 
-    setWaiting((was) => ({ accountId, presses: [...pressesFor(was, accountId), { id, on }] }));
+    const was = queue.read();
+    queue.set({ accountId, presses: [...pressesFor(was, accountId), { id, on }] });
   };
 
   return [drawn, press];
