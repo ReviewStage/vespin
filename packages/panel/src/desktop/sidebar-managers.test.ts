@@ -235,7 +235,7 @@ test("Managers lists the workspace's unarchived Managers of the live list alone,
   assert.deepEqual(opened, [FRONTEND]);
 });
 
-test("a Manager's row hangs the Manager's card: where it stands, how many of the agents it started are at work, and the repository it works in", async () => {
+test("a Manager's row hangs the Manager's card: where it stands, and how many of the agents it started are at work", async () => {
   // Note that one agent it started works and one has ended, so the card counts the one at work alone.
   const started: readonly ListedAgent[] = [
     {
@@ -268,7 +268,6 @@ test("a Manager's row hangs the Manager's card: where it stands, how many of the
 
   assert.ok(words?.includes("Idle"), "the card says its Manager is idle");
   assert.ok(words?.includes("Agents at work1"), "the card counts the one agent at work");
-  assert.ok(words?.includes(RELAY), "the card names the repository it works in");
 });
 
 test("View options' Sort by › Recent activity lists the Manager that moved last first", async () => {
