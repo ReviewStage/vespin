@@ -223,6 +223,13 @@ import {
   fixtureGeneratedChapters,
 } from "./fixture-pull-requests.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
+import {
+  FIXTURE_DONE_WORKER_CALL,
+  FIXTURE_WORKER_AGENT_ID,
+  fixtureDoneWorkerTranscript,
+  fixtureWorkerAgent,
+  fixtureWorkerTranscript,
+} from "./fixture-worker-agent.js";
 
 export { FIXTURE_RECORDING_ID } from "./fixture-agent-transcript.js";
 
@@ -1025,6 +1032,14 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
     agentOn(AGENT.ROUNDING, TASK.ROUNDING, "Fix ledger rounding", AGENT_STATUS.COMPLETED, 5 * DAY),
   ],
 ]);
+
+/** How long before the fixture landed the agent that hands its work to workers was started, a few minutes, so its worker still at work counts a short while. */
+const WORKER_AGENT_AGO = 3 * MINUTE;
+
+/** The agent that hands its work to workers, whose page draws each delegation's row and opens its finished worker: staged for its page and its transcripts alone, in no task's list (`fixture-worker-agent.ts`). */
+const WORKER_AGENT = fixtureWorkerAgent(
+  agentOn(AGENT.ROUNDING, TASK.ROUNDING, "", AGENT_STATUS.RUNNING, WORKER_AGENT_AGO),
+);
 
 /** When the release Manager was started, which its chat counts from. */
 const MANAGER_STARTED = LANDED - 2 * HOUR;
@@ -2212,6 +2227,10 @@ const DIGEST_TRANSCRIPT = fixtureDigestTranscript(DIGEST_STARTED, ADA, "Send the
 /** The release Manager's run, whose turns' work its chat keeps a press away. */
 const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
 
+/** The run of the agent that hands its work to workers, and its finished worker's, which its row opens. */
+const WORKER_AGENT_TRANSCRIPT = fixtureWorkerTranscript(LANDED - WORKER_AGENT_AGO, ADA);
+const DONE_WORKER_TRANSCRIPT = fixtureDoneWorkerTranscript(LANDED - WORKER_AGENT_AGO);
+
 /** The release Manager's turn, which its two messages were sent in (`fixtureManagerTranscript`). */
 const MANAGER_TURN = "fixture-manager-turn";
 
@@ -2371,7 +2390,7 @@ function withQueued(transcript: AppTranscript): AppTranscript {
   return { ...transcript, word: { ...word, queue: { messages: queued, revision: 1 } } };
 }
 
-/** The transcripts main holds with the invitations, rounding, and digest agents' and the Manager's laid over them, one object for each of main's. */
+/** The transcripts main holds with the invitations, rounding, and digest agents' and the Manager's laid over them, and the worker agent's with its finished worker's, one object for each of main's. */
 const STAGED_TRANSCRIPTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
@@ -2390,6 +2409,11 @@ function stagedTranscripts(
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
     [AGENT.DIGEST]: { ...held[AGENT.DIGEST], [OWN_TRANSCRIPT]: { rows: DIGEST_TRANSCRIPT } },
     [AGENT.MANAGER]: { ...held[AGENT.MANAGER], [OWN_TRANSCRIPT]: { rows: MANAGER_TRANSCRIPT } },
+    [FIXTURE_WORKER_AGENT_ID]: {
+      ...held[FIXTURE_WORKER_AGENT_ID],
+      [OWN_TRANSCRIPT]: { rows: WORKER_AGENT_TRANSCRIPT },
+      [FIXTURE_DONE_WORKER_CALL]: { rows: DONE_WORKER_TRANSCRIPT },
+    },
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);
@@ -3348,7 +3372,7 @@ function stagedItem(itemId: string): InboxItem | undefined {
 
 /** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER, WORKER_AGENT].find((each) => each.id === agentId);
 }
 
 /* ----- The automations ----- */
