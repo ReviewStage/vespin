@@ -1,0 +1,11 @@
+pinned to 1a57025ae2
+== bundle PJjrepro5272a base 1a57025ae2
+  built 1a57025ae2 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-dark-transcript-open: fails 10 shots 28     Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  iphone-dark-transcript-open shots: at-failure.png repro-back-down.png repro-brief-end.png repro-brief-start.png repro-card-closed.png repro-card-open.png repro-control-end.png repro-control-start.png repro-sent-working.png repro-tapped-settled.png step-050-assertCondition-Stop.png step-055-runFlow.png step-059-runFlow.png step-060-scrollUntilVisible-${ELEMENT}.png step-063-runFlow.png step-067-runFlow.png step-068-scrollUntilVisible-${ELEMENT}.png step-071-runFlow.png step-075-runFlow.png step-076-scrollUntilVisible-${ELEMENT}.png step-080-tapOnElement-Prompt,_Long_brief_check_th.png step-083-runFlow.png step-088-runFlow.png step-089-scrollUntilVisible-${ELEMENT}.png step-092-runFlow.png step-096-runFlow.png step-097-scrollUntilVisible-${ELEMENT}.png transcript-open-latest.png transcript-open-tapped.png 
+iphone-light-transcript-open: fails 10 shots 28     Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  iphone-light-transcript-open shots: at-failure.png repro-back-down.png repro-brief-end.png repro-brief-start.png repro-card-closed.png repro-card-open.png repro-control-end.png repro-control-start.png repro-sent-working.png repro-tapped-settled.png step-050-assertCondition-Stop.png step-055-runFlow.png step-059-runFlow.png step-060-scrollUntilVisible-${ELEMENT}.png step-063-runFlow.png step-067-runFlow.png step-068-scrollUntilVisible-${ELEMENT}.png step-071-runFlow.png step-075-runFlow.png step-076-scrollUntilVisible-${ELEMENT}.png step-080-tapOnElement-Prompt,_Long_brief_check_th.png step-083-runFlow.png step-088-runFlow.png step-089-scrollUntilVisible-${ELEMENT}.png step-092-runFlow.png step-096-runFlow.png step-097-scrollUntilVisible-${ELEMENT}.png transcript-open-latest.png transcript-open-tapped.png 

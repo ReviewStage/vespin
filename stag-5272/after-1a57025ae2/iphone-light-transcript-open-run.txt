@@ -1,0 +1,134 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow .kbd-transcript-open
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7})... COMPLETED
+Assert that "Rounding is settled: every total now rounds half-cents to even.*" is visible... COMPLETED
+Assert that "Where do totals round today\?" is not visible... COMPLETED
+Take screenshot transcript-open-latest... COMPLETED
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Run subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+      Run flow when "Collapsed" is visible...
+      Run flow when "Collapsed" is visible... SKIPPED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: tasks-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when "${TAB}" is not visible and ${FLOATING_TABS == 'true'} is true...
+  Run flow when "Tasks" is not visible and false is true... SKIPPED
+  Run flow when "${TAB}", id: place-row is visible and ${FLOATING_TABS == 'true'} is true...
+  Run flow when "Tasks", id: place-row is visible and false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run subflows/tab.yaml... COMPLETED
+Run flow when "Search tasks" is not visible...
+  Tap on "Search", Above "Tab Bar"... COMPLETED
+Run flow when "Search tasks" is not visible... COMPLETED
+Tap on "Search tasks"... COMPLETED
+Run flow when "Speed up your typing.*" is visible...
+Run flow when "Speed up your typing.*" is visible... SKIPPED
+RIG: the software keyboard stands before the first inputText... COMPLETED
+Input text rounding... COMPLETED
+Assert that "Ledger rounding" is visible... COMPLETED
+Tap on "Ledger rounding"... COMPLETED
+Assert that "Created by .*" is visible... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+    Scrolling DOWN until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+Run subflows/scroll-in.yaml... COMPLETED
+Wait for animation to end... COMPLETED
+Tap on "Fix ledger rounding"... COMPLETED
+Assert that "Rounding is settled: every total now rounds half-cents to even.*" is visible... COMPLETED
+Assert that "Where do totals round today\?" is not visible... COMPLETED
+Take screenshot transcript-open-tapped... COMPLETED
+Tap on id: composer-field... COMPLETED
+Input text Probe line: keep going.... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that (Optional) "Stop" is visible... WARNED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot repro-sent-working... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot repro-tapped-settled... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+    Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  Run flow when true is true... FAILED
+Run subflows/scroll-in.yaml... WARNED
+Wait for animation to end... COMPLETED
+Take screenshot repro-control-end... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+    Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  Run flow when true is true... FAILED
+Run subflows/scroll-in.yaml... WARNED
+Wait for animation to end... COMPLETED
+Take screenshot repro-control-start... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+    Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  Run flow when true is true... FAILED
+Run subflows/scroll-in.yaml... WARNED
+Wait for animation to end... COMPLETED
+Assert that (Optional) "End of the long brief\." is not visible... COMPLETED
+Take screenshot repro-card-closed... COMPLETED
+Tap on (Optional) "Prompt, Long brief: check that every pull request.*"... WARNED
+Wait for animation to end... COMPLETED
+Take screenshot repro-card-open... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+    Scrolling DOWN until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  Run flow when true is true... FAILED
+Run subflows/scroll-in.yaml... WARNED
+Wait for animation to end... COMPLETED
+Take screenshot repro-brief-end... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+    Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  Run flow when true is true... FAILED
+Run subflows/scroll-in.yaml... WARNED
+Wait for animation to end... COMPLETED
+Take screenshot repro-brief-start... COMPLETED
+Run subflows/scroll-in.yaml...
+  Run flow when ${BESIDE != 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE != 'true' && DIRECTION != 'UP'} is true...
+    Scrolling DOWN until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${BESIDE == 'true' && DIRECTION == 'UP'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when ${BESIDE == 'true' && DIRECTION != 'UP'} is true...
+  Run flow when false is true... SKIPPED
+Run subflows/scroll-in.yaml... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot repro-back-down... COMPLETED
+
+No visible element found: "Long brief: check that every pull request.*"
+
+Could not find a visible element matching selector: "Long brief: check that every pull request.*"
+Tip: Try adjusting the following settings to improve detection:
+- `timeout`: current = 20000ms → Increase if you need more time to find the element
+- `speed`: current = 40 (0-100 scale) → Increase for faster scrolling if element is far away
+- `waitToSettleTimeoutMs`: current = Not defined → Set this value (e.g., 500ms) if your UI updates frequently between scrolls
+- `visibilityPercentage`: current = 100% → Lower this value if you want to detect partially visible elements
+- `centerElement`: current = false → Enable if you want the element to be centered after finding it
+
