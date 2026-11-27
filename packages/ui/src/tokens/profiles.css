@@ -24,8 +24,8 @@
   /* The window sets no display face of its own; its largest words are the system's. */
   --ui-font-display: var(--ui-font-sans);
 
-  --ui-control-height: 30px;
-  --ui-control-radius: var(--ui-radius-10);
+  --ui-control-height: 34px;
+  --ui-control-radius: var(--ui-radius-12);
   --ui-control-icon: var(--ui-icon-16);
   /* The least a press is taken across on a coarse pointer, a finger's: a
      control drawn smaller keeps its size and takes the press around it. */
@@ -37,7 +37,7 @@
   /* The least of a bar's title that reads: a bar that would cut it shorter
      on one row stands it on a row of its own (`use-wrap-when-cut.ts`). */
   --ui-title-floor: calc(10 * var(--ui-space-12));
-  --ui-control-inset: var(--ui-space-12);
+  --ui-control-inset: var(--ui-space-16);
   --ui-control-gap: var(--ui-space-8);
   /* How far every control fades while it cannot be used: one look, so a
      switched-off button, field, switch and menu row read as the same state. */
@@ -52,7 +52,7 @@
   /* The gap between a glyph, mark, face or picture and the words beside it, in the iOS app's three steps (`SPACE.GLYPH_GAP`) by the size of what draws the pair: compact in a chip, a badge or a caption-size line, regular in a capsule, a breadcrumb or a row's line above its words, and row, which is `--ui-icon-gap`, in a row, a menu, a control or an editing line. */
   --ui-icon-gap-compact: var(--ui-space-4);
   --ui-icon-gap-regular: var(--ui-space-6);
-  --ui-icon-gap: var(--ui-space-8);
+  --ui-icon-gap: var(--ui-space-10);
   /* A settings row's pop-up stands in one column whatever value it names. */
   --ui-select-field-width: 200px;
   --ui-field-gap: var(--ui-space-16);
@@ -83,6 +83,10 @@
   --ui-sidebar-row-gap: var(--ui-space-6);
   --ui-sidebar-places-gap: var(--ui-space-4);
   --ui-sidebar-group-gap: var(--ui-space-24);
+  /* A task list's row: the room it keeps over and under a control's height. */
+  --ui-task-row-block: var(--ui-space-2);
+  /* How many lines an agent's empty box stands, before it grows with its words. */
+  --ui-composer-least-lines: 2;
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's
@@ -255,7 +259,7 @@
   /* A hover hint: the pill's own corner and lift, as it was drawn before it
      was shared, the widest it stands (the window, less twice tooltip.tsx's
      TOOLTIP_MARGIN), and the width of a card hung in its place. */
-  --ui-tooltip-radius: 7px;
+  --ui-tooltip-radius: var(--ui-radius-8);
   --ui-tooltip-shadow: 0 4px 14px var(--ui-color-shadow);
   --ui-tooltip-max-width: calc(var(--ui-stage-width) - 12px);
   --ui-tooltip-card-width: 280px;
@@ -271,9 +275,9 @@
     calc(var(--ui-stage-height) * 0.4)
   );
 
-  --ui-menu-row-height: 32px;
-  --ui-menu-row-radius: var(--ui-radius-8);
-  --ui-menu-inset: var(--ui-space-4);
+  --ui-menu-row-height: 36px;
+  --ui-menu-row-radius: var(--ui-radius-10);
+  --ui-menu-inset: var(--ui-space-6);
   /* A row's corner and the inset together, so a highlighted row follows the menu's curve. */
   --ui-menu-radius: calc(var(--ui-menu-row-radius) + var(--ui-menu-inset));
   /* The glyph slot every menu row keeps, at its end as at its start. */
@@ -390,6 +394,10 @@
   --ui-sidebar-row-gap: var(--ui-list-gap);
   --ui-sidebar-places-gap: var(--ui-list-gap);
   --ui-sidebar-group-gap: var(--ui-section-gap);
+  /* A task list's row: the room it keeps over and under a control's height. */
+  --ui-task-row-block: var(--ui-space-6);
+  /* How many lines an agent's empty box stands, before it grows with its words. */
+  --ui-composer-least-lines: 1;
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's
@@ -637,8 +645,16 @@
    keep iOS from zooming into it. */
 @media not all and (pointer: coarse) {
   [data-ui-profile="web"][data-ui-density="compact"] {
-    --ui-control-height: 32px;
-    --ui-control-inset: var(--ui-space-12);
+    --ui-control-height: 34px;
+    --ui-control-inset: var(--ui-space-16);
+    --ui-control-radius: var(--ui-radius-12);
+    --ui-icon-gap: var(--ui-space-10);
+    --ui-menu-inset: var(--ui-space-6);
+    --ui-menu-row-radius: var(--ui-radius-10);
+    --ui-tooltip-radius: var(--ui-radius-8);
+    /* A task list's row stands as tall as the site's did, under the taller controls. */
+    --ui-task-row-block: var(--ui-space-4);
+    --ui-composer-least-lines: 2;
 
     --ui-type-body-size: 14px;
     --ui-type-body-leading: 20px;
@@ -647,8 +663,8 @@
     --ui-type-title-size: 22px;
     --ui-type-title-leading: 30px;
 
-    /* A compact menu's rows are its controls' height, as the site's are. */
-    --ui-menu-row-height: 32px;
+    /* A compact menu's rows, a step over its controls' height. */
+    --ui-menu-row-height: 36px;
 
     /* The sidebar's rows, as the window's stand them. */
     --ui-sidebar-row-height: 32px;
