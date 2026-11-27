@@ -29,10 +29,11 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { MACHINE_ASK_DECISION, type MachineAskDecision } from "@repo/features/machine-ask-wire";
 import { timeLeftText } from "@repo/features/time-format";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { Text } from "./text.js";
+import { useTickingNow } from "./ticking-now.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -52,9 +53,6 @@ const MACHINE_ASK_WORDS = {
   DENY_TITLE: "Deny this ask?",
   NOTE: "Tell the agent why (optional)",
 } as const;
-
-/** How often the time left is drawn again: each second, as the panel's countdown ticks. */
-const TICK_MS = 1000;
 
 /** Which of its two faces the sheet shows: the ask, or Deny's words for the agent. */
 const ASK_FACE = { ASK: "ask", DENY: "deny" } as const;
@@ -78,20 +76,6 @@ type MachineAskSheetProps = {
   /** Called as the sheet is dragged away unanswered, which sets the ask aside on this phone. */
   readonly onDismiss: () => void;
 };
-
-/** The clock, read again each second while `ticking`, so a countdown drawn from it moves; still otherwise. */
-function useTickingNow(ticking: boolean): number {
-  const [now, setNow] = useState(Date.now);
-
-  useEffect(() => {
-    if (!ticking) return;
-    const tick = setInterval(() => setNow(Date.now()), TICK_MS);
-
-    return () => clearInterval(tick);
-  }, [ticking]);
-
-  return now;
-}
 
 /** The sheet's head: the machine's glyph and name, and the time the ask has left, or Timed out. */
 function AskHead({ machine, expiresAt }: { readonly machine: string; readonly expiresAt: number }) {

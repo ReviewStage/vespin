@@ -10,6 +10,7 @@ import {
   chatWorkWords,
 } from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
+import { workingTime } from "@repo/features/time-format";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { Predicate } from "effect";
@@ -42,6 +43,8 @@ import {
   ThreadRule,
 } from "./channel-row.js";
 import { BUBBLE_PADDING, BUBBLE_SHARE, CHAT_SIDE, ChatBubble, chatRunOf } from "./chat-bubble.js";
+import { ChipMarkView } from "./chip-mark.js";
+import { CHIP_MARK } from "./chip-mark-model.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
 import { GitHubLineCard } from "./github-line-card.js";
@@ -71,6 +74,7 @@ import { LoaderImage, PICTURE_FIT, type PictureRef, usePictureRef } from "./pict
 import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
+import { useTickingNow } from "./ticking-now.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE } from "./tokens/type.js";
@@ -139,6 +143,12 @@ const COLLAPSED_HEARD = "Collapsed";
 /** What a press on a call's line, or a fold's, is heard to do. */
 const CALL_HINT = "Shows or hides the call's input and output";
 const FOLD_HINT = "Shows or hides the steps it holds";
+
+/** What a press on a worker's row is heard to do: open its page, or, where it opens none, show its task and answer. */
+const WORKER_HINT = {
+  OPENS: "Opens the subagent",
+  FOLDS: "Shows or hides the subagent's task and answer",
+} as const;
 
 /** What the spinner over the oldest row is heard as while an older page is read. */
 const READING_OLDER = "Loading earlier messages";
@@ -212,6 +222,7 @@ const styles = StyleSheet.create({
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
   callWords: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
   wrapped: { flexWrap: "wrap" },
+  failure: { flexDirection: "row", alignItems: "flex-start", gap: SPACE.TIGHT + 2 },
   chip: {
     flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1019,6 +1030,8 @@ interface RowDrawing {
   /** Opens a link or a chip a message names, by the address it was written as, where the app draws it or in Safari. */
   readonly onOpenLink: (address: string) => void;
   readonly onToggle: (item: TranscriptItem) => void;
+  /** Opens a worker's own page, its transcript, by the item of the delegation that started it; none where the screen opens no worker, when a worker's row folds open on its task and answer, as on a worker's own page. */
+  readonly onOpenWorker?: ((item: WorkerItem) => void) | undefined;
   /** Opens a page the agent showed whole, by the item that names it. */
   readonly onOpenPage: (
     item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>,
@@ -1069,6 +1082,9 @@ export type MessageItem = Extract<
 
 /** A pull request an agent opened, as the transcript lists it. */
 type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
+
+/** A delegation to a worker, as the transcript lists it. */
+type WorkerItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.WORKER }>;
 
 /** What a picture a sent line kept by its id is drawn from, read as the agent's shown ones are; `null` for one the line names no way to, which stands as could not be read. */
 function saidSource(
@@ -1164,6 +1180,120 @@ function workActs(
       onPress: () => drawing.onToggle(item),
     },
   ];
+}
+
+/** How long a running worker has worked, beside its working mark, counted each second from when it began, as the panel's `WorkingTime` counts it. */
+function WorkerTime({ startedAt }: { readonly startedAt: number }) {
+  const colors = useColors();
+  const now = useTickingNow(true);
+
+  return (
+    <Text
+      style={{
+        fontSize: ROLE_SIZE.ROW_LINE,
+        color: colors.TEXT_MUTED,
+        fontVariant: ["tabular-nums"],
+      }}
+    >
+      {workingTime(now - startedAt)}
+    </Text>
+  );
+}
+
+/**
+ * A worker's row, as the panel's subagent row (`TranscriptSubagent`)
+ * stands: one line led by the mark of the harness its model runs in, or the
+ * worker's glyph where its model is not known, its job in the full ink, the
+ * pair it runs on in the muted one, how long it has worked while it runs,
+ * and where it stands at its end. A press opens the worker's own page,
+ * where its steps and its answer are read, so it folds nothing open; a
+ * native harness's subagent, whose work no page keeps, and a worker on a
+ * page that opens none, fold open on the task and the answer instead, as a
+ * call's row does. A failure stands under the line in the danger's ink,
+ * set in under the job's words, as a call's failure stands under its line.
+ */
+function WorkerRow({ item, drawing }: { readonly item: WorkerItem; readonly drawing: RowDrawing }) {
+  const colors = useColors();
+  const large = useAccessibilitySize();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+  const lines = large ? undefined : 1;
+  const running = item.standing === CALL_STANDING.RUNNING;
+  const { onOpenWorker, onToggle } = drawing;
+  const opens = onOpenWorker !== undefined && !item.native;
+  const standing = CALL_STANDING_HEARD[item.standing];
+
+  return (
+    <View style={[styles.row, inset(item.depth)]}>
+      <Press
+        onPress={() => (opens ? onOpenWorker(item) : onToggle(item))}
+        accessibilityRole="button"
+        accessibilityState={opens ? undefined : { expanded: item.open }}
+        accessibilityLabel={[item.job, item.pair].filter(Boolean).join(", ")}
+        accessibilityValue={{
+          text: opens || item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
+        }}
+        accessibilityHint={opens ? WORKER_HINT.OPENS : WORKER_HINT.FOLDS}
+        hitSlop={LINE_REACH}
+        style={styles.callLine}
+      >
+        {item.harness === undefined ? (
+          <SymbolView
+            name={glyphSymbol(GLYPH.AGENT)}
+            size={size}
+            tintColor={colors.TEXT_MUTED}
+            accessibilityElementsHidden
+          />
+        ) : (
+          <ChipMarkView
+            mark={{ kind: CHIP_MARK.HARNESS, harness: item.harness }}
+            size={size}
+            colors={colors}
+          />
+        )}
+        <View style={[styles.callWords, large ? styles.wrapped : null]}>
+          <Text
+            numberOfLines={lines}
+            style={{ flexShrink: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_BODY }}
+          >
+            {item.job}
+          </Text>
+        </View>
+        {item.pair === undefined ? null : (
+          <Text
+            numberOfLines={lines}
+            style={{ flexShrink: 0, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+          >
+            {item.pair}
+          </Text>
+        )}
+        {running && item.startedAt !== undefined ? <WorkerTime startedAt={item.startedAt} /> : null}
+        <StandingMark running={running} failed={item.standing === CALL_STANDING.FAILED} />
+      </Press>
+      {item.failure === undefined ? null : (
+        <View style={[styles.body, styles.failure]}>
+          <SymbolView
+            name={glyphSymbol(GLYPH.FAILED)}
+            size={size}
+            tintColor={colors.DANGER}
+            accessibilityElementsHidden
+          />
+          <Text
+            selectable
+            style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.DANGER_TEXT }}
+          >
+            {item.failure}
+          </Text>
+        </View>
+      )}
+      {item.open && !opens ? (
+        <View style={styles.body}>
+          {item.body.map((block) => (
+            <BodyBlock key={block.title} title={block.title} text={block.text} colors={colors} />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 /** One of the transcript's rows, as its kind draws it. */
@@ -1380,6 +1510,8 @@ function TranscriptRow({
           placeCall={drawing.placeCall}
         />
       );
+    case TRANSCRIPT_ITEM.WORKER:
+      return <WorkerRow item={item} drawing={drawing} />;
     case TRANSCRIPT_ITEM.FOLD:
       // Note that a Manager's turn's work folded over the message that opens its run stands under the Manager's head, its words then going on the run under it, as the panel stands the fold under the name.
       if (item.channel !== undefined && drawing.channel !== undefined && item.depth === 0) {

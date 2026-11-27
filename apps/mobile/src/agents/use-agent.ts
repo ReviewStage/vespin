@@ -318,29 +318,49 @@ export function useAgentRowActs(): {
   );
 }
 
+/** Whose transcript a page reads: the agent's own, or, naming the delegation call that started one, a worker's under it, as the panel's tab names it (`TRANSCRIPT_KIND`). */
+function transcriptKey(agentId: string, callId: string | undefined) {
+  return callId === undefined
+    ? { kind: TRANSCRIPT_KIND.AGENT, agentId }
+    : { kind: TRANSCRIPT_KIND.AGENT, agentId, callId };
+}
+
 /**
- * The agent's own transcript as the host holds it, held followed while the
- * page is in focus and let go as it leaves, as the panel's tab holds its
+ * The agent's own transcript as the host holds it, or one of its workers'
+ * where `callId` names the delegation that started it, held followed while
+ * the page is in focus and let go as it leaves, as the panel's tab holds its
  * own while it shows; none before the host holds it.
  */
-export function useAgentTranscript(agentId: string): AppHostRead<AppTranscript> | undefined {
+export function useAgentTranscript(
+  agentId: string,
+  callId?: string,
+): AppHostRead<AppTranscript> | undefined {
   const acts = useHostActs();
   const follow = useHostFollow();
   useFocusEffect(
     useCallback(
       () =>
         follow(
-          () => acts[ACT_KIND.AGENTS_TRANSCRIPT]({ kind: TRANSCRIPT_KIND.AGENT, agentId }),
+          () => acts[ACT_KIND.AGENTS_TRANSCRIPT](transcriptKey(agentId, callId)),
           () => undefined,
         ),
-      [acts, follow, agentId],
+      [acts, follow, agentId, callId],
     ),
   );
 
-  const select = useMemo(
-    () => selectTranscript({ kind: TRANSCRIPT_KIND.AGENT, agentId }),
-    [agentId],
-  );
+  const select = useMemo(() => selectTranscript(transcriptKey(agentId, callId)), [agentId, callId]);
+
+  return useQuery({ ...appStateQuery, select }).data;
+}
+
+/**
+ * The agent's own transcript as the host still holds it, never followed for
+ * it, so a page under the agent, such as a worker's, reads where each of its
+ * workers stands from what the agent's page already holds; none where the
+ * host holds none.
+ */
+export function useHeldTranscript(agentId: string): AppHostRead<AppTranscript> | undefined {
+  const select = useMemo(() => selectTranscript(transcriptKey(agentId, undefined)), [agentId]);
 
   return useQuery({ ...appStateQuery, select }).data;
 }
@@ -410,13 +430,15 @@ function mediaReadFailed(agentId: string, pictureId: string, cause: unknown, aga
   );
 }
 
-/** One picture, recording, or sound clip the agent showed, read through the host into what it is drawn from. */
+/** One picture, recording, or sound clip the agent showed, or a worker of it where `callId` names the delegation that started it, read through the host into what it is drawn from. */
 async function agentMediaSource(
   acts: ReturnType<typeof useHostActs>,
   agentId: string,
   pictureId: string,
   shown: PictureShown,
+  callId: string | undefined,
 ): Promise<string> {
+  const picture = callId === undefined ? { agentId, pictureId } : { agentId, pictureId, callId };
   const askedAt = performance.now();
   // Note that one shown before draws from the file its first read wrote, asking the host nothing.
   const kept = keptMedia(AGENT_MEDIA_PREFIX, pictureId);
@@ -429,8 +451,8 @@ async function agentMediaSource(
 
   // Note that one read the first time is downloaded by the phone straight into its file, its bytes never crossing into JavaScript; a host that downloads none, or a download that read nothing, reads it as bytes below.
   const downloaded = await downloadedMedia(AGENT_MEDIA_PREFIX, pictureId, randomUUID(), (path) =>
-    acts[ACT_KIND.AGENTS_PICTURE_FILE]({ agentId, pictureId, playable: MP4_TYPE, path }).then(
-      (answer) => ("contentType" in answer ? answer.contentType : undefined),
+    acts[ACT_KIND.AGENTS_PICTURE_FILE]({ ...picture, playable: MP4_TYPE, path }).then((answer) =>
+      "contentType" in answer ? answer.contentType : undefined,
     ),
   );
 
@@ -442,7 +464,7 @@ async function agentMediaSource(
   }
 
   // Note that a recording, or an Ogg clip, is asked for as its MP4 copy, which the system's player plays, where the service kept one; anything else is answered as it is.
-  const read = await acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE });
+  const read = await acts[ACT_KIND.AGENTS_PICTURE]({ ...picture, playable: MP4_TYPE });
 
   if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
 
@@ -468,7 +490,8 @@ export interface AgentMedia {
  * What each picture, recording, and sound clip the agent showed is drawn
  * from, by its id: the file an earlier read wrote under the app's caches,
  * this launch's or one before it (`keptMedia`), or else read once through
- * the host as the panel reads one (`ACT_KIND.AGENTS_PICTURE`): a picture
+ * the host as the panel reads one (`ACT_KIND.AGENTS_PICTURE`), a worker's
+ * under its agent where `callId` names the delegation that started it: a picture
  * written to a file of the caches, or a `data:` address where its type names
  * none, and a
  * recording or a clip, its MP4 copy where the service kept one, as a file of
@@ -482,7 +505,11 @@ export interface AgentMedia {
  * transcript's next change; and that each failure is written to the
  * device's log.
  */
-export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMedia {
+export function useAgentMedia(
+  agentId: string,
+  ids: readonly string[],
+  callId?: string,
+): AgentMedia {
   const acts = useHostActs();
   const pictureShown = usePictureShownCount(PRODUCT_PICTURE_KIND.AGENT);
 
@@ -507,7 +534,7 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
   // Note that the agent's reads stand while its page does, and are let go as another agent's page stands or the page leaves, so none that lands after is drawn.
   useEffect(() => {
     const standing = mediaReads({
-      read: (pictureId) => agentMediaSource(acts, agentId, pictureId, pictureShown),
+      read: (pictureId) => agentMediaSource(acts, agentId, pictureId, pictureShown, callId),
       landed: (pictureId, source) => stand(pictureId, source),
       // Note that a read whose every try failed stands failed, so it says so with Try again rather than spinning on.
       failed: (pictureId, cause, again) => {
@@ -521,7 +548,7 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
     setReads(standing);
 
     return () => standing.stop();
-  }, [acts, agentId, pictureShown]);
+  }, [acts, agentId, pictureShown, callId]);
 
   useEffect(() => reads?.ask(ids), [reads, ids]);
 
@@ -650,12 +677,13 @@ export interface WholeParts {
 /**
  * How each part its page carried cut stands read whole, read once through
  * the host as its call opens, as the panel's fold reads it
- * (`ACT_KIND.AGENTS_PART`). A read is held as of the size its page said, so
- * a part that grew since is read again, and one that failed stays failed,
- * its two ends drawn. A read that lands once another agent's page stands is
- * let go.
+ * (`ACT_KIND.AGENTS_PART`), a worker's under its agent where `callId`
+ * names the delegation that started it. A read is held as of the size its
+ * page said, so a part that grew since is read again, and one that failed
+ * stays failed, its two ends drawn. A read that lands once another agent's
+ * page stands is let go.
  */
-export function useWholeParts(agentId: string): WholeParts {
+export function useWholeParts(agentId: string, callId?: string): WholeParts {
   const acts = useHostActs();
 
   // Note that the reads are held apart from what is drawn, so an ask made twice before the first is drawn is sent once.
@@ -690,7 +718,9 @@ export function useWholeParts(agentId: string): WholeParts {
         if (held.current.parts.get(cut.messageId)?.get(cut.index)?.bytes === cut.bytes) continue;
         settle(cut, { state: WHOLE_PART.READING });
 
-        acts[ACT_KIND.AGENTS_PART]({ agentId, messageId: cut.messageId, index: cut.index }).then(
+        const part = { agentId, messageId: cut.messageId, index: cut.index };
+
+        acts[ACT_KIND.AGENTS_PART](callId === undefined ? part : { ...part, callId }).then(
           (answer) =>
             land(
               cut,
@@ -705,7 +735,7 @@ export function useWholeParts(agentId: string): WholeParts {
         );
       }
     },
-    [acts, agentId],
+    [acts, agentId, callId],
   );
 
   const parts = drawn.agentId === agentId ? drawn.parts : undefined;
@@ -809,16 +839,21 @@ interface OlderAsk<Before> {
  * did not answer says so until Try again asks it again, which a scroll never
  * does, even one that lands before the failure is drawn; one the host did not lay,
  * since newer messages took their place meanwhile, may be asked again at
- * once, as may one whose cursor comes back after a rewind. None where
- * nothing older stands.
+ * once, as may one whose cursor comes back after a rewind. A worker's, where
+ * `callId` names the delegation that started it, is read the same way. None
+ * where nothing older stands.
  */
-export function useOlderPages(agentId: string, before: string | undefined): OlderPages | undefined {
+export function useOlderPages(
+  agentId: string,
+  before: string | undefined,
+  callId?: string,
+): OlderPages | undefined {
   const acts = useHostActs();
 
   const ask = useCallback(
     (at: string) =>
-      acts[ACT_KIND.AGENTS_TRANSCRIPT_OLDER]({ kind: TRANSCRIPT_KIND.AGENT, agentId, before: at }),
-    [acts, agentId],
+      acts[ACT_KIND.AGENTS_TRANSCRIPT_OLDER]({ ...transcriptKey(agentId, callId), before: at }),
+    [acts, agentId, callId],
   );
 
   return useOlderReads(agentId, before, ask, "An older page of the transcript");
@@ -917,13 +952,13 @@ function useOlderReads<Before extends string | number>(
   };
 }
 
-/** Reads the agent's transcript anew where it could not be read, as the panel's Try again does (`ACT_KIND.AGENTS_TRANSCRIPT_RETRY`). */
-export function useTranscriptRetry(agentId: string): () => void {
+/** Reads the agent's transcript anew where it could not be read, or a worker's where `callId` names the delegation that started it, as the panel's Try again does (`ACT_KIND.AGENTS_TRANSCRIPT_RETRY`). */
+export function useTranscriptRetry(agentId: string, callId?: string): () => void {
   const acts = useHostActs();
 
   return useCallback(() => {
-    acts[ACT_KIND.AGENTS_TRANSCRIPT_RETRY]({ kind: TRANSCRIPT_KIND.AGENT, agentId }).catch(
+    acts[ACT_KIND.AGENTS_TRANSCRIPT_RETRY](transcriptKey(agentId, callId)).catch(
       refused("Reading the transcript again"),
     );
-  }, [acts, agentId]);
+  }, [acts, agentId, callId]);
 }

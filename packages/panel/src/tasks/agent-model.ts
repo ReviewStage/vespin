@@ -100,7 +100,6 @@ import {
 import { agentStillWriting, inPullRequestOrder } from "@repo/features/task-agents-model";
 import type { DescriptionEditor, TaskPullRequestLine } from "@repo/features/task-wire";
 import { dayAndTimeText, dueText } from "@repo/features/time-format";
-import { TOOL_STATE, type ToolState } from "@repo/features/tool-call-block";
 import { githubLineOf } from "@repo/features/transcript-lines";
 import { isAgentTurn, opensTurn } from "@repo/features/voice-call-lines";
 import { andList, countWords, readFailedWords, TERM } from "@repo/features/words";
@@ -1655,31 +1654,6 @@ export function agentWorkingSince(lines: readonly AgentTranscriptMessage[]): num
   const before = lines.slice(0, at).findLastIndex(isAgentTurn);
 
   return lines.slice(before + 1, at).find(opens)?.sentAt ?? journal.startedAt;
-}
-
-/**
- * How a worker's row marks where it stands, as its own session reads: still
- * running while it starts or works, at rest once it completed or was
- * stopped, whose own tab says which, and failed where it failed.
- */
-export function workerToolState(status: AgentStatus): ToolState {
-  switch (status) {
-    case AGENT_STATUS.STARTING:
-    case AGENT_STATUS.RUNNING:
-      return TOOL_STATE.INPUT_AVAILABLE;
-    case AGENT_STATUS.FAILED:
-      return TOOL_STATE.OUTPUT_ERROR;
-    case AGENT_STATUS.COMPLETED:
-    case AGENT_STATUS.CANCELED:
-      return TOOL_STATE.OUTPUT_AVAILABLE;
-  }
-}
-
-/** Where a worker stands, read from its delegation's part: running until the call answers, then completed, or failed where the call ended in an error. */
-export function workerStatusOf(state: ToolState): AgentStatus {
-  if (state === TOOL_STATE.OUTPUT_AVAILABLE) return AGENT_STATUS.COMPLETED;
-
-  return state === TOOL_STATE.OUTPUT_ERROR ? AGENT_STATUS.FAILED : AGENT_STATUS.RUNNING;
 }
 
 /** How many words a reply's lead holds at most, where its first sentence runs on. */
