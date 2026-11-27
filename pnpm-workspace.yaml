@@ -305,6 +305,18 @@ patchedDependencies:
 # binding, and a toolbar spacer.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #
+# `@shopify/flash-list` 2.3.2 keeps a reader's place as rows change height by
+# holding its first visible row still, and picks that row where a scroll
+# settles, even while it stands at its estimated size, not yet measured. A
+# transcript's row far taller than the estimate, such as an automation's
+# 15k-character prompt, scrolled into view from below and still unmeasured,
+# became that anchor, then grew down over the rows the reader was on, so a
+# scroll up landed on its top, past everything between (STAG-5272). The patch
+# anchors on the first visible row already measured, falling back to the
+# first visible one. It patches `dist/`, which Metro reads, never `src/`.
+# Delete it when a FlashList release anchors on a measured row.
+  "@shopify/flash-list@2.3.2": patches/@shopify__flash-list@2.3.2.patch
+#
 # `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
 # lines by the marker's width less its `.` or `)`, so each line of a code
 # block in a numbered item opens with a stray space, one more on every save,

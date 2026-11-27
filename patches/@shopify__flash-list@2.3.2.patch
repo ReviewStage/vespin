@@ -1,0 +1,22 @@
+diff --git a/dist/recyclerview/hooks/useRecyclerViewController.js b/dist/recyclerview/hooks/useRecyclerViewController.js
+index 08724d1f33824ef563948cff17904d7f497739d4..e7bab3fd43b62945a4e3ee50848035c7f83cd133 100644
+--- a/dist/recyclerview/hooks/useRecyclerViewController.js
++++ b/dist/recyclerview/hooks/useRecyclerViewController.js
+@@ -62,7 +62,16 @@ export function useRecyclerViewController(recyclerViewManager, ref, scrollViewRe
+             recyclerViewManager.getDataLength() > 0 &&
+             recyclerViewManager.shouldMaintainVisibleContentPosition()) {
+             // Update the tracked first visible item
+-            const firstVisibleIndex = Math.max(0, recyclerViewManager.computeVisibleIndices().startIndex);
++            const visibleIndices = recyclerViewManager.computeVisibleIndices();
++            let firstVisibleIndex = Math.max(0, visibleIndices.startIndex);
++            // Anchor on the first visible item already measured, so an item still at its estimated size that grows as it is measured, such as a tall item scrolled into view from above, never takes the visible items below it away with its growth.
++            for (let index = firstVisibleIndex; index <= visibleIndices.endIndex; index++) {
++                const layout = recyclerViewManager.getLayout(index);
++                if (recyclerViewManager.props.horizontal ? layout.isWidthMeasured : layout.isHeightMeasured) {
++                    firstVisibleIndex = index;
++                    break;
++                }
++            }
+             if (firstVisibleIndex !== undefined && firstVisibleIndex >= 0) {
+                 firstVisibleItemKey.current =
+                     recyclerViewManager.getDataKey(firstVisibleIndex);
