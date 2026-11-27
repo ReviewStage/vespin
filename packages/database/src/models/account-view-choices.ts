@@ -27,8 +27,14 @@ import { isWorkspaceMember } from "./workspace-store.js";
 
 type ViewChoiceEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
-/** A view choice to keep: its key, the workspace it is kept for or none for the account's own, and its value as JSON, or null to forget it. */
+/**
+ * A view choice to keep: the id its row takes where it is first made in
+ * its place, the client's own so it draws the row before the service
+ * answers; its key; the workspace it is kept for, or none for the
+ * account's own; and its value as JSON, or null to forget it.
+ */
 export interface ViewChoiceToKeep {
+  readonly id: string;
   readonly key: ViewChoiceKey;
   readonly organizationId: string | null;
   readonly value: WireValue;
@@ -52,32 +58,33 @@ function placed({ userId, key, organizationId }: typeof PlaceSchema.Type): SQL |
   );
 }
 
-const upsertChoice = SqlSchema.findOne({
+const updateChoice = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...PlaceSchema.fields, value: WireValueSchema, now: Schema.Date }),
+  Result: TxidRowSchema,
+  execute: ({ value, now, ...place }) =>
+    Database.use((db) =>
+      db
+        .update(accountViewChoice)
+        .set({ value, updatedAt: now })
+        .where(placed(place))
+        .returning(TXID_RETURNING),
+    ),
+});
+
+const insertChoice = SqlSchema.findOneOption({
   Request: Schema.Struct({
     ...PlaceSchema.fields,
+    id: Schema.String,
     value: WireValueSchema,
     now: Schema.Date,
   }),
   Result: TxidRowSchema,
-  execute: ({ userId, key, organizationId, value, now }) =>
+  execute: ({ id, userId, key, organizationId, value, now }) =>
     Database.use((db) =>
       db
         .insert(accountViewChoice)
-        .values({
-          userId,
-          key,
-          organizationId,
-          value,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: [
-            accountViewChoice.userId,
-            accountViewChoice.key,
-            accountViewChoice.organizationId,
-          ],
-          set: { value, updatedAt: now },
-        })
+        .values({ id, userId, key, organizationId, value, updatedAt: now })
+        .onConflictDoNothing()
         .returning(TXID_RETURNING),
     ),
 });
@@ -93,16 +100,17 @@ const deleteChoice = SqlSchema.findOneOption({
 
 /**
  * Keeps one of the account's view choices, writing over the one it kept
- * in the same place, or forgets it where `value` is null. Answers the
- * transaction it committed in, with none where forgetting found nothing;
- * none at all where the choice names a workspace the account is not a
- * member of, which keeps nothing.
+ * in the same place, which keeps its own id, or forgets it where `value`
+ * is null. Answers the transaction it committed in, with none where
+ * forgetting found nothing; none at all where the choice names a workspace
+ * the account is not a member of, or where it is first made under an id
+ * another row holds, which keeps nothing.
  */
 export function writeViewChoice(
   userId: string,
   choice: ViewChoiceToKeep,
 ): ViewChoiceEffect<Option.Option<ViewChoiceWritten>> {
-  const { key, organizationId, value } = choice;
+  const { id, key, organizationId, value } = choice;
   const place = { userId, key, organizationId };
 
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
@@ -121,13 +129,17 @@ export function writeViewChoice(
         }
 
         const now = yield* DateTime.nowAsDate;
+        const written = { ...place, value, now };
 
-        // An upsert that answered no row is the database breaking its own contract, not an outcome.
-        const { txid } = yield* upsertChoice({ ...place, value, now }).pipe(
-          Effect.catchTag("NoSuchElementError", Effect.die),
-        );
+        // Note that the place is written over before a row is made in it, and again where a row made meanwhile beat this one, so its id stands as first made.
+        const kept = yield* updateChoice(written);
 
-        return Option.some({ txid });
+        if (Option.isSome(kept)) return kept;
+        const made = yield* insertChoice({ ...written, id });
+
+        if (Option.isSome(made)) return made;
+
+        return yield* updateChoice(written);
       }),
     ),
   );

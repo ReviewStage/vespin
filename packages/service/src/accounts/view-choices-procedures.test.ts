@@ -57,7 +57,7 @@ const procedures = viewChoicesProcedures({
 });
 
 /** The status a write of `body` by `userId` is answered with. */
-const write = (userId: string, body: WireRecord) =>
+const write = (userId: string, choice: WireRecord) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
 
@@ -71,7 +71,7 @@ const write = (userId: string, body: WireRecord) =>
     const request = new Request(new URL(HOSTED_SERVICE_PATH.ACCOUNT_VIEW_CHOICES, ORIGIN), {
       method: HTTP_METHOD.PUT,
       headers: { authorization: `Bearer ${userId}`, "content-type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ id: randomUUID(), ...choice }),
     });
 
     const response = yield* hostedAnswer({ account: procedures }, services, request);

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { MANAGER_SORT } from "@repo/features/workspace-managers-model";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { accountViewChoice } from "../../schemas/account-view-choice.js";
@@ -50,12 +50,33 @@ const choicesOf = (userId: string) =>
     return Object.fromEntries(rows.map((row) => [row.organizationId ?? "account", row.value]));
   });
 
+/** The ids of the account's choices kept for the workspace. */
+const idsOf = (userId: string, organizationId: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+
+    const rows = yield* db
+      .select({ id: accountViewChoice.id })
+      .from(accountViewChoice)
+      .where(
+        and(
+          eq(accountViewChoice.userId, userId),
+          eq(accountViewChoice.organizationId, organizationId),
+        ),
+      );
+
+    return rows.map((row) => row.id);
+  });
+
 it.layer(getTestDB())("the account view choices store", (it) => {
   it.effect("a choice is kept in its place, chosen again over itself, and forgotten", () =>
     Effect.gen(function* () {
       const { owner, ownerWorkspace } = yield* openAccounts;
 
+      const madeAs = randomUUID();
+
       const kept = yield* writeViewChoice(owner, {
+        id: madeAs,
         key: KEY,
         organizationId: ownerWorkspace,
         value: MANAGER_SORT.NAME,
@@ -63,11 +84,13 @@ it.layer(getTestDB())("the account view choices store", (it) => {
 
       assert.notEqual(Option.getOrUndefined(kept)?.txid, undefined);
       yield* writeViewChoice(owner, {
+        id: randomUUID(),
         key: KEY,
         organizationId: null,
         value: MANAGER_SORT.CREATED,
       });
       yield* writeViewChoice(owner, {
+        id: randomUUID(),
         key: KEY,
         organizationId: ownerWorkspace,
         value: MANAGER_SORT.RECENT_ACTIVITY,
@@ -76,8 +99,11 @@ it.layer(getTestDB())("the account view choices store", (it) => {
         [ownerWorkspace]: MANAGER_SORT.RECENT_ACTIVITY,
         account: MANAGER_SORT.CREATED,
       });
+      // A choice made again in its place keeps the id it was first made under, as a client drew it.
+      assert.deepEqual(yield* idsOf(owner, ownerWorkspace), [madeAs]);
 
       const forgotten = yield* writeViewChoice(owner, {
+        id: randomUUID(),
         key: KEY,
         organizationId: ownerWorkspace,
         value: null,
@@ -87,7 +113,12 @@ it.layer(getTestDB())("the account view choices store", (it) => {
       assert.deepEqual(yield* choicesOf(owner), { account: MANAGER_SORT.CREATED });
       // Forgetting a choice no longer kept changes no row, and answers no transaction.
       assert.deepEqual(
-        yield* writeViewChoice(owner, { key: KEY, organizationId: ownerWorkspace, value: null }),
+        yield* writeViewChoice(owner, {
+          id: randomUUID(),
+          key: KEY,
+          organizationId: ownerWorkspace,
+          value: null,
+        }),
         Option.some({}),
       );
     }),
@@ -97,6 +128,7 @@ it.layer(getTestDB())("the account view choices store", (it) => {
     Effect.gen(function* () {
       const { owner, other, ownerWorkspace, otherWorkspace } = yield* openAccounts;
       yield* writeViewChoice(owner, {
+        id: randomUUID(),
         key: KEY,
         organizationId: ownerWorkspace,
         value: MANAGER_SORT.NAME,
@@ -105,6 +137,7 @@ it.layer(getTestDB())("the account view choices store", (it) => {
       assert.ok(
         Option.isNone(
           yield* writeViewChoice(other, {
+            id: randomUUID(),
             key: KEY,
             organizationId: ownerWorkspace,
             value: MANAGER_SORT.CREATED,
@@ -113,10 +146,16 @@ it.layer(getTestDB())("the account view choices store", (it) => {
       );
       assert.ok(
         Option.isNone(
-          yield* writeViewChoice(other, { key: KEY, organizationId: ownerWorkspace, value: null }),
+          yield* writeViewChoice(other, {
+            id: randomUUID(),
+            key: KEY,
+            organizationId: ownerWorkspace,
+            value: null,
+          }),
         ),
       );
       yield* writeViewChoice(other, {
+        id: randomUUID(),
         key: KEY,
         organizationId: otherWorkspace,
         value: MANAGER_SORT.CREATED,

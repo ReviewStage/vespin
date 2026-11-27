@@ -9,7 +9,8 @@
  * service holds only a value a build could have chosen. A value its key
  * does not hold, and a place that is not the key's (a workspace for one of
  * the account's, or none for one of a workspace's), are refused as invalid;
- * a workspace the account is not a member of as not found. Nothing of a
+ * a workspace the account is not a member of, or a choice first made under
+ * an id another row holds, as not found. Nothing of a
  * choice is counted, traced, or logged here.
  */
 
@@ -33,7 +34,7 @@ export function viewChoicesProcedures(seams: ViewChoicesProcedureSeams) {
 
   return {
     writeViewChoice: signedIn.writeViewChoice.effect(function* ({ context, input }) {
-      const { key, workspaceId } = input;
+      const { id, key, workspaceId } = input;
 
       if (!viewChoicePlaced(key, workspaceId)) {
         return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
@@ -44,7 +45,7 @@ export function viewChoicesProcedures(seams: ViewChoicesProcedureSeams) {
       if (value === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 
       const written = yield* hostedStoreOrUnavailable(
-        writeViewChoice(context.userId, { key, organizationId: workspaceId, value }),
+        writeViewChoice(context.userId, { id, key, organizationId: workspaceId, value }),
       );
 
       if (Option.isNone(written)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);

@@ -20,6 +20,7 @@
 
 import { type WireValue, WireValueSchema } from "@repo/wire";
 import { Option, Schema } from "effect";
+import { wireUuidSchema } from "./service-wire.js";
 import { workspaceIdSchema } from "./task-wire.js";
 import { MANAGER_SORT } from "./workspace-managers-model.js";
 
@@ -77,12 +78,15 @@ export const VIEW_CHOICE_BOUNDS = {
 } as const;
 
 /**
- * A view choice written: its key, the workspace it is kept for (null for
- * the account's own), and its value as JSON, which the service reads
- * through the key's own Schema; null forgets the choice, which then stands
- * at its default on every device.
+ * A view choice written: the id its row takes where it is first made in
+ * its place, the client's own so it draws the row before the service
+ * answers, and passed over where a row already stands there; its key; the
+ * workspace it is kept for (null for the account's own); and its value as
+ * JSON, which the service reads through the key's own Schema. Null forgets
+ * the choice, which then stands at its default on every device.
  */
 export const viewChoiceWriteSchema = Schema.Struct({
+  id: wireUuidSchema,
   key: Schema.Literals(Object.values(VIEW_CHOICE_KEY)),
   workspaceId: Schema.NullOr(workspaceIdSchema),
   value: WireValueSchema,
