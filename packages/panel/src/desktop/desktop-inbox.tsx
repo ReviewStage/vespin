@@ -72,6 +72,7 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import { useInboxListing } from "../tasks/use-inbox-listing.js";
 import { useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
 import { useInboxItemOpenSpan, useInboxOpenSpan } from "../tasks/use-inbox-spans.js";
+import { usePlainLinkNames } from "../tasks/use-link-standing.js";
 import {
   OpenAddressesHere,
   type OpenAddressHere,
@@ -202,6 +203,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   // New task is the way on from an Inbox with nothing in it, wherever an account can start one.
   const newTask = tasks.signedIn ? tasks.newTask.onOpen : undefined;
   const inbox = useInboxDoor(tasks);
+  const links = usePlainLinkNames();
   // A task chosen narrows the Inbox to its own items, which a chip over the list names and clears.
   const narrowedTask = useInboxView(tasks).narrowed;
   const narrowedTaskRow = useNamedTask(narrowedTask, tasks.typedNames);
@@ -614,7 +616,7 @@ export const DesktopInbox = memo(function DesktopInbox({
             mentions={mentions}
             phone={
               room === SHELL_ROOM.NARROW && chosen !== undefined
-                ? { back: cardTitle(chosen.item.title), onBack: sidePanel.onToggle }
+                ? { back: cardTitle(chosen.item.title, links), onBack: sidePanel.onToggle }
                 : undefined
             }
           />
