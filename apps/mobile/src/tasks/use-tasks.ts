@@ -23,6 +23,7 @@ import {
   inAgentListOrder,
 } from "@repo/features/task-agents-model";
 import {
+  ASSIGNED_TO,
   type ChildTaskCount,
   childTaskCounts,
   NO_REPOSITORY,
@@ -51,7 +52,6 @@ import {
   type TaskRowFace,
   type TaskRowLook,
   type TaskTree,
-  type TaskTreeView,
   taskRowFace,
   taskRowLook,
   taskTree,
@@ -125,7 +125,7 @@ import { useInboxWaiting } from "../inbox/inbox-groups.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useMenuPhotos, useMenuRepositoryPictures } from "../menu-photos.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { useTreeView } from "./tree-view.js";
+import { type TreeViewControl, useTreeView } from "./tree-view.js";
 import { useFollowWrite } from "./use-following.js";
 import { useHeldTasksNamed } from "./use-found-task.js";
 import { type TaskRelationWrites, useTaskRelationWrites } from "./use-relations.js";
@@ -512,10 +512,8 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
 /** What the Tasks tab draws: the tree, what a search finds, each row's look, and the acts on a row. */
 export interface TasksListing {
   readonly tree: TaskTree;
-  /** How the tree stands the reader's tasks, as the tab's View options chose it for the workspace. */
-  readonly treeView: TaskTreeView;
-  /** Keeps another view for the workspace, which every screen reading the list draws at once. */
-  readonly setTreeView: (view: TaskTreeView) => void;
+  /** How the tree stands the tasks, the Tasks page's filter and List display, and the presses that change them on the account, which every screen reading the list draws at once. */
+  readonly treeView: TreeViewControl;
   /** Whether the workspace is shared, which alone offers whose tasks the list holds. */
   readonly shared: boolean;
   /** The workspace's tasks the search finds, whatever their status; none while nothing is typed. */
@@ -793,7 +791,7 @@ export function useTasksListing(search: string): ReadListing {
     useMemo(() => members.map(({ userId }) => userId), [members]),
   );
 
-  const { view: treeView, setView: setTreeView } = useTreeView(workspace?.id);
+  const treeView = useTreeView(workspace?.id, readerId);
   const searching = useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
   // Note that the last tree is kept where the new one draws the same rows, because a group's new array resets every row it holds (`RowForEach`), and every delivery to the task list built the tree anew.
   const [keepTree] = useState(answerKeeper<TaskTree>);
@@ -821,8 +819,14 @@ export function useTasksListing(search: string): ReadListing {
         workspaceId: workspace?.id,
         readerId,
         noRepository: NO_REPOSITORY,
-        tasksHead: tasksHeadOf(treeView.assignedTo, shared, readerId, personName),
-        treeView,
+        tasksHead: tasksHeadOf(
+          treeView.view.assignedTo ?? { kind: ASSIGNED_TO.ANYONE },
+          shared,
+          readerId,
+          personName,
+        ),
+        filter: treeView.filter,
+        treeView: treeView.view,
         personName,
         now: Date.now(),
       }),
@@ -862,7 +866,6 @@ export function useTasksListing(search: string): ReadListing {
     return {
       tree,
       treeView,
-      setTreeView,
       shared,
       workspace,
       lookOf,
@@ -909,7 +912,6 @@ export function useTasksListing(search: string): ReadListing {
     markRead,
     pin,
     treeView,
-    setTreeView,
   ]);
 
   return useMemo(() => ({ ...rest, found, searching }), [rest, found, searching]);

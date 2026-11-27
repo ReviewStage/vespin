@@ -112,7 +112,7 @@ import {
   repositoryPageUrl,
   type StopAgentsWords,
 } from "@repo/features/tasks-model";
-import { TASKS_GROUP } from "@repo/features/tasks-page-model";
+import { TASKS_GROUP, type TasksGroupHead } from "@repo/features/tasks-page-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
@@ -267,6 +267,7 @@ import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useTabDrawnCount } from "../tab-drawn.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { standingPressed, useStandingDrawnCount } from "../tasks/standing-drawn.js";
+import { type TreeFolds, useTreeFolds } from "../tasks/tree-view.js";
 import {
   threadComments,
   threadOpen,
@@ -1113,12 +1114,13 @@ type OpenedParents = {
   readonly toggle: (taskId: string) => void;
 };
 
-/** What the tree holds of its own reading: each group's opened parents, and the groups folded shut, by the group's key. */
+/** What the tree holds of its own reading: each group's opened parents, the groups folded shut, by the group's key, and the folds of the groups the Tasks page's grouping heads, which the account keeps. */
 type TreeHold = {
   readonly opened: ReadonlyMap<string, ReadonlySet<string>>;
   readonly toggleParent: (group: string, taskId: string) => void;
   readonly folded: ReadonlySet<string>;
   readonly setFolded: (group: string, folded: boolean) => void;
+  readonly pageFolds: TreeFolds;
 };
 
 /**
@@ -1153,7 +1155,27 @@ function useTreeHoldState(): TreeHold {
       return next;
     });
 
-  return { opened, toggleParent, folded, setFolded };
+  return { opened, toggleParent, folded, setFolded, pageFolds: useTreeFolds() };
+}
+
+/** The head a group folds by on the account: one the Tasks page's grouping heads, as the page's List folds it; none for Pinned, Following, a section, or the run of every task, which the tree holds itself. */
+function pageHead(group: TaskTreeGroup): TasksGroupHead | undefined {
+  return group.head === undefined || group.head.kind === TASKS_GROUP.ALL ? undefined : group.head;
+}
+
+/** Whether a group stands folded: on the account where the page's grouping heads it, else as the tree holds it. */
+function groupFolded(hold: TreeHold, group: TaskTreeGroup): boolean {
+  const head = pageHead(group);
+
+  return head === undefined ? hold.folded.has(group.key) : hold.pageFolds.folded(head);
+}
+
+/** Folds or opens a group: on the account where the page's grouping heads it, else in the tree's own hold. */
+function foldGroup(hold: TreeHold, group: TaskTreeGroup, shut: boolean): void {
+  const head = pageHead(group);
+
+  if (head === undefined) hold.setFolded(group.key, shut);
+  else hold.pageFolds.setFolded(head, shut);
 }
 
 function groupParents(hold: TreeHold, group: string): OpenedParents {
@@ -1605,8 +1627,8 @@ function GroupSection({
       repository={headPicture(group)}
       count={group.rows.length}
       foldable={group.rows.length > 0}
-      folded={hold.folded.has(group.key)}
-      onFold={(shut) => hold.setFolded(group.key, shut)}
+      folded={groupFolded(hold, group)}
+      onFold={(shut) => foldGroup(hold, group, shut)}
       onDropLink={dropOnto(group, listing)}
       add={groupAdd(group, newTaskIn, newTaskInRepository)}
     >
@@ -3791,7 +3813,7 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
 
 /** The list's View options, its members' photos read as files for the menu, built anew only as the view or the members change. */
 function useViewMenu(read: ReadListing): BarMenu {
-  const { treeView, setTreeView, shared, members } = read;
+  const { treeView, shared, members } = read;
   const pictureOf = useMemberPictures();
 
   const photoOf = useMenuPhotos(
@@ -3800,8 +3822,17 @@ function useViewMenu(read: ReadListing): BarMenu {
   );
 
   return useMemo(
-    () => tasksViewMenu({ view: treeView, setView: setTreeView, shared, members, photoOf }),
-    [treeView, setTreeView, shared, members, photoOf],
+    () =>
+      tasksViewMenu({
+        view: treeView.view,
+        change: treeView.change,
+        reset: treeView.reset,
+        changed: treeView.changed,
+        shared,
+        members,
+        photoOf,
+      }),
+    [treeView, shared, members, photoOf],
   );
 }
 

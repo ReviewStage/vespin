@@ -29,6 +29,7 @@ import {
   TASK_CALL_FAILURE,
   type TaskListParts,
 } from "@repo/features/tasks-view";
+import type { ViewChoiceLiveRow } from "@repo/features/view-choice-live";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppStateSnapshot,
@@ -222,6 +223,12 @@ const READ_MARKS = new WeakMap<object, KeptReadMarks>();
 
 /** No read mark set yet. */
 const NO_READ_MARKS: KeptReadMarks = new Map();
+
+/** The view choices each run made, by the store the run stages, as the account's read carries them. */
+const VIEW_CHOICES = new WeakMap<object, readonly ViewChoiceLiveRow[]>();
+
+/** No view choice made yet. */
+const NO_VIEW_CHOICES: readonly ViewChoiceLiveRow[] = [];
 
 /** What the store is handed: whole slices of the document. */
 type StorePatch = Parameters<AppStateStore["update"]>[0];
@@ -516,9 +523,22 @@ export function stageFixture(
     tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
     [LIVE_READ.PROVIDER_KEYS]: stagedKeys(inbox),
+    [LIVE_READ.VIEW_CHOICES]: stagedViewChoices(held, VIEW_CHOICES.get(state) ?? NO_VIEW_CHOICES),
   };
 
   state.update(stagedPatch(held, staged), listed.lists);
+}
+
+/** The account's view choices as its read carries them, those the run made, none at first; the slice held where no account is signed in. */
+function stagedViewChoices(
+  held: AppStateSnapshot,
+  rows: readonly ViewChoiceLiveRow[],
+): AppStateSnapshot[typeof LIVE_READ.VIEW_CHOICES] {
+  const accountId = signedInAccountId(held.account);
+
+  if (accountId === undefined) return held[LIVE_READ.VIEW_CHOICES];
+
+  return { ...held[LIVE_READ.VIEW_CHOICES], [accountId]: { rows } };
 }
 
 /**
@@ -640,6 +660,32 @@ function keepReadMark(
   const { taskId, readMark } = payload as PortActPayload<typeof ACT_KIND.TASKS_MARK_READ>;
   const kept: KeptReadMark = { mark: readMark, at: Date.now() };
   READ_MARKS.set(state, new Map(READ_MARKS.get(state) ?? NO_READ_MARKS).set(taskId, kept));
+  stageFixture(state);
+
+  return true;
+}
+
+/**
+ * Keeps a view choice the fixture made, or forgets it, over the one in its
+ * place, and lays it over the document at once, as the service keeps it for
+ * a live run, for the run alone; nothing for any other act.
+ */
+function keepViewChoice(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): boolean {
+  if (kind !== ACT_KIND.VIEW_CHOICE_WRITE) return false;
+
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const write = payload as PortActPayload<typeof ACT_KIND.VIEW_CHOICE_WRITE>;
+  const { id, key, workspaceId, value } = write;
+
+  const others = (VIEW_CHOICES.get(state) ?? NO_VIEW_CHOICES).filter(
+    (row) => row.key !== key || row.workspaceId !== workspaceId,
+  );
+
+  VIEW_CHOICES.set(state, value === null ? others : [...others, { id, key, workspaceId, value }]);
   stageFixture(state);
 
   return true;
@@ -897,7 +943,8 @@ function memberAt<Member>(
  * and a change to its queue moves the queue there, a Stop pausing it, so a
  * flow may move a queued message and Resume, and a description comment
  * thread started, replied to, resolved, or reopened stands so on its task's
- * comments there (`keepCommentThread`).
+ * comments there (`keepCommentThread`), and a view choice made stands
+ * for the run, as the account keeps it (`keepViewChoice`).
  * Where `refusesWrites`, the writes `REFUSED_WRITES` names are refused
  * before anything else answers them, so a flow sees the failure notice.
  */
@@ -944,6 +991,9 @@ export function fixtureActs(
 
         // SAFETY: the port is keyed by act kind, and each function under a kind takes that kind's payload.
         if (keepReadMark(state, kind as PortActKind, payload)) return Promise.resolve(true);
+
+        // SAFETY: as above.
+        if (keepViewChoice(state, kind as PortActKind, payload)) return Promise.resolve({});
 
         // SAFETY: as above.
         const remote = remoteRecording(mediaOrigin, kind as PortActKind, payload);

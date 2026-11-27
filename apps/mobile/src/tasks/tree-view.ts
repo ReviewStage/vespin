@@ -1,73 +1,183 @@
 /**
- * tree-view.ts -- how the Tasks tab stands the reader's tasks in each workspace, as its View options chose it, kept on this device across launches, as the panel keeps its task list's view on each Mac.
+ * tree-view.ts -- how the Tasks tab stands the reader's tasks: the Tasks page's own filter and List display, read and changed on the account, so the phone lists the tasks the Mac's Tasks page lists; and the List's folds.
  *
- * What a view holds, and how it reads and is written, is
- * `@repo/features/task-tree-model`'s (`TaskTreeView`). Each workspace keeps a
- * view of its own, since a repository and a teammate are a workspace's own,
- * held in memory and kept in the app's `NSUserDefaults` through React
- * Native's `Settings` for the next launch, as the chosen workspace is
- * (`chosen-workspace.ts`), and every screen reading it hears a choice as it
- * is made, the iPad's list and its detail alike.
+ * The phone follows the Tasks page, as Dean chose: it reads the page's filter
+ * for the workspace (`VIEW_CHOICE_KEY.TASKS_FILTER`), whole, the fields it
+ * offers no control for among it, and the page's List display
+ * (`VIEW_CHOICE_KEY.TASKS_LIST_DISPLAY`). Its View options read them as a
+ * `TaskTreeView` (`@repo/features/task-tree-model`), a value it does not offer
+ * standing at its nearest, and a choice there writes back only the fields it
+ * changed, over the value standing, so a choice the Mac made the phone
+ * cannot show is never lost. A group the page's grouping heads folds on the
+ * account too (`VIEW_CHOICE_KEY.TASKS_LIST_FOLDS`), as the page's List folds
+ * it.
+ *
+ * A view an earlier build kept on this device (`tasksTreeViews` in
+ * `NSUserDefaults`) moves up once for each workspace as it is listed, as the
+ * page's filter and display where the account keeps none, and is let go
+ * either way.
  */
 
+import { ASSIGNED_TO, type AssignedTo } from "@repo/features/task-list-model";
 import {
-  DEFAULT_TASK_TREE_VIEW,
+  displayReset,
+  displayWithTreeView,
+  filterWithTreeView,
   type KeptTreeViews,
-  keptTreeViews,
-  readTreeViews,
+  keptTreeViewMoved,
+  keptTreeViewsSchema,
   type TaskTreeView,
-  treeViewIn,
+  treeViewChanged,
+  treeViewOf,
 } from "@repo/features/task-tree-model";
-import { heldValue, useHeldValue } from "@repo/ui-native";
-import { Predicate } from "effect";
-import { useCallback, useMemo } from "react";
+import {
+  foldedIn,
+  type KeptTasksDisplay,
+  NO_TASKS_FILTER,
+  type TasksFilter,
+  type TasksGroupHead,
+  type TasksListFolds,
+  toggledFold,
+} from "@repo/features/tasks-page-model";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
+import { useHeldValue } from "@repo/ui-native";
+import { Option } from "effect";
+import { useEffect, useMemo } from "react";
 import { Settings } from "react-native";
+import { deviceKept, useViewChoice, type ViewChoiceControl } from "../view-choices.js";
 
-/** The defaults key the views are kept under. */
-const TREE_VIEWS_KEY = "tasksTreeViews";
+/** What a view choice that did not keep says in the failure notice. */
+const VIEW_REFUSED = "Couldn't change how Tasks are shown.";
 
-/** The words the views were kept as at launch, none where nothing was ever kept. */
-function launchWords(): string | undefined {
-  const kept: unknown = Settings.get(TREE_VIEWS_KEY);
+/** What a fold that did not keep says in the failure notice. */
+const FOLD_REFUSED = "Couldn't fold that group.";
 
-  return Predicate.isString(kept) ? kept : undefined;
+/** A display nothing kept, which stands at the page's own; one value for every draw. */
+const NO_KEPT_DISPLAY: KeptTasksDisplay = {};
+
+/** No group folded, one value for every draw. */
+const NO_FOLDS: TasksListFolds = {};
+
+/** The views an earlier build kept on this device, each workspace's moved up as it is listed. */
+const KEPT = deviceKept<KeptTreeViews>("tasksTreeViews", keptTreeViewsSchema);
+
+/** The workspace's view as the View options read it, and the presses that change it. */
+export interface TreeViewControl {
+  readonly view: TaskTreeView;
+  /** The page's filter, whole, which the tree keeps its tasks by. */
+  readonly filter: TasksFilter;
+  /** Whether the view stands apart from the page's own, so Reset view offers itself. */
+  readonly changed: boolean;
+  /** Keeps the fields `change` names over the view standing. */
+  readonly change: (change: Partial<TaskTreeView>) => void;
+  /** Puts the page's filter and the phone's choices of its display back to the page's own. */
+  readonly reset: () => void;
+}
+
+/** Whether two Assigned to's name the same tasks; none names no pick of the phone's. */
+export function sameAssignedTo(a: AssignedTo | undefined, b: AssignedTo): boolean {
+  if (a === undefined) return false;
+
+  if (a.kind !== ASSIGNED_TO.MEMBER || b.kind !== ASSIGNED_TO.MEMBER) return a.kind === b.kind;
+
+  return a.userId === b.userId;
 }
 
 /**
- * The views as the device holds them now. Note that they are held here
- * rather than read back from `Settings` after each choice, because that
- * module's copy of the defaults lands on the native side only later, and a
- * default another piece of the app wrote in between reported the old views
- * back over the new (`chosen-workspace.ts`); only this module writes them.
+ * Moves the view an earlier build kept for `workspaceId` up to the account
+ * once both of the page's choices are read: each kept where the account
+ * keeps none, and the device's let go either way.
  */
-const views = heldValue<KeptTreeViews>(readTreeViews(launchWords()));
+function useKeptViewMovedUp(
+  workspaceId: string | undefined,
+  readerId: string | undefined,
+  filter: ViewChoiceControl<typeof VIEW_CHOICE_KEY.TASKS_FILTER>,
+  display: ViewChoiceControl<typeof VIEW_CHOICE_KEY.TASKS_LIST_DISPLAY>,
+): void {
+  const left = useHeldValue(KEPT.left);
+  const kept = workspaceId === undefined ? undefined : left?.[workspaceId];
+  const answered = filter.answered && display.answered;
+  const filterKept = Option.isSome(filter.value);
+  const displayKept = Option.isSome(display.value);
+  const { choose: chooseFilter } = filter;
+  const { choose: chooseDisplay } = display;
 
-/** A workspace's view and the choice of another, which is kept and heard by every screen reading it. */
-export interface TreeViewControl {
-  readonly view: TaskTreeView;
-  readonly setView: (view: TaskTreeView) => void;
+  useEffect(() => {
+    if (!answered || kept === undefined || workspaceId === undefined || readerId === undefined)
+      return;
+
+    const moved = keptTreeViewMoved(kept, readerId);
+
+    if (!filterKept) chooseFilter(moved.filter);
+
+    if (!displayKept) chooseDisplay(moved.display);
+
+    const { [workspaceId]: _moved, ...rest } = KEPT.left.read() ?? {};
+    const remaining = Object.keys(rest).length === 0 ? undefined : rest;
+    Settings.set({ [KEPT.name]: remaining === undefined ? null : JSON.stringify(remaining) });
+    KEPT.left.set(remaining);
+  }, [answered, kept, workspaceId, readerId, filterKept, displayKept, chooseFilter, chooseDisplay]);
 }
 
-/** The view of the workspace the phone works in, the default before one is known. */
-export function useTreeView(workspaceId: string | undefined): TreeViewControl {
-  const kept = useHeldValue(views);
+/** The view of the workspace the phone works in, the page's own before one is read. */
+export function useTreeView(
+  workspaceId: string | undefined,
+  readerId: string | undefined,
+): TreeViewControl {
+  const filterChoice = useViewChoice(VIEW_CHOICE_KEY.TASKS_FILTER, workspaceId, VIEW_REFUSED);
 
-  // Note that the view and its setter hold their identity until a choice or the workspace changes them, because the list's whole tree is built again on a new one.
-  const view = useMemo(
-    () => (workspaceId === undefined ? DEFAULT_TASK_TREE_VIEW : treeViewIn(kept, workspaceId)),
-    [kept, workspaceId],
+  const displayChoice = useViewChoice(
+    VIEW_CHOICE_KEY.TASKS_LIST_DISPLAY,
+    workspaceId === undefined ? undefined : null,
+    VIEW_REFUSED,
   );
 
-  const setView = useCallback(
-    (next: TaskTreeView) => {
-      if (workspaceId === undefined) return;
-      const words = keptTreeViews(views.read(), workspaceId, next);
+  useKeptViewMovedUp(workspaceId, readerId, filterChoice, displayChoice);
 
-      Settings.set({ [TREE_VIEWS_KEY]: words });
-      views.set(readTreeViews(words));
+  const filter = Option.getOrElse(filterChoice.value, () => NO_TASKS_FILTER);
+  const display = Option.getOrElse(displayChoice.value, () => NO_KEPT_DISPLAY);
+
+  const view = useMemo(() => treeViewOf(filter, display, readerId), [filter, display, readerId]);
+
+  const { choose: chooseFilter } = filterChoice;
+  const { choose: chooseDisplay } = displayChoice;
+
+  // Note that the control holds its identity until what it reads changes, since the Tasks tab builds its whole listing again on a new one; each choice it makes is made over the values it read then.
+  return useMemo(() => {
+    const change = (part: Partial<TaskTreeView>) => {
+      if (readerId === undefined) return;
+
+      if (part.statuses !== undefined || part.assignedTo !== undefined)
+        chooseFilter(filterWithTreeView(filter, part, readerId));
+
+      if (Object.keys(part).some((field) => field !== "statuses" && field !== "assignedTo"))
+        chooseDisplay(displayWithTreeView(display, part));
+    };
+
+    const reset = () => {
+      chooseFilter(null);
+      chooseDisplay(displayReset(display));
+    };
+
+    return { view, filter, changed: treeViewChanged(filter, view), change, reset };
+  }, [view, filter, display, readerId]);
+}
+
+/** Which of the List's groups stand folded on the account, and the press that folds or opens one. */
+export interface TreeFolds {
+  readonly folded: (head: TasksGroupHead) => boolean;
+  readonly setFolded: (head: TasksGroupHead, folded: boolean) => void;
+}
+
+/** The List's folds as the page keeps them on the account, which the tree's groups under the page's grouping fold by. */
+export function useTreeFolds(): TreeFolds {
+  const choice = useViewChoice(VIEW_CHOICE_KEY.TASKS_LIST_FOLDS, null, FOLD_REFUSED);
+  const folds = Option.getOrElse(choice.value, () => NO_FOLDS);
+
+  return {
+    folded: (head) => foldedIn(folds, head),
+    setFolded: (head, folded) => {
+      if (foldedIn(folds, head) !== folded) choice.choose(toggledFold(folds, head));
     },
-    [workspaceId],
-  );
-
-  return { view, setView };
+  };
 }

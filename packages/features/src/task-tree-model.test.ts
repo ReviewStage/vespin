@@ -1,7 +1,9 @@
 import { expect, test } from "vitest";
 import { ASSIGNED_TO } from "./task-list-model.js";
 import {
-  DEFAULT_TASK_TREE_VIEW,
+  displayWithTreeView,
+  filterWithTreeView,
+  keptTreeViewMoved,
   searchedTasks,
   TASK_ROW_FACE,
   type TaskBranch,
@@ -9,9 +11,15 @@ import {
   taskBranches,
   taskRowFace,
   taskTree,
+  treeViewOf,
 } from "./task-tree-model.js";
 import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
-import { COMPLETED_WINDOW, TASKS_GROUPING, TASKS_ORDER } from "./tasks-page-model.js";
+import {
+  COMPLETED_WINDOW,
+  TASK_PROPERTY,
+  TASKS_GROUPING,
+  TASKS_ORDER,
+} from "./tasks-page-model.js";
 
 /**
  * task-tree-model.test.ts -- the phone's Tasks list holds each of the
@@ -20,16 +28,26 @@ import { COMPLETED_WINDOW, TASKS_GROUPING, TASKS_ORDER } from "./tasks-page-mode
  * rest under their repository, and a teammate's task they follow under
  * Following; a search finds a settled task by its key;
  * a row nests under the nearest shallower row above it, however deep;
- * the view the reader chose stands their tasks as the Tasks page would;
+ * the view the reader chose stands their tasks as the Tasks page would,
+ * no status chosen keeping every one; the phone reads the page's filter and
+ * display and changes only its own fields of them;
  * a row wears a teammate's face, the unassigned mark, or none for the reader's own.
  */
 
 const READER = "user-ada";
 const WORKSPACE = "workspace-acme";
 
-/** The view the tab starts from, the sidebar's own, as the reader has not changed it. */
+/** The reader's own tasks by repository, the latest active first, as the sidebar stands them. */
 const SIDEBAR_VIEW = {
-  treeView: DEFAULT_TASK_TREE_VIEW,
+  filter: { assignee: [READER] },
+  treeView: {
+    assignedTo: { kind: ASSIGNED_TO.ME },
+    statuses: [],
+    grouping: TASKS_GROUPING.REPOSITORY,
+    order: TASKS_ORDER.UPDATED,
+    completed: COMPLETED_WINDOW.NONE,
+    subTasks: false,
+  },
   personName: (userId: string) => userId,
   now: 0,
 } as const;
@@ -193,7 +211,7 @@ test("Following holds the open tasks the reader follows that no other list holds
   ]);
 });
 
-test("the view the reader chose stands their tasks: whose, grouped, ordered, finished lately, sub-tasks beside their parents", () => {
+test("the view the reader chose stands their tasks: anyone's, every status where none is chosen, grouped, ordered, finished lately, sub-tasks beside their parents", () => {
   const day = 24 * 60 * 60 * 1000;
   const now = 100 * day;
   const grace = { assignee: { userId: "user-grace", name: "Grace Hopper" } };
@@ -216,6 +234,7 @@ test("the view the reader chose stands their tasks: whose, grouped, ordered, fin
     readerId: READER,
     noRepository: "No repository",
     tasksHead: "Everyone's tasks",
+    filter: {},
     treeView: {
       assignedTo: { kind: ASSIGNED_TO.ANYONE },
       statuses: [],
@@ -231,8 +250,47 @@ test("the view the reader chose stands their tasks: whose, grouped, ordered, fin
   expect(drawn(tree)).toEqual([
     ["In progress", "Invites"],
     ["Todo", "Billing", "Invite copy"],
+    ["Backlog", "Archive"],
     ["Done", "Rounding"],
   ]);
+});
+
+test("the phone reads the page's filter and display, a value it does not offer at its nearest, and its change keeps every other choice the page keeps", () => {
+  const filter = { priority: ["urgent" as const], assignee: [READER], status: ["todo" as const] };
+  const display = { grouping: TASKS_GROUPING.CREATOR, completed: COMPLETED_WINDOW.ALL };
+
+  expect(treeViewOf(filter, display, READER)).toEqual({
+    assignedTo: { kind: ASSIGNED_TO.ME },
+    statuses: ["todo"],
+    grouping: TASKS_GROUPING.STATUS,
+    order: TASKS_ORDER.PRIORITY,
+    completed: COMPLETED_WINDOW.PAST_MONTH,
+    subTasks: false,
+  });
+  expect(
+    filterWithTreeView(filter, { assignedTo: { kind: ASSIGNED_TO.FOLLOWING } }, READER),
+  ).toEqual({ priority: ["urgent"], status: ["todo"], follower: [READER] });
+  expect(filterWithTreeView(filter, { statuses: [] }, READER)).toEqual({
+    priority: ["urgent"],
+    assignee: [READER],
+  });
+
+  const properties = [TASK_PROPERTY.KEY];
+  expect(
+    displayWithTreeView({ ...display, properties }, { grouping: TASKS_GROUPING.PRIORITY }),
+  ).toEqual({ grouping: TASKS_GROUPING.PRIORITY, completed: COMPLETED_WINDOW.ALL, properties });
+});
+
+test("a view an earlier build kept on the phone moves up as the page's filter and display, what it lacks read as that build's own", () => {
+  expect(keptTreeViewMoved({ grouping: TASKS_GROUPING.STATUS }, READER)).toEqual({
+    filter: { assignee: [READER] },
+    display: {
+      grouping: TASKS_GROUPING.STATUS,
+      order: TASKS_ORDER.UPDATED,
+      completed: COMPLETED_WINDOW.NONE,
+      subTasks: false,
+    },
+  });
 });
 
 test("a search finds the workspace's tasks whatever their status, by name or key", () => {
