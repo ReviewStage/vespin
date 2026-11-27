@@ -338,6 +338,8 @@ export {
   WriteNoteRow,
 } from "./pull-request-page.js";
 
+export { ConversationSkeleton, PullRequestHeadSkeleton } from "./pull-request-skeleton.js";
+
 export { type QueuedLine, QueuedLines } from "./queued-lines.js";
 
 export { RemindPickSheet } from "./remind-sheet.js";
