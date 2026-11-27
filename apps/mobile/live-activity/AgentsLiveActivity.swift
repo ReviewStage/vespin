@@ -10,8 +10,8 @@
 // widest reading and reads hours and minutes once the screen dims. The
 // count stands by the panel's working mark while agents work, held still
 // since a Live Activity runs no animation of its own (`WorkingMark`), and
-// by its done mark once none does, on the Lock Screen in the same row and
-// place, in the working blue or the done green, and copper
+// by its done mark once none does, in the same row and place, in the
+// working blue or the done green, and copper
 // (`Attention`) marks only what wants the member: the asks waiting, the
 // compact presentation's Inbox glyph, and the keyline while one waits. Nothing in it is a link, so no row or region opens a page of
 // the app: a person swipes it away more often than they open it, and a
@@ -43,21 +43,12 @@ struct AgentsLiveActivity: Widget {
       let state = context.state
       return DynamicIsland {
         // Note that the header stands in from the island's sides as far as the rows do, so its ends line up with the rows' titles and Stop.
-        // Note that once none works the header has no rows under it, so it stands in the island's center region instead of its leading one.
+        // Note that once none works the header keeps the same regions, so the done mark and the asks stand where the count and the asks stood, as on the Lock Screen.
         DynamicIslandExpandedRegion(.leading) {
-          if state.running > 0 {
-            CountLabel(state: state).padding(.leading, ExpandedInset.side)
-          }
+          CountLabel(state: state).padding(.leading, ExpandedInset.side)
         }
         DynamicIslandExpandedRegion(.trailing) {
-          if state.running > 0 {
-            WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
-          }
-        }
-        DynamicIslandExpandedRegion(.center) {
-          if state.running == 0 {
-            DoneHeader(state: state)
-          }
+          WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
         }
         DynamicIslandExpandedRegion(.bottom) {
           // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
@@ -128,18 +119,6 @@ struct CountLabel: View {
     .monospacedDigit()
     .foregroundStyle(state.tone)
     .lineLimit(1)
-  }
-}
-
-/// The expanded island's header once none works: the done mark and its words, with any ask still waiting beside them, in the island's center, since no rows stand under it.
-struct DoneHeader: View {
-  let state: AgentsActivityAttributes.ContentState
-
-  var body: some View {
-    HStack(spacing: 12) {
-      CountLabel(state: state)
-      WaitingLabel(state: state)
-    }
   }
 }
 
