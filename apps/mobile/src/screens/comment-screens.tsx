@@ -194,9 +194,14 @@ function commentPath(overview: TaskOverview | undefined): readonly string[] {
   return [task?.name, key].filter((step): step is string => step !== undefined);
 }
 
-/** The words a thread stands on, as its heading quotes them, or that they are gone where every one was deleted. */
-function quoteOf(quote: string, anchored: boolean): string {
-  return anchored && quote.trim() !== "" ? `“${quote.trim()}”` : WORDS.GONE;
+/** The words a thread stands on, as its heading quotes them, or that they are gone where it kept none of them. */
+function quoteOf(quote: string): string {
+  return quote.trim() === "" ? WORDS.GONE : `“${quote.trim()}”`;
+}
+
+/** That the words a thread stands on were deleted since, said over the quote it keeps of them, as the panel's thread says it; none while they stand, or where it kept no quote, which its heading says alone. */
+function goneOf(quote: string, anchored: boolean): string | undefined {
+  return anchored || quote.trim() === "" ? undefined : WORDS.GONE;
 }
 
 /**
@@ -279,9 +284,11 @@ function CommentThread({
     onDropPictures: reply.pictures.drop,
   };
 
+  const drawn = thread === undefined ? undefined : threadMessages(thread, agents, pictureOf, media);
+
   // Note that each picture of the thread reads its own source where it is drawn, under the task it belongs to, so one landing draws that picture alone.
   const page =
-    thread === undefined || task === undefined ? undefined : (
+    thread === undefined || task === undefined || drawn === undefined ? undefined : (
       <PicturesProvider
         owner={PICTURE_OWNER.TASK}
         ownerId={task.id}
@@ -291,8 +298,10 @@ function CommentThread({
           quoted
           path={path}
           status={task.status}
-          title={quoteOf(thread.quote, thread.anchor !== undefined)}
-          messages={threadMessages(thread, agents, pictureOf, media)}
+          title={quoteOf(thread.quote)}
+          gone={goneOf(thread.quote, thread.anchor !== undefined)}
+          opening={drawn.opening}
+          messages={drawn.messages}
           repository={task.repository}
           onOpenLink={openLink}
           standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
@@ -465,7 +474,7 @@ function NewComment({
         quoted
         path={path}
         status={overview?.task.status}
-        title={quoteOf(block.quote ?? "", true)}
+        title={quoteOf(block.quote ?? "")}
         messages={[]}
         repository={overview?.task.repository}
         onOpenLink={openLink}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commentRowLines } from "./description-comment-model.js";
+import { commentRowLines, commentThreadLines } from "./description-comment-model.js";
 import {
   DESCRIPTION_COMMENT_ACTOR,
   DESCRIPTION_COMMENT_ENTRY,
@@ -65,5 +65,39 @@ describe("commentRowLines", () => {
     const lines = commentRowLines(thread([entry(1, DESCRIPTION_COMMENT_ENTRY.COMMENT, "")]));
 
     expect(lines.preview).toBe("Invites expire after seven days.");
+  });
+});
+
+describe("commentThreadLines", () => {
+  it("stands each resolve and reopen after the comment it follows, and leaves an ask's line out", () => {
+    const lines = commentThreadLines(
+      thread([
+        entry(1, DESCRIPTION_COMMENT_ENTRY.COMMENT, "Can we resend it?"),
+        entry(2, DESCRIPTION_COMMENT_ENTRY.RESOLVED),
+        entry(3, DESCRIPTION_COMMENT_ENTRY.REOPENED),
+        entry(4, DESCRIPTION_COMMENT_ENTRY.ASKED),
+        entry(5, DESCRIPTION_COMMENT_ENTRY.COMMENT, "Reopened to add Resend."),
+      ]),
+    );
+
+    expect(lines.opening).toEqual([]);
+    expect(
+      lines.comments.map(({ comment, after }) => [comment.at, after.map((event) => event.kind)]),
+    ).toEqual([
+      [1, [DESCRIPTION_COMMENT_ENTRY.RESOLVED, DESCRIPTION_COMMENT_ENTRY.REOPENED]],
+      [5, []],
+    ]);
+  });
+
+  it("stands a line that comes before every comment, as one whose first comment was deleted, over them", () => {
+    const lines = commentThreadLines(
+      thread([
+        entry(1, DESCRIPTION_COMMENT_ENTRY.RESOLVED),
+        entry(2, DESCRIPTION_COMMENT_ENTRY.COMMENT, "Still needed."),
+      ]),
+    );
+
+    expect(lines.opening.map((event) => event.at)).toEqual([1]);
+    expect(lines.comments.map(({ comment }) => comment.at)).toEqual([2]);
   });
 });

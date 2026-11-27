@@ -509,6 +509,7 @@ export {
 
 export {
   THREAD_MEDIA,
+  type ThreadEvent,
   type ThreadMedia,
   type ThreadMessage,
   ThreadPage,
