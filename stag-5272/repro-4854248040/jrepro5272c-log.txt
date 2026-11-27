@@ -1,0 +1,11 @@
+pinned to 4854248040
+== bundle PJjrepro5272c base 4854248040
+  built 4854248040 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-dark-transcript-open: fails 8 shots 23     Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  iphone-dark-transcript-open shots: at-failure.png repro-back-down.png repro-brief-end.png repro-brief-start.png repro-control-end.png repro-control-start.png repro-sent-working.png repro-tapped-settled.png step-050-assertCondition-Stop.png step-051-hideKeyboard.png step-058-runFlow.png step-062-runFlow.png step-063-scrollUntilVisible-${ELEMENT}.png step-066-runFlow.png step-070-runFlow.png step-071-scrollUntilVisible-${ELEMENT}.png step-074-runFlow.png step-078-runFlow.png step-079-scrollUntilVisible-${ELEMENT}.png step-093-runFlow.png step-098-runFlow.png step-099-scrollUntilVisible-${ELEMENT}.png transcript-open-latest.png transcript-open-tapped.png 
+iphone-light-transcript-open: fails 8 shots 23     Scrolling UP until "${ELEMENT}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  iphone-light-transcript-open shots: at-failure.png repro-back-down.png repro-brief-end.png repro-brief-start.png repro-control-end.png repro-control-start.png repro-sent-working.png repro-tapped-settled.png step-050-assertCondition-Stop.png step-051-hideKeyboard.png step-058-runFlow.png step-062-runFlow.png step-063-scrollUntilVisible-${ELEMENT}.png step-066-runFlow.png step-070-runFlow.png step-071-scrollUntilVisible-${ELEMENT}.png step-074-runFlow.png step-078-runFlow.png step-079-scrollUntilVisible-${ELEMENT}.png step-093-runFlow.png step-098-runFlow.png step-099-scrollUntilVisible-${ELEMENT}.png transcript-open-latest.png transcript-open-tapped.png 
