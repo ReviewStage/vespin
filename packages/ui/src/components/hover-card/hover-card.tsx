@@ -4,7 +4,7 @@ import { INLINE_REF_FIT, InlineRefFitScope } from "../inline-ref/inline-ref-fit.
 import { GAP, LAYOUT_ELEMENT, Stack } from "../layout/layout.js";
 import { useLinkAddress } from "../menu/link-address.js";
 import { ClippedLine, ONE_LINE_ELEMENT, ONE_LINE_END } from "../one-line/clipped-line.js";
-import { SCROLL_FADE, SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
+import { SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
 import { Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
 
 /**
@@ -367,14 +367,13 @@ export function HoverCardRow({
 }
 
 /**
- * What a card holds past a few rows' height, scrolling within the card and
- * fading at the edge where more stands, so a long list is read whole rather
- * than cut short. Its rows keep their wash to the card's edges.
+ * What a card holds past a few rows' height, scrolling within the card, so
+ * a long list is read whole rather than cut short. Its rows keep their wash to the card's edges.
  */
 export function HoverCardScroll({ children }: { children: ReactNode }): React.JSX.Element {
   return (
     <div className={SCROLL}>
-      <ScrollArea size={SCROLL_SIZE.CONTENT} fade={SCROLL_FADE.BOTH}>
+      <ScrollArea size={SCROLL_SIZE.CONTENT}>
         <div className={SCROLL_BODY}>{children}</div>
       </ScrollArea>
     </div>

@@ -1160,7 +1160,6 @@
      utilities): the gaps a byline's phrases, a line's parts, a pane's groups,
      and a page's sections stand apart by, and the weights words are set in
      where no type role names them; then each surface's own. */
-  --spacing-log-over-composer: calc(var(--ui-scroll-fade) + var(--ui-space-4));
   --spacing-todos-dock: calc(var(--ui-stage-height) * 0.3);
   --spacing-dictation-clock: 34px; /* off-scale: a clock's widest reading */
   --text-section-inline: var(--ui-type-section-size);

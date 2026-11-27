@@ -265,10 +265,8 @@ const COMPOSER_IN_PLACE_ROOM_CLASS =
 export const COMPOSER_DOCK_CLASS = "px-ui-16 pt-0 pb-row-inset";
 
 /**
- * A log that runs right up to the card's top edge, its words dissolving
- * over `--ui-scroll-fade` just above it rather than being sliced short of
- * the card: its foot pads past the fade, so the newest line stands whole
- * above it.
+ * A log that runs right up to the card's top edge: its foot keeps a step
+ * of room, so the newest line stands whole just above the card.
  */
 export const LOG_OVER_COMPOSER_CLASS = "agent-log-over-composer";
 
