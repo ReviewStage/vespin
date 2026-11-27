@@ -674,6 +674,7 @@ export function PullRequestReviewScreen() {
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={FINISH_WORDS.MORE}>
+          <Stack.Toolbar.Label>{FINISH_WORDS.MORE}</Stack.Toolbar.Label>
           <Stack.Toolbar.MenuAction
             destructive
             disabled={busy || pending === undefined}
