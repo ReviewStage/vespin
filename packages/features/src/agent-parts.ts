@@ -59,6 +59,7 @@ import { type KeptPicture, keptPicturesOf } from "./conversation-picture-wire.js
 import { drawnCall } from "./native-tool-calls.js";
 import { formatBytes } from "./number-format.js";
 import { type OutOfMemory, outOfMemoryOf } from "./out-of-memory-wire.js";
+import { cardTitle } from "./plain-words.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import {
   type CallMachine,
@@ -127,6 +128,41 @@ export const CUT_PART_WORDS = {
 /** A cut part's two ends, the middle that could not be read said between them, as a part whose whole read failed draws. */
 export function cutPartText(cut: Pick<AgentPartCut, "head" | "tail" | "bytes">): string {
   return `${cut.head}\n\n… ${formatBytes(cut.bytes)} in all; only its start and end could be read …\n\n${cut.tail}`;
+}
+
+/** What a thought's folded line says, before its preview. */
+export const THOUGHT_LINE = "Thought";
+
+/** The blank lines a thought may open on, up to the first line with words. */
+const LEADING_BLANK_LINES = /^(?:[^\S\n]*\n)+/u;
+
+/**
+ * How many characters of a thought its closed line is handed: more than the
+ * widest column shows, since the line cuts the rest itself. Note that the
+ * words are cut here as well, because a transcript holds hundreds of closed
+ * thoughts, and a long first paragraph whole in each line would put back in
+ * the page what the fold keeps out of it.
+ */
+const THOUGHT_PREVIEW_LENGTH = 400;
+
+/**
+ * A thought's closed line's preview: its first line of words, as plain
+ * words, as a task is named on its card, since a model's thought often opens
+ * on a bold title of its own, which a preview of every paragraph would run
+ * into the sentence after it.
+ */
+export function thoughtPreview(text: string): string {
+  return cardTitle(text).slice(0, THOUGHT_PREVIEW_LENGTH);
+}
+
+/**
+ * A thought's words as its open body draws them, as they are but for the
+ * blank lines a model leaves around them. Note that only whole blank lines
+ * go at the start, because the words keep their line breaks and indents, and
+ * a trailing break would draw as an empty line under the last.
+ */
+export function thoughtWords(text: string): string {
+  return text.replace(LEADING_BLANK_LINES, "").trimEnd();
 }
 
 /** One part of a stored message as the tab draws it. */

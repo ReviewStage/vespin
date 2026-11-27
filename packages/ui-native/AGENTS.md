@@ -137,7 +137,8 @@ builds a control of its own.
   Deny and Allow; its rows
   are read by `transcript-model.ts` from the panel's own parts, folds, and
   call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
-  the agent's thinking left out, and each call leads with the glyph for its
+  the agent's thinking folded under one line previewing it, as the panel's
+  thought stands, a cut one read whole as it opens, and each call leads with the glyph for its
   kind, as the rows' glyphs are chosen (`transcript-look.ts`). A pull
   request an agent opened stands in its call's place as `PullRequestCard`, as the
   task list holds it now. A page an agent showed is `SealedPage`, the app's

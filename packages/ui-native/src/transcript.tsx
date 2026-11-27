@@ -3,6 +3,7 @@
 import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
+import { CUT_PART_WORDS, THOUGHT_LINE } from "@repo/features/agent-parts";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import {
   CHAT_EDIT_WORDS,
@@ -139,6 +140,7 @@ const COLLAPSED_HEARD = "Collapsed";
 /** What a press on a call's line, or a fold's, is heard to do. */
 const CALL_HINT = "Shows or hides the call's input and output";
 const FOLD_HINT = "Shows or hides the steps it holds";
+const THOUGHT_HINT = "Shows or hides the whole thought";
 
 /** What the spinner over the oldest row is heard as while an older page is read. */
 const READING_OLDER = "Loading earlier messages";
@@ -997,6 +999,63 @@ function FoldRow({
   );
 }
 
+/**
+ * What the agent thought, as the panel's thought draws it: the brain, then
+ * "Thought" in the full ink and its first line of words in the muted one,
+ * cut to the line, folded until a press opens it in place. Open, the line
+ * says "Thought" alone, and its words stand under it whole in the muted
+ * ink, set in to the line's words as a call's body is; while a thought its
+ * page carried cut is read whole, the body says so.
+ */
+function ThoughtRow({
+  item,
+  onToggle,
+}: {
+  readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.THOUGHT }>;
+  readonly onToggle: (item: TranscriptItem) => void;
+}) {
+  const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
+  const large = useAccessibilitySize();
+  const reading = item.cut !== undefined;
+
+  return (
+    <View style={[styles.row, inset(item.depth)]}>
+      <Press
+        onPress={() => onToggle(item)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: item.open }}
+        accessibilityLabel={item.open ? THOUGHT_LINE : `${THOUGHT_LINE} ${item.preview}`}
+        accessibilityValue={item.open ? undefined : { text: COLLAPSED_HEARD }}
+        accessibilityHint={THOUGHT_HINT}
+        hitSlop={LINE_REACH}
+        style={styles.callLine}
+      >
+        <SymbolView
+          name={glyphSymbol(GLYPH.THOUGHT)}
+          size={size}
+          tintColor={colors.TEXT_MUTED}
+          accessibilityElementsHidden
+        />
+        <Text
+          numberOfLines={large ? undefined : 1}
+          style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+        >
+          <Text style={{ color: colors.TEXT }}>{THOUGHT_LINE}</Text>
+          {item.open || item.preview === "" ? null : ` ${item.preview}`}
+        </Text>
+      </Press>
+      {item.open ? (
+        <View style={styles.body}>
+          <Text selectable style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+            {reading ? CUT_PART_WORDS.THOUGHT : item.words}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 /** The mark a line of the reader's that did not go stands under its bubble at the column's trailing edge, as Messages marks one; nothing for a line that went. */
 function UndeliveredUnder({ line }: { readonly line: UndeliveredLine | undefined }) {
   if (line === undefined) return null;
@@ -1369,6 +1428,8 @@ function TranscriptRow({
           </CopyWordsMenu>
         </View>
       );
+    case TRANSCRIPT_ITEM.THOUGHT:
+      return <ThoughtRow item={item} onToggle={drawing.onToggle} />;
     case TRANSCRIPT_ITEM.CALL:
       return (
         <CallRow

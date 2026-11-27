@@ -1,4 +1,10 @@
-import { CUT_PART_WORDS, cutPartText, WHOLE_PART } from "@repo/features/agent-parts";
+import {
+  CUT_PART_WORDS,
+  cutPartText,
+  thoughtPreview,
+  thoughtWords,
+  WHOLE_PART,
+} from "@repo/features/agent-parts";
 import {
   AGENT_TODO_STATUS,
   type AgentTodoStatus,
@@ -12,7 +18,6 @@ import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/featur
 import { machineName } from "@repo/features/machine-name";
 import { encodeMention, MENTION_KIND, mayNameChip } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
-import { cardTitle } from "@repo/features/plain-words";
 import { readReplyButtonLink } from "@repo/features/reply-button-wire";
 import {
   blockSays,
@@ -1148,18 +1153,6 @@ export function TranscriptWords({
   );
 }
 
-/** The blank lines a reasoning may open on, up to the first line with words. */
-const LEADING_BLANK_LINES = /^(?:[^\S\n]*\n)+/u;
-
-/**
- * How many characters of a thought its closed line is handed: more than the
- * widest column shows, since the line cuts the rest itself. Note that the
- * words are cut here as well, because a transcript holds hundreds of closed
- * thoughts, and a long first paragraph whole in each line would put back in
- * the page what the fold keeps out of it.
- */
-const REASONING_PREVIEW_LENGTH = 400;
-
 /**
  * A model's reasoning, folded under one line until opened, its words as they
  * are but for the blank lines a model leaves around them. Note that only
@@ -1186,9 +1179,9 @@ export function TranscriptReasoning({
 
   return (
     <Reasoning>
-      <ReasoningTrigger preview={cardTitle(shown).slice(0, REASONING_PREVIEW_LENGTH)} />
+      <ReasoningTrigger preview={thoughtPreview(shown)} />
       {cut === undefined ? (
-        <ReasoningContent text={text.replace(LEADING_BLANK_LINES, "").trimEnd()} />
+        <ReasoningContent text={thoughtWords(text)} />
       ) : (
         <FoldBody className={REASONING_BODY_CLASS}>
           <CutWords cut={cut} waiting={CUT_PART_WORDS.THOUGHT}>

@@ -1,3 +1,4 @@
+import { THOUGHT_LINE } from "@repo/features/agent-parts";
 import {
   GLYPH_INK,
   GlyphSlot,
@@ -28,9 +29,6 @@ import { Fold, FoldBody, type FoldProps } from "./fold.js";
  * call's line, "Thought" is in the full ink, and the brain and the preview
  * in the muted one. Its look is `.reasoning`'s (tasks.css).
  */
-
-/** What the folded line says. */
-const REASONING_LINE = "Thought";
 
 /** The thinking under its open line: set in past the brain to the line's words (`--transcript-gutter`, tasks.css), in the muted ink. */
 export const REASONING_BODY_CLASS =
@@ -67,7 +65,7 @@ export function ReasoningTrigger({ preview = "" }: ReasoningTriggerProps): React
         <BrainIcon />
       </GlyphSlot>
       <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} truncate className="flex-1">
-        <span className="text-foreground">{REASONING_LINE}</span>
+        <span className="text-foreground">{THOUGHT_LINE}</span>
         {previewed && preview !== "" ? ` ${preview}` : null}
       </Text>
     </LineSummary>
