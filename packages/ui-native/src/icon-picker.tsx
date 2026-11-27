@@ -1,4 +1,4 @@
-// icon-picker.tsx -- the app's one icon picker on iOS, as the panel's `IconPicker` is the desktop's: a sheet with the choice large at its top, its colors as the system's palette under it, a search, and tabs where it has them, over named groups of choices, each a picture or an emoji in a grid, the one chosen ringed in copper, confirmed by Done and dropped by Cancel.
+// icon-picker.tsx -- the app's one icon picker on iOS, as the panel's `IconPicker` is the desktop's: a sheet with the choice large at its top, its colors as the system's palette under it, a search, and tabs where it has them, over named groups of choices, each a picture, a glyph, or an emoji in a grid, the one chosen ringed in copper, confirmed by Done and dropped by Cancel, and an act that takes it away at its foot.
 
 import {
   BottomSheet,
@@ -48,7 +48,9 @@ import {
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { type ListScopes, ScopeControl } from "./button.js";
+import { type Glyph, glyphImage } from "./glyph.js";
 import { MANAGER_FACE_EDGE_WIDTH, MANAGER_FACE_EMOJI_SCALE } from "./manager-face-look.js";
+import { ActionRow } from "./settings-form.js";
 import { Text } from "./text.js";
 import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -73,12 +75,16 @@ const RING_WIDTH = 2;
 const BARE_EMOJI_SCALE = 0.8;
 
 /**
- * How many choices the sheet draws at once before a group waits for its place
- * to scroll near: about a screen and a half of the grid, so a tab of some two
- * thousand emoji opens on its first category and draws the rest as the reader
- * reaches them.
+ * How many choices the sheet draws at once before the rest wait for their
+ * place to scroll near, and how many a long group draws at a time: about a
+ * screen and a half of the grid, whole rows of it, so a tab of some two
+ * thousand emoji or glyphs opens on its first rows and draws the rest as the
+ * reader reaches them, and no chunk ends on a short row inside its group.
  */
-const DRAWN_AHEAD = 120;
+const DRAWN_AHEAD = 15 * GRID_COLUMNS;
+
+/** How much of a choice's side a glyph fills, as a symbol stands a little inside its line. */
+const GLYPH_SCALE = 0.75;
 
 /** No color at all, for a ring's room where no choice is chosen and the tabs' row. */
 const CLEAR = "#00000000";
@@ -89,14 +95,21 @@ const WORDS = {
   CANCEL: "Cancel",
 } as const;
 
-/** What a choice is drawn as: a picture of the asset catalog, or an emoji, on a disc of its color where it has one. */
+/** What a choice is drawn as: a picture of the asset catalog, a glyph in its ink, or an emoji, on a disc of its color where it has one. */
 export const ICON_PICKER_LOOK = {
   PICTURE: "picture",
+  GLYPH: "glyph",
   EMOJI: "emoji",
 } as const;
 
 type IconPickerLook =
   | { readonly kind: typeof ICON_PICKER_LOOK.PICTURE; readonly asset: string }
+  | {
+      readonly kind: typeof ICON_PICKER_LOOK.GLYPH;
+      readonly glyph: Glyph;
+      /** Its ink in the theme's shade, as a section's glyph wears its color. */
+      readonly ink: string;
+    }
   | {
       readonly kind: typeof ICON_PICKER_LOOK.EMOJI;
       readonly emoji: string;
@@ -164,18 +177,29 @@ type IconPickerSheetProps = {
   readonly groups: readonly IconPickerGroup[];
   /** Hands on the key of the group and of the choice pressed, which the caller shows in the preview. */
   readonly onPick: (group: string, key: string) => void;
+  /** An act that takes the choice away, such as a section's Remove icon, standing alone in red at the sheet's foot; none where nothing can be taken away. */
+  readonly remove?: { readonly label: string; readonly onPress: () => void } | undefined;
 };
 
 /** What the grid hands a press: its group's key and its choice's. */
 type PickChoice = (group: string, key: string) => void;
 
-/** A choice's face: its picture, or its emoji, on its disc where it has one. */
+/** A choice's face: its picture, its glyph in its ink, or its emoji, on its disc where it has one. */
 function ChoiceFace({ look, side }: { readonly look: IconPickerLook; readonly side: number }) {
   if (look.kind === ICON_PICKER_LOOK.PICTURE)
     return (
       <Image
         assetName={look.asset}
         modifiers={[resizable(), frame({ width: side, height: side })]}
+      />
+    );
+
+  if (look.kind === ICON_PICKER_LOOK.GLYPH)
+    return (
+      <Image
+        {...glyphImage(look.glyph)}
+        color={look.ink}
+        modifiers={[font({ size: side * GLYPH_SCALE }), frame({ width: side, height: side })]}
       />
     );
 
@@ -317,20 +341,33 @@ function WaitingGrid({ count, onReach }: { readonly count: number; readonly onRe
   );
 }
 
-/** The groups drawn at once: those whose choices before them number under `DRAWN_AHEAD`, and each the reader has scrolled near. */
-function drawnGroups(
+/** The chunks the reader has scrolled near, by their group's key and their place in it. */
+type ReachedChunks = ReadonlyMap<string, ReadonlySet<number>>;
+
+/** One chunk of a group's choices, `DRAWN_AHEAD` at most, and whether it is drawn. */
+type GroupChunk = { readonly choices: readonly IconPickerChoice[]; readonly drawn: boolean };
+
+/**
+ * Each group's choices in the chunks it draws at a time, `DRAWN_AHEAD` each,
+ * a chunk drawn where it starts within the sheet's first `DRAWN_AHEAD`
+ * choices or the reader has scrolled near it.
+ */
+function groupChunks(
   groups: readonly IconPickerGroup[],
-  reached: ReadonlySet<string>,
-): ReadonlySet<string> {
-  const drawn = new Set(reached);
+  reached: ReachedChunks,
+): readonly (readonly GroupChunk[])[] {
   let before = 0;
 
-  for (const group of groups) {
-    if (before < DRAWN_AHEAD) drawn.add(group.key);
-    before += group.choices.length;
-  }
+  return groups.map((group) =>
+    Array.from({ length: Math.ceil(group.choices.length / DRAWN_AHEAD) }, (_, at) => {
+      const choices = group.choices.slice(at * DRAWN_AHEAD, (at + 1) * DRAWN_AHEAD);
+      const drawn = before < DRAWN_AHEAD || (reached.get(group.key)?.has(at) ?? false);
 
-  return drawn;
+      before += choices.length;
+
+      return { choices, drawn };
+    }),
+  );
 }
 
 /** The sheet's top: the choice standing, large, or the chosen color's disc alone before a pick, heard by its name. */
@@ -384,8 +421,8 @@ function ColorRow({ colors: row }: { readonly colors: IconPickerColors }) {
 function IconPickerPage(props: IconPickerSheetProps) {
   const colors = useColors();
   const query = useNativeState("");
-  const [reached, setReached] = useState<ReadonlySet<string>>(() => new Set());
-  const drawn = drawnGroups(props.groups, reached);
+  const [reached, setReached] = useState<ReachedChunks>(() => new Map());
+  const chunks = groupChunks(props.groups, reached);
 
   // Note that every choice hears one press that reads the caller's latest, so a choice redraws only when it changes, never because the caller's handler did.
   const latestPick = useRef(props.onPick);
@@ -394,7 +431,9 @@ function IconPickerPage(props: IconPickerSheetProps) {
     latestPick.current = props.onPick;
   });
   const onPick = useCallback<PickChoice>((group, key) => latestPick.current(group, key), []);
-  const reach = (key: string) => setReached((before) => new Set(before).add(key));
+
+  const reach = (group: string, at: number) =>
+    setReached((before) => new Map(before).set(group, new Set(before.get(group)).add(at)));
 
   const clearRow = [
     listRowBackground(CLEAR),
@@ -439,17 +478,38 @@ function IconPickerPage(props: IconPickerSheetProps) {
               <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{props.empty}</Text>
             </Section>
           ) : (
-            props.groups.map((group) => (
+            props.groups.map((group, place) => (
               <Section key={group.key} title={group.name}>
-                <VStack modifiers={[gridRow]}>
-                  {drawn.has(group.key) ? (
-                    <ChoiceGrid group={group.key} choices={group.choices} onPick={onPick} />
-                  ) : (
-                    <WaitingGrid count={group.choices.length} onReach={() => reach(group.key)} />
+                <VStack modifiers={[gridRow]} spacing={SPACE.TIGHT}>
+                  {(chunks[place] ?? []).map((chunk, at) =>
+                    chunk.drawn ? (
+                      <ChoiceGrid
+                        key={at}
+                        group={group.key}
+                        choices={chunk.choices}
+                        onPick={onPick}
+                      />
+                    ) : (
+                      <WaitingGrid
+                        key={at}
+                        count={chunk.choices.length}
+                        onReach={() => reach(group.key, at)}
+                      />
+                    ),
                   )}
                 </VStack>
               </Section>
             ))
+          )}
+          {props.remove === undefined ? null : (
+            <Section>
+              <ActionRow
+                label={props.remove.label}
+                destructive
+                centered
+                onPress={props.remove.onPress}
+              />
+            </Section>
           )}
         </Form>
         <Toolbar.Content>
@@ -476,12 +536,14 @@ function IconPickerPage(props: IconPickerSheetProps) {
  * its bar and the system's search field in the bar's drawer; the choice
  * standing large at its top, its colors under it as the system's palette;
  * its tabs, where it has them, as the system's segmented control; and the
- * choices in named groups, each group a grid eight wide of pictures or
- * emoji, the one chosen ringed in copper, as a picked option is. A press
- * hands on the choice, which the caller shows in the preview, and a color
- * chosen recolors it; Done keeps it and Cancel, or a swipe down, drops it.
- * A long grid draws its groups as the reader scrolls near them
- * (`DRAWN_AHEAD`). The caller narrows its groups by the search's words
+ * choices in named groups, each group a grid eight wide of pictures,
+ * glyphs, or emoji, the one chosen ringed in copper, as a picked option is.
+ * A press hands on the choice, which the caller shows in the preview, and a
+ * color chosen recolors it; Done keeps it and Cancel, or a swipe down, drops
+ * it. An act that takes the choice away (`remove`) stands alone in red at
+ * its foot, as a form's red row does. A long grid draws its choices a chunk
+ * at a time as the reader scrolls near them (`DRAWN_AHEAD`), a long group's
+ * included. The caller narrows its groups by the search's words
  * (`onQuery`), so a search finds what the panel's would. It stands on the
  * lifted ground in a host of its own beside its screen, as every sheet of
  * choices does.

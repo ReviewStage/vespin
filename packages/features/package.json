@@ -183,6 +183,7 @@
     "./search-recent-model": "./src/search-recent-model.js",
     "./search-score": "./src/search-score.js",
     "./search-tokens": "./src/search-tokens.js",
+    "./section-icon-model": "./src/section-icon-model.js",
     "./device-agent-wire": "./src/device-agent-wire.js",
     "./checkout-path": "./src/checkout-path.js",
     "./host-connect-words": "./src/host-connect-words.js",

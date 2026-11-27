@@ -5,6 +5,7 @@ import {
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
 import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
+import { glyphKey } from "@repo/features/section-icon-model";
 import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_KIND,
@@ -240,8 +241,6 @@ export const GLYPH = {
   REMOVE_FROM_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_MINUS),
   /** A section's Change icon and Add icon, the panel's Lucide SmilePlus, which the catalog's Lucide names FaceSlightlySmilingPlus, among every glyph it holds. */
   CHANGE_ICON: catalogLucide("FaceSlightlySmilingPlus"),
-  /** A section's icon's Color, the colors its glyph may wear, Lucide's Palette, among every glyph the catalog holds. */
-  ICON_COLOR: catalogLucide("Palette"),
   /** A repository's Keep at top, the panel's arrow to the top rather than a pin so it never reads as Pinned, among every glyph the catalog holds. */
   KEEP_AT_TOP: catalogLucide("ArrowUpToLine"),
   /** A repository's Stop keeping at top, the panel's arrow down from the top, among every glyph the catalog holds. */
@@ -385,11 +384,6 @@ export function runsOnGlyph(place: {
 /** Every Lucide glyph the app's catalog holds a symbol set of, by its asset name. */
 const EVERY_LUCIDE: ReadonlySet<string> = new Set(EVERY_LUCIDE_SYMBOL);
 
-/** A glyph's name on the wire as its asset's name, Lucide's own component name: "arrow-down01" as "ArrowDown01", as the panel's picker spells it back (`glyphKey`). */
-function lucideAssetName(glyph: string): string {
-  return glyph.replace(/(?:^|-)([a-z0-9])/g, (_, letter: string) => letter.toUpperCase());
-}
-
 /**
  * The glyph a section leads with, as the panel's sidebar draws its icon: the
  * Lucide glyph its member chose from the picker, any of them; the folder, the
@@ -404,7 +398,7 @@ export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
 
   if (isSectionGlyph(icon.glyph)) return SECTION_GLYPH[icon.glyph];
 
-  const name = lucideAssetName(icon.glyph);
+  const name = glyphKey(icon.glyph);
 
   // SAFETY: a name the catalog holds a symbol set of is a glyph's name, minted here as `lucide` mints the table's.
   return EVERY_LUCIDE.has(name) ? (name as Glyph) : GLYPH.FOLDER;

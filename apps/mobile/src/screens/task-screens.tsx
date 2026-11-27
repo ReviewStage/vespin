@@ -11,7 +11,6 @@ import { descriptionHead } from "@repo/features/description-blocks";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { COPY_DESCRIPTION, descriptionMarkdown } from "@repo/features/description-markdown";
-import { emojiSchema } from "@repo/features/emoji-wire";
 import { agentGlyphState, GLYPH_STATE } from "@repo/features/glyph-state";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import {
@@ -64,23 +63,12 @@ import {
   TASK_RELATION_ORDER,
   TASK_RELATION_VERBS,
 } from "@repo/features/task-relation-model";
-import {
-  TASK_SECTION_GLYPH,
-  TASK_SECTION_ICON_COLOR,
-  TASK_SECTION_ICON_KIND,
-  type TaskSection,
-  type TaskSectionIcon,
-  type TaskSectionIconColor,
-} from "@repo/features/task-section-wire";
+import type { TaskSection, TaskSectionIcon } from "@repo/features/task-section-wire";
 import {
   MOVE_TO_SECTION,
   NEW_SECTION,
   REMOVE_FROM_SECTION,
-  REMOVE_SECTION_ICON,
   SECTION_ICON_ACT,
-  SECTION_ICON_COLOR_WORDS,
-  sectionGlyphWords,
-  textInkWords,
 } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
@@ -215,7 +203,6 @@ import {
   WordsRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Schema } from "effect";
 import { setStringAsync } from "expo-clipboard";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
@@ -229,7 +216,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useColorScheme } from "react-native";
 import { CHANGE_FACE, type FaceAsk, FaceAsking, useFaceAsk } from "../agents/face-ask.js";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
@@ -261,6 +247,11 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useTabDrawnCount } from "../tab-drawn.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
+import {
+  type SectionIconAsk,
+  SectionIconAsking,
+  useSectionIconAsk,
+} from "../tasks/section-icon-ask.js";
 import { standingPressed, useStandingDrawnCount } from "../tasks/standing-drawn.js";
 import {
   threadComments,
@@ -1230,14 +1221,6 @@ const SECTION_MENU_WORDS = {
   RENAME_SECTION: "Rename section",
   DELETE_SECTION: "Delete section",
   OPEN_ON_GITHUB: "Open on GitHub",
-  /** What Change icon's color menu is called, the colors a glyph may wear. */
-  COLOR: "Color",
-  /** What Change icon's emoji act and its alert are called, as the panel's picker names its Emoji tab. */
-  EMOJI: "Emoji",
-  /** What the emoji alert asks for. */
-  ONE_EMOJI: "Type one emoji for the section.",
-  /** The emoji alert's act. */
-  USE_EMOJI: "Use emoji",
   /** New section's act, as the panel's New section card's. */
   CREATE_SECTION: "Create section",
 } as const;
@@ -1251,18 +1234,6 @@ function movesIntoWords(name: string): string {
 function newTaskInWords(title: string): string {
   return `${SECTION_MENU_WORDS.NEW_TASK} in ${title}`;
 }
-
-/** The glyphs Change icon offers, the panel's picker's suggested ones, in its order. */
-const SUGGESTED_GLYPHS = Object.values(TASK_SECTION_GLYPH);
-
-/** The colors Change icon's Color offers: the text's own ink first, then the picker's palette, in its order. */
-const GLYPH_COLORS: readonly (TaskSectionIconColor | undefined)[] = [
-  undefined,
-  ...Object.values(TASK_SECTION_ICON_COLOR),
-];
-
-/** Whether words typed are one emoji, as a section's icon may be. */
-const isOneEmoji = Schema.is(emojiSchema);
 
 /**
  * Asks for a new section's name in the system's alert, as the panel's New
@@ -1286,111 +1257,24 @@ function askNewSection(
   });
 }
 
-/** Asks for one emoji in the system's alert, on the emoji the section wears, and gives the section it; words that are not one emoji change nothing. */
-function askSectionEmoji(section: TaskSection, placing: Pick<TaskPlacing, "setSectionIcon">): void {
-  askForWords({
-    title: SECTION_MENU_WORDS.EMOJI,
-    message: SECTION_MENU_WORDS.ONE_EMOJI,
-    initial: sectionEmoji(section.icon),
-    kind: WORDS_KIND.NAME,
-    acts: [
-      {
-        label: SECTION_MENU_WORDS.USE_EMOJI,
-        onWords: (typed) => {
-          if (!isOneEmoji(typed)) {
-            buzz(BUZZ.ERROR);
-
-            return;
-          }
-
-          placing.setSectionIcon(section, { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: typed });
-        },
-      },
-    ],
-  });
-}
-
 /**
  * A section's Change icon, Add icon where it wears none, as the panel's
- * icon picker offers it in a phone's own menus: the picker's suggested
- * glyphs, each in the color the section's glyph wears, the one it wears
- * checked; Color, the text's own ink and the palette, while it wears a
- * glyph; Emoji, which asks for one in the system's alert, where the emoji
- * keyboard picks it; and Remove icon while it wears one. Note that the
- * panel's search of every Lucide glyph and every emoji is left to the
- * desktop, since a menu holds a few.
+ * icon well offers it: one act that opens the screen's icon picker over the
+ * section (`SectionIconAsking`), with every Lucide glyph and every emoji, the
+ * glyph's colors, and Remove icon while it wears one. Note that the pick is
+ * written through `setSectionIcon`, which reads the section as it stands at
+ * the write, so a rename while the sheet stood open is kept.
  */
-function iconSubmenu(
+function iconAct(
   section: TaskSection,
   placing: Pick<TaskPlacing, "setSectionIcon">,
-  dark: boolean,
-): RowSubmenu {
-  const { icon } = section;
-  const color = sectionGlyphColor(icon);
-  const worn = icon?.kind === TASK_SECTION_ICON_KIND.GLYPH ? icon.glyph : undefined;
-
-  const glyphIn = (glyph: string, inColor: TaskSectionIconColor | undefined): TaskSectionIcon =>
-    inColor === undefined
-      ? { kind: TASK_SECTION_ICON_KIND.GLYPH, glyph }
-      : { kind: TASK_SECTION_ICON_KIND.GLYPH, glyph, color: inColor };
-
-  const colors: readonly RowSubmenu[] =
-    worn === undefined
-      ? []
-      : [
-          {
-            label: SECTION_MENU_WORDS.COLOR,
-            symbol: GLYPH.ICON_COLOR,
-            choices: GLYPH_COLORS.map((each) => ({
-              label: each === undefined ? textInkWords(dark) : SECTION_ICON_COLOR_WORDS[each],
-              id: each ?? "",
-              mark: { kind: CHOICE_MARK.SECTION_GLYPH, glyph: sectionGlyph(icon), color: each },
-              on: each === color,
-              onPress: () => {
-                if (each !== color) placing.setSectionIcon(section, glyphIn(worn, each));
-              },
-            })),
-          },
-        ];
-
-  const remove: readonly RowAction[] =
-    icon === undefined
-      ? []
-      : [
-          {
-            label: REMOVE_SECTION_ICON,
-            symbol: GLYPH.REMOVE,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => placing.setSectionIcon(section, null),
-          },
-        ];
-
+  askIcon: SectionIconAsk,
+): RowAction {
   return {
-    label: icon === undefined ? SECTION_ICON_ACT.ADD : SECTION_ICON_ACT.CHANGE,
+    label: section.icon === undefined ? SECTION_ICON_ACT.ADD : SECTION_ICON_ACT.CHANGE,
     symbol: GLYPH.CHANGE_ICON,
-    choices: SUGGESTED_GLYPHS.map((glyph) => {
-      const chosen = glyphIn(glyph, color);
-
-      return {
-        label: sectionGlyphWords(glyph),
-        id: glyph,
-        mark: { kind: CHOICE_MARK.SECTION_GLYPH, glyph: sectionGlyph(chosen), color },
-        on: glyph === worn,
-        onPress: () => {
-          if (glyph !== worn) placing.setSectionIcon(section, chosen);
-        },
-      };
-    }),
-    submenus: colors,
-    actions: [
-      {
-        label: SECTION_MENU_WORDS.EMOJI,
-        symbol: GLYPH.CHANGE_FACE,
-        tone: ROW_ACTION_TONE.NEUTRAL,
-        onPress: () => askSectionEmoji(section, placing),
-      },
-      ...remove,
-    ],
+    tone: ROW_ACTION_TONE.NEUTRAL,
+    onPress: () => askIcon(section.icon, (icon) => placing.setSectionIcon(section, icon)),
   };
 }
 
@@ -1410,11 +1294,11 @@ function keepAtTopAct(repository: string, placing: TaskPlacing): RowAction {
   };
 }
 
-/** What a group's header's long press reads beyond the group: the listing, what opens New task on a section, and whether the window is dark, which names the text's own ink. */
+/** What a group's header's long press reads beyond the group: the listing, what opens New task on a section, and the screen's icon picker, none where it stands none. */
 type GroupMenuDoors = {
   readonly listing: TasksListing;
   readonly newTaskIn: (sectionId: string) => void;
-  readonly dark: boolean;
+  readonly askIcon: SectionIconAsk | undefined;
 };
 
 /**
@@ -1422,7 +1306,7 @@ type GroupMenuDoors = {
  * on the sidebar's same header does: Mark all as read on Pinned, Following
  * and the tasks with no repository, only while one of its tasks is unread;
  * on one of the member's sections, New task, then Rename, Change icon (Add
- * icon where it wears none, `iconSubmenu`) and Mark all as read, then
+ * icon where it wears none, `iconAct`) and Mark all as read, then
  * Delete section, its Undo in the notice; on a repository's group, Keep at
  * top and Open on GitHub, then Mark all as read; and on My tasks, which
  * heads the reader's tasks where the list draws no repository headings,
@@ -1430,7 +1314,7 @@ type GroupMenuDoors = {
  * phone holds it in its long press.
  */
 function groupMenu(group: TaskTreeGroup, doors: GroupMenuDoors): readonly LongPressGroup[] {
-  const { listing, newTaskIn, dark } = doors;
+  const { listing, newTaskIn, askIcon } = doors;
   const { placing } = listing;
   const unread = group.rows.map(({ task }) => task).filter((task) => listing.lookOf(task).unread);
 
@@ -1475,7 +1359,7 @@ function groupMenu(group: TaskTreeGroup, doors: GroupMenuDoors): readonly LongPr
               onName: (title) => placing.renameSection(section, title),
             }),
         },
-        iconSubmenu(section, placing, dark),
+        ...(askIcon === undefined ? [] : [iconAct(section, placing, askIcon)]),
         ...read,
       ],
       [
@@ -1586,11 +1470,11 @@ function GroupSection({
 }) {
   const newTaskIn = useNewTaskIn();
   const newTaskInRepository = useNewTaskInRepository();
-  const dark = useColorScheme() === "dark";
+  const askIcon = useSectionIconAsk();
 
   return (
     <ListSection
-      menu={groupMenu(group, { listing, newTaskIn, dark })}
+      menu={groupMenu(group, { listing, newTaskIn, askIcon })}
       title={group.title ?? listing.tree.tasksHead}
       glyph={group.title === undefined ? undefined : groupHeadGlyph(group)}
       glyphColor={
@@ -4076,8 +3960,8 @@ const SharedTasksContext = createContext<SharedTasks | undefined>(undefined);
  * sidebar lists under its places (`SidebarTasksContext`) and the Tasks tab
  * draws whole, so an account's thousands of tasks are read once rather than
  * once for each tab, and a group folded in one tab's sidebar stands folded
- * in every tab's; and the questions a row's status or delete asks, asked
- * once for all. A Manager's row pressed in a sidebar opens its page; a
+ * in every tab's; and the questions a row's status or delete asks, and the
+ * icon picker a section's header opens, asked once for all. A Manager's row pressed in a sidebar opens its page; a
  * task's opens on Tasks (`AppSidebarPane`).
  */
 export function SidebarTasksProvider({ children }: { readonly children: ReactNode }) {
@@ -4111,9 +3995,11 @@ export function SidebarTasksProvider({ children }: { readonly children: ReactNod
 
   return (
     <SharedTasksContext value={shared}>
-      <SidebarTasksContext value={tasks}>{children}</SidebarTasksContext>
-      <StatusQuestionAsk question={screen.status} />
-      <StatusQuestionAsk question={screen.deletion} />
+      <SectionIconAsking>
+        <SidebarTasksContext value={tasks}>{children}</SidebarTasksContext>
+        <StatusQuestionAsk question={screen.status} />
+        <StatusQuestionAsk question={screen.deletion} />
+      </SectionIconAsking>
     </SharedTasksContext>
   );
 }
@@ -4146,7 +4032,8 @@ function TasksSharedRoot() {
  * so a rotation or a fold of the iPhone Duo, which swaps one layout for the
  * other, keeps it: the search, the parents opened and the groups folded
  * (`TreeHold`), and a status or a delete question standing open. It stands
- * the face picker its Managers' rows open (`FaceAsking`).
+ * the face picker its Managers' rows open (`FaceAsking`) and the icon picker
+ * its sections' headers open (`SectionIconAsking`).
  */
 export function TasksListScreen() {
   return APP_SIDEBAR ? <TasksSharedRoot /> : <TasksOwnRoot />;
@@ -4162,13 +4049,15 @@ function TasksOwnRoot() {
 
   return (
     <FaceAsking>
-      {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-        <TasksSplitScreen selected={selected} select={select} screen={screen} hold={hold} />
-      ) : (
-        <TasksStackList screen={screen} hold={hold} />
-      )}
-      <StatusQuestionAsk question={screen.status} />
-      <StatusQuestionAsk question={screen.deletion} />
+      <SectionIconAsking>
+        {sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+          <TasksSplitScreen selected={selected} select={select} screen={screen} hold={hold} />
+        ) : (
+          <TasksStackList screen={screen} hold={hold} />
+        )}
+        <StatusQuestionAsk question={screen.status} />
+        <StatusQuestionAsk question={screen.deletion} />
+      </SectionIconAsking>
     </FaceAsking>
   );
 }

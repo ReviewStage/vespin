@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { TASK_SECTION_GLYPH } from "@repo/features/task-section-wire";
 import { describe, it } from "vitest";
 import { findGlyphs, glyphChoices, glyphKey, glyphName } from "./section-icon-model.js";
+import { TASK_SECTION_GLYPH } from "./task-section-wire.js";
 
 /**
  * What the section icon picker offers and finds, over a synthetic slice of
