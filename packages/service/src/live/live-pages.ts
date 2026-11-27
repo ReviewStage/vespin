@@ -34,8 +34,15 @@ import { Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
 
-/** The first hosted API version whose builds read a whole answer in pages (`client-identity.ts`'s `HOSTED_API_VERSION`). */
-const PAGED_API_VERSION = 10;
+/**
+ * The first hosted API version whose builds read a whole answer in pages
+ * (`client-identity.ts`'s `HOSTED_API_VERSION`). Note that it stands above
+ * every version a build sends today, because no client follows a page yet:
+ * a build that takes the first page for the whole answer holds only its
+ * newest parents, and the rest never come back to it. The client that
+ * learns to follow pages ships at this version.
+ */
+const PAGED_API_VERSION = 12;
 
 /** Which way the parents stand by one of their columns. */
 type PageOrder = (typeof ORDER)[keyof typeof ORDER];
