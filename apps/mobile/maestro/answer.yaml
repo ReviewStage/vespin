@@ -25,7 +25,8 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 # A decide: the options as a card of rows, the recommended tagged; a
 # pick lights Send, which sends it with the note typed, and the thread reads
-# it answered at once: the card gone, and the answer's stamp under "You".
+# it answered at once: the card standing at the head of the reply under
+# "You", its pick checked and taking no press, as the panel's answered card.
 - runFlow:
     file: subflows/open-row.yaml
     env:
@@ -38,9 +39,11 @@ appId: dev.vespin.ios
 - takeScreenshot: answer-decide-picked
 - tapOn: "Send"
 - extendedWaitUntil:
-    visible: "Chose Both"
+    visible: "Answered"
     timeout: 5000
-- assertNotVisible: "The member who sent it"
+- assertVisible: "Both, Recommended.*"
+- assertVisible: "The member who sent it"
+- assertNotVisible: "Add a note"
 - waitForAnimationToEnd
 - takeScreenshot: answer-decide-sent
 
