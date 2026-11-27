@@ -1,0 +1,20 @@
+-- jinboxoff11190r2: main pinned to 085f572576: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to debe927bb1
+== bundle PJjinboxoff11190r2 base debe927bb1
+  built debe927bb1 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+p11190-ipad27-light-inbox-toggle-off-r2 1-open: fails 0 shots 1 
+row bounds [143,1107][691,1159]
+  p11190-ipad27-light-inbox-toggle-off-r2: switch point 647,1133
+p11190-ipad27-light-inbox-toggle-off-r2 2-toggle: fails 1 shots 1 Assert that "Use the Inbox" is visible... FAILED
+  p11190-ipad27-light-inbox-toggle-off-r2: FAIL
+p11190-iphone-light-inbox-toggle-off-r2 1-open: fails 0 shots 1 
+row bounds [16,768][386,820]
+  p11190-iphone-light-inbox-toggle-off-r2: switch point 356,794
+p11190-iphone-light-inbox-toggle-off-r2 2-toggle: fails 0 shots 1 
+  p11190-iphone-light-inbox-toggle-off-r2: Inbox rows or inbox-tab before the close: 0
+p11190-iphone-light-inbox-toggle-off-r2 3-close: fails 0 shots 1 
+  p11190-iphone-light-inbox-toggle-off-r2: PASS
