@@ -83,6 +83,7 @@ import {
   RULE_LOOK,
   type SaidCard,
   type SaidFile,
+  type SaidHead,
   type SaidPicture,
   SHOWN_MEDIA,
   type ShownMedia,
@@ -139,6 +140,9 @@ const COLLAPSED_HEARD = "Collapsed";
 /** What a press on a call's line, or a fold's, is heard to do. */
 const CALL_HINT = "Shows or hides the call's input and output";
 const FOLD_HINT = "Shows or hides the steps it holds";
+
+/** What a press on a carry-on's line is heard to do, as the panel's line hints it. */
+const CARRY_ON_HINT = "Shows or hides what the agent was sent";
 
 /** What the spinner over the oldest row is heard as while an older page is read. */
 const READING_OLDER = "Loading earlier messages";
@@ -212,6 +216,9 @@ const styles = StyleSheet.create({
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
   callWords: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
   wrapped: { flexWrap: "wrap" },
+  lineHead: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 5 },
+  headChip: { flexDirection: "row", alignItems: "center", gap: 3 },
+  carryOnWords: { marginLeft: MARK_SIZE.GLYPH + SPACE.ROW - 2, paddingTop: SPACE.TIGHT },
   chip: {
     flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
@@ -796,6 +803,127 @@ function OriginFrom({
 }
 
 /**
+ * The head a thread's, a comment's, a Slack message's, or a wakeup's line
+ * stands under, as the panel's: who sent it where the reader did not, what
+ * they did, and the chip of what they did it on, which opens the thread
+ * through the app, as a call's thread chip does, or a page as a link does;
+ * a wakeup's chip wears the alarm and opens nothing.
+ */
+function LineHead({
+  head,
+  sender,
+  senderAddress,
+  drawing,
+}: {
+  readonly head: SaidHead;
+  readonly sender: string | undefined;
+  readonly senderAddress: string | undefined;
+  readonly drawing: RowDrawing;
+}) {
+  const colors = useColors();
+  const glyph = useScaledSize(MARK_SIZE.GLYPH - 3);
+  const { thread, address, subject } = head;
+  const onOpenThread = drawing.onOpenThread;
+
+  const open =
+    thread !== undefined
+      ? onOpenThread === undefined
+        ? undefined
+        : () => onOpenThread(thread)
+      : address === undefined
+        ? undefined
+        : () => drawing.onOpenLink(address);
+
+  return (
+    <View style={styles.lineHead}>
+      {sender === undefined ? null : (
+        <SenderName name={sender} address={senderAddress} onOpenLink={drawing.onOpenLink} />
+      )}
+      <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>{head.lead}</Text>
+      {subject === undefined ? null : (
+        <Press
+          disabled={open === undefined}
+          onPress={open}
+          accessibilityRole={open === undefined ? undefined : "link"}
+          accessibilityLabel={subject}
+          style={[
+            styles.chip,
+            styles.headChip,
+            { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
+          ]}
+        >
+          {head.wakeup === true ? (
+            <SymbolView
+              name={glyphSymbol(GLYPH.WAKE)}
+              size={glyph}
+              tintColor={colors.TEXT_MUTED}
+              accessibilityElementsHidden
+            />
+          ) : null}
+          <Text
+            numberOfLines={1}
+            style={{
+              flexShrink: 1,
+              fontSize: ROLE_SIZE.TIME,
+              color: colors.TEXT_BODY,
+              fontWeight: "500",
+            }}
+          >
+            {subject}
+          </Text>
+        </Press>
+      )}
+    </View>
+  );
+}
+
+/** Where a turn was cut off and carried on by itself, as the panel's step: its glyph and why, a press opening the words the agent was sent under it, as a thought's fold opens. */
+function CarryOnRow({
+  item,
+  onToggle,
+}: {
+  readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.CARRY_ON }>;
+  readonly onToggle: (item: TranscriptItem) => void;
+}) {
+  const colors = useColors();
+  const column = useScaledSize(MARK_SIZE.GLYPH);
+
+  return (
+    <View style={[styles.row, inset(item.depth)]}>
+      <Press
+        onPress={() => onToggle(item)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: item.open }}
+        accessibilityLabel={item.line}
+        accessibilityValue={item.open ? undefined : { text: COLLAPSED_HEARD }}
+        accessibilityHint={CARRY_ON_HINT}
+        hitSlop={LINE_REACH}
+        style={styles.callLine}
+      >
+        <SymbolView
+          name={glyphSymbol(GLYPH.CARRY_ON)}
+          size={column}
+          tintColor={colors.TEXT_MUTED}
+          style={{ width: column, height: column }}
+          accessibilityElementsHidden
+        />
+        <Text style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+          {item.line}
+        </Text>
+      </Press>
+      {item.open ? (
+        <Text
+          selectable
+          style={[styles.carryOnWords, { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }]}
+        >
+          {item.sent}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+/**
  * Who sent a line, over its bubble: their name in semibold, heard as the
  * line's heading, and where it names a page (`address`), a tap that opens
  * it (`SenderPress`), as a press on the panel's sender opens their page, an
@@ -1212,7 +1340,15 @@ function TranscriptRow({
           {item.from === undefined ? null : (
             <OriginFrom parts={item.from} onOpenLink={drawing.onOpenLink} />
           )}
-          {item.sender === undefined || item.joinsAbove ? null : (
+          {/* Note that a line under a head names its sender inside it, as the panel's head reads on from their name, so the head stands even in a run. */}
+          {item.head !== undefined ? (
+            <LineHead
+              head={item.head}
+              sender={item.sender}
+              senderAddress={item.senderAddress}
+              drawing={drawing}
+            />
+          ) : item.sender === undefined || item.joinsAbove ? null : (
             <SenderName
               name={item.sender}
               address={item.senderAddress}
@@ -1490,6 +1626,8 @@ function TranscriptRow({
           </Press>
         </View>
       );
+    case TRANSCRIPT_ITEM.CARRY_ON:
+      return <CarryOnRow item={item} onToggle={drawing.onToggle} />;
     case TRANSCRIPT_ITEM.GITHUB:
       // Note that GitHub's card stands across the column at its leading edge, as the panel stands a received line, between the sent lines' bubbles.
       return (

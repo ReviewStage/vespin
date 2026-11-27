@@ -33,6 +33,7 @@ import {
 } from "./agent-wire.js";
 import { GITHUB_PAGE, gitHubPageLink } from "./link-grammar.js";
 import { MESSAGE_BLOCK, messageText } from "./reply-quote.js";
+import { workingTime } from "./time-format.js";
 
 /**
  * transcript-lines.ts -- the lines a coding agent's transcript carries beside its own turns, read out of what the service stored: an agent's, a thread's, a comment's, GitHub's and Slack's, a wakeup and a carry-on, and a worker's task.
@@ -93,6 +94,14 @@ export function carryOnLineOf(message: AgentTranscriptMessage): CarryOnLineMetad
   const read = userMetadataOf(message);
 
   return read?.channel === MESSAGE_CHANNEL.CARRY_ON ? read : undefined;
+}
+
+/** What a wakeup's line says the agent did, after its own name, as a thread's line leads with what its member did. */
+export const WAKEUP_LINE_LEAD = "woke up";
+
+/** What a wakeup's line names after its lead: the wakeup the agent set, by how long it waited. */
+export function wakeupLineSubject(delayMs: number): string {
+  return `${workingTime(delayMs)} wakeup`;
 }
 
 /** A second, in the milliseconds a wakeup's wait is told in. */
