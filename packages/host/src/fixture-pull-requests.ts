@@ -33,6 +33,7 @@ import {
   REVIEW_DECISION,
   REVIEW_STATE,
 } from "@repo/features/agent-wire";
+import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   CHAPTER_KIND,
@@ -846,17 +847,19 @@ const READY_CHAPTERS: readonly Chapter[] = [
   },
 ];
 
-/** The model the fixture's chapters were told by. */
-const CHAPTERS_MODEL = "claude-haiku-5-5";
+/** The ready pull request's chapters, told for `headSha`. */
+function toldFor(headSha: string): PullRequestChaptersState {
+  return {
+    status: PULL_REQUEST_CHAPTERS_STATE.READY,
+    headSha,
+    baseSha: CHAPTERS_BASE,
+    model: CHAPTERS_MODEL.HAIKU,
+    chapters: READY_CHAPTERS,
+  };
+}
 
 /** The ready pull request's chapters told for its head now. */
-const READY_TOLD: PullRequestChaptersState = {
-  status: PULL_REQUEST_CHAPTERS_STATE.READY,
-  headSha: READY.merging?.headSha ?? "",
-  baseSha: CHAPTERS_BASE,
-  model: CHAPTERS_MODEL,
-  chapters: READY_CHAPTERS,
-};
+const READY_TOLD = toldFor(READY.merging?.headSha ?? "");
 
 /** A pull request's chapters answer, by its number, generatable on the fixture's run. */
 function chaptersOf(number: number, chapters: PullRequestChaptersState): PullRequestChaptersAnswer {
@@ -884,12 +887,14 @@ const CHAPTERS: ReadonlyMap<number, PullRequestChaptersAnswer> = new Map([
 
 /**
  * What a Generate of a pull request's chapters answers on the fixture's run:
- * the ready pull request's chapters, told again for the one asked, as the
- * service answers once a model told them; nothing for a number the fixture
- * holds none of.
+ * the ready pull request's chapters, told again for the head of the one
+ * asked, as the service answers once a model told them, so they never read
+ * as stale; nothing for a number the fixture holds none of.
  */
 export function fixtureGeneratedChapters(number: number): PullRequestChaptersAnswerView {
-  if (!CHAPTERS.has(number)) return { pullRequest: null };
+  const asked = [READY, FAILING, QUEUED].find((each) => each.number === number);
 
-  return chaptersOf(number, READY_TOLD);
+  if (asked?.merging === undefined) return { pullRequest: null };
+
+  return chaptersOf(number, toldFor(asked.merging.headSha));
 }
