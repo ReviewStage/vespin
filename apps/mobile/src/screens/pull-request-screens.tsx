@@ -979,7 +979,9 @@ function PullRequestPage({
           ) : (
             <LoadingRow words={PULL_REQUEST_READ_WORDS.READING_CONVERSATION} />
           )
-        ) : conversation.conversation.length === 0 && conversation.earlier === 0 ? (
+        ) : conversation.conversation.length === 0 &&
+          conversation.earlier === 0 &&
+          drafts.length === 0 ? (
           <MarkRow
             id={OPENS_ROW.ON_GITHUB}
             mark={{ symbol: GLYPH.THREAD, tone: STATUS_TONE.NEUTRAL }}

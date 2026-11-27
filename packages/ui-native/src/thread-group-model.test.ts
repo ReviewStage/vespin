@@ -40,6 +40,15 @@ describe("threadRuns", () => {
       [["a"], ["b"]],
     ],
     [
+      "the reader's pending comment starts a run of its own, so it is never taken for one of their published ones",
+      [
+        message("a", "Ada", 0),
+        { ...message("b", "Ada", 1), pending: true },
+        message("c", "Ada", 2),
+      ],
+      [["a"], ["b"], ["c"]],
+    ],
+    [
       "a member named as the agent is still another writer",
       [message("a", "Relay", 0, true), message("b", "Relay", 1)],
       [["a"], ["b"]],
