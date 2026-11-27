@@ -1,4 +1,4 @@
-# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a pinned one under Pinned and a kept one in its section, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
+# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, the pinned ones under Pinned among its tasks by their pins and a kept one in its section, the Managers head wearing the Manager's glyph, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -27,6 +27,19 @@ env:
 # Experiments, each as its Managers row, as the desktop's sidebar places
 # them; the Managers group lists the rest.
 - assertVisible: "Docs manager"
+# Under Pinned the Managers stand among the pinned task by their pins, as
+# the desktop's Pinned mixes them: the docs one, pinned after the digest
+# task, above it, and the alerts one, pinned before it, below.
+- assertVisible:
+    text: "Weekly digest email"
+    below:
+      text: "Docs manager"
+- assertVisible:
+    text: "Alerts manager"
+    below:
+      text: "Weekly digest email"
+- waitForAnimationToEnd
+- takeScreenshot: managers-pinned-order
 - scrollUntilVisible:
     element: "Triage manager"
     direction: DOWN

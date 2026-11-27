@@ -4,6 +4,8 @@ import { AGENT_KIND, AGENT_STATUS } from "./agent-wire.js";
 import {
   MANAGER_SORT,
   type ManagerSort,
+  managersAmongRows,
+  PLACED_RUN,
   sortedManagers,
   workspaceManagersOf,
 } from "./workspace-managers-model.js";
@@ -85,5 +87,31 @@ it.each<[ManagerSort, readonly string[]]>([
   assert.deepEqual(
     sortedManagers(SORTED, sort).map((each) => each.id),
     ids,
+  );
+});
+
+test("stands a group's Managers among its tasks by their places, a task's sub-tasks kept under it", () => {
+  // Positions as the desktop's drags write them: Ship, then Docs manager, then Bugs with its sub-task, then Triage manager.
+  const row = (id: string, depth: number) => ({ task: { id }, depth });
+
+  const places = new Map([
+    ["ship", { position: "a0", at: 1 }],
+    ["bugs", { position: "a2", at: 2 }],
+  ]);
+
+  const runs = managersAmongRows(
+    [row("ship", 0), row("bugs", 0), row("bugs-child", 1)],
+    [
+      { agent: "triage", place: { position: "a3", at: 3 } },
+      { agent: "docs", place: { position: "a1", at: 4 } },
+    ],
+    (id) => places.get(id),
+  );
+
+  assert.deepEqual(
+    runs.map((run) =>
+      run.kind === PLACED_RUN.MANAGER ? run.agent : run.rows.map((each) => each.task.id),
+    ),
+    [["ship"], "docs", ["bugs", "bugs-child"], "triage"],
   );
 });
