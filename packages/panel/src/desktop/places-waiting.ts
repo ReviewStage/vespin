@@ -10,6 +10,7 @@ import {
 import type { AppInboxTask, AppInboxTaskHolding } from "@repo/host/app-state";
 import { type BarCount, type BarCountTone, STATUS_TONE, useMinute } from "@repo/ui";
 import { useMemo } from "react";
+import { useTaskListRows } from "../task-list-collections.js";
 import { useInboxTaskHoldings, useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { useTasklessInboxGroups } from "../tasks/use-taskless-inbox-groups.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -20,7 +21,8 @@ import type { SidebarTasksControl } from "./sidebar-open.js";
 /**
  * places-waiting.ts -- what the places that count the Inbox draw from: the
  * sidebar's Inbox row (`desktop-sidebar.tsx`) and a phone's places bar
- * (`mobile-bar.tsx`), which count what the Inbox's chosen view lists, and
+ * (`mobile-bar.tsx`), which count what the Inbox's chosen view lists, the
+ * workspace switcher's count of what waits in each other workspace, and
  * each task's badge on the Tasks page's List and Board, which counts the
  * open threads of that task that wait on the developer, a question or an
  * update not yet opened, as main counts them.
@@ -66,6 +68,46 @@ export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number
   const byTask = useMemo(() => toDoByTask(holdings, waiting, now), [holdings, waiting, now]);
 
   return tasks.signedIn ? byTask : NO_COUNTS;
+}
+
+/**
+ * How many threads wait on the developer in each workspace, by the
+ * workspace's id, as the Dock counts them across every workspace: each
+ * task's items that wait on them (`AppInboxTask`), less those reminded for
+ * after `now`, under the workspace the task stands in. A thread on no task,
+ * a Manager's, is not among them, since main's slice carries it under no
+ * task. A workspace where none waits is left out.
+ */
+function waitingByWorkspace(
+  waiting: readonly AppInboxTask[],
+  workspaceOf: (taskId: string) => string | undefined,
+  now: number,
+): ReadonlyMap<string, number> {
+  const counted = new Map<string, number>();
+
+  for (const { taskId, items } of waiting) {
+    const workspaceId = workspaceOf(taskId);
+    const due = items.filter((item) => item.remindAt === undefined || item.remindAt <= now);
+
+    if (workspaceId === undefined || due.length === 0) continue;
+    counted.set(workspaceId, (counted.get(workspaceId) ?? 0) + due.length);
+  }
+
+  return counted;
+}
+
+/** How many threads wait on the developer in each workspace (`waitingByWorkspace`), which the workspace switcher says beside each other workspace; none while signed out. */
+export function useWorkspacesWaiting(tasks: SidebarTasksControl): ReadonlyMap<string, number> {
+  const now = useMinute();
+  const waiting = useInboxWaitingTasks();
+  const rows = useTaskListRows();
+
+  const byWorkspace = useMemo(
+    () => waitingByWorkspace(waiting, (taskId) => rows.task(taskId)?.workspaceId, now),
+    [waiting, rows, now],
+  );
+
+  return tasks.signedIn ? byWorkspace : NO_COUNTS;
 }
 
 /** Where a scope's count is drawn in the tone of what needs the reader: what waits on them and what they are not done with; everything, or what they put off, is a tally. */
