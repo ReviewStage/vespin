@@ -1,4 +1,4 @@
-# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
+# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out, a message's reactions under it and any emoji given from its long press), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -60,6 +60,40 @@ env:
 - assertNotVisible: "Reading the invitations task before I answer."
 - waitForAnimationToEnd
 - takeScreenshot: managers-chat
+# Under its first answer stand the reactions it was given, a chip to each:
+# the account's 👍 among two lit, Grace's 🎉 and the Manager's 👀.
+- assertVisible: "You and 1 other reacted with thumbs up"
+- assertVisible: "1 reacted with :tada:"
+- assertVisible: "1 reacted with :eyes:"
+# Its long press offers Add reaction, 👍 and 👎 first, then More emoji…,
+# which opens the app's one icon picker over every emoji, Quick reactions
+# leading, searched by an emoji's Unicode name or a name Slack gives it.
+- longPressOn: "On it. The invitations agent has its pull request open.*"
+- tapOn: "Add reaction"
+- assertVisible: "Thumbs down"
+- waitForAnimationToEnd
+- takeScreenshot: managers-chat-add-reaction
+- tapOn: "More emoji…"
+- extendedWaitUntil:
+    visible: "Search emoji"
+    timeout: 10000
+- assertVisible: "Quick reactions"
+- waitForAnimationToEnd
+- takeScreenshot: managers-reaction-picker-open
+- tapOn: "Search emoji"
+- inputText: "heart"
+- extendedWaitUntil:
+    visible: "sparkling heart"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: managers-reaction-picker
+# A pick gives the reaction and puts the picker away, its chip standing lit.
+- tapOn: "red heart"
+- extendedWaitUntil:
+    visible: "You reacted with :heart:"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: managers-chat-reacted
 # Its ⋯ offers Settings… in Rename's place: its name and model to change,
 # its checkout and machine standing as it was made.
 - tapOn: "More"

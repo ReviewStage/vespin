@@ -71,7 +71,11 @@ import { fileMarkers } from "@repo/features/file-marker";
 import { githubAccountPage, isBotLogin } from "@repo/features/github-login";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
-import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
+import {
+  MANAGER_CHAT_AUTHOR,
+  type ManagerChatAttachment,
+  type ManagerChatReactionCount,
+} from "@repo/features/manager-chat-live";
 import {
   CHAT_NEW_WORDS,
   CHAT_RUN_ALONE,
@@ -321,6 +325,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly thread?: ChatThreadMark | undefined;
       /** In a Manager's chat, whether its sender edited its words since it was sent, which a mark after them says; none outside one. */
       readonly edited?: boolean | undefined;
+      /** In a Manager's chat, the reactions it was given, in the order its chips stand, where it may be given one: a message the chat's rows hold, in the channel or a thread; none for a line on its way, or outside a chat. */
+      readonly reactions?: readonly ManagerChatReactionCount[] | undefined;
       /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
@@ -1621,6 +1627,7 @@ function chatLineItems(
     channel: chatSenderOf(message, reading),
     thread: threads ? threadMarkOf(line, view) : undefined,
     edited: message.editedAt !== null,
+    reactions: message.reactions ?? [],
   } as const;
 
   if (message.authorKind === MANAGER_CHAT_AUTHOR.PERSON) {

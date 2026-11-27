@@ -47,6 +47,7 @@ import {
   useWholeParts,
 } from "../agents/use-agent.js";
 import { useAgentComposer } from "../agents/use-agent-composer.js";
+import { useChatReact } from "../agents/use-chat-react.js";
 import { useChatFaces } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
 import { usePlaceAddress } from "../agents/use-suggestions.js";
@@ -179,6 +180,8 @@ export function ManagerThreadScreen() {
   const messageLink = useMessageLink(id, shown?.workspaceId);
   const placeAddress = usePlaceAddress(shown?.workspaceId);
   const retry = useManagerChatRetry(id);
+  // The reader's reactions to the thread's messages, each drawn at once over the messages it reads.
+  const reacting = useChatReact(id);
   const older = useOlderChatPages(id, chatPage?.before);
   const composer = useAgentComposer(id, agent, transcript, status, undefined, undefined, root);
 
@@ -187,7 +190,7 @@ export function ManagerThreadScreen() {
       chatPage === undefined
         ? undefined
         : managerThreadItems(
-            managerChatView(chatPage.messages, messages ?? [], {
+            managerChatView(reacting.drawn(chatPage.messages), messages ?? [], {
               running,
               sending: chatPage.sending ?? [],
             }),
@@ -206,7 +209,18 @@ export function ManagerThreadScreen() {
               placeAddress,
             },
           ),
-    [chatPage, messages, running, root, readerId, toggles, whole.read, chatFaces, placeAddress],
+    [
+      chatPage,
+      reacting,
+      messages,
+      running,
+      root,
+      readerId,
+      toggles,
+      whole.read,
+      chatFaces,
+      placeAddress,
+    ],
   );
 
   // Note that a root older than the pages read is read for, a page at a time, until it stands or the chat's start is read, as the panel's thread tab reads for it.
@@ -332,6 +346,7 @@ export function ManagerThreadScreen() {
             messageLink={messageLink}
             messageMore={messageActs.more}
             channel={chatFaces?.faces}
+            onReact={reacting.react}
             undelivered={undelivered}
           />
         </PicturesProvider>
