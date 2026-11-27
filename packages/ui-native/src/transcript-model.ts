@@ -7,8 +7,8 @@
  * rows out flat, one item each, so the list draws each lazily. A group of
  * calls stands as one line, and the rows it holds follow it as items of
  * their own while it stands open, set in a step. A call is one line that
- * opens in place to its body. What the agent thought is left out, as the
- * phone has no room for it. A finished turn ends on how long it worked, and
+ * opens in place to its body. What the agent thought stands folded under
+ * one line that previews it, as the panel's does. A finished turn ends on how long it worked, and
  * the transcript on Working… while its agent works. The pictures and the
  * recordings it showed, and those a call answered and the service kept (a
  * browser's screenshots, an integration's pictures), stand under the call
@@ -26,6 +26,7 @@ import {
   AGENT_PART,
   type AgentPart,
   type AgentPartCut,
+  agentPart,
   agentRows,
   type ComputerApps,
   CUT_PART_WORDS,
@@ -33,6 +34,8 @@ import {
   cutPartText,
   messageWords,
   placedMessages,
+  thoughtPreview,
+  thoughtWords,
   turnStretches,
   WHOLE_PART,
   type WholePartRead,
@@ -144,6 +147,8 @@ export const TRANSCRIPT_ITEM = {
   SAID: "said",
   /** The agent's own words, in Markdown. */
   WORDS: "words",
+  /** What the agent thought, folded under one line that previews it, opening in place. */
+  THOUGHT: "thought",
   /** One tool call, its line, and its body where it stands open. */
   CALL: "call",
   /** A run of calls, as one line that opens on the rows it holds. */
@@ -340,6 +345,16 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
     }
   | { readonly kind: typeof TRANSCRIPT_ITEM.WORDS; readonly words: string }
   | {
+      readonly kind: typeof TRANSCRIPT_ITEM.THOUGHT;
+      /** Its first line of words, which its closed line says after its word (`thoughtPreview`). */
+      readonly preview: string;
+      readonly open: boolean;
+      /** Its words while it stands open: whole, or its two ends where its page carried it cut and its whole read failed; empty while it is closed or its whole read is under way. */
+      readonly words: string;
+      /** Where it stands open with words its page carried cut whose whole read has not settled: the part to read whole, its body saying so meanwhile. */
+      readonly cut: AgentPartCut | undefined;
+    }
+  | {
       readonly kind: typeof TRANSCRIPT_ITEM.CALL;
       /** The call's id, which opens and closes it. */
       readonly callId: string;
@@ -429,18 +444,32 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
     }
 );
 
-/** Which folds the reader turned from how they stand on their own, by their turn and then their row, and which calls they opened, by the call. */
+/** Which folds the reader turned from how they stand on their own, by their turn and then their row, which calls they opened, by the call, and which thoughts they opened (`OpenedThoughts`). */
 export interface TranscriptToggles {
   readonly folds: ReadonlyMap<string, ReadonlySet<string>>;
   readonly calls: ReadonlySet<string>;
+  readonly thoughts: OpenedThoughts;
   /** Whether the reader opened the turn under way's work under its working line. */
   readonly liveWork: boolean;
 }
+
+/**
+ * The thoughts a reader opened: by the work of a Manager's chat they stand
+ * in (none for a transcript's own), their turn, their row, and their place
+ * in a group's rows (none for a thought on a row of its own). Note that the
+ * work leads, because a chat's finished work and the turn under way's may
+ * stand under one message, whose thoughts would otherwise open together.
+ */
+type OpenedThoughts = ReadonlyMap<
+  ChatWorkPlace | undefined,
+  ReadonlyMap<string, ReadonlyMap<string, ReadonlySet<number | undefined>>>
+>;
 
 /** Nothing turned. */
 export const NO_TOGGLES: TranscriptToggles = {
   folds: new Map(),
   calls: new Set(),
+  thoughts: new Map(),
   liveWork: false,
 };
 
@@ -514,6 +543,13 @@ function cutLines(text: string): string {
 /** Whether a reader turned a fold from how it stands on its own. */
 function foldTurned(toggles: TranscriptToggles, place: TranscriptPlace): boolean {
   return toggles.folds.get(place.message)?.has(place.row) === true;
+}
+
+/** Whether a reader opened a thought, which stands closed on its own. */
+function thoughtOpened(toggles: TranscriptToggles, place: TranscriptPlace): boolean {
+  const { work, message, row, member } = place;
+
+  return toggles.thoughts.get(work)?.get(message)?.get(row)?.has(member) === true;
 }
 
 /** An item's place with another piece of its row. */
@@ -1020,6 +1056,47 @@ function wholeRead(
   };
 }
 
+/**
+ * What the agent thought as its one item, as the panel's thought draws it:
+ * folded under its line, which previews its first line of words, until the
+ * reader opens it in place. A thought its page carried cut previews its
+ * head, and open is read whole, as an open call's cut answer is: its body
+ * says so while the read is under way, draws the thought whole once it
+ * lands, and its two ends where it could not be read. A thought with no
+ * words, such as a model's encrypted one, draws nothing.
+ */
+function thoughtItems(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.REASONING }>,
+  base: ItemBase,
+  reading: ItemsReading,
+): readonly TranscriptItem[] {
+  const { cut } = part;
+  const shown = cut === undefined ? part.text : cut.head;
+
+  if (shown.trim() === "") return [];
+  const open = thoughtOpened(reading.toggles, base.place);
+  const item = { ...base, kind: TRANSCRIPT_ITEM.THOUGHT, preview: thoughtPreview(shown), open };
+
+  if (!open) return [{ ...item, words: "", cut: undefined }];
+
+  if (cut === undefined) return [{ ...item, words: thoughtWords(part.text), cut: undefined }];
+  const read = reading.wholePart?.(cut);
+  const whole = read?.state === WHOLE_PART.WHOLE ? agentPart(read.part) : undefined;
+
+  if (whole?.kind === AGENT_PART.REASONING) {
+    return [{ ...item, words: thoughtWords(whole.text), cut: undefined }];
+  }
+
+  // Note that a read that failed, or answered with a part that is no thought, leaves the thought at its two ends.
+  const settled = read?.state === WHOLE_PART.FAILED || read?.state === WHOLE_PART.WHOLE;
+
+  return [
+    settled
+      ? { ...item, words: thoughtWords(cutPartText(cut)), cut: undefined }
+      : { ...item, words: "", cut },
+  ];
+}
+
 /** One tool call as its items: its line, then what it showed. */
 function callItems(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
@@ -1151,7 +1228,7 @@ function callItems(
   return [call, ...page, ...mediaItem];
 }
 
-/** One part as its items; none for what the agent thought, or a part with nothing to draw. */
+/** One part as its items; none for a part with nothing to draw. */
 function partItems(
   part: AgentPart,
   base: ItemBase,
@@ -1162,6 +1239,8 @@ function partItems(
       return part.text.trim() === ""
         ? []
         : [{ ...base, kind: TRANSCRIPT_ITEM.WORDS, words: part.text }];
+    case AGENT_PART.REASONING:
+      return thoughtItems(part, base, reading);
     case AGENT_PART.TOOL:
       return callItems(part, base, reading);
     case AGENT_PART.ARRIVED:
@@ -1171,16 +1250,17 @@ function partItems(
   }
 }
 
-/** A turn's rows as items, a group's rows after its line while it stands open. */
+/** A turn's rows as items, a group's rows after its line while it stands open, each in the work of a Manager's chat it stands in, where it stands in one. */
 function rowItems(
   rows: readonly TurnRow<AgentPart>[],
   message: string,
   depth: number,
   reading: ItemsReading,
+  work?: ChatWorkPlace,
 ): readonly TranscriptItem[] {
   return rows.flatMap((row): readonly TranscriptItem[] => {
     const base = {
-      place: { message, row: row.key, member: undefined, piece: TRANSCRIPT_PIECE.LINE },
+      place: { message, row: row.key, member: undefined, piece: TRANSCRIPT_PIECE.LINE, work },
       depth,
     };
 
@@ -1331,10 +1411,8 @@ function workItems(
   moving: boolean,
   reading: ItemsReading,
 ): readonly TranscriptItem[] {
-  return rowItems(workRows(parts, moving), message, 1, reading).map((item) => ({
-    ...item,
-    place: { ...item.place, work },
-  }));
+  // Note that each row stands in the work's place from the start, so a thought's opening is read by it as it is drawn.
+  return rowItems(workRows(parts, moving), message, 1, reading, work);
 }
 
 /** A Manager's greeting as its chat's first message, under its name, though no one sent it and nothing stores it; none where there is none. */
@@ -1887,10 +1965,24 @@ export function drawnCallIds(items: readonly TranscriptItem[]): ReadonlySet<stri
   );
 }
 
-/** The toggles with a fold's, by its place, a call's, by its id, or the turn under way's work under a Manager's working line, turned the other way. */
+/** The toggles with a fold's, by its place, a call's, by its id, a thought's, by its work and its place, or the turn under way's work under a Manager's working line, turned the other way. */
 export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): TranscriptToggles {
   // Note that a Manager's working line turns the turn under way's work (Show work).
   if (item.kind === TRANSCRIPT_ITEM.WORKING) return { ...toggles, liveWork: !toggles.liveWork };
+
+  if (item.kind === TRANSCRIPT_ITEM.THOUGHT) {
+    const { work, message, row, member } = item.place;
+    const turns = new Map(toggles.thoughts.get(work));
+    const rows = new Map(turns.get(message));
+    const members = new Set(rows.get(row));
+
+    if (!members.delete(member)) members.add(member);
+
+    return {
+      ...toggles,
+      thoughts: new Map(toggles.thoughts).set(work, turns.set(message, rows.set(row, members))),
+    };
+  }
 
   if (item.kind === TRANSCRIPT_ITEM.CALL) {
     const calls = new Set(toggles.calls);
@@ -1908,10 +2000,13 @@ export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): Tra
   return { ...toggles, folds: new Map(toggles.folds).set(message, held) };
 }
 
-/** The parts of every open call whose answer its page carried cut and whose whole read has not settled, which the page reads whole. */
+/** The parts of every open call or thought its page carried cut and whose whole read has not settled, which the page reads whole. */
 export function openCuts(items: readonly TranscriptItem[]): readonly AgentPartCut[] {
   return items.flatMap((item) =>
-    item.kind === TRANSCRIPT_ITEM.CALL && item.cut !== undefined ? [item.cut] : [],
+    (item.kind === TRANSCRIPT_ITEM.CALL || item.kind === TRANSCRIPT_ITEM.THOUGHT) &&
+    item.cut !== undefined
+      ? [item.cut]
+      : [],
   );
 }
 

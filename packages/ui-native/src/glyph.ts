@@ -277,6 +277,8 @@ export const GLYPH = {
   READ: lucide(LUCIDE_SYMBOL.SCROLL_TEXT),
   MODELS: lucide(LUCIDE_SYMBOL.CPU),
   TOOL: lucide(LUCIDE_SYMBOL.WRENCH),
+  // What the agent thought, as the panel's thought leads its line with the brain.
+  THOUGHT: catalogLucide("Brain"),
   SIGN_OUT: lucide(LUCIDE_SYMBOL.LOG_OUT),
   SIDEBAR: lucide(LUCIDE_SYMBOL.PANEL_LEFT),
   SCHEDULES: lucide(LUCIDE_SYMBOL.CALENDAR_CLOCK),

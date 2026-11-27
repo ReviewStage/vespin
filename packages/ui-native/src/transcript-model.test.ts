@@ -23,6 +23,7 @@ import {
   shownFiles,
   shownMediaIds,
   TRANSCRIPT_ITEM,
+  type TranscriptItem,
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
@@ -35,8 +36,22 @@ const PICTURE = { id: "picture-1", mediaType: "image/png", width: 320, height: 1
 const SHOT = "data:image/png;base64,iVBORw0KGgo=";
 const CLIP = { id: "clip-1", mediaType: "audio/mpeg", width: 0, height: 0, byteCount: 10 };
 
+/** The toggles with the `nth` item of `kind` among `items` turned, as a press on its line turns it. */
+function pressed(
+  toggles: TranscriptToggles,
+  items: readonly TranscriptItem[],
+  kind: TranscriptItem["kind"],
+  nth = 0,
+): TranscriptToggles {
+  const item = items.filter((each) => each.kind === kind)[nth];
+
+  if (item === undefined) throw new Error(`No ${kind} item ${nth} to press.`);
+
+  return toggledAt(toggles, item);
+}
+
 describe("transcriptItems", () => {
-  it("leaves the agent's thinking out and draws what it showed under the turn, a sound clip played rather than drawn", () => {
+  it("draws what the agent showed under the turn, a sound clip played rather than drawn", () => {
     const items = transcriptItems(
       [
         {
@@ -71,10 +86,11 @@ describe("transcriptItems", () => {
 
     expect(items.map((item) => item.kind)).toEqual([
       TRANSCRIPT_ITEM.SAID,
+      TRANSCRIPT_ITEM.THOUGHT,
       TRANSCRIPT_ITEM.MEDIA,
       TRANSCRIPT_ITEM.WORDS,
     ]);
-    expect(items[1]).toMatchObject({
+    expect(items[2]).toMatchObject({
       media: [
         { id: "picture-1", caption: "The dialog", label: "The dialog", kind: SHOWN_MEDIA.PICTURE },
         { id: "clip-1", caption: "The chime", label: "The chime", kind: SHOWN_MEDIA.AUDIO },
@@ -897,6 +913,113 @@ describe("a call whose answer its page carried cut", () => {
   );
 });
 
+describe("what the agent thought", () => {
+  const READING = { writing: false, readerId: undefined, now: 2, pullRequests: [] };
+
+  const LOOK = {
+    type: "tool-lookup",
+    toolCallId: "look",
+    state: "output-available",
+    input: { q: "x" },
+    output: "found",
+  };
+
+  // A thought alone between the agent's words, and one inside a run of calls, which the group folds with them.
+  const WORK = {
+    id: "work",
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [
+      { type: "reasoning", text: "\n\n**Plan**\nRead the schema first.\n" },
+      { type: "text", text: "Looking." },
+      LOOK,
+      { type: "reasoning", text: "The schema has no expiry column." },
+      { ...LOOK, toolCallId: "look-again" },
+    ],
+    finishedAt: 1,
+  } as const;
+
+  it("stands folded under its first line, alone or inside a group of calls, and opens in place on its words whole", () => {
+    const closed = transcriptItems([WORK], { ...READING, toggles: NO_TOGGLES });
+    const unfolded = pressed(NO_TOGGLES, closed, TRANSCRIPT_ITEM.FOLD);
+    const drawn = transcriptItems([WORK], { ...READING, toggles: unfolded });
+
+    expect(drawn.filter((item) => item.kind === TRANSCRIPT_ITEM.THOUGHT)).toMatchObject([
+      { preview: "Plan", open: false, words: "", depth: 0 },
+      { preview: "The schema has no expiry column.", open: false, words: "", depth: 1 },
+    ]);
+
+    // Opening one thought opens it alone, never the group it stands in or the other thought.
+    const toggles = pressed(unfolded, drawn, TRANSCRIPT_ITEM.THOUGHT, 1);
+    const opened = transcriptItems([WORK], { ...READING, toggles });
+
+    expect(opened.filter((item) => item.kind === TRANSCRIPT_ITEM.THOUGHT)).toMatchObject([
+      { open: false, words: "" },
+      { open: true, words: "The schema has no expiry column." },
+    ]);
+    expect(opened.find((item) => item.kind === TRANSCRIPT_ITEM.FOLD)).toMatchObject({ open: true });
+
+    const both = transcriptItems([WORK], {
+      ...READING,
+      toggles: pressed(toggles, opened, TRANSCRIPT_ITEM.THOUGHT),
+    });
+
+    // Note that its words keep their own breaks, but for the blank lines the model left around them.
+    expect(both.find((item) => item.kind === TRANSCRIPT_ITEM.THOUGHT)).toMatchObject({
+      open: true,
+      words: "**Plan**\nRead the schema first.",
+    });
+  });
+
+  const CUT = {
+    messageId: "cut",
+    index: 0,
+    bytes: 2048,
+    head: "**Weighing**\nfirst",
+    tail: "last",
+  };
+
+  const CUT_WORK = {
+    id: "cut",
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [{ type: "reasoning", text: "" }],
+    cutParts: [{ ...CUT, field: PART_CUT_FIELD.TEXT }],
+    finishedAt: 1,
+  } as const;
+
+  it.each([
+    { read: undefined, words: "", asks: true },
+    { read: { state: WHOLE_PART.READING }, words: "", asks: true },
+    {
+      read: { state: WHOLE_PART.WHOLE, part: { type: "reasoning", text: "The whole thought." } },
+      words: "The whole thought.",
+      asks: false,
+    },
+    {
+      read: { state: WHOLE_PART.FAILED },
+      words:
+        "**Weighing**\nfirst\n\n… 2.0 kB in all; only its start and end could be read …\n\nlast",
+      asks: false,
+    },
+  ] as const)(
+    "carried cut, previews its head and opened draws its words as its whole read stands ($read.state)",
+    ({ read, words, asks }) => {
+      const closed = transcriptItems([CUT_WORK], { ...READING, toggles: NO_TOGGLES });
+
+      expect(closed).toMatchObject([{ kind: TRANSCRIPT_ITEM.THOUGHT, preview: "Weighing" }]);
+      expect(openCuts(closed)).toEqual([]);
+
+      const items = transcriptItems([CUT_WORK], {
+        ...READING,
+        toggles: pressed(NO_TOGGLES, closed, TRANSCRIPT_ITEM.THOUGHT),
+        wholePart: (cut) => (cut.messageId === "cut" && cut.index === 0 ? read : undefined),
+      });
+
+      expect(items).toMatchObject([{ kind: TRANSCRIPT_ITEM.THOUGHT, open: true, words }]);
+      expect(openCuts(items)).toEqual(asks ? [CUT] : []);
+    },
+  );
+});
+
 describe("rowsNear", () => {
   it("reads the pictures of the rows on screen and of the few on each side of them", () => {
     const shown = (index: number) => ({
@@ -1206,6 +1329,54 @@ describe("managerChatItems", () => {
       [TRANSCRIPT_ITEM.FOLD, 0],
       [TRANSCRIPT_ITEM.CALL, 1],
       [TRANSCRIPT_ITEM.SAID, 0],
+    ]);
+  });
+  it("opens a thought in a finished turn's work apart from one in the turn under way's, though both stand under the same message", () => {
+    const said = row("m1", 1, {
+      authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+      text: "Nothing open.",
+      turnId: "done",
+    });
+
+    const thinking = (id: string, text: string) => ({
+      id,
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [{ type: "reasoning", text }],
+      startedAt: 0,
+    });
+
+    const done = { ...thinking("done", "What finished."), finishedAt: 60_000 };
+    const live = thinking("live", "What runs now.");
+
+    const read = (toggles: typeof NO_TOGGLES) =>
+      managerChatItems(
+        {
+          messages: [{ message: said, place: run(true, true), work: "done" }],
+          top: [{ message: said, place: run(true, true), work: "done" }],
+          threads: new Map(),
+          sending: { messages: new Map(), channel: new Map() },
+          work: new Map([["done", agentParts(done)]]),
+          live: agentParts(live),
+        },
+        [done, live],
+        { writing: true, readerId: "u1", toggles, now: 2 * minute, pullRequests: [] },
+      );
+
+    // Both works opened, the finished one's fold and the turn under way's Show work.
+    const folded = read({ ...NO_TOGGLES, liveWork: true });
+    const unfolded = pressed({ ...NO_TOGGLES, liveWork: true }, folded, TRANSCRIPT_ITEM.FOLD);
+    const both = read(unfolded);
+
+    expect(both.filter((item) => item.kind === TRANSCRIPT_ITEM.THOUGHT)).toMatchObject([
+      { preview: "What finished.", open: false },
+      { preview: "What runs now.", open: false },
+    ]);
+
+    const opened = read(pressed(unfolded, both, TRANSCRIPT_ITEM.THOUGHT, 1));
+
+    expect(opened.filter((item) => item.kind === TRANSCRIPT_ITEM.THOUGHT)).toMatchObject([
+      { preview: "What finished.", open: false },
+      { preview: "What runs now.", open: true, words: "What runs now." },
     ]);
   });
 });

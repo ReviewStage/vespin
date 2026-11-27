@@ -9,6 +9,7 @@ import {
   failedLineWords,
   settledFailure,
 } from "@repo/features/agent-continue-model";
+import { TRANSCRIPT_EMPTY_LINE } from "@repo/features/agent-parts";
 import {
   AGENT_PORTS_WORDS,
   PORT_ACT,
@@ -212,9 +213,10 @@ const MEDIA_REACH = 5;
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
 const UNLISTED_AGENT = "Agent";
 
-/** What stands in the transcript's place while it is read, and where it could not be, with what reads it again. */
+/** What stands in the transcript's place while it is read, once read with nothing to draw, and where it could not be, with what reads it again. */
 const TRANSCRIPT_WORDS = {
   READING: "Reading the transcript",
+  EMPTY: TRANSCRIPT_EMPTY_LINE,
   FAILED: "The transcript could not be read.",
   RETRY: "Try again",
 } as const;
@@ -1123,6 +1125,9 @@ const AgentConversation = memo(function AgentConversation({
     ? chatHeld?.failed === true
     : held?.failed === true || transcript?.failure !== undefined;
 
+  // Note that a transcript read whole with nothing to draw says so, rather than standing on Reading forever, as one whose turns hold only what draws no row would.
+  const read = chat ? chatPage !== undefined : messages !== undefined;
+
   const statusWords = status === undefined ? undefined : agentStateWords(status);
 
   const subtitle = agentSubtitle(
@@ -1362,9 +1367,13 @@ const AgentConversation = memo(function AgentConversation({
         reveal={reveal}
         head={null}
         empty={{
-          title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
+          title: failed
+            ? TRANSCRIPT_WORDS.FAILED
+            : read
+              ? TRANSCRIPT_WORDS.EMPTY
+              : TRANSCRIPT_WORDS.READING,
           symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
-          loading: !failed,
+          loading: !failed && !read,
           action: failed
             ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
             : undefined,

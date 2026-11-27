@@ -1,0 +1,84 @@
+# agent-thinking.yaml -- an agent's thoughts stand folded under one line that previews each, as the panel folds them: one alone between its words, and one inside its run of calls, drawn once the run is opened; a press opens each in place on its words, and one its page carried cut is read whole as it opens.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+#
+# Note that an iPad stands in landscape, where the transcript stands in the
+# detail column beside the list, so it is scrolled well inside that column
+# (`BESIDE`), and that the window is turned back upright however the flow
+# ends, because a run left in landscape fails every flow after it.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose thinking agent finished one
+# turn holding a long thought among its two calls and a thought its page
+# carried cut between its words (`@repo/host/fixture-thinking-agent`), and
+# opened on its page by `-agent <id>`; nothing reaches a server, and the
+# fixture answers the cut thought's whole read.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 2b7e4c91-5d3a-4f86-9c1e-7a8b9c0d1e2f
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+# Note that the launch waits up to half a minute for its first words, as
+# `agent.yaml`'s does.
+- extendedWaitUntil:
+    visible: "A resend keeps the pending membership.*"
+    timeout: 30000
+# The thought between the agent's words stands closed on one line, "Thought"
+# and its first line of words, its body drawn nowhere; the one among the
+# calls stands folded with them under the run's line.
+- assertVisible: "Thought Weighing a resend against a new invite"
+- assertNotVisible: ".*A new row would leave the old one behind.*"
+- assertNotVisible: "Thought Checking why invites expire"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-thinking-closed
+# The run opened draws the thought among its calls, closed; a press opens it
+# in place on its words whole.
+- tapOn: "2 tool calls"
+- assertVisible: "Thought Checking why invites expire"
+- tapOn: "Thought Checking why invites expire"
+- assertVisible: ".*Nine invites expired, and the funnel counts.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-thinking-open
+# The thought its page carried cut is read whole as it opens: its middle,
+# which only the whole read holds, stands under its line.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Thought Weighing a resend against a new invite"
+      BESIDE: ${FLOATING_TABS}
+- tapOn: "Thought Weighing a resend against a new invite"
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: ".*Keeping the row and replacing the link.*"
+      BESIDE: ${FLOATING_TABS}
+- assertNotVisible: "Reading the whole thought…"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-thinking-cut-open
+# An agent the fixture holds no messages for: its transcript, once read,
+# says it holds none, rather than standing on Reading forever; where the
+# read never lands it still says it is reading.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 00000000-0000-4000-8000-000000000000
+- extendedWaitUntil:
+    visible: "Reading the transcript|No messages yet|The transcript could not be read\\."
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-thinking-empty
