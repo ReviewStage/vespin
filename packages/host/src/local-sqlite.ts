@@ -28,6 +28,7 @@ export const sqliteBackend = Effect.fn("host/sqliteBackend")(function* (stateRoo
     FileSystem.FileSystem,
     Path.Path,
   )(yield* Effect.context<LocalDatabaseDriver | FileSystem.FileSystem | Path.Path>());
+
   const keepsCollections = (yield* LocalDatabaseDriver).collections !== undefined;
 
   return {
