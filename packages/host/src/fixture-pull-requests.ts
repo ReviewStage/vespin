@@ -367,7 +367,9 @@ const EXPIRY_THREAD = {
     {
       by: GRACE,
       html: "<p>This reads <code>Date.now()</code> twice.</p>",
-      body: "This reads `Date.now()` twice.",
+      body: "",
+      markdown:
+        "This reads `Date.now()` twice, @ada; #126 fixed the same thing.\n\n> [!WARNING]\n> The seventh day is still open.\n\n```suggestion\nconst now = request.at;\nreturn now - invite.sentAt > SEVEN_DAYS;\n```",
       at: LANDED - 15 * MINUTE,
       url: `${REPOSITORY_URL}/pull/127#discussion_r18`,
       subject: "PRRC_expiry_18",
@@ -434,9 +436,30 @@ const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerVie
               15 * MINUTE,
               REVIEW_STATE.CHANGES_REQUESTED,
             ),
-            threads: [EXPIRY_THREAD],
+            threads: [
+              EXPIRY_THREAD,
+              {
+                ...EXPIRY_THREAD,
+                id: "PRRT_expiry_old",
+                resolved: true,
+                outdated: true,
+                more: 3,
+                comments: [
+                  {
+                    ...EXPIRY_THREAD.comments[1],
+                    url: `${REPOSITORY_URL}/pull/127#discussion_r20`,
+                    subject: "PRRC_expiry_20",
+                  },
+                ],
+              },
+            ],
             subject: "PRR_expiry",
             reactions: [{ content: REACTION.THUMBS_UP, count: 1 }],
+          },
+          {
+            ...entry(127, REVIEW_BOT, "", 10 * MINUTE),
+            markdown:
+              '<table><tr><th>Name</th><th>Status</th><th>Preview</th></tr><tr><td>web</td><td>Ready</td><td><a href="https://example.com">Visit</a></td></tr></table>\n\n<details><summary>Coverage: 81%</summary>\n\nAll files changed are covered.\n\n</details>',
           },
         ],
         earlier: 0,
