@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@repo/panel/testing/match-media";
-import "@repo/panel/testing/resize-observer";
+import "@repo/ui/testing/resize-observer";
 import { withQueryClient } from "@repo/panel/testing/copy-feedback";
 import type { WireValue } from "@repo/wire";
 import { act, createElement, StrictMode } from "react";
