@@ -142,7 +142,7 @@ export function useTreeView(
   const { choose: chooseFilter } = filterChoice;
   const { choose: chooseDisplay } = displayChoice;
 
-  // Note that the control holds its identity until what it reads changes, since the Tasks tab builds its whole listing again on a new one; each choice it makes is made over the values it read then.
+  // Note that the control holds its identity until what it reads or the workspace it writes to changes, since the Tasks tab builds its whole listing again on a new one; each choice it makes is made over the values it read then.
   return useMemo(() => {
     const change = (part: Partial<TaskTreeView>) => {
       if (readerId === undefined) return;
@@ -160,7 +160,7 @@ export function useTreeView(
     };
 
     return { view, filter, changed: treeViewChanged(filter, view), change, reset };
-  }, [view, filter, display, readerId]);
+  }, [view, filter, display, readerId, workspaceId]);
 }
 
 /** Which of the List's groups stand folded on the account, and the press that folds or opens one. */
