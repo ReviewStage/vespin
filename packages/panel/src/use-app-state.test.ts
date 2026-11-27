@@ -244,12 +244,13 @@ test("a workspace renamed reaches a chip of it drawn before the rename", async (
     slug: "acme",
     role: WORKSPACE_ROLE.OWNER,
     github: null,
-    personal: false,
   };
+
   const holding = (workspace: Workspace, version: number): AppStateSnapshot => ({
     ...stateWith({}, { tasks: { ...IDLE_TASKS_VIEW, workspaces: [workspace] } }),
     version,
   });
+
   const nobody: KnownNames = {
     tasks: new Map(),
     agents: new Map(),
@@ -260,14 +261,17 @@ test("a workspace renamed reaches a chip of it drawn before the rename", async (
     people: new Map(),
     automations: new Map(),
   };
+
   const { deliver } = await window(holding(acme, 1));
   // The chip of the workspace by its slug, as an app link to it draws one: its tile, lettered by the workspace's name.
   const chip = document.body.appendChild(document.createElement("div"));
   const drawnChip = createRoot(chip);
+
   const mark = entityMark(
     { kind: ENTITY_KIND.WORKSPACE, workspace: "acme" },
     { name: "acme", known: nobody, workspace: "acme", tiles: undefined, standing: undefined },
   );
+
   act(() => drawnChip.render(withQueryClient(createElement("span", null, mark))));
   const letter = () => chip.querySelector(".ui-avatar")?.textContent;
 

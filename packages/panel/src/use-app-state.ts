@@ -417,6 +417,12 @@ interface SharedSlice<Slice> {
   readonly subscribe: (heard: () => void) => () => void;
 }
 
+/** The document a slice was last cut from, and the slice it cut. */
+interface SliceRead<Slice> {
+  readonly state: AppStateSnapshot | undefined;
+  readonly slice: Slice | undefined;
+}
+
 /** The slices read through `useAppStateSlice`, by the client they are read from and the select that cuts each. */
 const sharedSlices = new WeakMap<QueryClient, Map<unknown, SharedSlice<unknown>>>();
 
@@ -441,12 +447,12 @@ function sharedSlice<Slice>(
   sharedSlices.set(client, byClient);
   const held = byClient.get(select);
 
-  // SAFETY: a slice is kept under the select that cuts it, so the one found under `select` is a `Slice`'s.
-  if (held !== undefined) return held as SharedSlice<Slice>;
-  let read: { readonly state: AppStateSnapshot | undefined; readonly slice: Slice | undefined } = {
-    state: undefined,
-    slice: undefined,
-  };
+  if (held !== undefined) {
+    // SAFETY: a slice is kept under the select that cuts it, so the one found under `select` is a `Slice`'s.
+    return held as SharedSlice<Slice>;
+  }
+
+  let read: SliceRead<Slice> = { state: undefined, slice: undefined };
 
   const sliced = (state: AppStateSnapshot | undefined): Slice | undefined => {
     if (state !== read.state)
@@ -493,6 +499,7 @@ function sharedSlice<Slice>(
       };
     },
   };
+
   byClient.set(select, made);
 
   return made;
