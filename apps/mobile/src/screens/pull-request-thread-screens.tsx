@@ -29,6 +29,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
+import { useNewestNote } from "../newest-note.js";
 import { useOpenLink } from "../open-link.js";
 import { reactionMenu } from "../pull-requests/reaction-menu.js";
 import {
@@ -38,6 +39,7 @@ import {
   usePullRequestRetry,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { useDictation } from "../use-dictation.js";
 
 /** The parts these screens hold live: the pull request, for its title, and its conversation, for its threads. */
 const THREAD_PARTS = [PULL_REQUEST_PART.PULL_REQUEST, PULL_REQUEST_PART.CONVERSATION] as const;
@@ -145,6 +147,10 @@ export function PullRequestThreadScreen() {
     writes.pending !== undefined,
   );
 
+  const dictated = useDictation(field.words, field.onWords);
+  // Note that one pick holds the newest refusal, GitHub's or a dictation's, so an older one never hides why the last act did not go.
+  const note = useNewestNote([writes.note?.words, dictated.note]);
+
   const settle = () => {
     if (thread === undefined) return;
 
@@ -205,7 +211,8 @@ export function PullRequestThreadScreen() {
             <Composer
               placeholder={THREAD_ACT_WORDS.REPLY}
               {...field}
-              head={writes.note === undefined ? undefined : <AskNote words={writes.note.words} />}
+              dictation={dictated.dictation}
+              head={note === undefined ? undefined : <AskNote words={note} />}
             />
           }
         >
@@ -254,6 +261,10 @@ export function PullRequestCommentScreen() {
     writes.pending !== undefined,
   );
 
+  const dictated = useDictation(field.words, field.onWords);
+  // Note that one pick holds the newest refusal, GitHub's or a dictation's, so an older one never hides why the last act did not go.
+  const note = useNewestNote([writes.note?.words, dictated.note]);
+
   return (
     <>
       <Stack.Screen
@@ -267,7 +278,8 @@ export function PullRequestCommentScreen() {
           <Composer
             placeholder={WORDS.COMMENT}
             {...field}
-            head={writes.note === undefined ? undefined : <AskNote words={writes.note.words} />}
+            dictation={dictated.dictation}
+            head={note === undefined ? undefined : <AskNote words={note} />}
           />
         }
       >

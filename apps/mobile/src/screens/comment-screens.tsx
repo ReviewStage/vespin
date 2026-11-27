@@ -27,6 +27,7 @@ import {
 import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMemberPictures } from "../member-pictures.js";
+import { useNewestNote } from "../newest-note.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
@@ -42,6 +43,7 @@ import {
   useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
 import { type TaskOverview, useTaskOverview } from "../tasks/use-tasks.js";
+import { useDictation } from "../use-dictation.js";
 import { PicturesProvider } from "../use-pictures.js";
 import { TaskMissing } from "./task-missing.js";
 
@@ -273,13 +275,18 @@ function CommentThread({
   const task = overview?.task;
   const path = commentPath(overview);
 
+  const replyDictated = useDictation(reply.words, reply.onWords);
+  // Note that one pick holds the newest refusal, a send's or a dictation's, so an older one never hides why the last act did not go.
+  const replyNote = useNewestNote([reply.note, replyDictated.note]);
+
   const composer = {
     placeholder: WORDS.REPLY,
     words: reply.words,
     onWords: reply.onWords,
     sendable: reply.sendable,
     onSend: reply.send,
-    head: fieldHead(reply.pictures, reply.note),
+    head: fieldHead(reply.pictures, replyNote),
+    dictation: replyDictated.dictation,
     onAdd: reply.pictures.attach,
     onDropPictures: reply.pictures.drop,
   };
@@ -450,6 +457,9 @@ function NewComment({
     return true;
   };
 
+  const startDictated = useDictation(start.words, start.onWords);
+  const startNote = useNewestNote([start.note, startDictated.note]);
+
   const composer = {
     placeholder: WORDS.ADD_COMMENT,
     autoFocus: true,
@@ -457,7 +467,8 @@ function NewComment({
     onWords: start.onWords,
     sendable: start.sendable,
     onSend: send,
-    head: fieldHead(start.pictures, start.note),
+    head: fieldHead(start.pictures, startNote),
+    dictation: startDictated.dictation,
     onAdd: start.pictures.attach,
     onDropPictures: start.pictures.drop,
   };
