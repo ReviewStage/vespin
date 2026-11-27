@@ -49,6 +49,9 @@ const KEPT = {
   MAIL_ICON: "fixture-picture-mail-icon",
 } as const;
 
+/** The recording the fixture's agent showed, by the id the service kept it under, which a rig run may serve over HTTP (`-mediaOrigin`). */
+export const FIXTURE_RECORDING_ID = KEPT.RECORDING;
+
 /** The mail app the digest agent reads its draft in on the reader's Mac, as the Mac names it. */
 const MAIL_APP = { name: "Mail", bundleId: "com.apple.mail" } as const;
 
