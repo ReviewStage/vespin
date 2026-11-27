@@ -1,0 +1,16 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane B) - iOS 27.2 - D2E5EAB5-4ACE-4AE7-B7C9-7984D6FD7999
+ > Flow fnewtask
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, startPlace=${PLACE}})... COMPLETED
+Assert that "Inbox" is visible... COMPLETED
+Tap on "New task"... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot newtask-keyboard... COMPLETED
+Run flow when ${CAP == 'true'} is true...
+Run flow when false is true... SKIPPED
