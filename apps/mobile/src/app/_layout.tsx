@@ -99,7 +99,7 @@ function AppFrame() {
             presentsWithGesture
             topColumnForCollapsing="secondary"
             columnMetrics={COLUMN_WIDTHS}
-            {...(signedIn ? {} : { preferredDisplayMode: "secondaryOnly" as const })}
+            preferredDisplayMode={signedIn ? sidebar.preferred : "secondaryOnly"}
           >
             <SplitView.Column>{signedIn ? <AppSidebarPane /> : null}</SplitView.Column>
             <SplitView.Column>{signedIn ? <PlaceListColumn /> : null}</SplitView.Column>

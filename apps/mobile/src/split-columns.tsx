@@ -2,7 +2,7 @@
 
 import { Screen, SplitView } from "@repo/ui-native";
 import { Stack } from "expo-router";
-import { type ComponentProps, createContext, useContext, useState } from "react";
+import { type ComponentProps, createContext, useContext, useEffect, useState } from "react";
 import { Dimensions } from "react-native";
 import type { SplitHostCommands } from "react-native-screens/experimental";
 import { APP_SIDEBAR } from "./sidebar-shown.js";
@@ -31,18 +31,27 @@ export function showPickedPage(): void {
   splitHost?.show("secondary");
 }
 
+/** The display mode an upright iPad's sidebar steps aside to once a pick is made in it: the list beside the page, as Mail's mailboxes step aside once a mailbox is picked. */
+const SIDEBAR_ASIDE_MODE = "oneBesideSecondary" as const;
+
+/** Asks the root split view to stand in a display mode, once it stands (`useSplitSidebar`). */
+let preferMode: ((mode: typeof SIDEBAR_ASIDE_MODE) => void) | null = null;
+
 /**
- * Brings the list of the place picked in the sidebar forward on an iPad held
- * upright, where the system's split view stands the sidebar over the list,
- * as Mail's mailboxes step aside once a mailbox is picked. Note that a
- * window wider than tall leaves the sidebar standing beside the list.
+ * Steps the sidebar aside on an iPad held upright, where the system's split
+ * view stands it over the list, once a place or a task is picked in it.
+ * Note that it asks for the display mode through the split view's own
+ * `preferredDisplayMode`, since `show()` does nothing for a column already
+ * visible under the overlay, which left the sidebar over the list after a
+ * place was picked again (vjipadmain's failure-notice lane); a window wider
+ * than tall leaves the sidebar standing beside the list.
  */
-export function showPlaceList(): void {
+export function stepSidebarAside(): void {
   const { width, height } = Dimensions.get("window");
 
   if (!APP_SIDEBAR || width >= height) return;
 
-  splitHost?.show("supplementary");
+  preferMode?.(SIDEBAR_ASIDE_MODE);
 }
 
 /** The system split view's display modes that stand its sidebar, beside the list or over it (UISplitViewController.DisplayMode). */
@@ -71,12 +80,26 @@ function openingMode(): string {
 export function useSplitSidebar() {
   const [mode, setMode] = useState(openingMode);
   const [collapsed, setCollapsed] = useState(false);
+  // The display mode a pick in the sidebar asked for, held only until the split view stands in it, so the toggle, the swipe, and a turn of the iPad keep the system's own choice after it.
+  const [preferred, setPreferred] = useState<typeof SIDEBAR_ASIDE_MODE | undefined>(undefined);
+
+  useEffect(() => {
+    preferMode = setPreferred;
+
+    return () => {
+      preferMode = null;
+    };
+  }, []);
 
   return {
     stands: !collapsed && SIDEBAR_MODES.has(mode),
+    /** The display mode a pick asked for, or the system's own choice. */
+    preferred: preferred ?? ("automatic" as const),
     props: {
-      onDisplayModeWillChange: (event: { nativeEvent: { nextDisplayMode: string } }) =>
-        setMode(event.nativeEvent.nextDisplayMode),
+      onDisplayModeWillChange: (event: { nativeEvent: { nextDisplayMode: string } }) => {
+        setMode(event.nativeEvent.nextDisplayMode);
+        setPreferred(undefined);
+      },
       onCollapse: () => setCollapsed(true),
       onExpand: () => setCollapsed(false),
     },

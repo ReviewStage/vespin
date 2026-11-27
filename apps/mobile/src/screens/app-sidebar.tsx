@@ -26,7 +26,7 @@ import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-o
 import { useSettingsAccount } from "../settings-button.js";
 import { APP_SIDEBAR, useSidebarShown } from "../sidebar-shown.js";
 import { useSidebarTasks } from "../sidebar-tasks.js";
-import { showPickedPage, showPlaceList, useSidebarStands } from "../split-columns.js";
+import { stepSidebarAside, useSidebarStands } from "../split-columns.js";
 import { SPLIT_TAB, usePickInPlace, useSplitPicked } from "../split-route.js";
 import { tabGroupOf, useOnTab } from "../tab-route.js";
 import { useStandingCallCard } from "../voice-call.js";
@@ -47,17 +47,6 @@ const SIDEBAR_PLACE = {
 } as const;
 
 type SidebarPlace = (typeof SIDEBAR_PLACE)[keyof typeof SIDEBAR_PLACE];
-
-/** The places that open a page rather than a list, which an upright iPad brings forward over the list. */
-const PAGE_PLACES: ReadonlySet<string> = new Set([SIDEBAR_PLACE.CALL, SIDEBAR_PLACE.MERGE_QUEUE]);
-
-/** The places whose list stands in the middle column, which an upright iPad brings forward from under the sidebar. */
-const LIST_PLACES: ReadonlySet<string> = new Set([
-  SIDEBAR_PLACE.SEARCH,
-  SIDEBAR_PLACE.INBOX,
-  SIDEBAR_PLACE.TASKS,
-  SIDEBAR_PLACE.AUTOMATIONS,
-]);
 
 /** Each place's name, as the panel's sidebar names it. */
 const PLACE_WORDS = {
@@ -157,10 +146,8 @@ export function AppSidebarPane() {
   const pickTask = usePickInPlace(SPLIT_TAB.TASKS);
 
   const go = (id: string) => {
-    // Note that a place picked steps the sidebar aside in an upright window, where it stands over the list, as Mail's mailboxes do: its list comes forward, or the page it opens.
-    if (LIST_PLACES.has(id)) showPlaceList();
-
-    if (PAGE_PLACES.has(id)) showPickedPage();
+    // Note that a pick, a place's or a task's, steps the sidebar aside in an upright window, where it stands over the list, as Mail's mailboxes do.
+    stepSidebarAside();
 
     switch (id) {
       case SIDEBAR_PLACE.CALL:

@@ -116,7 +116,24 @@ env:
 - waitForAnimationToEnd
 - assertVisible: "Check each deploy"
 - takeScreenshot: automations-runs
-- tapOn: "Failed.*"
+# Note that the filter is found by its count, "Failed 1", since an iPad's
+# list column, standing beside the runs, holds a failed run's mark heard as
+# "Failed" too, which came first in the tree and opened its automation; and
+# there the automation the filter leaves out is looked for only in the runs,
+# right of the list column's search, since the list always holds it.
+- tapOn: "Failed,? [0-9]+"
 - waitForAnimationToEnd
-- assertNotVisible: "Fix failing checks"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - assertNotVisible: "Fix failing checks"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - assertVisible: "Check each deploy"
+      - assertNotVisible:
+          text: "Fix failing checks"
+          rightOf: "Search automations"
 - takeScreenshot: automations-runs-failed
