@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 
-import { MAX_OPENED_TASKS } from "@repo/features/view-choice-wire";
+import { MAX_OPENED_TASKS, VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, expect, test } from "vitest";
+import { afterEach, beforeAll, expect, test, vi } from "vitest";
 import { useChosenWorkspace } from "./desktop/chosen-workspace.js";
 import {
   FILE_TREE_WIDTH,
@@ -26,9 +26,9 @@ import { keepViewChoices } from "./testing/view-choices.js";
  * still kept: each is read from the name and in the shape an earlier build
  * wrote it, and written back under the same name in the same shape, so
  * nobody loses a fold, a width or a filter to the move; and one that moved
- * up to the account is read once from there and handed up in the
- * account's shape. The stored texts are spelled out here, never computed
- * from the code under test.
+ * up to the account is read once from where an earlier build kept it,
+ * handed up in the account's shape, and let go here. The stored texts are
+ * spelled out here, never computed from the code under test.
  */
 
 declare global {
@@ -247,24 +247,24 @@ test("the chosen workspace is read from the id it was kept as", () => {
   expect(kept("app.chosenWorkspace")).toBe('"w1"');
 });
 
-test("the conversation's filters and folds are read from the one record, and every other conversation draws a change at once", () => {
+test("the conversation's filters and folds an earlier build kept move up to the account once, and leave the window", async () => {
   keep(
     "app.conversation-filters",
-    '{"hideBots":true,"hideResolved":false,"descriptionOpen":false,"conversationOpen":true}',
+    '{"hideBots":true,"hideResolved":"no","descriptionOpen":false,"conversationOpen":true}',
   );
-  const drawn = draw(() => ({ first: useConversationFilters(), second: useConversationFilters() }));
-  expect(drawn.now().first.filters).toEqual({
+  const written = keepViewChoices();
+  const drawn = draw(() => useConversationFilters());
+
+  const moved = {
     hideBots: true,
     hideResolved: false,
     descriptionOpen: false,
     conversationOpen: true,
-  });
-  act(() => drawn.now().first.change({ hideResolved: true }));
-  expect(drawn.now().second.filters.hideResolved).toBe(true);
-  expect(JSON.parse(kept("app.conversation-filters") ?? "{}")).toEqual({
-    hideBots: true,
-    hideResolved: true,
-    descriptionOpen: false,
-    conversationOpen: true,
-  });
+  };
+
+  await vi.waitFor(() => expect(drawn.now().filters).toEqual(moved));
+  expect(written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value }))).toEqual([
+    { key: VIEW_CHOICE_KEY.CONVERSATION_FILTERS, workspaceId: null, value: moved },
+  ]);
+  expect(kept("app.conversation-filters")).toBeNull();
 });

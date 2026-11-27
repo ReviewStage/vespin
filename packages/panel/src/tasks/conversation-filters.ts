@@ -10,13 +10,13 @@
  * other is on or not: Hide bots the comments and reviews, Hide resolved
  * the threads.
  *
- * The choice is the window's own, as the sidebar's fold is
- * (`../desktop/sidebar-collapse.ts`): no other window draws a conversation
- * and main never reads it, so it is kept in the renderer's storage rather
- * than crossing to the settings file. One choice holds for every pull request,
+ * The choice is the member's, one of the account's view choices
+ * (`VIEW_CHOICE_KEY.CONVERSATION_FILTERS`, `../view-choices.ts`), so it
+ * follows them to every device. One choice holds for every pull request,
  * both off until changed, and a change in one tab is drawn at once in every
- * other. Each is read on its own, so one that no longer reads leaves the
- * other as it was kept.
+ * other. What an earlier build kept in this window's storage moves up to
+ * the account once, each part read on its own, so one that no longer reads
+ * leaves the other as it was kept.
  *
  * Whether the Description and the Conversation stand open is kept beside
  * them on the same terms: one choice for each section, never one for each
@@ -25,9 +25,11 @@
  */
 
 import type { ConversationEntry, ReviewThread } from "@repo/features/agent-wire";
+import { VIEW_CHOICE_KEY, type ViewChoiceValue } from "@repo/features/view-choice-wire";
 import { Effect, Option, Schema } from "effect";
-import { useCallback } from "react";
-import { keptKey, useKept } from "../use-kept.js";
+import { selectFixtureStaged, useAppStateSlice } from "../use-app-state.js";
+import { keptKey, useKeptLeaving } from "../use-kept.js";
+import { useAccountChoice } from "../view-choices.js";
 
 /** A kept filter read on its own: as kept where it reads, its default where it is missing or does not. */
 function keptOr<S extends Schema.Codec<unknown, unknown>>(
@@ -48,7 +50,8 @@ const DEFAULT_CHOICES = {
   conversationOpen: true,
 } as const;
 
-const conversationChoicesSchema = Schema.Struct({
+/** The choices as an earlier build kept them in this window's storage, each part read on its own. */
+const keptChoicesSchema = Schema.Struct({
   hideBots: keptOr(Schema.Boolean, DEFAULT_CHOICES.hideBots),
   hideResolved: keptOr(Schema.Boolean, DEFAULT_CHOICES.hideResolved),
   descriptionOpen: keptOr(Schema.Boolean, DEFAULT_CHOICES.descriptionOpen),
@@ -56,15 +59,13 @@ const conversationChoicesSchema = Schema.Struct({
 });
 
 /** The Conversation view's kept choices: its two filters, and whether each of its sections stands open. */
-type ConversationChoices = typeof conversationChoicesSchema.Type;
+type ConversationChoices = ViewChoiceValue<typeof VIEW_CHOICE_KEY.CONVERSATION_FILTERS>;
 
 /** What the filters leave out of a conversation. */
 export type ConversationFilters = Pick<ConversationChoices, "hideBots" | "hideResolved">;
 
-/** The choice, kept on this Mac under one key for every pull request. */
-const KEPT = {
-  CHOICES: keptKey("app.conversation-filters", Schema.fromJsonString(conversationChoicesSchema)),
-} as const;
+/** Where an earlier build kept the choice in this window's storage, one for every pull request, moved up to the account once. */
+const KEPT_CHOICES = keptKey("app.conversation-filters", Schema.fromJsonString(keptChoicesSchema));
 
 /** How many entries each filter would leave out of a conversation, each counted on its own. */
 export interface ConversationHidden {
@@ -132,13 +133,17 @@ export interface ConversationFiltersControl {
 }
 
 export function useConversationFilters(): ConversationFiltersControl {
-  const [filters, , changeChoices] = useKept<ConversationChoices>(KEPT.CHOICES, DEFAULT_CHOICES);
-
-  // Note that a change is made over what is kept now, so every conversation's tab draws it at once, and a filter changed in one never undoes a section folded in another.
-  const change = useCallback(
-    (changed: Partial<ConversationChoices>) => changeChoices((held) => ({ ...held, ...changed })),
-    [changeChoices],
+  const choice = useAccountChoice(
+    VIEW_CHOICE_KEY.CONVERSATION_FILTERS,
+    null,
+    DEFAULT_CHOICES,
+    useAppStateSlice(selectFixtureStaged) === true,
+    useKeptLeaving(KEPT_CHOICES),
   );
 
-  return { filters, change };
+  // Note that a change is made over the choice held now, so every conversation's tab draws it at once, and a filter changed in one never undoes a section folded in another.
+  const change = (changed: Partial<ConversationChoices>) =>
+    choice.change((held) => ({ ...held, ...changed }));
+
+  return { filters: choice.value, change };
 }

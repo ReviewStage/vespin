@@ -20,6 +20,7 @@
 
 import { type WireValue, WireValueSchema } from "@repo/wire";
 import { Option, Schema } from "effect";
+import { AUTOMATIONS_ORDER } from "./automation-list-model.js";
 import { AUTOMATION_LIST_GROUP } from "./automation-wire.js";
 import { INBOX_RUNS, INBOX_SHOW, INBOX_WHOSE } from "./inbox-list-model.js";
 import { wireUuidSchema } from "./service-wire.js";
@@ -88,6 +89,14 @@ export const VIEW_CHOICE_KEY = {
   TASKS_BOARD_DISPLAY: "tasksBoardDisplay",
   /** The Tasks page List's folded groups, each kind by the values its groups stand for. */
   TASKS_LIST_FOLDS: "tasksListFolds",
+  /** How the Automations list orders each owner's automations (`AUTOMATIONS_ORDER`). */
+  AUTOMATIONS_ORDER: "automationsOrder",
+  /** Whether a task Overview's Archived agents stand open, one choice for every task. */
+  ARCHIVED_AGENTS_OPEN: "archivedAgentsOpen",
+  /** A pull request's Conversation filters and its two sections' folds, one choice for every pull request. */
+  CONVERSATION_FILTERS: "conversationFilters",
+  /** Whether Find in tab searches a transcript's details too. */
+  FIND_DETAILS: "findDetails",
 } as const;
 
 export type ViewChoiceKey = (typeof VIEW_CHOICE_KEY)[keyof typeof VIEW_CHOICE_KEY];
@@ -286,6 +295,31 @@ export const VIEW_CHOICE = {
     VIEW_CHOICE_KEY.TASKS_LIST_FOLDS,
     VIEW_CHOICE_SCOPE.ACCOUNT,
     tasksListFoldsSchema,
+  ),
+  [VIEW_CHOICE_KEY.AUTOMATIONS_ORDER]: viewChoice(
+    VIEW_CHOICE_KEY.AUTOMATIONS_ORDER,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Literals(Object.values(AUTOMATIONS_ORDER)),
+  ),
+  [VIEW_CHOICE_KEY.ARCHIVED_AGENTS_OPEN]: viewChoice(
+    VIEW_CHOICE_KEY.ARCHIVED_AGENTS_OPEN,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Boolean,
+  ),
+  [VIEW_CHOICE_KEY.CONVERSATION_FILTERS]: viewChoice(
+    VIEW_CHOICE_KEY.CONVERSATION_FILTERS,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Struct({
+      hideBots: Schema.Boolean,
+      hideResolved: Schema.Boolean,
+      descriptionOpen: Schema.Boolean,
+      conversationOpen: Schema.Boolean,
+    }),
+  ),
+  [VIEW_CHOICE_KEY.FIND_DETAILS]: viewChoice(
+    VIEW_CHOICE_KEY.FIND_DETAILS,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Boolean,
   ),
 } as const satisfies { readonly [Key in ViewChoiceKey]: ViewChoice<ViewChoiceSchema> };
 

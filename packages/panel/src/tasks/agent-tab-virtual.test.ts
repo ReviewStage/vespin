@@ -70,8 +70,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
-  // The find's choice of searching calls and thoughts is the window's, kept across draws.
-  window.localStorage.clear();
 });
 
 const AGENT_ID = "4b0f6d3e-2c1a-4f5e-9d8c-7a6b5c4d3e2f";
@@ -280,6 +278,19 @@ function pressInBar(label: string): void {
   act(() => button.click());
 }
 
+/** Turns on the find's search of calls and thinking by the bar's button named `label`, as the account keeps it, and waits until the bar says it searches them. */
+async function searchDetails(label: string): Promise<void> {
+  pressInBar(label);
+  await vi.waitFor(() =>
+    assert.equal(
+      document
+        .querySelector('[aria-label="Search tool calls and thinking"]')
+        ?.getAttribute("aria-pressed"),
+      "true",
+    ),
+  );
+}
+
 test("⌘F finds words in a row the log has not drawn, scrolls the log to it, and lights the match there", async () => {
   const held = messages(0, 400);
   held[7] = message(7, "The lantern is lit in the seventh reply.");
@@ -456,7 +467,7 @@ test("⌘F leaves a closed call's answer far up the log out until asked, then co
     "the bar says the calls hold a match",
   );
 
-  pressInBar("Include");
+  await searchDetails("Include");
   await act(settled);
   assert.equal(findTally(), "1 of 1");
   assert.ok(drawnRows(container).includes("m-7"), "the seventh reply's row is drawn");
@@ -499,7 +510,7 @@ async function farTally(far: AgentTranscriptMessage, query: string) {
   act(() => {
     runAppCommand(APP_COMMAND.FIND);
   });
-  pressInBar("Search tool calls and thinking");
+  await searchDetails("Search tool calls and thinking");
   typeFind(query);
   await act(settled);
 
