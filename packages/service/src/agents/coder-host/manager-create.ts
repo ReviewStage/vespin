@@ -4,7 +4,7 @@
  * The Manager is made by `startManager`, the one function the app's
  * `createManager` runs, so it is refused and kept as one made at New
  * Manager is: in the calling Manager's own workspace, as the member who
- * asked for the turn under way (`turnAsker`, its owner standing in only
+ * asked for the turn under way (`askingMember`, its owner standing in only
  * where no member asked), who owns it and pays for it, in the cloud, under
  * the call's own key, so a call run again makes one. Its model and effort
  * are the ones named or else that member's own default, as New Manager
@@ -16,7 +16,6 @@
  */
 
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
-import { turnAsker } from "@repo/database/models/turn-asker";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_KIND, AGENT_MACHINE } from "@repo/features/agent-wire";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
@@ -35,6 +34,7 @@ import {
   type AgentCall,
   type AgentToolServices,
   agentToolRejected,
+  askingMember,
   callerAgent,
   callerUserId,
   callerWorkspace,
@@ -173,10 +173,7 @@ export function runCreateManager(
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
 
       // The Manager is the asking member's, as one they made at New Manager would be.
-      const asker = yield* turnAsker({
-        userId: calling.userId,
-        conversationId: calling.conversationId,
-      });
+      const asker = yield* askingMember(call.caller);
 
       const [first, ...rest] =
         made.repositories ??
