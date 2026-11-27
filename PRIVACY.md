@@ -536,7 +536,7 @@ team's Slack, by way of PostHog, whether or not you share usage data. That copy
 is filed under a random identifier, with no name, email, or account id and no
 person profile, so PostHog cannot tie it to you.
 
-### Information stored on your Mac and iPhone
+### Information stored on your Mac, iPhone, and browser
 
 The Mac app keeps its window layout and the drafts of messages you have not
 sent. While you are signed in, it also keeps a copy of your workspaces' lists,
@@ -561,6 +561,15 @@ phone's first unlock since it started, never synced to iCloud or moved to
 another device, and deleted when you sign out. Earlier versions of the app
 kept them encrypted in its own files under a key in the Keychain; once the
 tokens moved into the Keychain itself, the app deletes that key.
+
+The Vespin web app (vespin.dev/app) keeps the same copy of your workspaces'
+lists and your Inbox's newest threads in your browser's storage for
+vespin.dev (IndexedDB), one copy for each account you sign in with, so that a
+page load can draw them at once and ask us only for what changed. Your
+browser keeps it as it keeps any site's data, and it is not encrypted under a
+key of Vespin's own. The web app deletes it when you sign out. Changes you
+made offline and messages to agents that were not delivered are held only in
+the open tab, and are lost when it closes.
 
 When you close New task in the Vespin iOS app and choose Save draft, the
 app keeps that draft's words on your iPhone or iPad, one draft for each

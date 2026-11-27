@@ -62,6 +62,7 @@ import type { AppManagerChats, AppTranscript } from "./app-state.js";
 import { INBOX_CHANGE, INBOX_ITEM } from "./inbox-collections.js";
 import { localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
+import { sqliteBackend } from "./local-sqlite.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { taskListCollections } from "./task-list-collections.js";
 import {
@@ -1044,7 +1045,7 @@ function signedInLocal(
 ) {
   return Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const local = yield* localCopy(stateRoot).pipe(Scope.provide(scope));
+    const local = yield* localCopy(yield* sqliteBackend(stateRoot)).pipe(Scope.provide(scope));
     yield* local.open("user-dana", harness.refused);
     yield* settled;
 
@@ -2435,7 +2436,7 @@ function localLaunch(
   tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[],
 ) {
   return Effect.gen(function* () {
-    const local = yield* localCopy(root);
+    const local = yield* localCopy(yield* sqliteBackend(root));
 
     const pool = yield* entityPool({
       mintKey: () => "key",
@@ -2554,7 +2555,7 @@ function keptItemIds(pool: EntityPool) {
 /** One launch as the host makes it where the Inbox kind is kept on disk: the pool on the local copy, the agents on the pool, then `account`'s database opened. */
 function keptLaunch(root: string, account = "user-dana") {
   return Effect.gen(function* () {
-    const local = yield* localCopy(root);
+    const local = yield* localCopy(yield* sqliteBackend(root));
 
     const pool = yield* entityPool({
       mintKey: () => "key",

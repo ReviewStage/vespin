@@ -56,6 +56,7 @@ import type { AppDescriptionComments } from "./app-state.js";
 import type { TasksClient } from "./compose-tasks.js";
 import { FIXTURE_IDS, FIXTURE_PAGE } from "./fixture-stage.js";
 import { localCopy } from "./local-copy.js";
+import { sqliteBackend } from "./local-sqlite.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { polledLive } from "./testing/polled-live.js";
 import { agentListRow } from "./testing/task-list-rows.js";
@@ -283,7 +284,7 @@ it.effect(
 
       /** One launch as the host makes it: the pool on the local copy, the composers on the pool, then the database opened and the gate opened. */
       const launched = Effect.gen(function* () {
-        const local = yield* localCopy(root);
+        const local = yield* localCopy(yield* sqliteBackend(root));
 
         const pool = yield* entityPool({
           mintKey: () => "key",
@@ -340,7 +341,7 @@ const LOCAL_PLATFORM = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, node
 /** One launch of Dana's account over `directory`: a pool whose waiting writes, each sent under `key`, are kept in the local database, and the writes it held at the last quit, to lay back. */
 const launchedOver = (directory: string, key: string) =>
   Effect.gen(function* () {
-    const copy = yield* localCopy(directory);
+    const copy = yield* localCopy(yield* sqliteBackend(directory));
 
     const pool = yield* entityPool({
       mintKey: () => key,
