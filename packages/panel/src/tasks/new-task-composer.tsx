@@ -110,7 +110,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * agent runs, its glyph alone where the card is too narrow for its words:
  * Cloud and the member's
  * devices, which the agent it starts runs on (`runs-on.tsx`); an automation's
- * card draws none. Note that the card holds Start while the account's last pick is unread, and
+ * card draws none. Note that the card holds Start while the account's last pick is unread, saying
+ * so with Retry where its read failed, and
  * reads the member's devices as it opens and, where the last
  * pick is a device, holds Start, saying so, until that read lands, a list read before it opened not
  * counting, and says a read that failed, or one still out past its bound,
@@ -266,6 +267,12 @@ const REPOSITORY_HELD = "A sub-task and its parent share one repository";
 const DEVICES_UNREAD: Failure = {
   reason: FAILURE_REASON.OTHER,
   text: `Couldn't read your devices, so ${PRODUCT_NAME} can't tell where this task should run.`,
+};
+
+/** What the card says where the account's last Runs on pick could not be read, with Retry, rather than starting the task in the cloud. */
+const LAST_PICK_UNREAD: Failure = {
+  reason: FAILURE_REASON.OTHER,
+  text: `Couldn't read where you last ran an agent, so ${PRODUCT_NAME} can't tell where this task should run.`,
 };
 
 /** The servers a card switches off as it opens: none, as an agent started with none named runs with every one on. */
@@ -554,6 +561,7 @@ export function NewTaskComposer({
   // Note that Start waits on the account's last pick too, since it may name a device.
   const devicesUnread = devicesRead.unread || (runsOnStands && runsOnPick.unread);
   const devicesFailed = devicesRead.failed;
+  const pickFailed = runsOnStands && runsOnPick.failed;
 
   // Note that a model nothing of the account's pays for runs all the same on a picked device that runs its harness, on the device's own sign-in.
   const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
@@ -782,11 +790,11 @@ export function NewTaskComposer({
       starts.clear();
     },
     sending: starting,
-    // Note that a read of the devices that failed is said over any note before it, and read again by its Retry.
-    note: devicesFailed ? DEVICES_UNREAD : note,
+    // Note that a read of the last pick or the devices that failed is said over any note before it, and read again by its Retry.
+    note: pickFailed ? LAST_PICK_UNREAD : devicesFailed ? DEVICES_UNREAD : note,
     closed: undefined,
     send: start,
-    retry: devicesFailed ? () => readModels.current() : start,
+    retry: pickFailed ? runsOnPick.retry : devicesFailed ? () => readModels.current() : start,
     sent: [],
   };
 

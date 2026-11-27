@@ -39,7 +39,8 @@ import type { NewTaskStart } from "./use-new-task.js";
  * saying so with a Retry that reads them again, while a member whose last pick
  * is the cloud is not held, the chip standing on Cloud alone. The last pick is
  * the account's, where its last Start ran: nothing starts before it is read,
- * and a device picked in this window gives way once a Start moves it. A card opened as a sub-task
+ * and one that failed holds it with Retry; a device picked in this window
+ * gives way for good once a Start moves it. A card opened as a sub-task
  * of another names no repository, which it takes from its parent, but draws
  * Runs on as any card does, since a task holds no place to run.
  * Synthetic throughout.
@@ -405,7 +406,7 @@ test("nothing starts before the account's last pick is read, and the task starts
   assert.deepEqual(starts, [ON_STUDIO]);
 });
 
-test("a device picked in this window gives way once the account's last Start runs elsewhere", async () => {
+test("a device picked in this window gives way for good once the account's last Start runs elsewhere", async () => {
   const held = handHostReads({ preferences: heldPreferences({ runsOn: ON_STUDIO }) });
   const { container } = await mount({ devices: devicesWith(Date.now(), Date.now()) });
   act(() => runsOnChip(container).click());
@@ -418,8 +419,37 @@ test("a device picked in this window gives way once the account's last Start run
     held.deliverPreferences(heldPreferences({ runsOn: { machine: AGENT_MACHINE.VERCEL } })),
   );
   await settle();
-
   assert.equal(runsOnChip(container).getAttribute("aria-label"), "Machine: Cloud");
+
+  // A Start back on the Studio is newer than the pick made over it, which must not come back.
+  act(() => held.deliverPreferences(heldPreferences({ runsOn: ON_STUDIO })));
+  await settle();
+
+  assert.equal(runsOnChip(container).getAttribute("aria-label"), "Machine: Studio");
+});
+
+test("a read of the account's last pick that failed holds the start, saying so, with a Retry that reads it again", async () => {
+  handState(experimentsOn());
+  const held = handHostReads({ preferences: { failed: true } });
+  const { container, starts } = await mount();
+  pressInComposer(container, "Enter", { metaKey: true });
+  await settle();
+
+  assert.deepEqual(starts, []);
+  assert.match(container.textContent ?? "", /Couldn't read where you last ran an agent/);
+
+  const retry =
+    [...container.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Retry",
+    ) ?? assert.fail("the card offers Retry");
+
+  act(() => retry.click());
+  act(() => held.deliverPreferences(heldPreferences({ runsOn: ON_STUDIO })));
+  await settle();
+  pressInComposer(container, "Enter", { metaKey: true });
+  await settle();
+
+  assert.deepEqual(starts, [ON_STUDIO]);
 });
 
 test("a member whose last pick is the cloud, as every member's with no device is, starts while the card's read of the devices is still out", async () => {

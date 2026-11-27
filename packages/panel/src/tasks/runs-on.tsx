@@ -29,10 +29,18 @@ import {
 } from "@repo/ui";
 import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
-import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  hashKey,
+  type QueryClient,
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useCallback, useState } from "react";
-import { useAccountPreferences } from "../account-choices.js";
+import { useAccountKey } from "../account-choices.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
+import { accountPreferencesQuery, accountPreferencesRetryMutation } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { Picker } from "../settings/picker-row.js";
@@ -217,38 +225,80 @@ function requestRow(runsOn: AgentRunsOnRequest): string {
   return runsOn.machine === AGENT_MACHINE.DEVICE ? runsOn.deviceId : CLOUD_ROW;
 }
 
-/** The member's last pick as a Runs on row, and the door that picks another, with whether the account's is still unread. */
+/** The account's last pick as a Runs on row: Cloud's id where no Start named a place. */
+function accountRow(stored: AgentRunsOnRequest | undefined): string {
+  return stored === undefined ? CLOUD_ROW : requestRow(stored);
+}
+
+/**
+ * Lets `pick` go once the account's pick moves from the one it was made
+ * over: a Start here moves it to what was picked, and one on another device
+ * is newer. Note that it is let go for good, heard on the window's Query
+ * cache whether or not a chip is drawn, because a later move back to where
+ * it was made must not bring an older pick back over a newer Start.
+ */
+function expireOnMove(
+  queries: QueryClient,
+  preferences: ReturnType<typeof accountPreferencesQuery>,
+  pick: WindowPick,
+): void {
+  const hash = hashKey(preferences.queryKey);
+
+  const stop = queries.getQueryCache().subscribe((event) => {
+    if (event.type !== "updated" || event.query.queryHash !== hash) return;
+    const read = queries.getQueryData(preferences.queryKey);
+
+    if (read === undefined || accountRow(read.runsOn) === pick.over) return;
+    stop();
+
+    if (queries.getQueryData(windowPickQuery.queryKey) === pick) {
+      queries.setQueryData(windowPickQuery.queryKey, null);
+    }
+  });
+}
+
+/** The member's last pick as a Runs on row, and the door that picks another, with whether the account's is unread or could not be read, and Try again on it. */
 interface LastPick {
   readonly row: string;
   readonly choose: (row: string) => void;
+  /** Whether the account's pick is not read, still out or failed, which a start waits on, since it may name a device. */
   readonly unread: boolean;
+  /** Whether the account's pick could not be read, which a card says with Retry. */
+  readonly failed: boolean;
+  readonly retry: () => void;
 }
 
 /**
  * The member's last pick: this window's, where one was made over the
- * account's pick as it stands, else the account's, else Cloud. Note that a
- * window's pick gives way once the account's moves, because a Start here
- * moves it to what was picked, and one on another device is newer.
+ * account's pick as it stands, else the account's, else Cloud. A window's
+ * pick gives way for good once the account's moves (`expireOnMove`).
  */
 function useLastPick(): LastPick {
-  const preferences = useAccountPreferences();
-  const stored = preferences.data?.runsOn;
-  const account = stored === undefined ? CLOUD_ROW : requestRow(stored);
+  const preferencesRead = accountPreferencesQuery(useAccountKey());
+  const preferences = useQuery(preferencesRead);
+  const account = accountRow(preferences.data?.runsOn);
   const queries = useQueryClient();
   const mine = useQuery(windowPickQuery).data;
+  const { mutate: retry } = useMutation(accountPreferencesRetryMutation());
 
   const choose = useCallback(
     (row: string) => {
       const pick: WindowPick = { over: account, row };
       queries.setQueryData(windowPickQuery.queryKey, pick);
+      expireOnMove(queries, preferencesRead, pick);
     },
-    [queries, account],
+    [queries, account, preferencesRead],
   );
+
+  // Note that a read that failed before it ever answered holds a start as one still out does, since the pick it would have named may be a device.
+  const failed = preferences.data === undefined && preferences.isError;
 
   return {
     row: mine?.over === account ? mine.row : account,
     choose,
-    unread: preferences.isLoading,
+    unread: preferences.isLoading || failed,
+    failed,
+    retry: () => retry(),
   };
 }
 
@@ -259,8 +309,12 @@ export interface NewTaskRunsOn {
   readonly choose: (deviceId: string | undefined) => void;
   /** Whether the pick is a device, listed or not, which a start waits on the devices' read for. */
   readonly onDevice: boolean;
-  /** Whether the account's last pick is still unread, which a start waits on, since it may name a device. */
+  /** Whether the account's last pick is not read, still out or failed, which a start waits on, since it may name a device. */
   readonly unread: boolean;
+  /** Whether the account's last pick could not be read, which a card says with Retry. */
+  readonly failed: boolean;
+  /** Try again on the account's last pick. */
+  readonly retry: () => void;
 }
 
 /**
@@ -279,6 +333,8 @@ export function useNewTaskRunsOn(devices: readonly MacOffer[]): NewTaskRunsOn {
     choose: (deviceId: string | undefined) => last.choose(deviceId ?? CLOUD_ROW),
     onDevice: last.row !== CLOUD_ROW,
     unread: last.unread,
+    failed: last.failed,
+    retry: last.retry,
   };
 }
 

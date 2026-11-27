@@ -36,7 +36,7 @@ export interface DrawnAgentDefault {
 }
 
 /** The account signed in, by the id the host holds its reads under; none while nobody is. */
-function useAccountKey(): string | undefined {
+export function useAccountKey(): string | undefined {
   return signedInAccountId(useAppStateSlice(selectAccount));
 }
 
