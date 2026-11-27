@@ -141,11 +141,14 @@ export function Conversation({
   const own = useRef<HTMLDivElement>(null);
   const list = handed ?? own;
   const log = useRef<HTMLDivElement>(null);
+  // The log's room at its end, as its block says it (`ConversationContent`).
   const [logEnd, setLogEnd] = useState(0);
+
   const sayLogEnd = useCallback(
     (room: number) => setLogEnd((was) => (was === room ? was : room)),
     [],
   );
+
   // The log's run of lines, while one stands.
   const rows = useRef<RefObject<VirtualRowsHandle | null> | undefined>(undefined);
 
