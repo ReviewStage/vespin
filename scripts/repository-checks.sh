@@ -175,6 +175,11 @@ node "$APP_REPO_ROOT/packages/brand/scripts/generate-surface-shared.mjs" --check
 # ProviderMark into @repo/ui-native's assets; --check fails if one drifted.
 pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/native-provider-marks.ts --check
 
+# The working mark's lap and a Manager's typing dots play on frames written
+# from their geometry into @repo/ui's loop-frames.css; --check fails if they
+# drifted.
+pnpm --dir "$APP_REPO_ROOT/packages/ui" exec tsx scripts/loop-frames.ts --check
+
 # The iOS app's Manager faces are the desktop's, each character at rest and
 # at work rendered from @repo/ui's ManagerFace into @repo/ui-native's assets;
 # --check fails if one drifted.
