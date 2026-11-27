@@ -49,6 +49,7 @@ import {
   useLayoutEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
 } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -179,10 +180,13 @@ export function InboxAttentionProvider({ children }: { readonly children: ReactN
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   // Note that the counts are made again as the soonest reminder comes due, since an item it put away comes back with no write to say so.
   const [dueTurns, dueCame] = useReducer((turns: number) => turns + 1, 0);
+  // The moment the counts standing were made at, which the next reminder is looked for after, so one that comes due between the count and the timer is never passed over.
+  const countedAt = useRef(0);
 
   // Note that the store moves before the frame paints, so no screen draws a frame of the read before.
   useLayoutEffect(() => {
-    const counted = inboxWaitingIn(inboxRowGroups(drawn), readerId, Date.now());
+    countedAt.current = Date.now();
+    const counted = inboxWaitingIn(inboxRowGroups(drawn), readerId, countedAt.current);
 
     store.set({
       all,
@@ -192,11 +196,11 @@ export function InboxAttentionProvider({ children }: { readonly children: ReactN
   }, [store, all, drawn, readerId, dueTurns]);
 
   useEffect(() => {
-    const now = Date.now();
-    const due = inboxNextReminderDue(inboxRowGroups(drawn), now);
+    const due = inboxNextReminderDue(inboxRowGroups(drawn), countedAt.current);
 
     if (due === undefined) return;
-    const timer = setTimeout(dueCame, due - now);
+    // Note that a reminder already due by now counts again at once.
+    const timer = setTimeout(dueCame, Math.max(0, due - Date.now()));
 
     return () => clearTimeout(timer);
   }, [drawn, dueTurns]);
