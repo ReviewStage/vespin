@@ -46,6 +46,7 @@ import {
   ComposerFoot,
   GLYPH,
   MentionSuggestions,
+  ResolvableAsk,
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
@@ -201,7 +202,11 @@ function controlsStand(item: InboxItem): boolean {
  * note typed; an answer's fields to fill. A notice asking nothing has no
  * card: its Got it is the box's empty Send (`ThreadComposer`), as the
  * panel's is. What the last send said where it did not go stands in the
- * box's head, beside the words it put back. None where nothing is asked.
+ * box's head, beside the words it put back. Its × at the top end resolves
+ * the thread without answering, as the panel's question's × does, at once
+ * with Undo (`answer.resolve`). None where nothing is asked, and an ask of
+ * words alone, whose box is its answer, draws no card and so no ×, as the
+ * panel's draws none.
  */
 export function OpenAskCard({
   item,
@@ -212,11 +217,31 @@ export function OpenAskCard({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, send, asNew } = answer;
   // Note that the ask's controls step aside while the box starts a new thread, since nothing picked there goes with it, and come back as they were.
-  const ask = asNew ? undefined : openAsk(item);
+  const ask = answer.asNew ? undefined : openAsk(item);
 
-  if (ask === undefined) return null;
+  if (ask === undefined || !controlsStand(item)) return null;
+
+  return (
+    <ResolvableAsk resolve={{ label: RESOLVE, onPress: answer.resolve }}>
+      <AskControls item={item} ask={ask} answer={answer} doors={doors} />
+    </ResolvableAsk>
+  );
+}
+
+/** The open ask's controls as `OpenAskCard` stands them: a decide's options, a do's steps and presses, or an answer's fields. */
+function AskControls({
+  item,
+  ask,
+  answer,
+  doors,
+}: {
+  readonly item: InboxItem;
+  readonly ask: NonNullable<ReturnType<typeof openAsk>>;
+  readonly answer: ThreadAnswer;
+  readonly doors: OptionMediaDoors;
+}): ReactNode {
+  const { draft, onDraft, send } = answer;
 
   if (ask.type === INBOX_ASK.DECIDE) {
     const cards = optionsCarryMedia(ask);

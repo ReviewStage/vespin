@@ -46,7 +46,7 @@ import { Markdown } from "./markdown.js";
 import { ProblemLine } from "./problem-line.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How thick the card's edge is drawn: a hairline, as the decide card's is. */
@@ -180,6 +180,51 @@ export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
     </VStack>
   ) : (
     <HStack spacing={SPACE.TIGHT * 2}>{buttons}</HStack>
+  );
+}
+
+/** What settles an open ask without answering it, as the panel's × beside its question: its words, heard on the ×, and its press. */
+export type AskResolve = {
+  readonly label: string;
+  readonly onPress: () => void;
+};
+
+/**
+ * An open ask's card with the × that resolves it without an answer at its
+ * top end, as the panel's question stands its × (`DraftQuestion`): the
+ * system's close mark in the muted ink, a full press's size, heard by its
+ * act's words. The card alone where nothing resolves it.
+ */
+export function ResolvableAsk({
+  resolve,
+  children,
+}: {
+  readonly resolve: AskResolve | undefined;
+  readonly children: ReactNode;
+}) {
+  const colors = useColors();
+
+  if (resolve === undefined) return children;
+
+  return (
+    <HStack alignment="top" spacing={0}>
+      {children}
+      <SwiftUIButton
+        onPress={resolve.onPress}
+        modifiers={[buttonStyle("plain"), accessibilityLabel(resolve.label)]}
+      >
+        <Image
+          {...glyphImage(GLYPH.CLOSE)}
+          size={MARK_SIZE.GLYPH}
+          color={colors.TEXT_MUTED}
+          modifiers={[
+            // Note that the mark is drawn small, as the panel's compact ×, while its press stands as large as Apple asks of a target.
+            frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE, alignment: "top" }),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          ]}
+        />
+      </SwiftUIButton>
+    </HStack>
   );
 }
 
