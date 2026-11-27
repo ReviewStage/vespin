@@ -34,13 +34,15 @@ import { openWorkspacePlugin } from "../testing/workspace-plugin.js";
 /**
  * A workspace's people and its invitations (`workspaceMembersRead`,
  * `workspaceInvitationsRead`) on the migrated capture: each write that moves
- * either read, through its real writer, notifies the workspace's topic, which
- * both reads are woken on, so a window holding them hears it within a
- * coalesce window rather than at the hold's end. A membership is made by the
- * organization plugin's server-only add, and changed, and invitations made
- * and canceled, by the stores the operations write through; an account's name and its sign-in by the account's own row, as the
- * plugin's adapter writes them; and the work that names a former member by
- * the stores. A sign-in moves no read, so it notifies nothing.
+ * either read, through its real writer, notifies a topic the read is woken
+ * on, so a window holding them hears it within a coalesce window rather than
+ * at the hold's end. A membership is made by the organization plugin's
+ * server-only add, and changed, and invitations made and canceled, by the
+ * stores the operations write through; an account's name and its sign-in by
+ * the account's own row, as the plugin's adapter writes them; and the
+ * workspace's work by the stores. A sign-in moves no read, so it notifies
+ * nothing, and the workspace's work wakes no people read, since only
+ * membership moves who its people are.
  *
  * Synthetic accounts, workspaces, and work throughout.
  */
@@ -70,25 +72,35 @@ const openTeam = (plugin: WorkspacePlugin, ownerId: string) =>
     (made) => made.id,
   );
 
+/** The workspace's reads for the reader that one of `topics` wakes. */
+const wokenBy = (
+  topics: readonly SyncTopic[],
+  params: { readonly userId: string; readonly workspaceId: string },
+) =>
+  WORKSPACE_READS.flatMap((read) =>
+    read
+      .topics(params)
+      .some((topic) => topics.some(([kind, id]) => topic[0] === kind && topic[1] === id))
+      ? [read.name]
+      : [],
+  );
+
 /**
- * Runs the write, held to the topics it notifies, and fails unless one of
- * them wakes each of the workspace's reads for the reader.
+ * Runs the write, held to the topics it notifies, and fails unless they
+ * wake exactly the workspace's reads named, for the reader.
  */
 const wakesTheWorkspace = <A, E, R>(
   write: Effect.Effect<A, E, R>,
   topics: readonly SyncTopic[],
   params: { readonly userId: string; readonly workspaceId: string },
+  reads: readonly (typeof WORKSPACE_READS)[number][] = WORKSPACE_READS,
 ) =>
   Effect.gen(function* () {
     const fired = yield* expectTopicsFire(write, topics);
-
-    for (const read of WORKSPACE_READS) {
-      const woken = read.topics(params);
-      assert.ok(
-        topics.some(([kind, id]) => woken.some((topic) => topic[0] === kind && topic[1] === id)),
-        `the ${read.name} read is woken by a topic the write notifies`,
-      );
-    }
+    assert.deepEqual(
+      wokenBy(topics, params),
+      reads.map((read) => read.name),
+    );
 
     return fired;
   });
@@ -106,6 +118,7 @@ it.effect(
 
         const moved: readonly SyncTopic[] = [
           [TOPIC.WORKSPACE, workspaceId],
+          [TOPIC.WORKSPACE_PEOPLE, workspaceId],
           [TOPIC.ACCOUNT, teammate],
         ];
 
@@ -161,19 +174,21 @@ it.effect("an invitation made and canceled notifies the workspace", () =>
         }),
         workspace,
         reader,
+        [workspaceInvitationsRead],
       );
 
       yield* wakesTheWorkspace(
         cancelWorkspaceInvitation(workspaceId, invited.value.id),
         workspace,
         reader,
+        [workspaceInvitationsRead],
       );
     }).pipe(Effect.provide(plugin.database));
   }),
 );
 
 it.effect(
-  "a write to a teammate's task, agent, workspace automation, and the agent's inbox item each notifies the workspace, whose former members that work names",
+  "a write to a teammate's task, agent, workspace automation, and the agent's inbox item each notifies the workspace and wakes none of its people reads",
   () =>
     Effect.gen(function* () {
       const plugin = yield* openWorkspacePlugin;
@@ -208,11 +223,13 @@ it.effect(
           updateTask(teammate, task.id, { name: "Teammate invites" }),
           onTheTask,
           reader,
+          [workspaceInvitationsRead],
         );
         yield* wakesTheWorkspace(
           renameAgent(teammate, agentId, "Invite flow"),
           [[TOPIC.AGENT, agentId], ...onTheTask],
           reader,
+          [workspaceInvitationsRead],
         );
         yield* wakesTheWorkspace(
           createAutomation(teammate, {
@@ -229,6 +246,7 @@ it.effect(
           }),
           [workspace, [TOPIC.ACCOUNT, teammate]],
           reader,
+          [workspaceInvitationsRead],
         );
         yield* wakesTheWorkspace(
           Effect.map(
@@ -240,6 +258,7 @@ it.effect(
           ),
           [[TOPIC.AGENT, agentId], ...onTheTask, [TOPIC.ACCOUNT, owner], [TOPIC.ACCOUNT, teammate]],
           reader,
+          [workspaceInvitationsRead],
         );
       }).pipe(Effect.provide(plugin.database));
     }),

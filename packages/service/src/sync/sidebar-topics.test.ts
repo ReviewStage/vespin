@@ -181,7 +181,7 @@ it.layer(getTestDB())("what moves an account's sidebar notifies", (it) => {
         yield* wakesTheSidebar(removeGitHubToken(teammate), [teammateTopic], teammate);
         yield* wakesTheSidebar(
           leaveWorkspace(workspaceId, teammate),
-          [teammateTopic, [TOPIC.WORKSPACE, workspaceId]],
+          [teammateTopic, [TOPIC.WORKSPACE, workspaceId], [TOPIC.WORKSPACE_PEOPLE, workspaceId]],
           teammate,
         );
       }),

@@ -173,7 +173,7 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
 
         yield* wakesTheTeammate(
           joinWorkspace(world.workspaceId, newcomer),
-          [workspace, [TOPIC.ACCOUNT, newcomer]],
+          [workspace, [TOPIC.WORKSPACE_PEOPLE, world.workspaceId], [TOPIC.ACCOUNT, newcomer]],
           world,
         );
         const made = yield* wakesTheTeammate(makeAutomation(world), owners, world);
