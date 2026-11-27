@@ -2,7 +2,8 @@
 
 Releases are cut by pushing a `vX.Y.Z` tag. GitHub Actions does the rest: the **Release**
 workflow builds, signs, notarizes, staples, and validates an arm64 macOS app with
-electron-builder on a `macos-15` runner, then publishes the GitHub Release and uploads
+electron-builder on GitHub's `xcode-27` runner (Xcode 27.1; the app's Icon Composer icon
+needs Xcode 26's `actool` or later), then publishes the GitHub Release and uploads
 every asset. The Apple, PostHog, and Sentry secrets the workflow needs are configured on
 this repository, so here the tag push is the whole release.
 
