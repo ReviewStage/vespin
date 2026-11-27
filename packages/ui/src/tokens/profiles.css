@@ -100,8 +100,8 @@
   --ui-composer-least-lines: 1;
   /* The work's sheet on the window's frame (the panel's `.desktop-shell`):
      how far in from the frame it stands and how round its corners are. */
-  --ui-sheet-gap: var(--ui-space-8);
-  --ui-sheet-radius: var(--ui-radius-14);
+  --ui-sheet-gap: var(--ui-space-0);
+  --ui-sheet-radius: var(--ui-space-0);
   /* The room over and under a control in the window's top row, which sets
      how tall the title row and every pane's top row stand. */
   --ui-title-bar-inset: var(--ui-space-8);
@@ -431,8 +431,8 @@
   --ui-composer-least-lines: 1;
   /* The work's sheet on the window's frame (the panel's `.desktop-shell`):
      how far in from the frame it stands and how round its corners are. */
-  --ui-sheet-gap: var(--ui-space-8);
-  --ui-sheet-radius: var(--ui-radius-14);
+  --ui-sheet-gap: var(--ui-space-0);
+  --ui-sheet-radius: var(--ui-space-0);
   /* The room over and under a control in the window's top row, which sets
      how tall the title row and every pane's top row stand. */
   --ui-title-bar-inset: var(--ui-space-8);
