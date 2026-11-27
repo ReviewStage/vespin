@@ -36,7 +36,13 @@ env:
 # opens again. Note that the header's title is pressed, as a child of the
 # header, because the iPad's floating sidebar stands over the header's
 # leading half, where a press at the whole header's middle folded nothing,
-# and the sidebar's own Launch row has no such parent.
+# and the sidebar's own Launch row has no such parent. The header is
+# scrolled clear of the tab bar first, since My tasks' own header stands
+# above it and carries it down under the bar, where a press opened Inbox.
+- runFlow:
+    file: subflows/to-row.yaml
+    env:
+      ROW: "Launch, [0-9]+"
 - tapOn:
     text: "Launch"
     childOf: "Launch, [0-9]+"
