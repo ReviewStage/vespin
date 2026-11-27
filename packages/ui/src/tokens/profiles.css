@@ -74,15 +74,20 @@
   /* Between two items of a list, close enough that they read as one. */
   --ui-list-gap: var(--ui-space-2);
   /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
-     in place of a control's height, the body's size, and the list's and
-     section's gaps: how tall a row stands, the size of its words, the room
-     between two rows and between the places at its top, and the room over
-     each group. */
-  --ui-sidebar-row-height: 32px;
+     in place of a control's height, the body's size, the list's and
+     section's gaps, a control's corner, a row's inset and a glyph's gap: how
+     tall a row's pill stands, the size of its words, the room between two
+     rows and between the places at its top, the room over each group, the
+     pill's corner, how far it holds its glyph from its edge, and the room
+     between its glyph and its words. */
+  --ui-sidebar-row-height: 34px;
   --ui-sidebar-text-size: 14px;
-  --ui-sidebar-row-gap: var(--ui-space-6);
-  --ui-sidebar-places-gap: var(--ui-space-4);
+  --ui-sidebar-row-gap: var(--ui-space-4);
+  --ui-sidebar-places-gap: var(--ui-space-2);
   --ui-sidebar-group-gap: var(--ui-space-24);
+  --ui-sidebar-row-radius: var(--ui-radius-8);
+  --ui-sidebar-row-inset: var(--ui-space-12);
+  --ui-sidebar-icon-gap: var(--ui-space-10);
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's
@@ -381,15 +386,20 @@
   /* Between two items of a list, close enough that they read as one. */
   --ui-list-gap: var(--ui-space-2);
   /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
-     in place of a control's height, the body's size, and the list's and
-     section's gaps: how tall a row stands, the size of its words, the room
-     between two rows and between the places at its top, and the room over
-     each group. */
+     in place of a control's height, the body's size, the list's and
+     section's gaps, a control's corner, a row's inset and a glyph's gap: how
+     tall a row's pill stands, the size of its words, the room between two
+     rows and between the places at its top, the room over each group, the
+     pill's corner, how far it holds its glyph from its edge, and the room
+     between its glyph and its words. */
   --ui-sidebar-row-height: var(--ui-control-height);
   --ui-sidebar-text-size: var(--ui-type-body-size);
   --ui-sidebar-row-gap: var(--ui-list-gap);
   --ui-sidebar-places-gap: var(--ui-list-gap);
   --ui-sidebar-group-gap: var(--ui-section-gap);
+  --ui-sidebar-row-radius: var(--ui-control-radius);
+  --ui-sidebar-row-inset: var(--ui-row-inset);
+  --ui-sidebar-icon-gap: var(--ui-icon-gap);
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's
@@ -651,10 +661,13 @@
     --ui-menu-row-height: 32px;
 
     /* The sidebar's rows, as the window's stand them. */
-    --ui-sidebar-row-height: 32px;
+    --ui-sidebar-row-height: 34px;
     --ui-sidebar-text-size: 14px;
-    --ui-sidebar-row-gap: var(--ui-space-6);
-    --ui-sidebar-places-gap: var(--ui-space-4);
+    --ui-sidebar-row-gap: var(--ui-space-4);
+    --ui-sidebar-places-gap: var(--ui-space-2);
     --ui-sidebar-group-gap: var(--ui-space-24);
+    --ui-sidebar-row-radius: var(--ui-radius-8);
+    --ui-sidebar-row-inset: var(--ui-space-12);
+    --ui-sidebar-icon-gap: var(--ui-space-10);
   }
 }

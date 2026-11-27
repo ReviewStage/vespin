@@ -47,7 +47,7 @@
   --content-inset: calc(var(--column-inset) + var(--row-inset));
   /* The sidebar's default width (`SIDEBAR_WIDTH.DEFAULT`), and its width as
      drawn, which the app stage carries once the developer has dragged it. */
-  --sidebar-width-default: 320px;
+  --sidebar-width-default: 328px;
   --sidebar-width: var(--sidebar-width-default);
   /* The widest a narrow room's drawer stands, a phone's drawer's usual
      width, so a task's name keeps its room beside its time and its ⋯. */
@@ -96,14 +96,18 @@
 
 /* The sidebar draws its rows at its own roles (`profiles.css`'s
    `--ui-sidebar-*`): a row's height stands for a control's, its words' size
-   for the body's, and its gaps for the list's and the section's, so every
-   row, head, and button in it follows them without a class of its own. The
-   places at its top stand a gap of their own apart. */
+   for the body's, its gaps for the list's and the section's, its pill's
+   corner for a control's, its inset for a row's, and its glyph's gap for
+   the icon gap, so every row, head, and button in it follows them without a
+   class of its own. The places at its top stand a gap of their own apart. */
 .desktop-sidebar {
   --ui-control-height: var(--ui-sidebar-row-height);
   --ui-type-body-size: var(--ui-sidebar-text-size);
   --ui-list-gap: var(--ui-sidebar-row-gap);
   --ui-section-gap: var(--ui-sidebar-group-gap);
+  --ui-control-radius: var(--ui-sidebar-row-radius);
+  --ui-row-inset: var(--ui-sidebar-row-inset);
+  --ui-icon-gap: var(--ui-sidebar-icon-gap);
 }
 
 .desktop-sidebar .sidebar-places {

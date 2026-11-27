@@ -31,7 +31,7 @@ import { PANE_FLOAT, type PaneFloat } from "./hover-pane.js";
 export const SIDEBAR_WIDTH = {
   MIN: 200,
   MAX: 400,
-  DEFAULT: 320,
+  DEFAULT: 328,
 } as const;
 
 /**
