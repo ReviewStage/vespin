@@ -188,6 +188,7 @@ import { type InboxReminder, useRemindMany } from "./inbox-remind.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
 import { type InboxListMark, type InboxSelection, useInboxSelection } from "./inbox-selection.js";
 import { PlanGlyph } from "./tab-look.js";
+import { usePlainLinkNames } from "./use-link-standing.js";
 
 /**
  * inbox-list.tsx -- the Inbox's list of items: one row each, in one run, the latest changed first, with what the list shows at its head.
@@ -528,7 +529,7 @@ export const InboxItemRow = memo(function InboxItemRow({
   const { nameOf } = useInboxStanding(listed, readerId);
   const lineKind = inboxLineKind(item);
   const preview = useInboxLinePieces(item, nameOf, ticked);
-  const heard = inboxPreviewHeard(item, nameOf, ticked);
+  const heard = inboxPreviewHeard(item, nameOf, ticked, usePlainLinkNames());
   const addressedTo = inboxAddressedTo(item);
   const addressee = usePerson(addressedTo);
   const coarse = useCoarsePointer();

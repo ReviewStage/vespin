@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { ENTITY_KIND, type Entity, type KnownNames } from "./entity-kind.js";
-import { heldChipName } from "./place-chip-model.js";
+import { heldChipName, namedPlainLinks } from "./place-chip-model.js";
 
 const NONE: ReadonlyMap<string, string> = new Map();
 
@@ -30,4 +30,20 @@ test("a chip says the name held for what it names where that is live or the link
   assert.equal(heldChipName(VERSION, "Version", true, KNOWN), "Teammate invitations, version 3");
   // A task the client holds no name of keeps its kind, as one still found, one the reader may not open, or one deleted.
   assert.equal(heldChipName(UNHELD, "Task", true, KNOWN), "Task");
+});
+
+test("plain words say each place of ours spelled bare by its chip's name, a task's number found first, and leave every other address as written", () => {
+  const names = {
+    known: { ...KNOWN, tasks: new Map([["task-id-42", "Teammate invitations"]]) },
+    taskIdOf: ({ workspace, number }: { workspace: string; number: number }) =>
+      workspace === "acme" && number === 42 ? "task-id-42" : undefined,
+  };
+
+  assert.equal(
+    namedPlainLinks(
+      "Open https://vespin.dev/acme/task/42, then https://vespin.dev/acme/task/STAG-7 and https://example.com/docs.",
+      names,
+    ),
+    "Open Teammate invitations, then Task and https://example.com/docs.",
+  );
 });

@@ -134,6 +134,7 @@ import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/hos
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import { useInboxRunFolds } from "../inbox/inbox-runs.js";
+import { usePreviewLinkNames } from "../inbox/preview-link-names.js";
 import {
   type InboxThreadHeld,
   useInboxActs,
@@ -454,6 +455,7 @@ function InboxRowView({
   const waitsOn = inboxWaitsOn(item);
   const { name: agentName, harness } = useAgentLabel(item.agentId);
   const title = cardTitle(item.title);
+  const links = usePreviewLinkNames(item);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
   const keeping = useKeeping();
@@ -504,7 +506,7 @@ function InboxRowView({
           : { name: taskName, manager: { face: managerFace, working: false } }
       }
       line={inboxLineKind(item)}
-      summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
+      summary={inboxPreview(item, (member) => inboxMemberName(member, readerId), undefined, links)}
       unread={unread}
       done={isDone(item)}
       face={
