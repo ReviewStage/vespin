@@ -3,7 +3,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { signAsync } from "@electron/osx-sign";
-import { BUNDLED_HOST_ENTITLEMENTS, macAppDesignatedRequirement } from "./package-config.mjs";
+import { machOAboveMinimum } from "./mach-o-minimum.mjs";
+import {
+  BUNDLED_HOST_ENTITLEMENTS,
+  MACOS_DEPLOYMENT_TARGET,
+  macAppDesignatedRequirement,
+} from "./package-config.mjs";
 import { BUNDLED_HOST } from "./package-layout.mjs";
 import {
   awaitNotarizationDecision,
@@ -172,6 +177,25 @@ export async function signElectronBuilderApp(configuration, teamIds) {
   }
 
   if (teamIds !== undefined) assertDesignatedRequirement(configuration.app, teamIds);
+}
+
+/**
+ * Fails the package where any Mach-O in the app asks for a newer macOS than
+ * its LSMinimumSystemVersion, before it is signed: a newer Xcode's SDK, or a
+ * prebuilt addon or runtime built for a newer macOS, would otherwise ship a
+ * file that refuses to load on a Mac the app installs on.
+ */
+export function assertPackagedMinimumSystemVersion(context) {
+  const appPath = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
+  const above = machOAboveMinimum(appPath, MACOS_DEPLOYMENT_TARGET);
+
+  if (above.length > 0) {
+    const listed = above.map((file) => `  ${file.path}: macOS ${file.minimum}`).join("\n");
+
+    throw new Error(
+      `These files in ${appPath} need a newer macOS than its minimum, ${MACOS_DEPLOYMENT_TARGET}:\n${listed}`,
+    );
+  }
 }
 
 function shouldNotarize() {

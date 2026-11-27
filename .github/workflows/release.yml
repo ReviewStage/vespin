@@ -36,7 +36,10 @@ jobs:
     # loudly at the check below rather than silently doing nothing.
     needs: gate
     if: ${{ github.event_name == 'workflow_dispatch' || needs.gate.outputs.signable == 'true' }}
-    runs-on: macos-15
+    # GitHub's Xcode 27 image, as release-ios.yml's job uses: electron-builder
+    # compiles the app's Icon Composer icon with actool, which takes a `.icon`
+    # only from Xcode 26 on.
+    runs-on: xcode-27
     timeout-minutes: 60
     permissions:
       contents: write
@@ -44,7 +47,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
-          xcode-version: "16.2"
+          xcode-version: "27.1"
 
       - name: Check release secrets
         env:
@@ -142,6 +145,14 @@ jobs:
           architectures=$(lipo -archs "$APP_PATH/Contents/MacOS/Vespin")
           if [[ "$architectures" != "arm64" ]]; then
             echo "error: expected an arm64-only application, found: $architectures" >&2
+            exit 1
+          fi
+
+          # macOS 26 and later draw the icon in each appearance from the asset catalog; earlier ones read the icns.
+          if [[ $(plutil -extract CFBundleIconName raw -o - "$APP_PATH/Contents/Info.plist") != "Icon" \
+            || ! -f "$APP_PATH/Contents/Resources/Assets.car" \
+            || ! -f "$APP_PATH/Contents/Resources/$(plutil -extract CFBundleIconFile raw -o - "$APP_PATH/Contents/Info.plist")" ]]; then
+            echo "error: the application's icon is missing its asset catalog or its icns" >&2
             exit 1
           fi
 
