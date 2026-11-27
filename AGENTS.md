@@ -25,7 +25,7 @@ on a PR (`ios-simulators.yml`, on GitHub's `xcode-27` image): it builds the
 app for the simulator, runs its Maestro flows on an iPhone, the iPhone Duo,
 and an iPad, and uploads each one's screenshots as a `mobile-screenshots-*`
 artifact, which `apps/mobile/AGENTS.md` says how to read. No workflow runs the
-desktop app's tests on a Mac: the release job (`release.yml`'s `macos-15` job,
+desktop app's tests on a Mac: the release job (`release.yml`'s `xcode-27` job,
 run on a `v*` tag push or a manual dispatch) only builds, signs, notarizes,
 and verifies the app. A green PR says nothing about either app on a device.
 
