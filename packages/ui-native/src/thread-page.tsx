@@ -33,6 +33,7 @@ import {
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
+import { PENDING_WORD } from "@repo/features/pending-review";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard, sinceText } from "@repo/features/time-format";
 import { type ReactNode, useDeferredValue, useMemo } from "react";
@@ -49,6 +50,7 @@ import { AgentTile, Avatar, type Face } from "./marks.js";
 import type { MediaSize } from "./media-frame.js";
 import { PictureSet, type SetPicture } from "./picture-set.js";
 import type { PictureRef } from "./picture-source.js";
+import { PendingTag } from "./pull-request-page.js";
 import type { LongPressGroup } from "./row-menu-model.js";
 import {
   type BarFootItem,
@@ -163,6 +165,8 @@ export type ThreadMessage = {
   readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
   /** That the reader sent it and it did not go, which it says under its words with what mends it; none for a message that went. */
   readonly undelivered?: UndeliveredLine | undefined;
+  /** Whether it is the reader's own comment of a review they have not yet submitted, which nobody else sees, tagged Pending after their name, as the panel and GitHub tag one. */
+  readonly pending?: boolean | undefined;
   /** The reactions it wears as one line, such as "👍 2  ❤️ 1", under its words; none where it wears none. */
   readonly reactions?: string | undefined;
   /** What its long press menu holds after Copy message, such as Add reaction; none where it offers nothing more. */
@@ -525,26 +529,33 @@ function MessageView({
     <Avatar name={writer.name} id={writer.id} picture={writer.picture} size={MARK_SIZE.WRITER} />
   );
 
+  const pending = message.pending === true ? <PendingTag /> : null;
+
   const writerLine = (
     <>
       {face}
       {large ? (
         <VStack alignment="leading" spacing={2}>
           {name}
+          {pending}
           {time}
         </VStack>
       ) : (
         <>
           {name}
+          {pending}
           {time}
         </>
       )}
     </>
   );
 
+  // Note that a pending comment is heard so between who wrote it and when, as it reads.
+  const who = message.pending === true ? `${writer.name}, ${PENDING_WORD}` : writer.name;
+
   const writerHeard = [
     accessibilityElement("ignore"),
-    accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
+    accessibilityLabel(`${who}, ${sinceHeard(message.at, moment)}`),
     accessibilityAddTraits(["isHeader"]),
   ];
 

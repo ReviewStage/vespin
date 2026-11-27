@@ -44,6 +44,7 @@ import {
   type ReviewState,
 } from "@repo/features/agent-wire";
 import { BOT_TAG_WORDS, githubLoginName } from "@repo/features/github-login";
+import { PENDING_WORD } from "@repo/features/pending-review";
 import { pullRequestMarkState, REVIEW_WORDS } from "@repo/features/pull-request-model";
 import { agoText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
@@ -83,8 +84,8 @@ export function githubFace(person: GitHubPerson): Face {
   };
 }
 
-/** The quiet tag after an App's bot's name, as the panel's `BotBadge` and GitHub's own pages mark one: "bot", muted on a soft fill, on one line at every size, and heard as its word. */
-export function BotTag() {
+/** A quiet tag after a name: its word muted on a soft fill, on one line at every size, and heard as its word. */
+function QuietTag({ words }: { readonly words: string }) {
   const colors = useColors();
 
   return (
@@ -101,9 +102,19 @@ export function BotTag() {
         ),
       ]}
     >
-      {BOT_TAG_WORDS}
+      {words}
     </Text>
   );
+}
+
+/** The quiet tag after an App's bot's name, as the panel's `BotBadge` and GitHub's own pages mark one: "bot". */
+export function BotTag() {
+  return <QuietTag words={BOT_TAG_WORDS} />;
+}
+
+/** The quiet tag after the member's name on a comment of their own pending review, which nobody else sees until they submit it, as the panel and GitHub mark one: "Pending". */
+export function PendingTag() {
+  return <QuietTag words={PENDING_WORD} />;
 }
 
 /** Who opened a pull request and when, and when it merged where it has. */

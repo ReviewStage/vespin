@@ -2,6 +2,7 @@
 
 import { PULL_REQUEST_PART } from "@repo/features/agent-view";
 import type { ReviewThread } from "@repo/features/agent-wire";
+import { withPendingReplies } from "@repo/features/pending-review";
 import {
   PULL_REQUEST_READ_WORDS,
   reactionsLine,
@@ -74,12 +75,14 @@ function threadById(
   return undefined;
 }
 
-/** A thread's comments as a thread's messages, oldest first: who wrote each by their GitHub face, when, their words as written, and the reactions each wears, with Add reaction in its long press menu. */
+/** A thread's comments as a thread's messages, oldest first: who wrote each by their GitHub face, when, the reader's own pending ones (`pendingIds`) tagged Pending, their words as written, and the reactions each wears, with Add reaction in its long press menu. */
 function threadMessagesOf(
   thread: ReviewThread,
   writes: PullRequestWrites,
+  pendingIds: ReadonlySet<string>,
 ): readonly ThreadMessage[] {
   return thread.comments.map((comment) => ({
+    pending: pendingIds.has(comment.url),
     id: comment.url,
     writer: { ...githubFace(comment.by), agent: false },
     at: comment.at,
@@ -135,8 +138,14 @@ export function PullRequestThreadScreen() {
   const conversation = landedAnswer(parts.conversation)?.pullRequest ?? undefined;
   const path = [key.repository, `#${key.number}`];
 
-  const thread =
+  const drafts = conversation?.pendingReview?.drafts ?? [];
+
+  const published =
     conversation === undefined ? undefined : threadById(conversation.conversation, threadId);
+
+  // Note that the reader's pending replies on the thread stand last among its comments, tagged Pending, as the panel's card draws them.
+  const thread = published === undefined ? undefined : withPendingReplies(published, drafts);
+  const pendingIds = new Set(drafts.map((draft) => draft.id));
 
   const lines = thread === undefined ? undefined : threadLineSpan(thread);
 
@@ -213,7 +222,7 @@ export function PullRequestThreadScreen() {
             <ThreadPage
               path={path}
               title={lines === undefined ? thread.path : `${thread.path} ${lines}`}
-              messages={threadMessagesOf(thread, writes)}
+              messages={threadMessagesOf(thread, writes, pendingIds)}
               repository={key.repository}
               onOpenLink={openLink}
               standing={thread.resolved ? THREAD_STATE_WORDS.RESOLVED : undefined}

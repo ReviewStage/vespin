@@ -20,6 +20,7 @@ import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
 import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import { formatCount } from "@repo/features/number-format";
+import { PENDING_WORD, pendingStarts, withPendingReplies } from "@repo/features/pending-review";
 import {
   CHECK_SUMMARY_WORDS,
   CLOSE_WORDS,
@@ -440,6 +441,14 @@ function PullRequestToolbar({ url }: { readonly url: string | undefined }) {
  * read. Opened from a split view's detail, it is pushed on the tab's own
  * stack over the whole window, as a compact window pushes it.
  */
+
+/** Every review thread a conversation's reviews started, in their order. */
+function reviewThreadsOf(
+  entries: readonly { readonly threads?: readonly ReviewThread[] | undefined }[],
+): readonly ReviewThread[] {
+  return entries.flatMap((entry) => entry.threads ?? []);
+}
+
 export function PullRequestScreen() {
   const {
     workspace = "",
@@ -773,6 +782,41 @@ function PullRequestPage({
     ),
   );
 
+  // The reader's own pending review comments, which only they see, read beside the conversation.
+  const drafts = conversation?.pendingReview?.drafts ?? [];
+  const pendingIds = new Set(drafts.map((draft) => draft.id));
+
+  // A review thread as its row, its file and lines, where it stands, and its comments, a pending one tagged so, and none for a thread with no comment.
+  const threadRow = (thread: ReviewThread, acts: readonly RowAction[]) => {
+    const first = thread.comments[0];
+
+    if (first === undefined) return [];
+    const pending = pendingIds.has(first.url);
+
+    return [
+      <ThreadRow
+        key={first.url}
+        id={first.url}
+        path={thread.path}
+        lines={threadLineSpan(thread)}
+        states={pending ? [PENDING_WORD] : threadStateWords(thread)}
+        comments={thread.comments.map((comment) => ({
+          id: comment.url,
+          by: githubFace(comment.by),
+          at: comment.at,
+          words: comment.markdown ?? comment.body,
+          pending: pendingIds.has(comment.url),
+        }))}
+        count={thread.comments.length + thread.more}
+        now={now}
+        open={opened.has(first.url)}
+        repository={agent?.repository}
+        onOpenLink={openLink}
+        acts={acts}
+      />,
+    ];
+  };
+
   return page(
     <RowList
       look={LIST_LOOK.PLAIN}
@@ -970,35 +1014,15 @@ function PullRequestPage({
                 reactions={reactionsLine(entry.reactions ?? [])}
                 submenus={reactionMenu(entry.subject, entry.reactions, writes)}
               />,
-              // Note that a thread is named by its first comment's page, which no other row shares.
-              ...(entry.threads ?? []).flatMap((thread) => {
-                const first = thread.comments[0];
-
-                if (first === undefined) return [];
-
-                return [
-                  <ThreadRow
-                    key={first.url}
-                    id={first.url}
-                    path={thread.path}
-                    lines={threadLineSpan(thread)}
-                    states={threadStateWords(thread)}
-                    comments={thread.comments.map((comment) => ({
-                      id: comment.url,
-                      by: githubFace(comment.by),
-                      at: comment.at,
-                      words: comment.markdown ?? comment.body,
-                    }))}
-                    count={thread.comments.length + thread.more}
-                    now={now}
-                    open={opened.has(first.url)}
-                    repository={agent?.repository}
-                    onOpenLink={openLink}
-                    acts={threadActs(thread)}
-                  />,
-                ];
-              }),
+              // Note that a thread is named by its first comment's page, which no other row shares, and wears the reader's pending replies on it last.
+              ...(entry.threads ?? []).flatMap((thread) =>
+                threadRow(withPendingReplies(thread, drafts), threadActs(thread)),
+              ),
             ])}
+            {/* Note that a pending comment starting a thread of its own stands after the conversation, named by its own id, which opens it in place, since it has no page to push until the review is submitted. */}
+            {pendingStarts(reviewThreadsOf(conversation.conversation), drafts).flatMap((thread) =>
+              threadRow(thread, []),
+            )}
           </>
         )}
         {conversation === undefined ? null : (

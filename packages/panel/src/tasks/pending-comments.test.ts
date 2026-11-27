@@ -12,9 +12,9 @@ import {
   type PendingReviewComment,
   type ReviewThread,
 } from "@repo/features/agent-wire";
+import { pendingThreadsOf } from "@repo/features/pending-review";
 import { test } from "vitest";
 import { gapLines, threadsOn } from "./changes-model.js";
-import { pendingThreadsOf } from "./pending-comments.js";
 
 /** A published thread on line 4 of the file. */
 const PUBLISHED: ReviewThread = {

@@ -34,6 +34,7 @@ import {
 } from "@repo/features/link-grammar";
 import { type LinkStanding, PULL_REQUEST_MOMENT } from "@repo/features/link-standing-model";
 import { formatCount } from "@repo/features/number-format";
+import { pendingThreadsOf } from "@repo/features/pending-review";
 import {
   CHECK_WORDS,
   checksCountOf,
@@ -241,7 +242,6 @@ import {
   PendingCommentsProvider,
   PendingSurfaceProvider,
   PendingWords,
-  pendingThreadsOf,
   usePendingActs,
   usePendingComment,
   usePendingThread,
