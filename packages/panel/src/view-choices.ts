@@ -9,7 +9,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createStore, type Store, useSelector } from "@tanstack/react-store";
 import { Option } from "effect";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { actMutation, pressMutation } from "./act-mutations.js";
 import { viewChoicesQuery } from "./live-reads.js";
 import { selectAccount, useAppStateSlice } from "./use-app-state.js";
@@ -81,9 +81,12 @@ export function useViewChoice<Key extends ViewChoiceKey>(
 /**
  * Moves a choice this window kept itself up to the account, once the
  * account's read has answered: kept there where the account keeps none in
- * its place, and let go here either way through `forget`. Note that a
- * choice the account already keeps stands over the window's, since another
- * device made it since.
+ * its place, and let go here through `forget` once the account kept it, or
+ * at once where the account already keeps one, since another device made it
+ * since. Note that it is tried once a mount, and that a write refused or
+ * unanswered leaves the window's copy where it was, since the host takes the
+ * write back and nothing else would keep the choice; the next launch tries
+ * again.
  */
 export function useKeptMovedUp<Key extends ViewChoiceKey>(
   key: Key,
@@ -94,15 +97,32 @@ export function useKeptMovedUp<Key extends ViewChoiceKey>(
 ): void {
   const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const rows = useQuery(viewChoicesQuery(workspaceId === undefined ? undefined : accountId)).data;
-  const { mutate: moveUp } = useMutation(actMutation(ACT_KIND.VIEW_CHOICE_WRITE));
+  const { mutateAsync: moveUp } = useMutation(actMutation(ACT_KIND.VIEW_CHOICE_WRITE));
   const { answered, value } = choice;
   const unkept = Option.isNone(value);
+  // Whether this mount sent the move up, and whether it is still on its way.
+  const tried = useRef(false);
+  const moving = useRef(false);
 
   useEffect(() => {
     if (!answered || kept === undefined || workspaceId === undefined || rows === undefined) return;
 
-    if (unkept) moveUp(viewChoiceWrite(rows, key, workspaceId, kept, crypto.randomUUID()));
-    forget();
+    // Note that the account's choice drawn while the move up is on its way is the move's own, so the window's copy waits for its answer.
+    if (!unkept) {
+      if (!moving.current) forget();
+
+      return;
+    }
+
+    if (tried.current) return;
+    tried.current = true;
+    moving.current = true;
+
+    void moveUp(viewChoiceWrite(rows, key, workspaceId, kept, crypto.randomUUID()))
+      .then(forget, () => undefined)
+      .finally(() => {
+        moving.current = false;
+      });
   }, [answered, kept, unkept, key, workspaceId, rows, forget, moveUp]);
 }
 

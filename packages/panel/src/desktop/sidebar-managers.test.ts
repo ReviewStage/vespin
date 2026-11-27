@@ -33,7 +33,7 @@ import {
   type ModelsRead,
 } from "../tasks/use-agents.js";
 import { NEW_TASK_UNSHOWN, type NewTask } from "../tasks/use-new-task.js";
-import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
+import { fakeActPort, fakeActPortCalls, refusedOnPort } from "../testing/app-bridge.js";
 import { handHostReads, handState, signedInAs, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { hoveredCard } from "../testing/desktop-inbox.js";
@@ -396,6 +396,24 @@ test("a Managers sort this Mac kept itself moves up to the account once, and lea
     [{ key: VIEW_CHOICE_KEY.MANAGER_SORT, workspaceId: WORKSPACE.id, value: MANAGER_SORT.NAME }],
   );
   assert.equal(window.localStorage.getItem("app.sidebarManagerSorts"), "{}");
+});
+
+test("a Managers sort the account refused to keep stays on this Mac, for the next launch to move up", async () => {
+  window.localStorage.setItem(
+    "app.sidebarManagerSorts",
+    JSON.stringify({ [WORKSPACE.id]: MANAGER_SORT.NAME }),
+  );
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.VIEW_CHOICE_WRITE]: () => Promise.reject(refusedOnPort("Not kept.")),
+  });
+  await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, []);
+  await settleQueries();
+
+  assert.equal(
+    window.localStorage.getItem("app.sidebarManagerSorts"),
+    JSON.stringify({ [WORKSPACE.id]: MANAGER_SORT.NAME }),
+  );
 });
 
 test("a Manager the reader pinned stands under Pinned alone, leaving Managers, and opens its page from there", async () => {
