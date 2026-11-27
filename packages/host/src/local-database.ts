@@ -48,6 +48,7 @@ import {
   type KeptWordsDatabase,
   keptWordsIn,
   keptWordsInMemory,
+  keptWordsOnceOpen,
 } from "./kept-words.js";
 
 /** The folder every account's own folder stands in, under the state root. */
@@ -382,14 +383,24 @@ export const openKeptCollections = Effect.fn("host/openKeptCollections")(functio
   if (words === undefined) return { keep: opened.keep, words: keptWordsInMemory() };
   const wordsFile = yield* placedFile(WORDS_FILE);
 
-  const wordsDatabase = yield* Effect.acquireRelease(
-    Effect.tryPromise({ try: () => words(wordsFile), catch: failed }),
-    (database) => Effect.promise(() => database.close()),
+  // Note that the words' database opens beside the launch rather than before it, since no first read waits on a search, so the kept Inbox is told as soon as the collections are.
+  const wordsDatabase = words(wordsFile);
+  // Note that a database that will not open is closed as nothing, its failure each call's own (`keptWordsOnceOpen`).
+  wordsDatabase.catch(() => undefined);
+
+  yield* Effect.addFinalizer(() =>
+    Effect.promise(() =>
+      wordsDatabase.then(
+        (database) => database.close(),
+        () => undefined,
+      ),
+    ),
   );
 
-  const kept = yield* Effect.tryPromise({ try: () => keptWordsIn(wordsDatabase), catch: failed });
+  const keptWords = wordsDatabase.then(keptWordsIn);
+  keptWords.catch(() => undefined);
 
-  return { keep: opened.keep, words: kept };
+  return { keep: opened.keep, words: keptWordsOnceOpen(keptWords) };
 });
 
 /** Deletes `accountId`'s folder under `stateRoot`, its database and WAL files among it, as a sign-out does; one that stands not is already forgotten. */

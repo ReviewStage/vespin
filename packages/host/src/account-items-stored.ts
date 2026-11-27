@@ -45,7 +45,7 @@ import {
   not,
   or,
 } from "@tanstack/db";
-import { Clock, Effect, Option, Schema } from "effect";
+import { Clock, Effect, Option, Schema, type Scope } from "effect";
 import type { AppInboxItems, AppInboxRead } from "./app-state.js";
 import {
   INBOX_THREAD,
@@ -290,8 +290,8 @@ export interface StoredItemsFollow {
   readonly pool: EntityPool;
   /** The items the follow stands on, kept on disk whole. */
   readonly items: HeldRows<PlacedInboxRow, InboxChange>;
-  /** Each message of their threads, kept on disk whole beside them, which a thread reads as it opens. */
-  readonly messages: HeldRows<ThreadMessage, never>;
+  /** Stands the follow on each message of their threads, kept on disk whole beside them, which a thread reads as it opens; stood only once the kept Inbox is told, since no first draw reads a message. */
+  readonly messages: Effect.Effect<HeldRows<ThreadMessage, never>, never, Scope.Scope>;
   /** The words each of those messages says, which a search reads, written as the messages are. */
   readonly words: KeptWords;
   /** Whether this attempt may read past the sync id kept, as the first of a follow's does. */
@@ -311,7 +311,9 @@ export interface StoredItemsFollow {
  * there and the aged items deleted, until the follow stops. Answers whether
  * the read was answered at all, false where the service refused its first.
  */
-export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<boolean> {
+export function followStoredItems(
+  follow: StoredItemsFollow,
+): Effect.Effect<boolean, never, Scope.Scope> {
   return Effect.gen(function* () {
     const { items, pool } = follow;
     const kept = items.loaded ? Option.getOrUndefined(decodeCursor(items.stored)) : undefined;
@@ -345,14 +347,15 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
       yield* wordsWritten(follow.words.rewritten(aged, []));
       const left = yield* threadMessageIds(pool, aged);
 
-      if (left.size > 0) yield* follow.messages.answer([], { gone: [...left] });
+      if (left.size > 0) yield* messages.answer([], { gone: [...left] });
       const gone = unwritten(aged);
 
       if (gone.length > 0) yield* items.answer([], { gone });
     });
 
-    // Note that a database that kept the items is told at once, so a launch draws the kept Inbox before the read answers.
+    // Note that a database that kept the items is told at once, so a launch draws the kept Inbox before the read answers, and before the messages' collection is made, which no first draw reads.
     if (kept !== undefined) yield* told(true);
+    const messages = yield* follow.messages;
     yield* agedOut;
 
     const first = yield* follow.seal(follow.resumes ? (kept?.at ?? "") : "");
@@ -373,11 +376,11 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
         const said = placed.flatMap(({ item }) => messageWordsOf(item));
 
         if (whole) {
-          yield* follow.messages.answer(messagesOf(placed));
+          yield* messages.answer(messagesOf(placed));
           yield* wordsWritten(follow.words.replaced(said));
         } else {
           const moved = yield* movedMessages(pool, placed, standing.gone);
-          yield* follow.messages.answer(moved.rows, { gone: moved.gone });
+          yield* messages.answer(moved.rows, { gone: moved.gone });
           yield* wordsWritten(
             follow.words.rewritten([...placed.map(({ item }) => item.id), ...standing.gone], said),
           );

@@ -461,8 +461,8 @@ export function followAccountItems(
 
         yield* dependencies.accountWide.stand(() => wait);
 
-        // Note that the messages are answered by this follow alone, whole or by what moved, so it stands as the read that answers every one.
-        const messages = yield* dependencies.pool.stand(INBOX_MESSAGE, {
+        // Note that the messages are answered by this follow alone, whole or by what moved, so it stands as the read that answers every one, once the kept Inbox is told (`followStoredItems`).
+        const messages = dependencies.pool.stand(INBOX_MESSAGE, {
           owns: true,
           redraw: () => Effect.void,
           confirmation: () => undefined,

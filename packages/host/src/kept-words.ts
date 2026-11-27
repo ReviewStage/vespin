@@ -223,6 +223,21 @@ export function heardWords(now: () => KeptWords): HeardWords {
   };
 }
 
+/**
+ * The words kept in the database `opening` answers once it has opened, so
+ * the open stands off a launch's path, as the collections beside it are
+ * read; each call waits on it, and one where it would not open fails as
+ * the open failed, as a write the follow reports and a search finds
+ * nothing by (`useSearchedWords`).
+ */
+export function keptWordsOnceOpen(opening: Promise<KeptWords>): KeptWords {
+  return {
+    replaced: (rows) => opening.then((words) => words.replaced(rows)),
+    rewritten: (threadIds, rows) => opening.then((words) => words.rewritten(threadIds, rows)),
+    threadsSaying: (tokens) => opening.then((words) => words.threadsSaying(tokens)),
+  };
+}
+
 /** The words kept in memory for a launch whose database will not open, read as the table is. */
 export function keptWordsInMemory(): KeptWords {
   const kept = new Map<string, MessageWords>();
