@@ -131,7 +131,7 @@ import {
 import type { DelegationDoors } from "./agent-tab.js";
 import { LOG_ROW_CLASS, ToolCallView, TurnWorkRows } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
-import { TranscriptSkeleton } from "./agent-tab-skeleton.js";
+import { ManagerChatSkeleton, ManagerThreadSkeleton } from "./agent-tab-skeleton.js";
 import { useChatMessageMenu } from "./chat-message-menu.js";
 import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
 import { CopyMessageAction } from "./copy-message.js";
@@ -1297,7 +1297,7 @@ export function ManagerChatTab({
       );
     }
 
-    if (chat === undefined) return <TranscriptSkeleton />;
+    if (chat === undefined) return <ManagerChatSkeleton />;
 
     return (
       <Conversation list={list} onNearTop={onNearTop}>
@@ -1508,7 +1508,7 @@ export function ManagerThreadTab({
       <OlderReadFailed onRetry={onOlder} />
     </Conversation>
   ) : chat === undefined || lacksRoot ? (
-    <TranscriptSkeleton />
+    <ManagerThreadSkeleton />
   ) : rootLine === undefined ? (
     // A root gone from the chat, as a rewind drops one, takes its thread with it.
     <EmptyState icon={<EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />}>

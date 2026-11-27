@@ -1648,6 +1648,24 @@ summary button[data-tool-agent-ref]:focus-visible {
   padding: var(--ui-section-gap) var(--ui-space-16) var(--ui-space-20);
 }
 
+/* A Manager's chat while its messages are read (`ManagerChatSkeleton`)
+   stands its messages as the chat's rows do: a message going on its
+   sender's run right under the one before, since each pads itself, and one
+   opening a run a step under the run before, as the chat's next row
+   stands (`.agent-log-row-next`). A thread's stands from its top, as the
+   message it answers leads it. */
+.manager-chat-skeleton {
+  gap: 0;
+}
+
+.manager-chat-skeleton > :not(:first-child, [data-continues]) {
+  margin-block-start: var(--ui-block-gap);
+}
+
+.manager-thread-skeleton-wait {
+  justify-content: flex-start;
+}
+
 /* Coding agents --------------------------------------------------------- */
 
 /* A line the agent refused for good or for now (`undelivered-mark.tsx`): its
