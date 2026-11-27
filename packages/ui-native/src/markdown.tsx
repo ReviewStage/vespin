@@ -391,9 +391,7 @@ function MentionChip({
   // Note that the name the app holds is handed up to the words, since VoiceOver hears the chip through its line's label and actions, never the chip itself.
   const heardNow = named.heard;
 
-  useEffect(() => {
-    if (heardNow !== chip.heard) onNamed(chip, heardNow);
-  }, [chip, heardNow, onNamed]);
+  useEffect(() => onNamed(chip, heardNow), [chip, heardNow, onNamed]);
   const heard = standing?.heard ?? named.heard;
   const name = standing?.name ?? named.name;
   const menu = useChipMenu(chip.target, onPress);
@@ -1713,11 +1711,18 @@ export function Markdown({
 
   const onNamed = useCallback(
     (chip: MarkdownChip, heard: string) =>
-      setNamed((held) =>
-        held.chips.get(chip) === heard
-          ? held
-          : { blocks: held.blocks, chips: new Map(held.chips).set(chip, heard) },
-      ),
+      setNamed((held) => {
+        // Note that a chip back at its words' own name lets go of the name it held, so its line says that name again.
+        const own = heard === chip.heard;
+
+        if (own ? !held.chips.has(chip) : held.chips.get(chip) === heard) return held;
+        const chips = new Map(held.chips);
+
+        if (own) chips.delete(chip);
+        else chips.set(chip, heard);
+
+        return { blocks: held.blocks, chips };
+      }),
     [],
   );
 
