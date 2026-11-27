@@ -23,6 +23,7 @@ import {
   opacity,
   resizable,
   scaleEffect,
+  strokeBorder,
   symbolEffect,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -46,8 +47,10 @@ import { useReduceMotion, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
 import {
+  MANAGER_FACE_EDGE_WIDTH,
   MANAGER_FACE_EMOJI_SCALE,
   managerFaceAsset,
+  managerFaceEdge,
   managerFaceFill,
 } from "./manager-face-look.js";
 import {
@@ -470,7 +473,7 @@ const FACE_BUBBLE_OUT = 3;
  * (`managerFaceAsset`), drawn and cached by the system, so a long list of
  * them costs no more than its glyphs; an emoji is SwiftUI's own text,
  * centered on a disc of the face's fill in the theme's shade
- * (`managerFaceFill`). At rest a character smiles and turns excited while
+ * (`managerFaceFill`), inside a hairline in the light (`managerFaceEdge`). At rest a character smiles and turns excited while
  * the Manager works; as a mark of its own, a working face also wears the
  * system's typing bubble (`ellipsis.bubble.fill`) at its top end corner,
  * its dots lit in turn by the symbol's own variable color effect, held
@@ -496,6 +499,7 @@ export const ManagerFace = memo(function ManagerFace({
   const dark = useColorScheme() === "dark";
   const reduceMotion = useReduceMotion();
   const bubble = Math.max(FACE_BUBBLE_LEAST, size * FACE_BUBBLE_SCALE);
+  const edge = managerFaceEdge(dark);
 
   return (
     <ZStack
@@ -508,7 +512,21 @@ export const ManagerFace = memo(function ManagerFace({
           modifiers={[resizable(), frame({ width: size, height: size })]}
         />
       ) : (
-        <ZStack modifiers={[frame({ width: size, height: size })]}>
+        <ZStack
+          modifiers={[
+            frame({ width: size, height: size }),
+            ...(edge === undefined
+              ? []
+              : [
+                  strokeBorder({
+                    content: edge,
+                    // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+                    shape: "circle",
+                    style: { lineWidth: MANAGER_FACE_EDGE_WIDTH },
+                  }),
+                ]),
+          ]}
+        >
           <Circle modifiers={[foregroundStyle(managerFaceFill(face, dark))]} />
           <Text
             modifiers={[font({ size: size * MANAGER_FACE_EMOJI_SCALE }), lineLimit(1), fixedSize()]}

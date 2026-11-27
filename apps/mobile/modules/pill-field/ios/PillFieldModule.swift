@@ -182,6 +182,8 @@ struct PillRecord: Record {
   @Field var emoji: String? = nil
   @Field var emojiFill: UIColor? = nil
   @Field var emojiFillDark: UIColor? = nil
+  /// The hairline the disc stands inside in the light alone; none where none is given.
+  @Field var emojiEdge: UIColor? = nil
 }
 
 struct RunRecord: Record {
@@ -247,6 +249,8 @@ struct Pill: Equatable {
     let emoji: String
     let fill: UIColor
     let fillDark: UIColor
+    /// The hairline the disc stands inside in the light; none in the dark, or where none is given.
+    let edge: UIColor?
   }
 
   init(markdown: String, words: String, glyph: String, heard: String, thumbnail: String? = nil, emoji: EmojiFace? = nil) {
@@ -265,7 +269,7 @@ struct Pill: Equatable {
     heard = record.heard
     thumbnail = record.thumbnail
     if let emoji = record.emoji, !emoji.isEmpty, let fill = record.emojiFill {
-      self.emoji = EmojiFace(emoji: emoji, fill: fill, fillDark: record.emojiFillDark ?? fill)
+      self.emoji = EmojiFace(emoji: emoji, fill: fill, fillDark: record.emojiFillDark ?? fill, edge: record.emojiEdge)
     } else {
       self.emoji = nil
     }
@@ -462,6 +466,9 @@ private let thumbnailCorner: CGFloat = 4
 /// How much of a Manager's emoji face's disc its emoji fills, as every face sets it (`manager-face-look.ts`'s `MANAGER_FACE_EMOJI_SCALE`).
 private let emojiFaceScale: CGFloat = 0.62
 
+/// How thick an emoji face's hairline stands, in points, as every face draws it (`manager-face-look.ts`'s `MANAGER_FACE_EDGE_WIDTH`).
+private let emojiFaceEdgeWidth: CGFloat = 0.5
+
 /// The panel's chip: its kind's glyph and its words on a rounded fill, cut short where the line is narrower; a picture's wears its thumbnail in the glyph's place.
 final class PillView: UIView {
   private let glyph = UIImageView()
@@ -536,6 +543,21 @@ final class PillView: UIView {
     }
     face.clipsToBounds = true
     addSubview(face)
+    edgeEmojiFace()
+    // Note that a layer's border takes no dynamic color, so the hairline is set again as light and dark trade places.
+    registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: PillView, _: UITraitCollection) in
+      view.edgeEmojiFace()
+    }
+  }
+
+  /// Stands the emoji's disc inside its hairline in the light, and takes it away in the dark.
+  private func edgeEmojiFace() {
+    guard let edge = pill.emoji?.edge, traitCollection.userInterfaceStyle != .dark else {
+      face.layer.borderWidth = 0
+      return
+    }
+    face.layer.borderWidth = emojiFaceEdgeWidth
+    face.layer.borderColor = edge.cgColor
   }
 
   @objc private func pressed() {
