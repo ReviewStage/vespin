@@ -574,10 +574,7 @@ export const AGENT_ATTACHMENT_TYPE = {
    * Any other file, a document, a spreadsheet, an archive, or a binary,
    * whatever type its machine gave it, since its name says what it is and a
    * file is served back under the type it travels as, which this one names
-   * no reader to run. Note that no client sends one yet, but refuses it as
-   * it always has, because a message box's file may be kept and served back
-   * as its type (a comment's, an Inbox reply's, a queued message's), which a
-   * client released before this reads under types without it.
+   * no reader to run.
    */
   OTHER: "application/octet-stream",
 } as const;
