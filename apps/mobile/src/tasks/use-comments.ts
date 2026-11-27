@@ -21,11 +21,11 @@
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
+import { threadComments } from "@repo/features/description-comment-model";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
 import {
   DESCRIPTION_COMMENT_ACTION,
   DESCRIPTION_COMMENT_ACTOR,
-  DESCRIPTION_COMMENT_ENTRY,
   DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentEntry,
@@ -34,6 +34,7 @@ import {
 } from "@repo/features/description-comment-wire";
 import { markersAsNames } from "@repo/features/file-marker";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { agentName, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -62,6 +63,7 @@ import {
 } from "../use-attached-pictures.js";
 import { usePictures } from "../use-pictures.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
+import type { TaskAgentLine } from "./use-tasks.js";
 
 /** No threads read yet. */
 const NO_THREADS: readonly DescriptionCommentThread[] = [];
@@ -237,13 +239,6 @@ export function useTaskCommentsRetry(taskId: string | undefined): (() => void) |
   );
 }
 
-/** A thread's comments, its words and the lines of what happened to it left out. */
-export function threadComments(
-  thread: DescriptionCommentThread,
-): readonly DescriptionCommentEntry[] {
-  return thread.entries.filter((entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT);
-}
-
 /** Whether a thread still stands open, rather than resolved into the description's history. */
 export function threadOpen(thread: DescriptionCommentThread): boolean {
   return thread.status === DESCRIPTION_COMMENT_STATUS.OPEN;
@@ -255,8 +250,18 @@ export interface CommentAgent {
   readonly harness: ModelProvider | undefined;
 }
 
+/** The task's agents by their ids, as a comment's writer names one (`CommentAgent`), archived ones among them, since an agent archived since it wrote is still its writer. */
+export function commentAgents(lines: readonly TaskAgentLine[]): ReadonlyMap<string, CommentAgent> {
+  return new Map(
+    lines.map(
+      ({ agent }) =>
+        [agent.id, { name: agentName(agent), harness: providerOf(agent.model) }] as const,
+    ),
+  );
+}
+
 /** Who wrote an entry, as the panel's thread names them: a member by their name and picture, and a coding agent by the name its task lists it under. */
-function writerOf(
+export function commentWriter(
   entry: DescriptionCommentEntry,
   agents: ReadonlyMap<string, CommentAgent>,
   pictureOf: PictureOf,
@@ -323,7 +328,7 @@ export function threadMessages(
 ): readonly ThreadMessage[] {
   return threadComments(thread).map((entry) => ({
     id: entry.id,
-    writer: writerOf(entry, agents, pictureOf),
+    writer: commentWriter(entry, agents, pictureOf),
     at: entry.at,
     // Note that a marker naming one of its files is said as the file's name, since the file stands as its own picture or chip after the words.
     words: markersAsNames(entry.words ?? ""),

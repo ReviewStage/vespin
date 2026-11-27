@@ -8,6 +8,7 @@ import {
 } from "@repo/features/agent-wire";
 import { PRODUCT_STANDING_FIELD, PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionHead } from "@repo/features/description-blocks";
+import { commentRowLines } from "@repo/features/description-comment-model";
 import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { agentGlyphState, GLYPH_STATE } from "@repo/features/glyph-state";
@@ -215,7 +216,12 @@ import { useWholeListRead } from "../host/host-provider.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useKeeping } from "../keeping.js";
-import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
+import {
+  type ListedMember,
+  type PictureOf,
+  useListedMembers,
+  useMemberPictures,
+} from "../member-pictures.js";
 import { useMenuPhotos } from "../menu-photos.js";
 import { useOpenDrawnCount } from "../open-drawn.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -239,7 +245,9 @@ import { useTabDrawnCount } from "../tab-drawn.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { standingPressed, useStandingDrawnCount } from "../tasks/standing-drawn.js";
 import {
-  threadComments,
+  type CommentAgent,
+  commentAgents,
+  commentWriter,
   threadOpen,
   threadsOnBlocks,
   useCommentSettle,
@@ -3054,33 +3062,44 @@ function repliesWords(count: number): string | undefined {
 }
 
 /**
- * One description thread's row, in two lines as an Inbox thread's: its first
- * comment's words with the time it last changed, then its replies' count
- * and the words it is on, muted, as the panel's card in the comments list
- * stands its quote and replies. A resolved one leads with the resolved
- * glyph and mutes its words. A swipe from the trailing edge resolves it, or
- * reopens it once resolved, which a full swipe runs; a press opens it.
+ * One description thread's row, in three lines as an Inbox thread's: who
+ * wrote its first comment, their face where a task's ring stands and their
+ * name, with the time the thread last changed at the line's end, as the
+ * panel's comment heads its words; that comment's words under it as plain
+ * words, mentions and files by their names; and its replies' count and the
+ * words it is on, muted, as the panel's card at rest counts its replies and
+ * the comments list stands its quote. A resolved one leads its last line
+ * with the resolved glyph and mutes its words. A swipe from the trailing
+ * edge resolves it, or reopens it once resolved, which a full swipe runs; a
+ * press opens it.
  */
 function CommentRow({
   thread,
   now,
+  agents,
+  pictureOf,
   onSettle,
 }: {
   readonly thread: DescriptionCommentThread;
   /** The minute the row's time is said against (`useMinute`). */
   readonly now: number;
+  readonly agents: ReadonlyMap<string, CommentAgent>;
+  readonly pictureOf: PictureOf;
   readonly onSettle: (thread: DescriptionCommentThread) => void;
 }) {
   const open = threadOpen(thread);
-  const comments = threadComments(thread);
-  const replies = repliesWords(Math.max(comments.length - 1, 0));
+  const { first, preview, replies } = commentRowLines(thread);
+  const writer = first === undefined ? undefined : commentWriter(first, agents, pictureOf);
 
   return (
     <ListRow
       id={thread.id}
-      title={comments[0]?.words ?? thread.quote}
+      title={preview}
+      task={writer === undefined ? undefined : { name: writer.name, writer }}
       line={open ? INBOX_LINE.SAID : INBOX_LINE.RESOLVED}
-      summary={[replies, thread.quote].filter((part) => part !== undefined).join(LINE_PART)}
+      summary={[repliesWords(replies), thread.quote.trim()]
+        .filter((part) => part !== undefined && part !== "")
+        .join(LINE_PART)}
       done={!open}
       at={thread.updatedAt}
       now={now}
@@ -3104,16 +3123,24 @@ function CommentRow({
  * stands, and a row that reads them again where their read failed.
  */
 function OverviewComments({
-  taskId,
+  overview,
   threads,
 }: {
-  readonly taskId: string;
+  readonly overview: TaskOverview;
   readonly threads: readonly DescriptionCommentThread[];
 }) {
+  const taskId = overview.task.id;
   const now = useMinute();
+  const pictureOf = useMemberPictures();
   const retry = useTaskCommentsRetry(taskId);
   const settle = useCommentSettle(taskId);
   const [resolvedShown, setResolvedShown] = useState(false);
+
+  // Note that the agents are read only as the task's move, so a writer's tile keeps its name across the minute's tick.
+  const agents = useMemo(
+    () => commentAgents([...overview.agents, ...overview.archived]),
+    [overview.agents, overview.archived],
+  );
 
   // Note that the threads are split only as they or the resolved toggle move, so the minute's tick hands `RowForEach` the same rows rather than resetting them, a swipe left open among them.
   const { open, resolved, listed } = useMemo(() => {
@@ -3143,7 +3170,15 @@ function OverviewComments({
   return (
     <ListSection title={WORDS.COMMENTS} count={listed.length}>
       <RowForEach data={listed} keyOf={(thread) => thread.id}>
-        {(thread) => <CommentRow thread={thread} now={now} onSettle={settle} />}
+        {(thread) => (
+          <CommentRow
+            thread={thread}
+            now={now}
+            agents={agents}
+            pictureOf={pictureOf}
+            onSettle={settle}
+          />
+        )}
       </RowForEach>
       {resolved.length === 0 ? null : (
         <LinkRow
@@ -3420,7 +3455,9 @@ function OverviewPage({
       ) : (
         <OverviewDescription overview={overview} body={document.description.body} edit={edit} />
       )}
-      {described && descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
+      {described && descriptions ? (
+        <OverviewComments overview={overview} threads={threads} />
+      ) : null}
     </RowList>
   );
 }
