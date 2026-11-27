@@ -42,17 +42,29 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: inbox-notification-ask
 - tapOn: "Turn On Notifications"
+# Note that iOS's prompt is answered only while it stands, and the refused
+# row only where it stands, because on the iPad the prompt has been seen
+# answered as allowed before the tap on Don't Allow landed, the ask then
+# gone with no refused row; either way the ask is let go before the Inbox.
 - extendedWaitUntil:
     visible: "Don.t Allow"
     timeout: 10000
-- tapOn: "Don.t Allow"
+    optional: true
+- tapOn:
+    text: "Don.t Allow"
+    optional: true
+# Answered either way, the ask's first words go: refused, its row says so.
 - extendedWaitUntil:
-    visible: "Notifications are off"
+    notVisible: "Know when an agent needs you"
     timeout: 10000
-- assertVisible: "Open Settings"
-- waitForAnimationToEnd
-- takeScreenshot: inbox-notification-refused
-- tapOn: "Not Now"
+- runFlow:
+    when:
+      visible: "Notifications are off"
+    commands:
+      - assertVisible: "Open Settings"
+      - waitForAnimationToEnd
+      - takeScreenshot: inbox-notification-refused
+      - tapOn: "Not Now"
 - assertNotVisible: "Notifications are off"
 - assertVisible: "Inbox"
 # The next launch reads the tokens back from the settings file and opens on
