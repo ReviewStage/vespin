@@ -50,7 +50,12 @@ export const inboxSearchRead = bindLiveRead(INBOX_SEARCH_READ, {
       ...inboxHoldersStatements(userId, items.getSQL(), taskless === TASKLESS_LIVE.CARRIED),
     };
   },
+  // Note that the query's bound is held here rather than in `admit`, because `serve` is answered first, and the search must not run for a query it refuses.
   serve: Effect.fnUntraced(function* ({ userId, query }, _query, request) {
+    if (query.length > INBOX_SEARCH_QUERY_MAX_CHARS) {
+      return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    }
+
     const taskless = tasklessLiveParam(request);
 
     const found = yield* hostedStoreOrUnavailable(
@@ -59,8 +64,4 @@ export const inboxSearchRead = bindLiveRead(INBOX_SEARCH_READ, {
 
     return { taskless, found: Schema.encodeSync(FoundSchema)(found) };
   }),
-  admit: ({ query }) =>
-    query.length > INBOX_SEARCH_QUERY_MAX_CHARS
-      ? Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)
-      : Effect.void,
 });
