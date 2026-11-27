@@ -8,6 +8,11 @@
  * under the id of the row standing in its place or one minted here, and a
  * write that did not go says so in the failure notice in the screen's own
  * words.
+ *
+ * A choice an earlier build kept in this device's `NSUserDefaults` moves up
+ * once (`useDeviceKeptMovedUp`), as the panel's `useKeptMovedUp` moves a
+ * window's: where the account keeps none in its place, the device's is kept
+ * on the account, and the device's own is let go either way.
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
@@ -21,10 +26,12 @@ import type { ViewChoiceKey, ViewChoiceValue } from "@repo/features/view-choice-
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount } from "@repo/host/app-state-reads";
+import { heldValue, useHeldValue } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Option } from "effect";
+import { Option, Schema } from "effect";
 import { randomUUID } from "expo-crypto";
-import { useCallback } from "react";
+import { useCallback, useEffect, useMemo } from "react";
+import { Settings } from "react-native";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
 import { useLiveFollow } from "./host/live-follow.js";
@@ -38,10 +45,17 @@ function heldChoices(accountId: string) {
   return (state: AppStateSnapshot) => state[LIVE_READ.VIEW_CHOICES][accountId]?.rows;
 }
 
-/** One view choice as a screen reads it: its value, none where the account keeps none or keeps one this build cannot read; and the press that keeps another, or forgets it with null. */
+/** One view choice as a screen reads it: its value, none where the account keeps none or keeps one this build cannot read; whether the host has read the account's choices; and the press that keeps another, or forgets it with null. */
 export interface ViewChoiceControl<Key extends ViewChoiceKey> {
   readonly value: Option.Option<ViewChoiceValue<Key>>;
+  readonly answered: boolean;
   readonly choose: (value: ViewChoiceValue<Key> | null) => void;
+}
+
+/** A choice an earlier build kept in this device's `NSUserDefaults`: the name it is kept under, and its value as read at launch, none where none reads. */
+export interface DeviceKept<Value> {
+  readonly name: string;
+  readonly left: ReturnType<typeof heldValue<Value | undefined>>;
 }
 
 /**
@@ -66,9 +80,12 @@ export function useViewChoice<Key extends ViewChoiceKey>(
     acts[ACT_KIND.VIEW_CHOICES_FOLLOW](),
   );
 
-  const rows =
-    useQuery({ ...appStateQuery, select: useCallback(heldChoices(held), [held]) }).data ??
-    NO_CHOICES;
+  const heldRows = useQuery({
+    ...appStateQuery,
+    select: useCallback(heldChoices(held), [held]),
+  }).data;
+
+  const rows = heldRows ?? NO_CHOICES;
 
   const choose = (value: ViewChoiceValue<Key> | null) => {
     if (workspaceId === undefined) return;
@@ -80,8 +97,49 @@ export function useViewChoice<Key extends ViewChoiceKey>(
     });
   };
 
+  // Note that the value is decoded once for the rows read, so a record or a list stands as one object across draws until the rows move, and an effect over it runs only then.
+  const value = useMemo(
+    () => (workspaceId === undefined ? Option.none() : viewChoiceOf(rows, key, workspaceId)),
+    [rows, key, workspaceId],
+  );
+
   return {
-    value: workspaceId === undefined ? Option.none() : viewChoiceOf(rows, key, workspaceId),
+    value,
+    answered: workspaceId !== undefined && heldRows !== undefined,
     choose,
   };
+}
+
+/** A choice an earlier build kept under `name` in this device's `NSUserDefaults`, read once a launch through `schema`: none where it reads as no value this build knows. */
+export function deviceKept<Value>(
+  name: string,
+  schema: Schema.Codec<Value, unknown>,
+): DeviceKept<Value> {
+  const kept: unknown = Settings.get(name);
+
+  return { name, left: heldValue(Option.getOrUndefined(Schema.decodeUnknownOption(schema)(kept))) };
+}
+
+/**
+ * Moves the choice an earlier build kept on this device up to the account,
+ * once the host has read the account's choices: kept there where the account
+ * keeps none in its place, and let go here either way. Note that a choice
+ * the account already keeps stands over the device's, since another device
+ * made it since.
+ */
+export function useDeviceKeptMovedUp<Key extends ViewChoiceKey>(
+  choice: ViewChoiceControl<Key>,
+  kept: DeviceKept<ViewChoiceValue<Key>>,
+): void {
+  const left = useHeldValue(kept.left);
+  const { answered, value, choose } = choice;
+  const unkept = Option.isNone(value);
+
+  useEffect(() => {
+    if (!answered || left === undefined) return;
+
+    if (unkept) choose(left);
+    Settings.set({ [kept.name]: null });
+    kept.left.set(undefined);
+  }, [answered, left, unkept, choose, kept]);
 }
