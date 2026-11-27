@@ -142,12 +142,13 @@ const COLLAPSED_HEARD = "Collapsed";
 
 /** What a press on a call's line, or a fold's, is heard to do. */
 const CALL_HINT = "Shows or hides the call's input and output";
+const FOLD_HINT = "Shows or hides the steps it holds";
+
 /** What a press on a worker's row is heard to do: open its page, or, where it opens none, show its task and answer. */
 const WORKER_HINT = {
   OPENS: "Opens the subagent",
   FOLDS: "Shows or hides the subagent's task and answer",
 } as const;
-const FOLD_HINT = "Shows or hides the steps it holds";
 
 /** What the spinner over the oldest row is heard as while an older page is read. */
 const READING_OLDER = "Loading earlier messages";
