@@ -36,6 +36,7 @@ import {
   type ShortcutChord,
 } from "@repo/settings/shortcuts";
 import { DisclosureFind } from "@repo/ui";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { Effect } from "effect";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -70,7 +71,6 @@ import {
 import { layContainersAt } from "../testing/container-width.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { focusRestOn, restOn } from "../testing/hint-rest.js";
-import { relayout } from "../testing/resize-observer.js";
 import { landedBundles, onSideBundles } from "../testing/side-bundles.js";
 import { agentsControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";

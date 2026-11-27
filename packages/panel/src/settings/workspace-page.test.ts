@@ -55,6 +55,7 @@ import {
   type SettingsSubPage,
 } from "@repo/settings/settings-views";
 import { ProviderMark, SettingsPage } from "@repo/ui";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -84,7 +85,6 @@ import {
 import { settleQueries, startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { stubCanvas, webpBytes } from "../testing/photo-canvas.js";
-import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { standingToastWords } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";

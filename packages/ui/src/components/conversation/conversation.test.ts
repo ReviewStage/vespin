@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
-import { relayout } from "../testing/resize-observer.js";
+import { relayout } from "../../testing/resize-observer.js";
 import {
   Conversation,
   ConversationContent,

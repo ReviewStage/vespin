@@ -77,6 +77,12 @@ import {
   TIME_LOOK,
   Time,
 } from "@repo/ui";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationRows,
+  ConversationScrollButton,
+} from "@repo/ui/conversation";
 import { ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
@@ -88,12 +94,6 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { AgentActAnswer } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationRows,
-  ConversationScrollButton,
-} from "../ai-elements/conversation.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { managerChatQuery, managerChatRetryMutation } from "../live-reads.js";
