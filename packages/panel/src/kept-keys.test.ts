@@ -266,5 +266,5 @@ test("the conversation's filters and folds an earlier build kept move up to the 
   expect(written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value }))).toEqual([
     { key: VIEW_CHOICE_KEY.CONVERSATION_FILTERS, workspaceId: null, value: moved },
   ]);
-  expect(kept("app.conversation-filters")).toBeNull();
+  await vi.waitFor(() => expect(kept("app.conversation-filters")).toBeNull());
 });

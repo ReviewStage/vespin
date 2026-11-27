@@ -2784,8 +2784,13 @@ function ConversationView({
   useVirtualFind({ root: scroller, rows: findRows, handle: entries, findable: viewShown });
   const asked = landing?.ask;
   const conversationOpen = filters.conversationOpen;
+  // The landing that last opened a folded Conversation, so each asks it once, however long the account's read takes to draw the choice.
+  const openedFor = useRef<number | undefined>(undefined);
+
   useEffect(() => {
-    if (asked !== undefined && !conversationOpen) change({ conversationOpen: true });
+    if (asked === undefined || conversationOpen || openedFor.current === asked) return;
+    openedFor.current = asked;
+    change({ conversationOpen: true });
   }, [asked, conversationOpen, change]);
 
   return (

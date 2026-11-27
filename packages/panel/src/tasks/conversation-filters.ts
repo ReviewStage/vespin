@@ -27,6 +27,7 @@
 import type { ConversationEntry, ReviewThread } from "@repo/features/agent-wire";
 import { VIEW_CHOICE_KEY, type ViewChoiceValue } from "@repo/features/view-choice-wire";
 import { Effect, Option, Schema } from "effect";
+import { useCallback, useRef } from "react";
 import { selectFixtureStaged, useAppStateSlice } from "../use-app-state.js";
 import { keptKey, useKeptLeaving } from "../use-kept.js";
 import { useAccountChoice } from "../view-choices.js";
@@ -141,9 +142,15 @@ export function useConversationFilters(): ConversationFiltersControl {
     useKeptLeaving(KEPT_CHOICES),
   );
 
-  // Note that a change is made over the choice held now, so every conversation's tab draws it at once, and a filter changed in one never undoes a section folded in another.
-  const change = (changed: Partial<ConversationChoices>) =>
-    choice.change((held) => ({ ...held, ...changed }));
+  // Note that a change is made over the choice held now, so every conversation's tab draws it at once, and a filter changed in one never undoes a section folded in another; and that it is one door across draws, read through a ref, so an effect that hands it on runs only as what it reads moves.
+  const changeNow = useRef(choice.change);
+  changeNow.current = choice.change;
+
+  const change = useCallback(
+    (changed: Partial<ConversationChoices>) =>
+      changeNow.current((held) => ({ ...held, ...changed })),
+    [],
+  );
 
   return { filters: choice.value, change };
 }
