@@ -1,0 +1,19 @@
+# open-none.yaml -- PROBE, not for merge: one launch and one open of #128 by a link with every part at once, the client's own cost alone, waited on until it shows.
+appId: dev.vespin.ios
+---
+- launchApp:
+    stopApp: true
+    arguments:
+      fixture: inbox
+      prProbe: "0,0,0"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128"
+- runFlow: open-ask.yaml
+- extendedWaitUntil:
+    visible: "Ready to merge"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ".*passed.*"
+    timeout: 30000
