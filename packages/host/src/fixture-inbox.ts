@@ -223,6 +223,11 @@ import {
   fixtureGeneratedChapters,
 } from "./fixture-pull-requests.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
+import {
+  FIXTURE_TODOS_AGENT_ID,
+  fixtureTodosAgent,
+  fixtureTodosTranscript,
+} from "./fixture-todos-agent.js";
 
 export { FIXTURE_RECORDING_ID } from "./fixture-agent-transcript.js";
 
@@ -1028,6 +1033,14 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
 
 /** When the release Manager was started, which its chat counts from. */
 const MANAGER_STARTED = LANDED - 2 * HOUR;
+
+/** How long before the fixture landed the to-dos agent was started, which its transcript counts from. */
+const TODOS_AGENT_AGO = 30 * MINUTE;
+
+/** The agent keeping a to-do list on the invitations task, still at work: staged for its page and its transcript alone, in no task's list (`fixture-todos-agent.ts`). */
+const TODOS_AGENT = fixtureTodosAgent(
+  agentOn(AGENT.INVITES, TASK.INVITES, "", AGENT_STATUS.RUNNING, TODOS_AGENT_AGO),
+);
 
 /**
  * The workspace's one Manager, an agent on no task, which the Tasks list
@@ -2209,6 +2222,9 @@ const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix le
 /** The digest agent's run, which the weekly digest automation's newest run opens. */
 const DIGEST_TRANSCRIPT = fixtureDigestTranscript(DIGEST_STARTED, ADA, "Send the weekly digest");
 
+/** The to-dos agent's run, its to-do lists drawn as the panel draws them (`fixture-todos-agent.ts`). */
+const TODOS_TRANSCRIPT = fixtureTodosTranscript(LANDED - TODOS_AGENT_AGO, ADA);
+
 /** The release Manager's run, whose turns' work its chat keeps a press away. */
 const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
 
@@ -2371,7 +2387,7 @@ function withQueued(transcript: AppTranscript): AppTranscript {
   return { ...transcript, word: { ...word, queue: { messages: queued, revision: 1 } } };
 }
 
-/** The transcripts main holds with the invitations, rounding, and digest agents' and the Manager's laid over them, one object for each of main's. */
+/** The transcripts main holds with the invitations, rounding, digest, and to-dos agents' and the Manager's laid over them, one object for each of main's. */
 const STAGED_TRANSCRIPTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
@@ -2390,6 +2406,10 @@ function stagedTranscripts(
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
     [AGENT.DIGEST]: { ...held[AGENT.DIGEST], [OWN_TRANSCRIPT]: { rows: DIGEST_TRANSCRIPT } },
     [AGENT.MANAGER]: { ...held[AGENT.MANAGER], [OWN_TRANSCRIPT]: { rows: MANAGER_TRANSCRIPT } },
+    [FIXTURE_TODOS_AGENT_ID]: {
+      ...held[FIXTURE_TODOS_AGENT_ID],
+      [OWN_TRANSCRIPT]: { rows: TODOS_TRANSCRIPT },
+    },
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);
@@ -3348,7 +3368,7 @@ function stagedItem(itemId: string): InboxItem | undefined {
 
 /** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER, TODOS_AGENT].find((each) => each.id === agentId);
 }
 
 /* ----- The automations ----- */

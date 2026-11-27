@@ -1,0 +1,73 @@
+# agent-todos.yaml -- an agent's to-do lists, as the panel draws them: a whole list written at once (Claude Code's TodoWrite) as one call's line saying how far it has got, which opens on the checklist, each item marked by where it stands; and a run of Claude Code's task calls (TaskCreate, TaskUpdate), each a line saying how far the list had got after it, the newest opening on the list the agent is at, its item in progress wearing the working mark.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+#
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the page draws its turn still running, whose mark never stops
+# moving, so an uncapped wait always ran to Maestro's fifteen. Note too that
+# an iPad stands in landscape, where the transcript stands in the detail
+# column beside the list, and that the window is turned back upright however
+# the flow ends, because a run left in landscape fails every flow after it.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose to-dos agent wrote its list
+# whole, then kept it on Claude Code's task list, still at work
+# (`@repo/host/fixture-todos-agent`), and opened on its page by
+# `-agent <id>`; nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: c21c56c4-87a7-470c-b9bb-96008c107766
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+# Note that the launch waits up to half a minute for its first words, as
+# `agent.yaml`'s does.
+- extendedWaitUntil:
+    visible: "Here's what's left on invites."
+    timeout: 30000
+# Each call stands as one line saying how far its list has got: the list
+# written whole, then a line for each task call, the run standing open as
+# the turn's latest work.
+- assertVisible: "Updated the to-dos: 1 of 4 done"
+- assertVisible: "Updated the to-dos: 0 of 3 done"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-todos-rows
+# Pressed, the written list opens on its checklist: the item done, the one
+# in progress, and the two still pending.
+- tapOn: "Updated the to-dos: 1 of 4 done"
+- assertVisible: "Answer an invite to an existing member"
+- assertVisible: "Resend an expired invite"
+- assertVisible: "Withdraw an invite from the member list"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-todos-list
+- tapOn: "Updated the to-dos: 1 of 4 done"
+# The newest call's list is the one the agent is at: its first task done,
+# its second taken up, wearing the working mark while the agent works.
+# Note that the last two calls read alike, since taking a task up moves no
+# count, so the newest is the second.
+- tapOn:
+    text: "Updated the to-dos: 1 of 3 done"
+    index: 1
+# Note that the list's last item is scrolled to above the composer, since
+# the list opens downward from the transcript's last line.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Count pending invites in the weekly digest"
+      ABOVE: composer-field
+- assertVisible: "Mint a fresh link when an invite is resent"
+- assertVisible: "Keep the old link working until the new one is sent"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-todos-tasks
