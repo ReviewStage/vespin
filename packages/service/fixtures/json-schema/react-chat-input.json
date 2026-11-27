@@ -8,11 +8,8 @@
     },
     "name": {
       "type": "string",
-      "enum": [
-        "thumbsup",
-        "thumbsdown"
-      ],
-      "description": "The reaction: `thumbsup` or `thumbsdown`."
+      "minLength": 1,
+      "description": "The emoji's name as Slack writes it, without colons, such as `thumbsup`, `eyes`, `tada`, or `white_check_mark`."
     },
     "remove": {
       "type": "boolean",

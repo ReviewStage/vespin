@@ -13,12 +13,7 @@
  */
 
 import { AGENT_KIND } from "@repo/features/agent-wire";
-import {
-  MANAGER_CHAT_AUTHOR,
-  MANAGER_CHAT_REACTION,
-  type ManagerChatAuthor,
-  type ManagerChatReaction,
-} from "@repo/features/manager-chat-live";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatAuthor } from "@repo/features/manager-chat-live";
 import { and, asc, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -36,12 +31,13 @@ export const MANAGER_CHAT_REACTION_OUTCOME = {
   NO_MESSAGE: "no-message",
 } as const;
 
-/** A reaction to give a message of a Manager's chat, or take off it: whose chat and which message, who gives it, a member as the account or the Manager, its kind, and whether it stands after. */
+/** A reaction to give a message of a Manager's chat, or take off it: whose chat and which message, who gives it, a member as the account or the Manager, its kind and the emoji it names (`reactionOfName`), and whether it stands after. */
 export interface ManagerChatReactionWrite {
   readonly agentId: string;
   readonly messageId: string;
   readonly by: ManagerChatAuthor;
-  readonly kind: ManagerChatReaction;
+  readonly kind: string;
+  readonly emoji: string;
   readonly reacted: boolean;
   readonly now: Date;
 }
@@ -52,7 +48,7 @@ export type ManagerChatReactionOutcome =
 
 const ManagerChatReactionGivenSchema = Schema.Struct({
   messageId: Schema.String,
-  kind: Schema.Literals(Object.values(MANAGER_CHAT_REACTION)),
+  kind: Schema.String,
   reactorKind: Schema.Literals(Object.values(MANAGER_CHAT_AUTHOR)),
   reactorUserId: Schema.NullOr(Schema.String),
   /** The member's name as their account holds it now; null for the Manager's own. */
@@ -71,7 +67,7 @@ const MessageKeySchema = Schema.Struct({
 const ReactionKeySchema = Schema.Struct({
   agentId: Schema.String,
   messageId: Schema.String,
-  kind: Schema.Literals(Object.values(MANAGER_CHAT_REACTION)),
+  kind: Schema.String,
   reactorUserId: Schema.NullOr(Schema.String),
 });
 
@@ -111,6 +107,7 @@ const holdMessage = SqlSchema.findAll({
 const insertReaction = SqlSchema.findAll({
   Request: Schema.Struct({
     ...ReactionKeySchema.fields,
+    emoji: Schema.String,
     reactorKind: Schema.Literals(Object.values(MANAGER_CHAT_AUTHOR)),
     now: Schema.Date,
   }),
@@ -188,7 +185,7 @@ export function reactManagerChat(
   userId: string,
   write: ManagerChatReactionWrite,
 ): AgentStoreEffect<ManagerChatReactionOutcome> {
-  const { agentId, messageId, by, kind, reacted, now } = write;
+  const { agentId, messageId, by, kind, emoji, reacted, now } = write;
 
   const key = {
     agentId,
@@ -206,7 +203,7 @@ export function reactManagerChat(
           return { status: MANAGER_CHAT_REACTION_OUTCOME.NO_MESSAGE } as const;
 
         const written = reacted
-          ? yield* insertReaction({ ...key, reactorKind: by, now })
+          ? yield* insertReaction({ ...key, emoji, reactorKind: by, now })
           : yield* deleteReaction(key);
 
         return { status: MANAGER_CHAT_REACTION_OUTCOME.DONE, changed: written.length > 0 } as const;

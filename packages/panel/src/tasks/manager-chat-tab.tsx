@@ -23,7 +23,7 @@
  * drawn at its end from the moment it is sent, as the host draws it on its
  * way, until its row lands; one refused stands marked, with Retry, Edit, and
  * Delete, as any of the agent box's lines does. Each message may be given
- * the reader's 👍 or 👎 from its actions, and wears the reactions it was
+ * the reader's 👍, 👎, or any emoji from its actions, and wears the reactions it was
  * given under its words (`manager-chat-reactions.tsx`). The first message
  * after the reader's mark, where the chat stood unread as the page opened
  * or where the reader marked one of its messages unread, stands under New
@@ -147,6 +147,7 @@ import {
   ChatReactions,
   ReactMessageActions,
   useChatReact,
+  useChatReactionMenu,
 } from "./manager-chat-reactions.js";
 import {
   THREAD_WORDS,
@@ -190,7 +191,7 @@ interface ChatDoors {
   readonly lines: ReadonlyMap<string, AgentTranscriptMessage>;
   /** The chat's threads, which its rows open; none in a thread's own tab, whose rows open no thread, nor where nothing beside the chat shows a thread. */
   readonly thread?: ChatThreadDoors | undefined;
-  /** Gives a message the reader's 👍 or 👎, or takes it off. */
+  /** Gives a message the reader's reaction of any emoji, or takes it off. */
   readonly react: ChatReact;
   /** The reader's edit of their own messages: which stands open, and its presses. */
   readonly edit: ChatEdit;
@@ -348,7 +349,17 @@ function ManagerMessage({
   const link = chatMessagePlace(doors, message.id);
   const { markUnread } = doors;
   const onMarkUnread = markUnread === undefined ? undefined : () => markUnread(message);
-  const menu = useChatMessageMenu(message.text, thread.onOpen, workToggle, link, onMarkUnread);
+  const reactionMenu = useChatReactionMenu(message, doors.react);
+
+  const menu = useChatMessageMenu(
+    message.text,
+    thread.onOpen,
+    workToggle,
+    link,
+    reactionMenu,
+    onMarkUnread,
+  );
+
   const workAction = workToggle === undefined ? null : <WorkMessageAction toggle={workToggle} />;
   // Note that while a find stands open the closed work is drawn hidden until found, so ⌘F reaches it and a match there opens it, as a closed fold's body is.
   const finding = useFindOpen();
@@ -360,7 +371,16 @@ function ManagerMessage({
   // Note that the Manager's pictures kept with their size stand as the set it showed, as the transcript draws a shown set.
   const shown = shownOf(message);
   const files = fileChipsOf(message, shown);
-  const reactions = <ReactMessageActions message={message} react={doors.react} />;
+  const [picking, setPicking] = useState(false);
+
+  const reactions = (
+    <ReactMessageActions
+      message={message}
+      react={doors.react}
+      picking={picking}
+      onPicking={setPicking}
+    />
+  );
 
   return (
     <>
@@ -371,6 +391,7 @@ function ManagerMessage({
         at={sentTime(message.createdAt)}
         continues={!place.opens}
         open={thread.open}
+        actionsHeld={picking}
         contextMenu={menu.contextMenu}
         actions={
           // Note that a message of files alone has no words to copy, so it offers its reactions, its thread, and its work alone.
@@ -449,8 +470,28 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   const link = chatMessagePlace(doors, message.id);
   const { markUnread } = doors;
   const onMarkUnread = markUnread === undefined ? undefined : () => markUnread(message);
-  const menu = useChatMessageMenu(message.text, thread.onOpen, undefined, link, onMarkUnread);
-  const reactions = <ReactMessageActions message={message} react={doors.react} />;
+  const reactionMenu = useChatReactionMenu(message, doors.react);
+
+  const menu = useChatMessageMenu(
+    message.text,
+    thread.onOpen,
+    undefined,
+    link,
+    reactionMenu,
+    onMarkUnread,
+  );
+
+  const [picking, setPicking] = useState(false);
+
+  const reactions = (
+    <ReactMessageActions
+      message={message}
+      react={doors.react}
+      picking={picking}
+      onPicking={setPicking}
+    />
+  );
+
   const { edit } = doors;
 
   const editAction = own ? <EditChatMessageAction onEdit={() => edit.onOpen(message.id)} /> : null;
@@ -492,6 +533,7 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
             at={sentTime(message.createdAt)}
             continues={!place.opens}
             open={thread.open}
+            actionsHeld={picking}
             contextMenu={menu.contextMenu}
             edited={message.editedAt !== null}
             actions={

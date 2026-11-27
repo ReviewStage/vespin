@@ -848,11 +848,12 @@ export const managerChatUnsendParamsSchema = EffectSchema.Struct({
 
 export type ManagerChatUnsendParams = typeof managerChatUnsendParamsSchema.Type;
 
-/** A member's reaction given a message of a Manager's chat, or taken off it, as the window asks it: the Manager, the message, and the reaction as the service takes it (`managerChatReactRequestSchema`). */
+/** A member's reaction given a message of a Manager's chat, or taken off it, as the window asks it: the Manager, the message, the reaction as the service takes it (`managerChatReactRequestSchema`), and its emoji, which the host draws it by until the chat's read carries it and never sends. */
 export const managerChatReactParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   messageId: EffectSchema.NonEmptyString,
   ...managerChatReactRequestSchema.fields,
+  emoji: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 export type ManagerChatReactParams = typeof managerChatReactParamsSchema.Type;

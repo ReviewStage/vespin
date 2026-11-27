@@ -994,9 +994,10 @@ function composed(
     asked(client.chatSend(agentId, request)),
   );
 
-  /** A member's reaction to a message of a Manager's chat, after every write of the agent's asked before it, so a reaction given and taken back lands in the order it was pressed. */
-  const chatReacted = queues.inTurn(({ agentId, messageId, ...request }: ManagerChatReactParams) =>
-    asked(client.chatReact(agentId, messageId, request)),
+  /** A member's reaction to a message of a Manager's chat, after every write of the agent's asked before it, so a reaction given and taken back lands in the order it was pressed; its emoji is the host's to draw by, never sent. */
+  const chatReacted = queues.inTurn(
+    ({ agentId, messageId, kind, reacted }: ManagerChatReactParams) =>
+      asked(client.chatReact(agentId, messageId, { kind, reacted })),
   );
 
   /** A member's edit of their own message of a Manager's chat, after every write of the agent's asked before it, so the Manager is told of its messages and edits in the order they were written. */

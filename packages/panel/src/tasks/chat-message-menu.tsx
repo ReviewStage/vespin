@@ -7,12 +7,12 @@ import type { ReactNode } from "react";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { useLinkItems } from "../copy-link-item.js";
-import { ActionMenu } from "../desktop/action-menu.js";
+import { ActionMenu, type MenuEntry } from "../desktop/action-menu.js";
 import type { ChatWorkToggle } from "./chat-work.js";
 import { THREAD_WORDS } from "./manager-chat-threads.js";
 
 /**
- * chat-message-menu.tsx -- the menu a right-click or a long press on a message of a Manager's chat opens: Reply in thread, Copy, Copy link, Mark as unread, and Show work.
+ * chat-message-menu.tsx -- the menu a right-click or a long press on a message of a Manager's chat opens: its reactions, Reply in thread, Copy, Copy link, Mark as unread, and Show work.
  *
  * Every message of the chat, the Manager's and every person's, offers in
  * its menu what its actions beside it offer. A message is answered in its
@@ -33,9 +33,10 @@ interface ChatMessageMenu {
 }
 
 /**
- * A chat message's right-click menu, a phone's long press: Reply in thread
- * first where the message opens a thread (`onThread`), as the actions beside
- * it lead with it, then Copy of its Markdown `words`, where it has any, then
+ * A chat message's right-click menu, a phone's long press: its reactions
+ * first, apart (`reactions`, `useChatReactionMenu`), as the actions beside
+ * it lead with them, then Reply in thread where the message opens a thread
+ * (`onThread`), then Copy of its Markdown `words`, where it has any, then
  * Copy link to the message (`link`), as Slack's menu offers it, where the
  * page hands down a workspace to write it under, then apart Mark as unread
  * where the chat's mark moves back to it (`onMarkUnread`), and last, apart,
@@ -47,6 +48,7 @@ export function useChatMessageMenu(
   onThread: (() => void) | undefined,
   work: ChatWorkToggle | undefined,
   link: LinkDestination | undefined,
+  reactions: readonly MenuEntry[],
   onMarkUnread?: (() => void) | undefined,
 ): ChatMessageMenu {
   const copy = useCopyToast();
@@ -56,6 +58,7 @@ export function useChatMessageMenu(
   const linkItems = link === undefined ? [] : linkItemsOf(link);
 
   const offered =
+    reactions.length > 0 ||
     worded ||
     onThread !== undefined ||
     work !== undefined ||
@@ -107,7 +110,7 @@ export function useChatMessageMenu(
         <ActionMenu
           label={MENU_WORDS.MENU}
           menu={menu.drawn}
-          groups={[items, readItems, workItems].filter((group) => group.length > 0)}
+          groups={[reactions, items, readItems, workItems].filter((group) => group.length > 0)}
           replayUnmasked
           onClose={menu.close}
         />

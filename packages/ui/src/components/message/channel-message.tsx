@@ -53,6 +53,7 @@ export function ChannelMessage({
   continues = false,
   open = false,
   actions,
+  actionsHeld = false,
   contextMenu,
   under,
   messageId,
@@ -68,6 +69,8 @@ export function ChannelMessage({
   /** Whether its thread stands open beside the channel, which holds the row in a steady tint. */
   open?: boolean | undefined;
   actions?: ReactNode;
+  /** Whether its actions stand shown whatever the pointer does, as while a picker they hang stands open. */
+  actionsHeld?: boolean | undefined;
   /** The menu a right-click or a long press on it opens; none where it has none. */
   contextMenu?: ContextMenuProps | undefined;
   under?: ReactNode;
@@ -115,7 +118,7 @@ export function ChannelMessage({
       </div>
       {actions === undefined || actions === null ? null : (
         <div className="ui-channel-message-actions absolute -top-ui-12 end-ui-8 z-1">
-          <MessageActions>
+          <MessageActions held={actionsHeld}>
             <span className="flex items-center gap-ui-2 rounded-ui-6 border border-border bg-popover p-ui-2 shadow-menu">
               {actions}
             </span>

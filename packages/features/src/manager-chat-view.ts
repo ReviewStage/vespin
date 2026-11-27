@@ -240,6 +240,19 @@ export const CHAT_EDIT_WORDS = {
   REFUSED: "Could not edit the message.",
 } as const;
 
+/** What the press that picks any reaction for a message is called, in its actions and its menu alike. */
+export const CHAT_ADD_REACTION_WORDS = "Add reaction";
+
+/** What the picker of any reaction searches for, and the group 👍 and 👎 lead it under. */
+export const CHAT_REACTION_PICKER_WORDS = {
+  SEARCH: "Search emoji",
+  LEGEND: "Emoji",
+  QUICK: "Quick reactions",
+} as const;
+
+/** What a pick of an emoji Slack gives no name says, which can be no reaction. */
+export const CHAT_REACTION_UNNAMED_WORDS = "That emoji can't be a reaction.";
+
 /** Who else gave a reaction beside the reader. */
 const OTHER_NOUN = { one: "other", many: "others" } as const;
 

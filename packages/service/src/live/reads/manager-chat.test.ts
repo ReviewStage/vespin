@@ -21,7 +21,6 @@ import {
   MANAGER_CHAT_REACTION,
   MANAGER_CHAT_READ,
   type ManagerChatAuthor,
-  type ManagerChatReaction,
   managerChatPageOf,
 } from "@repo/features/manager-chat-live";
 import { Effect, Option, Schema } from "effect";
@@ -95,14 +94,29 @@ const say = (userId: string, agentId: string, text: string) =>
     return { id: outcome.message.id, clientKey };
   });
 
-/** A reaction of this kind the account gives the message, as a member or, by its starter, as the Manager. */
+/** The reactions the tests give, by kind and emoji. */
+const THUMBS_UP = { kind: MANAGER_CHAT_REACTION.THUMBS_UP, emoji: "👍" };
+const THUMBS_DOWN = { kind: MANAGER_CHAT_REACTION.THUMBS_DOWN, emoji: "👎" };
+const TADA = { kind: "tada", emoji: "🎉" };
+const EYES = { kind: "eyes", emoji: "👀" };
+
+/** A reaction the account gives the message `minutes` after the first message was sent, as a member or, by its starter, as the Manager. */
 const react = (
   userId: string,
   agentId: string,
   messageId: string,
-  kind: ManagerChatReaction,
+  reaction: { readonly kind: string; readonly emoji: string },
   by: ManagerChatAuthor = MANAGER_CHAT_AUTHOR.PERSON,
-) => reactManagerChat(userId, { agentId, messageId, by, kind, reacted: true, now: SENT_AT });
+  minutes = 0,
+) =>
+  reactManagerChat(userId, {
+    agentId,
+    messageId,
+    by,
+    ...reaction,
+    reacted: true,
+    now: new Date(SENT_AT.getTime() + minutes * 60_000),
+  });
 
 /** The statement run as raw SQL. */
 const runLive = (statement: LiveStatement) =>
@@ -194,7 +208,7 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
   );
 
   it.effect(
-    "carries each message's reactions by kind, marked as the reader's where they gave one",
+    "carries each message's reactions by kind with its emoji, 👍 and 👎 first and the rest as first given, marked as the reader's where they gave one",
     () =>
       Effect.gen(function* () {
         const owner = yield* openAccount("Dean Stratakos");
@@ -207,18 +221,14 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
 
         // Note that a reaction wakes the read on the Manager's topic, as a message does.
         yield* expectTopicsFire(
-          react(owner, agentId, messageId, MANAGER_CHAT_REACTION.THUMBS_DOWN),
+          react(owner, agentId, messageId, TADA, MANAGER_CHAT_AUTHOR.PERSON, 1),
           [[TOPIC.AGENT, agentId]],
         );
-        yield* react(teammate, agentId, messageId, MANAGER_CHAT_REACTION.THUMBS_UP);
-
-        yield* react(
-          owner,
-          agentId,
-          messageId,
-          MANAGER_CHAT_REACTION.THUMBS_UP,
-          MANAGER_CHAT_AUTHOR.AGENT,
-        );
+        yield* react(teammate, agentId, messageId, EYES, MANAGER_CHAT_AUTHOR.PERSON, 2);
+        yield* react(teammate, agentId, messageId, TADA, MANAGER_CHAT_AUTHOR.PERSON, 3);
+        yield* react(owner, agentId, messageId, THUMBS_DOWN, MANAGER_CHAT_AUTHOR.PERSON, 4);
+        yield* react(teammate, agentId, messageId, THUMBS_UP, MANAGER_CHAT_AUTHOR.PERSON, 5);
+        yield* react(owner, agentId, messageId, THUMBS_UP, MANAGER_CHAT_AUTHOR.AGENT, 6);
 
         const page = yield* livePageOf(teammate, agentId);
 
@@ -229,8 +239,10 @@ it.layer(getTestDB())("a Manager's chat followed live", (it) => {
             [
               "Ship the table?",
               [
-                { kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 2, reacted: true, emoji: "👍" },
-                { kind: MANAGER_CHAT_REACTION.THUMBS_DOWN, count: 1, reacted: false, emoji: "👎" },
+                { kind: "thumbsup", count: 2, reacted: true, emoji: "👍" },
+                { kind: "thumbsdown", count: 1, reacted: false, emoji: "👎" },
+                { kind: "tada", count: 2, reacted: true, emoji: "🎉" },
+                { kind: "eyes", count: 1, reacted: true, emoji: "👀" },
               ],
             ],
           ],

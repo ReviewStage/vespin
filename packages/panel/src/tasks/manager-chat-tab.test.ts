@@ -381,7 +381,7 @@ test("each message is a row under its sender's name where their run opens, a tea
   assert.deepEqual(threads, ["first"]);
 });
 
-test("a message's menu, a right-click or a long press, leads with Reply in thread, which opens its thread beside the chat", async () => {
+test("a message's menu, a right-click or a long press, leads with its reactions, then Reply in thread, which opens its thread beside the chat", async () => {
   const { container } = await drawChat([row("first", 1, "On it.")]);
 
   const words =
@@ -398,10 +398,10 @@ test("a message's menu, a right-click or a long press, leads with Reply in threa
   const items = [...document.querySelectorAll<HTMLElement>("[role='menuitem']")];
   assert.deepEqual(
     items.map((item) => item.textContent),
-    ["Reply in thread", "Copy", "Mark as unread"],
+    ["👍Thumbs up", "👎Thumbs down", "Add reaction", "Reply in thread", "Copy", "Mark as unread"],
   );
 
-  act(() => items[0]?.click());
+  act(() => items.find((item) => item.textContent === "Reply in thread")?.click());
   await settleQueries();
 
   assert.ok(container.querySelector("[data-thread-tab]"), "the thread opens beside the chat");
@@ -812,6 +812,53 @@ test("a 👍 pressed beside a message stands under it at once as the reader's, a
   await settleQueries();
   assert.deepEqual(reactions(), []);
   assert.deepEqual(standingToastWords(), [CHAT_REACTION_REFUSED_WORDS]);
+});
+
+test("an emoji picked from a message's Add reaction is given by the name Slack gives it and stands under the message at once", async () => {
+  const { promise: reactAnswer } = Promise.withResolvers<FakeActAnswer>();
+  const { container, reacted } = await drawChat([row("told", 1, "Shipped.")], { reactAnswer });
+  const message = container.querySelector('[data-message-id="told"]');
+  assert.ok(message, "the message is drawn");
+  pointerCross(document.body, message);
+
+  const add =
+    message.querySelector<HTMLButtonElement>('button[aria-label="Add reaction"]') ??
+    assert.fail("Add reaction stands beside the message");
+
+  await act(async () => add.click());
+
+  const search =
+    document.querySelector<HTMLInputElement>('input[aria-label="Search emoji"]') ??
+    assert.fail("the picker's search stands");
+
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+
+  act(() => {
+    setValue?.call(search, "🎉");
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
+  // Note that the emoji is matched by its label read back rather than in a selector, which jsdom's engine misreads past the Basic Multilingual Plane.
+  const typed =
+    [...document.querySelectorAll<HTMLButtonElement>("fieldset button")].find(
+      (choice) => choice.getAttribute("aria-label") === "🎉",
+    ) ?? assert.fail("the emoji typed is offered");
+
+  await act(async () => typed.click());
+  await vi.waitFor(() => assert.equal(reacted.length, 1));
+  await settleQueries();
+
+  assert.deepEqual(reacted, [
+    { agentId: MANAGER.id, messageId: "told", kind: "tada", reacted: true, emoji: "🎉" },
+  ]);
+
+  assert.deepEqual(
+    [...message.querySelectorAll(".ui-reactions button")].map((chip) => [
+      chip.textContent,
+      chip.getAttribute("aria-label"),
+    ]),
+    [["🎉1", "You reacted with :tada:"]],
+  );
 });
 
 test("a chat longer than its first page asks once for the page before it as it opens, and one that did not answer offers Retry", async () => {

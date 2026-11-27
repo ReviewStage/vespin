@@ -15,7 +15,12 @@ import { SmilePlusIcon } from "../../icons/icons.js";
 import { ReplayUnmask } from "../../session-replay-marks.js";
 import { BUTTON_SIZE, type ButtonSize } from "../button/button.js";
 import { CHOICE_BAR_LOOK, ChoiceBar } from "../choice-bar/choice-bar.js";
-import { IconPicker, IconPickerChoice, IconPickerGroup } from "../icon-picker/icon-picker.js";
+import {
+  IconPicker,
+  IconPickerChoice,
+  IconPickerGroup,
+  IconPickerMenuPanel,
+} from "../icon-picker/icon-picker.js";
 import { type IconPickerColor, IconPickerColors } from "../icon-picker/icon-picker-colors.js";
 import {
   IconPickerEmoji,
@@ -111,10 +116,6 @@ const NO_FACE_MATCHES = noMatchWords({ one: "character or emoji", many: "charact
 
 /** What the picker's popover is called. */
 const MANAGER_FACE = "Manager face";
-
-/** The picker as a menu's panel: on the menu's surface, which the panel beside a menu's item leaves to what it holds. */
-const MENU_PANEL =
-  "ui-manager-face-menu-panel rounded-menu border border-border-strong bg-popover text-popover-foreground shadow-menu animate-menu-in";
 
 /** Where the faces this window picked last are kept, as a section's recent icons are: read as the picker opens, written as it picks. */
 export interface ManagerFaceRecent {
@@ -568,8 +569,8 @@ export function ManagerFaceMenuPanel({
   onChange: (next: ManagerFaceValue) => void;
 }): React.JSX.Element {
   return (
-    <div className={MENU_PANEL}>
+    <IconPickerMenuPanel>
       <ManagerFacePicker face={face} recent={recent} onChange={onChange} />
-    </div>
+    </IconPickerMenuPanel>
   );
 }

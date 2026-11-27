@@ -42,6 +42,7 @@ import {
 import { LIVE_USER_QUERY } from "./live-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
+import type { SlackEmoji, SlackEmojiIndex } from "./slack-emoji.js";
 import { trimmedText } from "./text-schema.js";
 
 /** Who wrote a message of a Manager's chat: a person, or the Manager itself. */
@@ -159,6 +160,29 @@ export function withReaction(
 
   // Note that the sort is stable, so the kinds past the offered ones keep the order they were first given in.
   return [...reactions, next].sort((a, b) => reactionRank(a.kind) - reactionRank(b.kind));
+}
+
+/**
+ * The reaction an emoji Slack names is given and kept as: its kind, Slack's
+ * first name for it, or the name an offered reaction shipped with where it
+ * is one (👍 is `thumbsup`, never `+1`), so one emoji given by any of its
+ * names is one reaction; none where Slack names no such emoji.
+ */
+function reactionOf(index: SlackEmojiIndex, found: SlackEmoji | undefined): SlackEmoji | undefined {
+  if (found === undefined) return undefined;
+  const offered = REACTION_ORDER.find((kind) => index.byName(kind)?.emoji === found.emoji);
+
+  return { emoji: found.emoji, name: offered ?? found.name };
+}
+
+/** The reaction a name Slack gives an emoji is kept as (`reactionOf`): `+1` as `thumbsup`, `tada` as itself. */
+export function reactionOfName(index: SlackEmojiIndex, name: string): SlackEmoji | undefined {
+  return reactionOf(index, index.byName(name));
+}
+
+/** The reaction an emoji is kept as (`reactionOf`), however its variation selector is spelled. */
+export function reactionOfEmoji(index: SlackEmojiIndex, emoji: string): SlackEmoji | undefined {
+  return reactionOf(index, index.byEmoji(emoji));
 }
 
 /** How many messages one page of a Manager's chat holds. */

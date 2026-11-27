@@ -2528,7 +2528,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a member's reaction on a Manager's chat message stands once however often it is given, comes off as asked, and opens no turn; none lands from outside the workspace or on a message the chat holds none of",
+    "a member's reaction on a Manager's chat message, of any emoji by any of its Slack names, stands once however often it is given, comes off as asked, and opens no turn; none lands of a name no emoji has, from outside the workspace, or on a message the chat holds none of",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -2560,30 +2560,46 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
 
         const sends = agentSessions.sent.length;
 
-        const react = (bearer: string, messageId: string, reacted: boolean) =>
+        const react = (
+          bearer: string,
+          messageId: string,
+          reacted: boolean,
+          kind: string = MANAGER_CHAT_REACTION.THUMBS_UP,
+        ) =>
           ask(
             request(chatReactionPath(messageId), bearer, {
               method: "POST",
               id: agent.id,
-              body: { kind: MANAGER_CHAT_REACTION.THUMBS_UP, reacted },
+              body: { kind, reacted },
             }),
           );
 
-        const changed = (bearer: string, reacted: boolean) =>
+        const changed = (bearer: string, reacted: boolean, kind?: string) =>
           Effect.map(
-            react(bearer, "m1", reacted),
+            react(bearer, "m1", reacted, kind),
             (answered) =>
               readAnswer(managerChatReactAnswerSchema, HOSTED_HTTP_STATUS.OK, answered).changed,
           );
 
-        const given = [yield* changed(owner, true), yield* changed(owner, true)];
-        const standing = yield* readManagerChatReactions(owner, agent.id, ["m1"]);
-        const takenOff = yield* changed(owner, false);
-        const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
+        // Note that `+1` is Slack's own name for 👍, which the reaction stands under as `thumbsup`.
+        const given = [
+          yield* changed(owner, true),
+          yield* changed(owner, true, "+1"),
+          yield* changed(owner, true, "tada"),
+        ];
 
-        assert.deepEqual(given, [true, false]);
-        assert.equal(standing.get("m1")?.length, 1);
-        assert.equal(takenOff, true);
+        const standing = yield* readManagerChatReactions(owner, agent.id, ["m1"]);
+        const takenOff = [yield* changed(owner, false), yield* changed(owner, false, "tada")];
+        const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
+        const invalid = refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST);
+
+        assert.deepEqual(given, [true, false, true]);
+        assert.deepEqual(
+          standing.get("m1")?.map((reaction) => reaction.kind),
+          ["thumbsup", "tada"],
+        );
+        assert.deepEqual(takenOff, [true, true]);
+        assert.deepEqual(yield* react(owner, "m1", true, "no_such_emoji"), invalid);
         assert.deepEqual(yield* react(other, "m1", true), notFound);
         assert.deepEqual(yield* react(owner, "nope", true), notFound);
         assert.equal((yield* readManagerChatReactions(owner, agent.id, ["m1"])).size, 0);
