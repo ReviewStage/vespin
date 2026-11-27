@@ -1,0 +1,104 @@
+pinned to 8802a45813
+== bundle PJj11079t2 base 8802a45813
+  built 8802a45813 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn-2947.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+main for A and B: 604f24d955; A = 8802a45813; order B-1x, B-3x, B-3x keys, then A-1x, A-3x, A-3x keys
+== bundle PJj11079t2B base 604f24d955
+  built 604f24d955 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn-2947.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+B-1x starts 11:31:23 UTC
+B-1x 1x: first rc 0, first app-ready {"launch_ms":1647.236249089241,"local_ms":411.44749915599823,"started_ms":832.8404161930084,"screens_ms":1451.2947491407394,"inbox_ms":1192.4680411815643,"active_ms":287.52254116535187,"first_rows":"k | first-answers  || second app-ready {"launch_ms":1359.3271244764328,"local_ms":390.6824164390564,"started_ms":677.3170413970947,"screens_ms":1220.4290823936462,"inbox_ms":1036.1817494630814,"active_ms":275.7894574403763,"first_rows":"ke | second first-answers 
+B-1x app-ready in full: first {"launch_ms":1647.236249089241,"local_ms":411.44749915599823,"started_ms":832.8404161930084,"screens_ms":1451.2947491407394,"inbox_ms":1192.4680411815643,"active_ms":287.52254116535187,"first_rows":"kept"} || second {"launch_ms":1359.3271244764328,"local_ms":390.6824164390564,"started_ms":677.3170413970947,"screens_ms":1220.4290823936462,"inbox_ms":1036.1817494630814,"active_ms":275.7894574403763,"first_rows":"kept"}
+B-3x starts 11:36:48 UTC
+B-3x 3x: first rc 0, first app-ready {"launch_ms":3328.2595831155777,"local_ms":396.23337411880493,"started_ms":1528.7427911758423,"screens_ms":2902.077208161354,"inbox_ms":2553.08108317852,"active_ms":280.2488331794739,"first_rows":"kep | first-answers  || second app-ready {"launch_ms":3065.81620824337,"local_ms":425.90904128551483,"started_ms":1213.364374279976,"screens_ms":2487.066124200821,"inbox_ms":2241.2961661815643,"active_ms":279.83416616916656,"first_rows":"kep | second first-answers 
+B-3x app-ready in full: first {"launch_ms":3328.2595831155777,"local_ms":396.23337411880493,"started_ms":1528.7427911758423,"screens_ms":2902.077208161354,"inbox_ms":2553.08108317852,"active_ms":280.2488331794739,"first_rows":"kept"} || second {"launch_ms":3065.81620824337,"local_ms":425.90904128551483,"started_ms":1213.364374279976,"screens_ms":2487.066124200821,"inbox_ms":2241.2961661815643,"active_ms":279.83416616916656,"first_rows":"kept"}
+B-3x keys start 11:42:05 UTC
+B-3x keys: flow results shown | worst longest JS hold over 6 keystrokes: 7235 ms (bar 50 ms) | poll window 30200 ms after the last keystroke: JS running 4905 ms, longest JS hold 626 ms, 14 over 50 ms | rows naming decide: 12 before the poll window, 12 after
+B-3x keycut, every keystroke (key windows run from one inputText to the next; the trace starts 3 s before the flow, which opens Search before key 1):
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 1 'd' at 29022 ms into the trace: window 1496 ms, JS running 1337 ms, longest JS hold touching it 7235 ms
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 2 'e' at 30518 ms into the trace: window 1916 ms, JS running 1915 ms, longest JS hold touching it 7235 ms
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 3 'c' at 32434 ms into the trace: window 2040 ms, JS running 2040 ms, longest JS hold touching it 7235 ms
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 4 'i' at 34474 ms into the trace: window 1934 ms, JS running 1934 ms, longest JS hold touching it 7235 ms
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 5 'd' at 36408 ms into the trace: window 3679 ms, JS running 2442 ms, longest JS hold touching it 7235 ms
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 6 'e' at 40087 ms into the trace: window 2000 ms, JS running 1062 ms, longest JS hold touching it 265 ms
+  worst longest JS hold over 6 keystrokes: 7235 ms (bar 50 ms)
+     poll-window hold 98 ms at 62123 ms: leaf  | first non-engine 
+     poll-window hold 556 ms at 62823 ms: leaf  | first non-engine 
+     poll-window hold 125 ms at 65373 ms: leaf  | first non-engine 
+     poll-window hold 89 ms at 67223 ms: leaf  | first non-engine 
+     poll-window hold 236 ms at 68940 ms: leaf  | first non-engine 
+     poll-window hold 171 ms at 72290 ms: leaf  | first non-engine 
+     poll-window hold 626 ms at 74757 ms: leaf  | first non-engine 
+     poll-window hold 347 ms at 77373 ms: leaf  | first non-engine 
+     poll-window hold 545 ms at 80957 ms: leaf  | first non-engine 
+     poll-window hold 155 ms at 82690 ms: leaf  | first non-engine 
+     poll-window hold 147 ms at 83507 ms: leaf  | first non-engine 
+     poll-window hold 255 ms at 87073 ms: leaf  | first non-engine 
+     poll-window hold 146 ms at 87607 ms: leaf  | first non-engine 
+     poll-window hold 104 ms at 87857 ms: leaf  | first non-engine 
+  poll window 30200 ms after the last keystroke: JS running 4905 ms, longest JS hold 626 ms, 14 over 50 ms
+A-1x starts 11:44:26 UTC
+A-1x 1x: first rc 0, first app-ready {"launch_ms":2168.1561241149902,"local_ms":422.06495809555054,"started_ms":833.8638740777969,"screens_ms":1425.7001241445541,"inbox_ms":1184.2255411148071,"active_ms":286.21833312511444,"first_rows":" | first-answers  || second app-ready {"launch_ms":1423.1998327970505,"local_ms":403.96049976348877,"started_ms":694.9800828695297,"screens_ms":1243.517040848732,"inbox_ms":1057.458874821663,"active_ms":276.97437477111816,"first_rows":"ke | second first-answers 
+A-1x app-ready in full: first {"launch_ms":2168.1561241149902,"local_ms":422.06495809555054,"started_ms":833.8638740777969,"screens_ms":1425.7001241445541,"inbox_ms":1184.2255411148071,"active_ms":286.21833312511444,"first_rows":"feed"} || second {"launch_ms":1423.1998327970505,"local_ms":403.96049976348877,"started_ms":694.9800828695297,"screens_ms":1243.517040848732,"inbox_ms":1057.458874821663,"active_ms":276.97437477111816,"first_rows":"kept"}
+A-3x starts 11:49:42 UTC
+A-3x 3x: first rc 0, first app-ready {"launch_ms":4236.597707748413,"local_ms":429.8445408344269,"started_ms":1767.1538747549057,"screens_ms":3219.7954998016357,"inbox_ms":2867.376457810402,"active_ms":297.76912474632263,"first_rows":"fe | first-answers  || second app-ready {"launch_ms":3124.858374595642,"local_ms":440.3107075691223,"started_ms":1241.540791630745,"screens_ms":2551.5614166259766,"inbox_ms":2328.8371245861053,"active_ms":288.29341661930084,"first_rows":"ke | second first-answers 
+A-3x app-ready in full: first {"launch_ms":4236.597707748413,"local_ms":429.8445408344269,"started_ms":1767.1538747549057,"screens_ms":3219.7954998016357,"inbox_ms":2867.376457810402,"active_ms":297.76912474632263,"first_rows":"feed"} || second {"launch_ms":3124.858374595642,"local_ms":440.3107075691223,"started_ms":1241.540791630745,"screens_ms":2551.5614166259766,"inbox_ms":2328.8371245861053,"active_ms":288.29341661930084,"first_rows":"kept"}
+A-3x keys start 11:55:00 UTC
+A-3x keys: flow results shown | worst longest JS hold over 6 keystrokes: 1140 ms (bar 50 ms) | poll window 30277 ms after the last keystroke: JS running 3450 ms, longest JS hold 356 ms, 15 over 50 ms | rows naming decide: 12 before the poll window, 12 after
+A-3x keycut, every keystroke (key windows run from one inputText to the next; the trace starts 3 s before the flow, which opens Search before key 1):
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 1 'd' at 29924 ms into the trace: window 1544 ms, JS running 1450 ms, longest JS hold touching it 820 ms
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 2 'e' at 31468 ms into the trace: window 2096 ms, JS running 2001 ms, longest JS hold touching it 1140 ms
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 3 'c' at 33564 ms into the trace: window 3877 ms, JS running 2429 ms, longest JS hold touching it 1025 ms
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 4 'i' at 37441 ms into the trace: window 2367 ms, JS running 1173 ms, longest JS hold touching it 161 ms
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 5 'd' at 39808 ms into the trace: window 3303 ms, JS running 1244 ms, longest JS hold touching it 586 ms
+     top frames in that hold (leaf): 
+     first non-engine frame: 
+  key 6 'e' at 43111 ms into the trace: window 2000 ms, JS running 357 ms, longest JS hold touching it 165 ms
+  worst longest JS hold over 6 keystrokes: 1140 ms (bar 50 ms)
+     poll-window hold 249 ms at 63724 ms: leaf  | first non-engine 
+     poll-window hold 87 ms at 64596 ms: leaf  | first non-engine 
+     poll-window hold 82 ms at 65963 ms: leaf  | first non-engine 
+     poll-window hold 356 ms at 69520 ms: leaf  | first non-engine 
+     poll-window hold 71 ms at 71763 ms: leaf  | first non-engine 
+     poll-window hold 92 ms at 74863 ms: leaf  | first non-engine 
+     poll-window hold 91 ms at 75413 ms: leaf  | first non-engine 
+     poll-window hold 128 ms at 80196 ms: leaf  | first non-engine 
+     poll-window hold 142 ms at 81068 ms: leaf  | first non-engine 
+     poll-window hold 116 ms at 82346 ms: leaf  | first non-engine 
+     poll-window hold 71 ms at 83196 ms: leaf  | first non-engine 
+     poll-window hold 236 ms at 86811 ms: leaf  | first non-engine 
+     poll-window hold 96 ms at 89029 ms: leaf  | first non-engine 
+     poll-window hold 154 ms at 89713 ms: leaf  | first non-engine 
+     poll-window hold 70 ms at 92598 ms: leaf  | first non-engine 
+  poll window 30277 ms after the last keystroke: JS running 3450 ms, longest JS hold 356 ms, 15 over 50 ms
+A ends 11:57:19 UTC
