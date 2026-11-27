@@ -21,6 +21,7 @@
 import { type WireValue, WireValueSchema } from "@repo/wire";
 import { Option, Schema } from "effect";
 import { wireUuidSchema } from "./service-wire.js";
+import { ASSIGNED_TO, TASK_GROUPING } from "./task-list-model.js";
 import { workspaceIdSchema } from "./task-wire.js";
 import { MANAGER_SORT } from "./workspace-managers-model.js";
 
@@ -36,6 +37,22 @@ export type ViewChoiceScope = (typeof VIEW_CHOICE_SCOPE)[keyof typeof VIEW_CHOIC
 export const VIEW_CHOICE_KEY = {
   /** How a workspace's Managers are sorted in the sidebar (`MANAGER_SORT`). */
   MANAGER_SORT: "managerSort",
+  /** How a workspace's sidebar Tasks list is grouped, whose tasks it holds, and whether it shows finished sub-tasks (`TaskListView`). */
+  SIDEBAR_TASK_VIEW: "sidebarTaskView",
+  /** The sidebar's task groups folded, each by its repository's full name, null for the tasks with none. */
+  SIDEBAR_FOLDED_GROUPS: "sidebarFoldedGroups",
+  /** Whether the sidebar's Pinned is folded. */
+  SIDEBAR_PINNED_FOLDED: "sidebarPinnedFolded",
+  /** Whether the sidebar's Following is folded. */
+  SIDEBAR_FOLLOWING_FOLDED: "sidebarFollowingFolded",
+  /** Whether the sidebar's Tasks head is folded, the sections and the list under it with it. */
+  SIDEBAR_TASKS_FOLDED: "sidebarTasksFolded",
+  /** Whether the sidebar's Managers is folded. */
+  SIDEBAR_MANAGERS_FOLDED: "sidebarManagersFolded",
+  /** The account's own sections folded in the sidebar, by id. */
+  SIDEBAR_FOLDED_SECTIONS: "sidebarFoldedSections",
+  /** The tasks whose sub-tasks stand open under them in the sidebar, by id, the latest opened last. */
+  SIDEBAR_OPENED_TASKS: "sidebarOpenedTasks",
 } as const;
 
 export type ViewChoiceKey = (typeof VIEW_CHOICE_KEY)[keyof typeof VIEW_CHOICE_KEY];
@@ -59,12 +76,85 @@ function viewChoice<S extends ViewChoiceSchema>(
   return { key, scope, schema };
 }
 
+/** How many tasks may stand opened at once, the earliest opened let go first, so the list stays well under `MAX_VALUE_CHARS`. */
+export const MAX_OPENED_TASKS = 200;
+
+/** The tasks opened, the latest `MAX_OPENED_TASKS` of them where they run past the bound, as the account keeps them. */
+export function openedTasksBounded(opened: readonly string[]): readonly string[] {
+  return opened.length > MAX_OPENED_TASKS ? opened.slice(-MAX_OPENED_TASKS) : opened;
+}
+
+/** The tasks opened with `taskId` shut where it was opened, and opened last where it was not, within the bound. */
+export function openedTasksToggled(opened: readonly string[], taskId: string): readonly string[] {
+  return opened.includes(taskId)
+    ? opened.filter((each) => each !== taskId)
+    : openedTasksBounded([...opened, taskId]);
+}
+
+/** Whose tasks a list holds (`AssignedTo`). */
+const assignedToSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.ME) }),
+  Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.FOLLOWING) }),
+  Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.ANYONE) }),
+  Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.MEMBER), userId: Schema.String }),
+]);
+
+/** Whether a sidebar head stands folded. */
+const foldedSchema = Schema.Boolean;
+
+/** Ids folded or opened. */
+const idsSchema = Schema.Array(Schema.String);
+
 /** Every view choice, by its key. */
 export const VIEW_CHOICE = {
   [VIEW_CHOICE_KEY.MANAGER_SORT]: viewChoice(
     VIEW_CHOICE_KEY.MANAGER_SORT,
     VIEW_CHOICE_SCOPE.WORKSPACE,
     Schema.Literals(Object.values(MANAGER_SORT)),
+  ),
+  [VIEW_CHOICE_KEY.SIDEBAR_TASK_VIEW]: viewChoice(
+    VIEW_CHOICE_KEY.SIDEBAR_TASK_VIEW,
+    VIEW_CHOICE_SCOPE.WORKSPACE,
+    Schema.Struct({
+      grouping: Schema.Literals(Object.values(TASK_GROUPING)),
+      assignedTo: assignedToSchema,
+      finishedSubTasks: Schema.Boolean,
+    }),
+  ),
+  [VIEW_CHOICE_KEY.SIDEBAR_FOLDED_GROUPS]: viewChoice(
+    VIEW_CHOICE_KEY.SIDEBAR_FOLDED_GROUPS,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Array(Schema.NullOr(Schema.String)),
+  ),
+  [VIEW_CHOICE_KEY.SIDEBAR_PINNED_FOLDED]: viewChoice(
+    VIEW_CHOICE_KEY.SIDEBAR_PINNED_FOLDED,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    foldedSchema,
+  ),
+  [VIEW_CHOICE_KEY.SIDEBAR_FOLLOWING_FOLDED]: viewChoice(
+    VIEW_CHOICE_KEY.SIDEBAR_FOLLOWING_FOLDED,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    foldedSchema,
+  ),
+  [VIEW_CHOICE_KEY.SIDEBAR_TASKS_FOLDED]: viewChoice(
+    VIEW_CHOICE_KEY.SIDEBAR_TASKS_FOLDED,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    foldedSchema,
+  ),
+  [VIEW_CHOICE_KEY.SIDEBAR_MANAGERS_FOLDED]: viewChoice(
+    VIEW_CHOICE_KEY.SIDEBAR_MANAGERS_FOLDED,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    foldedSchema,
+  ),
+  [VIEW_CHOICE_KEY.SIDEBAR_FOLDED_SECTIONS]: viewChoice(
+    VIEW_CHOICE_KEY.SIDEBAR_FOLDED_SECTIONS,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    idsSchema,
+  ),
+  [VIEW_CHOICE_KEY.SIDEBAR_OPENED_TASKS]: viewChoice(
+    VIEW_CHOICE_KEY.SIDEBAR_OPENED_TASKS,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    idsSchema.check(Schema.isMaxLength(MAX_OPENED_TASKS)),
   ),
 } as const satisfies { readonly [Key in ViewChoiceKey]: ViewChoice<ViewChoiceSchema> };
 

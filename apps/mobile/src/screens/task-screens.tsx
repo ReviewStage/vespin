@@ -267,6 +267,7 @@ import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useTabDrawnCount } from "../tab-drawn.js";
 import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { standingPressed, useStandingDrawnCount } from "../tasks/standing-drawn.js";
+import { type TreeHold, useTreeHold } from "../tasks/tree-folds.js";
 import {
   threadComments,
   threadOpen,
@@ -1107,60 +1108,14 @@ function dropOnto(group: TaskTreeGroup, listing: ReadListing): ((url: string) =>
   };
 }
 
-/** Which parents of a group stand open, and the toggle a parent's chevron calls. */
+/** Which parents stand open, and the toggle a parent's chevron calls. */
 type OpenedParents = {
   readonly opened: ReadonlySet<string>;
   readonly toggle: (taskId: string) => void;
 };
 
-/** What the tree holds of its own reading: each group's opened parents, and the groups folded shut, by the group's key. */
-type TreeHold = {
-  readonly opened: ReadonlyMap<string, ReadonlySet<string>>;
-  readonly toggleParent: (group: string, taskId: string) => void;
-  readonly folded: ReadonlySet<string>;
-  readonly setFolded: (group: string, folded: boolean) => void;
-};
-
-/**
- * The tree's hold: which parents stand open and which groups stand folded.
- * Note that it is held above the rows, since a recycled row draws another
- * task once scrolled past and a folded section drops its rows, and above the
- * Tasks tab's two layouts, since a fold or an unfold of the iPhone Duo, or a
- * rotation across the split's cutoff, swaps one layout for the other and
- * would lose what the reader opened. It is handed to the tree as a prop,
- * so each layout's tree reads the one hold.
- */
-function useTreeHoldState(): TreeHold {
-  const [opened, setOpened] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
-  const [folded, setFoldedSet] = useState<ReadonlySet<string>>(NONE_OPEN);
-
-  const toggleParent = (group: string, taskId: string) =>
-    setOpened((was) => {
-      const parents = new Set(was.get(group) ?? NONE_OPEN);
-
-      if (!parents.delete(taskId)) parents.add(taskId);
-
-      return new Map(was).set(group, parents);
-    });
-
-  const setFolded = (group: string, shut: boolean) =>
-    setFoldedSet((was) => {
-      const next = new Set(was);
-
-      if (shut) next.add(group);
-      else next.delete(group);
-
-      return next;
-    });
-
-  return { opened, toggleParent, folded, setFolded };
-}
-
-function groupParents(hold: TreeHold, group: string): OpenedParents {
-  return {
-    opened: hold.opened.get(group) ?? NONE_OPEN,
-    toggle: (taskId) => hold.toggleParent(group, taskId),
-  };
+function treeParents(hold: TreeHold): OpenedParents {
+  return { opened: hold.opened, toggle: hold.toggleParent };
 }
 
 /** A group's rows, a task's sub-tasks folded under it by SwiftUI's own disclosure, each parent opened and shut by its chevron or its long press. */
@@ -1605,12 +1560,12 @@ function GroupSection({
       repository={headPicture(group)}
       count={group.rows.length}
       foldable={group.rows.length > 0}
-      folded={hold.folded.has(group.key)}
-      onFold={(shut) => hold.setFolded(group.key, shut)}
+      folded={hold.folded(group)}
+      onFold={(shut) => hold.setFolded(group, shut)}
       onDropLink={dropOnto(group, listing)}
       add={groupAdd(group, newTaskIn, newTaskInRepository)}
     >
-      <FoldedRows rows={group.rows} listing={listing} parents={groupParents(hold, group.key)} />
+      <FoldedRows rows={group.rows} listing={listing} parents={treeParents(hold)} />
     </ListSection>
   );
 }
@@ -1789,9 +1744,6 @@ const MANAGERS_WORDS = {
   NONE: "No Managers yet.",
 } as const;
 
-/** The Managers section's key among the tree's groups, by which its fold is held. */
-const MANAGERS_KEY = "managers";
-
 /** Where New Manager opens, as a sheet over the tabs. */
 const NEW_MANAGER_ROUTE = "/new-manager";
 
@@ -1842,8 +1794,8 @@ function ManagersSection({
       title={MANAGERS_WORDS.HEAD}
       count={managers.length}
       foldable={managers.length > 0}
-      folded={hold.folded.has(MANAGERS_KEY)}
-      onFold={(shut) => hold.setFolded(MANAGERS_KEY, shut)}
+      folded={hold.managersFolded}
+      onFold={hold.setManagersFolded}
       footer={managers.length === 0 ? MANAGERS_WORDS.NONE : undefined}
       menu={[[sortBy]]}
       add={{
@@ -4102,7 +4054,7 @@ export function SidebarTasksProvider({ children }: { readonly children: ReactNod
   const onTab = useOnTab();
   const [search, setSearch] = useState("");
   const screen = useTasksScreen({ search, setSearch });
-  const hold = useTreeHoldState();
+  const hold = useTreeHold();
   const workspaceId = screen.listing.workspace?.id;
   const managers = useWorkspaceManagers(workspaceId);
   const managersListed = useManagersListed(workspaceId);
@@ -4174,7 +4126,7 @@ function TasksOwnRoot() {
   const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
   const [search, setSearch] = useState("");
   const screen = useTasksScreen({ search, setSearch });
-  const hold = useTreeHoldState();
+  const hold = useTreeHold();
 
   return (
     <>
