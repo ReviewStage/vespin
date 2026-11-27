@@ -1634,11 +1634,16 @@ const REVEAL_POSITION = 0.35;
 /**
  * An agent's transcript as one lazy list, the app's one React Native list,
  * since SwiftUI has no piece for its rows: FlashList's own chat list, which
- * opens at its newest row (`startRenderingFromBottom`) and keeps it in view
- * as rows land while the reader stands near it (`autoscrollToBottomThreshold`),
- * while one that lands as they read back holds their place; a line the reader
- * sends brings it into view wherever they stood, just over the composer's
- * stack, as Messages' does; a reader scrolled back is offered Jump to latest.
+ * opens at its newest row (`startRenderingFromBottom`), while a row that
+ * lands as the reader reads back holds their place. It keeps to its newest
+ * row as `@repo/ui/end-anchor` keeps a log on the panel: it opens anchored
+ * there, only the reader's own drag, a row they open, or a reveal lets go,
+ * and while anchored every change of its content's size or its own (a row
+ * landing or growing as its words stream, a picture drawn late, the list
+ * resized) takes it back to its end, which FlashList's own autoscroll does
+ * only as rows land; a line the reader sends brings it into view wherever
+ * they stood, just over the composer's stack, as Messages' does; a reader
+ * scrolled back is offered Jump to latest.
  * Only the rows near the screen are drawn, however long the transcript runs.
  */
 export function AgentTranscript({
@@ -1667,10 +1672,8 @@ export function AgentTranscript({
   const reduceMotion = useReduceMotion();
   const { bottom, left, right } = useSafeAreaInsets();
   const list = useRef<FlashListRef<TranscriptItem>>(null);
-  // Whether the reader stands at the newest row, which the keyboard's rise keeps in view; it opens there.
-  const anchored = useRef(true);
-  // Whether the list keeps its end in view each time its content grows, since the reader sent a line and has neither scrolled nor opened a row since.
-  const following = useRef(false);
+  // Whether the list keeps to its newest row; it opens there, unless it opens at a row a reveal asked for, so its content settling never takes it off that row.
+  const anchored = useRef(reveal === undefined);
   const [away, setAway] = useState(false);
   // The list's own width, so a wide window's rows stand centered within the reading width rather than across it.
   const [width, setWidth] = useState(0);
@@ -1718,7 +1721,7 @@ export function AgentTranscript({
     column,
     placeCall,
     onToggle: (item) => {
-      following.current = false;
+      anchored.current = false;
       drawing.onToggle(item);
     },
   };
@@ -1743,21 +1746,20 @@ export function AgentTranscript({
   // Note that Jump to latest stands just over the composer, on the keyboard while it stands past the safe area.
   const jumpFoot = Math.max(bottom, keyboard) + dock + SPACE.ROW;
 
-  // Note that a line the reader sends brings the end into view, wherever they stood, as Messages' does, and holds it there as the line's row is measured, takes its Not delivered mark, and the composer's stack changes under it, which FlashList's own autoscroll leaves behind the stack: it scrolls once as the row lands, before the row is measured, and skips a growth that follows a scroll within 100 ms.
+  // Note that a line the reader sends brings the end into view, wherever they stood, as Messages' does, and anchors it there.
   useOwnSend(items, () => {
     anchored.current = true;
-    following.current = true;
     list.current?.scrollToEnd({ animated: !reduceMotion });
   });
 
+  // Note that every change of the content's size takes an anchored list back to its end, since FlashList's own autoscroll scrolls once as a row lands, before the row is measured, and skips a growth that follows a scroll within 100 ms: a row growing as its words stream, a picture drawn late, or a Not delivered mark would otherwise leave the end behind the composer.
   const onContentSize = useCallback(() => {
-    if (following.current && anchored.current) list.current?.scrollToEnd({ animated: false });
+    if (anchored.current) list.current?.scrollToEnd({ animated: false });
   }, []);
 
   // Note that only the reader's own scroll moves the anchor, never the list's own: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
-    following.current = false;
   }, []);
 
   // The older pages as they stand now, which the scroll reads without being made anew for each.
@@ -1844,11 +1846,10 @@ export function AgentTranscript({
     <View
       style={[styles.list, { backgroundColor: colors.GROUND }]}
       onLayout={(event) => {
-        const next = event.nativeEvent.layout.width;
+        setWidth(event.nativeEvent.layout.width);
 
-        // Note that a new width under a reader at the newest row keeps the end in view as the rows reflow taller, as an iPad's page column narrows once the split view stands its sidebar and list beside it, which left a page just opened above its end.
-        if (next !== width && anchored.current) following.current = true;
-        setWidth(next);
+        // Note that the list resized under a reader at its end keeps the end in view, as an iPad's page column narrows once the split view stands its sidebar and list beside it and its rows reflow taller, which left a page just opened above its end.
+        if (anchored.current) list.current?.scrollToEnd({ animated: false });
       }}
     >
       {measured ? (
