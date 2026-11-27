@@ -1843,7 +1843,13 @@ export function AgentTranscript({
   return (
     <View
       style={[styles.list, { backgroundColor: colors.GROUND }]}
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+      onLayout={(event) => {
+        const next = event.nativeEvent.layout.width;
+
+        // Note that a new width under a reader at the newest row keeps the end in view as the rows reflow taller, as an iPad's page column narrows once the split view stands its sidebar and list beside it, which left a page just opened above its end.
+        if (next !== width && anchored.current) following.current = true;
+        setWidth(next);
+      }}
     >
       {measured ? (
         <FlashList

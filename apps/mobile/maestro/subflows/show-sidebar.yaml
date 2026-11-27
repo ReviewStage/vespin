@@ -1,0 +1,22 @@
+# show-sidebar.yaml -- shows an iPad's sidebar where it is hidden, as a reader does, by the system's own Show Sidebar; nothing where it stands, or where none can, as on an iPhone.
+#
+# Note that the system names its button Show Sidebar while the sidebar is
+# hidden and Hide Sidebar while it stands, so only the first is pressed.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Note that an iPad waits for the system's sidebar button, as Show or Hide, before it reads which, because a relaunch at a large text size drew the bar after the check had passed it by (vjsplit4's accessibility lane).
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - extendedWaitUntil:
+          visible: "(Show|Hide) Sidebar"
+          timeout: 30000
+- runFlow:
+    when:
+      visible: "Show Sidebar"
+    commands:
+      - tapOn: "Show Sidebar"
+      - waitForAnimationToEnd
