@@ -17,11 +17,12 @@ import {
 import { Schema } from "effect";
 import { useCallback, useMemo } from "react";
 import { useSteadyDoor } from "../steady-door.js";
+import { selectFixtureStaged, useAppStateSlice } from "../use-app-state.js";
 import { type KeptKey, keptKey, useKept, useKeptLeaving } from "../use-kept.js";
 import { type AccountChoice, useAccountChoice } from "../view-choices.js";
 
 /**
- * folded-groups.ts -- which of the sidebar's groups the developer folded, Managers, Pinned, Following, the Tasks head's, and the repositories', kept on the account, and what the Inbox lists and how wide its list stands kept on this Mac.
+ * folded-groups.ts -- which of the sidebar's groups the developer folded, Managers, Pinned, Following, the Tasks head's, and the repositories', kept on the account, what the Inbox lists kept the same way, and how wide its list stands kept on this Mac.
  *
  * A fold is the reader's reading of their own sidebar, as Slack and Notion
  * keep a sidebar's folds, so it is one of the account's view choices
@@ -38,13 +39,15 @@ import { type AccountChoice, useAccountChoice } from "../view-choices.js";
  * their own, the latest `MAX_OPENED_TASKS` of them (`openedTasksToggled`). A fold this Mac kept
  * itself before the account kept it moves up once (`useKeptMovedUp`). A
  * fixture run starts with every group open and keeps nothing, so its
- * frames never wear a developer's folds. The
- * Inbox's view choices are kept on this Mac, the scope it shows,
- * whom the items it lists are addressed to, a teammate by their account's
- * id, whether its pinned tasks' items stand first, and which of those runs
- * are folded, and so is its list's width; a task's own Inbox lists every item it holds, and keeps no
- * choice. A choice kept under a value this build no longer names reads as
- * none, the default, until the next choice is kept. A fixture run draws no
+ * frames never wear a developer's folds. The Inbox's view choices are the
+ * account's on the same terms, the scope it shows, whom the items it lists
+ * are addressed to, a teammate by their account's id, whether its pinned
+ * tasks' items stand first, and which of those runs are folded, so the
+ * iPhone's Inbox lists what the Mac's does; a task's own Inbox lists every
+ * item it holds, and keeps no choice. A choice kept under a value this
+ * build no longer names reads as none, the default, until the next choice
+ * is kept. A fixture run keeps none of them. The Inbox list's width stays
+ * on this Mac, as a window's sizes do. A fixture run draws no
  * inbox, so it has nothing staged to keep apart. An automation's Runs panel keeps its width and whether it
  * stands on the same terms, one for every automation, as the side panel
  * keeps one for every plan, and so does the tree beside every File and
@@ -198,8 +201,8 @@ export interface FoldedGroups {
 /** No group folded, and no task opened. */
 const NONE: readonly never[] = [];
 
-/** A sidebar fold of the account's, moved up from the name this window kept it under. */
-function useFold<Key extends ViewChoiceKey>(
+/** One of the account's own choices, a sidebar fold or the Inbox's, moved up from the name this window kept it under. */
+function useMovedUp<Key extends ViewChoiceKey>(
   key: Key,
   kept: KeptKey<ViewChoiceValue<Key>>,
   fallback: ViewChoiceValue<Key>,
@@ -228,12 +231,12 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
   const [openedLeft, forgetOpened] = useKeptLeaving(KEPT.OPENED_TASKS);
 
   const choices: FoldChoices = {
-    groups: useFold(KEY.SIDEBAR_FOLDED_GROUPS, KEPT.FOLDED_GROUPS, NONE, staged),
-    pinned: useFold(KEY.SIDEBAR_PINNED_FOLDED, KEPT.PINNED_FOLDED, false, staged),
-    following: useFold(KEY.SIDEBAR_FOLLOWING_FOLDED, KEPT.FOLLOWING_FOLDED, false, staged),
-    tasks: useFold(KEY.SIDEBAR_TASKS_FOLDED, KEPT.TASKS_FOLDED, false, staged),
-    managers: useFold(KEY.SIDEBAR_MANAGERS_FOLDED, KEPT.MANAGERS_FOLDED, false, staged),
-    sections: useFold(KEY.SIDEBAR_FOLDED_SECTIONS, KEPT.FOLDED_SECTIONS, NONE, staged),
+    groups: useMovedUp(KEY.SIDEBAR_FOLDED_GROUPS, KEPT.FOLDED_GROUPS, NONE, staged),
+    pinned: useMovedUp(KEY.SIDEBAR_PINNED_FOLDED, KEPT.PINNED_FOLDED, false, staged),
+    following: useMovedUp(KEY.SIDEBAR_FOLLOWING_FOLDED, KEPT.FOLLOWING_FOLDED, false, staged),
+    tasks: useMovedUp(KEY.SIDEBAR_TASKS_FOLDED, KEPT.TASKS_FOLDED, false, staged),
+    managers: useMovedUp(KEY.SIDEBAR_MANAGERS_FOLDED, KEPT.MANAGERS_FOLDED, false, staged),
+    sections: useMovedUp(KEY.SIDEBAR_FOLDED_SECTIONS, KEPT.FOLDED_SECTIONS, NONE, staged),
     opened: useAccountChoice(KEY.SIDEBAR_OPENED_TASKS, null, NONE, staged, [
       openedLeft === undefined ? undefined : openedTasksBounded(openedLeft),
       forgetOpened,
@@ -306,24 +309,39 @@ export interface InboxWhoseChoice {
 /** No run folded. */
 const NO_RUNS: readonly InboxRun[] = [];
 
-/** The Inbox's view choices, Open addressed to the reader, which is Needs you, its pinned tasks' items first with no run folded, until first changed, and kept as each is pressed. */
+/** The Inbox's view choices, Open addressed to the reader, its pinned tasks' items first with no run folded, until first changed, each kept on the account as it is pressed. A fixture run keeps none of them. */
 export function useInboxViewChoices(): InboxViewChoices {
-  const [show, onShow] = useKept(KEPT.INBOX_SHOW, INBOX_SHOW.OPEN);
-  const [whose, onWhose] = useKept(KEPT.WHOSE, MINE);
-  const [pinnedFirst, onPinnedFirst] = useKept(KEPT.PINNED_FIRST, true);
-  const [folded, keepFolded] = useKept(KEPT.FOLDED_RUNS, NO_RUNS);
+  const KEY = VIEW_CHOICE_KEY;
+  const staged = useAppStateSlice(selectFixtureStaged) === true;
+  const show = useMovedUp(KEY.INBOX_SHOW, KEPT.INBOX_SHOW, INBOX_SHOW.OPEN, staged);
+  const whose = useMovedUp(KEY.INBOX_WHOSE, KEPT.WHOSE, MINE, staged);
+  const pinnedFirst = useMovedUp(KEY.INBOX_PINNED_FIRST, KEPT.PINNED_FIRST, true, staged);
+  const folded = useMovedUp(KEY.INBOX_FOLDED_RUNS, KEPT.FOLDED_RUNS, NO_RUNS, staged);
 
-  const onFold = useCallback(
-    (run: InboxRun, fold: boolean) =>
-      keepFolded(
-        fold
-          ? [...folded.filter((each) => each !== run), run]
-          : folded.filter((each) => each !== run),
-      ),
-    [folded, keepFolded],
+  // Note that a fold is made over the runs folded as it is pressed, so a menu left open never opens a run folded since.
+  const { change: changeFolded } = folded;
+
+  const onFold = useSteadyDoor((run: InboxRun, fold: boolean) =>
+    changeFolded((held) =>
+      fold ? [...held.filter((each) => each !== run), run] : held.filter((each) => each !== run),
+    ),
   );
 
-  return { show, onShow, whose, onWhose, pinnedFirst, onPinnedFirst, folded, onFold };
+  // Note that the presses stand as the same doors across draws, so a row handed one draws again only when its choice does.
+  const onShow = useSteadyDoor(show.choose);
+  const onWhose = useSteadyDoor(whose.choose);
+  const onPinnedFirst = useSteadyDoor(pinnedFirst.choose);
+
+  return {
+    show: show.value,
+    onShow,
+    whose: whose.value,
+    onWhose,
+    pinnedFirst: pinnedFirst.value,
+    onPinnedFirst,
+    folded: folded.value,
+    onFold,
+  };
 }
 
 /** A width held within the list's bounds, in whole pixels. */

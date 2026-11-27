@@ -132,14 +132,36 @@ test("the Inbox opens on Open, addressed to me, where nothing was kept", () => {
   expect(opening.whose).toEqual({ kind: "mine" });
 });
 
-test("the Inbox's choices are read as they were kept", () => {
+test("the Inbox's choices this Mac kept move up to the account under their own keys, and leave the Mac", async () => {
   keep("app.inboxShow", '"all"');
   keep("app.inboxWhose", '{"kind":"person","userId":"u1","name":"Ana"}');
+  keep("app.inboxPinnedFirst", "false");
+  keep("app.inboxFoldedRuns", '["rest"]');
+  const written = keepViewChoices();
   const choices = draw(() => useInboxViewChoices());
+  await settleQueries();
+
+  expect(written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value }))).toEqual(
+    expect.arrayContaining([
+      { key: "inboxShow", workspaceId: null, value: "all" },
+      {
+        key: "inboxWhose",
+        workspaceId: null,
+        value: { kind: "person", userId: "u1", name: "Ana" },
+      },
+      { key: "inboxPinnedFirst", workspaceId: null, value: false },
+      { key: "inboxFoldedRuns", workspaceId: null, value: ["rest"] },
+    ]),
+  );
+  expect(written).toHaveLength(4);
   expect(choices.now().show).toBe("all");
   expect(choices.now().whose).toEqual({ kind: "person", userId: "u1", name: "Ana" });
-  act(() => choices.now().onShow("to-do"));
-  expect(kept("app.inboxShow")).toBe('"to-do"');
+  expect(choices.now().pinnedFirst).toBe(false);
+  expect(choices.now().folded).toEqual(["rest"]);
+  expect(kept("app.inboxShow")).toBeNull();
+  expect(kept("app.inboxWhose")).toBeNull();
+  expect(kept("app.inboxPinnedFirst")).toBeNull();
+  expect(kept("app.inboxFoldedRuns")).toBeNull();
 });
 
 test("the list, the file tree and the Runs panel stand at the widths they were kept at, held to their bounds", () => {

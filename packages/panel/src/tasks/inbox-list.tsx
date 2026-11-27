@@ -10,6 +10,7 @@ import {
   INBOX_SHOW,
   INBOX_SHOW_EMPTY,
   INBOX_SHOW_LABEL,
+  INBOX_VIEW_WORDS,
   INBOX_WHOSE,
   type InboxAnyHolder,
   type InboxCounts,
@@ -334,12 +335,6 @@ const SHOW_INSTEAD = {
   MINE: "Show mine",
   EVERYONE: "Show anyone's",
 } as const;
-
-/** What the view's submenu of whom the items are addressed to is called. */
-const WHOSE = "Addressed to";
-
-/** What the view's switch that stands the pinned tasks' items first is called. */
-const PINNED_FIRST = "Pinned tasks first";
 
 /** What the chip over the list says its × does, in full, since a reader hears it apart from the empty state's short press. */
 const CLEAR_WHOSE = "Show what's addressed to me";
@@ -724,7 +719,7 @@ function windowEntries(
       : [
           [
             {
-              label: PINNED_FIRST,
+              label: INBOX_VIEW_WORDS.PINNED_FIRST,
               icon: <PinIcon />,
               checked: order.pinnedFirst,
               mark: MENU_ITEM_MARK.SWITCH,
@@ -739,7 +734,7 @@ function windowEntries(
   return [
     [
       {
-        label: WHOSE,
+        label: INBOX_VIEW_WORDS.WHOSE,
         icon: <UsersIcon />,
         items: whoseEntries(choices.whose, choices.onWhose, reader, readerId),
       },

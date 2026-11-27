@@ -908,6 +908,14 @@ export type InboxWhose =
   | { readonly kind: typeof INBOX_WHOSE.MINE }
   | { readonly kind: typeof INBOX_WHOSE.PERSON; readonly userId: string; readonly name: string };
 
+/** What the Inbox's view menu calls its choices beside its scopes: whom the items are addressed to, its people, and the switch that stands the pinned tasks' items first, on every client. */
+export const INBOX_VIEW_WORDS = {
+  WHOSE: "Addressed to",
+  ANYONE: "Anyone",
+  ME: "Me",
+  PINNED_FIRST: "Pinned tasks first",
+} as const;
+
 /** Anyone's items, as a task's own Inbox lists them. */
 export const EVERYONES: InboxWhose = { kind: INBOX_WHOSE.EVERYONE };
 
