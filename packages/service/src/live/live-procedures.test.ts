@@ -2861,6 +2861,24 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
   );
 
   it.effect(
+    "a build at a version answered first pages it never followed, past a sync id from before they stopped, is answered the task list whole",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        const kept = yield* startTask(dana, { name: "Teammate invitations" });
+        const past = (yield* askTasks(dana, "")).tasks.sync?.next;
+        assert.ok(past !== undefined);
+
+        const answer = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(
+          yield* askHeld(dana, "/api/live/tasks", past, undefined, { build: SHIPPED_BUILD }),
+        ).queries;
+
+        assert.equal(answer.tasks.sync?.past, undefined);
+        assert.deepEqual(idsOf(answer.tasks), [kept.id]);
+      }),
+  );
+
+  it.effect(
     "a page named by another reader's answer reads the asker's own tasks past it and none of the other's",
     () =>
       Effect.gen(function* () {

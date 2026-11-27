@@ -243,7 +243,7 @@ import {
 import { accountMiddleware, heldReadMiddleware, hosted } from "../orpc/base.js";
 import { type LiveTopics, ownMovedKeys, syncMovedOf } from "../sync/live-query.js";
 import { NO_TOPICS } from "../sync/watch.js";
-import { pageParents, pageTokenOf, readsPages } from "./live-pages.js";
+import { mayHoldFirstPage, pageParents, pageTokenOf, readsPages } from "./live-pages.js";
 import { type BoundLiveRead, type PartOf, WATCHED_LOOK } from "./live-read-binding.js";
 import { type LiveSealer, NO_ROWS_DIGEST, pollSealer } from "./poll-sealer.js";
 import { accountInboxRead } from "./reads/account-inbox.js";
@@ -741,7 +741,9 @@ const narrowedParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends 
  * a reader that names no id, whose id is below the oldest the log kept or
  * past the settled one, that is more than `SYNC_LOG.MOST` rows behind, or
  * whose admission to the rows moved (a `whole` table's row naming its
- * account), in pages where it is `paged` and the read binds them
+ * account), or that may hold the first page of a read that binds pages for
+ * its whole answer (`firstPage`, `mayHoldFirstPage`), in pages where it is
+ * `paged` and the read binds them
  * (`pagedParts`). Otherwise each part is its statement narrowed to what moved,
  * with the reader's id it was read past and the id to read past next, the
  * ids of its own rows a write the reader's topics reach moved that the
@@ -756,6 +758,7 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   params: LiveReadParams<Read>,
   sync: string,
   paged: boolean,
+  firstPage: (past: number) => boolean,
 ) {
   const delta = query.delta;
 
@@ -765,6 +768,8 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
   const reached = delta.reach === undefined ? topics : yield* topicsNamed(delta.reach(params));
   const accounts = new Set(reached.flatMap(([kind, id]) => (kind === TOPIC.ACCOUNT ? [id] : [])));
   const whole = new Set(delta.whole.map((table) => table.name));
+  // Note that a read a build took the first page of for its whole answer is answered whole once, so the parents past that page come back to it.
+  const firstPageHeld = past !== undefined && delta.page !== undefined && firstPage(past);
   /** The id the log is read past: the reader's, then the settled id of each window held past. */
   let from = past;
   /** The txids of the windows held past, which the answer carries, since it is read past them too. */
@@ -796,7 +801,7 @@ const deltaParts = /* @__PURE__ */ Effect.fnUntraced(function* <Read extends Any
           (window.floor !== undefined && from < window.floor) ||
           window.rows.length > SYNC_LOG.MOST;
 
-        return { settled, window, whole: behind || admissionMoved };
+        return { settled, window, whole: behind || admissionMoved || firstPageHeld };
       }),
     );
 
@@ -920,10 +925,13 @@ const liveDeltaParts = /* @__PURE__ */ Effect.fnUntraced(
     params: LiveReadParams<Read>,
     asked: { readonly sync: string | undefined; readonly page: string | undefined },
     paged: boolean,
+    firstPage: (past: number) => boolean,
   ) {
     const page = query.delta?.page;
 
-    if (asked.page === undefined) return yield* deltaParts(query, params, asked.sync ?? "", paged);
+    if (asked.page === undefined) {
+      return yield* deltaParts(query, params, asked.sync ?? "", paged, firstPage);
+    }
 
     if (page === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     const token = yield* pageTokenOf(asked.page);
@@ -967,7 +975,9 @@ function boundParts<Read extends AnyLiveRead>(
   const page = asked[LIVE_POLL.PAGE];
 
   if (read.delta !== undefined && (sync !== undefined || page !== undefined)) {
-    return liveDeltaParts(read, bound, { sync, page }, readsPages(request));
+    return liveDeltaParts(read, bound, { sync, page }, readsPages(request), (past) =>
+      mayHoldFirstPage(request, past),
+    );
   }
 
   if (read.cursor !== undefined) {
