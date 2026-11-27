@@ -77,6 +77,7 @@ import {
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
 import { AgentTile, Avatar, type Face, FailedMark, ToneGlyph, WorkingMark } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
+import type { PictureRef } from "./picture-source.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
 import type { RowPreview } from "./row-preview-model.js";
@@ -846,7 +847,7 @@ type WordsRowProps = {
   /** How far under the words the next row stands: a page's gap after the last block, a block's own gap between blocks. */
   readonly last?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a description's picture read through the host; each from the address it names where none is given. */
-  readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
+  readonly pictureSource?: ((written: string) => PictureRef | null | undefined) | undefined;
   /** The video a picture's address names, played in its place; none where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** The file a picture's address names, such as a description's PDF, drawn as its chip in its place. */
