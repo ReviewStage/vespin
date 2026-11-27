@@ -27,6 +27,11 @@
  * loaded itself. A browser with no Web Locks writes nothing, so it never
  * writes beside another tab.
  *
+ * The browser keeps only the store of the account signed in now: an open
+ * deletes every other account's, so a session that ended with no tab open
+ * (signed out from the admin dashboard, which deletes them itself, expired,
+ * or ended elsewhere) leaves its copy no longer than the next sign-in.
+ *
  * A writer that opens on a schema hash other than its build's clears the
  * kept lists, as SQLite's open does; a reader on another hash loads none,
  * since the writer may be a build of other row shapes. A write that fails,
@@ -136,6 +141,11 @@ interface Standing {
  */
 function storeName(accountId: string): string {
   return `${STORE_PREFIX}:${accountId}`;
+}
+
+/** Whether `name` is the database of a tab store, of any account. */
+function isStoreName(name: string): boolean {
+  return name.startsWith(`${STORE_PREFIX}:`);
 }
 
 /** `request`'s result, or its error. */
@@ -433,6 +443,25 @@ function tabRows(standing: Standing, keyRange: typeof IDBKeyRange, hash: string)
   };
 }
 
+/**
+ * Deletes every account's store this browser keeps but `kept`'s: what a
+ * sign-out from a page that runs no host (the admin dashboard) does, and
+ * what an open does for every other account's. A delete that fails or
+ * waits is left for the next, so this never fails.
+ */
+export async function forgetTabStores(databases: IDBFactory, kept?: string): Promise<void> {
+  const keep = kept === undefined ? undefined : storeName(kept);
+  const listed = await databases.databases().catch(() => []);
+
+  await Promise.all(
+    listed.flatMap(({ name }) =>
+      name !== undefined && name !== keep && isStoreName(name)
+        ? [requested(databases.deleteDatabase(name)).catch(() => undefined)]
+        : [],
+    ),
+  );
+}
+
 /** The tab's store of the account's kept reads in IndexedDB, as the host's local copy opens it at sign-in and deletes it at sign-out. */
 export function webLocalStore({
   databases,
@@ -446,6 +475,8 @@ export function webLocalStore({
         const name = storeName(accountId);
         const failed = (cause: unknown) => new LocalDatabaseFailed({ accountId, cause });
         const hash = yield* keptRowsHash;
+        // Note that the browser keeps only the store of the account signed in now, so one a session that ended with no tab open left behind goes at the next sign-in; its delete is not waited on, since a tab of that account still open lets it go only as it hears it.
+        yield* Effect.sync(() => void forgetTabStores(databases, accountId));
         // Note that the lock is asked for before the database opens, so a tab writes only rows it loaded after it held the lock.
         const lock = yield* writerLock(locks, name);
 

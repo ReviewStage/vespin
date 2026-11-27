@@ -72,11 +72,11 @@ const browser = () => ({
 
 type Browser = ReturnType<typeof browser>;
 
-/** A tab of `on` with Dana's store open, until its `close`, as its page closing closes it. */
-const tabOpened = (on: Browser) =>
+/** A tab of `on` with `account`'s store open, Dana's where none is named, until its `close`, as its page closing closes it. */
+const tabOpened = (on: Browser, account = ACCOUNT) =>
   Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const store = yield* webLocalStore(on).open(ACCOUNT).pipe(Scope.provide(scope));
+    const store = yield* webLocalStore(on).open(account).pipe(Scope.provide(scope));
 
     return {
       answered: store.rows.answered,
@@ -289,6 +289,27 @@ it.effect("deletes the account's store at a sign-out", () =>
     yield* webLocalStore(on).forget(ACCOUNT);
 
     assert.deepEqual(yield* databaseNames(on), []);
+    assert.equal(yield* (yield* tabOpened(on)).loaded, undefined);
+  }),
+);
+
+it.effect("deletes every other account's store as an account signs in, and keeps its own", () =>
+  Effect.gen(function* () {
+    const on = browser();
+    const dana = yield* tabOpened(on);
+    yield* dana.answered(wholeAnswer([FIRST], "1"));
+    yield* dana.close;
+
+    // Dana's session ended with no tab open; Lee signs in on the same browser.
+    const lee = yield* tabOpened(on, "user-lee");
+    yield* lee.answered(wholeAnswer([SECOND], "2"));
+
+    yield* Effect.promise(() => new Promise((resolve) => setImmediate(resolve))).pipe(
+      Effect.andThen(databaseNames(on)),
+      Effect.repeat({ until: (names) => names.length === 1, times: 100 }),
+    );
+
+    assert.deepEqual(yield* lee.loaded, keptLoad([SECOND], "2"));
     assert.equal(yield* (yield* tabOpened(on)).loaded, undefined);
   }),
 );
