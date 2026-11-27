@@ -468,7 +468,7 @@ test("Managers folded leaves the open Manager's row standing and folds the rest 
   assert.deepEqual(named(), ["Frontend Manager"], "the open Manager stays");
 });
 
-test("a face picked before the account's choices are read is kept first among the faces the account picked last", async () => {
+test("a face picked before the account's choices are read is kept first among the faces the account picked last, though its picker was put away", async () => {
   const faced: { agentId: string; face: ManagerFace }[] = [];
   const sidebar = await mountSidebar(true, [], undefined, [], [], [], faced, NO_WORK, null);
   const list = sidebar.querySelector('nav[aria-label="Managers"]');
@@ -500,6 +500,16 @@ test("a face picked before the account's choices are read is kept first among th
     ).click(),
   );
   await vi.waitFor(() => assert.equal(faced.length, 1, "the face is changed"));
+
+  // The rename ends, putting the picker away before the account's choices land.
+  const name = list?.querySelector<HTMLInputElement>('input[aria-label="Agent name"]');
+
+  await act(async () =>
+    name?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    ),
+  );
+  assert.equal(document.querySelector('button[aria-label="Cat"]'), null, "the picker is put away");
 
   // The account's choices land, holding the face it picked last on another device.
   const written = keepViewChoices([
