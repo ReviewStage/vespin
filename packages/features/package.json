@@ -128,6 +128,7 @@
     "./workspace-tools-wire": "./src/workspace-tools-wire.js",
     "./agent-move-model": "./src/agent-move-model.js",
     "./agent-continue-model": "./src/agent-continue-model.js",
+    "./agent-end-line": "./src/agent-end-line.js",
     "./agent-failure-words": "./src/agent-failure-words.js",
     "./carry-on-words": "./src/carry-on-words.js",
     "./chapters-model-choice": "./src/chapters-model-choice.js",

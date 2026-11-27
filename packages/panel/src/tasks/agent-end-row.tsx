@@ -2,6 +2,11 @@
  * agent-end-row.tsx -- the line a transcript ends on once its turn was stopped or failed, said once as it lands, and the Try again its row may offer.
  */
 
+import {
+  type EndLineParts,
+  TRY_AGAIN_LABEL,
+  TRYING_AGAIN_LABEL,
+} from "@repo/features/agent-end-line";
 import { AGENT_FAILURE, type AgentFailure } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
 import type { ModelProvider } from "@repo/features/models-wire";
@@ -15,7 +20,6 @@ import { GLYPH } from "@repo/ui/icons";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { type ReactNode, useRef, useState } from "react";
 import { failureShown } from "../failure-report.js";
-import { type EndLineParts, TRY_AGAIN_LABEL, TRYING_AGAIN_LABEL } from "./agent-model.js";
 
 /**
  * The cause a failed turn is reported under, one per failure word, so a tab

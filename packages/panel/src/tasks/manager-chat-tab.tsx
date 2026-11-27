@@ -37,6 +37,7 @@
 
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { endLineReason } from "@repo/features/agent-continue-model";
+import { endLineParts } from "@repo/features/agent-end-line";
 import { computerAppsOf } from "@repo/features/agent-parts";
 import type { ShownPicture } from "@repo/features/agent-pictures-model";
 import type {
@@ -114,7 +115,6 @@ import { AgentEndRow } from "./agent-end-row.js";
 import { useCallRoute } from "./agent-machines.js";
 import {
   agentName,
-  endLineParts,
   providerOf,
   SENT_LINE_STATE,
   type SentLine,

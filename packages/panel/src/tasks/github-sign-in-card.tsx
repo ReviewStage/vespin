@@ -1,3 +1,4 @@
+import { TRY_AGAIN_LABEL, TRYING_AGAIN_LABEL } from "@repo/features/agent-end-line";
 import {
   BANNER_GLYPH,
   BANNER_LOOK,
@@ -17,7 +18,6 @@ import {
 import { GLYPH } from "@repo/ui/icons";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useRef, useState } from "react";
-import { TRY_AGAIN_LABEL, TRYING_AGAIN_LABEL } from "./agent-model.js";
 import { OnMachine } from "./transcript-blocks.js";
 
 /**
@@ -49,9 +49,6 @@ const GITHUB_SIGN_IN_WORDS = {
   COMMAND_WHAT: "command",
   MOVE_TO_CLOUD: "Move to cloud",
 } as const;
-
-/** The line Try again sends the agent, which reads in the transcript as the developer's own. */
-export const RETRY_LINE = "Try again";
 
 /** What the card draws and presses: the Mac and the repository by name where known, and its acts. */
 export interface GitHubSignInDoors {

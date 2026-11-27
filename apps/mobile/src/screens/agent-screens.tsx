@@ -1,14 +1,5 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, or Unarchive in its place while it is archived, Continue in new agent over it where only a new agent goes on, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions, its Move to › and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer, or Unarchive in its place while it is archived, the line its transcript ends on once its turn was stopped or failed with the press that goes on from it, with its + of Photos and MCP servers and its model chip, whose sheet holds its model, effort, Fast and permission mode, its ⋯ menu, its run actions, its Move to › and its Permanently delete among it, a page it showed, opened whole, and the sheet of its listening ports.
 
-import {
-  CONTINUE_AGAIN_LABEL,
-  CONTINUE_LABEL,
-  continuedByIds,
-  endLineOffersContinue,
-  endLineReason,
-  failedLineWords,
-  settledFailure,
-} from "@repo/features/agent-continue-model";
 import {
   AGENT_PORTS_WORDS,
   PORT_ACT,
@@ -20,7 +11,6 @@ import {
   AGENT_KIND,
   type AgentOverviewPullRequest,
   type AgentPullRequest,
-  type AgentStatus,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { PRODUCT_PICTURE_KIND, PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -58,11 +48,7 @@ import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-mo
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
 import { PATH_OPENS, VERB } from "@repo/features/words";
-import {
-  type FollowedAgent,
-  selectInboxReader,
-  selectWorkspaces,
-} from "@repo/host/app-state-reads";
+import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   AgentTranscript,
@@ -80,7 +66,6 @@ import {
   type ComposerDictation,
   type ComposerMenu,
   ConfirmAsk,
-  ContinueLine,
   drawnCallIds,
   EditingLine,
   FORM_SPACING,
@@ -121,6 +106,7 @@ import {
   useColors,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
+  withEndLine,
   withSending,
   withWaitingLine,
 } from "@repo/ui-native";
@@ -168,6 +154,7 @@ import {
   undeliveredWhole,
   useAgentComposer,
 } from "../agents/use-agent-composer.js";
+import { useAgentEndLine } from "../agents/use-agent-end-line.js";
 import { useAgentMove } from "../agents/use-agent-move.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
@@ -341,53 +328,6 @@ function CardMergeAsk({
   );
 }
 
-/** Continue in new agent as the agent page offers it: why the turn failed, and what the press says. */
-interface ContinueOffer {
-  readonly words: string;
-  readonly label: string;
-}
-
-/**
- * Where the agent page offers Continue in new agent, as the panel's failed
- * end line does (`endLineOffersContinue`): the agent's last turn failed in a
- * way only a new agent goes on past, or another agent continued it already,
- * when it says Continue again. Note that the phone draws no end line, so the
- * press stands over the composer and in ⋯, and that the end line reads a
- * teammate's refused key as theirs to mend, so it names the starter where
- * the reader did not start the agent.
- */
-function continueOffer(
-  agent: FollowedAgent | undefined,
-  status: AgentStatus | undefined,
-  readerId: string | undefined,
-): ContinueOffer | undefined {
-  if (agent === undefined || status === undefined) return undefined;
-  const failure = settledFailure({ status, turn: agent.turn });
-  const { startedBy } = agent;
-
-  const starter =
-    startedBy === undefined || readerId === undefined || startedBy.userId === readerId
-      ? undefined
-      : startedBy.name;
-
-  const continued = continuedByIds(agent, undefined, undefined).length > 0;
-
-  const offered = endLineOffersContinue({
-    status,
-    endReason: endLineReason(failure, starter),
-    failure,
-    continued,
-    boxClosed: false,
-  });
-
-  if (!offered) return undefined;
-
-  return {
-    words: failedLineWords(failure, starter, true),
-    label: continued ? CONTINUE_AGAIN_LABEL : CONTINUE_LABEL,
-  };
-}
-
 /** The agent's composer at the page's foot: that a message denies the call waiting, a call waiting that no row draws, the queue, the pictures attached, and what did not go over the field, and Stop in Send's place while the agent works. */
 function AgentComposerBar({
   composer,
@@ -397,7 +337,6 @@ function AgentComposerBar({
   note,
   call,
   otherCall,
-  ending,
   tools,
   trailing,
   dictation,
@@ -417,8 +356,6 @@ function AgentComposerBar({
   readonly call: ComposerCall | undefined;
   /** The way back to a call into another agent, which stands over the field since the tab bar steps aside here. */
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
-  /** Continue in new agent and why, where only a new agent goes on past the agent's failed turn; none elsewhere. */
-  readonly ending: ReactNode;
   /** What leads the row under the field after the +: where the agent works. */
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
@@ -460,10 +397,8 @@ function AgentComposerBar({
     composer.skills === undefined &&
     composer.mentions === undefined &&
     otherCall === undefined &&
-    ending === undefined &&
     note === undefined ? undefined : (
       <>
-        {ending}
         {otherCall === undefined ? null : (
           <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
         )}
@@ -539,7 +474,6 @@ function AgentComposerArea({
   note,
   call,
   otherCall,
-  ending,
   tools,
   trailing,
   onOpenThread,
@@ -562,7 +496,6 @@ function AgentComposerArea({
   readonly note: string | undefined;
   readonly call: ComposerCall | undefined;
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
-  readonly ending: ReactNode;
   /** What leads the row under the field after the +: where the agent works. */
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
@@ -596,7 +529,6 @@ function AgentComposerArea({
         note={said}
         call={call}
         otherCall={otherCall}
-        ending={ending}
         tools={tools}
         trailing={trailing}
         dictation={dictated.dictation}
@@ -1310,11 +1242,23 @@ const AgentConversation = memo(function AgentConversation({
   // Note that an archived agent takes no message until it is brought back, so its bar stands in the composer's place, as the panel's note stands in its box's.
   const archived = shown?.archivedAt !== undefined;
 
-  const continueOf =
-    taskId === undefined || archived ? undefined : continueOffer(shown, status, readerId);
-
   const continueAgent = () =>
     router.push({ pathname: "/start-agent", params: { task: taskId, continueOf: id } });
+
+  // Note that the transcript ends on the line its stopped or failed turn ends on, with the press that goes on from it, as the panel's does, so Continue stands there rather than over the composer.
+  const endLine = useAgentEndLine({
+    agentId: id,
+    agent: shown,
+    status,
+    readerId,
+    hostLost: transcript?.word?.hostLost,
+    taskId,
+    archived,
+    onContinue: continueAgent,
+    onOpenKeys: () => router.push("/settings/agents"),
+  });
+
+  const endRows = useMemo(() => withEndLine(rows, endLine.end), [rows, endLine.end]);
 
   const composerBar = archived ? (
     <ArchivedBar unarchiving={actions.unarchiving} note={note} onUnarchive={actions.unarchive} />
@@ -1340,15 +1284,6 @@ const AgentConversation = memo(function AgentConversation({
       note={note}
       call={talk.call}
       otherCall={otherCall}
-      ending={
-        continueOf === undefined ? undefined : (
-          <ContinueLine
-            words={continueOf.words}
-            label={continueOf.label}
-            onContinue={continueAgent}
-          />
-        )
-      }
       tools={box.tools}
       trailing={box.trailing}
     />
@@ -1357,7 +1292,7 @@ const AgentConversation = memo(function AgentConversation({
   const transcriptView = (
     <PicturesProvider owner={PICTURE_OWNER.AGENT} ownerId={id} kind={PRODUCT_PICTURE_KIND.AGENT}>
       <AgentTranscript
-        items={rows}
+        items={endRows}
         onRowsShown={showRows}
         reveal={reveal}
         head={null}
@@ -1391,6 +1326,7 @@ const AgentConversation = memo(function AgentConversation({
         channel={chatFaces?.faces}
         onOpenChatThread={chat ? openChatThread : undefined}
         onOpenThread={openThread}
+        onEndPress={endLine.onPress}
         undelivered={undelivered}
         onOpenPullRequest={(item) => openPullRequest(item.url)}
         pullRequestActs={(item) => {
@@ -1550,9 +1486,15 @@ const AgentConversation = memo(function AgentConversation({
           },
           {
             items:
-              continueOf === undefined
+              endLine.continueLabel === undefined
                 ? []
-                : [{ label: continueOf.label, symbol: GLYPH.CONTINUE, onPress: continueAgent }],
+                : [
+                    {
+                      label: endLine.continueLabel,
+                      symbol: GLYPH.CONTINUE,
+                      onPress: continueAgent,
+                    },
+                  ],
           },
           {
             // Note that Move to stands before Archive, as the panel's menu stands them.

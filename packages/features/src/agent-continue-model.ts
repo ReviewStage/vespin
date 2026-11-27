@@ -4,9 +4,9 @@
  * A continue is a Start from the agent naming no message
  * (`agent-fork-model.ts`'s `continueFork`). A failed turn offers it where a
  * new agent is the one way on (`endLineOffersContinue`), and once another
- * agent continued this one, as Continue again in the same place. The panel
- * draws it on the failed turn's end line; the phone, which draws no end
- * line, in its agent page's menu.
+ * agent continued this one, as Continue again in the same place: on the
+ * failed turn's end line (`agent-end-line.ts`), on the panel and the phone
+ * alike.
  */
 
 import { agentFailureWords, mendedByNewAgent } from "./agent-failure-words.js";

@@ -1,4 +1,4 @@
-// agent-end.tsx -- where an agent's page offers it a way on once it takes no message: the bar that stands in the composer's place while it is archived, with Unarchive, and the line over the composer where only a new agent goes on, with Continue in new agent.
+// agent-end.tsx -- where an agent's page offers it a way on once it takes no message: the bar that stands in the composer's place while it is archived, with Unarchive.
 
 import { HStack, VStack } from "@expo/ui/swift-ui";
 import { font, foregroundStyle, frame } from "@expo/ui/swift-ui/modifiers";
@@ -107,37 +107,5 @@ export function ArchivedBar({
         }}
       />
     </GlassBar>
-  );
-}
-
-/**
- * Over the composer's field, inside its glass, where the agent's last turn
- * failed in a way only a new agent goes on past, as the panel's failed end
- * line ends on its press: why it failed, and Continue in new agent, or
- * Continue again once another agent continued it, which opens the new
- * agent's draft on the agent's whole transcript.
- */
-export function ContinueLine({
-  words,
-  label,
-  onContinue,
-}: {
-  /** Why the turn failed, as the panel's end line says it ("Failed: …"). */
-  readonly words: string;
-  /** What the press says: Continue in new agent, or Continue again. */
-  readonly label: string;
-  readonly onContinue: () => void;
-}) {
-  return (
-    <WordsWithPress
-      words={words}
-      press={{
-        label,
-        symbol: GLYPH.CONTINUE,
-        busy: false,
-        busyLabel: label,
-        onPress: onContinue,
-      }}
-    />
   );
 }
