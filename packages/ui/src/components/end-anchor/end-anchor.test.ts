@@ -145,3 +145,45 @@ test("a log the reader scrolls away from stays where they left it until they rea
   assert.equal(box.scrollTop, 2400, "asking to go back takes it to its end");
   assert.equal(anchor().stuck, true);
 });
+
+/** A box's place on the screen, `top` to `bottom`, as `getBoundingClientRect` answers it. */
+function placedAt(top: number, bottom: number): DOMRect {
+  // SAFETY: the anchor reads a place's top and bottom alone.
+  return { top, bottom, left: 0, right: 400, width: 400, height: bottom - top } as DOMRect;
+}
+
+test("a scroll that brings a line just focused or selected in the log into view, as a screen reader's or a find's does, is the reader's", () => {
+  const { box, anchor } = drawLog();
+  relayout();
+  const line = document.createElement("p");
+  line.tabIndex = -1;
+  line.textContent = "An earlier line.";
+  box.firstElementChild?.append(line);
+  // The log shows 0 to 600 on the screen, and the earlier line stands at 100 once scrolled to.
+  box.getBoundingClientRect = () => placedAt(0, 600);
+  line.getBoundingClientRect = () => placedAt(100, 120);
+
+  act(() => line.focus());
+  scrollTo(box, 300);
+  assert.equal(anchor().stuck, false, "focus moved up the log lets go of the end");
+  assert.equal(box.scrollTop, 300, "and the log stays on the focused line");
+
+  scrollTo(box, 1400);
+  assert.equal(anchor().stuck, true);
+  const found = document.createRange();
+  found.selectNodeContents(line);
+  found.getBoundingClientRect = () => placedAt(100, 120);
+  act(() => {
+    document.getSelection()?.removeAllRanges();
+    document.getSelection()?.addRange(found);
+    document.dispatchEvent(new Event("selectionchange"));
+  });
+  scrollTo(box, 500);
+  assert.equal(anchor().stuck, false, "a selection moved up the log lets go of the end");
+  assert.equal(box.scrollTop, 500);
+
+  // Note that a scroll with neither behind it, the reader back at the end, is still undone.
+  scrollTo(box, 1400);
+  scrollTo(box, 200);
+  assert.equal(box.scrollTop, 1400, "a scroll nothing the reader moved brought in is undone");
+});
