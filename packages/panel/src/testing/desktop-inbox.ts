@@ -324,6 +324,12 @@ class InboxWorld {
   deliverFeed: (read: AppHostRead<AppInboxItems>) => void = () => undefined;
   /** Delivers the holders' own inboxes to the window as the host holds them, as main delivers a move of them; nothing before a mount. */
   deliverHolders: (held: AppHolderInboxes) => void = () => undefined;
+  /** The pages of the account's older items the host reads All, by the cursor each reads past, the first under none; a page none names answers none after it and reads nothing. */
+  olderPages = new Map<string, OlderPage>();
+  /** The cursor each read of a page of older items read past, in order, the first's empty. */
+  olderAsked: string[] = [];
+  /** Delivers the older items the host holds to the window, as main delivers a move of them; nothing before a mount. */
+  deliverOlder: (read: AppHostRead<AppInboxItems>) => void = () => undefined;
   /** Whether a read of a plan's agents is held open, never answering. */
   agentListHeld = false;
   /** How a read of a task from the start answers, where a test holds it in its own hands. */
@@ -347,7 +353,37 @@ class InboxWorld {
   fileReads: TasksFileParams[] = [];
 }
 
+/** One page of the account's older items as the host reads it in: its items by task, and the page after it where one stands. */
+export interface OlderPage {
+  readonly items: Readonly<Record<string, readonly InboxItem[]>>;
+  readonly next?: string;
+}
+
 export const world = new InboxWorld();
+
+/**
+ * The page of older items past `before` read in, as the host reads it: its
+ * items laid beside those read before on the document, and the page after
+ * it answered.
+ */
+function olderPageRead(before: string | undefined): FakeActAnswer {
+  world.olderAsked.push(before ?? "");
+  const page = world.olderPages.get(before ?? "");
+
+  if (page === undefined) return { status: FAKE_ANSWER.DONE, value: {} };
+
+  const read = new Map<string, readonly InboxItem[]>();
+
+  for (const cursor of new Set(world.olderAsked)) {
+    for (const [taskId, items] of Object.entries(world.olderPages.get(cursor)?.items ?? {})) {
+      read.set(taskId, [...(read.get(taskId) ?? []), ...items]);
+    }
+  }
+
+  world.deliverOlder({ rows: { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(read) } });
+
+  return { status: FAKE_ANSWER.DONE, value: page.next === undefined ? {} : { next: page.next } };
+}
 
 /** A read of a task's inbox as the act answers it: done, carrying the view the service answered. */
 export interface ReadOutcome {
@@ -571,8 +607,15 @@ beforeEach(() => {
   world.fileReads = [];
   world.main = heldInboxes();
   world.deliverHolders = () => undefined;
+  world.olderPages = new Map();
+  world.olderAsked = [];
+  world.deliverOlder = () => undefined;
   fakeActs({
     act: (request: AnyAct): Promise<FakeActAnswer> => {
+      if (request.kind === ACT_KIND.AGENTS_INBOX_OLDER_PAGE) {
+        return Promise.resolve(olderPageRead(request.payload.before));
+      }
+
       if (request.kind === ACT_KIND.AGENTS_INBOX_ITEMS_RETRY) {
         deliverFeed();
 
@@ -760,6 +803,7 @@ export function mount({
 
   world.deliverFeed = reads.deliverItems;
   world.deliverHolders = reads.deliverHolders;
+  world.deliverOlder = reads.deliverOlder;
   // Note that a workspace's automations are laid on the document as the window holds them, as the host lays them.
   holdAutomations(reads.deliverAutomations, {
     [AUTOMATION_FOLLOW.WORKSPACE]: () => ({ rows: world.automations }),

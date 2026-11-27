@@ -1512,6 +1512,21 @@ export const agentInboxReadAllViewSchema = answerView(inboxContract.markAllRead,
 
 export type AgentInboxReadAllView = typeof agentInboxReadAllViewSchema.Type;
 
+/** A page of the account's settled items older than its feed holds, as an Inbox listing every item asks the host for it: the cursor the page reads past, the service's own word, where it is not the first. */
+export const agentInboxOlderPageParamsSchema = EffectSchema.Struct({
+  before: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
+});
+
+export type AgentInboxOlderPageParams = typeof agentInboxOlderPageParamsSchema.Type;
+
+/** A page of older items read into the host, as the window hears it: the cursor the next page reads past, none after the last, or that the service did not answer. The items reach the window on app state (`LIVE_READ.INBOX_OLDER`), never here. */
+export const agentInboxOlderPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({ next: EffectSchema.optionalKey(EffectSchema.NonEmptyString) }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(AGENT_CALL_FAILURE.UNANSWERED) }),
+]);
+
+export type AgentInboxOlderPageAnswer = typeof agentInboxOlderPageAnswerSchema.Type;
+
 /** What waits across the account, as main hears it each time it moves: every open item, or why there is none. */
 export const agentAccountInboxAnswerViewSchema = EffectSchema.Union([
   accountInboxAnswerSchema,

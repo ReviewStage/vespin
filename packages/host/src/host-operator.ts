@@ -55,6 +55,8 @@ import { Base64 } from "effect/encoding";
 import type {
   AppAccessSlice,
   AppAccountPreferences,
+  AppHostRead,
+  AppInboxItems,
   AppInboxRead,
   AppThisMacHosts,
   AppWorkspacePhotos,
@@ -130,6 +132,7 @@ export interface HostOperator {
   onAccountInboxChanged(listener: (answer: AgentAccountInboxAnswerView) => void): () => void;
   /** Every inbox item the account reaches, whole, each time the host's read of them for the session moves. */
   onInboxItemsChanged(listener: (read: AppInboxRead) => void): () => void;
+  onInboxOlderChanged(listener: (read: AppHostRead<AppInboxItems>) => void): () => void;
   /** The account's preferences row, whole, each time the host's read of it for the session moves or a write is drawn over it. */
   onAccountPreferencesChanged(listener: (held: AppAccountPreferences) => void): () => void;
   onSettingsChanged(listener: (change: HostSettingsChange) => void): () => void;
@@ -337,6 +340,14 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         GATEWAY_EVENT.INBOX_ITEMS_CHANGED,
         // Note that the read is the host's own, handed over in this process, so it is passed on as built, as the tasks are.
         (payload) => (isRecord(payload) ? answered<AppInboxRead>(payload) : undefined),
+        listener,
+      ),
+    onInboxOlderChanged: (listener) =>
+      on(
+        GATEWAY_EVENT.INBOX_OLDER_CHANGED,
+        // Note that the read is the host's own, handed over in this process, so it is passed on as built, as the feed's is.
+        (payload) =>
+          isRecord(payload) ? answered<AppHostRead<AppInboxItems>>(payload) : undefined,
         listener,
       ),
     onSettingsChanged: (listener) =>

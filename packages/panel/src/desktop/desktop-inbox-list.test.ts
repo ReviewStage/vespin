@@ -529,6 +529,32 @@ test("the sidebar's Inbox counts what the view the Inbox shows lists, Open and Q
   assert.equal(sidebarInboxCount(page), toDoRows(page), "All's count, the teammate's among it");
 });
 
+test("All lists the account's older items past the feed, read from the newest page as All is shown and again as it is shown anew, and nothing counts them: the sidebar's Inbox counts the feed's alone, and Open lists none", async () => {
+  const OLD: InboxItem = {
+    ...noticeOf(item("a1b2c3d4-0000-4000-8000-000000000021", "Rotate last year's key", 500)),
+    status: INBOX_STATUS.CLOSED,
+    unread: true,
+  };
+
+  world.olderPages.set("", { items: { [BILLING.id]: [OLD] } });
+
+  const { page } = mount({ withSidebar: true });
+  await settle();
+
+  assert.deepEqual(world.olderAsked, [""], "the newest page is read as All is shown");
+  assert.equal(listed(page).includes("Rotate last year's key"), true);
+  assert.equal(sidebarInboxCount(page), listed(page).length - 1, "the feed's count alone");
+
+  showScope(page, "Open");
+  await settle();
+  assert.equal(listed(page).includes("Rotate last year's key"), false);
+
+  showScope(page, "All");
+  await settle();
+  assert.deepEqual(world.olderAsked, ["", ""], "shown anew, All reads from its newest page");
+  assert.equal(listed(page).includes("Rotate last year's key"), true);
+});
+
 test("a fresh profile opens the Inbox on Open addressed to Me, its head naming the Inbox alone, a settled item left out until All is chosen, the head naming the Inbox still", async () => {
   window.localStorage.clear();
   const { page } = mount({ chosen: ON_EXPIRY });

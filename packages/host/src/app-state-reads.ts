@@ -27,6 +27,7 @@ import {
   inboxGroup,
   inboxGroups,
 } from "@repo/features/inbox-list-model";
+import { inboxInOrder } from "@repo/features/inbox-live";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -57,6 +58,7 @@ import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHistories,
   type AppHostRead,
+  type AppInboxItems,
   type AppManagerChat,
   type AppMemories,
   type AppStateDelivery,
@@ -679,6 +681,123 @@ export const selectInboxHoldings = memoizedSelect(
     };
   },
 );
+
+/** No item older than the feed holds: the slice before All reads a page of them, and after a sign-out. */
+const NO_OLDER: AppInboxItems = { [INBOX_SCOPE_KIND.TASK]: {} };
+
+/**
+ * The account's settled items older than its feed holds, as All read them a
+ * page at a time past it (`LIVE_READ.INBOX_OLDER`), as a `select`: by the
+ * plan each is on, and on no task by its agent; none before a page is read.
+ * Note that they are All's alone: nothing that counts or badges reads them,
+ * since an older item may stand unread.
+ */
+export function selectInboxOlder(state: AppStateSnapshot): AppInboxItems {
+  return state[LIVE_READ.INBOX_OLDER].rows ?? NO_OLDER;
+}
+
+/** Whether `older` holds no item on any holder, as before All reads a page. */
+function holdsNone(older: AppInboxItems): boolean {
+  return (
+    Object.keys(older[INBOX_SCOPE_KIND.TASK]).length === 0 &&
+    Object.keys(older.agents ?? {}).length === 0
+  );
+}
+
+/** Every id `lists` hold, of every holder. */
+function idsIn(lists: Iterable<readonly InboxItem[]>): ReadonlySet<string> {
+  const ids = new Set<string>();
+
+  for (const items of lists) for (const item of items) ids.add(item.id);
+
+  return ids;
+}
+
+/**
+ * Each holder's list of `live` with the items `older` puts on it that no
+ * list of the live ones holds (`liveIds`), in the order a holder's list
+ * draws them; a holder only older items stand on holds those alone, and
+ * every other list is the very one `live` holds.
+ */
+function listsWithOlder(
+  live: ReadonlyMap<string, readonly InboxItem[]>,
+  older: Readonly<Record<string, readonly InboxItem[]>> | undefined,
+  liveIds: ReadonlySet<string>,
+): Map<string, readonly InboxItem[]> {
+  const lists = new Map(live);
+
+  for (const [holder, items] of Object.entries(older ?? {})) {
+    const past = items.filter((item) => !liveIds.has(item.id));
+
+    if (past.length === 0) continue;
+    const own = live.get(holder);
+    lists.set(holder, own === undefined ? past : inboxInOrder([...own, ...past]));
+  }
+
+  return lists;
+}
+
+/**
+ * The feed's items as an Inbox listing every item lists them: each plan's
+ * and each agent's on no task with the older items All read past the feed
+ * (`selectInboxOlder`) beside its own, an item any of the feed's lists holds
+ * the feed's alone wherever its older copy stands, so a write that moved it
+ * back into the feed draws it once, as the feed holds it. The very `live`
+ * where no older item stands past it.
+ */
+export function inboxWithOlder(live: AppInboxItems, older: AppInboxItems): AppInboxItems {
+  if (holdsNone(older)) return live;
+  const onTasks = live[INBOX_SCOPE_KIND.TASK];
+  const onAgents = live.agents ?? {};
+  const liveIds = idsIn([...Object.values(onTasks), ...Object.values(onAgents)]);
+  const plans = listsWithOlder(
+    new Map(Object.entries(onTasks)),
+    older[INBOX_SCOPE_KIND.TASK],
+    liveIds,
+  );
+  const agents = listsWithOlder(new Map(Object.entries(onAgents)), older.agents, liveIds);
+
+  return agents.size === 0
+    ? { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(plans) }
+    : { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(plans), agents: Object.fromEntries(agents) };
+}
+
+/**
+ * The holdings an Inbox listing every item groups (`inboxGroupsIn`): those
+ * of `live`, each task's and each agent's items with the older ones All read
+ * past the feed beside them (`inboxWithOlder`), an item any live list holds
+ * the live list's alone; and the tasks only older items stand on after the
+ * live holdings' own, the one whose item changed latest first. Both the
+ * document's holdings and those the phone reads from its kept rows
+ * (`inbox-rows.ts`'s `inboxHoldingsOfRows`) are laid over so. Note that
+ * only All lists what this adds, and nothing counts it.
+ */
+export function inboxHoldingsWithOlder(live: InboxHoldings, older: AppInboxItems): InboxHoldings {
+  if (holdsNone(older)) return live;
+  const liveIds = idsIn([...live.read.values(), ...Object.values(live.agents)]);
+  const read = listsWithOlder(live.read, older[INBOX_SCOPE_KIND.TASK], liveIds);
+  const agents = listsWithOlder(new Map(Object.entries(live.agents)), older.agents, liveIds);
+  const named = new Set(live.tasks.map(({ taskId }) => taskId));
+
+  // Note that only a task the older items stand on is added, since the live holdings leave out a task they hold items of only where they mean to.
+  const added = Object.keys(older[INBOX_SCOPE_KIND.TASK])
+    .flatMap((taskId) => {
+      const items = read.get(taskId) ?? [];
+
+      return named.has(taskId) || items.length === 0
+        ? []
+        : [{ taskId, updatedAt: Math.max(...items.map((item) => item.updatedAt)) }];
+    })
+    .sort((one, other) => other.updatedAt - one.updatedAt)
+    .map(({ taskId }) => ({ taskId }));
+
+  return {
+    ...live,
+    read,
+    tasks: added.length === 0 ? live.tasks : [...live.tasks, ...added],
+    agents: Object.fromEntries(agents),
+  };
+}
 
 /** Each listed agent as an Inbox names it, kept while its row stands, so its holder, and every group made of it, is the one made last (`agentHolder`). */
 const namedAgents = new WeakMap<ListedAgent, InboxHolderAgent>();

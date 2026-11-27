@@ -38,7 +38,12 @@ import { FAILURE_FACT, type FailureFacts, GATE_CLOSED_BY } from "@repo/features/
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { GITHUB_TOKEN_STATUS, type GitHubTokenSummary } from "@repo/features/github-token-wire";
 import { HOSTS_READ } from "@repo/features/host-live";
-import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
+import {
+  ACCOUNT_INBOX_READ,
+  INBOX_ITEMS_READ,
+  INBOX_OLDER_READ,
+  TASK_INBOX_READ,
+} from "@repo/features/inbox-live";
 import {
   INBOX_IMAGE_TYPE,
   INBOX_MESSAGE_AUTHOR,
@@ -48,6 +53,7 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import {
+  LIVE_POLL_URL,
   LIVE_READ,
   type LIVE_SIGNED_OUT,
   type LiveRead,
@@ -64,6 +70,7 @@ import {
   type ProviderKeySummary,
 } from "@repo/features/provider-key-wire";
 import { PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
+import type { TaskListLiveRows } from "@repo/features/task-list-live";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
   GATEWAY_CLIENT_ROLE,
@@ -296,6 +303,9 @@ function fakeService() {
     })),
   };
 
+  /** Each page of the account's older items the service answers, by the cursor it reads past, the first under none; a page it holds none of goes unanswered. */
+  const olderPages = new Map<string, OlderPage>();
+
   /** The models the account is offered, as the service answers them; the one Claude model from the start. */
   let offeredModels: readonly CatalogModel[] = MODELS;
   /** The account's provider keys, as the service answers them; the one Claude key from the start. */
@@ -519,6 +529,15 @@ function fakeService() {
             return accountInboxLive(params.userId, poll !== undefined, poll?.after);
           case INBOX_ITEMS_READ.name:
             return accountItemsLive(params.userId, params.sync);
+          case INBOX_OLDER_READ.name: {
+            asked.push(`inbox-older:${params.before ?? ""}`);
+            const page = olderPages.get(params.before ?? "");
+
+            return Effect.succeed(
+              page === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : olderAnswer(page),
+            );
+          }
+
           default:
             return assert.fail(`no script answers the live read ${read.name}`);
         }
@@ -1148,6 +1167,10 @@ function fakeService() {
     sealAccount: (next: typeof LIVE_ANSWERED | typeof LIVE_SIGNED_OUT | undefined) => {
       accountLive = next;
     },
+    /** The page of the account's older items the service answers past `before`, the first where it names none, from now on. */
+    answerOlder: (before: string | undefined, page: OlderPage) => {
+      olderPages.set(before ?? "", page);
+    },
     /** Whether the service answers the account's items' live read; none answers unanswered. */
     sealItems: (next: typeof LIVE_ANSWERED | undefined) => {
       itemsLive = next;
@@ -1360,6 +1383,40 @@ function bySyncId(
 
 const UNANSWERED_CALL = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 
+/** One page of the account's older items as a test sets it: each part's rows, and the page after it where one stands. */
+export interface OlderPage {
+  readonly stamps: readonly unknown[];
+  readonly items: readonly unknown[];
+  readonly tasks?: readonly unknown[];
+  readonly agents?: readonly unknown[];
+  readonly next?: string;
+}
+
+/** `page` as the service answers its older items' read, each part sealed with its rows inline. */
+function olderAnswer(page: OlderPage) {
+  const sealed = (rows: readonly unknown[]): SealedLiveQueryWire => ({
+    capability: LIVE_POLL_URL,
+    queryFingerprint: LIVE_POLL_URL,
+    expiresAt: 0,
+    digest: "0",
+    rows,
+  });
+
+  return {
+    url: LIVE_POLL_URL,
+    queries: {
+      stamps: sealed(page.stamps),
+      items: sealed(page.items),
+      messages: sealed([]),
+      files: sealed([]),
+      tasks: sealed(page.tasks ?? []),
+      agents: sealed(page.agents ?? []),
+    },
+    ...(page.next === undefined ? undefined : { next: page.next }),
+    settledSince: 0,
+  };
+}
+
 /** The service's side of a pull request named by its repository, which no test here asks, so it answers none. */
 const NO_PULL_REQUESTS: PullRequestClient = {
   pullRequest: () => Effect.succeed(UNANSWERED_CALL),
@@ -1414,6 +1471,8 @@ export function subject(
     pool?: EntityPool;
     fileDownload?: FileDownloadSeam;
     keepsInbox?: boolean;
+    /** Whether the task list may be read outside of, which a page of older items draws its tasks into; true from the start. */
+    readableOutside?: () => boolean;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -1434,6 +1493,9 @@ export function subject(
     const accountId = options.accountId ?? (() => "user-dana");
     const focus = yield* windowFocus;
     const pool = options.pool ?? (yield* entityPool());
+    /** The rows each page of older items drew into the task list as cold tasks, in order. */
+    const coldDrawn: TaskListLiveRows[] = [];
+    const readableOutside = options.readableOutside ?? (() => true);
 
     const composer = yield* composeAgents({
       kernel,
@@ -1456,6 +1518,13 @@ export function subject(
       ...(options.agentListed === undefined ? undefined : { agentListed: options.agentListed }),
       ...(options.tasksListed === undefined ? undefined : { tasksListed: options.tasksListed }),
       ...(options.fileDownload === undefined ? undefined : { fileDownload: options.fileDownload }),
+      coldMarked: () =>
+        readableOutside()
+          ? (rows) =>
+              Effect.sync(() => {
+                coldDrawn.push(rows);
+              })
+          : undefined,
       pool,
     }).pipe(Effect.provide(noNetwork));
 
@@ -1552,6 +1621,9 @@ export function subject(
       sealScope: service.sealScope,
       sealAccount: service.sealAccount,
       sealItems: service.sealItems,
+      answerOlder: service.answerOlder,
+      /** The rows each page of older items drew into the task list as cold tasks, in order. */
+      coldDrawn,
       stallItems: service.stallItems,
       commitIn: service.commitIn,
       changeFirst: service.changeFirst,
@@ -1560,6 +1632,11 @@ export function subject(
       accountInboxes: () =>
         events.flatMap((event) =>
           event.kind === GATEWAY_EVENT.ACCOUNT_INBOX_CHANGED ? [event.payload] : [],
+        ),
+      /** Every telling of the account's older items, whole, in order. */
+      olderItems: () =>
+        events.flatMap((event) =>
+          event.kind === GATEWAY_EVENT.INBOX_OLDER_CHANGED ? [event.payload] : [],
         ),
       /** Every telling of the account's items, whole, in order. */
       accountItems: () =>

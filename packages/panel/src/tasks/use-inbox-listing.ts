@@ -19,12 +19,16 @@ import {
 } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { searchTokens } from "@repo/features/search-tokens";
+import type { TaskSummary } from "@repo/features/task-wire";
 import type { AppInboxTaskHolding } from "@repo/host/app-state";
+import { inboxHoldingsWithOlder } from "@repo/host/app-state-reads";
 import { useMinute } from "@repo/ui";
 import { afterPaint } from "@repo/ui/after-paint";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useInboxViewChoices } from "../desktop/folded-groups.js";
 import { useInboxView } from "../inbox-route.js";
+import { inboxOlderQuery } from "../live-reads.js";
 import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
 import {
   type TaskListRows,
@@ -39,6 +43,7 @@ import { wholeInboxItems } from "./inbox-whole-items.js";
 import { useAgents, useTaskAgents } from "./use-agents.js";
 import { useHeldInboxList } from "./use-held-inbox-list.js";
 import { taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
+import { useInboxOlderPages } from "./use-inbox-older-pages.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
 import { useInboxWaitingTasks, useListedInbox } from "./use-inbox-slices.js";
 import { useHeldTaskInbox, useInboxDraftsLetGo } from "./use-task-inbox.js";
@@ -86,6 +91,12 @@ import type { InboxChoice, TasksControl } from "./use-tasks-tab.js";
 
 /** No run folded. */
 const NO_RUNS: readonly InboxRun[] = [];
+
+/** No agent's items, as the taskless groups lay the older ones beside the feed's themselves (`use-taskless-inbox-groups.ts`). */
+const NO_AGENTS: Readonly<Record<string, readonly InboxItem[]>> = {};
+
+/** No task kept beside the Inbox, which only the phone's kept rows name. */
+const NO_TASKS: readonly TaskSummary[] = [];
 
 /** What an Inbox narrowed to a task lists: every item the task holds, open or settled, whoever it is addressed to, in one run. */
 const TASK_LISTS = {
@@ -291,11 +302,18 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
 
   const taskId = chosenTask?.id;
 
+  // Note that All alone lists the account's older items, read a page at a time past the feed as its end comes into view, and never counts them (`use-inbox-older-pages.ts`).
+  const listsOlder = narrowedTask === undefined && choices.show === INBOX_SHOW.ALL;
+  const olderPages = useInboxOlderPages(tasks.me, listsOlder && inbox.open && tasks.shown);
+  const { data: olderHeld } = useQuery(inboxOlderQuery());
+  const older = listsOlder ? olderHeld : undefined;
+
   const {
     groups: taskless,
-    whole: tasklessWhole,
+    listed: tasklessListed,
+    listedWhole: tasklessListedWhole,
     ...tasklessFeed
-  } = useTasklessInboxGroups(tasks.workspace?.id, tasks.agentsCarried, tasks.agents.models);
+  } = useTasklessInboxGroups(tasks.workspace?.id, tasks.agentsCarried, tasks.agents.models, older);
 
   // The agent on no task holding the item asked for, whose threads the feed alone holds.
   const askedItemId = asked?.itemId;
@@ -392,8 +410,38 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     return [...inboxGroups(inboxReadRows(held), { tasks: holdings, listed: holders }), ...taskless];
   }, [held, holdings, holderRows, taskless]);
 
+  // Note that the older items are laid beside the reads the rows are made from, an item a read holds its own alone, so every count above stands on the feed's alone.
+  const withOlder = useMemo(
+    () =>
+      older === undefined
+        ? undefined
+        : inboxHoldingsWithOlder(
+            { read: held, tasks: holdings, agents: NO_AGENTS, keptHolders: NO_TASKS },
+            older,
+          ),
+    [held, holdings, older],
+  );
+
+  const everyListed: readonly InboxGroup<InboxAnyHolder>[] = useMemo(() => {
+    if (withOlder === undefined) return everyItem;
+
+    const holders = withOlder.tasks.flatMap(({ taskId }) => {
+      const task = holderRows.task(taskId);
+
+      return task === undefined ? [] : [task];
+    });
+
+    return [
+      ...inboxGroups(inboxReadRows(withOlder.read), { tasks: withOlder.tasks, listed: holders }),
+      ...tasklessListed,
+    ];
+  }, [withOlder, everyItem, holderRows, tasklessListed]);
+
   // Note that the list draws rows, and the pane and the search read each item whole, found by its id in the reads the rows are made from.
-  const whole = useMemo(() => wholeInboxItems(held, tasklessWhole), [held, tasklessWhole]);
+  const whole = useMemo(
+    () => wholeInboxItems(withOlder?.read ?? held, tasklessListedWhole),
+    [withOlder, held, tasklessListedWhole],
+  );
 
   // Note that a reminder is weighed on the window's clock, since no read of the service's may read one, so an item comes back within the minute its reminder comes due.
   const now = useMinute();
@@ -402,6 +450,12 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     () =>
       inboxAtNow(narrowedTask === undefined ? everyItem : taskGroups(everyItem, narrowedTask), now),
     [everyItem, narrowedTask, now],
+  );
+
+  // What the list lists: what stands, and under All the older items beside it, which nothing counts.
+  const listedStanding = useMemo(
+    () => (everyListed === everyItem ? standing : inboxAtNow(everyListed, now)),
+    [everyListed, everyItem, standing, now],
   );
 
   // Note that every item marked read is pushed with each followed inbox, its marker among its rows, so nothing is read again.
@@ -429,7 +483,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   );
 
   useFoldOpensOnChoice(
-    standing,
+    listedStanding,
     asked?.itemId,
     pinnedFirst ? foldedRuns : undefined,
     choices.onFold,
@@ -438,7 +492,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // The rows hold what the filter lists and the chosen row they drew, while the steps keep the item the pane shows in its place,
   // both held still while the page stands: every row while the pointer is over the list, and the chosen row while it stays chosen.
   const { list, steps, onPointing } = useHeldInboxList(
-    standing,
+    listedStanding,
     filter,
     asked?.itemId,
     inbox.open && tasks.shown,
@@ -468,7 +522,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     searched === undefined &&
     listedRows.length === 0 &&
     (show !== INBOX_SHOW.ALL || whose.kind !== INBOX_WHOSE.EVERYONE) &&
-    standing.some(({ items }) => items.length > 0);
+    listedStanding.some(({ items }) => items.length > 0);
 
   // Note that a chosen item whose task is listed but not read yet keeps its place, because
   // it may be listed once the read lands; one whose task left the list, deleted elsewhere, gives way.
@@ -548,10 +602,12 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     named,
     marks,
     standing,
+    listedStanding,
     markable,
     counts,
     list,
     listedRows,
+    olderPages: listsOlder ? olderPages : undefined,
     steps,
     onPointing,
     chosen,

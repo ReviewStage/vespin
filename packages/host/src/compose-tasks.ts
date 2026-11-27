@@ -508,6 +508,14 @@ export interface TasksComposer extends Composer {
    * stands in place of the one before.
    */
   inboxNamed: (taskIds: readonly string[]) => Effect.Effect<void>;
+  /**
+   * Marks the list now and answers how to draw rows read after the mark
+   * into it as cold tasks, as a page of older Inbox items draws the tasks
+   * and agents its items stand on, so a task the follow lets go while the
+   * read is out is not drawn back by it, and a list a sign-out replaced
+   * meanwhile draws nothing; none while the list cannot be read outside of.
+   */
+  coldMarked: () => ((rows: TaskListLiveRows) => Effect.Effect<void>) | undefined;
   /** Every workspace's repositories the windows hold asked again, as the member's own token saved or removed moves them, answering once each has landed. */
   repositoriesMoved: Effect.Effect<void>;
 }
@@ -1627,6 +1635,15 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
       return Effect.asVoid(FiberHandle.run(inboxReads, readInboxTasks));
     });
+
+  const coldMarked = (): ((rows: TaskListLiveRows) => Effect.Effect<void>) | undefined => {
+    if (!readableOutside()) return undefined;
+    const { collections } = taskList;
+    const mark = collections.mark();
+
+    return (rows) =>
+      taskList.collections === collections ? drawCold(collections, rows, mark) : Effect.void;
+  };
 
   const decodeSearchRows = Schema.decodeUnknownOption(TASK_SEARCH_READ.rows);
 
@@ -3387,6 +3404,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     }),
     openedOutside,
     inboxNamed,
+    coldMarked,
     repositoriesMoved: repositoryLists.reread(() => true),
     reset: Effect.gen(function* () {
       yield* Cache.invalidateAll(pullRequestReads);

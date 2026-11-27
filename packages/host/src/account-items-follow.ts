@@ -127,6 +127,8 @@ export interface AccountItemsDependencies {
   readonly tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
   /** Hears each part of an answer whose reading left rows out, since they did not decode, and how many (`live-follow.ts`). */
   readonly dropped?: (part: AccountItemsPart, count: number) => void;
+  /** Hears the ids of the items each answer carried, which are the feed's from then on, as an older one a write moved back into its window is (`inbox-older-items.ts`). */
+  readonly carried?: (ids: readonly string[]) => void;
 }
 
 /** A part of the account's items read, whose dropped rows are counted by it. */
@@ -460,6 +462,8 @@ export function followAccountItems(
             for (const [part, count] of droppedParts(ACCOUNT_ITEMS_PARTS, read, rows)) {
               dependencies.dropped?.(part, count);
             }
+
+            dependencies.carried?.(rows.stamps.map((stamp) => stamp.id));
           },
           tell: (told) =>
             Effect.suspend(() => {
@@ -544,6 +548,8 @@ export function followAccountItems(
           for (const [part, count] of droppedParts(ACCOUNT_ITEMS_PARTS, read, decoded)) {
             dependencies.dropped?.(part, count);
           }
+
+          dependencies.carried?.(decoded.stamps.map((stamp) => stamp.id));
 
           return landed(decoded, standing);
         },

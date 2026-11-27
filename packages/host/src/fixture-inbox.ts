@@ -193,6 +193,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
 import {
   type AppHeldById,
+  type AppInboxItems,
   type AppInboxTask,
   type AppInboxTaskHolding,
   type AppManagerChat,
@@ -883,6 +884,53 @@ function largeThread(n: number): InboxItem {
     ],
     n % 3 === 0 ? { status: INBOX_STATUS.ANSWERED } : {},
   );
+}
+
+/** How many items each page of the older Inbox items stands, fewer than the service's, so a run reads every page in a short list; the last page short, as a service's last is. */
+const OLDER_PAGE_ITEMS = [6, 3] as const;
+
+/** How many pages of older items the staged account holds past its feed. */
+const OLDER_PAGES = OLDER_PAGE_ITEMS.length;
+
+/** The cursor the `page`th page of older items reads past, as the service's own word stands for it. */
+function olderCursor(page: number): string {
+  return `older-${page}`;
+}
+
+/** The `n`th older item: a closed thread of a staged task more than a month back, the latest first, so All lists it past the feed. */
+function olderThread(n: number): InboxItem {
+  const holder = LARGE_HOLDERS[n % LARGE_HOLDERS.length] ?? LARGE_HOLDERS[0];
+  const ago = 35 * DAY + n * 9 * HOUR;
+  const at = 20_000 + n * 2;
+
+  return item(
+    2000 + n,
+    holder.agentId,
+    `older-${n}`,
+    `Older thread ${n + 1}: how a partial cent rounds`,
+    [
+      agentSaid(at, ago, LARGE_WORDS),
+      adaSaid(at + 1, ago - 10 * MINUTE, "Round half up, as the invoice does."),
+    ],
+    { status: INBOX_STATUS.CLOSED, settledAt: LANDED - ago + 10 * MINUTE },
+  );
+}
+
+/** How many pages of older items the run has read, which All lists past the feed. */
+let olderPagesRead = 0;
+
+/** The older items the run has read, by the task each stands on, as the host holds them (`LIVE_READ.INBOX_OLDER`). */
+function olderItemsRead(): AppInboxItems {
+  const onTasks = new Map<string, InboxItem[]>();
+
+  const read = OLDER_PAGE_ITEMS.slice(0, olderPagesRead).reduce((sum, each) => sum + each, 0);
+
+  for (let n = 0; n < read; n += 1) {
+    const holder = LARGE_HOLDERS[n % LARGE_HOLDERS.length] ?? LARGE_HOLDERS[0];
+    onTasks.set(holder.taskId, [...(onTasks.get(holder.taskId) ?? []), olderThread(n)]);
+  }
+
+  return { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(onTasks) };
 }
 
 /** The staged items with the large Inbox's threads laid beside them, by the task each stands on. */
@@ -2864,6 +2912,7 @@ export function inboxAppState(
     [LIVE_READ.INBOX_ITEMS]: {
       rows: { [INBOX_SCOPE_KIND.TASK]: fed, agents: AGENT_INBOXES },
     },
+    ...(olderPagesRead === 0 ? undefined : { [LIVE_READ.INBOX_OLDER]: { rows: olderItemsRead() } }),
     [LIVE_READ.HELD_TASK]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
     [LIVE_READ.DESCRIPTION_COMMENTS]: stagedComments(state),
@@ -3897,6 +3946,13 @@ const ANSWERS: StagedAnswers = {
     return { agent: held, messageId: clientKey };
   },
   // Note that a reaction to a message of the release Manager's chat is kept for the run, so the chat stands with it as it would once its read carries it; the panel's run stages its document again on it (`tasks-fixture-loader.ts`).
+  // A page of older items is read into the run's, the page after it answered where one stands.
+  [ACT_KIND.AGENTS_INBOX_OLDER_PAGE]: ({ before }) => {
+    const page = before === undefined ? 1 : Number(before.replace("older-", "")) + 1;
+    olderPagesRead = Math.max(olderPagesRead, Math.min(page, OLDER_PAGES));
+
+    return page < OLDER_PAGES ? { next: olderCursor(page) } : {};
+  },
   [ACT_KIND.AGENTS_CHAT_REACT]: ({ agentId, messageId, kind, reacted }) => {
     if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     const message = reactedManagerChat().messages.find((each) => each.id === messageId);

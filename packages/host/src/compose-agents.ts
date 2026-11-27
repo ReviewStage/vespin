@@ -55,7 +55,13 @@ import {
 } from "@repo/features/analytics";
 import { GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_SOURCE, githubImageOf } from "@repo/features/github-image";
-import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
+import {
+  ACCOUNT_INBOX_READ,
+  INBOX_ITEMS_READ,
+  INBOX_OLDER_READ,
+  inboxOfLiveRows,
+  TASK_INBOX_READ,
+} from "@repo/features/inbox-live";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   acknowledgedNow,
@@ -74,6 +80,7 @@ import { REPOSITORY_PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-reque
 import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
 import type { RepositoryPullRequestPartParams } from "@repo/features/pull-request-view";
 import { markedAs, unreadThroughOf } from "@repo/features/read-mark";
+import type { TaskListLiveRows } from "@repo/features/task-list-live";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
@@ -144,7 +151,9 @@ import {
   type InboxWritten,
   inboxSent,
   type PlacedInboxItem,
+  placedItem,
 } from "./inbox-collections.js";
+import { type OlderInboxItems, olderInboxItems } from "./inbox-older-items.js";
 import {
   AgentPictureKey,
   GitHubImageKey,
@@ -361,11 +370,16 @@ export interface AgentsDependencies extends AccountGateDependencies {
   openedOutside?: (agentId: string) => Effect.Effect<void>;
   /** Reads the tasks the account's Inbox holds items of into the task list where it holds them not (`TasksComposer.inboxNamed`); none reads nothing. */
   inboxNamed?: (taskIds: readonly string[]) => Effect.Effect<void>;
+  /** Marks the task list now and answers how to draw rows read after the mark into it as cold tasks (`TasksComposer.coldMarked`), as the older Inbox items' tasks and agents are; none while it cannot be read outside of, and none where nothing draws them. */
+  coldMarked?: () => ((rows: TaskListLiveRows) => Effect.Effect<void>) | undefined;
   /** The task list's summaries of the tasks named, of those it holds now, which the account's kept Inbox keeps beside its items (`account-items-follow.ts`); none keeps none. */
   tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
   /** Counts a product event, as the rows the account's items read left out are counted (`dropped-rows.ts`). */
   recordProductEvent: RecordProductEvent;
 }
+
+/** One page of the account's older items as its parts decode, none where one does not. */
+const decodeOlderPage = Schema.decodeUnknownOption(INBOX_OLDER_READ.rows);
 
 /** The kind each part of the account's items read counts its dropped rows as. */
 const ACCOUNT_ITEMS_ROW_KIND = {
@@ -577,6 +591,11 @@ export function composeAgents(
     const tellItems = (read: AppInboxRead) =>
       Effect.sync(() => dependencies.kernel.emit(GATEWAY_EVENT.INBOX_ITEMS_CHANGED, carried(read)));
 
+    const older = olderInboxItems({
+      pool: dependencies.pool,
+      tell: (read) => dependencies.kernel.emit(GATEWAY_EVENT.INBOX_OLDER_CHANGED, carried(read)),
+    });
+
     const holders = yield* holderInboxes(inboxes, {
       gate,
       tell: liveTold(dependencies.kernel.emit, AGENT_INBOX_FOLLOWS.AGENTS_INBOX_FOLLOW),
@@ -636,7 +655,11 @@ export function composeAgents(
       tellItems(UNREAD),
     );
 
+    // Note that the older items stand beside the pool for as long as the session's feed does, on the account's database it stands on.
     const followItems = (userId: string) =>
+      Effect.scoped(Effect.andThen(older.stand, followAccount(userId)));
+
+    const followAccount = (userId: string) =>
       followAccountItems(
         {
           // Note that the items are always read polled, their rows inline, and past a sync id the service holds the read until something moves.
@@ -651,6 +674,7 @@ export function composeAgents(
           pool: dependencies.pool,
           accountWide,
           dropped: (part, count) => countDropped(ACCOUNT_ITEMS_ROW_KIND[part], count),
+          carried: older.carried,
           ...(dependencies.tasksListed === undefined
             ? undefined
             : { tasksListed: dependencies.tasksListed }),
@@ -722,7 +746,7 @@ export function composeAgents(
       { transcripts, slice: transcriptSlice, queues },
       { inboxes, holders, accountWide },
       { accounts, followed: accountFollow },
-      { reads: sessionReads, followItems, preferences, holdPreferences },
+      { reads: sessionReads, followItems, preferences, holdPreferences, older },
       { repositoryChapters, origins, managerChats },
       fetched,
       { parts, repositoryParts },
@@ -759,6 +783,8 @@ interface SessionReads {
   /** The account's preferences row, held for the session by `holdPreferences`. */
   readonly preferences: HeldSlice<string>;
   readonly holdPreferences: (userId: string) => Effect.Effect<void>;
+  /** The account's settled items older than its feed holds, the pages All read of them, held for the session. */
+  readonly older: OlderInboxItems;
 }
 
 /** The live follows' reads the windows hold (`contract/live-follow.ts`), each held through its stream's scope. */
@@ -843,7 +869,7 @@ function composed(
   /** What waits across the account, and main's one follow of it. */
   { accounts, followed: accountFollow }: AccountFollow,
   /** The session's account reads, every item the account reaches and its preferences among them. */
-  { reads: sessionReads, followItems, preferences, holdPreferences }: SessionReads,
+  { reads: sessionReads, followItems, preferences, holdPreferences, older }: SessionReads,
   /** The pull requests' chapters, the agents' origins, and the Managers' chats the windows hold. */
   { repositoryChapters, origins, managerChats }: LiveFollows,
   { tools, models, modelsHold }: FetchedReads,
@@ -864,6 +890,64 @@ function composed(
   ) => (gate() ? kept.answer(key, dependencies.accountId, asked(call), carries) : asked(call));
 
   const listed = dependencies.listed ?? (() => Effect.void);
+
+  /** What the window hears of an older page the service did not answer, or the host could not read in. */
+  const olderUnanswered = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
+
+  /**
+   * A page of the account's settled items older than its feed holds, past
+   * the page `before` names, read into the session's older items
+   * (`inbox-older-items.ts`), and the tasks and agents they stand on into
+   * the task list as cold tasks where it holds them not, so an Inbox groups
+   * the page under them; answered the cursor the next page reads past, held
+   * nowhere, once both are drawn. Note that the list is marked before the
+   * page is asked, as any read outside it is, so a task its follow lets go
+   * meanwhile is not drawn back by the page; and that a page answered after
+   * its account signed out is drawn nowhere.
+   */
+  const olderPage = (before: string | undefined) =>
+    Effect.gen(function* () {
+      const userId = dependencies.accountId();
+      const drawHolders = dependencies.coldMarked?.();
+
+      if (!gate() || userId === undefined || drawHolders === undefined) return olderUnanswered;
+
+      const sealed = yield* asked(
+        client.liveRead(
+          INBOX_OLDER_READ,
+          { userId, ...(before === undefined ? undefined : { before }) },
+          {},
+        ),
+      );
+
+      if ("failure" in sealed) return olderUnanswered;
+      const { stamps, items, messages, files, tasks, agents } = sealed.queries;
+
+      const rows = decodeOlderPage({
+        stamps: stamps.rows,
+        items: items.rows,
+        messages: messages.rows,
+        files: files.rows,
+        tasks: tasks.rows,
+        agents: agents.rows,
+      });
+
+      if (Option.isNone(rows) || dependencies.accountId() !== userId) return olderUnanswered;
+      yield* drawHolders({ tasks: rows.value.tasks, agents: rows.value.agents });
+
+      if (dependencies.accountId() !== userId) return olderUnanswered;
+      const placedOn = new Map(rows.value.stamps.map((stamp) => [stamp.id, stamp.taskId]));
+
+      older.took(
+        inboxOfLiveRows(rows.value).flatMap((item) => {
+          const taskId = placedOn.get(item.id);
+
+          return taskId === undefined ? [] : [placedItem(item, taskId)];
+        }),
+      );
+
+      return sealed.next === undefined ? {} : { next: sealed.next };
+    });
 
   /**
    * A write to an agent's row of the task list, as the agents' own writes
@@ -1444,6 +1528,7 @@ function composed(
     AGENTS_INBOX_READ_STATE: declaredWrite(dependencies.pool, marked),
     AGENTS_INBOX_REMIND: declaredWrite(dependencies.pool, reminded),
     AGENTS_INBOX_ITEM_HOME: ({ itemId }) => asked(client.inboxItemHome(itemId)),
+    AGENTS_INBOX_OLDER_PAGE: ({ before }) => olderPage(before),
     AGENTS_INBOX_READ_ALL: declaredWrite(dependencies.pool, markedAll),
     AGENTS_INBOX_ATTACHMENT: ({ itemId, attachmentId, playable = PLAYABLE_VIDEO_TYPE.WEBM }) =>
       keptAsked(
@@ -1582,6 +1667,7 @@ function composed(
 
     for (const userId of yield* RcMap.keys(accounts)) yield* RcMap.invalidate(accounts, userId);
     yield* sessionReads.end;
+    older.clear();
     yield* preferences.end;
     yield* tools.end;
     yield* models.end;
