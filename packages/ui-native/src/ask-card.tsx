@@ -42,9 +42,10 @@ import { Pressable } from "react-native";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { Markdown } from "./markdown.js";
+import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { ProblemLine } from "./problem-line.js";
 import { PickedCheck } from "./settings-form.js";
+import { useSteppedBack } from "./stepped-back.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
@@ -297,6 +298,7 @@ function StepRow({
   readonly onOpenLink: (address: string) => void;
 }) {
   const heard = linkLabels(step);
+  const stepped = useSteppedBack();
   const heardAs = accessibilityLabel(ticked ? `${heard}, ${TICKED}` : heard);
 
   return (
@@ -319,7 +321,12 @@ function StepRow({
       )}
       <RNHostView matchContents={{ vertical: true }}>
         <Pressable accessible={false} onPress={onPress}>
-          <Markdown words={step} repository={repository} onOpenLink={onOpenLink} />
+          <Markdown
+            words={step}
+            look={stepped ? MARKDOWN_LOOK.STEPPED_BACK : MARKDOWN_LOOK.MESSAGE}
+            repository={repository}
+            onOpenLink={onOpenLink}
+          />
         </Pressable>
       </RNHostView>
     </HStack>
@@ -588,6 +595,7 @@ function BooleanRow({
  */
 function HeldFieldRow({ field }: { readonly field: AnswerField }) {
   const colors = useColors();
+  const ink = useSteppedBack() ? colors.TEXT_MUTED : colors.TEXT;
 
   if (field.kind === ANSWER_FIELD.BOOLEAN) {
     const ticked = field.value === true;
@@ -610,7 +618,7 @@ function HeldFieldRow({ field }: { readonly field: AnswerField }) {
           label={field.label}
           optional={!field.required}
           textStyle={TYPE_ROLE.ROW_TITLE}
-          ink={colors.TEXT}
+          ink={ink}
         />
         <Spacer />
       </HStack>
@@ -636,7 +644,7 @@ function HeldFieldRow({ field }: { readonly field: AnswerField }) {
         ink={colors.TEXT_MUTED}
       />
       {words === "" ? null : (
-        <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}>
+        <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(ink)]}>
           {words}
         </Text>
       )}

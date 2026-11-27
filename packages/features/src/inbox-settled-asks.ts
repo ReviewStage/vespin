@@ -1,4 +1,4 @@
-// inbox-settled-asks.ts -- what a thread's asks still show once answered, as the panel draws them: the ask's controls at the head of the reply that answered it, as the answer left them, and a mark on an ask the thread shows answered with no such card.
+// inbox-settled-asks.ts -- what a thread's asks still show once they no longer wait, as the panel draws them: an answered ask's controls at the head of the reply that answered it, as the answer left them, a mark on an ask the thread shows answered with no such card, and a withdrawn or replaced ask's controls stepped back on its own message.
 
 import { answeredDraft, answerOf, type InboxDraft } from "./inbox-draft.js";
 import { type InboxKnownAsk, knownAsk } from "./inbox-list-model.js";
@@ -70,6 +70,31 @@ export function inboxAnsweredMarks(thread: readonly InboxMessage[]): ReadonlySet
       const replied = answerOf(thread, message.id)?.answers !== undefined;
 
       return !replied || (knownAsk(ask) && !askHasControls(ask)) ? [message.id] : [];
+    }),
+  );
+}
+
+/**
+ * Each message whose ask was taken back or asked again, by id, with the ask
+ * as its card draws it stepped back on that message, nothing picked, as the
+ * panel's `HeldAsk` stands it, so what it used to ask still reads in the
+ * thread and never as an answer; the thread's own line says what became of
+ * it. None for an ask of words alone, which has no controls, nor a do naming
+ * no steps, since its one step is the thread's title as it stood then, which
+ * a later post may have renamed.
+ */
+export function inboxHeldAsks(thread: readonly InboxMessage[]): ReadonlyMap<string, InboxKnownAsk> {
+  return new Map(
+    thread.flatMap((message): (readonly [string, InboxKnownAsk])[] => {
+      const ask = message.ask;
+
+      if (ask === undefined || !knownAsk(ask) || !askHasControls(ask)) return [];
+
+      if (ask.status !== INBOX_ASK_STATUS.WITHDRAWN && ask.status !== INBOX_ASK_STATUS.REPLACED) {
+        return [];
+      }
+
+      return ask.type === INBOX_ASK.DO && ask.steps.length === 0 ? [] : [[message.id, ask]];
     }),
   );
 }
