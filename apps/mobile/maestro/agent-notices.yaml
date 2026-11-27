@@ -1,0 +1,75 @@
+# agent-notices.yaml -- the quiet notices an agent's transcript keeps between its stretches of work, as the panel draws them: a new session and a connection still waited on at its newest turn; a goal judged not met as a card that opens on its reason, the agent's move to a Mac, and the goal paused, resumed, and met as trails; and the conversation compacted and a connection lost and restored in its first turn.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+#
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the agent is still at work, whose mark never stops moving. Note
+# too that an iPad stands in landscape, where the transcript stands in the
+# detail column beside the list, so it is scrolled well inside that column
+# (`BESIDE`), and that the window is turned back upright however the flow
+# ends, because a run left in landscape fails every flow after it.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose notices agent holds one of each
+# notice (`@repo/host/fixture-notices-agent`), with the Goals experiment on,
+# and opened on its page by `-agent <id>`; nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 7cce5db7-d11b-47b2-8dea-066b80cb21f8
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+# Note that the launch waits up to half a minute for its first words, as
+# `agent.yaml`'s does.
+- extendedWaitUntil:
+    visible: "Do the same for the weekly run."
+    timeout: 30000
+# The newest turn opens on a new session, then the connection it still waits on.
+- assertVisible: "New session. The agent no longer has the messages above."
+- assertVisible: "Lost the connection to Anthropic. Carries on when it's back"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-notices-newest
+# The goal's turn: its verdict a card closed on its head, the move, and the
+# goal's trails; its setting draws nothing under the `/goal` line.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Goal not met yet"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- assertVisible: "Moved to Studio"
+- assertVisible: "Goal paused. The agent stops after this turn."
+- assertVisible: "Goal resumed"
+- assertVisible: "Goal met"
+- assertNotVisible: "Goal set."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-notices-goal
+# A press on the verdict's head opens its reason whole.
+- tapOn: "Goal not met yet"
+- assertVisible: "The run still takes 14m 51s. Matching by date first would cut it further."
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-notices-goal-open
+# The first turn: the conversation compacted, then the connection lost and
+# back.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Compacted the conversation from 148K tokens"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- assertVisible: "Lost the connection to Anthropic. Back at.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-notices-first-turn

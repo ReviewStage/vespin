@@ -8,9 +8,11 @@ import { describe, expect, it } from "vitest";
 import {
   AGENT_GOAL_STATE,
   GOAL_ASK_WAIT_MS,
+  GOAL_NOTICE_LOOK,
   goalAsShown,
   goalConditions,
   goalControlLine,
+  goalNoticeShown,
   goalVerdict,
   readGoal,
 } from "./agent-goal-model.js";
@@ -205,6 +207,37 @@ describe("goalAsShown", () => {
     expect(goalAsShown(readGoal(answered), [], false, 6_000)?.state).toBe(AGENT_GOAL_STATE.ACTIVE);
     // Clear takes the row away at once.
     expect(goalAsShown(readGoal(running), ["/goal clear"], true, 0)).toBe(undefined);
+  });
+});
+
+describe("goalNoticeShown", () => {
+  it("draws nothing for a setting or a project's own Stop hook, a trail for a move of standing, and a card with its reason and turn for a verdict", () => {
+    const conditions = new Set([CONDITION]);
+
+    expect(goalNoticeShown(notice(GOAL_EVENT.SET), conditions)).toBeUndefined();
+    expect(
+      goalNoticeShown(
+        notice(GOAL_EVENT.NOT_MET, { condition: "lint passes", reason: "it fails" }),
+        conditions,
+      ),
+    ).toBeUndefined();
+    expect(goalNoticeShown(notice(GOAL_EVENT.PAUSED), conditions)).toEqual({
+      look: GOAL_NOTICE_LOOK.TRAIL,
+      event: GOAL_EVENT.PAUSED,
+      words: "Goal paused. The agent stops after this turn.",
+    });
+    expect(
+      goalNoticeShown(
+        notice(GOAL_EVENT.NOT_MET, { reason: "Two tests still fail.", turns: 3 }),
+        conditions,
+      ),
+    ).toEqual({
+      look: GOAL_NOTICE_LOOK.CARD,
+      event: GOAL_EVENT.NOT_MET,
+      words: "Goal not met yet",
+      reason: "Two tests still fail.",
+      turn: "Turn 3",
+    });
   });
 });
 

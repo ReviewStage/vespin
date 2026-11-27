@@ -60,9 +60,11 @@ import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-
 import { PATH_OPENS, VERB } from "@repo/features/words";
 import {
   type FollowedAgent,
+  selectExperiment,
   selectInboxReader,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
+import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   AgentTranscript,
@@ -843,6 +845,11 @@ const AgentConversation = memo(function AgentConversation({
   const asked = merging === undefined ? undefined : offers(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+
+  // A goal's notices stand behind the Goals experiment, as the panel's do.
+  const goalsOn =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.GOALS) }).data === true;
+
   const address = useAgentAddress(id, shown?.workspaceId, shown?.taskId ?? undefined);
   const messageLink = useMessageLink(id, shown?.workspaceId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
@@ -969,9 +976,11 @@ const AgentConversation = memo(function AgentConversation({
             origin,
             placeAddress,
             waitingCalls,
+            goalsOn,
           }),
     [
       chat,
+      goalsOn,
       waitingCalls,
       messages,
       sending,
