@@ -5,9 +5,8 @@ import { findGlyphs, glyphChoices, glyphKey, glyphName } from "./section-icon-mo
 
 /**
  * What the section icon picker offers and finds, over a synthetic slice of
- * Lucide's icons: a glyph found by
- * the words of its name, drawn again from
- * the name it is stored under, and the suggested glyphs first.
+ * Lucide's icons: a glyph found by the words of its name, drawn again from
+ * the name it is stored under, the suggested glyphs first.
  */
 
 /** Keys of Lucide's `icons`, a few of them. */

@@ -5,7 +5,7 @@ import { PILL_KIND, type Pill } from "@repo/features/pill-words";
 import { CHIP_MARK, type ChipMarkOf } from "./chip-mark-model.js";
 import { ENTITY_GLYPH } from "./entity-glyph.js";
 import { GLYPH, type Glyph } from "./glyph.js";
-import { managerFaceAsset, managerFaceFill } from "./manager-face-look.js";
+import { managerFaceAsset, managerFaceEdge, managerFaceFill } from "./manager-face-look.js";
 import {
   MARKDOWN_BLOCK,
   MARKDOWN_RUN,
@@ -24,6 +24,8 @@ interface PillLook {
   readonly emoji?: string | undefined;
   readonly emojiFill?: string | undefined;
   readonly emojiFillDark?: string | undefined;
+  /** The hairline the disc stands inside in the light (`managerFaceEdge`); the dark draws none. */
+  readonly emojiEdge?: string | undefined;
 }
 
 /** The glyph a mention leads with where its link reads as no chip of ours. */
@@ -33,7 +35,7 @@ const LINK_GLYPH = GLYPH.GLOBE;
 function chipLead(
   chip: MarkdownChip,
   markOf: ChipMarkOf | undefined,
-): Pick<PillLook, "glyph" | "emoji" | "emojiFill" | "emojiFillDark"> {
+): Pick<PillLook, "glyph" | "emoji" | "emojiFill" | "emojiFillDark" | "emojiEdge"> {
   const mark = chip.of === undefined ? undefined : markOf?.(chip.of);
 
   if (mark?.kind !== CHIP_MARK.MANAGER) return { glyph: ENTITY_GLYPH[chip.entity] };
@@ -47,6 +49,7 @@ function chipLead(
     emoji: mark.face.emoji,
     emojiFill: managerFaceFill(mark.face, false),
     emojiFillDark: managerFaceFill(mark.face, true),
+    emojiEdge: managerFaceEdge(false),
   };
 }
 

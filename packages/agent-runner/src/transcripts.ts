@@ -10,6 +10,14 @@
  * page at a time and joins the pages before it answers, so no one answer
  * holds a large session whole and the SDK still gets it whole. Nothing of a
  * transcript is logged, since it can hold a tool's output.
+ *
+ * A store kept for a resume that neither rewinds nor forks loads a main
+ * transcript from its latest compaction (`fromLatestCompaction`): the
+ * service leaves out the conversation before the messages that compaction
+ * preserves, which the CLI would read and pass over, and keeps every other
+ * kind, so a long session resumes on the conversation it hands the model
+ * rather than everything it ever wrote. A rewind and a fork read the whole
+ * transcript, since each may name or copy a message from before it.
  */
 
 import type { SessionKey, SessionStore, SessionStoreEntry } from "@anthropic-ai/claude-agent-sdk";
@@ -34,11 +42,12 @@ function keyOf(key: SessionKey): SessionKey {
   return subpath === undefined ? { projectKey, sessionId } : { projectKey, sessionId, subpath };
 }
 
-/** The store at the URL given, called under the runner's bearer, each call carrying the launch's trace where it has one (`trace.ts`). */
+/** The store at the URL given, called under the runner's bearer, each call carrying the launch's trace where it has one (`trace.ts`), its main transcripts loaded from their latest compaction where the options say so. */
 export function transcriptStore(
   url: string,
   bearer: Redacted.Redacted,
   traceHeaders: Readonly<Record<string, string>>,
+  options: { readonly fromLatestCompaction?: boolean } = {},
 ): Required<Pick<SessionStore, "append" | "load" | "listSessions" | "delete" | "listSubkeys">> {
   const post = async (call: RunnerTranscriptCall): Promise<WireValue> => {
     const response = await fetch(url, {
@@ -62,11 +71,21 @@ export function transcriptStore(
     },
     load: async (key) => {
       const entries: SessionStoreEntry[] = [];
+
+      // Note that a subagent's transcript is read whole, as it holds no compaction of the session's.
+      const fromLatestCompaction =
+        options.fromLatestCompaction === true && key.subpath === undefined;
+
       let after: number | null = null;
 
       do {
         const page = decodePage(
-          await post({ call: RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE, key: keyOf(key), after }),
+          await post({
+            call: RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE,
+            key: keyOf(key),
+            after,
+            ...(fromLatestCompaction ? { fromLatestCompaction } : undefined),
+          }),
         );
 
         for (const entry of page.entries) {

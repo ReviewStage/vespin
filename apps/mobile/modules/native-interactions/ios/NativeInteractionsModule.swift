@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); a view of React Native views a long press opens UIKit's own menu on, such as a mention's chip (`ContextMenuView.swift`); and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -82,6 +82,15 @@ public final class NativeInteractionsModule: Module {
 
     OnDestroy {
       ModifierName.all.forEach { ViewModifierRegistry.unregister($0) }
+    }
+
+    // A view of React Native views that a long press opens UIKit's own menu on, from a menu's tree (`ContextMenuView.swift`).
+    View(ContextMenuView.self) {
+      Events("onPressPlace")
+
+      Prop("menu") { (view: ContextMenuView, menu: String) in
+        view.menu = menu
+      }
     }
 
     // Note that the keyboard is lowered by ending editing in every window of every scene, forced, since a SwiftUI field such as a split view's search, unlike React Native's, has no focus JavaScript can reach, and an action sent to the first responder never reached the search field of a split view's column on an iPad. It answers whether any field let go, and logs it, so a run on the simulator shows whether a pick reached it.
@@ -201,6 +210,7 @@ internal struct StackSubtitleModifier: ViewModifier, Record {
   @Field var titleEmoji: String = ""
   @Field var titleEmojiFill: String = ""
   @Field var titleEmojiFillDark: String = ""
+  @Field var titleEmojiEdge: String = ""
 
   func body(content: Content) -> some View {
     content.background(
@@ -211,30 +221,42 @@ internal struct StackSubtitleModifier: ViewModifier, Record {
         titleMark: titleMark,
         emojiFace: titleEmoji.isEmpty
           ? nil
-          : EmojiTitleFace(emoji: titleEmoji, fill: titleEmojiFill, fillDark: titleEmojiFillDark)
+          : EmojiTitleFace(emoji: titleEmoji, fill: titleEmojiFill, fillDark: titleEmojiFillDark, edge: titleEmojiEdge)
       )
     )
   }
 }
 
-/// A Manager's emoji face as a bar's title leads with it: its emoji, and its disc's fill in the light and the dark, as hex.
+/// A Manager's emoji face as a bar's title leads with it: its emoji, its disc's fill in the light and the dark, and the hairline it stands inside in the light, as hex; an empty edge draws none.
 private struct EmojiTitleFace: Equatable {
   let emoji: String
   let fill: String
   let fillDark: String
+  let edge: String
 }
+
+/// How thick an emoji face's hairline stands, in points, as every face draws it (`manager-face-look.ts`'s `MANAGER_FACE_EDGE_WIDTH`).
+private let emojiFaceEdgeWidth: CGFloat = 0.5
 
 /// How much of an emoji face's disc its emoji fills, as every face sets it (`manager-face-look.ts`'s `MANAGER_FACE_EMOJI_SCALE`).
 private let emojiFaceScale: CGFloat = 0.62
 
-/// An emoji face drawn into a square of `side` points: its disc in the fill of `traits`' appearance, its emoji centered on it.
+/// An emoji face drawn into a square of `side` points: its disc in the fill of `traits`' appearance, inside its hairline in the light, its emoji centered on it.
 private func emojiFaceImage(_ face: EmojiTitleFace, side: CGFloat, traits: UITraitCollection) -> UIImage {
-  let fill = UIColor(vespinHex: traits.userInterfaceStyle == .dark ? face.fillDark : face.fill)
+  let dark = traits.userInterfaceStyle == .dark
+  let fill = UIColor(vespinHex: dark ? face.fillDark : face.fill)
   let words = NSAttributedString(string: face.emoji, attributes: [.font: UIFont.systemFont(ofSize: side * emojiFaceScale)])
   let drawn = words.size()
   let image = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
     fill.setFill()
     UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side)).fill()
+    // Note that the hairline is stroked inside the disc's edge, so the image keeps its square.
+    if !dark, !face.edge.isEmpty {
+      UIColor(vespinHex: face.edge).setStroke()
+      let ring = UIBezierPath(ovalIn: CGRect(x: 0, y: 0, width: side, height: side).insetBy(dx: emojiFaceEdgeWidth / 2, dy: emojiFaceEdgeWidth / 2))
+      ring.lineWidth = emojiFaceEdgeWidth
+      ring.stroke()
+    }
     words.draw(at: CGPoint(x: (side - drawn.width) / 2, y: (side - drawn.height) / 2))
   }
   return image.withRenderingMode(.alwaysOriginal)

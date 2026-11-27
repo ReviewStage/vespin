@@ -13,8 +13,10 @@ import {
   LINK_SITE_MARK_ASSET,
 } from "./integration-marks.js";
 import {
+  MANAGER_FACE_EDGE_WIDTH,
   MANAGER_FACE_EMOJI_SCALE,
   managerFaceAsset,
+  managerFaceEdge,
   managerFaceFill,
 } from "./manager-face-look.js";
 import { HARNESS_MARK_ASSET, TILE_ROUNDING } from "./mark-look.js";
@@ -76,6 +78,7 @@ function PictureOverLetters({
   ink,
   letters,
   letterScale,
+  edge,
 }: {
   readonly address: string | undefined;
   readonly size: number;
@@ -84,6 +87,8 @@ function PictureOverLetters({
   readonly ink: string;
   readonly letters: string;
   readonly letterScale: number;
+  /** The hairline its ground stands inside, such as an emoji face's in the light; none where none is given. */
+  readonly edge?: string | undefined;
 }) {
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const shown = address !== undefined && address !== failed;
@@ -98,7 +103,15 @@ function PictureOverLetters({
     >
       {shown ? null : (
         <>
-          <View style={[box, { position: "absolute", backgroundColor: ground }]} />
+          <View
+            style={[
+              box,
+              { position: "absolute", backgroundColor: ground },
+              edge === undefined
+                ? undefined
+                : { borderWidth: MANAGER_FACE_EDGE_WIDTH, borderColor: edge },
+            ]}
+          />
           <Text
             allowFontScaling={false}
             style={{ fontSize: size * letterScale, fontWeight: "600", color: ink }}
@@ -194,6 +207,7 @@ export function ChipMarkView({
             ink={colors.TEXT}
             letters={mark.face.emoji}
             letterScale={MANAGER_FACE_EMOJI_SCALE}
+            edge={managerFaceEdge(dark)}
           />
         );
 

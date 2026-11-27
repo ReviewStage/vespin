@@ -21,8 +21,7 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * words copies nothing, because a press there is how a person starts a
  * selection, and a second way to copy would be a second control no keyboard
  * reaches. A value longer than the block stays one line and scrolls sideways
- * within it, its end fading under the Copy (`copy-field.css`), rather than
- * wrapping or widening the row. It stands at a picker's width beside a row's
+ * within it, rather than wrapping or widening the row. It stands at a picker's width beside a row's
  * words (`COPY_FIELD_WIDTH.CONTROL`), as wide as the row it is laid under
  * (`COPY_FIELD_WIDTH.FULL`), as a command a person reads whole does, or
  * hugging a short value under a step's words (`COPY_FIELD_WIDTH.HUG`), as the

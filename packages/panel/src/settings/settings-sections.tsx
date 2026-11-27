@@ -1,5 +1,5 @@
 import { CLOUD_ENVIRONMENT_HEAD } from "@repo/features/cloud-environment-words";
-import { MACHINES_WORDS, WORKSPACE_MACHINES_WORDS } from "@repo/features/machines-settings-words";
+import { MACHINES_WORDS } from "@repo/features/machines-settings-words";
 import { SKILLS_LINE, workspaceGroupTitle } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
@@ -143,7 +143,6 @@ export const SECTION = {
   ENVIRONMENT_RUN_ACTIONS: SETTINGS_SEARCH_ROW.ENVIRONMENT_RUN_ACTIONS,
   ADD_HOSTS: SETTINGS_SEARCH_ROW.ADD_HOSTS,
   HOSTS: SETTINGS_SEARCH_ROW.HOSTS,
-  WORKSPACE_MACHINES: SETTINGS_SEARCH_ROW.WORKSPACE_MACHINES,
   MCP_CLIENTS: SETTINGS_SEARCH_ROW.MCP_CLIENTS,
   CLI_SIGN_IN: SETTINGS_SEARCH_ROW.CLI_SIGN_IN,
   /** Skills' first group, the workspace's or, in the account's first workspace, the reader's own, whose heading holds its Add skill. */
@@ -302,16 +301,6 @@ const SETTINGS_SECTIONS = {
     words:
       "machines machine hosts host connected list agents terminal commands run computer use apps always allow allowed never ask every time remove",
     drawn: accountDrawn,
-  },
-  [SECTION.WORKSPACE_MACHINES]: {
-    found: SECTION_FOUND.HEAD,
-    page: SETTINGS_VIEW.HOSTS,
-    headFor: (workspace) => ({
-      text: `${WORKSPACE_MACHINES_WORDS.TITLE_LEAD}${workspace.name}`,
-      maskedFrom: WORKSPACE_MACHINES_WORDS.TITLE_LEAD.length,
-    }),
-    words: "machines machine hosts host workspace team shared everyone members vm linux mac",
-    drawn: (input) => input.accountDrawn && workspaceShown(input),
   },
   [SECTION.INTEGRATIONS_GROUP]: {
     found: SECTION_FOUND.ROWS,

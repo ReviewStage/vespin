@@ -6,6 +6,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useColorScheme } from "react-native";
 import { type Glyph, glyphImage, type MarkLayer } from "./glyph.js";
 import { type ChoiceLook, MENU_ICON, type MenuPhotoFile } from "./row-menu-model.js";
+import { sectionInk } from "./section-ink.js";
 import { Text } from "./text.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import type { StatusTone } from "./tokens/status-tone.js";
@@ -101,7 +102,7 @@ function GlyphLabel({
 
 /**
  * A choice's head as a system menu draws it (`choiceLook`): its glyph in
- * its tone's ink, with a faint glyph under it where it has one; its photo,
+ * its section's color or its tone's ink, with a faint glyph under it where it has one; its photo,
  * drawn round; its emoji, on its disc where it has one, as a Manager's
  * emoji face stands on its color; or its integration's mark, each kept in its own
  * colors, which a menu would otherwise template in its ink.
@@ -120,7 +121,13 @@ export function LookIcon({
       return (
         <GlyphImage
           glyph={look.glyph}
-          menuColor={look.tone === undefined ? undefined : toneInk(look.tone)}
+          menuColor={
+            look.section !== undefined
+              ? sectionInk(look.section, dark)
+              : look.tone === undefined
+                ? undefined
+                : toneInk(look.tone)
+          }
           under={look.under}
         />
       );
@@ -134,6 +141,7 @@ export function LookIcon({
           {...(look.disc === undefined
             ? {}
             : { emojiDisc: dark ? look.disc.dark : look.disc.light })}
+          {...(look.disc?.edge === undefined || dark ? {} : { emojiDiscEdge: look.disc.edge })}
         />
       );
     case MENU_ICON.MARK:

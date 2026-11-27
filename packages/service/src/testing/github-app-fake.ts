@@ -165,6 +165,55 @@ export function listingTokenOf(installationId: number): string {
   return `ghs_fixture_listing_${installationId}`;
 }
 
+/** What every token the fake App mints for reading one repository's metadata begins with. */
+const METADATA_TOKEN_PREFIX = "ghs_fixture_metadata_";
+
+/** The token the fake App mints for reading one repository's metadata, naming the installation so the read knows whose it is. */
+function metadataTokenOf(installationId: number): string {
+  return `${METADATA_TOKEN_PREFIX}${installationId}`;
+}
+
+/** Whether a mint asks for metadata read alone, as a reach's read of the one repository does. */
+function metadataAlone(permissions: Readonly<Record<string, string>> | undefined): boolean {
+  const asked = Object.entries(permissions ?? {});
+
+  return asked.length === 1 && asked[0]?.[0] === "metadata" && asked[0]?.[1] === "read";
+}
+
+/**
+ * Whether a request is a mint of a token the App hands out for the
+ * repositories it names, never a reach's own mint for reading one
+ * repository's metadata.
+ */
+export function handedRepositoryMint(sent: SentToGitHub): boolean {
+  if (!sent.url.endsWith("/access_tokens")) return false;
+
+  const asked: { repositories?: unknown; permissions?: Record<string, string> } = JSON.parse(
+    sent.body,
+  );
+
+  return asked.repositories !== undefined && !metadataAlone(asked.permissions);
+}
+
+/** Whether a request carries a token the fake App minted for named repositories, which reads a private one it was given. */
+export function onRepositoryToken(sent: SentToGitHub): boolean {
+  const bearer = sent.headers.get("authorization");
+
+  return (
+    bearer === `Bearer ${GITHUB_FIXTURE_INSTALLATION_TOKEN}` ||
+    (bearer?.startsWith(`Bearer ${METADATA_TOKEN_PREFIX}`) ?? false)
+  );
+}
+
+/** The installation's repository of that name, whatever its case, as GitHub folds case in names. */
+function givenRepository(installation: InstallationFixture, owner: string, name: string) {
+  return installation.repositories.find(
+    (one) =>
+      one.owner.toLowerCase() === owner.toLowerCase() &&
+      one.name.toLowerCase() === name.toLowerCase(),
+  );
+}
+
 /** The user access token GitHub's web flow hands the fake for any code but the refused one, on the fixture member's GitHub account. */
 export const GITHUB_FIXTURE_AUTHORIZED_TOKEN = "ghu_fixture_authorized";
 
@@ -371,6 +420,7 @@ const INSTALLATION_ACCESS_TOKENS = /^\/app\/installations\/(\d+)\/access_tokens$
 const APP_TOKEN = /^\/applications\/[^/]+\/token$/u;
 const TOKEN_ENDPOINT = "https://github.com/login/oauth/access_token";
 const USER_BY_LOGIN = /^\/users\/([^/]+)$/u;
+const REPOSITORY = /^\/repos\/([^/]+)\/([^/]+)$/u;
 
 /** GitHub's own record of a user, as much of it as the service reads and a little it does not. */
 function userJson(fixture: UserFixture) {
@@ -482,9 +532,10 @@ export function githubReaching(
         return Response.json({ message: "This installation has been suspended" }, { status: 403 });
       }
 
-      const asked: { repositories?: unknown; permissions?: Record<string, string> } = JSON.parse(
-        sent.body,
-      );
+      const asked: {
+        repositories?: readonly string[];
+        permissions?: Record<string, string>;
+      } = JSON.parse(sent.body);
 
       // Note that GitHub refuses a mint naming a permission the installation never granted, at any level.
       const granted = installation.permissions ?? FIXTURE_INSTALLATION_PERMISSIONS;
@@ -498,11 +549,33 @@ export function githubReaching(
 
       const forRepositories = asked.repositories !== undefined;
 
+      // Note that GitHub refuses a mint naming a repository the installation was not given.
+      const named = asked.repositories ?? [];
+
+      const ungiven = named.some(
+        (name) =>
+          !installation.repositories.some((one) => one.name.toLowerCase() === name.toLowerCase()),
+      );
+
+      if (ungiven) {
+        return Response.json(
+          {
+            message:
+              "There is at least one repository that does not exist or is not accessible to the parent installation.",
+          },
+          { status: 422 },
+        );
+      }
+
+      const token = !forRepositories
+        ? listingTokenOf(installation.id)
+        : metadataAlone(asked.permissions)
+          ? metadataTokenOf(installation.id)
+          : GITHUB_FIXTURE_INSTALLATION_TOKEN;
+
       return Response.json(
         {
-          token: forRepositories
-            ? GITHUB_FIXTURE_INSTALLATION_TOKEN
-            : listingTokenOf(installation.id),
+          token,
           expires_at: new Date(sent.at + GITHUB_FIXTURE.HOUR_MS).toISOString(),
           repository_selection: GITHUB_REPOSITORY_SELECTION.SELECTED,
         },
@@ -527,6 +600,27 @@ export function githubReaching(
         },
         sent.url,
       );
+    }
+
+    const repositoryPath = REPOSITORY.exec(pathname);
+
+    if (repositoryPath !== null) {
+      const bearer = sent.headers.get("authorization");
+
+      const installation = installations.find(
+        (candidate) => bearer === `Bearer ${metadataTokenOf(candidate.id)}`,
+      );
+
+      const given =
+        installation === undefined
+          ? undefined
+          : givenRepository(
+              installation,
+              decodeURIComponent(repositoryPath[1] ?? ""),
+              decodeURIComponent(repositoryPath[2] ?? ""),
+            );
+
+      return given === undefined ? notFound() : Response.json(repositoryJson(given));
     }
 
     if (pathname === "/installation/repositories") {

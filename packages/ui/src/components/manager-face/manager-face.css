@@ -22,6 +22,25 @@
     --ui-manager-face-side: var(--spacing-words-glyph);
   }
 
+  /* The light theme's hairline round a face, the strong edge's, since a soft
+     fill on white (yellow's is 1.5:1) would nearly vanish; the dark needs
+     none. A character's is traced round its whole body by four drop shadows,
+     each a half pixel out, so its overlapping parts draw no lines inside it. */
+  .ui-manager-face {
+    --ui-manager-face-edge: light-dark(var(--ui-color-border-strong), transparent);
+  }
+
+  .ui-manager-face-body {
+    filter: drop-shadow(0.5px 0 0 var(--ui-manager-face-edge))
+      drop-shadow(-0.5px 0 0 var(--ui-manager-face-edge))
+      drop-shadow(0 0.5px 0 var(--ui-manager-face-edge))
+      drop-shadow(0 -0.5px 0 var(--ui-manager-face-edge));
+  }
+
+  .ui-manager-face-disc {
+    box-shadow: 0 0 0 0.5px var(--ui-manager-face-edge);
+  }
+
   /* An emoji, about two thirds of its disc, so the fill rings it. */
   .ui-manager-face-emoji {
     display: block;

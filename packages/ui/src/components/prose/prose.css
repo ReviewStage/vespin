@@ -244,13 +244,8 @@
   /* A table, a note's, a transcript's, and a site document's alike, scrolls
      sideways rather than widening its column; a column's
      alignment arrives as each cell's own inline style, from the delimiter
-     row. Its edges fade where it hides columns past them, as the tab strip
-     does, so a column cut at the edge reads as more to scroll to rather than
-     as words cut short: the one scroll fade (`ScrollArea`, whose registered
-     depths and keyframes it eases), its two depths eased on the table's own
-     inline timeline, which stands only while the table overflows. Note that
-     the table is no `ScrollArea` itself, because a table's own box is what
-     scrolls. */
+     row. Note that the table is no `ScrollArea` itself, because a table's
+     own box is what scrolls. */
   :is(.ui-markdown-flow, .ui-prose-document) table {
     display: block;
     max-width: 100%;
@@ -259,23 +254,6 @@
     overscroll-behavior-x: contain;
     font-variant-numeric: tabular-nums;
     text-align: left;
-    scrollbar-width: thin;
-    mask:
-      linear-gradient(
-        to right,
-        transparent,
-        #000 var(--ui-scroll-area-fade-start),
-        #000 calc(100% - var(--ui-scroll-area-fade-end)),
-        transparent
-      ),
-      var(--ui-scrollbar-keep-horizontal);
-    animation-name: ui-scroll-area-fade-start, ui-scroll-area-fade-end;
-    animation-timing-function: linear;
-    animation-fill-mode: both;
-    animation-timeline: scroll(self inline), scroll(self inline);
-    animation-range:
-      0 var(--ui-scroll-fade),
-      calc(100% - var(--ui-scroll-fade)) 100%;
   }
 
   :is(.ui-markdown-flow, .ui-prose-document) :is(th, td) {

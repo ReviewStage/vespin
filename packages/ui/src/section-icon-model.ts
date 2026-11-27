@@ -1,5 +1,5 @@
 /**
- * section-icon-model.ts -- what a sidebar section's icon picker offers and finds: every Lucide glyph by its kebab-case name, and the words a search finds each by.
+ * section-icon-model.ts -- what a sidebar section's icon picker offers and finds of Lucide's glyphs: every one by its kebab-case name, and the words a search finds each by.
  *
  * A glyph travels by its kebab-case name (`@repo/features/task-section-wire`)
  * and is drawn from Lucide's `icons` map, whose keys are the same name in
@@ -10,10 +10,10 @@
  * glyphs a section could wear before the picker offered them all keep
  * their names, `flask` among them, which Lucide calls `flask-conical`.
  *
- * Lucide ships no tags, so a glyph is found by the words of its name. Every
- * function is pure over the data it is handed, so the picker loads that
- * data when it opens rather than with the window. The emoji it offers are
- * `@repo/features/emoji-model`'s.
+ * Lucide ships no tags, so a glyph is found by the words of its name. The
+ * emoji beside them are `@repo/features/emoji-model`'s. Every function is
+ * pure over the data it is handed, so the picker loads that data when it
+ * opens rather than with the window.
  */
 
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
@@ -22,6 +22,7 @@ import {
   TASK_SECTION_ICON_KIND,
   type TaskSectionIcon,
 } from "@repo/features/task-section-wire";
+import { sectionGlyphWords } from "@repo/features/task-sections-model";
 
 /** The glyphs whose stored name is not Lucide's own, and the Lucide icon each is drawn as. */
 const RENAMED_GLYPH = new Map<string, string>([[TASK_SECTION_GLYPH.FLASK, "flask-conical"]]);
@@ -57,13 +58,6 @@ export function glyphKey(glyph: string): string {
     .join("");
 }
 
-/** What a glyph is called where it is named, its words in sentence case: `flask-conical` as "Flask conical". */
-export function glyphLabel(glyph: string): string {
-  const words = glyph.split("-").join(" ");
-
-  return words.charAt(0).toUpperCase() + words.slice(1);
-}
-
 /** Whether a glyph is one the picker suggests. */
 export function isSuggestedGlyph(glyph: string): boolean {
   return SUGGESTED_GLYPHS.includes(glyph);
@@ -92,7 +86,7 @@ export function glyphChoices(keys: readonly string[]): GlyphChoice[] {
   const choices = keys.map((key): GlyphChoice => {
     const glyph = glyphName(key);
 
-    return { glyph, label: glyphLabel(glyph), words: [glyph.split("-").join(" ")] };
+    return { glyph, label: sectionGlyphWords(glyph), words: [glyph.split("-").join(" ")] };
   });
 
   const rank = (choice: GlyphChoice) => {

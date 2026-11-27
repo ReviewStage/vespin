@@ -57,6 +57,7 @@ export function barSubtitle(
     titleEmoji: titleMark?.emoji?.emoji ?? "",
     titleEmojiFill: titleMark?.emoji?.fill ?? "",
     titleEmojiFillDark: titleMark?.emoji?.fillDark ?? "",
+    titleEmojiEdge: titleMark?.emoji?.edge ?? "",
   });
 }
 
@@ -65,7 +66,13 @@ export type BarTitleMark = {
   readonly title: string;
   readonly asset: string;
   readonly emoji?:
-    | { readonly emoji: string; readonly fill: string; readonly fillDark: string }
+    | {
+        readonly emoji: string;
+        readonly fill: string;
+        readonly fillDark: string;
+        /** The hairline the disc stands inside in the light alone. */
+        readonly edge: string;
+      }
     | undefined;
 };
 

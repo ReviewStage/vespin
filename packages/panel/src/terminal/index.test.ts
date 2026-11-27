@@ -2,9 +2,9 @@
 
 import assert from "node:assert/strict";
 import { COMMAND_KEY, installCommandKey } from "@repo/settings/shortcuts";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { FitAddon } from "@xterm/addon-fit";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { relayout } from "../testing/resize-observer.js";
 import { TERMINAL_FIND, type TerminalHandle, type TerminalSize } from "./contract.js";
 import { terminal } from "./index.js";
 

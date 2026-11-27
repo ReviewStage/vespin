@@ -1,5 +1,6 @@
 // manager-face-picker-model.test.ts -- the face picker offers Recent atop each tab, draws and picks every face but a recent one in the color row's color, and finds a character or an emoji by name.
 
+import { emojiGroups } from "@repo/features/emoji-model";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { describe, expect, it } from "vitest";
 import {
@@ -10,16 +11,21 @@ import {
   recentFaces,
 } from "./manager-face-picker-model.js";
 
-const EMOJI = [
+const EMOJI = emojiGroups([
   {
     name: "Animals & Nature",
     emojis: [
-      { emoji: "🦊", name: "fox" },
-      { emoji: "🐱", name: "cat face" },
+      { emoji: "🦊", name: "fox", version: 3, keywords: ["fox"], shortcodes: ["fox_face"] },
+      { emoji: "🐱", name: "cat face", version: 0.6, keywords: ["cat"], shortcodes: ["cat"] },
     ],
   },
-  { name: "Travel & Places", emojis: [{ emoji: "🚀", name: "rocket" }] },
-];
+  {
+    name: "Travel & Places",
+    emojis: [
+      { emoji: "🚀", name: "rocket", version: 0.6, keywords: ["space"], shortcodes: ["rocket"] },
+    ],
+  },
+]);
 
 const STANDING: ManagerFace = { character: "planet", color: "blue" };
 

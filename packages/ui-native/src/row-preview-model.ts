@@ -18,6 +18,7 @@ import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import {
   MANAGER_FACE_EMOJI_SCALE,
   managerFaceAsset,
+  managerFaceEdge,
   managerFaceFill,
 } from "./manager-face-look.js";
 import {
@@ -321,6 +322,8 @@ type PreviewNode =
       readonly letterInk: string;
       /** The photo's address, asked for at the size it is drawn; their letter alone where none is given, or where it cannot be read. */
       readonly picture?: string | undefined;
+      /** The hairline its letter's ground stands inside, such as an emoji face's in the light; none where none is given. */
+      readonly edge?: string | undefined;
     }
   | { readonly kind: typeof PREVIEW_NODE.RULE; readonly ink: string };
 
@@ -441,6 +444,7 @@ function agentTile(
       letter: face.emoji,
       letterSize: size * MANAGER_FACE_EMOJI_SCALE,
       letterInk: look.colors.TEXT,
+      edge: managerFaceEdge(look.dark),
     };
 
   if (face !== undefined)

@@ -6,7 +6,7 @@
  * (`heldTaskMentions`), and its workspace's members and link slug. A
  * Manager stands on no task, so its page reads them through the agent's
  * own workspace and repository instead, as New task's composer and an
- * automation's prompt do (`tasklessMentions`): a `/` lists its
+ * automation's prompt do (`useTasklessMentions`): a `/` lists its
  * repository's skills and the member's installed ones, a skill a message
  * names opens its `SKILL.md` in a File tab beside the page, as a file it
  * names does, an `@` offers its repository's files, its skills, the servers,
@@ -35,8 +35,7 @@ import type { SkillWithFile } from "../tasks/skill-ref.js";
 import {
   TaskMentions,
   type TaskMentionsValue,
-  tasklessMentions,
-  useMentionAgentsReader,
+  useTasklessMentions,
 } from "../tasks/task-mentions.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -86,20 +85,12 @@ export function useOwnAgentPlace(
     [queryClient, skillsOn, workspaceId, repository],
   );
 
-  // The workspace's agents an `@` offers, named by the tasks the window lists.
-  const readAgents = useMentionAgentsReader(workspaceId, useTaskNames(tasks.typedNames), models);
-
-  const { onShowMention } = tasks;
-
-  const mentions = useMemo(
-    () =>
-      tasklessMentions(
-        { workspace: linkWorkspace, workspaceId, repository },
-        onShowMention,
-        readAgents,
-        onOpenFile,
-      ),
-    [linkWorkspace, workspaceId, repository, onShowMention, readAgents, onOpenFile],
+  // What an `@` offers, the workspace's agents named by the tasks the window lists.
+  const mentions = useTasklessMentions(
+    { workspace: linkWorkspace, workspaceId, repository },
+    { tasks: useTaskNames(tasks.typedNames), models },
+    tasks.onShowMention,
+    onOpenFile,
   );
 
   const { title } = agent;

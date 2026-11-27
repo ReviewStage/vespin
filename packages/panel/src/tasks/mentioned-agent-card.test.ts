@@ -414,8 +414,12 @@ test("a pull request's chip off its task's page hangs the card its Pull request 
   const card = await cardOf(opened);
   assert.equal(card.pullRequest, true, "the chip hangs the pull request's card");
   assert.equal(card.name, "Prorate seats on upgrade");
-  assert.match(card.words ?? "", /in 3 files/u, "it says what the list holds of it");
-  assert.match(card.words ?? "", /By Prorate seat changes/u, "it names the agent whose it is");
+  assert.match(card.words ?? "", /\+120 −8/u, "it says what the list holds of it");
+  assert.match(
+    card.words ?? "",
+    /Opened by Prorate seat changes/u,
+    "it names the agent whose it is",
+  );
   const other = await cardOf(outside);
   assert.deepEqual([other.pullRequest, other.reading], [false, false]);
   const earlier = await cardOf(older);

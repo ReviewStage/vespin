@@ -76,7 +76,6 @@ import {
   RowHint,
   RowHintOptions,
   reachedKey,
-  SCROLL_FADE,
   ScrollArea,
   SearchField,
   type SelectionAct,
@@ -1827,9 +1826,7 @@ export function InboxList({
         order={[drawn.map(({ item }) => item.id)]}
         bringIn={rows.bringIn}
       >
-        <ScrollArea ref={scroller} fade={SCROLL_FADE.START}>
-          {body}
-        </ScrollArea>
+        <ScrollArea ref={scroller}>{body}</ScrollArea>
       </SelectionRegion>
       {/* Note that a phone's bar stands at the list's foot rather than over its rows, so choosing a row moves none under the finger. */}
       {footed && picks.length > 0 ? (

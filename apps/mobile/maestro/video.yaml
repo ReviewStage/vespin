@@ -1,0 +1,50 @@
+# video.yaml -- an agent's recording at rest in its message as its still first frame, then in the system's own player full screen on a tap, as Messages opens one; with MEDIA_ORIGIN, the recording is read over HTTP from the rig, as a device reads it from the service.
+#
+# The screenshots are read by eye: `video-at-rest` must show the
+# recording's first frame in its message under the system's play mark
+# (`play.circle.fill`), and `video-full-screen` the system's player full screen
+# with its own controls: play, the scrubber, and Picture in Picture. Note
+# that the inline player stands to VoiceOver, and so to this flow, as one
+# element whose activation opens it full screen, since the inline player's
+# own views stood past the depth XCTest can read in an iPad's split view
+# (`video.tsx`), so the system's controls are seen in the screenshot
+# rather than asserted by name. With MEDIA_ORIGIN, the rig serves the
+# fixture's MP4 at `<origin>/fixture-recording.mp4` with byte ranges, and
+# the app's fixture answers the recording's source there (`-mediaOrigin`).
+appId: dev.vespin.ios
+env:
+  MEDIA_ORIGIN: ${MEDIA_ORIGIN || ''}
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      mediaOrigin: ${MEDIA_ORIGIN}
+# The page opens at its newest row, so the recording stands above it. Note
+# that the page is drawn down in slow steps until the player itself, named by
+# its caption and its length once it can play, stands clear under the bar
+# (`scroll-to.yaml`'s `BELOW`), because a centered scroll ends on one more
+# whole swipe, which on an iPad left the recording under the bar, where the
+# tap landed on the bar and scrolled the page to its top instead.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Accepting an invite, \\d+:\\d\\d"
+      BELOW: "Build teammate invitations"
+- extendedWaitUntil:
+    visible:
+      id: "video-player"
+    timeout: 30000
+- assertNotVisible: ".*can't play here.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: video-at-rest
+# A tap opens it in the system's player full screen. Note that the flow
+# waits a bounded time rather than for the screen to settle, since a playing
+# video never settles.
+- tapOn:
+    id: "video-player"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: video-full-screen

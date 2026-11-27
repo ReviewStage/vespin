@@ -34,8 +34,30 @@ import { Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
 
-/** The first hosted API version whose builds read a whole answer in pages (`client-identity.ts`'s `HOSTED_API_VERSION`). */
-const PAGED_API_VERSION = 10;
+/**
+ * The first hosted API version whose builds read a whole answer in pages
+ * (`client-identity.ts`'s `HOSTED_API_VERSION`). Note that it stands above
+ * every version a build sends today, because no client follows a page yet:
+ * a build that takes the first page for the whole answer holds only its
+ * newest parents, and the rest never come back to it. The client that
+ * learns to follow pages ships at this version.
+ */
+const PAGED_API_VERSION = 12;
+
+/**
+ * The first hosted API version answered a whole answer in pages before any
+ * build followed them (#10886): its builds and those up to
+ * `PAGED_API_VERSION` took the first page for the whole answer.
+ */
+const FIRST_PAGE_TAKEN_API_VERSION = 10;
+
+/**
+ * The settled id the service stood at once those builds were answered
+ * whole again (#11234). A sync id below it may have come with a first page
+ * taken for the whole answer; every answer since names one at or past it,
+ * so such a build is answered whole once, and past ids after.
+ */
+const FIRST_PAGES_HEALED_AT = 44_749_068;
 
 /** Which way the parents stand by one of their columns. */
 type PageOrder = (typeof ORDER)[keyof typeof ORDER];
@@ -90,6 +112,23 @@ export function readsPages(request: Request): boolean {
   const client = presentedClient(request.headers);
 
   return client !== undefined && client.apiVersion >= PAGED_API_VERSION;
+}
+
+/**
+ * Whether the build asking may hold a read's first page for its whole
+ * answer, past `past`: a build at a version answered pages it never
+ * followed, reading past a sync id from before those pages stopped, which
+ * is answered whole once so the parents past that page come back to it.
+ */
+export function mayHoldFirstPage(request: Request, past: number): boolean {
+  const client = presentedClient(request.headers);
+
+  return (
+    client !== undefined &&
+    client.apiVersion >= FIRST_PAGE_TAKEN_API_VERSION &&
+    client.apiVersion < PAGED_API_VERSION &&
+    past < FIRST_PAGES_HEALED_AT
+  );
 }
 
 /** The page a reader names, read; refused as invalid where it does not read as one. */

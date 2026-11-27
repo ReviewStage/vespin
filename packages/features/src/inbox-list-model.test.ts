@@ -6,6 +6,8 @@ import {
   INBOX_MEDIA,
   inboxThreadEventsShown,
   inboxThreadMessages,
+  inboxWaitingAt,
+  inboxWaitingKept,
 } from "./inbox-list-model.js";
 import {
   INBOX_MESSAGE_AUTHOR,
@@ -267,5 +269,75 @@ describe("agentThreadsLine", () => {
       waiting: 0,
       opens: expect.objectContaining({ id: "closed" }),
     });
+  });
+});
+
+describe("inboxWaitingAt", () => {
+  it("counts what waits on the reader by task, by agent, and in all, in each workspace and across them, a Manager's thread toward its agent alone", () => {
+    const task = {
+      id: "task-1",
+      workspaceId: "acme",
+      name: "Ship it",
+      createdAt: 1,
+      updatedAt: 1,
+      repository: null,
+      openedAt: 1,
+    };
+
+    const manager = {
+      id: "manager-1",
+      name: "Release manager",
+      model: "claude-opus-5-5",
+      workspaceId: "stage",
+      repository: null,
+    };
+
+    const groups = [
+      {
+        holder: { task },
+        items: [
+          posted("open", "agent-1", INBOX_STATUS.OPEN, 1, 1),
+          posted("answered", "agent-1", INBOX_STATUS.ANSWERED, 2, 2),
+        ],
+      },
+      { holder: { agent: manager }, items: [posted("asks", "manager-1", INBOX_STATUS.OPEN, 3, 3)] },
+    ];
+
+    const { waiting } = inboxWaitingAt(groups, undefined, 100);
+
+    expect(waiting.get("acme")).toEqual({
+      byTask: new Map([["task-1", 1]]),
+      byAgent: new Map([["agent-1", 1]]),
+      total: 1,
+    });
+    expect(waiting.get("stage")).toEqual({
+      byTask: new Map(),
+      byAgent: new Map([["manager-1", 1]]),
+      total: 1,
+    });
+    expect(waiting.get(undefined)?.total).toBe(2);
+
+    // Counted again with nothing moved, each workspace's counts are the very object held, so their readers draw nothing again.
+    const kept = inboxWaitingKept(waiting, inboxWaitingAt(groups, undefined, 100).waiting);
+
+    expect(kept.get("acme")).toBe(waiting.get("acme"));
+
+    // A thread put away until a reminder comes due is counted again then, not at the next write.
+    const reminded = [
+      {
+        holder: { task },
+        items: [{ ...posted("later", "agent-1", INBOX_STATUS.OPEN, 1, 1), remindAt: 500 }],
+      },
+    ];
+
+    const before = inboxWaitingAt(reminded, undefined, 100);
+
+    expect(before.waiting.get("acme")).toBeUndefined();
+    expect(before.nextReminderDue).toBe(500);
+
+    const due = inboxWaitingAt(reminded, undefined, 500);
+
+    expect(due.waiting.get("acme")?.total).toBe(1);
+    expect(due.nextReminderDue).toBeUndefined();
   });
 });

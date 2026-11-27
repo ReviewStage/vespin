@@ -117,7 +117,12 @@ import { ResetCreditCard, useResetCreditOffer } from "../reset-credit.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { useWorkingToast } from "../toast.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
-import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
+import {
+  appStateQuery,
+  selectAccount,
+  selectExperiment,
+  useAppStateSlice,
+} from "../use-app-state.js";
 import { ChatGptDeviceLogin } from "./chatgpt-device-login.js";
 import { ReadFailed } from "./marks.js";
 
@@ -1404,7 +1409,7 @@ function useCredentials({
   onKeys?: ((keys: readonly ProviderKeySummary[]) => void) | undefined;
   onConnected?: ((connected: boolean) => void) | undefined;
 }): UseCredentialsResult {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const keys = useQuery(providerKeysQuery(signedIn ? accountId : undefined));
   const retryKeys = useMutation(providerKeysRetryMutation());
   const answer = keys.data;

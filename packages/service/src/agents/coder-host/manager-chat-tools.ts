@@ -8,7 +8,9 @@
  * the newest messages at the chat's top, one thread whole, or the messages
  * a search finds, each with its id and, for a reply, its thread's root's id
  * (`thread_ts`), so the Manager answers in the right thread with
- * `chat_send`, and its reactions, each kind with who gave it. The Manager
+ * `chat_send`, its reactions, each kind with who gave it, and whether its
+ * words were edited since it was sent, which a read answers as they now
+ * stand, as Slack's `edited` marks a message. The Manager
  * gives a reaction or takes its own off (`chat_react`), as Slack's
  * `reactions.add` and `reactions.remove` do; a reaction, a member's or its
  * own, opens no turn.
@@ -241,7 +243,7 @@ function reactionsShown(given: readonly ManagerChatReactionGiven[] | undefined) 
   };
 }
 
-/** A message as a read answers it, in the format asked: its id, sender, words, thread's root where it is a reply, and reactions where it was given any; and, detailed, when it was sent and its thread's replies where it is a root. */
+/** A message as a read answers it, in the format asked: its id, sender, words as they now stand, thread's root where it is a reply, whether it was edited, and reactions where it was given any; and, detailed, when it was sent and last edited, and its thread's replies where it is a root. */
 function shown(
   message: ManagerChatMessage,
   format: string | undefined,
@@ -256,6 +258,7 @@ function shown(
     from,
     text: message.text,
     ...thread,
+    ...(message.editedAt === null ? undefined : { edited: true }),
     ...reactionsShown(reactions),
   };
 
@@ -264,6 +267,7 @@ function shown(
   return {
     ...concise,
     at: message.createdAt.toISOString(),
+    ...(message.editedAt === null ? undefined : { edited_at: message.editedAt.toISOString() }),
     ...(message.threadRoot === null ? { reply_count: replies?.count ?? 0 } : undefined),
     ...(replies === undefined ? undefined : { latest_reply: replies.latestAt.toISOString() }),
   };

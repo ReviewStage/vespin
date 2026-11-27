@@ -44,6 +44,16 @@
  * and word stay together after it. The sentence is an alert for the same
  * reason, because it appears in the row's place after a press or a scroll.
  *
+ * While the app does not reach the service, the window's Offline mark says
+ * once why nothing new is read (`ServiceReached`), so no failure offers
+ * Retry, and a read that did not land for it says nothing at all: among
+ * rows it is drawn as nothing, so what the place still holds stands as it
+ * was, and alone in its region the region stands its quiet empty state, the
+ * mark's glyph over "Available when you're back online.", no alert and no
+ * press, until the service answers and the read starts again by itself. A
+ * refusal, a write, and the person's own input are still said, since the
+ * mark does not say them.
+ *
  * A line is a paragraph of its own, but one standing inside words, as a
  * picture that failed to read stands inside the paragraph that names it, is
  * a span (`ERROR_STATE_ELEMENT.SPAN`), since a paragraph holds no other.
@@ -64,8 +74,10 @@
  */
 
 import { createContext, type ReactNode, useContext } from "react";
+import { GLYPH } from "../../icons/glyph-registry.js";
 import { AlertIcon, CloseIcon, RetryIcon } from "../../icons/lucide-glyphs.js";
-import type { ReportedFailure, Unreported } from "../../reported-failure.js";
+import { isReported, type ReportedFailure, type Unreported } from "../../reported-failure.js";
+import { ReplayUnmask } from "../../session-replay-marks.js";
 import { BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
 import { EmptyState } from "../empty-state/empty-state.js";
 import { FailureCopy } from "../failure-copy/failure-copy.js";
@@ -164,24 +176,45 @@ const LINE = {
 
 const WORDS = {
   RETRY: "Retry",
+  OFFLINE: "Available when you're back online.",
   REMOVE: "Remove",
   DISMISS: "Dismiss",
 } as const;
 
 /**
- * Whether a failure may offer the Retry it is given: true unless the window
- * says trying again cannot mend anything now, as while the app does not
- * reach the service, whose reads start again by themselves once it does.
+ * What a region whose read the connection explains stands while the app
+ * does not reach the service: the place's empty state, quiet, with the
+ * Offline mark's glyph over a sentence saying the place comes back with the
+ * connection. It is no alert and offers nothing, since the mark already
+ * said the app is offline and the read starts again by itself.
  */
-export const RetryOffered = createContext(true);
+function OfflineState(): React.JSX.Element {
+  return (
+    <EmptyState icon={<GLYPH.OFFLINE />}>
+      <ReplayUnmask>{WORDS.OFFLINE}</ReplayUnmask>
+    </EmptyState>
+  );
+}
 
 /**
- * A failure's sentence, `children`, and, where `onRetry` is given and Retry
- * is offered (`RetryOffered`), the
+ * Whether the window reaches the service now: true unless the window says
+ * it does not, while its Offline mark stands. Trying again cannot mend
+ * anything then, so no failure offers Retry, and a read the connection
+ * already explains (`ReportedFailure.saidByConnection`) is not said at all,
+ * since its reads start again by themselves once the service answers.
+ */
+export const ServiceReached = createContext(true);
+
+/**
+ * A failure's sentence, `children`, and, where `onRetry` is given and the
+ * service is reached (`ServiceReached`), the
  * Retry that tries again, said together as an alert and drawn at
  * `placement`; among rows, with the remedy, Remove, and Dismiss where each
  * is given; and, wherever it stands, Copy details for the
- * failure beneath it, which is reported as it first stands.
+ * failure beneath it, which is reported as it first stands. While the
+ * service is not reached, a read the connection already explains says
+ * nothing on a line, and alone in its region says only that the place is
+ * there once the app is back online (`OfflineState`).
  */
 export function ErrorState(
   props: {
@@ -190,11 +223,17 @@ export function ErrorState(
     /** The failure beneath the sentence, as the app reports it, or what names it as none to report. */
     failure: ReportedFailure | Unreported;
   } & Placed,
-): React.JSX.Element {
+): React.JSX.Element | null {
   const { remedy, onRemove, onDismiss, failure, children } = props;
-  const onRetry = useContext(RetryOffered) ? props.onRetry : undefined;
+  const reached = useContext(ServiceReached);
+  const onRetry = reached ? props.onRetry : undefined;
   const Line = props.as ?? ERROR_STATE_ELEMENT.PARAGRAPH;
   const placement = props.placement ?? ERROR_STATE_PLACEMENT.INLINE;
+
+  // Note that the Offline mark already says why a read did not land, so the place keeps what it holds and says nothing more.
+  if (!reached && isReported(failure) && failure.saidByConnection === true) {
+    return placement === ERROR_STATE_PLACEMENT.CENTERED ? <OfflineState /> : null;
+  }
 
   if (placement === ERROR_STATE_PLACEMENT.CENTERED) {
     const again = onRetry === undefined ? undefined : { label: WORDS.RETRY, onClick: onRetry };
@@ -267,7 +306,7 @@ export function RetryRowLabel({ failure }: { failure: string }): React.JSX.Eleme
   return (
     <>
       <span role="alert">{failure}</span>{" "}
-      <span className="ui-retry-row-label ml-ui-4 inline-flex items-baseline gap-ui-4 font-emphasis">
+      <span className="ui-retry-row-label ml-ui-4 inline-flex items-baseline gap-icon-gap-compact font-emphasis">
         <RetryIcon />
         {WORDS.RETRY}
       </span>

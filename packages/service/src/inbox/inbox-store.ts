@@ -43,7 +43,7 @@ import {
   userSync,
 } from "@repo/database/sync/tables";
 import type { AccountInboxEntry, AccountInboxTask } from "@repo/features/account-inbox-wire";
-import { AGENT_MACHINE, type AgentAttachment } from "@repo/features/agent-wire";
+import type { AgentAttachment } from "@repo/features/agent-wire";
 import type { ConversationMediaType } from "@repo/features/conversation-picture-wire";
 import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
 import {
@@ -1233,39 +1233,17 @@ const ScopeSchema = Schema.Struct({
   id: Schema.String,
   /** The one workspace the read keeps to, where a coding agent reads beyond its own threads; none for a member's read, which `itemVisibleTo` bounds. */
   workspaceId: Schema.optionalKey(Schema.String),
-  /** False where the build reading reads no agent on a workspace's machine, whose items are then left out (`itemServed`); every item where unsaid. */
-  workspaceMachines: Schema.optionalKey(Schema.Boolean),
 });
 
 type InboxScope = typeof ScopeSchema.Type;
 
-/**
- * The items the build reading reads: none of an agent on a workspace's
- * machine for one before `HOSTED_API_VERSION` 7 (`workspaceMachines`
- * false), which reads no agent there (`workspace-machine-reads.ts`), so it
- * never lists an item whose agent it would read as not found; every item
- * otherwise.
- */
-function itemServed(workspaceMachines: boolean | undefined): SQL | undefined {
-  if (workspaceMachines !== false) return undefined;
-
-  return notExists(
-    queryBuilder
-      .select({ one: agentTable.id })
-      .from(agentTable)
-      .where(
-        and(eq(agentTable.id, inboxItem.agentId), eq(agentTable.machine, AGENT_MACHINE.WORKSPACE)),
-      ),
-  );
-}
-
 /** The rows a scope names, kept to its workspace where it names one. */
 function inScope(scope: InboxScope) {
-  return and(
-    scopeRows(scope),
-    scope.workspaceId === undefined ? undefined : eq(inboxItem.organizationId, scope.workspaceId),
-    itemServed(scope.workspaceMachines),
-  );
+  const named = scopeRows(scope);
+
+  return scope.workspaceId === undefined
+    ? named
+    : and(named, eq(inboxItem.organizationId, scope.workspaceId));
 }
 
 /** The rows a scope names: the task's, the agent's, or the workspace's where the account may read them (`itemVisibleTo`), or the agent's own under the account that started it, which its tools read as it acts as itself. */
@@ -1380,18 +1358,16 @@ const findSettledStamps = SqlSchema.findAll({
 /**
  * The open items on the tasks of the account's workspaces, whichever
  * member's agent posted each, but those that are their agent's turn
- * (`AGENTS_TURN`), and those the build reading reads none of
- * (`itemServed`): the rows the account's read of what waits names. Those
+ * (`AGENTS_TURN`): the rows the account's read of what waits names. Those
  * on no task, a Manager's, are among them only where `taskless`, for a
  * build that reads a null task (`tasklessLiveParam`).
  */
-function accountWaiting({ userId, workspaceMachines }: InboxReader, taskless = false) {
+function accountWaiting(userId: string, taskless = false) {
   return and(
     taskless ? undefined : isNotNull(inboxItem.taskId),
     itemVisibleTo(userId),
     eq(inboxItem.status, INBOX_STATUS.OPEN),
     not(AGENTS_TURN),
-    itemServed(workspaceMachines),
   );
 }
 
@@ -1457,13 +1433,7 @@ function accountUnreadSettled(userId: string) {
   );
 }
 
-/** Who reads the account's inbox, and whether the build they read it in reads an agent on a workspace's machine (`itemServed`), which a read from no build, such as a tool's or a push's, leaves true. */
-const AccountRequestSchema = Schema.Struct({
-  userId: Schema.String,
-  workspaceMachines: Schema.Boolean,
-});
-
-type InboxReader = typeof AccountRequestSchema.Type;
+const AccountRequestSchema = Schema.Struct({ userId: Schema.String });
 
 /** One open item as the account's read carries it, with its agent as its row names it now. */
 const WaitingRowSchema = Schema.Struct({
@@ -1487,7 +1457,7 @@ const WaitingRowSchema = Schema.Struct({
 const findWaitingItems = SqlSchema.findAll({
   Request: AccountRequestSchema,
   Result: WaitingRowSchema,
-  execute: (reader) =>
+  execute: ({ userId }) =>
     Database.use((db) =>
       db
         .select({
@@ -1503,13 +1473,13 @@ const findWaitingItems = SqlSchema.findAll({
           status: inboxItem.status,
           postedAt: inboxItem.postedAt,
           updatedAt: inboxItem.updatedAt,
-          unread: unreadFor(reader.userId),
+          unread: unreadFor(userId),
           asking: ASKING,
-          remindAt: remindAtMillisFor(reader.userId),
+          remindAt: remindAtMillisFor(userId),
         })
         .from(inboxItem)
         .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        .where(accountWaiting(reader))
+        .where(accountWaiting(userId))
         .orderBy(...LATEST_FIRST),
     ),
 });
@@ -1518,18 +1488,13 @@ const findWaitingItems = SqlSchema.findAll({
 const findWaitingStamps = SqlSchema.findAll({
   Request: AccountRequestSchema,
   Result: StampRowSchema,
-  execute: (reader) =>
+  execute: ({ userId }) =>
     Database.use((db) =>
       db
-        .select(stampColumns(reader.userId))
+        .select(stampColumns(userId))
         .from(inboxItem)
         .leftJoin(task, eq(task.id, inboxItem.taskId))
-        .where(
-          and(
-            or(accountWaiting(reader), accountUnreadSettled(reader.userId)),
-            itemServed(reader.workspaceMachines),
-          ),
-        )
+        .where(or(accountWaiting(userId), accountUnreadSettled(userId)))
         .orderBy(...LATEST_FIRST),
     ),
 });
@@ -1552,9 +1517,9 @@ const LATEST_ITEM = max(inboxItem.updatedAt);
  * changed latest first.
  */
 const findTasksWithItems = SqlSchema.findAll({
-  Request: AccountRequestSchema,
+  Request: Schema.Struct({ userId: Schema.String }),
   Result: TaskItemsRowSchema,
-  execute: ({ userId, workspaceMachines }) =>
+  execute: ({ userId }) =>
     Database.use((db) =>
       db
         .select({
@@ -1564,9 +1529,7 @@ const findTasksWithItems = SqlSchema.findAll({
           updatedAt: LATEST_ITEM,
         })
         .from(inboxItem)
-        .where(
-          and(isNotNull(inboxItem.taskId), itemVisibleTo(userId), itemServed(workspaceMachines)),
-        )
+        .where(and(isNotNull(inboxItem.taskId), itemVisibleTo(userId)))
         .groupBy(inboxItem.taskId)
         .orderBy(desc(LATEST_ITEM), desc(inboxItem.taskId)),
     ),
@@ -1588,11 +1551,7 @@ const findTasksWithItems = SqlSchema.findAll({
  * items' agents and their automations, so its columns read as they did,
  * and takes no row.
  */
-export function accountInboxLiveStatements(
-  userId: string,
-  served: { readonly taskless: boolean; readonly workspaceMachines: boolean },
-) {
-  const reader = { userId, workspaceMachines: served.workspaceMachines };
+export function accountInboxLiveStatements(userId: string, served: { readonly taskless: boolean }) {
   const { parts } = ACCOUNT_INBOX_READ;
 
   const items = liveRowsStatement(
@@ -1624,7 +1583,7 @@ export function accountInboxLiveStatements(
         .select(selection)
         .from(inboxItem)
         .innerJoin(agentTable, eq(agentTable.id, inboxItem.agentId))
-        .where(accountWaiting(reader, served.taskless)),
+        .where(accountWaiting(userId, served.taskless)),
   );
 
   const taskless = liveRowsStatement(
@@ -1678,13 +1637,7 @@ export function accountInboxLiveStatements(
       queryBuilder
         .select(selection)
         .from(inboxItem)
-        .where(
-          and(
-            isNotNull(inboxItem.taskId),
-            itemVisibleTo(userId),
-            itemServed(reader.workspaceMachines),
-          ),
-        )
+        .where(and(isNotNull(inboxItem.taskId), itemVisibleTo(userId)))
         .groupBy(inboxItem.taskId),
   );
 
@@ -1911,39 +1864,31 @@ function itemsLiveStatements(readerId: string, read: SQL | undefined) {
  * from before the inbox's channels were removed decodes a stamp without it
  * as no stamp: the key goes with the minimum supported desktop version.
  * An item on no task is carried only where `taskless`, for a build that
- * reads one, and one of an agent on a workspace's machine only where
- * `workspaceMachines` (`itemServed`).
+ * reads one.
  */
 export function accountItemsLiveStatements(reader: AccountItemsReader, since: Date) {
   return accountItemsOf(reader, sql`true`, gte(inboxItem.updatedAt, since));
 }
 
-/** Whose items an account-wide read carries: the reader's, settled ones since `settledSince`, those on no task only where `taskless`, and those of an agent on a workspace's machine only where `workspaceMachines`. */
+/** Whose items an account-wide read carries: the reader's, settled ones since `settledSince`, and those on no task only where `taskless`. */
 export interface AccountItemsReader {
   readonly userId: string;
-  readonly workspaceMachines: boolean;
   readonly settledSince: Date;
   readonly taskless: boolean;
 }
 
 /**
  * Every item an account-wide read carries for its reader: those the account
- * may read and is served, those on no task only where `taskless`, and the
+ * may read, those on no task only where `taskless`, and the
  * settled ones by `settledSince`, as `accountItemsLiveStatements` reads
  * them; where a whole answer in pages reads its parents
  * (`../live/reads/inbox-items.ts`).
  */
-export function accountItemsCarried({
-  userId,
-  settledSince,
-  taskless,
-  workspaceMachines,
-}: AccountItemsReader): SQL {
+export function accountItemsCarried({ userId, settledSince, taskless }: AccountItemsReader): SQL {
   return (
     and(
       // Every item the account may read, as its read of what waits names them (`accountWaiting`).
       itemVisibleTo(userId),
-      itemServed(workspaceMachines),
       // Note that an item on no task is carried only where the build reads one, because a build before `HOSTED_API_VERSION` 6 fails its whole answer on one null task.
       taskless ? undefined : isNotNull(inboxItem.taskId),
       // Note that a settled item stands by the latest of its last change, its settling, and the time the reader's reminder brings it back, since a nod on an old notice settles it without moving its last change, and a reminder must find it still carried when it comes back.
@@ -2048,8 +1993,8 @@ export function accountItemsPageStatements(
 }
 
 /** One plan's inbox written for Neon Realtime, as `taskInboxItems` reads it. */
-export function taskInboxLiveStatements(userId: string, taskId: string, workspaceMachines = true) {
-  return scopeLiveStatements({ userId, scope: INBOX_SCOPE.TASK, id: taskId, workspaceMachines });
+export function taskInboxLiveStatements(userId: string, taskId: string) {
+  return scopeLiveStatements({ userId, scope: INBOX_SCOPE.TASK, id: taskId });
 }
 
 /** One agent's inbox written for Neon Realtime, as `memberAgentInboxItems` reads it. */
@@ -2980,10 +2925,9 @@ export function agentInboxItems(
 export function taskInboxItems(
   userId: string,
   taskId: string,
-  workspaceMachines = true,
 ): InboxStoreEffect<readonly InboxItem[]> {
   return scopeItems(
-    { userId, scope: INBOX_SCOPE.TASK, id: taskId, workspaceMachines },
+    { userId, scope: INBOX_SCOPE.TASK, id: taskId },
     INBOX_BOUNDS.MAX_ITEMS_READ,
     userId,
   );
@@ -3055,9 +2999,8 @@ export function memberAgentInboxStamps(
 export function taskInboxStamps(
   userId: string,
   taskId: string,
-  workspaceMachines = true,
 ): InboxStoreEffect<readonly InboxStamp[]> {
-  return scopeStamps({ userId, scope: INBOX_SCOPE.TASK, id: taskId, workspaceMachines });
+  return scopeStamps({ userId, scope: INBOX_SCOPE.TASK, id: taskId });
 }
 
 /** Where the scope's items stand: every open one, then the latest settled, as `scopeItems` reads them, the two at once. */
@@ -4473,9 +4416,8 @@ type AccountWaitingRow = AccountInboxEntry & Pick<InboxStamp, "status">;
  */
 export function accountWaitingItems(
   userId: string,
-  workspaceMachines = true,
 ): InboxStoreEffect<readonly AccountWaitingRow[]> {
-  return Effect.map(findWaitingItems({ userId, workspaceMachines }), (rows) =>
+  return Effect.map(findWaitingItems({ userId }), (rows) =>
     rows.map(({ taskId, ...row }) => ({
       ...row,
       // Note that the reminder is carried under `snoozedUntil` too, as `liveReminderFor` carries it.
@@ -4488,11 +4430,8 @@ export function accountWaitingItems(
 }
 
 /** Where each item `accountWaitingItems` reads stands, the same items and none of their words: what a held read of the account compares between looks. */
-export function accountWaitingStamps(
-  userId: string,
-  workspaceMachines = true,
-): InboxStoreEffect<readonly InboxStamp[]> {
-  return Effect.map(findWaitingStamps({ userId, workspaceMachines }), (rows) =>
+export function accountWaitingStamps(userId: string): InboxStoreEffect<readonly InboxStamp[]> {
+  return Effect.map(findWaitingStamps({ userId }), (rows) =>
     rows.map((row) => ({ ...row, updatedAt: row.updatedAt.getTime() })),
   );
 }
@@ -4554,11 +4493,8 @@ export function inboxItemWaitsOn(itemId: string): InboxStoreEffect<Option.Option
  * changed, the task whose item changed latest first: what the desktop's
  * Inbox lists.
  */
-export function accountInboxTasks(
-  userId: string,
-  workspaceMachines = true,
-): InboxStoreEffect<readonly AccountInboxTask[]> {
-  return Effect.map(findTasksWithItems({ userId, workspaceMachines }), (rows) =>
+export function accountInboxTasks(userId: string): InboxStoreEffect<readonly AccountInboxTask[]> {
+  return Effect.map(findTasksWithItems({ userId }), (rows) =>
     rows.map(({ taskId, ...row }) => ({
       ...row,
       taskId: taskId,

@@ -7,7 +7,6 @@ import {
 } from "@repo/database/github-installation-vocabulary";
 import {
   deviceAgentLinesWaiting,
-  ownDeviceHost,
   queueDeviceAgentLine,
 } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
@@ -417,12 +416,10 @@ it.effect(
         );
         // The agent's row is gone with the workspace, so its Mac reads the discard alone, not the stop queued before.
         assert.deepEqual(
-          (yield* deviceAgentLinesWaiting(ownDeviceHost(grace.id, mac))).map(
-            ({ agentId, kind }) => ({
-              agentId,
-              kind,
-            }),
-          ),
+          (yield* deviceAgentLinesWaiting(grace.id, mac)).map(({ agentId, kind }) => ({
+            agentId,
+            kind,
+          })),
           [{ agentId: local, kind: DEVICE_AGENT_LINE_KIND.DISCARD }],
         );
         // Ada's task in the shared workspace stays Grace's to read, created by no one, with Grace's agent on it.

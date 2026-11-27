@@ -1,6 +1,7 @@
 // manager-face-look.ts -- how a Manager's face is drawn: which picture of the asset catalog a character is, at rest or at work, and the disc an emoji stands on.
 
 import type { ManagerFace } from "@repo/features/manager-face";
+import { BRAND_COLOR } from "./tokens/brand-colors.js";
 import { MANAGER_FACE_FILL } from "./tokens/manager-face-fills.js";
 
 /**
@@ -37,4 +38,12 @@ export function managerFaceFill(face: Pick<ManagerFace, "color">, dark: boolean)
   const fill = MANAGER_FACE_FILL[face.color];
 
   return dark ? fill.DARK : fill.LIGHT;
+}
+
+/** How thick an emoji face's hairline stands, in points, as the panel's 0.5 px edge. */
+export const MANAGER_FACE_EDGE_WIDTH = 0.5;
+
+/** The hairline an emoji face's disc wears: the strong edge's ink in the light, so a pale fill holds its edge on the white ground, as the panel's face draws `--ui-color-border-strong`; none in the dark, where every fill already stands off the ground. */
+export function managerFaceEdge(dark: boolean): string | undefined {
+  return dark ? undefined : BRAND_COLOR.LIGHT.CHIP_EDGE_STRONG;
 }
