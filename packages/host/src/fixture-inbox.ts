@@ -2045,7 +2045,14 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
         id: fixtureId(302),
         kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
         writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
-        words: "Should an owner be able to resend an expired invite from this page?",
+        words: [
+          "Should an owner be able to **resend** an expired invite from this page? [@Grace Hopper](https://vespin.dev/personal/person/user-grace) asked for it, see [@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60).",
+          "",
+          "```ts",
+          "export const INVITE_LIFETIME_DAYS = 7;",
+          "```",
+        ].join("\n"),
+        editedAt: LANDED - 150 * MINUTE,
         files: [
           {
             attachmentId: COMMENT_FILES.PICTURE,
@@ -2066,6 +2073,18 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
         writer: { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: AGENT.INVITES },
         words: "Yes: Resend stands beside each expired invite, and it mints a new link.",
         at: LANDED - 2 * HOUR,
+      },
+      {
+        id: fixtureId(306),
+        kind: DESCRIPTION_COMMENT_ENTRY.RESOLVED,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+        at: LANDED - 110 * MINUTE,
+      },
+      {
+        id: fixtureId(307),
+        kind: DESCRIPTION_COMMENT_ENTRY.REOPENED,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: GRACE },
+        at: LANDED - 100 * MINUTE,
       },
     ],
     createdAt: LANDED - 3 * HOUR,
