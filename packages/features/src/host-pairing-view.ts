@@ -1,5 +1,5 @@
 import { hostsContract } from "./contract/hosts.js";
-import { hostPairingApproveRequestSchema, hostPairingCodeRequestSchema } from "./host-wire.js";
+import { hostPairingCodeRequestSchema } from "./host-wire.js";
 import { answerView, failureSetOf } from "./hosted-failure.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
 
@@ -12,10 +12,7 @@ import { HOSTED_API_ERROR } from "./service-wire.js";
  * pairing has the code, whether it was mistyped, lapsed, or already
  * approved or denied, by this member or another, which the screen says
  * alike; or the member named too many codes that none has, so the service
- * refuses their reads, approves, and denies until the time it names. An
- * approve may also be refused because the machine already stands as
- * another owner's host, a member's own or a workspace's, or because the
- * member does not manage the workspace it named.
+ * refuses their reads, approves, and denies until the time it names.
  */
 
 /**
@@ -49,9 +46,6 @@ export const HOST_PAIRING_CALL_FAILURE = failureSetOf(HOST_PAIRING_CALLS, {
 /** What a read, an approve, or a deny names: the code as typed or as its link named it. */
 export const hostPairingParamsSchema = hostPairingCodeRequestSchema;
 
-/** What an approve names: the code, and who it connects the box for, the member alone where it names none. */
-export const hostPairingApproveParamsSchema = hostPairingApproveRequestSchema;
-
 /** A pending pairing, as the screen hears it read: the box and where its start came from, or why there is none. */
 export const hostPairingViewSchema = answerView(hostsContract.readPairing, {
   as: HOST_PAIRING_RENAMES,
@@ -59,20 +53,15 @@ export const hostPairingViewSchema = answerView(hostsContract.readPairing, {
 
 export type HostPairingView = typeof hostPairingViewSchema.Type;
 
+/** A failed call, with when the member's guesses are taken again, in epoch milliseconds, where it is held and the service said, and the facts of what failed beneath it where it reached no answer. */
+export type HostPairingFailed = (typeof hostPairingViewSchema.members)[1]["Type"];
+
 /** A pairing approved, as the screen hears it: the host it made, or why not. */
 export const hostPairingApproveViewSchema = answerView(hostsContract.approvePairing, {
   as: HOST_PAIRING_RENAMES,
 });
 
 export type HostPairingApproveView = typeof hostPairingApproveViewSchema.Type;
-
-/**
- * A failed read, approve, or deny, the approve's failures holding the
- * others', with when the member's guesses are taken again, in epoch
- * milliseconds, where it is held and the service said, and the facts of what
- * failed beneath it where it reached no answer.
- */
-export type HostPairingFailed = (typeof hostPairingApproveViewSchema.members)[1]["Type"];
 
 /** A pairing denied, as the screen hears it: done, or why not. */
 export const hostPairingDenyViewSchema = answerView(hostsContract.denyPairing, {

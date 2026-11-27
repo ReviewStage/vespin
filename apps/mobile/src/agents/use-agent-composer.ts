@@ -92,6 +92,7 @@ import {
   type ComposerSaving,
   type ComposerSend,
   type QueuedLine,
+  sentPictures,
   wordsHandedBack,
 } from "@repo/ui-native";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -124,9 +125,24 @@ interface Sent {
  * they are held beside the screens, so a refusal that lands once the page
  * was left still finds them, and in memory alone, since pictures may run to
  * megabytes: a relaunch, or a line sent from another device, keeps its line
- * and words but none of its pictures' bytes (`undeliveredWhole`).
+ * and words but none of its pictures' bytes (`undeliveredWhole`). They are
+ * never written anywhere, and a sign-out lets them all go
+ * (`useHeldSendsSignOut`).
  */
-const heldSends = new Map<string, Sent>();
+const heldSends = sentPictures<Sent>();
+
+/** Lets go of every line's pictures this phone holds when the account signs out, an account switch's sign-out among them, so they never outlive the account that sent them. */
+export function useHeldSendsSignOut(signedIn: boolean): void {
+  const wasSignedIn = useRef(signedIn);
+
+  useEffect(() => {
+    if (wasSignedIn.current && !signedIn) {
+      heldSends.clear();
+    }
+
+    wasSignedIn.current = signedIn;
+  }, [signedIn]);
+}
 
 /** A file a chat message went with as the field holds it again: its picture drawn from its own bytes, a text file with no thumbnail. */
 function heldPictureOf(file: AgentAttachment): HeldPicture {
@@ -135,6 +151,11 @@ function heldPictureOf(file: AgentAttachment): HeldPicture {
     : undefined;
 
   return { id: randomUUID(), file, address };
+}
+
+/** The files this phone holds of a line it sent, by the id its line is drawn under, which the line draws as its row will; none for a line it holds nothing of, such as one sent from another device. */
+export function heldFiles(lineId: string): readonly AgentAttachment[] {
+  return heldSends.get(lineId)?.pictures.map(({ file }) => file) ?? [];
 }
 
 /** Whether this phone holds every file a refused line went with, so its Retry sends it as it went. */
@@ -381,6 +402,29 @@ export function useAgentComposer(
     };
   }, []);
 
+  // The member's lines the host draws on the agent's transcript now, against which a line's pictures are let go once it no longer stands; none until the transcript is read.
+  const drawn = transcript?.sending;
+
+  const drawnNow = useRef<{ readonly lines: readonly SendingMessage[] | undefined } | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    if (transcript === undefined) return;
+    drawnNow.current = { lines: drawn };
+    heldSends.drawn(agentId, drawn ?? []);
+  }, [agentId, transcript, drawn]);
+
+  // Note that a page that leaves draws nothing more, so the pictures of each line of its agent let go go with it, a refused line's staying for its Retry.
+  useEffect(() => () => heldSends.left(agentId), [agentId]);
+
+  /** Lets go of a line's pictures once the host drew it and no longer draws it, at once where its row already landed or no page of its agent stands. */
+  const letGo = (lineId: string) => {
+    // Note that what the page last drew stands for what the host draws only while the page stands.
+    const now = mounted.current ? drawnNow.current : undefined;
+    heldSends.letGo(agentId, lineId, now === undefined ? undefined : (now.lines ?? []));
+  };
+
   // A Stop stands pressed until the agent stops writing.
   useEffect(() => {
     if (!writing) setStopping(false);
@@ -487,6 +531,9 @@ export function useAgentComposer(
       return true;
     }
 
+    // Note that the line's files are held before it goes, so the host's first drawing of it finds its pictures.
+    heldSends.set(sentLineId(sent.id), sent);
+
     const message = acts[ACT_KIND.AGENTS_MESSAGE]({
       agentId,
       text,
@@ -502,14 +549,13 @@ export function useAgentComposer(
         () => false,
       ),
     );
-    heldSends.set(sentLineId(sent.id), sent);
     write(() => message, {
       ...saying,
       // A refused message stays in the transcript marked Not delivered, the host keeping its line, so only the refusal is said over the field.
       inPlace: (words: string) => {
         if (mounted.current) setNote(words);
       },
-      done: () => heldSends.delete(sentLineId(sent.id)),
+      done: () => letGo(sentLineId(sent.id)),
       refused: (answer) => ("failure" in answer ? messageFailureWords(answer.failure) : undefined),
       unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
     });
@@ -626,7 +672,7 @@ export function useAgentComposer(
         inPlace: (refusal: string) => {
           if (mounted.current) setNote(refusal);
         },
-        done: () => heldSends.delete(sentLineId(sent.id)),
+        done: () => letGo(sentLineId(sent.id)),
         refused: (answer) =>
           "failure" in answer ? messageFailureWords(answer.failure) : undefined,
         unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
@@ -701,7 +747,7 @@ export function useAgentComposer(
     const line = refusedLine(lineId);
 
     if (line === undefined || !undeliveredWhole(line)) return;
-    const files = heldSends.get(lineId)?.pictures.map(({ file }) => file) ?? [];
+    const files = heldFiles(lineId);
     setNote(undefined);
     write(
       () =>
@@ -726,7 +772,7 @@ export function useAgentComposer(
         inPlace: (refusal: string) => {
           if (mounted.current) setNote(refusal);
         },
-        done: () => heldSends.delete(lineId),
+        done: () => letGo(lineId),
         refused: (answer) =>
           "failure" in answer ? messageFailureWords(answer.failure) : undefined,
         unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
@@ -741,7 +787,7 @@ export function useAgentComposer(
 
     if (line === undefined) return;
     const held = heldSends.get(lineId);
-    heldSends.delete(lineId);
+    letGo(lineId);
     void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId }).catch(() => undefined);
     handBack(
       { id: line.clientKey, words: held?.words ?? line.text, pictures: held?.pictures ?? [] },
@@ -753,7 +799,7 @@ export function useAgentComposer(
     if (chat) return unsendChat(lineId, false);
 
     if (refusedLine(lineId) === undefined) return;
-    heldSends.delete(lineId);
+    letGo(lineId);
     void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId }).catch(() => undefined);
   };
 

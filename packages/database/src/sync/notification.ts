@@ -88,8 +88,8 @@ export const TOPIC = {
   CONVERSATION: "conversation",
   /**
    * A host's device, by device id: the lines and requests queued for it,
-   * which its held reads are woken on, a member's own Mac or box and a
-   * workspace's machine alike, whose lines are every member's.
+   * which its held reads are woken on, so a Mac or a box wakes on its own
+   * writes alone rather than on every write to its account's.
    */
   DEVICE: "device",
 } as const;

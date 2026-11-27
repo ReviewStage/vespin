@@ -48,6 +48,7 @@ import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import type { ManagerChatSending, SendingMessage } from "@repo/features/agent-view";
 import {
   AGENT_SENDER,
+  type AgentAttachment,
   type AgentOrigin,
   type AgentPullRequest,
   type AgentSender,
@@ -1272,10 +1273,17 @@ function inRuns(
  * place, as the host draws them (`AppTranscript.sending`); a message the
  * service refused stands there too, where it went, which the page marks Not
  * delivered (`AgentTranscript`'s `undelivered`), as the panel keeps it.
+ * Note that each line carries the files this phone still holds of it
+ * (`held`, by the line's id) as its row will carry them, so a picture its
+ * words name stands as its chip from the moment it goes, as the panel's
+ * sent line draws it (`sentLineMessage`), rather than as its marker's words
+ * until the row lands; a file the phone holds no bytes of, such as one sent
+ * from another device, is left off, as the panel leaves it.
  */
 export function withSending(
   messages: readonly AgentTranscriptMessage[],
   sending: readonly SendingMessage[],
+  held: (lineId: string) => readonly AgentAttachment[],
 ): readonly AgentTranscriptMessage[] {
   if (sending.length === 0) return messages;
 
@@ -1285,7 +1293,15 @@ export function withSending(
       (message): AgentTranscriptMessage => ({
         id: message.id,
         role: MESSAGE_ROLE.USER,
-        parts: [{ type: AGENT_PART.TEXT, text: message.text }],
+        parts: [
+          { type: AGENT_PART.TEXT, text: message.text },
+          ...held(message.id).map((file) => ({
+            type: "file",
+            mediaType: file.mediaType,
+            filename: file.name,
+            url: `data:${file.mediaType};base64,${file.data}`,
+          })),
+        ],
         sentAt: message.sentAt,
       }),
     ),

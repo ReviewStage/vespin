@@ -47,6 +47,7 @@ import { electronNoticeDoors } from "../window/notice-doors";
 import { askBeforeLeaving } from "../window/quit-dialog";
 import type { DesktopConfig } from "./desktop-config";
 import { hostAssemblyLayerFor } from "./host-layer";
+import { hostedConnection } from "./hosted-connection";
 import { createKeychainService } from "./keychain-service";
 import { createNativeNode, type NativeNode } from "./native-node";
 import { colorCodeInUtilityProcess } from "./task-code-coloring";
@@ -405,7 +406,11 @@ export function composeDesktop(
         unsavedWork,
         menuOffers: offers,
         handoff: handedOff,
-        tellOnline: (found) => void run(SubscriptionRef.set(online, found)),
+        tellOnline: (found) => {
+          // A connection that outlived the network going may be dead without a word (`networkSaid`).
+          hostedConnection.networkSaid(found);
+          void run(SubscriptionRef.set(online, found));
+        },
         askBeforeLeaving: askFirst,
       };
     }),

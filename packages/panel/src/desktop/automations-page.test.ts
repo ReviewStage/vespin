@@ -15,6 +15,7 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { act } from "react";
 import { test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
@@ -53,7 +54,6 @@ import {
 import { layContainersAt } from "../testing/container-width.js";
 import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
-import { relayout } from "../testing/resize-observer.js";
 import { newTaskControl, tasksControl } from "../testing/tasks-control.js";
 
 /**
@@ -523,6 +523,11 @@ test("a new automation is created only once it is named and told its task, and t
     page.querySelector<HTMLInputElement>("h1 input[aria-label='Automation name']")?.placeholder,
     "New automation",
     "a page not yet made stands as New automation until it is named",
+  );
+  assert.equal(
+    promptEditor(page).getAttribute("aria-placeholder"),
+    "Tell the agent what to do each run",
+    "the empty prompt asks for one rather than reading as one already written",
   );
   assert.equal(crumbs(page), "Automations");
 

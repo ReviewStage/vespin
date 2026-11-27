@@ -34,7 +34,7 @@ import {
   UNKNOWN_AGENT_LABEL,
   UNTITLED_TASK_NAME,
 } from "@repo/features/task-wire";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, ne, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { Data, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import {
@@ -266,17 +266,15 @@ const MachineSchema = Schema.Literals(Object.values(AGENT_MACHINE));
 
 /**
  * The column `column` names of the task's newest agent, any member's,
- * archived ones among them, but none on a workspace's machine; null for a
- * task with none. Note that a task holds no place of its own, so this is
- * what a released desktop is told the task runs on (`runsOnOf`), and
- * those desktops alone read it, none of which reads a workspace's machine.
+ * archived ones among them; null for a task with none. Note that a task
+ * holds no place of its own, so this is what a released desktop is told the
+ * task runs on (`runsOnOf`).
  */
 function newestAgentColumn<T>(column: typeof agentTable.machine | typeof agentTable.deviceId) {
   const newest = queryBuilder
     .select({ value: column })
     .from(agentTable)
-    // Note that the field is kept only for released desktops, none of which reads a workspace's machine, so it skips those agents for every build and leaves when the field does.
-    .where(and(eq(agentTable.taskId, task.id), ne(agentTable.machine, AGENT_MACHINE.WORKSPACE)))
+    .where(eq(agentTable.taskId, task.id))
     .orderBy(desc(agentTable.createdAt), desc(agentTable.id))
     .limit(1);
 

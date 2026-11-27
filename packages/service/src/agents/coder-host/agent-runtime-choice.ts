@@ -55,19 +55,12 @@
  * the machine's own login to its harness (`AGENT_PAYER.MAC_SIGN_IN`), never on
  * a credential the account saved in the app, so a Start on a machine needs
  * none (`localAgentRuntimeChoice`), and each of its launches records that
- * payer rather than choosing one (`launchPayerOf`). A Start may also be
- * placed on a machine the agent's workspace owns, which runs it in a VM of
- * its own on the starter's credentials, chosen as a cloud agent's are.
+ * payer rather than choosing one (`launchPayerOf`).
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { type Agent, recordAgentPayer } from "@repo/database/models/agent-store";
-import {
-  type Device,
-  deviceLayout,
-  devicesSeenSince,
-  workspaceMachineStanding,
-} from "@repo/database/models/device-store";
+import { type Device, deviceLayout, devicesSeenSince } from "@repo/database/models/device-store";
 import { openProviderKey, parseKeyRing } from "@repo/database/models/provider-key-seal";
 import {
   listAccountProviderKeyRows,
@@ -122,21 +115,7 @@ export const THIS_MAC = {
   FRESH: Duration.millis(MAC_PRESENCE.FRESH_MS),
 } as const;
 
-/**
- * Where a Start asks its agent to run, once its place is admitted
- * (`machineOfStart`): the cloud, one of the starter's devices, or a machine
- * the agent's workspace owns, named with that workspace.
- */
-export type AskedMachine =
-  | { readonly machine: typeof AGENT_MACHINE.VERCEL }
-  | { readonly machine: typeof AGENT_MACHINE.DEVICE; readonly deviceId: string }
-  | {
-      readonly machine: typeof AGENT_MACHINE.WORKSPACE;
-      readonly deviceId: string;
-      readonly workspaceId: string;
-    };
-
-/** Where a new agent runs: its machine, and the device or workspace's machine it is pinned to. */
+/** Where a new agent runs: its machine, and the Mac a local agent is pinned to. */
 export interface AgentMachineChoice {
   readonly machine: AgentMachineKind;
   readonly deviceId: string | undefined;
@@ -490,42 +469,25 @@ const freshOffer = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * Where a new agent of the account's runs on the runtime given, as its
- * Start asks: a sandbox, one of the account's devices (`deviceChoice`), or
- * a machine its workspace owns (`workspaceMachineChoice`), each refused by
- * name where it would not take the agent.
+ * Start asks: a sandbox where it asks for none, or the Mac it names, where
+ * that Mac is one the account is offered and there now (`freshOffer`) and lists the
+ * provider the runtime runs; refused by name otherwise: a Mac that is
+ * another account's or is not there as away, Codex on a Mac that runs none,
+ * and an agent in a repository on a host from before it works in every
+ * repository on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`),
+ * whose launch would ask for a token the service never hands a device.
  */
 export const agentMachineChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
-  asked: AskedMachine,
+  asked: {
+    readonly machine?: AgentMachineKind | undefined;
+    readonly deviceId?: string | undefined;
+  },
   runtime: NativeRuntime,
   inRepository: boolean,
 ): Effect.fn.Return<AgentMachineChoice, StoreFailure | LocalAgentRefused, DatabaseServices> {
-  switch (asked.machine) {
-    case AGENT_MACHINE.VERCEL:
-      return IN_A_SANDBOX;
-    case AGENT_MACHINE.DEVICE:
-      return yield* deviceChoice(userId, asked.deviceId, runtime, inRepository);
-    case AGENT_MACHINE.WORKSPACE:
-      return yield* workspaceMachineChoice(asked.workspaceId, asked.deviceId);
-  }
-});
-
-/**
- * The account's device a Start names, where that device is one the account
- * is offered and there now (`freshOffer`) and lists the provider the
- * runtime runs; refused by name otherwise: a device that is another
- * account's or is not there as away, Codex on a Mac that runs none, and an
- * agent in a repository on a host from before it works in every repository
- * on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`), whose
- * launch would ask for a token the service never hands a device.
- */
-const deviceChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
-  userId: string,
-  deviceId: string,
-  runtime: NativeRuntime,
-  inRepository: boolean,
-): Effect.fn.Return<AgentMachineChoice, StoreFailure | LocalAgentRefused, DatabaseServices> {
-  const offer = yield* freshOffer(userId, deviceId);
+  if (asked.machine !== AGENT_MACHINE.DEVICE) return IN_A_SANDBOX;
+  const offer = yield* freshOffer(userId, asked.deviceId);
 
   if (offer === undefined) {
     return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.MAC_AWAY });
@@ -545,43 +507,6 @@ const deviceChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   }
 
   return { machine: AGENT_MACHINE.DEVICE, deviceId: offer.deviceId };
-});
-
-/**
- * The machine of the workspace's a Start names, where its workspace owns
- * it, it beat within `THIS_MAC.FRESH`, its setup is done, and its host runs
- * agents in VMs (`DEVICE_CAPABILITY.VM_AGENTS`); refused by name otherwise:
- * one gone, removed, another workspace's, or not there as away, one still
- * setting up or whose setup failed as such, and one not yet running VMs as
- * still preparing, since its host registers that once its agent image is
- * pulled. Note that neither its providers nor its GitHub sign-in are read,
- * because each agent runs in a VM of the agent image, which carries every
- * harness, on the starter's own credentials and the workspace's
- * installation.
- */
-const workspaceMachineChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
-  workspaceId: string,
-  deviceId: string,
-): Effect.fn.Return<AgentMachineChoice, StoreFailure | LocalAgentRefused, DatabaseServices> {
-  const standing = Option.getOrUndefined(yield* workspaceMachineStanding(workspaceId, deviceId));
-  const now = yield* Clock.currentTimeMillis;
-
-  if (
-    standing === undefined ||
-    standing.lastSeenAt.getTime() < now - Duration.toMillis(THIS_MAC.FRESH)
-  ) {
-    return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.MAC_AWAY });
-  }
-
-  if (standing.setup !== null) {
-    return yield* new LocalAgentRefused({ reason: SETUP_REFUSAL[standing.setup] });
-  }
-
-  if (!standing.capabilities.includes(DEVICE_CAPABILITY.VM_AGENTS)) {
-    return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.PREPARING });
-  }
-
-  return { machine: AGENT_MACHINE.WORKSPACE, deviceId: standing.id };
 });
 
 /** Whether the account's device registered that it launches an agent on its own GitHub sign-in (`DEVICE_CAPABILITY.GITHUB_SIGN_IN`). */
@@ -677,9 +602,7 @@ export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * Who pays for the next turn of the account's agent, chosen now and written
  * on the agent: a local agent's machine's own login, which needs no choice
- * (`AGENT_PAYER.MAC_SIGN_IN`); any other's, in the cloud or on a
- * workspace's machine, as `turnPayerOf` chooses it, since a workspace's
- * machine holds no login of the starter's.
+ * (`AGENT_PAYER.MAC_SIGN_IN`); any other's as `turnPayerOf` chooses it.
  */
 export const launchPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,

@@ -307,36 +307,15 @@
   margin: var(--ui-item-gap) 0 0;
 }
 
-/* The rhythm of a transcript's log (../ai-elements/conversation.tsx) and of
-   a message's blocks (../ai-elements/message.tsx): its lines a step apart,
-   and a message's blocks a control's gap. They sit in the components layer,
-   under every utility and every surface's own rule, so a line's own margin
-   (a working line's, a finished turn's) still says the last word, and a
-   message's weighs nothing at all, so a block's own margin wins wherever it
-   is set. */
+/* The rhythm of a message's blocks (../ai-elements/message.tsx): a
+   control's gap. It sits in the components layer, under every utility and
+   every surface's own rule, and weighs nothing at all, so a block's own
+   margin wins wherever it is set. A log's own rhythm is its component's
+   (`@repo/ui/conversation`'s `conversation.css`). */
 @layer components {
-  .conversation-log {
-    --conversation-log-end: var(--ui-space-20);
-  }
-
-  .conversation-log > :not(:last-child) {
-    margin-block-end: var(--ui-block-gap);
-  }
-
   :where(:is(.message-content, .ui-chat-bubble) > :not(:last-child)) {
     margin-block: 0 var(--ui-control-gap);
   }
-}
-
-/* A log's room at its end (../ai-elements/conversation.tsx), which the log
-   hands its virtualizer as its own (`paddingEnd`) rather than wearing it, so
-   nothing the virtualizer does not measure stands after the rows, as
-   TanStack Virtual's chat guide has a log. It is registered as a length, so
-   the log reads it in pixels whatever it is written in. */
-@property --conversation-log-end {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
 }
 
 /* A message's actions, their glyphs the control icon whichever way each is

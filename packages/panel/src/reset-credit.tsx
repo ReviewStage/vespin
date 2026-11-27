@@ -43,7 +43,7 @@ import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "./confirm-act.js";
 import { confirmFailure } from "./failure-report.js";
 import { providerKeysQuery } from "./live-reads.js";
 import { TranscriptAgent } from "./tasks/line-cards.js";
-import { appStateQuery, selectAccount } from "./use-app-state.js";
+import { selectAccount, useAppStateSlice } from "./use-app-state.js";
 
 const WORDS = {
   VERB: "Use reset",
@@ -183,7 +183,7 @@ export function useResetCreditOffer(
 
 /** The reader's own plan of this id, from their keys; none for another's. */
 function useOwnPlan(planId: string | undefined): SubscriptionKeySummary | undefined {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const keys = useQuery(providerKeysQuery(accountId)).data;
 
   return planId === undefined ? undefined : keys?.subscriptions?.find((one) => one.id === planId);

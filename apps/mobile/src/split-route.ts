@@ -2,8 +2,9 @@
 
 import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
 import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { showPickedPage } from "./split-columns.js";
 import { useOwnTab } from "./tab-route.js";
 
 /** A tab whose root stands a split view in a regular window, by its root route. */
@@ -21,6 +22,68 @@ function itemRoute(tab: SplitTab, id: string): string {
 
 /** Each tab's item as its root last selected it, beside its list. */
 const picked = new Map<SplitTab, string>();
+
+/** Who hears a tab's pick change, such as an iPad's sidebar, which stands the picked task selected. */
+const listeners = new Set<() => void>();
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function told(): void {
+  for (const listener of listeners) listener();
+}
+
+/** Keeps a tab's pick, or lets it go, telling whoever hears it. */
+function keepPick(tab: SplitTab, id: string | undefined): void {
+  if (picked.get(tab) === id) return;
+
+  if (id === undefined) picked.delete(tab);
+  else picked.set(tab, id);
+
+  told();
+}
+
+/** Each place's root's own pick while it stands, which an iPad's list column hands its picks to. */
+const rootPicks = new Map<SplitTab, (id: string) => void>();
+
+/**
+ * How an iPad's list column picks a row of its place: through the place's
+ * root, standing in the last column, as a tap on the root's own list would
+ * pick it (`useSplitSelection`), so the root selects it beside the list,
+ * going back to the root first where a page stands pushed over it, and the
+ * page is brought forward where the window stands upright. Note that the
+ * pick goes through the root's own navigation rather than the router's,
+ * because the column stands outside every route, and the router's
+ * `setParams` from there never reached the root's param (vjnatc2's inbox
+ * and keep lanes). Where the root stands nowhere yet, the place is opened
+ * on the row.
+ */
+export function usePickInPlace(tab: SplitTab): (id: string) => void {
+  const router = useRouter();
+
+  return useCallback(
+    (id) => {
+      const pick = rootPicks.get(tab);
+
+      if (pick !== undefined) return pick(id);
+
+      keepPick(tab, id);
+      router.navigate({ pathname: tab, params: { selected: id } });
+      showPickedPage();
+    },
+    [router, tab],
+  );
+}
+
+/** The item a tab's root last picked beside its list, as an iPad's sidebar stands it selected; none while its whole list stands. */
+export function useSplitPicked(tab: SplitTab): string | undefined {
+  return useSyncExternalStore(subscribe, () => picked.get(tab));
+}
 
 /** An item just picked from the list, and the selection the route held when it was. */
 type HeldPick = { readonly id: string; readonly over: string | undefined };
@@ -50,6 +113,7 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   const router = useRouter();
   const { selected } = useLocalSearchParams<{ selected?: string }>();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const navigation = useNavigation();
   const [held, hold] = useState<HeldPick | undefined>(undefined);
   const routed = selected ?? (regular ? picked.get(tab) : undefined);
 
@@ -57,7 +121,7 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   useEffect(() => hold(undefined), [routed]);
 
   useEffect(() => {
-    if (regular && selected !== undefined) picked.set(tab, selected);
+    if (regular && selected !== undefined) keepPick(tab, selected);
   }, [regular, selected, tab]);
 
   // Note that the root hears its focus through an effect rather than reading it, because a read draws the root and its whole list again on every tab switch and every page pushed over it or popped.
@@ -70,21 +134,34 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
 
       if (shown === undefined) return;
       // Note that the item now stands pushed over the list, so the tab no longer holds it beside the list.
-      picked.delete(tab);
+      keepPick(tab, undefined);
 
       if (selected !== undefined) router.setParams({ selected: undefined });
       router.push(itemRoute(tab, shown));
     }, [regular, selected, router, tab]),
   );
 
-  return {
-    selected: held !== undefined && held.over === routed ? held.id : routed,
-    select: (id) => {
-      hold({ id, over: routed });
-      picked.set(tab, id);
-      router.setParams({ selected: id });
-    },
+  const select = (id: string) => {
+    hold({ id, over: routed });
+    keepPick(tab, id);
+
+    // Note that a pick from an iPad's list column under a page pushed over the root goes back to the root, as Mail's message list replaces the message, because the list stands beside every page of its place.
+    if (navigation.isFocused()) router.setParams({ selected: id });
+    else router.dismissTo({ pathname: tab, params: { selected: id } });
+
+    showPickedPage();
   };
+
+  // Note that the root's pick is kept for an iPad's list column as the root draws, its latest kept after each draw, and let go as it leaves, so a pick never reaches a root that is gone.
+  useEffect(() => {
+    rootPicks.set(tab, select);
+
+    return () => {
+      if (rootPicks.get(tab) === select) rootPicks.delete(tab);
+    };
+  });
+
+  return { selected: held !== undefined && held.over === routed ? held.id : routed, select };
 }
 
 /**

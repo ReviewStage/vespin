@@ -25,7 +25,12 @@ import { useMemo, useSyncExternalStore } from "react";
 import { useAutomation } from "../automation-directory.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
-import { appStateQuery, memoizedSelect, selectWorkspaces } from "../use-app-state.js";
+import {
+  appStateQuery,
+  memoizedSelect,
+  selectWorkspaces,
+  useAppStateSlice,
+} from "../use-app-state.js";
 import { useMentionedPlace } from "./mentioned-place.js";
 
 /**
@@ -460,7 +465,7 @@ function useAutomationsNamed(
  */
 export function useWordTargets(): ReadonlyMap<string, string> {
   const numbers = useDerived(taskNumbersOf(useTaskListCollections().tasks));
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
+  const workspaces = useAppStateSlice(selectWorkspaces) ?? NO_WORKSPACES;
 
   return keyTargetsFor(numbers, workspaces);
 }

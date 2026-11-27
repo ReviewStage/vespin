@@ -58,6 +58,7 @@ import { AGENT_INBOX_ACT_KIND, type PortActResult } from "@repo/host/contract";
 import { DRAFT_WORD } from "@repo/ui";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { holdFrames, settleFrames } from "@repo/ui/testing/frames";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { Predicate } from "effect";
@@ -100,7 +101,6 @@ import { settleQueries, testQueryClientNow, withQueryClient } from "./copy-feedb
 import { sidebarProps } from "./desktop-sidebar.js";
 import { heardWords } from "./heard-words.js";
 import { restOn } from "./hint-rest.js";
-import { relayout } from "./resize-observer.js";
 import { installScrollIntoView } from "./scroll-into-view.js";
 import { onSideBundles } from "./side-bundles.js";
 import { listedAgent, newTaskControl, tasksControl, waitingOf } from "./tasks-control.js";

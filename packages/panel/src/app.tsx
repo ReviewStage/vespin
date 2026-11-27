@@ -134,6 +134,7 @@ import {
   selectSettingsHeld,
   selectSharesUsageData,
   selectTasks,
+  useAppStateSlice,
 } from "./use-app-state.js";
 import { useSignIn } from "./use-sign-in.js";
 import { usePrefetchBundles, useSessionReplay } from "./use-startup-work.js";
@@ -292,7 +293,7 @@ const WindowNotices = memo(function WindowNotices(): React.JSX.Element {
 export function App(): React.JSX.Element {
   const fixtureMode = useQuery({ ...appStateQuery, select: selectFixtureMode }).data === true;
   const landed = useTasksFixtureLanded(fixtureMode);
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
   const accountKey = windowAccountOf(account);
 
   // Note that the account's key is read above the window, because every message box's Dictate reads it, and every terminal and cloud Browser tab is held under it.
@@ -341,7 +342,7 @@ function AppWindow(): React.JSX.Element {
   // for a slice it draws from and for no other: a setting that moves draws
   // Settings and ⌘K, which read their own (`app-settings.ts`), and leaves the
   // window, and the tasks it holds, as they were.
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
   const run = useQuery({ ...appStateQuery, select: selectRun }).data;
   const planning = useQuery({ ...appStateQuery, select: selectTasks }).data;
   const taskListCollections = useTaskListCollections();

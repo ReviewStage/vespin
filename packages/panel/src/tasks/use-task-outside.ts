@@ -19,7 +19,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
 import { tellAct } from "../act.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
-import { appStateQuery } from "../use-app-state.js";
+import { appStateQuery, useAppStateSlice } from "../use-app-state.js";
 import { taskByNumberQueryOptions } from "./agent-reads.js";
 import { useWordTargets } from "./use-known-names.js";
 
@@ -144,7 +144,7 @@ export function useKeyTarget(key: string): string | undefined {
  */
 export function useKeysFound(words: string, asked: boolean): void {
   const targets = useWordTargets();
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const workspaces = useAppStateSlice(selectWorkspaces);
 
   const sought = useMemo(
     () => (!asked || workspaces === undefined ? [] : keyedTasks(words, targets, workspaces)),

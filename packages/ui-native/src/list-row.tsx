@@ -17,6 +17,7 @@ import {
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHidden,
+  accessibilityIdentifier,
   accessibilityLabel,
   accessibilityRemoveTraits,
   accessibilityValue,
@@ -104,6 +105,7 @@ import {
   RowOpenContext,
   RowSearchedContext,
   RowSelectedContext,
+  RowSystemLookContext,
 } from "./row-open.js";
 import { previewTree, type RowPreview } from "./row-preview-model.js";
 import { searchedTitleMarkdown } from "./searched-title-model.js";
@@ -142,6 +144,19 @@ const TITLE_LOOK = {
   PLAIN: "plain",
   MARKED: "marked",
 } as const;
+
+/** The ids a flow finds a row by, one for each kind of row, beside the row's own words. */
+export const ROW_TEST_ID = {
+  THREAD: "inbox-row",
+  TASK: "task-row",
+  /** A place an iPad's sidebar goes to, such as the Inbox, found beside its name. */
+  PLACE: "place-row",
+} as const;
+
+type RowTestId = (typeof ROW_TEST_ID)[keyof typeof ROW_TEST_ID];
+
+/** The system's primary hierarchical style, which a row's title in the system's sidebar list stands in. */
+const PRIMARY_STYLE = { type: "hierarchical", style: "primary" } as const;
 
 /** What parts the pieces of what a row is heard as, as VoiceOver pauses between a label's phrases. */
 const HEARD_PART = ", ";
@@ -456,6 +471,7 @@ export function rowPlacement(
     indent = 0,
     dot = true,
     reach = 0,
+    system = false,
   }: {
     readonly selected?: boolean | undefined;
     readonly vertical?: number | undefined;
@@ -463,12 +479,15 @@ export function rowPlacement(
     /** Whether the row draws the unread dot's column, which stands in the margin; a task's row, which draws none, starts its lead at `inset.lead`. */
     readonly dot?: boolean | undefined;
     readonly reach?: number | undefined;
+    /** Whether the row keeps the system sidebar list's own ground and selection highlight, as an iPad's own sidebar's rows do, rather than clearing it for a fill of ours. */
+    readonly system?: boolean | undefined;
   } = {},
 ) {
   const leading = dot ? inset.dotted : inset.lead;
 
   return [
-    listRowBackground("clear"),
+    // Note that a row of the system's sidebar list keeps its cell's ground, since a row ground of ours hides the list's own selection highlight.
+    ...(system ? [] : [listRowBackground("clear")]),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({
       leading: leading - ROW_INSET.FILL,
@@ -492,6 +511,21 @@ export function rowPlacement(
     listRowSeparatorTint(colors.CHIP_EDGE),
     alignmentGuide("listRowSeparatorLeading", inset.text + indent),
   ];
+}
+
+/** A long press menu's tree as the native module reads it, SwiftUI's menu (`rowMenu`) and UIKit's (`ContextMenu`) alike: its groups (`menuTree`) in the menu's muted ink, headed by `title` where it has one. */
+export function longPressTree(
+  groups: readonly LongPressGroup[],
+  title: string | undefined,
+  colors: BrandColors,
+): string {
+  return JSON.stringify({
+    title,
+    groups: menuTree(groups, {
+      act: colors.TEXT_MUTED,
+      tone: (tone) => toneColor(colors, tone),
+    }),
+  });
 }
 
 /**
@@ -519,13 +553,7 @@ export function LongPressMenu({
 
   if (filledGroups(groups).length === 0) return children;
 
-  const tree = JSON.stringify({
-    title,
-    groups: menuTree(groups, {
-      act: colors.TEXT_MUTED,
-      tone: (tone) => toneColor(colors, tone),
-    }),
-  });
+  const tree = longPressTree(groups, title, colors);
 
   return (
     <HStack modifiers={[rowMenu(tree, false, (path) => menuPressAt(groups, path)?.())]}>
@@ -574,9 +602,12 @@ export function RowFrame({
   indent,
   dot,
   now,
+  testId,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
+  /** What a flow finds the row by, its kind's id (`ROW_TEST_ID`), beside its words, so it never matches the same words elsewhere on screen. */
+  readonly testId?: RowTestId | undefined;
   /** The row's top and bottom inset, where it stands roomier than the list's own, as an Inbox thread does. */
   readonly vertical?: number | undefined;
   /** How far past the list's text column the row's words start, where it stands in deeper, a second mark leads it, or its lead grows, so its hairline starts under them. */
@@ -591,6 +622,7 @@ export function RowFrame({
   const fills = useSystemColors();
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
+  const system = useContext(RowSystemLookContext);
   const disclosed = useContext(RowDisclosedContext);
   const chevronRoom = useScaledSize(DISCLOSURE_CHEVRON_ROOM);
   const choosing = useContext(RowChoosingContext);
@@ -654,12 +686,14 @@ export function RowFrame({
   // Note that a heard row is one element whose children's own acts are left out, the swipes' and the menu's, which VoiceOver listed twice and each submenu's items with no verb; its Actions are read once from its menu's tree instead (`rowHeard`), and Select mode offers none, as it offers no long press.
   const frameModifiers = [
     tag(id),
+    ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
     ...rowPlacement(colors, inset, {
       selected,
       vertical,
       indent,
       dot,
       reach: disclosed ? inset.margin + chevronRoom : 0,
+      system,
     }),
     ...(heard === undefined
       ? []
@@ -783,6 +817,7 @@ export function RowHead({
   /** Where given, what the title's whole width and its room on the line are told to, so the row can let marks of its end go before the title is cut. */
   readonly fit?: TitleFit | undefined;
 }) {
+  const system = useContext(RowSystemLookContext);
   const lines = useRowLines();
   const stacked = useAccessibilitySize();
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
@@ -792,7 +827,8 @@ export function RowHead({
       title={title}
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "semibold" : "regular" }),
-        foregroundStyle(ink),
+        // Note that a title in the system's sidebar list stands in the system's primary style, so the sidebar's own selection turns it as it turns its own rows' words.
+        foregroundStyle(system ? PRIMARY_STYLE : ink),
         lineLimit(lines.title),
       ]}
     />
@@ -1090,6 +1126,7 @@ export function ListRow(props: ListRowProps) {
     <RowFrame
       {...props}
       id={id}
+      testId={ROW_TEST_ID.THREAD}
       row={row}
       heard={props.heard ?? threadHeard(props, now)}
       vertical={ROW_INSET.THREAD_VERTICAL}
@@ -1595,6 +1632,7 @@ export function TaskRow(props: TaskRowProps) {
     <RowFrame
       {...props}
       id={id}
+      testId={ROW_TEST_ID.TASK}
       row={row}
       indent={indent}
       dot={false}

@@ -30,6 +30,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { MESSAGE_ROLE } from "@repo/wire";
 import {
   createMemoryHistory,
@@ -59,7 +60,6 @@ import { editorBundleLanded, installEditorLayout, typeInComposer } from "../test
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { ACME, SHOW_KEY, WHOSE_KEY } from "../testing/desktop-inbox.js";
 import { overListedTasks } from "../testing/desktop-sidebar.js";
-import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import {
   agentsControl,

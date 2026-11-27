@@ -318,6 +318,7 @@ test("a run anchored to its end, first drawn in a scroller not laid out, opens a
           scroller,
           keys,
           estimate: 100,
+          anchor: VIRTUAL_ROWS_ANCHOR.END,
           children: (index: number) => createElement("p", null, keys[index]),
         }),
       ),

@@ -14,8 +14,8 @@ env:
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 30000
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 - tapOn: "Settings(, .*)?"
 - waitForAnimationToEnd
 - scrollUntilVisible:

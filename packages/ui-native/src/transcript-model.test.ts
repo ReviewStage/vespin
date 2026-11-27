@@ -1,5 +1,6 @@
 import { agentParts, WHOLE_PART } from "@repo/features/agent-parts";
 import {
+  AGENT_ATTACHMENT_TYPE,
   AGENT_SENDER,
   CHECK_SUMMARY,
   PART_CUT_FIELD,
@@ -25,6 +26,7 @@ import {
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  withSending,
   withWaitingLine,
 } from "./transcript-model.js";
 
@@ -704,6 +706,49 @@ describe("transcriptItems", () => {
     const foot = items.find((item) => item.kind === TRANSCRIPT_ITEM.FOOT);
 
     expect(foot?.kind === TRANSCRIPT_ITEM.FOOT ? foot.copy : undefined).toBe(copy);
+  });
+});
+
+describe("withSending", () => {
+  it("draws a line on its way with the pictures this phone holds of it, each its words name as its chip where they name it", () => {
+    const line = {
+      id: "line",
+      clientKey: "key",
+      text: "The button is cut off in [Picture 1].",
+      files: [{ name: "Picture 1", mediaType: "image/png" }],
+      sentAt: 1,
+      steers: false,
+    };
+
+    const held = (lineId: string) =>
+      lineId === "line"
+        ? [{ name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: "iVBORw0KGgo=" }]
+        : [];
+
+    const items = transcriptItems(withSending([], [line], held), {
+      writing: false,
+      readerId: undefined,
+      toggles: NO_TOGGLES,
+      now: 2,
+      pullRequests: [],
+    });
+
+    expect(items[0]).toMatchObject({
+      kind: TRANSCRIPT_ITEM.SAID,
+      words: "The button is cut off in [Picture 1].",
+      pictures: [],
+      wordPictures: new Map([
+        [
+          "Picture 1",
+          {
+            key: "0",
+            name: "Picture 1",
+            url: "data:image/png;base64,iVBORw0KGgo=",
+            pictureId: undefined,
+          },
+        ],
+      ]),
+    });
   });
 });
 

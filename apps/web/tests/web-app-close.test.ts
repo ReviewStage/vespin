@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import assert from "node:assert/strict";
 import "@repo/panel/testing/match-media";
-import "@repo/panel/testing/resize-observer";
+import "@repo/ui/testing/resize-observer";
 import { actPort, appBridge } from "@repo/panel/app-bridge";
 import { appPlatform } from "@repo/panel/app-platform";
 import { afterEach, test, vi } from "vitest";

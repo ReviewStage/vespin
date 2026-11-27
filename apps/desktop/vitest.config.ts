@@ -28,7 +28,7 @@ export default defineConfig({
     setupFiles: [
       "../../packages/wire/src/testing/file-time-cap.ts",
       "../../packages/wire/src/testing/duplicate-keys.ts",
-      "../../packages/panel/src/testing/resize-observer.ts",
+      "../../packages/ui/src/testing/resize-observer.ts",
       "../../packages/panel/src/testing/match-media.ts",
     ],
     server: { deps: { inline: ["streamdown"] } },

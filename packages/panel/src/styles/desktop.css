@@ -960,6 +960,17 @@ body,
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
 
+/* An agent's box stands the profile's least lines tall while it is empty
+   (`--ui-composer-least-lines`), and still grows to its eight as the words
+   are written; a box writing a sent message again keeps its own. */
+.desktop-agent .agent-composer .agent-composer-input {
+  min-height: calc(
+    var(--ui-composer-least-lines) *
+    var(--agent-composer-line) +
+    var(--agent-composer-field-block)
+  );
+}
+
 /* A Manager's chat (`desktop-agent-page.tsx`'s `data-chat`) stands both
    sides' bubbles at one width, as a chat app does: each turn of a bubble
    spans the column, and so does its row (`ChatBubble`), so its bubble keeps

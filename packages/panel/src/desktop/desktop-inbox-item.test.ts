@@ -37,6 +37,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -132,7 +133,6 @@ import {
 import { focusRestOn, restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { chooseMenuItem, menuItems } from "../testing/phone-head.js";
-import { relayout } from "../testing/resize-observer.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { viewerPlace } from "../testing/viewer-place.js";
@@ -1864,6 +1864,7 @@ test("a message written on a settled item's thread from its box goes as a messag
   // The thread is taller than its board, and the reader has scrolled up it, so the new comment lands under its foot.
   layScrollerOut(board, 400, 1_400);
   act(() => {
+    board.dispatchEvent(new WheelEvent("wheel", { deltaY: -120 }));
     board.scrollTop = 200;
   });
 
