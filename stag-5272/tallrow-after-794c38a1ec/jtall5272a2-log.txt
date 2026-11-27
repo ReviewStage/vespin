@@ -1,0 +1,11 @@
+pinned to 794c38a1ec
+== bundle PJjtall5272a2 base 794c38a1ec
+  built 794c38a1ec base app Vmain18.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-dark-transcript-open: fails 0 shots 5 
+  iphone-dark-transcript-open shots: transcript-open-latest.png transcript-open-link.png transcript-open-table.png transcript-open-tall-row.png transcript-open-tapped.png 
+iphone-light-transcript-open: fails 0 shots 5 
+  iphone-light-transcript-open shots: transcript-open-latest.png transcript-open-link.png transcript-open-table.png transcript-open-tall-row.png transcript-open-tapped.png 
