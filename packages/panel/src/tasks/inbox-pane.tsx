@@ -1633,6 +1633,8 @@ export function InboxPane({
 }): React.JSX.Element {
   const now = useMinute();
   const title = cardTitle(item.title, usePlainLinkNames());
+  // Note that an ask's controls and its cards keep the title's own addresses, since a to-do of no steps stands its title as its one step, drawn as Markdown, where an address is its chip.
+  const askTitle = cardTitle(item.title);
   const board = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLElement>(null);
 
@@ -1741,7 +1743,7 @@ export function InboxPane({
       >
         <AskControls
           ask={openAsk}
-          title={title}
+          title={askTitle}
           doors={{ draft, disabled: !open, text: formText, onDraft }}
         />
       </DraftQuestion>
@@ -1921,7 +1923,7 @@ export function InboxPane({
                         return (
                           <ThreadMessage
                             itemId={item.id}
-                            title={title}
+                            title={askTitle}
                             threadAddressedTo={inboxAddressedTo(item)}
                             message={row.message}
                             thread={thread}
@@ -1942,7 +1944,7 @@ export function InboxPane({
                             itemId={item.id}
                             readerId={readerId}
                             reply={row.reply}
-                            title={title}
+                            title={askTitle}
                             thread={thread}
                             now={now}
                             place={place}
