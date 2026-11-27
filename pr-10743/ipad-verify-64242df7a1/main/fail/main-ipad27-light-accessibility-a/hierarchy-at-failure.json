@@ -1,0 +1,2306 @@
+{
+  "attributes" : {
+    "bounds" : "[0,0][0,0]",
+    "enabled" : "false",
+    "focused" : "false",
+    "selected" : "false",
+    "checked" : "false"
+  },
+  "children" : [ {
+    "attributes" : {
+      "accessibilityText" : "Vespin",
+      "bounds" : "[0,0][834,1210]",
+      "enabled" : "true",
+      "focused" : "false",
+      "selected" : "false",
+      "checked" : "false"
+    },
+    "children" : [ {
+      "attributes" : {
+        "bounds" : "[0,0][834,1210]",
+        "enabled" : "true",
+        "focused" : "false",
+        "selected" : "false",
+        "checked" : "false"
+      },
+      "children" : [ {
+        "attributes" : {
+          "bounds" : "[0,0][834,1210]",
+          "enabled" : "true",
+          "focused" : "false",
+          "selected" : "false",
+          "checked" : "false"
+        },
+        "enabled" : true,
+        "focused" : false,
+        "checked" : false,
+        "selected" : false
+      }, {
+        "attributes" : {
+          "bounds" : "[0,0][834,1210]",
+          "enabled" : "true",
+          "focused" : "false",
+          "selected" : "false",
+          "checked" : "false"
+        },
+        "children" : [ {
+          "attributes" : {
+            "bounds" : "[0,0][834,1210]",
+            "enabled" : "true",
+            "focused" : "false",
+            "selected" : "false",
+            "checked" : "false"
+          },
+          "children" : [ {
+            "attributes" : {
+              "bounds" : "[0,0][834,1210]",
+              "enabled" : "true",
+              "focused" : "false",
+              "selected" : "false",
+              "checked" : "false"
+            },
+            "children" : [ {
+              "attributes" : {
+                "bounds" : "[0,0][834,1210]",
+                "enabled" : "true",
+                "focused" : "false",
+                "selected" : "false",
+                "checked" : "false"
+              },
+              "children" : [ {
+                "attributes" : {
+                  "bounds" : "[0,0][834,1210]",
+                  "enabled" : "true",
+                  "focused" : "false",
+                  "selected" : "false",
+                  "checked" : "false"
+                },
+                "children" : [ {
+                  "attributes" : {
+                    "bounds" : "[0,0][834,1210]",
+                    "enabled" : "true",
+                    "focused" : "false",
+                    "selected" : "false",
+                    "checked" : "false"
+                  },
+                  "children" : [ {
+                    "attributes" : {
+                      "bounds" : "[0,0][834,1210]",
+                      "enabled" : "true",
+                      "focused" : "false",
+                      "selected" : "false",
+                      "checked" : "false"
+                    },
+                    "children" : [ {
+                      "attributes" : {
+                        "bounds" : "[0,0][834,1210]",
+                        "enabled" : "true",
+                        "focused" : "false",
+                        "selected" : "false",
+                        "checked" : "false"
+                      },
+                      "children" : [ {
+                        "attributes" : {
+                          "bounds" : "[0,0][834,1210]",
+                          "enabled" : "true",
+                          "focused" : "false",
+                          "selected" : "false",
+                          "checked" : "false"
+                        },
+                        "children" : [ {
+                          "attributes" : {
+                            "bounds" : "[0,0][834,1210]",
+                            "enabled" : "true",
+                            "focused" : "false",
+                            "selected" : "false",
+                            "checked" : "false"
+                          },
+                          "children" : [ {
+                            "attributes" : {
+                              "bounds" : "[0,0][834,1210]",
+                              "enabled" : "true",
+                              "focused" : "false",
+                              "selected" : "false",
+                              "checked" : "false"
+                            },
+                            "children" : [ {
+                              "attributes" : {
+                                "bounds" : "[0,0][834,1210]",
+                                "enabled" : "true",
+                                "focused" : "false",
+                                "selected" : "false",
+                                "checked" : "false"
+                              },
+                              "children" : [ {
+                                "attributes" : {
+                                  "bounds" : "[0,0][834,1210]",
+                                  "enabled" : "true",
+                                  "focused" : "false",
+                                  "selected" : "false",
+                                  "checked" : "false"
+                                },
+                                "children" : [ {
+                                  "attributes" : {
+                                    "bounds" : "[0,0][834,1210]",
+                                    "enabled" : "true",
+                                    "focused" : "false",
+                                    "selected" : "false",
+                                    "checked" : "false"
+                                  },
+                                  "children" : [ {
+                                    "attributes" : {
+                                      "bounds" : "[0,0][834,1210]",
+                                      "enabled" : "true",
+                                      "focused" : "false",
+                                      "selected" : "false",
+                                      "checked" : "false"
+                                    },
+                                    "children" : [ {
+                                      "attributes" : {
+                                        "bounds" : "[0,0][834,1210]",
+                                        "enabled" : "true",
+                                        "focused" : "false",
+                                        "selected" : "false",
+                                        "checked" : "false"
+                                      },
+                                      "children" : [ {
+                                        "attributes" : {
+                                          "bounds" : "[0,0][834,1210]",
+                                          "enabled" : "true",
+                                          "focused" : "false",
+                                          "selected" : "false",
+                                          "checked" : "false"
+                                        },
+                                        "children" : [ {
+                                          "attributes" : {
+                                            "bounds" : "[0,0][834,1210]",
+                                            "enabled" : "true",
+                                            "focused" : "false",
+                                            "selected" : "false",
+                                            "checked" : "false"
+                                          },
+                                          "children" : [ {
+                                            "attributes" : {
+                                              "bounds" : "[0,0][834,1210]",
+                                              "enabled" : "true",
+                                              "focused" : "false",
+                                              "selected" : "false",
+                                              "checked" : "false"
+                                            },
+                                            "children" : [ {
+                                              "attributes" : {
+                                                "bounds" : "[0,0][834,1210]",
+                                                "enabled" : "true",
+                                                "focused" : "false",
+                                                "selected" : "false",
+                                                "checked" : "false"
+                                              },
+                                              "children" : [ {
+                                                "attributes" : {
+                                                  "bounds" : "[0,0][834,1210]",
+                                                  "enabled" : "true",
+                                                  "focused" : "false",
+                                                  "selected" : "false",
+                                                  "checked" : "false"
+                                                },
+                                                "children" : [ {
+                                                  "attributes" : {
+                                                    "bounds" : "[0,0][834,1210]",
+                                                    "enabled" : "true",
+                                                    "focused" : "false",
+                                                    "selected" : "false",
+                                                    "checked" : "false"
+                                                  },
+                                                  "children" : [ {
+                                                    "attributes" : {
+                                                      "bounds" : "[0,0][834,1210]",
+                                                      "enabled" : "true",
+                                                      "focused" : "false",
+                                                      "selected" : "false",
+                                                      "checked" : "false"
+                                                    },
+                                                    "children" : [ {
+                                                      "attributes" : {
+                                                        "bounds" : "[0,0][834,1210]",
+                                                        "enabled" : "true",
+                                                        "focused" : "false",
+                                                        "selected" : "false",
+                                                        "checked" : "false"
+                                                      },
+                                                      "children" : [ {
+                                                        "attributes" : {
+                                                          "bounds" : "[0,0][834,1210]",
+                                                          "enabled" : "true",
+                                                          "focused" : "false",
+                                                          "selected" : "false",
+                                                          "checked" : "false"
+                                                        },
+                                                        "children" : [ {
+                                                          "attributes" : {
+                                                            "bounds" : "[0,0][834,1210]",
+                                                            "enabled" : "true",
+                                                            "focused" : "false",
+                                                            "selected" : "false",
+                                                            "checked" : "false"
+                                                          },
+                                                          "children" : [ {
+                                                            "attributes" : {
+                                                              "bounds" : "[0,0][834,1210]",
+                                                              "enabled" : "true",
+                                                              "focused" : "false",
+                                                              "selected" : "false",
+                                                              "checked" : "false"
+                                                            },
+                                                            "children" : [ {
+                                                              "attributes" : {
+                                                                "bounds" : "[0,0][834,1210]",
+                                                                "enabled" : "true",
+                                                                "focused" : "false",
+                                                                "selected" : "false",
+                                                                "checked" : "false"
+                                                              },
+                                                              "children" : [ {
+                                                                "attributes" : {
+                                                                  "bounds" : "[0,0][834,1210]",
+                                                                  "enabled" : "true",
+                                                                  "focused" : "false",
+                                                                  "selected" : "false",
+                                                                  "checked" : "false"
+                                                                },
+                                                                "children" : [ {
+                                                                  "attributes" : {
+                                                                    "bounds" : "[0,0][834,1210]",
+                                                                    "enabled" : "true",
+                                                                    "focused" : "false",
+                                                                    "selected" : "false",
+                                                                    "checked" : "false"
+                                                                  },
+                                                                  "children" : [ {
+                                                                    "attributes" : {
+                                                                      "bounds" : "[0,0][834,1210]",
+                                                                      "enabled" : "true",
+                                                                      "focused" : "false",
+                                                                      "selected" : "false",
+                                                                      "checked" : "false"
+                                                                    },
+                                                                    "children" : [ {
+                                                                      "attributes" : {
+                                                                        "bounds" : "[0,0][834,1210]",
+                                                                        "enabled" : "true",
+                                                                        "focused" : "false",
+                                                                        "selected" : "false",
+                                                                        "checked" : "false"
+                                                                      },
+                                                                      "children" : [ {
+                                                                        "attributes" : {
+                                                                          "bounds" : "[0,0][834,1210]",
+                                                                          "enabled" : "true",
+                                                                          "focused" : "false",
+                                                                          "selected" : "false",
+                                                                          "checked" : "false"
+                                                                        },
+                                                                        "children" : [ {
+                                                                          "attributes" : {
+                                                                            "bounds" : "[0,0][834,1210]",
+                                                                            "enabled" : "true",
+                                                                            "focused" : "false",
+                                                                            "selected" : "false",
+                                                                            "checked" : "false"
+                                                                          },
+                                                                          "children" : [ {
+                                                                            "attributes" : {
+                                                                              "bounds" : "[0,0][320,1210]",
+                                                                              "enabled" : "true",
+                                                                              "focused" : "false",
+                                                                              "selected" : "false",
+                                                                              "checked" : "false"
+                                                                            },
+                                                                            "children" : [ {
+                                                                              "attributes" : {
+                                                                                "bounds" : "[0,0][320,1210]",
+                                                                                "enabled" : "true",
+                                                                                "focused" : "false",
+                                                                                "selected" : "false",
+                                                                                "checked" : "false"
+                                                                              },
+                                                                              "children" : [ {
+                                                                                "attributes" : {
+                                                                                  "bounds" : "[0,0][320,1210]",
+                                                                                  "enabled" : "true",
+                                                                                  "focused" : "false",
+                                                                                  "selected" : "false",
+                                                                                  "checked" : "false"
+                                                                                },
+                                                                                "children" : [ {
+                                                                                  "attributes" : {
+                                                                                    "bounds" : "[0,0][320,1210]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "children" : [ {
+                                                                                    "attributes" : {
+                                                                                      "bounds" : "[0,0][320,1210]",
+                                                                                      "enabled" : "true",
+                                                                                      "focused" : "false",
+                                                                                      "selected" : "false",
+                                                                                      "checked" : "false"
+                                                                                    },
+                                                                                    "children" : [ {
+                                                                                      "attributes" : {
+                                                                                        "bounds" : "[0,0][320,1210]",
+                                                                                        "enabled" : "true",
+                                                                                        "focused" : "false",
+                                                                                        "selected" : "false",
+                                                                                        "checked" : "false"
+                                                                                      },
+                                                                                      "children" : [ {
+                                                                                        "attributes" : {
+                                                                                          "bounds" : "[0,284][319,1190]",
+                                                                                          "enabled" : "true",
+                                                                                          "focused" : "false",
+                                                                                          "selected" : "false",
+                                                                                          "checked" : "false"
+                                                                                        },
+                                                                                        "enabled" : true,
+                                                                                        "focused" : false,
+                                                                                        "checked" : false,
+                                                                                        "selected" : false
+                                                                                      }, {
+                                                                                        "attributes" : {
+                                                                                          "bounds" : "[0,0][319,1210]",
+                                                                                          "enabled" : "true",
+                                                                                          "focused" : "false",
+                                                                                          "selected" : "false",
+                                                                                          "checked" : "false"
+                                                                                        },
+                                                                                        "children" : [ {
+                                                                                          "attributes" : {
+                                                                                            "bounds" : "[0,-2136][319,1460]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        }, {
+                                                                                          "attributes" : {
+                                                                                            "bounds" : "[0,0][319,1210]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "children" : [ {
+                                                                                            "attributes" : {
+                                                                                              "bounds" : "[0,0][319,324]",
+                                                                                              "enabled" : "true",
+                                                                                              "focused" : "false",
+                                                                                              "selected" : "false",
+                                                                                              "checked" : "false"
+                                                                                            },
+                                                                                            "enabled" : true,
+                                                                                            "focused" : false,
+                                                                                            "checked" : false,
+                                                                                            "selected" : false
+                                                                                          } ],
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        }, {
+                                                                                          "attributes" : {
+                                                                                            "bounds" : "[0,0][319,1210]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        }, {
+                                                                                          "attributes" : {
+                                                                                            "bounds" : "[0,284][319,357]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "children" : [ {
+                                                                                            "attributes" : {
+                                                                                              "bounds" : "[0,284][319,357]",
+                                                                                              "enabled" : "true",
+                                                                                              "focused" : "false",
+                                                                                              "selected" : "false",
+                                                                                              "checked" : "false"
+                                                                                            },
+                                                                                            "enabled" : true,
+                                                                                            "focused" : false,
+                                                                                            "checked" : false,
+                                                                                            "selected" : false
+                                                                                          }, {
+                                                                                            "attributes" : {
+                                                                                              "bounds" : "[0,284][319,357]",
+                                                                                              "enabled" : "true",
+                                                                                              "focused" : "false",
+                                                                                              "selected" : "false",
+                                                                                              "checked" : "false"
+                                                                                            },
+                                                                                            "children" : [ {
+                                                                                              "attributes" : {
+                                                                                                "bounds" : "[0,284][319,357]",
+                                                                                                "enabled" : "true",
+                                                                                                "focused" : "false",
+                                                                                                "selected" : "false",
+                                                                                                "checked" : "false"
+                                                                                              },
+                                                                                              "children" : [ {
+                                                                                                "attributes" : {
+                                                                                                  "bounds" : "[0,284][319,357]",
+                                                                                                  "enabled" : "true",
+                                                                                                  "focused" : "false",
+                                                                                                  "selected" : "false",
+                                                                                                  "checked" : "false"
+                                                                                                },
+                                                                                                "children" : [ {
+                                                                                                  "attributes" : {
+                                                                                                    "accessibilityText" : "Pinned, 2",
+                                                                                                    "value" : "Expanded",
+                                                                                                    "text" : "Expanded",
+                                                                                                    "bounds" : "[0,284][319,357]",
+                                                                                                    "enabled" : "true",
+                                                                                                    "focused" : "false",
+                                                                                                    "selected" : "false",
+                                                                                                    "checked" : "false"
+                                                                                                  },
+                                                                                                  "children" : [ {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "Pinned",
+                                                                                                      "bounds" : "[28,294][162,347]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "2",
+                                                                                                      "bounds" : "[168,294][195,347]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "ChevronDown",
+                                                                                                      "bounds" : "[278,316][294,325]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  } ],
+                                                                                                  "enabled" : true,
+                                                                                                  "focused" : false,
+                                                                                                  "checked" : false,
+                                                                                                  "selected" : false
+                                                                                                } ],
+                                                                                                "enabled" : true,
+                                                                                                "focused" : false,
+                                                                                                "checked" : false,
+                                                                                                "selected" : false
+                                                                                              } ],
+                                                                                              "enabled" : true,
+                                                                                              "focused" : false,
+                                                                                              "checked" : false,
+                                                                                              "selected" : false
+                                                                                            } ],
+                                                                                            "enabled" : true,
+                                                                                            "focused" : false,
+                                                                                            "checked" : false,
+                                                                                            "selected" : false
+                                                                                          } ],
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        }, {
+                                                                                          "attributes" : {
+                                                                                            "bounds" : "[0,357][319,908]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "children" : [ {
+                                                                                            "attributes" : {
+                                                                                              "bounds" : "[0,357][319,908]",
+                                                                                              "enabled" : "true",
+                                                                                              "focused" : "false",
+                                                                                              "selected" : "false",
+                                                                                              "checked" : "false"
+                                                                                            },
+                                                                                            "children" : [ {
+                                                                                              "attributes" : {
+                                                                                                "bounds" : "[0,357][319,908]",
+                                                                                                "enabled" : "true",
+                                                                                                "focused" : "false",
+                                                                                                "selected" : "false",
+                                                                                                "checked" : "false"
+                                                                                              },
+                                                                                              "children" : [ {
+                                                                                                "attributes" : {
+                                                                                                  "bounds" : "[0,357][319,908]",
+                                                                                                  "enabled" : "true",
+                                                                                                  "focused" : "false",
+                                                                                                  "selected" : "false",
+                                                                                                  "checked" : "false"
+                                                                                                },
+                                                                                                "children" : [ {
+                                                                                                  "attributes" : {
+                                                                                                    "bounds" : "[0,357][319,908]",
+                                                                                                    "enabled" : "true",
+                                                                                                    "focused" : "false",
+                                                                                                    "selected" : "false",
+                                                                                                    "checked" : "false"
+                                                                                                  },
+                                                                                                  "enabled" : true,
+                                                                                                  "focused" : false,
+                                                                                                  "checked" : false,
+                                                                                                  "selected" : false
+                                                                                                } ],
+                                                                                                "enabled" : true,
+                                                                                                "focused" : false,
+                                                                                                "checked" : false,
+                                                                                                "selected" : false
+                                                                                              } ],
+                                                                                              "enabled" : true,
+                                                                                              "focused" : false,
+                                                                                              "checked" : false,
+                                                                                              "selected" : false
+                                                                                            } ],
+                                                                                            "enabled" : true,
+                                                                                            "focused" : false,
+                                                                                            "checked" : false,
+                                                                                            "selected" : false
+                                                                                          }, {
+                                                                                            "attributes" : {
+                                                                                              "bounds" : "[0,357][319,908]",
+                                                                                              "enabled" : "true",
+                                                                                              "focused" : "false",
+                                                                                              "selected" : "false",
+                                                                                              "checked" : "false"
+                                                                                            },
+                                                                                            "children" : [ {
+                                                                                              "attributes" : {
+                                                                                                "bounds" : "[0,357][319,908]",
+                                                                                                "enabled" : "true",
+                                                                                                "focused" : "false",
+                                                                                                "selected" : "false",
+                                                                                                "checked" : "false"
+                                                                                              },
+                                                                                              "children" : [ {
+                                                                                                "attributes" : {
+                                                                                                  "bounds" : "[0,357][319,908]",
+                                                                                                  "enabled" : "true",
+                                                                                                  "focused" : "false",
+                                                                                                  "selected" : "false",
+                                                                                                  "checked" : "false"
+                                                                                                },
+                                                                                                "children" : [ {
+                                                                                                  "attributes" : {
+                                                                                                    "bounds" : "[0,357][319,908]",
+                                                                                                    "enabled" : "true",
+                                                                                                    "focused" : "false",
+                                                                                                    "selected" : "false",
+                                                                                                    "checked" : "false"
+                                                                                                  },
+                                                                                                  "enabled" : true,
+                                                                                                  "focused" : false,
+                                                                                                  "checked" : false,
+                                                                                                  "selected" : false
+                                                                                                }, {
+                                                                                                  "attributes" : {
+                                                                                                    "accessibilityText" : "Verify the digest's sender domain",
+                                                                                                    "value" : "Needs you, 3 steps left · Open the mail provider's Domains page and add relay.example.com., Weekly digest email, In progress, 25 minutes ago",
+                                                                                                    "text" : "Needs you, 3 steps left · Open the mail provider's Domains page and add relay.example.com., Weekly digest email, In progress, 25 minutes ago",
+                                                                                                    "bounds" : "[11,365][274,900]",
+                                                                                                    "enabled" : "true",
+                                                                                                    "focused" : "false",
+                                                                                                    "selected" : "false",
+                                                                                                    "checked" : "false"
+                                                                                                  },
+                                                                                                  "children" : [ {
+                                                                                                    "attributes" : {
+                                                                                                      "bounds" : "[11,376][29,394]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "In progress",
+                                                                                                      "bounds" : "[42,368][72,398]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "Weekly digest email",
+                                                                                                      "bounds" : "[87,365][271,552]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "25m",
+                                                                                                      "bounds" : "[87,554][177,607]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "Verify the digest's sender domain",
+                                                                                                      "bounds" : "[37,607][274,782]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "bounds" : "[11,686][29,704]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "3 steps left · Open the mail provider's Domains page and add relay.example.com.",
+                                                                                                      "bounds" : "[94,784][258,900]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "SquareCheck",
+                                                                                                      "bounds" : "[42,820][86,864]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "bounds" : "[11,833][29,851]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  } ],
+                                                                                                  "enabled" : true,
+                                                                                                  "focused" : false,
+                                                                                                  "checked" : false,
+                                                                                                  "selected" : false
+                                                                                                } ],
+                                                                                                "enabled" : true,
+                                                                                                "focused" : false,
+                                                                                                "checked" : false,
+                                                                                                "selected" : false
+                                                                                              } ],
+                                                                                              "enabled" : true,
+                                                                                              "focused" : false,
+                                                                                              "checked" : false,
+                                                                                              "selected" : false
+                                                                                            } ],
+                                                                                            "enabled" : true,
+                                                                                            "focused" : false,
+                                                                                            "checked" : false,
+                                                                                            "selected" : false
+                                                                                          } ],
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        }, {
+                                                                                          "attributes" : {
+                                                                                            "bounds" : "[0,908][319,1460]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "children" : [ {
+                                                                                            "attributes" : {
+                                                                                              "bounds" : "[0,908][319,1460]",
+                                                                                              "enabled" : "true",
+                                                                                              "focused" : "false",
+                                                                                              "selected" : "false",
+                                                                                              "checked" : "false"
+                                                                                            },
+                                                                                            "children" : [ {
+                                                                                              "attributes" : {
+                                                                                                "bounds" : "[0,908][319,1460]",
+                                                                                                "enabled" : "true",
+                                                                                                "focused" : "false",
+                                                                                                "selected" : "false",
+                                                                                                "checked" : "false"
+                                                                                              },
+                                                                                              "children" : [ {
+                                                                                                "attributes" : {
+                                                                                                  "bounds" : "[0,908][319,1460]",
+                                                                                                  "enabled" : "true",
+                                                                                                  "focused" : "false",
+                                                                                                  "selected" : "false",
+                                                                                                  "checked" : "false"
+                                                                                                },
+                                                                                                "children" : [ {
+                                                                                                  "attributes" : {
+                                                                                                    "bounds" : "[0,908][319,1460]",
+                                                                                                    "enabled" : "true",
+                                                                                                    "focused" : "false",
+                                                                                                    "selected" : "false",
+                                                                                                    "checked" : "false"
+                                                                                                  },
+                                                                                                  "enabled" : true,
+                                                                                                  "focused" : false,
+                                                                                                  "checked" : false,
+                                                                                                  "selected" : false
+                                                                                                } ],
+                                                                                                "enabled" : true,
+                                                                                                "focused" : false,
+                                                                                                "checked" : false,
+                                                                                                "selected" : false
+                                                                                              } ],
+                                                                                              "enabled" : true,
+                                                                                              "focused" : false,
+                                                                                              "checked" : false,
+                                                                                              "selected" : false
+                                                                                            } ],
+                                                                                            "enabled" : true,
+                                                                                            "focused" : false,
+                                                                                            "checked" : false,
+                                                                                            "selected" : false
+                                                                                          }, {
+                                                                                            "attributes" : {
+                                                                                              "bounds" : "[0,908][319,1460]",
+                                                                                              "enabled" : "true",
+                                                                                              "focused" : "false",
+                                                                                              "selected" : "false",
+                                                                                              "checked" : "false"
+                                                                                            },
+                                                                                            "children" : [ {
+                                                                                              "attributes" : {
+                                                                                                "bounds" : "[0,908][319,1460]",
+                                                                                                "enabled" : "true",
+                                                                                                "focused" : "false",
+                                                                                                "selected" : "false",
+                                                                                                "checked" : "false"
+                                                                                              },
+                                                                                              "children" : [ {
+                                                                                                "attributes" : {
+                                                                                                  "bounds" : "[0,908][319,1460]",
+                                                                                                  "enabled" : "true",
+                                                                                                  "focused" : "false",
+                                                                                                  "selected" : "false",
+                                                                                                  "checked" : "false"
+                                                                                                },
+                                                                                                "children" : [ {
+                                                                                                  "attributes" : {
+                                                                                                    "bounds" : "[0,908][319,1460]",
+                                                                                                    "enabled" : "true",
+                                                                                                    "focused" : "false",
+                                                                                                    "selected" : "false",
+                                                                                                    "checked" : "false"
+                                                                                                  },
+                                                                                                  "enabled" : true,
+                                                                                                  "focused" : false,
+                                                                                                  "checked" : false,
+                                                                                                  "selected" : false
+                                                                                                }, {
+                                                                                                  "attributes" : {
+                                                                                                    "accessibilityText" : "The digest's subject line",
+                                                                                                    "value" : "Needs you, Write an answer, Weekly digest email, In progress, 1 hour ago",
+                                                                                                    "text" : "Needs you, Write an answer, Weekly digest email, In progress, 1 hour ago",
+                                                                                                    "bounds" : "[11,916][277,1452]",
+                                                                                                    "enabled" : "true",
+                                                                                                    "focused" : "false",
+                                                                                                    "selected" : "false",
+                                                                                                    "checked" : "false"
+                                                                                                  },
+                                                                                                  "children" : [ {
+                                                                                                    "attributes" : {
+                                                                                                      "bounds" : "[11,928][29,946]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "In progress",
+                                                                                                      "bounds" : "[42,919][72,950]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "Weekly digest email",
+                                                                                                      "bounds" : "[87,916][271,1104]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "1h",
+                                                                                                      "bounds" : "[87,1106][138,1159]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  }, {
+                                                                                                    "attributes" : {
+                                                                                                      "accessibilityText" : "The digest's subject line",
+                                                                                                      "bounds" : "[37,1159][272,1333]",
+                                                                                                      "enabled" : "true",
+                                                                                                      "focused" : "false",
+                                                                                                      "selected" : "false",
+                                                                                                      "checked" : "false"
+                                                                                                    },
+                                                                                                    "enabled" : true,
+                                                                                                    "focused" : false,
+                                                                                                    "checked" : false,
+                                                                                                    "selected" : false
+                                                                                                  } ],
+                                                                                                  "enabled" : true,
+                                                                                                  "focused" : false,
+                                                                                                  "checked" : false,
+                                                                                                  "selected" : false
+                                                                                                } ],
+                                                                                                "enabled" : true,
+                                                                                                "focused" : false,
+                                                                                                "checked" : false,
+                                                                                                "selected" : false
+                                                                                              } ],
+                                                                                              "enabled" : true,
+                                                                                              "focused" : false,
+                                                                                              "checked" : false,
+                                                                                              "selected" : false
+                                                                                            } ],
+                                                                                            "enabled" : true,
+                                                                                            "focused" : false,
+                                                                                            "checked" : false,
+                                                                                            "selected" : false
+                                                                                          } ],
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        }, {
+                                                                                          "attributes" : {
+                                                                                            "bounds" : "[58,907][304,908]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        }, {
+                                                                                          "attributes" : {
+                                                                                            "accessibilityText" : "Vertical scroll bar, 4 pages",
+                                                                                            "value" : "0%",
+                                                                                            "text" : "0%",
+                                                                                            "bounds" : "[286,284][316,1210]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "children" : [ {
+                                                                                            "attributes" : {
+                                                                                              "bounds" : "[313,1193][316,1207]",
+                                                                                              "enabled" : "true",
+                                                                                              "focused" : "false",
+                                                                                              "selected" : "false",
+                                                                                              "checked" : "false"
+                                                                                            },
+                                                                                            "enabled" : true,
+                                                                                            "focused" : false,
+                                                                                            "checked" : false,
+                                                                                            "selected" : false
+                                                                                          } ],
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        }, {
+                                                                                          "attributes" : {
+                                                                                            "accessibilityText" : "Vertical scroll bar, 4 pages",
+                                                                                            "value" : "0%",
+                                                                                            "text" : "0%",
+                                                                                            "bounds" : "[286,284][316,1210]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "children" : [ {
+                                                                                            "attributes" : {
+                                                                                              "bounds" : "[313,1193][316,1207]",
+                                                                                              "enabled" : "true",
+                                                                                              "focused" : "false",
+                                                                                              "selected" : "false",
+                                                                                              "checked" : "false"
+                                                                                            },
+                                                                                            "enabled" : true,
+                                                                                            "focused" : false,
+                                                                                            "checked" : false,
+                                                                                            "selected" : false
+                                                                                          } ],
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        } ],
+                                                                                        "enabled" : true,
+                                                                                        "focused" : false,
+                                                                                        "checked" : false,
+                                                                                        "selected" : false
+                                                                                      } ],
+                                                                                      "enabled" : true,
+                                                                                      "focused" : false,
+                                                                                      "checked" : false,
+                                                                                      "selected" : false
+                                                                                    } ],
+                                                                                    "enabled" : true,
+                                                                                    "focused" : false,
+                                                                                    "checked" : false,
+                                                                                    "selected" : false
+                                                                                  } ],
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                } ],
+                                                                                "enabled" : true,
+                                                                                "focused" : false,
+                                                                                "checked" : false,
+                                                                                "selected" : false
+                                                                              }, {
+                                                                                "attributes" : {
+                                                                                  "resource-id" : "Inbox",
+                                                                                  "bounds" : "[0,96][320,284]",
+                                                                                  "enabled" : "true",
+                                                                                  "focused" : "false",
+                                                                                  "selected" : "false",
+                                                                                  "checked" : "false"
+                                                                                },
+                                                                                "children" : [ {
+                                                                                  "attributes" : {
+                                                                                    "accessibilityText" : "Inbox",
+                                                                                    "bounds" : "[16,77][167,149]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                }, {
+                                                                                  "attributes" : {
+                                                                                    "bounds" : "[14,105][50,131]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "children" : [ {
+                                                                                    "attributes" : {
+                                                                                      "bounds" : "[14,105][50,131]",
+                                                                                      "enabled" : "true",
+                                                                                      "focused" : "false",
+                                                                                      "selected" : "false",
+                                                                                      "checked" : "false"
+                                                                                    },
+                                                                                    "children" : [ {
+                                                                                      "attributes" : {
+                                                                                        "accessibilityText" : "Workspace: Ada Lovelace, Personal workspace",
+                                                                                        "resource-id" : "workspace-switcher",
+                                                                                        "bounds" : "[19,105][45,131]",
+                                                                                        "enabled" : "true",
+                                                                                        "focused" : "false",
+                                                                                        "selected" : "false",
+                                                                                        "checked" : "false"
+                                                                                      },
+                                                                                      "children" : [ {
+                                                                                        "attributes" : {
+                                                                                          "bounds" : "[19,105][45,131]",
+                                                                                          "enabled" : "true",
+                                                                                          "focused" : "false",
+                                                                                          "selected" : "false",
+                                                                                          "checked" : "false"
+                                                                                        },
+                                                                                        "children" : [ {
+                                                                                          "attributes" : {
+                                                                                            "bounds" : "[19,105][45,131]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        } ],
+                                                                                        "enabled" : true,
+                                                                                        "focused" : false,
+                                                                                        "checked" : false,
+                                                                                        "selected" : false
+                                                                                      } ],
+                                                                                      "enabled" : true,
+                                                                                      "focused" : false,
+                                                                                      "checked" : false,
+                                                                                      "selected" : false
+                                                                                    } ],
+                                                                                    "enabled" : true,
+                                                                                    "focused" : false,
+                                                                                    "checked" : false,
+                                                                                    "selected" : false
+                                                                                  } ],
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                }, {
+                                                                                  "attributes" : {
+                                                                                    "accessibilityText" : "Inbox",
+                                                                                    "bounds" : "[133,105][186,131]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                }, {
+                                                                                  "attributes" : {
+                                                                                    "bounds" : "[207,113][243,123]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "children" : [ {
+                                                                                    "attributes" : {
+                                                                                      "bounds" : "[207,113][243,123]",
+                                                                                      "enabled" : "true",
+                                                                                      "focused" : "false",
+                                                                                      "selected" : "false",
+                                                                                      "checked" : "false"
+                                                                                    },
+                                                                                    "children" : [ {
+                                                                                      "attributes" : {
+                                                                                        "accessibilityText" : "More",
+                                                                                        "bounds" : "[211,113][240,123]",
+                                                                                        "enabled" : "true",
+                                                                                        "focused" : "false",
+                                                                                        "selected" : "false",
+                                                                                        "checked" : "false"
+                                                                                      },
+                                                                                      "children" : [ {
+                                                                                        "attributes" : {
+                                                                                          "bounds" : "[211,113][240,123]",
+                                                                                          "enabled" : "true",
+                                                                                          "focused" : "false",
+                                                                                          "selected" : "false",
+                                                                                          "checked" : "false"
+                                                                                        },
+                                                                                        "children" : [ {
+                                                                                          "attributes" : {
+                                                                                            "accessibilityText" : "More",
+                                                                                            "bounds" : "[215,116][236,120]",
+                                                                                            "enabled" : "true",
+                                                                                            "focused" : "false",
+                                                                                            "selected" : "false",
+                                                                                            "checked" : "false"
+                                                                                          },
+                                                                                          "enabled" : true,
+                                                                                          "focused" : false,
+                                                                                          "checked" : false,
+                                                                                          "selected" : false
+                                                                                        } ],
+                                                                                        "enabled" : true,
+                                                                                        "focused" : false,
+                                                                                        "checked" : false,
+                                                                                        "selected" : false
+                                                                                      } ],
+                                                                                      "enabled" : true,
+                                                                                      "focused" : false,
+                                                                                      "checked" : false,
+                                                                                      "selected" : false
+                                                                                    } ],
+                                                                                    "enabled" : true,
+                                                                                    "focused" : false,
+                                                                                    "checked" : false,
+                                                                                    "selected" : false
+                                                                                  } ],
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                }, {
+                                                                                  "attributes" : {
+                                                                                    "accessibilityText" : "Hide Sidebar",
+                                                                                    "bounds" : "[263,100][306,136]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                }, {
+                                                                                  "attributes" : {
+                                                                                    "accessibilityText" : "Search inbox",
+                                                                                    "hintText" : "Search inbox",
+                                                                                    "bounds" : "[16,150][304,274]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "children" : [ {
+                                                                                    "attributes" : {
+                                                                                      "accessibilityText" : "Search",
+                                                                                      "resource-id" : "magnifyingglass",
+                                                                                      "bounds" : "[28,187][77,235]",
+                                                                                      "enabled" : "true",
+                                                                                      "focused" : "false",
+                                                                                      "selected" : "false",
+                                                                                      "checked" : "false"
+                                                                                    },
+                                                                                    "enabled" : true,
+                                                                                    "focused" : false,
+                                                                                    "checked" : false,
+                                                                                    "selected" : false
+                                                                                  } ],
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                } ],
+                                                                                "enabled" : true,
+                                                                                "focused" : false,
+                                                                                "checked" : false,
+                                                                                "selected" : false
+                                                                              }, {
+                                                                                "attributes" : {
+                                                                                  "accessibilityText" : "Toolbar",
+                                                                                  "resource-id" : "Toolbar",
+                                                                                  "bounds" : "[0,0][320,1210]",
+                                                                                  "enabled" : "true",
+                                                                                  "focused" : "false",
+                                                                                  "selected" : "false",
+                                                                                  "checked" : "false"
+                                                                                },
+                                                                                "children" : [ {
+                                                                                  "attributes" : {
+                                                                                    "bounds" : "[0,0][320,1210]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                } ],
+                                                                                "enabled" : true,
+                                                                                "focused" : false,
+                                                                                "checked" : false,
+                                                                                "selected" : false
+                                                                              } ],
+                                                                              "enabled" : true,
+                                                                              "focused" : false,
+                                                                              "checked" : false,
+                                                                              "selected" : false
+                                                                            }, {
+                                                                              "attributes" : {
+                                                                                "bounds" : "[0,0][320,1210]",
+                                                                                "enabled" : "true",
+                                                                                "focused" : "false",
+                                                                                "selected" : "false",
+                                                                                "checked" : "false"
+                                                                              },
+                                                                              "children" : [ {
+                                                                                "attributes" : {
+                                                                                  "bounds" : "[0,0][320,1210]",
+                                                                                  "enabled" : "true",
+                                                                                  "focused" : "false",
+                                                                                  "selected" : "false",
+                                                                                  "checked" : "false"
+                                                                                },
+                                                                                "children" : [ {
+                                                                                  "attributes" : {
+                                                                                    "bounds" : "[0,0][320,1210]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "children" : [ {
+                                                                                    "attributes" : {
+                                                                                      "bounds" : "[0,0][320,1210]",
+                                                                                      "enabled" : "true",
+                                                                                      "focused" : "false",
+                                                                                      "selected" : "false",
+                                                                                      "checked" : "false"
+                                                                                    },
+                                                                                    "children" : [ {
+                                                                                      "attributes" : {
+                                                                                        "bounds" : "[0,0][320,1210]",
+                                                                                        "enabled" : "true",
+                                                                                        "focused" : "false",
+                                                                                        "selected" : "false",
+                                                                                        "checked" : "false"
+                                                                                      },
+                                                                                      "children" : [ {
+                                                                                        "attributes" : {
+                                                                                          "bounds" : "[0,0][320,1210]",
+                                                                                          "enabled" : "true",
+                                                                                          "focused" : "false",
+                                                                                          "selected" : "false",
+                                                                                          "checked" : "false"
+                                                                                        },
+                                                                                        "enabled" : true,
+                                                                                        "focused" : false,
+                                                                                        "checked" : false,
+                                                                                        "selected" : false
+                                                                                      } ],
+                                                                                      "enabled" : true,
+                                                                                      "focused" : false,
+                                                                                      "checked" : false,
+                                                                                      "selected" : false
+                                                                                    } ],
+                                                                                    "enabled" : true,
+                                                                                    "focused" : false,
+                                                                                    "checked" : false,
+                                                                                    "selected" : false
+                                                                                  }, {
+                                                                                    "attributes" : {
+                                                                                      "bounds" : "[0,0][320,1210]",
+                                                                                      "enabled" : "true",
+                                                                                      "focused" : "false",
+                                                                                      "selected" : "false",
+                                                                                      "checked" : "false"
+                                                                                    },
+                                                                                    "children" : [ {
+                                                                                      "attributes" : {
+                                                                                        "bounds" : "[0,0][320,1210]",
+                                                                                        "enabled" : "true",
+                                                                                        "focused" : "false",
+                                                                                        "selected" : "false",
+                                                                                        "checked" : "false"
+                                                                                      },
+                                                                                      "enabled" : true,
+                                                                                      "focused" : false,
+                                                                                      "checked" : false,
+                                                                                      "selected" : false
+                                                                                    } ],
+                                                                                    "enabled" : true,
+                                                                                    "focused" : false,
+                                                                                    "checked" : false,
+                                                                                    "selected" : false
+                                                                                  } ],
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                } ],
+                                                                                "enabled" : true,
+                                                                                "focused" : false,
+                                                                                "checked" : false,
+                                                                                "selected" : false
+                                                                              } ],
+                                                                              "enabled" : true,
+                                                                              "focused" : false,
+                                                                              "checked" : false,
+                                                                              "selected" : false
+                                                                            } ],
+                                                                            "enabled" : true,
+                                                                            "focused" : false,
+                                                                            "checked" : false,
+                                                                            "selected" : false
+                                                                          }, {
+                                                                            "attributes" : {
+                                                                              "bounds" : "[0,0][834,1210]",
+                                                                              "enabled" : "true",
+                                                                              "focused" : "false",
+                                                                              "selected" : "false",
+                                                                              "checked" : "false"
+                                                                            },
+                                                                            "children" : [ {
+                                                                              "attributes" : {
+                                                                                "bounds" : "[0,0][834,1210]",
+                                                                                "enabled" : "true",
+                                                                                "focused" : "false",
+                                                                                "selected" : "false",
+                                                                                "checked" : "false"
+                                                                              },
+                                                                              "children" : [ {
+                                                                                "attributes" : {
+                                                                                  "resource-id" : "_TtGC7SwiftUI32NavigationStackHosting",
+                                                                                  "bounds" : "[0,96][834,150]",
+                                                                                  "enabled" : "true",
+                                                                                  "focused" : "false",
+                                                                                  "selected" : "false",
+                                                                                  "checked" : "false"
+                                                                                },
+                                                                                "children" : [ {
+                                                                                  "attributes" : {
+                                                                                    "accessibilityText" : "New task",
+                                                                                    "bounds" : "[334,100][370,136]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                }, {
+                                                                                  "attributes" : {
+                                                                                    "accessibilityText" : "Mark as unread",
+                                                                                    "bounds" : "[656,100][700,136]",
+                                                                                    "enabled" : "false",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "enabled" : false,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                }, {
+                                                                                  "attributes" : {
+                                                                                    "accessibilityText" : "Remind me",
+                                                                                    "bounds" : "[716,100][760,136]",
+                                                                                    "enabled" : "false",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "enabled" : false,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                }, {
+                                                                                  "attributes" : {
+                                                                                    "accessibilityText" : "Resolve",
+                                                                                    "bounds" : "[776,100][820,136]",
+                                                                                    "enabled" : "false",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "enabled" : false,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                } ],
+                                                                                "enabled" : true,
+                                                                                "focused" : false,
+                                                                                "checked" : false,
+                                                                                "selected" : false
+                                                                              }, {
+                                                                                "attributes" : {
+                                                                                  "bounds" : "[0,0][834,1210]",
+                                                                                  "enabled" : "true",
+                                                                                  "focused" : "false",
+                                                                                  "selected" : "false",
+                                                                                  "checked" : "false"
+                                                                                },
+                                                                                "children" : [ {
+                                                                                  "attributes" : {
+                                                                                    "bounds" : "[0,0][834,1210]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "children" : [ {
+                                                                                    "attributes" : {
+                                                                                      "bounds" : "[0,0][834,1210]",
+                                                                                      "enabled" : "true",
+                                                                                      "focused" : "false",
+                                                                                      "selected" : "false",
+                                                                                      "checked" : "false"
+                                                                                    },
+                                                                                    "children" : [ {
+                                                                                      "attributes" : {
+                                                                                        "bounds" : "[0,0][834,1210]",
+                                                                                        "enabled" : "true",
+                                                                                        "focused" : "false",
+                                                                                        "selected" : "false",
+                                                                                        "checked" : "false"
+                                                                                      },
+                                                                                      "children" : [ {
+                                                                                        "attributes" : {
+                                                                                          "accessibilityText" : "No item selected",
+                                                                                          "bounds" : "[382,637][771,703]",
+                                                                                          "enabled" : "true",
+                                                                                          "focused" : "false",
+                                                                                          "selected" : "false",
+                                                                                          "checked" : "false"
+                                                                                        },
+                                                                                        "enabled" : true,
+                                                                                        "focused" : false,
+                                                                                        "checked" : false,
+                                                                                        "selected" : false
+                                                                                      } ],
+                                                                                      "enabled" : true,
+                                                                                      "focused" : false,
+                                                                                      "checked" : false,
+                                                                                      "selected" : false
+                                                                                    } ],
+                                                                                    "enabled" : true,
+                                                                                    "focused" : false,
+                                                                                    "checked" : false,
+                                                                                    "selected" : false
+                                                                                  } ],
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                } ],
+                                                                                "enabled" : true,
+                                                                                "focused" : false,
+                                                                                "checked" : false,
+                                                                                "selected" : false
+                                                                              }, {
+                                                                                "attributes" : {
+                                                                                  "accessibilityText" : "Toolbar",
+                                                                                  "resource-id" : "Toolbar",
+                                                                                  "bounds" : "[0,0][834,1210]",
+                                                                                  "enabled" : "true",
+                                                                                  "focused" : "false",
+                                                                                  "selected" : "false",
+                                                                                  "checked" : "false"
+                                                                                },
+                                                                                "children" : [ {
+                                                                                  "attributes" : {
+                                                                                    "bounds" : "[0,0][834,1210]",
+                                                                                    "enabled" : "true",
+                                                                                    "focused" : "false",
+                                                                                    "selected" : "false",
+                                                                                    "checked" : "false"
+                                                                                  },
+                                                                                  "enabled" : true,
+                                                                                  "focused" : false,
+                                                                                  "checked" : false,
+                                                                                  "selected" : false
+                                                                                } ],
+                                                                                "enabled" : true,
+                                                                                "focused" : false,
+                                                                                "checked" : false,
+                                                                                "selected" : false
+                                                                              } ],
+                                                                              "enabled" : true,
+                                                                              "focused" : false,
+                                                                              "checked" : false,
+                                                                              "selected" : false
+                                                                            } ],
+                                                                            "enabled" : true,
+                                                                            "focused" : false,
+                                                                            "checked" : false,
+                                                                            "selected" : false
+                                                                          }, {
+                                                                            "attributes" : {
+                                                                              "accessibilityText" : "Toolbar",
+                                                                              "resource-id" : "Toolbar",
+                                                                              "bounds" : "[0,0][834,1210]",
+                                                                              "enabled" : "true",
+                                                                              "focused" : "false",
+                                                                              "selected" : "false",
+                                                                              "checked" : "false"
+                                                                            },
+                                                                            "children" : [ {
+                                                                              "attributes" : {
+                                                                                "bounds" : "[0,0][834,1210]",
+                                                                                "enabled" : "true",
+                                                                                "focused" : "false",
+                                                                                "selected" : "false",
+                                                                                "checked" : "false"
+                                                                              },
+                                                                              "enabled" : true,
+                                                                              "focused" : false,
+                                                                              "checked" : false,
+                                                                              "selected" : false
+                                                                            } ],
+                                                                            "enabled" : true,
+                                                                            "focused" : false,
+                                                                            "checked" : false,
+                                                                            "selected" : false
+                                                                          } ],
+                                                                          "enabled" : true,
+                                                                          "focused" : false,
+                                                                          "checked" : false,
+                                                                          "selected" : false
+                                                                        } ],
+                                                                        "enabled" : true,
+                                                                        "focused" : false,
+                                                                        "checked" : false,
+                                                                        "selected" : false
+                                                                      }, {
+                                                                        "attributes" : {
+                                                                          "bounds" : "[0,0][834,1210]",
+                                                                          "enabled" : "true",
+                                                                          "focused" : "false",
+                                                                          "selected" : "false",
+                                                                          "checked" : "false"
+                                                                        },
+                                                                        "children" : [ {
+                                                                          "attributes" : {
+                                                                            "bounds" : "[0,0][834,1210]",
+                                                                            "enabled" : "true",
+                                                                            "focused" : "false",
+                                                                            "selected" : "false",
+                                                                            "checked" : "false"
+                                                                          },
+                                                                          "enabled" : true,
+                                                                          "focused" : false,
+                                                                          "checked" : false,
+                                                                          "selected" : false
+                                                                        } ],
+                                                                        "enabled" : true,
+                                                                        "focused" : false,
+                                                                        "checked" : false,
+                                                                        "selected" : false
+                                                                      } ],
+                                                                      "enabled" : true,
+                                                                      "focused" : false,
+                                                                      "checked" : false,
+                                                                      "selected" : false
+                                                                    }, {
+                                                                      "attributes" : {
+                                                                        "bounds" : "[0,96][834,1190]",
+                                                                        "enabled" : "true",
+                                                                        "focused" : "false",
+                                                                        "selected" : "false",
+                                                                        "checked" : "false"
+                                                                      },
+                                                                      "enabled" : true,
+                                                                      "focused" : false,
+                                                                      "checked" : false,
+                                                                      "selected" : false
+                                                                    } ],
+                                                                    "enabled" : true,
+                                                                    "focused" : false,
+                                                                    "checked" : false,
+                                                                    "selected" : false
+                                                                  } ],
+                                                                  "enabled" : true,
+                                                                  "focused" : false,
+                                                                  "checked" : false,
+                                                                  "selected" : false
+                                                                } ],
+                                                                "enabled" : true,
+                                                                "focused" : false,
+                                                                "checked" : false,
+                                                                "selected" : false
+                                                              } ],
+                                                              "enabled" : true,
+                                                              "focused" : false,
+                                                              "checked" : false,
+                                                              "selected" : false
+                                                            } ],
+                                                            "enabled" : true,
+                                                            "focused" : false,
+                                                            "checked" : false,
+                                                            "selected" : false
+                                                          } ],
+                                                          "enabled" : true,
+                                                          "focused" : false,
+                                                          "checked" : false,
+                                                          "selected" : false
+                                                        } ],
+                                                        "enabled" : true,
+                                                        "focused" : false,
+                                                        "checked" : false,
+                                                        "selected" : false
+                                                      } ],
+                                                      "enabled" : true,
+                                                      "focused" : false,
+                                                      "checked" : false,
+                                                      "selected" : false
+                                                    }, {
+                                                      "attributes" : {
+                                                        "accessibilityText" : "Toolbar",
+                                                        "resource-id" : "Toolbar",
+                                                        "bounds" : "[0,0][834,1210]",
+                                                        "enabled" : "true",
+                                                        "focused" : "false",
+                                                        "selected" : "false",
+                                                        "checked" : "false"
+                                                      },
+                                                      "children" : [ {
+                                                        "attributes" : {
+                                                          "bounds" : "[0,0][834,1210]",
+                                                          "enabled" : "true",
+                                                          "focused" : "false",
+                                                          "selected" : "false",
+                                                          "checked" : "false"
+                                                        },
+                                                        "enabled" : true,
+                                                        "focused" : false,
+                                                        "checked" : false,
+                                                        "selected" : false
+                                                      } ],
+                                                      "enabled" : true,
+                                                      "focused" : false,
+                                                      "checked" : false,
+                                                      "selected" : false
+                                                    } ],
+                                                    "enabled" : true,
+                                                    "focused" : false,
+                                                    "checked" : false,
+                                                    "selected" : false
+                                                  } ],
+                                                  "enabled" : true,
+                                                  "focused" : false,
+                                                  "checked" : false,
+                                                  "selected" : false
+                                                } ],
+                                                "enabled" : true,
+                                                "focused" : false,
+                                                "checked" : false,
+                                                "selected" : false
+                                              } ],
+                                              "enabled" : true,
+                                              "focused" : false,
+                                              "checked" : false,
+                                              "selected" : false
+                                            } ],
+                                            "enabled" : true,
+                                            "focused" : false,
+                                            "checked" : false,
+                                            "selected" : false
+                                          } ],
+                                          "enabled" : true,
+                                          "focused" : false,
+                                          "checked" : false,
+                                          "selected" : false
+                                        } ],
+                                        "enabled" : true,
+                                        "focused" : false,
+                                        "checked" : false,
+                                        "selected" : false
+                                      }, {
+                                        "attributes" : {
+                                          "bounds" : "[0,0][834,1210]",
+                                          "enabled" : "true",
+                                          "focused" : "false",
+                                          "selected" : "false",
+                                          "checked" : "false"
+                                        },
+                                        "children" : [ {
+                                          "attributes" : {
+                                            "bounds" : "[0,28][834,77]",
+                                            "enabled" : "true",
+                                            "focused" : "false",
+                                            "selected" : "false",
+                                            "checked" : "false"
+                                          },
+                                          "children" : [ {
+                                            "attributes" : {
+                                              "accessibilityText" : "Toggle sidebar",
+                                              "resource-id" : "ToggleSideBar",
+                                              "bounds" : "[177,32][238,73]",
+                                              "enabled" : "true",
+                                              "focused" : "false",
+                                              "selected" : "false",
+                                              "checked" : "false"
+                                            },
+                                            "enabled" : true,
+                                            "focused" : false,
+                                            "checked" : false,
+                                            "selected" : false
+                                          }, {
+                                            "attributes" : {
+                                              "accessibilityText" : "Inbox",
+                                              "bounds" : "[238,32][322,73]",
+                                              "enabled" : "true",
+                                              "focused" : "false",
+                                              "selected" : "true",
+                                              "checked" : "false"
+                                            },
+                                            "children" : [ {
+                                              "attributes" : {
+                                                "accessibilityText" : "Inbox",
+                                                "bounds" : "[238,32][322,73]",
+                                                "enabled" : "true",
+                                                "focused" : "false",
+                                                "selected" : "true",
+                                                "checked" : "false"
+                                              },
+                                              "enabled" : true,
+                                              "focused" : false,
+                                              "checked" : false,
+                                              "selected" : true
+                                            } ],
+                                            "enabled" : true,
+                                            "focused" : false,
+                                            "checked" : false,
+                                            "selected" : true
+                                          }, {
+                                            "attributes" : {
+                                              "accessibilityText" : "Tasks",
+                                              "bounds" : "[322,32][407,73]",
+                                              "enabled" : "true",
+                                              "focused" : "false",
+                                              "selected" : "false",
+                                              "checked" : "false"
+                                            },
+                                            "children" : [ {
+                                              "attributes" : {
+                                                "accessibilityText" : "Tasks",
+                                                "bounds" : "[322,32][407,73]",
+                                                "enabled" : "true",
+                                                "focused" : "false",
+                                                "selected" : "false",
+                                                "checked" : "false"
+                                              },
+                                              "enabled" : true,
+                                              "focused" : false,
+                                              "checked" : false,
+                                              "selected" : false
+                                            } ],
+                                            "enabled" : true,
+                                            "focused" : false,
+                                            "checked" : false,
+                                            "selected" : false
+                                          }, {
+                                            "attributes" : {
+                                              "accessibilityText" : "Automations",
+                                              "bounds" : "[407,32][559,73]",
+                                              "enabled" : "true",
+                                              "focused" : "false",
+                                              "selected" : "false",
+                                              "checked" : "false"
+                                            },
+                                            "children" : [ {
+                                              "attributes" : {
+                                                "accessibilityText" : "Automations",
+                                                "bounds" : "[407,32][559,73]",
+                                                "enabled" : "true",
+                                                "focused" : "false",
+                                                "selected" : "false",
+                                                "checked" : "false"
+                                              },
+                                              "enabled" : true,
+                                              "focused" : false,
+                                              "checked" : false,
+                                              "selected" : false
+                                            } ],
+                                            "enabled" : true,
+                                            "focused" : false,
+                                            "checked" : false,
+                                            "selected" : false
+                                          }, {
+                                            "attributes" : {
+                                              "accessibilityText" : "Search",
+                                              "bounds" : "[559,32][657,73]",
+                                              "enabled" : "true",
+                                              "focused" : "false",
+                                              "selected" : "false",
+                                              "checked" : "false"
+                                            },
+                                            "children" : [ {
+                                              "attributes" : {
+                                                "accessibilityText" : "Search",
+                                                "bounds" : "[559,32][657,73]",
+                                                "enabled" : "true",
+                                                "focused" : "false",
+                                                "selected" : "false",
+                                                "checked" : "false"
+                                              },
+                                              "enabled" : true,
+                                              "focused" : false,
+                                              "checked" : false,
+                                              "selected" : false
+                                            } ],
+                                            "enabled" : true,
+                                            "focused" : false,
+                                            "checked" : false,
+                                            "selected" : false
+                                          } ],
+                                          "enabled" : true,
+                                          "focused" : false,
+                                          "checked" : false,
+                                          "selected" : false
+                                        } ],
+                                        "enabled" : true,
+                                        "focused" : false,
+                                        "checked" : false,
+                                        "selected" : false
+                                      } ],
+                                      "enabled" : true,
+                                      "focused" : false,
+                                      "checked" : false,
+                                      "selected" : false
+                                    } ],
+                                    "enabled" : true,
+                                    "focused" : false,
+                                    "checked" : false,
+                                    "selected" : false
+                                  } ],
+                                  "enabled" : true,
+                                  "focused" : false,
+                                  "checked" : false,
+                                  "selected" : false
+                                } ],
+                                "enabled" : true,
+                                "focused" : false,
+                                "checked" : false,
+                                "selected" : false
+                              } ],
+                              "enabled" : true,
+                              "focused" : false,
+                              "checked" : false,
+                              "selected" : false
+                            } ],
+                            "enabled" : true,
+                            "focused" : false,
+                            "checked" : false,
+                            "selected" : false
+                          } ],
+                          "enabled" : true,
+                          "focused" : false,
+                          "checked" : false,
+                          "selected" : false
+                        }, {
+                          "attributes" : {
+                            "accessibilityText" : "Toolbar",
+                            "resource-id" : "Toolbar",
+                            "bounds" : "[0,0][834,1210]",
+                            "enabled" : "true",
+                            "focused" : "false",
+                            "selected" : "false",
+                            "checked" : "false"
+                          },
+                          "children" : [ {
+                            "attributes" : {
+                              "bounds" : "[0,0][834,1210]",
+                              "enabled" : "true",
+                              "focused" : "false",
+                              "selected" : "false",
+                              "checked" : "false"
+                            },
+                            "enabled" : true,
+                            "focused" : false,
+                            "checked" : false,
+                            "selected" : false
+                          } ],
+                          "enabled" : true,
+                          "focused" : false,
+                          "checked" : false,
+                          "selected" : false
+                        } ],
+                        "enabled" : true,
+                        "focused" : false,
+                        "checked" : false,
+                        "selected" : false
+                      } ],
+                      "enabled" : true,
+                      "focused" : false,
+                      "checked" : false,
+                      "selected" : false
+                    } ],
+                    "enabled" : true,
+                    "focused" : false,
+                    "checked" : false,
+                    "selected" : false
+                  } ],
+                  "enabled" : true,
+                  "focused" : false,
+                  "checked" : false,
+                  "selected" : false
+                } ],
+                "enabled" : true,
+                "focused" : false,
+                "checked" : false,
+                "selected" : false
+              } ],
+              "enabled" : true,
+              "focused" : false,
+              "checked" : false,
+              "selected" : false
+            } ],
+            "enabled" : true,
+            "focused" : false,
+            "checked" : false,
+            "selected" : false
+          } ],
+          "enabled" : true,
+          "focused" : false,
+          "checked" : false,
+          "selected" : false
+        } ],
+        "enabled" : true,
+        "focused" : false,
+        "checked" : false,
+        "selected" : false
+      } ],
+      "enabled" : true,
+      "focused" : false,
+      "checked" : false,
+      "selected" : false
+    }, {
+      "attributes" : {
+        "bounds" : "[0,0][834,1210]",
+        "enabled" : "true",
+        "focused" : "false",
+        "selected" : "false",
+        "checked" : "false"
+      },
+      "children" : [ {
+        "attributes" : {
+          "bounds" : "[0,0][834,1210]",
+          "enabled" : "true",
+          "focused" : "false",
+          "selected" : "false",
+          "checked" : "false"
+        },
+        "children" : [ {
+          "attributes" : {
+            "bounds" : "[0,0][834,1210]",
+            "enabled" : "true",
+            "focused" : "false",
+            "selected" : "false",
+            "checked" : "false"
+          },
+          "enabled" : true,
+          "focused" : false,
+          "checked" : false,
+          "selected" : false
+        } ],
+        "enabled" : true,
+        "focused" : false,
+        "checked" : false,
+        "selected" : false
+      } ],
+      "enabled" : true,
+      "focused" : false,
+      "checked" : false,
+      "selected" : false
+    } ],
+    "enabled" : true,
+    "focused" : false,
+    "checked" : false,
+    "selected" : false
+  }, {
+    "attributes" : {
+      "bounds" : "[0,0][0,0]",
+      "enabled" : "false",
+      "focused" : "false",
+      "selected" : "false",
+      "checked" : "false"
+    },
+    "children" : [ {
+      "attributes" : {
+        "bounds" : "[0,0][834,32]",
+        "enabled" : "true",
+        "focused" : "false",
+        "selected" : "false",
+        "checked" : "false"
+      },
+      "children" : [ {
+        "attributes" : {
+          "bounds" : "[0,0][834,32]",
+          "enabled" : "true",
+          "focused" : "false",
+          "selected" : "false",
+          "checked" : "false"
+        },
+        "children" : [ {
+          "attributes" : {
+            "bounds" : "[0,0][834,32]",
+            "enabled" : "true",
+            "focused" : "false",
+            "selected" : "false",
+            "checked" : "false"
+          },
+          "children" : [ {
+            "attributes" : {
+              "bounds" : "[25,11][165,21]",
+              "enabled" : "true",
+              "focused" : "false",
+              "selected" : "false",
+              "checked" : "false"
+            },
+            "children" : [ {
+              "attributes" : {
+                "accessibilityText" : "2:25 PM",
+                "bounds" : "[25,7][78,24]",
+                "enabled" : "true",
+                "focused" : "false",
+                "selected" : "false",
+                "checked" : "false"
+              },
+              "enabled" : true,
+              "focused" : false,
+              "checked" : false,
+              "selected" : false
+            }, {
+              "attributes" : {
+                "accessibilityText" : "Thu Nov 26",
+                "bounds" : "[88,7][165,24]",
+                "enabled" : "true",
+                "focused" : "false",
+                "selected" : "false",
+                "checked" : "false"
+              },
+              "enabled" : true,
+              "focused" : false,
+              "checked" : false,
+              "selected" : false
+            } ],
+            "enabled" : true,
+            "focused" : false,
+            "checked" : false,
+            "selected" : false
+          }, {
+            "attributes" : {
+              "bounds" : "[175,11][234,21]",
+              "enabled" : "true",
+              "focused" : "false",
+              "selected" : "false",
+              "checked" : "false"
+            },
+            "children" : [ {
+              "attributes" : {
+                "bounds" : "[175,0][234,32]",
+                "enabled" : "true",
+                "focused" : "false",
+                "selected" : "false",
+                "checked" : "false"
+              },
+              "children" : [ {
+                "attributes" : {
+                  "bounds" : "[175,0][234,32]",
+                  "enabled" : "true",
+                  "focused" : "false",
+                  "selected" : "false",
+                  "checked" : "false"
+                },
+                "children" : [ {
+                  "attributes" : {
+                    "accessibilityText" : "Vespin",
+                    "bounds" : "[175,0][222,32]",
+                    "enabled" : "true",
+                    "focused" : "false",
+                    "selected" : "false",
+                    "checked" : "false"
+                  },
+                  "enabled" : true,
+                  "focused" : false,
+                  "checked" : false,
+                  "selected" : false
+                } ],
+                "enabled" : true,
+                "focused" : false,
+                "checked" : false,
+                "selected" : false
+              } ],
+              "enabled" : true,
+              "focused" : false,
+              "checked" : false,
+              "selected" : false
+            } ],
+            "enabled" : true,
+            "focused" : false,
+            "checked" : false,
+            "selected" : false
+          }, {
+            "attributes" : {
+              "bounds" : "[242,11][808,21]",
+              "enabled" : "true",
+              "focused" : "false",
+              "selected" : "false",
+              "checked" : "false"
+            },
+            "children" : [ {
+              "attributes" : {
+                "value" : "SSID, 3 of 3 Wi-Fi bars",
+                "text" : "SSID, 3 of 3 Wi-Fi bars",
+                "resource-id" : "3 of 3 Wi-Fi bars",
+                "bounds" : "[757,8][775,24]",
+                "enabled" : "true",
+                "focused" : "false",
+                "selected" : "false",
+                "checked" : "false"
+              },
+              "children" : [ {
+                "attributes" : {
+                  "accessibilityText" : "Wi-Fi",
+                  "resource-id" : "wifi",
+                  "bounds" : "[756,9][775,22]",
+                  "enabled" : "true",
+                  "focused" : "false",
+                  "selected" : "false",
+                  "checked" : "false"
+                },
+                "enabled" : true,
+                "focused" : false,
+                "checked" : false,
+                "selected" : false
+              } ],
+              "enabled" : true,
+              "focused" : false,
+              "checked" : false,
+              "selected" : false
+            }, {
+              "attributes" : {
+                "accessibilityText" : "100% battery power",
+                "value" : "Not charging",
+                "text" : "Not charging",
+                "bounds" : "[779,9][808,22]",
+                "enabled" : "true",
+                "focused" : "false",
+                "selected" : "false",
+                "checked" : "false"
+              },
+              "enabled" : true,
+              "focused" : false,
+              "checked" : false,
+              "selected" : false
+            } ],
+            "enabled" : true,
+            "focused" : false,
+            "checked" : false,
+            "selected" : false
+          } ],
+          "enabled" : true,
+          "focused" : false,
+          "checked" : false,
+          "selected" : false
+        } ],
+        "enabled" : true,
+        "focused" : false,
+        "checked" : false,
+        "selected" : false
+      } ],
+      "enabled" : true,
+      "focused" : false,
+      "checked" : false,
+      "selected" : false
+    } ],
+    "enabled" : false,
+    "focused" : false,
+    "checked" : false,
+    "selected" : false
+  } ],
+  "enabled" : false,
+  "focused" : false,
+  "checked" : false,
+  "selected" : false
+}

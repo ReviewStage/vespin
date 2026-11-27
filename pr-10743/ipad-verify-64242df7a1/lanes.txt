@@ -1,0 +1,55 @@
+main-ipad27-light-accessibility-a: fails 1 shots 1 Assert that "Recorded the invite flow" is visible... FAILED
+main-ipad27-light-accessibility-b: fails 1 shots 1 Tap on id: settings-workspace... FAILED
+main-ipad27-light-agent: fails 1 shots 26 Assert that "Copy message" is visible... FAILED
+main-ipad27-light-automations: fails 0 shots 12 
+main-ipad27-light-compose: fails 0 shots 13 
+main-ipad27-light-computer-use: fails 0 shots 3 
+main-ipad27-light-description-comment: fails 0 shots 9 
+main-ipad27-light-description-edit: fails 0 shots 11 
+main-ipad27-light-failure-notice: fails 0 shots 6 
+main-ipad27-light-following: fails 0 shots 4 
+main-ipad27-light-github-line: fails 1 shots 2 Assert that "Close, but an invite to an address.*" is visible... FAILED
+main-ipad27-light-inbox-off: fails 1 shots 2 Assert that ".*withdrawing one deletes it.*" is visible... FAILED
+main-ipad27-light-inbox: fails 0 shots 14 
+main-ipad27-light-keep: fails 1 shots 3 Assert that "Save Image" is visible... FAILED
+main-ipad27-light-manager-thread: fails 1 shots 3 Assert that "3 replies" is visible... FAILED
+main-ipad27-light-pinned-p: fails 0 shots 1 
+  hdr pinned main portrait: Pinned: Pinned [28,214][71,230] count=2 | Everything else: Everything else [28,421][123,437] count=9 | Weekly digest email: [58,248][216,268] -> PASS
+main-ipad27-light-pinned-l: fails 0 shots 1 
+  hdr pinned main landscape: Pinned: Pinned [308,150][351,166] count=2 | Everything else: Everything else [308,357][403,373] count=9 | Weekly digest email: [338,184][496,204] -> PASS
+main-ipad27-light-standing: fails 1 shots 7 Assert that "Priority, Low" is visible... FAILED
+  hdr stand main chips: Status In progress then Todo, Priority High then Low: FAIL at Assert that "Priority, Low" is visible... FAILED
+p10743-ipad27-light-accessibility-a: fails 1 shots 1 Assert that "Recorded the invite flow" is visible... FAILED
+p10743-ipad27-light-accessibility-b: fails 1 shots 1 Tap on id: settings-workspace... FAILED
+p10743-ipad27-light-agent: fails 0 shots 32 
+p10743-ipad27-light-automations: fails 1 shots 12 Assert that "Fix failing checks" is not visible... FAILED
+p10743-ipad27-light-compose: fails 0 shots 13 
+p10743-ipad27-light-computer-use: fails 3 shots 5     Assert that "${ELEMENT}" is visible... FAILED
+p10743-ipad27-light-description-comment: fails 0 shots 9 
+p10743-ipad27-light-description-edit: fails 1 shots 3 Assert that "Ada Lovelace", Below "People" is visible... FAILED
+p10743-ipad27-light-failure-notice: fails 1 shots 3 Tap on id: following-chip... FAILED
+p10743-ipad27-light-following: fails 0 shots 4 
+p10743-ipad27-light-github-line: fails 0 shots 2 
+p10743-ipad27-light-inbox-off: fails 2 shots 3   Assert that "Open in .Vespin.\?" is not visible... FAILED
+p10743-ipad27-light-inbox: fails 1 shots 4 Assert that id: picture-viewer-close is visible... FAILED
+p10743-ipad27-light-keep: fails 1 shots 1 Assert that "Save to Photos" is visible... FAILED
+p10743-ipad27-light-manager-thread: fails INCOMPLETE (Maestro stopped mid-step, no FAILED; last: Tap on "Back"...) 
+p10743-ipad27-light-pinned-p: fails 0 shots 1 
+  hdr pinned p10743 portrait: Pinned: Pinned [28,204][71,220] count=2 | Everything else: Everything else [28,411][123,427] count=9 | Weekly digest email: [58,238][216,258] -> PASS
+p10743-ipad27-light-pinned-l: fails 0 shots 1 
+  hdr pinned p10743 landscape: Pinned: Pinned [81,559][124,575] count=1 | Everything else: MISSING | Weekly digest email: [74,611][222,632] -> FAIL
+p10743-ipad27-light-pinned-l: fails 1 (c006chk verdict: headers)
+p10743-ipad27-light-standing: fails 1 shots 7 Assert that "Priority, Low" is visible... FAILED
+  hdr stand p10743 chips: Status In progress then Todo, Priority High then Low: FAIL at Assert that "Priority, Low" is visible... FAILED
+  hdr compare hdr pinned portrait: main PASS, 6c8b7652a1 PASS (same)
+  hdr compare hdr pinned landscape: main PASS, 6c8b7652a1 FAIL -> MISMATCH, counted against 6c8b7652a1
+p10743-ipad27-light-standing: fails 1 (c006chk: differs from main)
+  hdr compare hdr stand chips: main FAIL, 6c8b7652a1 FAIL (same)
+p10743-ipad27-light-agent-not-delivered: fails 0 shots 3 
+p10743-ipad27-light-mt-before-10924: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+p10743-ipad27-light-signout-draft: fails STALL (watchdog; steps 0, shots 0) 
+p10743-signout-draft: FAIL no after shot
+p10743 hdr portrait: fails 0 shots 1 
+  portrait Traceback (most recent call last):   File "/Users/deanstratakos/vespin-ipad-agent/hdrread.py", line 3, in <module>     j=json.load(open(sys.argv[1])); rows=[] FileNotFoundError: [Errno 2] No such file or directory: '/Users/deanstratakos/vespin-ipad-agent/out/sjipadmain/p10743-ipad27-light-hdr-p/hierarchy-portrait.json' 
+p10743 hdr landscape: fails 1 shots 1 Assert that "Recorded the invite flow" is visible... FAILED
+  landscape chrome rows: [] labeled items in the chrome: [] sidebar toggles: 0 [] New task items on screen: 0 [] 
