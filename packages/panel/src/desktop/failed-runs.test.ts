@@ -7,6 +7,7 @@ import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { keepViewChoices } from "../testing/view-choices.js";
 import { useFailedRunsMark } from "./failed-runs.js";
 
 const SWEEP = "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04";
@@ -15,9 +16,10 @@ const DIGEST = "6b1d5e3f-9a2c-4d4b-8f8e-3c7a2b9d0e15";
 let marked: boolean[] = [];
 const roots: Root[] = [];
 
+// Note that the failures seen are kept on the account, so each test starts with none seen.
 beforeEach(() => {
   marked = [];
-  localStorage.clear();
+  keepViewChoices();
 });
 
 afterEach(() => {
@@ -84,7 +86,7 @@ test("the Automations mark stands until each failing automation is opened, stays
   draw(first, undefined);
   assert.equal(marked.at(-1), false);
 
-  // A relaunch reads what this Mac kept.
+  // A relaunch reads what the account kept.
   const again = mount(first);
   assert.equal(marked.at(-1), false);
 

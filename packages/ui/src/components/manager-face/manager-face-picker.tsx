@@ -51,7 +51,7 @@ import { MANAGER_FACE_SIZE, ManagerFace } from "./manager-face.js";
  * beside a menu's item on the menu's surface (`ManagerFaceMenuPanel`), as a
  * Manager's Change face › opens it; a pick hands the face on and puts the
  * picker away. Recent is its owner's to keep (`ManagerFaceRecent`), as a
- * section's Recent is kept in the window's storage.
+ * section's Recent is kept by the section icon picker's owner.
  *
  * It sits on a subpath of its own (`@repo/ui/manager-face-picker`), out of
  * the barrel, as the face does, so Kawaii reaches only the bundles that
@@ -116,7 +116,7 @@ const MANAGER_FACE = "Manager face";
 const MENU_PANEL =
   "ui-manager-face-menu-panel rounded-menu border border-border-strong bg-popover text-popover-foreground shadow-menu animate-menu-in";
 
-/** Where the faces this window picked last are kept, as a section's recent icons are: read as the picker opens, written as it picks. */
+/** Where the faces picked last are kept, as a section's recent icons are: read as the picker opens, written as it picks. */
 export interface ManagerFaceRecent {
   readonly read: () => readonly ManagerFaceValue[];
   readonly write: (faces: readonly ManagerFaceValue[]) => void;

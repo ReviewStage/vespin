@@ -6,30 +6,38 @@
  * mark goes on saying it until the automation is opened. Main hands the window the
  * newest failed run of each of the account's own automations
  * (`AppInboxSlice.failedRuns`), and opening an automation sees its failure,
- * kept in the renderer's own storage as the folds are, so the mark stays off
- * across launches until another run of it fails. A `staged` run keeps
+ * kept on the account as a read mark is, one of its view choices
+ * (`VIEW_CHOICE_KEY.FAILED_RUNS_SEEN`, `../view-choices.ts`), so the mark
+ * stays off on every device until another run of it fails. What an earlier
+ * build kept in this window's storage moves up once. A `staged` run keeps
  * nothing, so its frames never wear a developer's choices.
  */
 
 import type { AccountFailedRun } from "@repo/features/account-inbox-wire";
+import { VIEW_CHOICE_KEY, type ViewChoiceValue } from "@repo/features/view-choice-wire";
 import { Schema } from "effect";
-import { useEffect, useState } from "react";
-import { readKept, writeKept } from "../kept-storage.js";
+import { useEffect, useRef } from "react";
+import { keptKey, useKeptLeaving } from "../use-kept.js";
+import { useAccountChoice } from "../view-choices.js";
 
-/** Where the failures seen are kept in the renderer's storage. */
-const STORAGE_KEY = "app.seenFailedRuns";
+/** Where an earlier build kept the failures seen in the renderer's storage, moved up to the account once. */
+const KEPT_SEEN = keptKey(
+  "app.seenFailedRuns",
+  Schema.fromJsonString(Schema.Record(Schema.String, Schema.String)),
+);
 
 /** The newest failed run seen of each automation, by the automation's id. */
-const storedSeen = Schema.fromJsonString(Schema.Record(Schema.String, Schema.String));
+type Seen = ViewChoiceValue<typeof VIEW_CHOICE_KEY.FAILED_RUNS_SEEN>;
 
-type Seen = Readonly<Record<string, string>>;
+/** None seen, one record for every draw. */
+const NONE_SEEN: Seen = {};
 
 /**
  * Whether a run of the account's own automation in the listed workspace
- * failed since that automation was last opened on this Mac, among
- * `failedRuns`, every workspace's. The automation `opened` sees its newest
- * failure as it opens. Note that a failure is told by its run's id rather
- * than its instant, because two runs may fail within one millisecond.
+ * failed since that automation was last opened, among `failedRuns`, every
+ * workspace's. The automation `opened` sees its newest failure as it opens.
+ * Note that a failure is told by its run's id rather than its instant,
+ * because two runs may fail within one millisecond.
  */
 export function useFailedRunsMark(
   failedRuns: readonly AccountFailedRun[],
@@ -37,8 +45,12 @@ export function useFailedRunsMark(
   opened: string | undefined,
   staged: boolean,
 ): boolean {
-  const [seen, setSeen] = useState<Seen>(() =>
-    staged ? {} : readKept(STORAGE_KEY, storedSeen, {}),
+  const { value: seen, change } = useAccountChoice(
+    VIEW_CHOICE_KEY.FAILED_RUNS_SEEN,
+    null,
+    NONE_SEEN,
+    staged,
+    useKeptLeaving(KEPT_SEEN),
   );
 
   // Note that only the listed workspace's runs are seen, because an editor left open across a switch shows no other's.
@@ -47,22 +59,27 @@ export function useFailedRunsMark(
   );
 
   const openedRun = listed.find((run) => run.automationId === opened);
+  // The failure this surface last saw, so it is kept once while the account's read catches up with it.
+  const saw = useRef<string | undefined>(undefined);
+
   useEffect(() => {
     if (openedRun === undefined || seen[openedRun.automationId] === openedRun.id) return;
 
-    // Note that only the automations still failing are kept, in every workspace, because one whose failures aged out of the read has nothing left to mark.
-    const next = Object.fromEntries(
-      failedRuns.flatMap((run) => {
-        const runId = run.automationId === openedRun.automationId ? run.id : seen[run.automationId];
+    if (saw.current === openedRun.id) return;
+    saw.current = openedRun.id;
 
-        return runId === undefined ? [] : [[run.automationId, runId]];
-      }),
+    // Note that only the automations still failing are kept, in every workspace, because one whose failures aged out of the read has nothing left to mark; and that it is made over the failures seen as it is kept, so one seen on another device since stands.
+    change((held) =>
+      Object.fromEntries(
+        failedRuns.flatMap((run) => {
+          const runId =
+            run.automationId === openedRun.automationId ? run.id : held[run.automationId];
+
+          return runId === undefined ? [] : [[run.automationId, runId]];
+        }),
+      ),
     );
-
-    setSeen(next);
-
-    if (!staged) writeKept(STORAGE_KEY, storedSeen, next);
-  }, [openedRun, failedRuns, seen, staged]);
+  }, [openedRun, failedRuns, seen, change]);
 
   return listed.some((run) => run.automationId !== opened && seen[run.automationId] !== run.id);
 }
