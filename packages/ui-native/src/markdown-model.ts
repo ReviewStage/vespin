@@ -10,6 +10,7 @@ import {
   entityWordHeard,
 } from "@repo/features/entity-kind";
 import { escapedMarkers, isPictureName, writtenMarkers } from "@repo/features/file-marker";
+import { githubAutolinks } from "@repo/features/github-autolinks";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import {
   LINK_DESTINATION,
@@ -221,12 +222,14 @@ export interface MarkdownReading {
    */
   readonly typed?: boolean | undefined;
   /**
-   * Whether the words are GitHub's, a pull request's or a comment's, whose
-   * raw HTML is read as GitHub's own page draws it: a picture, a table, a
-   * folded section, a list, a heading, a line break, and words marked bold,
-   * italic, struck, as code or as a link drawn as they would be written in
-   * Markdown, and every other tag, comment and template left unseen, never
-   * printed. Elsewhere raw HTML is drawn as the words it was written with.
+   * Whether the words are GitHub's, a pull request's or a comment's, read
+   * as GitHub's own page draws them: the words GitHub links on its own
+   * (`@login`, `#123`, a commit's hash) drawn as links, and raw HTML read
+   * from an allowlist (a picture, a table, a folded section, a list, a
+   * heading, a line break, and words marked bold, italic, struck, as code or
+   * as a link, drawn as they would be written in Markdown), every other tag,
+   * comment and template left unseen, never printed. Elsewhere raw HTML is
+   * drawn as the words it was written with, and nothing links on its own.
    */
   readonly githubWords?: boolean | undefined;
   /**
@@ -269,6 +272,8 @@ interface Reader {
   readonly spelled?: readonly SpelledMarker[] | undefined;
   /** How many of GitHub's HTML tags stand around the pieces read (`MAX_HTML_DEPTH`); none outside any. */
   readonly htmlDepth?: number | undefined;
+  /** Whether the words read are a link's own, which link nothing more inside them. */
+  readonly linked?: boolean | undefined;
 }
 
 function folded(identifier: string): string {
@@ -454,7 +459,7 @@ function linkRun(
 ): MarkdownRun {
   const words = children.map(wordsOf).join("");
 
-  return linkRunOf(href, words, () => phrasingRuns(children, marks, reader), reader);
+  return linkRunOf(href, words, () => phrasingRuns(children, marks, inLink(reader)), reader);
 }
 
 /** A link to `href` whose words are `words`: a suggestion, a chip, or a link around its own runs, read only where it stays a link. */
@@ -493,6 +498,32 @@ function referenced(node: LinkReference | ImageReference, reader: Reader): Defin
 /** A run of words as written, where nothing reads it as more: a reference with no definition, raw HTML. */
 function wordsRun(text: string, marks: WordMarks): MarkdownRun[] {
   return text === "" ? [] : [{ kind: MARKDOWN_RUN.WORDS, text, ...marks }];
+}
+
+/** The reader for a link's own words. */
+function inLink(reader: Reader): Reader {
+  return { ...reader, linked: true };
+}
+
+/**
+ * Plain words of GitHub's with each word GitHub links on its own
+ * (`githubAutolinks`: `@login`, `#123`, a commit's hash) as the link or
+ * chip a link to its page draws, the words around it kept; inside a
+ * link's own words, and in any words but GitHub's, the words alone.
+ */
+function wordsOrLinks(text: string, marks: WordMarks, reader: Reader): MarkdownRun[] {
+  if (reader.reading.githubWords !== true || reader.linked === true) return wordsRun(text, marks);
+  const runs: MarkdownRun[] = [];
+  let at = 0;
+
+  for (const link of githubAutolinks(text, reader.reading.repository)) {
+    const written = text.slice(link.start, link.end);
+    runs.push(...wordsRun(text.slice(at, link.start), marks));
+    runs.push(linkRunOf(link.href, link.label, () => wordsRun(written, marks), reader));
+    at = link.end;
+  }
+
+  return [...runs, ...wordsRun(text.slice(at), marks)];
 }
 
 /** Every marker spelled outside code in the words, in order, each escaped where a backslash makes it words (`@repo/features/file-marker`). */
@@ -570,7 +601,9 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
 
       return node.type === "html"
         ? wordsRun(text, marks)
-        : wordsWithPictures(node, text, marks, reader);
+        : reader.reading.githubWords === true
+          ? wordsOrLinks(text, marks, reader)
+          : wordsWithPictures(node, text, marks, reader);
     }
 
     case "inlineCode":
@@ -984,7 +1017,7 @@ function spanInlines(
     ];
   }
 
-  const runs = () => runsOnly(inlinesOf(inner, marks, reader));
+  const runs = () => runsOnly(inlinesOf(inner, marks, inLink(reader)));
   const href = token.attributes.get("href")?.trim();
 
   if (href === undefined || !WEB_ADDRESS.test(href)) return runs().map((run) => ({ run }));
@@ -1022,7 +1055,9 @@ function inlinesOf(
 
     if (token.kind === HTML_TOKEN.TEXT) {
       inlines.push(
-        ...wordsRun(token.text.replace(HTML_SPACE, " "), marked()).map((run) => ({ run })),
+        ...wordsOrLinks(token.text.replace(HTML_SPACE, " "), marked(), reader).map((run) => ({
+          run,
+        })),
       );
     } else if (token.kind === HTML_TOKEN.CLOSE) {
       const last = open.findLastIndex((each) => each.name === token.name);

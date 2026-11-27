@@ -158,6 +158,7 @@
     "./dictation-wire": "./src/dictation-wire.js",
     "./draft-text": "./src/draft-text.js",
     "./github-connection-wire": "./src/github-connection-wire.js",
+    "./github-autolinks": "./src/github-autolinks.js",
     "./github-holds-words": "./src/github-holds-words.js",
     "./github-image": "./src/github-image.js",
     "./github-login": "./src/github-login.js",

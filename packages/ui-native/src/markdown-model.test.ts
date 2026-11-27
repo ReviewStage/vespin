@@ -224,6 +224,48 @@ describe("markdownBlocks", () => {
     expect(markdownShows("<!-- What changed and why? -->\n", { githubWords: true })).toBe(false);
   });
 
+  // A pull request's comments reach the app as GitHub's Markdown, in which `@ada` and `#126` are words GitHub links on its own page alone.
+  it("links the words GitHub links on its own in GitHub's words, but none inside a link's own words", () => {
+    const [paragraph] = markdownBlocks(
+      'cc @ada: #126, not [#9](https://example.com/9) or <a href="https://example.com/7">#7</a>',
+      { ...READING, githubWords: true },
+    );
+
+    expect(paragraph).toMatchObject({
+      kind: MARKDOWN_BLOCK.PARAGRAPH,
+      runs: [
+        words("cc "),
+        {
+          kind: MARKDOWN_RUN.CHIP,
+          chip: { name: "ada", target: { kind: LINK_TARGET.WEB, href: "https://github.com/ada" } },
+        },
+        words(": "),
+        {
+          kind: MARKDOWN_RUN.CHIP,
+          chip: {
+            name: "#126",
+            target: { kind: LINK_TARGET.WEB, href: "https://github.com/acme/app/issues/126" },
+          },
+        },
+        words(", not "),
+        {
+          kind: MARKDOWN_RUN.LINK,
+          target: { kind: LINK_TARGET.WEB, href: "https://example.com/9" },
+          runs: [words("#9")],
+        },
+        words(" or "),
+        {
+          kind: MARKDOWN_RUN.LINK,
+          target: { kind: LINK_TARGET.WEB, href: "https://example.com/7" },
+          runs: [words("#7")],
+        },
+      ],
+    });
+    expect(markdownBlocks("cc @ada", READING)).toEqual([
+      { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("cc @ada")] },
+    ]);
+  });
+
   it.each([
     ['<a href="javascript:alert(1)">x</a>'],
     ['<a href="data:text/html,<p>hi</p>">x</a>'],
