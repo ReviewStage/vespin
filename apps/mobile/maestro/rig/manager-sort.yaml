@@ -1,0 +1,76 @@
+# manager-sort.yaml -- RIG SHIM (never merged): the Managers' Sort by, chosen from a long press on their section's header, reorders them at once and is still the sort after a relaunch, as the account keeps it.
+#
+# It lives under maestro/rig/ rather than maestro/, so the screenshot run
+# never runs it. The rig's fixture keeps the view choice a run writes in the
+# app's defaults across launches (`fixture-host.ts`'s `keepViewChoice`), as
+# the service keeps it for a live run, and its workspace holds three
+# Managers: newest started first Triage, Release, Docs, and by name Docs,
+# Release, Triage. Nothing reaches a server.
+appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# 1. Before: newest started first, the default, so Triage stands over Release over Docs.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: ../subflows/tab.yaml
+    env:
+      TAB: Tasks
+- extendedWaitUntil:
+    visible: "Docs manager"
+    timeout: 30000
+- assertVisible:
+    text: "Release manager"
+    below: "Triage manager"
+- assertVisible:
+    text: "Docs manager"
+    below: "Release manager"
+- waitForAnimationToEnd
+- takeScreenshot: manager-sort-before
+# 2. Menu open: a long press on the Managers header offers Sort by, Date created checked.
+- longPressOn: "Managers"
+- tapOn: "Sort by"
+- extendedWaitUntil:
+    visible: "Recent activity"
+    timeout: 10000
+- assertVisible: "Name"
+- assertVisible: "Date created"
+- takeScreenshot: manager-sort-menu
+# 3. After: Name reorders them at once, Docs over Release over Triage.
+- tapOn: "Name"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible:
+    text: "Release manager"
+    below: "Docs manager"
+- assertVisible:
+    text: "Triage manager"
+    below: "Release manager"
+- takeScreenshot: manager-sort-after
+# 4. After a relaunch: the sort the account kept still stands.
+- stopApp
+- launchApp:
+    clearState: false
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: ../subflows/tab.yaml
+    env:
+      TAB: Tasks
+- extendedWaitUntil:
+    visible: "Docs manager"
+    timeout: 30000
+- assertVisible:
+    text: "Release manager"
+    below: "Docs manager"
+- assertVisible:
+    text: "Triage manager"
+    below: "Release manager"
+- waitForAnimationToEnd
+- takeScreenshot: manager-sort-relaunch
+- longPressOn: "Managers"
+- tapOn: "Sort by"
+- takeScreenshot: manager-sort-relaunch-menu

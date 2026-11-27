@@ -29,6 +29,7 @@ import {
   TASK_CALL_FAILURE,
   type TaskListParts,
 } from "@repo/features/tasks-view";
+import type { ViewChoiceLiveRow } from "@repo/features/view-choice-live";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppStateSnapshot,
@@ -82,6 +83,7 @@ import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { SETUP_AUDIENCE, setupPlaceStored } from "@repo/settings";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Predicate } from "effect";
+import { Settings } from "react-native";
 
 /** The one workspace a fixture run's account is in. */
 const FIXTURE_WORKSPACE_IDS: readonly string[] = [FIXTURE_IDS.WORKSPACE];
@@ -516,9 +518,50 @@ export function stageFixture(
     tasks: listed.tasks,
     network: stagedNetwork(held, updateNeeded),
     [LIVE_READ.PROVIDER_KEYS]: stagedKeys(inbox),
+    // RIG SHIM (never merged): the view choices the rig kept, as the account's read carries them.
+    [LIVE_READ.VIEW_CHOICES]: {
+      ...held[LIVE_READ.VIEW_CHOICES],
+      [signedInAccountId(held.account) ?? ""]: { rows: rigViewChoices },
+    },
   };
 
   state.update(stagedPatch(held, staged), listed.lists);
+}
+
+/** RIG SHIM (never merged): where the rig's view choices are kept across launches, as the service keeps them for a live run. */
+const RIG_VIEW_CHOICES_KEY = "rigViewChoices";
+
+/** RIG SHIM (never merged): the view choices a rig run kept, read once at launch. */
+let rigViewChoices: readonly ViewChoiceLiveRow[] = (() => {
+  const kept: unknown = Settings.get(RIG_VIEW_CHOICES_KEY);
+
+  try {
+    // SAFETY: only this shim writes the key, as the rows it laid.
+    return Predicate.isString(kept) ? (JSON.parse(kept) as ViewChoiceLiveRow[]) : [];
+  } catch {
+    return [];
+  }
+})();
+
+/** RIG SHIM (never merged): keeps a view choice written, or forgets it, in the rig's own defaults, and lays it over the document at once; nothing for any other act. */
+function keepViewChoice(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): boolean {
+  if (kind !== ACT_KIND.VIEW_CHOICE_WRITE) return false;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { id, key, workspaceId, value } = payload as PortActPayload<
+    typeof ACT_KIND.VIEW_CHOICE_WRITE
+  >;
+  const others = rigViewChoices.filter(
+    (row) => !(row.key === key && row.workspaceId === workspaceId),
+  );
+  rigViewChoices = value === null ? others : [...others, { id, key, workspaceId, value }];
+  Settings.set({ [RIG_VIEW_CHOICES_KEY]: JSON.stringify(rigViewChoices) });
+  stageFixture(state);
+
+  return true;
 }
 
 /**
@@ -937,6 +980,10 @@ export function fixtureActs(
           : undefined;
 
         if (startRefused !== undefined) return Promise.resolve(startRefused);
+
+        // RIG SHIM (never merged): a view choice is kept by the rig, as the service keeps it.
+        // SAFETY: the port is keyed by act kind.
+        if (keepViewChoice(state, kind as PortActKind, payload)) return Promise.resolve({});
         // SAFETY: the port is keyed by act kind.
         const older = olderRead(state, profile, kind as PortActKind, payload);
 
