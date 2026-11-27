@@ -22,7 +22,6 @@ import type { DeviceSeams } from "./compose-mobile.js";
 import { expoFileSystem, hostStateRootIn } from "./expo-file-system.js";
 import { expoSqliteDriver } from "./expo-sqlite-driver.js";
 import { keychainTokens } from "./keychain-tokens.js";
-import { nativeFileDownload } from "./native-download.js";
 import { openRelaySocket } from "./relay-socket.js";
 import { keepShareToken } from "./share-token-module.js";
 
@@ -101,6 +100,5 @@ export function deviceSeams(): DeviceSeams {
     localDatabaseDriver: expoSqliteDriver(openDatabaseSync, openDatabaseAsync),
     keepLine: keepHostLine,
     renewalWindow,
-    fileDownload: nativeFileDownload,
   };
 }

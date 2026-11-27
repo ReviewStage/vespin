@@ -14,10 +14,8 @@ import {
   type AgentCallFailure,
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
-import { base64Bytes } from "@repo/features/agent-wire";
-import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { sizeLabel } from "@repo/features/attachment-model";
-import { base64PictureSize, type ImageDimensions } from "@repo/features/image-signature";
+import type { ImageDimensions } from "@repo/features/image-signature";
 import type { InboxFields, InboxRow } from "@repo/features/inbox-digest";
 import {
   INBOX_MEDIA,
@@ -59,7 +57,6 @@ import { formatBytes } from "@repo/features/number-format";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
-import { MP4_TYPE } from "@repo/features/video-signature";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -86,21 +83,13 @@ import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
-import {
-  cachedFile,
-  cachedPicture,
-  cachedPlayed,
-  KEPT_MEDIA,
-  type KeptMedia,
-  keptMedia,
-  keptPictureSize,
-} from "../cached-media.js";
+import { cachedFile, cachedPicture, cachedPlayed } from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
-import { usePictureShownCount } from "../picture-shown.js";
+import { serviceFile } from "../service-file.js";
 import { usePictures } from "../use-pictures.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useInboxGroupsIn, useInboxGroupsRead } from "./inbox-groups.js";
@@ -984,21 +973,6 @@ async function sourceOf(
   }
 }
 
-/** A kept picture's size in pixels, as its file's header states it; none for any other kind of file. */
-function keptPictureSizeOf(
-  each: InboxMessageMedia,
-  kept: KeptMedia,
-): Promise<ImageDimensions | undefined> {
-  return each.kind === INBOX_MEDIA.PICTURE && kept.kind === KEPT_MEDIA.PICTURE
-    ? keptPictureSize(kept.uri)
-    : Promise.resolve(undefined);
-}
-
-/** A picture's size in pixels, as its header states it, read from a file the service answered; none for any other kind of file. */
-function readPictureSize(each: InboxMessageMedia, base64: string): ImageDimensions | undefined {
-  return each.kind === INBOX_MEDIA.PICTURE ? base64PictureSize(base64) : undefined;
-}
-
 /** The files read with one more landed: what it is drawn from, its size in words, and a picture's size in pixels, as its header states it. */
 function withRead(
   held: ThreadMediaRead,
@@ -1018,22 +992,20 @@ function withRead(
 }
 
 /**
- * What each of a thread's files is drawn from, by its attachment, read once
- * through the host as the panel reads one (`AGENTS_INBOX_ATTACHMENT`): a
- * picture as a `data:` address, a video or a sound clip, asked for as its
- * MP4 copy, as a file of the app's caches, since the system's player reads a
- * file, which an older recording with no copy answers as a WebM the player
- * cannot play, and an Ogg clip before the service keeps its copy as the Ogg,
- * and
- * any other file, such as a PDF, as a file of the app's caches under its own
- * name, which its viewer and the share sheet read; with each one's size in
- * words, which a file's chip says. One still on its way is absent, and one
- * that could not be read is `null` until `retry` reads it again. Note that each file is asked for once while
- * the thread stands, whatever `media` list names it, because the thread's
- * item is made anew on every change to it, its read mark as it opens among
- * them, and each read carries the whole file; one whose read failed is asked
- * for again only by its Try again, since the thread's next change, such as
- * its read mark, would otherwise read the whole file again unseen.
+ * What each of a thread's files is drawn from, by its attachment: a picture
+ * or a recording the service keeps by its id, which it reads where it is
+ * drawn and expo-image or expo-video loads from the service's address
+ * (`usePictures`); a sound clip, as its M4A copy where the service keeps
+ * one, and any other file, such as a PDF, downloaded once under the app's
+ * caches with the header its read carries (`serviceFile`), which the
+ * system's audio strip, Quick Look, and the share sheet read; and a reply's
+ * file still on its way, from the reply's own bytes. Each comes with its
+ * size in words, which a file's chip says. One still on its way is absent,
+ * and one that could not be read is `null` until `retry` reads it again.
+ * Note that each file is asked for once while the thread stands, whatever
+ * `media` list names it, because the thread's item is made anew on every
+ * change to it, its read mark as it opens among them; one whose read failed
+ * is asked for again only by its Try again.
  */
 export function useThreadMedia(
   itemId: string | undefined,
@@ -1041,7 +1013,6 @@ export function useThreadMedia(
   pending?: (itemId: string, attachmentId: string) => InboxHeldFile | undefined,
 ): ThreadFiles {
   const acts = useHostActs();
-  const shown = usePictureShownCount(PRODUCT_PICTURE_KIND.INBOX);
   const [read, setRead] = useState<ThreadMediaRead>(NOTHING_READ);
   // How many times a file was read again, which asks the effect to read what was let go.
   const [retries, setRetries] = useState(0);
@@ -1093,61 +1064,20 @@ export function useThreadMedia(
         continue;
       }
 
-      const askedAt = performance.now();
-
-      // Note that a picture, a video, or a clip shown before draws from the file its first read wrote, asking the host nothing; a file such as a PDF stands under its own name, so it is read as before.
-      const kept =
-        each.kind === INBOX_MEDIA.FILE
-          ? undefined
-          : keptMedia(INBOX_MEDIA_PREFIX, each.attachmentId);
-
-      if (kept !== undefined) {
-        void keptPictureSizeOf(each, kept)
-          .then((pictureSize) => {
-            if (asked.current.itemId !== itemId) return;
-            setRead((was) => withRead(was, each, kept.uri, formatBytes(kept.bytes), pictureSize));
-
-            if (kept.kind === KEPT_MEDIA.PICTURE) {
-              shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
-            }
-          })
-          .catch(failed);
-        continue;
-      }
-
-      // A video or a sound clip is asked for as the MP4 copy iOS's player plays, which only a recording or an Ogg clip is kept with: one kept without it, an older recording's WebM or any other clip, is answered as it is.
-      const played = each.kind === INBOX_MEDIA.VIDEO || each.kind === INBOX_MEDIA.AUDIO;
-      const playable = played ? ({ playable: MP4_TYPE } as const) : {};
-      acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({
-        itemId,
-        attachmentId: each.attachmentId,
-        ...playable,
-      })
-        .then(async (answer) => {
+      // Note that a clip or a file is downloaded once under the app's caches with the header its read carries, its M4A copy where the service keeps one, and found there on its next read (`serviceFile`).
+      serviceFile(
+        acts,
+        { owner: PICTURE_OWNER.INBOX, itemId, attachmentId: each.attachmentId },
+        each.name,
+      )
+        .then((file) => {
           // A read that lands once another thread stands is that thread's no longer.
           if (asked.current.itemId !== itemId) return;
-
-          if (!("base64" in answer)) throw new Error(`The file was not read: ${answer.failure}.`);
-          const source = await sourceOf(each, answer);
-
-          if (asked.current.itemId !== itemId) return;
-          setRead((held) =>
-            withRead(
-              held,
-              each,
-              source,
-              sizeLabel(answer.base64),
-              readPictureSize(each, answer.base64),
-            ),
-          );
-
-          if (each.kind === INBOX_MEDIA.PICTURE) {
-            shown(PRODUCT_PICTURE_FROM.READ, askedAt, base64Bytes(answer.base64));
-          }
+          setRead((held) => withRead(held, each, file.uri, formatBytes(file.bytes), undefined));
         })
         .catch(failed);
     }
-  }, [acts, itemId, media, retries, pending, shown]);
+  }, [acts, itemId, media, retries, pending]);
 
   const retry = useCallback((attachmentId: string) => {
     asked.current.ids.delete(attachmentId);

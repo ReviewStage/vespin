@@ -12,14 +12,13 @@
  * (`DESCRIPTION_COMMENT_SCOPE.BLOCK`), as a long press on it offers, since
  * the app's read-only description has no selection of words; its span is
  * read from the shared parse (`@repo/features/description-blocks`).
- * A comment's files are read through the host as the panel reads them
- * (`TASKS_PICTURE_READ`), so no credential leaves it: a picture drawn from
- * its bytes, and any other file, such as a PDF, written under the app's
- * caches for its chip to open.
+ * A comment's files: a picture drawn from the service's address by expo-image, and any other
+ * file, such as a PDF, downloaded once under the app's caches for its chip
+ * to open (`serviceFile`).
  */
 
 import type { AgentAttachment } from "@repo/features/agent-wire";
-import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
+import { ATTACHMENT_VIEW, attachmentView, linesLabel } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
 import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
 import {
@@ -35,9 +34,10 @@ import {
 import { markersAsNames } from "@repo/features/file-marker";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { ModelProvider } from "@repo/features/models-wire";
+import { formatBytes } from "@repo/features/number-format";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
+import { COMMENT_SUBJECT } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   BUZZ,
@@ -49,12 +49,13 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
+import { File } from "expo-file-system";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
-import { cachedFile } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import type { PictureOf } from "../member-pictures.js";
+import { FileGone, type ServiceFile, serviceFile } from "../service-file.js";
 import {
   type AttachedPictures,
   type HeldPicture,
@@ -68,9 +69,6 @@ const NO_THREADS: readonly DescriptionCommentThread[] = [];
 
 /** What an entry says of who wrote it where its writer's account is gone. */
 const SOMEONE = "Someone";
-
-/** The prefix a comment's file is written under in the app's caches. */
-const COMMENT_MEDIA_PREFIX = "comment";
 
 /** One file of a comment as read: what it is drawn from, or `null` where it could not be read, its size in words once read, and whether it is gone for good, which no Try again brings back. */
 interface CommentFileRead {
@@ -101,9 +99,13 @@ function pictured(file: DescriptionCommentFile): boolean {
   );
 }
 
-/** The file a comment's file other than a picture is written to once its bytes land, under its own name in the app's caches, which its chip opens and shares. */
-function sourceOf(file: DescriptionCommentFile, base64: string): Promise<string> {
-  return cachedFile(COMMENT_MEDIA_PREFIX, file.attachmentId, file.name, file.mediaType, base64);
+/** What a comment's file says of its size on its chip: a text file its lines, read from the file it stands in, and any other its bytes. */
+async function fileSize(file: DescriptionCommentFile, read: ServiceFile): Promise<string> {
+  const chip = { name: file.name, mediaType: file.mediaType, url: "" };
+
+  if (attachmentView(chip) !== ATTACHMENT_VIEW.TEXT) return formatBytes(read.bytes);
+
+  return linesLabel(await new File(read.uri).text());
 }
 
 /** Every file a thread's comments carry, in order; none for no thread. */
@@ -337,8 +339,8 @@ export function threadMessages(
  * its attachment, which it reads where it is drawn and expo-image loads
  * from the service's address (`usePictures`, under the page's
  * `PicturesProvider`), and any other file read once through the host while
- * the page stands, as the panel reads a comment's (`TASKS_PICTURE_READ`),
- * and written under the app's caches, which its chip opens and shares. One the service answers is not
+ * the page stands, downloaded once under the app's caches with the header
+ * its read carries (`serviceFile`), which its chip opens and shares. One the service answers is not
  * there stands unread for good, as a description's picture does
  * (`useDescriptionPictures`), and one that got no answer stands unread with
  * Try again, which asks for it anew. Note that a read that lands once the
@@ -389,25 +391,13 @@ export function useCommentMedia(
       if (asked.current.has(id)) continue;
       asked.current.add(id);
 
-      acts[ACT_KIND.TASKS_PICTURE_READ]({ taskId, attachmentId: id })
-        .then(async (answer) => {
-          // Note that a file the service says is not there stays so, while one that got no answer offers Try again.
-          if (!("base64" in answer) && answer.failure === TASK_CALL_FAILURE.NOT_FOUND) {
-            landed(id, { source: null, size: undefined, gone: true });
-
-            return;
-          }
-
-          if (!("base64" in answer)) throw new Error(`The file was not read: ${answer.failure}.`);
-          const chip = { name: file.name, mediaType: file.mediaType, url: "" };
-          landed(id, {
-            source: await sourceOf(file, answer.base64),
-            size: chipSize(chip, answer.base64),
-          });
+      // Note that a file is downloaded once under the app's caches with the header its read carries, and found there on its next read (`serviceFile`); one the service keeps none of stays so, while one that could not be read offers Try again.
+      serviceFile(acts, { owner: PICTURE_OWNER.TASK, taskId, attachmentId: id }, file.name)
+        .then(async (read) => {
+          landed(id, { source: read.uri, size: await fileSize(file, read) });
         })
         .catch((cause: unknown) => {
-          console.error("A comment's file was not read.", cause);
-          landed(id, { source: null, size: undefined });
+          landed(id, { source: null, size: undefined, gone: cause instanceof FileGone });
         });
     }
     // Note that `round` is read so a Try again, which forgets the file's ask, reads it anew.

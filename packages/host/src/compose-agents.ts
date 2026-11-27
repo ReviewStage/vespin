@@ -129,7 +129,6 @@ import {
   PULL_REQUEST_FOLLOWS,
 } from "./contract/index.js";
 import { droppedRowsCount } from "./dropped-rows.js";
-import type { FileDownloadSeam } from "./effect/seams.js";
 import type { HostMethodTable } from "./gateway-door.js";
 import { type AccountHeld, accountHeld, type HeldFetch, heldFetch } from "./held-fetch.js";
 import { type HostActTable, liveTold } from "./host-acts.js";
@@ -195,9 +194,6 @@ import {
   withOlderPage,
 } from "./transcript-follow.js";
 import type { WindowFocus } from "./window-focus.js";
-
-/** What a picture asked into a file answers where the platform downloads none into a file, so the window reads it as bytes instead. */
-const UNANSWERED_PICTURE_FILE = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 
 /**
  * The names the agents' waiting writes are kept under. Note that each is
@@ -304,7 +300,6 @@ export type AgentClient = Pick<
   | "markInboxRead"
   | "inboxAttachment"
   | "agentPicture"
-  | "agentPictureFile"
 >;
 
 /** The service's side of a pull request named by its repository and number, as a Pull request tab asks it with no agent. */
@@ -331,8 +326,6 @@ export interface AgentsDependencies extends AccountGateDependencies {
   ports: Pick<HostedAgentPortsClient, "list" | "shared" | "share" | "unshare">;
   /** The account signed in now, by its id, which every live read names; none where nobody is. */
   accountId: () => string | undefined;
-  /** How the platform downloads a picture straight into a file (`PlatformFileDownload`); none where it draws one from its bytes, so `AGENTS_PICTURE_FILE` answers unanswered. */
-  fileDownload?: FileDownloadSeam | undefined;
   /** The content this host keeps under keys it never changes under, which a picture's, an attachment's, and an image's reads answer from (`kept-content.ts`). */
   kept: KeptContent;
   /** The windows coming forward, on which every fetched read a window holds is asked again. */
@@ -1457,27 +1450,6 @@ function composed(
         client.agentPicture(agentId, pictureId, callId, playable),
         (picture) => ("base64" in picture ? picture : undefined),
       ),
-    // Note that the picture is asked behind the gate as every read is, but carried by the platform's download, which writes its bytes to the file named rather than handing them here; nothing is kept, since the file is the copy.
-    AGENTS_PICTURE_FILE: ({
-      agentId,
-      pictureId,
-      callId,
-      playable = PLAYABLE_VIDEO_TYPE.WEBM,
-      path,
-    }) => {
-      const download = dependencies.fileDownload;
-
-      if (download === undefined) return Effect.succeed(UNANSWERED_PICTURE_FILE);
-
-      // Note that the download is provided inside the gate's ask, since the ask provides the host's own client and the nearer one is the one a request takes.
-      return asked(
-        Effect.provideService(
-          client.agentPictureFile(agentId, pictureId, callId, playable),
-          HttpClient.HttpClient,
-          download.into(path),
-        ),
-      );
-    },
     // A Manager's chat is held for a window while its page shows it.
     AGENTS_MANAGER_CHAT_FOLLOW: {
       hold: ({ agentId }) => managerChats.hold(agentId),

@@ -28,6 +28,7 @@ import { descriptionAttachmentOf } from "@repo/features/description-attachment-l
 import { DESCRIPTION_FILE_TYPE } from "@repo/features/description-attachment-wire";
 import { drawnPictureAddresses } from "@repo/features/drawn-pictures";
 import { isLinkHome } from "@repo/features/link-home";
+import { formatBytes } from "@repo/features/number-format";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
@@ -46,6 +47,7 @@ import {
 import { useHostActs } from "../host/host-provider.js";
 import { openInSafari } from "../open-link.js";
 import { usePictureShownCount } from "../picture-shown.js";
+import { FileGone, type ServiceFile, serviceFile } from "../service-file.js";
 import { usePictures } from "../use-pictures.js";
 
 /** The prefix a description's video or sound clip is written under in the app's caches. */
@@ -177,6 +179,17 @@ function addressedKind(
   return VIDEO_TYPES.has(type) ? PICTURE_READ.VIDEO : undefined;
 }
 
+/** What a downloaded file of the description is drawn as, by the type the task's read names: a clip played from it, a PDF opened as its chip, and unread for any other type. */
+function downloadedRead(type: string, file: ServiceFile): PictureRead {
+  if (type === DESCRIPTION_FILE_TYPE.PDF) {
+    return { kind: PICTURE_READ.FILE, source: file.uri, size: formatBytes(file.bytes) };
+  }
+
+  return isAudioType(type)
+    ? { kind: PICTURE_READ.AUDIO, source: file.uri }
+    : { kind: PICTURE_READ.UNREAD };
+}
+
 /**
  * The description's pictures as `body` draws them, each read once through
  * the host while the page stands, as its own description's or, where a
@@ -223,6 +236,19 @@ export function useDescriptionPictures(
       const landed = (picture: PictureRead) => {
         if (mounted.current) setRead((held) => withRead(held, owner, id, picture));
       };
+
+      const type = owner === files?.taskId ? files.types?.[id] : undefined;
+
+      // Note that a clip or a PDF the task's read names by its type is downloaded once under the app's caches with the header its read carries (`serviceFile`); any other is read through the host as before.
+      if (type !== undefined) {
+        serviceFile(acts, { owner: PICTURE_OWNER.TASK, taskId: owner, attachmentId: id }, PDF_NAME)
+          .then((file) => landed(downloadedRead(type, file)))
+          .catch((cause: unknown) => {
+            if (cause instanceof FileGone) landed({ kind: PICTURE_READ.UNREAD });
+            else asked.current.get(owner)?.delete(id);
+          });
+        continue;
+      }
 
       const askedAt = performance.now();
       // Note that a picture, a video, or a clip shown before draws from the file its first read wrote, asking the host nothing; a PDF stands under its own name, so it is read as before.

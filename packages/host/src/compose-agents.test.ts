@@ -43,7 +43,6 @@ import { type EntityPool, entityPool } from "@repo/sync";
 import { nodeKeptCollections } from "@repo/sync/testing";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { fakeHttpClient } from "@repo/wire/testing";
 import { createLiveQueryCollection } from "@tanstack/db";
 import {
   Deferred,
@@ -360,49 +359,6 @@ it.effect("each method asks the service once and answers what it said, whole", (
       `inbox-read-all:${WORKSPACE_ID}`,
     ]);
   }),
-);
-
-it.effect(
-  "a picture asked into a file is carried by the platform's download to the file named, never by the host's own client, and is unanswered where the platform downloads none",
-  () =>
-    Effect.gen(function* () {
-      const paths: string[] = [];
-      const written: string[] = [];
-
-      // A client that wrote the body to its file answers the status and headers alone, as the phone's download does.
-      const download = fakeHttpClient((url) => {
-        written.push(url);
-
-        return new Response(null, { status: 200, headers: { "content-type": "image/png" } });
-      });
-
-      const downloading = yield* subject({
-        fileDownload: {
-          into: (path) => {
-            paths.push(path);
-
-            return download;
-          },
-        },
-      });
-
-      const plain = yield* subject();
-
-      const picture = {
-        agentId: AGENT_ID,
-        pictureId: PICTURE_ID,
-        path: "file:///caches/agent-1.part",
-      };
-
-      assert.deepEqual(yield* downloading.acts.AGENTS_PICTURE_FILE(picture), {
-        contentType: INBOX_IMAGE_TYPE.PNG,
-      });
-      assert.deepEqual(paths, [picture.path]);
-      assert.equal(written.length, 1);
-      assert.deepEqual(yield* plain.acts.AGENTS_PICTURE_FILE(picture), {
-        failure: AGENT_CALL_FAILURE.UNANSWERED,
-      });
-    }),
 );
 
 it.effect(

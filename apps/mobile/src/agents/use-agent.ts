@@ -31,16 +31,13 @@ import {
 import {
   type AgentPullRequest,
   type AgentStatus,
-  base64Bytes,
   type ListedAgent,
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
-import { PRODUCT_PICTURE_FROM, PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
-import { isPlayedType } from "@repo/features/conversation-picture-wire";
 import { MANAGER_FACE_FAILED, type ManagerFace } from "@repo/features/manager-face";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
-import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type {
   AppHostRead,
@@ -64,17 +61,9 @@ import {
   transcriptItems,
 } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { randomUUID } from "expo-crypto";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  cachedFile,
-  cachedPicture,
-  cachedPlayed,
-  downloadedMedia,
-  KEPT_MEDIA,
-  keptMedia,
-} from "../cached-media.js";
+import { cachedFile } from "../cached-media.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useHostActs,
@@ -82,11 +71,8 @@ import {
   useTaskListCollections,
   useTaskListRow,
 } from "../host/host-provider.js";
-import { type PictureShown, usePictureShownCount } from "../picture-shown.js";
+import { serviceFile } from "../service-file.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-
-/** What an agent's recordings are named under among the app's caches. */
-const AGENT_MEDIA_PREFIX = "agent";
 
 /** No media read yet, held as one value so a page that holds none reads the same each time. */
 const NO_SOURCES: ReadonlyMap<string, string | null> = new Map();
@@ -410,71 +396,31 @@ function mediaReadFailed(agentId: string, pictureId: string, cause: unknown, aga
   );
 }
 
-/** One picture, recording, or sound clip the agent showed, read through the host into what it is drawn from. */
+/** One sound clip the agent showed, as the file the system's audio strip plays: downloaded once under the app's caches with the header its read carries, as its M4A copy where the service keeps one (`serviceFile`). */
 async function agentMediaSource(
   acts: ReturnType<typeof useHostActs>,
   agentId: string,
   pictureId: string,
-  shown: PictureShown,
 ): Promise<string> {
-  const askedAt = performance.now();
-  // Note that one shown before draws from the file its first read wrote, asking the host nothing.
-  const kept = keptMedia(AGENT_MEDIA_PREFIX, pictureId);
+  const file = await serviceFile(acts, { owner: PICTURE_OWNER.AGENT, agentId, pictureId });
 
-  if (kept !== undefined) {
-    if (kept.kind === KEPT_MEDIA.PICTURE) shown(PRODUCT_PICTURE_FROM.KEPT, askedAt, kept.bytes);
-
-    return kept.uri;
-  }
-
-  // Note that one read the first time is downloaded by the phone straight into its file, its bytes never crossing into JavaScript; a host that downloads none, or a download that read nothing, reads it as bytes below.
-  const downloaded = await downloadedMedia(AGENT_MEDIA_PREFIX, pictureId, randomUUID(), (path) =>
-    acts[ACT_KIND.AGENTS_PICTURE_FILE]({ agentId, pictureId, playable: MP4_TYPE, path }).then(
-      (answer) => ("contentType" in answer ? answer.contentType : undefined),
-    ),
-  );
-
-  if (downloaded !== undefined) {
-    if (downloaded.kind === KEPT_MEDIA.PICTURE)
-      shown(PRODUCT_PICTURE_FROM.DOWNLOADED, askedAt, downloaded.bytes);
-
-    return downloaded.uri;
-  }
-
-  // Note that a recording, or an Ogg clip, is asked for as its MP4 copy, which the system's player plays, where the service kept one; anything else is answered as it is.
-  const read = await acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE });
-
-  if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
-
-  if (isPlayedType(read.contentType)) {
-    return cachedPlayed(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64);
-  }
-
-  // Note that a picture is written to the app's caches and drawn from its file, so the page holds its address rather than its bytes, and the system's image cache holds what it decodes; a type no file can be named for keeps its `data:` address.
-  const written = await cachedPicture(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64);
-
-  shown(PRODUCT_PICTURE_FROM.READ, askedAt, base64Bytes(read.base64));
-
-  return written ?? `data:${read.contentType};base64,${read.base64}`;
+  return file.uri;
 }
 
-/** What an agent's pictures and recordings are drawn from, by id, and what reads one that failed again. */
+/** What an agent's sound clips are played from, by id, and what reads one that failed again. */
 export interface AgentMedia {
   readonly sources: ReadonlyMap<string, string | null>;
   readonly retry: (pictureId: string) => void;
 }
 
 /**
- * What each picture, recording, and sound clip the agent showed is drawn
- * from, by its id: the file an earlier read wrote under the app's caches,
- * this launch's or one before it (`keptMedia`), or else read once through
- * the host as the panel reads one (`ACT_KIND.AGENTS_PICTURE`): a picture
- * written to a file of the caches, or a `data:` address where its type names
- * none, and a
- * recording or a clip, its MP4 copy where the service kept one, as a file of
- * the app's caches, written whole before it is drawn, since the system's
- * player reads a file; one on its way is absent, and one whose every try
- * failed is `null`, which its Try again (`retry`) reads again. Note
+ * What each sound clip the agent showed is played from, by its id: the file
+ * it stands in under the app's caches, downloaded once with the header its
+ * read carries (`serviceFile`), its M4A copy where the service keeps one,
+ * since the system's audio strip reads a file; a picture and a recording
+ * draw and play from the service's address instead (`use-pictures.tsx`).
+ * One on its way is absent, and one whose every try failed is `null`,
+ * which its Try again (`retry`) reads again. Note
  * that each is asked for once while the agent's page stands, however often
  * the transcript moves; that one whose read failed is tried again on its
  * own a few times after a pause (`mediaReads`), since a transcript that
@@ -484,7 +430,6 @@ export interface AgentMedia {
  */
 export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMedia {
   const acts = useHostActs();
-  const pictureShown = usePictureShownCount(PRODUCT_PICTURE_KIND.AGENT);
 
   const [shown, setShown] = useState<{
     readonly agentId: string;
@@ -507,7 +452,7 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
   // Note that the agent's reads stand while its page does, and are let go as another agent's page stands or the page leaves, so none that lands after is drawn.
   useEffect(() => {
     const standing = mediaReads({
-      read: (pictureId) => agentMediaSource(acts, agentId, pictureId, pictureShown),
+      read: (pictureId) => agentMediaSource(acts, agentId, pictureId),
       landed: (pictureId, source) => stand(pictureId, source),
       // Note that a read whose every try failed stands failed, so it says so with Try again rather than spinning on.
       failed: (pictureId, cause, again) => {
@@ -521,7 +466,7 @@ export function useAgentMedia(agentId: string, ids: readonly string[]): AgentMed
     setReads(standing);
 
     return () => standing.stop();
-  }, [acts, agentId, pictureShown]);
+  }, [acts, agentId]);
 
   useEffect(() => reads?.ask(ids), [reads, ids]);
 
