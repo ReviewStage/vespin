@@ -202,10 +202,11 @@ function quoteOf(quote: string, anchored: boolean): string {
 /**
  * One thread of a task's description, named by the route's `id` on the
  * task its `task` names: the words it stands on as its heading, Resolved
- * under them once it is, its comments, each by its writer, and the reply
- * field docked over its foot, which answers it whether it stands open or
- * resolved, as the panel's thread does, what a reply that did not land
- * said standing in the field's head. The task's path stands small in
+ * under them once it is, its comments, each by its writer, and, while it
+ * stands open, the reply field docked over its foot, what a reply that did
+ * not land said standing in the field's head. A resolved thread offers no
+ * reply, as the panel's resolved thread offers none, until Reopen stands it
+ * open again. The task's path stands small in
  * the bar, as a page of the task's does, and the bar's trailing button
  * resolves the thread, or reopens it once resolved, as the panel's check
  * on its first comment does. Opened from a split view's detail, it is
@@ -328,10 +329,12 @@ function CommentThread({
         <Screen>
           <ThreadMissing taskId={taskId} overview={overview} />
         </Screen>
-      ) : (
+      ) : threadOpen(thread) ? (
         <GlassDock bar={<Composer {...composer} />}>
           <Screen>{page}</Screen>
         </GlassDock>
+      ) : (
+        <Screen>{page}</Screen>
       )}
     </>
   );
