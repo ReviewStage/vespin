@@ -7,16 +7,18 @@
  * while it works and rests while it waits on the reader's answer. Show work
  * opens the turn's work so far at the chat's end, still moving, and folds
  * it again; it stands open only for the turn it was opened in, so the next
- * turn's work opens folded.
+ * turn's work opens folded. Note that the line is said aloud as it comes,
+ * since it stands outside the chat's live log, where the row it replaced was
+ * heard landing, and its own words are said only as they change.
  */
 
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import type { ManagerWorkingLine } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
-import { GAP, GlyphSlot, Inline } from "@repo/ui";
+import { ANNOUNCE, announce, GAP, GlyphSlot, Inline } from "@repo/ui";
 import { ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { type ChatWorkToggle, WorkingWorkAction } from "./chat-work.js";
@@ -32,6 +34,21 @@ export function useLiveWorkToggle(turnId: string | undefined): ChatWorkToggle {
     onToggle: () => setOpenFor(shown ? undefined : turnId),
     onShow: () => setOpenFor(turnId),
   };
+}
+
+/** Says the line's words as it comes, not as the page opens on it, and takes them back once they change or it goes, where its own words take over. */
+function useArrivalSaid(words: string | undefined): void {
+  const shown = words !== undefined;
+  const was = useRef(shown);
+
+  useEffect(() => {
+    const arrived = shown && !was.current;
+    was.current = shown;
+
+    if (!arrived || words === undefined) return;
+
+    return announce(ANNOUNCE.POLITE, words);
+  }, [shown, words]);
 }
 
 /** The Manager's face beside the line, typing while it works, or the agent's glyph where a service older than faces names none. */
@@ -61,6 +78,8 @@ export function ManagerWorkingDock({
   face: ManagerFaceValue | undefined;
   toggle: ChatWorkToggle;
 }): ReactNode {
+  useArrivalSaid(line?.words);
+
   if (line === undefined) return null;
 
   return (
