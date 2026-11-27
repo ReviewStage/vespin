@@ -308,7 +308,15 @@ import { EditComposer } from "./edit-composer.js";
 import { FollowOfferDock } from "./follow-offer-dock.js";
 import { ForkedToLine, useForkOffered } from "./fork-action.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
-import { sameEntries, sameFields, sameIds, sameSet, useKept, useSteady } from "./kept-draws.js";
+import {
+  sameComputerApps,
+  sameEntries,
+  sameFields,
+  sameIds,
+  sameSet,
+  useKept,
+  useSteady,
+} from "./kept-draws.js";
 import {
   CommentLineHead,
   GitHubLineCard,
@@ -3449,7 +3457,13 @@ function AgentTabView({
 
   const queue = useAgentQueue(agent.id, transcript.queue);
   const pictures = useAgentPictureDoor(agent.id);
-  const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
+
+  // Note that the apps are kept while they say the same, because a reading made afresh on each write handed every call's row a new context, and drew each again.
+  const computerApps = useKept(
+    useMemo(() => computerAppsOf(lines), [lines]),
+    sameComputerApps,
+  );
+
   const queueEditing = useQueueEditing(composer, queue, pictures);
   const startedByReader = starter === undefined;
   // Any member who may message the agent changes its queue, every message in it, as the service holds (`controlsAgent`): an
@@ -4179,7 +4193,13 @@ export function AgentSubagentTab({
   const callRoute = useCallRoute(agentId);
   // The worker's lines, its task first, and what its rows draw from, kept from draw to draw while none of it moved.
   const lines = useMemo(() => workerLines(task, transcript.messages), [task, transcript.messages]);
-  const computerApps = useMemo(() => computerAppsOf(lines), [lines]);
+
+  // Note that the apps are kept while they say the same, because a reading made afresh on each write handed every call's row a new context, and drew each again.
+  const computerApps = useKept(
+    useMemo(() => computerAppsOf(lines), [lines]),
+    sameComputerApps,
+  );
+
   const models = control.models;
   // The press is the same door from draw to draw, so a message kept as it was opens what the window opens now.
   const openTarget = useSteady(onOpenTarget);
