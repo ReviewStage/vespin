@@ -1,0 +1,12 @@
+pinned to 151cce930c
+== bundle PJj11188 base 151cce930c
+  built 151cce930c base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+  tasks.yaml from 151cce930c: 603 lines
+iphone-light-tasks: fails 0 shots 35 
+  iphone-light-tasks swipe-row Stop:   Swiping in LEFT direction on "Usage alerts"... COMPLETED|  Swiping in LEFT direction on "Build teammate invitations"... COMPLETED|  Assert that "Stop" is visible... COMPLETED|  Take screenshot task-agent-swipe... COMPLETED|Swiping in LEFT direction on "Fix ledger rounding"... COMPLETED|Take screenshot task-agent-swipe-resting... COMPLETED|Swiping in LEFT direction on "Fix ledger rounding"... COMPLETED|Swiping in LEFT direction on "Fix ledger rounding"... COMPLETED|Take screenshot task-agent-swipe-archived... COMPLETED| shot: task-agent-swipe.png
+ipad27-light-tasks: fails 2 shots 14   Assert that "Stop" is visible... FAILED
+  ipad27-light-tasks swipe-row Stop:   Swiping in LEFT direction on "Build teammate invitations"... COMPLETED|  Assert that "Stop" is visible... FAILED| shot: 
