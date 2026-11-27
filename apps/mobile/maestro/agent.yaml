@@ -1,4 +1,4 @@
-# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny, Always allow and Allow under it and the working line saying it waits on you, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the thread, comment, Slack, wakeup and carry-on lines steered in under their heads, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, its held call allowed, its options sheet opened from the page's menu, its model, Fast, permission mode, and MCP servers changed there, and its ⋯ menu's Rename, Pin, Move to ›, and Archive; its threads line over the box, which opens the thread it names; a sent line's Edit, and a finished turn's Rewind conversation to here and Fork to new agent; then an agent whose transcript stands empty.
+# agent.yaml -- an agent's page: its title in the bar, its transcript opened at its newest turn, still running, its test run held for an answer with Deny, Always allow and Allow under it and the working line saying it waits on you, a call opened on its body, a run of calls opened, the pictures and the recording it showed, playing in place, the pull request it opened as its card, the page it showed opened whole, its older page read on Try again, its held call allowed, its options sheet opened from the page's menu, its model, Fast, permission mode, and MCP servers changed there, and its ⋯ menu's Rename, Pin, Move to ›, and Archive; its threads line over the box, which opens the thread it names; a sent line's Edit, and a finished turn's Rewind conversation to here and Fork to new agent; then an agent whose transcript stands empty.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -112,38 +112,6 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-recording
-# The lines steered in before that ask, each under the head the panel draws
-# rather than the words the agent read: the carry-on as the step that says
-# why its turn was cut off, opened on what the agent was sent, and the
-# wakeup the agent set under "woke up" and its wait; then a teammate's thread
-# line, the account's answer and comment, and a teammate's Slack message,
-# each its member's words alone under what they did and its chip.
-# Note that the carry-on is scrolled to clear under the bar (`BELOW`), since
-# a tap there must land on it, as the page card's does.
-- runFlow:
-    file: subflows/scroll-to.yaml
-    env:
-      ELEMENT: "Interrupted when the agent stopped answering.*"
-      BELOW: "Build teammate invitations"
-      BESIDE: ${FLOATING_TABS}
-- tapOn: "Interrupted when the agent stopped answering.*"
-- assertVisible: "From Vespin: your previous turn was interrupted.*"
-- assertVisible: "woke up"
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: agent-steered-wakeup
-- tapOn: "Interrupted when the agent stopped answering.*"
-- runFlow:
-    file: subflows/scroll-to.yaml
-    env:
-      ELEMENT: "Commented on"
-      DIRECTION: UP
-      BESIDE: ${FLOATING_TABS}
-- assertVisible: "Answered"
-- assertVisible: "Chose .Offer a resend.\\..*"
-- waitForAnimationToEnd:
-    timeout: 5000
-- takeScreenshot: agent-steered-heads
 # The first turn finished: its run of calls folded under one line, the
 # pictures it showed standing apart after it.
 - runFlow:

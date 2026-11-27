@@ -1,5 +1,5 @@
 /**
- * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a teammate's review GitHub steered in, thread, comment, Slack, wakeup and carry-on lines, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; the rounding agent's, ten finished turns with wide words; the digest agent's short run, which reads its draft in an app on the reader's Mac, still at work; and the release Manager's short chat.
+ * fixture-agent-transcript.ts -- the transcripts the Inbox fixture's agents hold: the invitations agent's, long enough to scroll, with its words, its thinking, its calls, a teammate's review GitHub steered in, a file the account sent, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn; the rounding agent's, ten finished turns with wide words; the digest agent's short run, which reads its draft in an app on the reader's Mac, still at work; and the release Manager's short chat.
  *
  * The Inbox fixture lays it on the document where the host holds an
  * agent's transcript (`LIVE_READ.TRANSCRIPT`), so the panel's agent page
@@ -20,16 +20,8 @@ import {
   agentMessageReplyLine,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
-import { INBOX_REPLY, inboxAnswerMessage, inboxThreadMessage } from "@repo/features/inbox-wire";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { MP4_TYPE } from "@repo/features/video-signature";
-import {
-  CARRY_ON_REASON,
-  MESSAGE_CHANNEL,
-  MESSAGE_ROLE,
-  THREAD_LINE_EVENT,
-  type WireRecord,
-} from "@repo/wire";
+import { MESSAGE_CHANNEL, MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import type { AppTranscript } from "./app-state.js";
 import {
   FIXTURE_APP_ICON_PNG,
@@ -37,7 +29,7 @@ import {
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
-import { FIXTURE_IDS, FIXTURE_PAGE } from "./fixture-stage.js";
+import { FIXTURE_PAGE } from "./fixture-stage.js";
 
 const MINUTE = 60_000;
 
@@ -195,186 +187,6 @@ function reviewed(at: number): AgentTranscriptMessage {
   };
 }
 
-/* ----- The lines steered in beside the agent's own turns ----- */
-
-/** The invitations agent itself, by the id `fixture-inbox.ts` gives it (`AGENT.INVITES`), which this file cannot import, since that one imports it; a wakeup it set comes back as its own line. */
-const INVITES_AGENT = {
-  id: "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5",
-  name: "Build teammate invitations",
-};
-
-/** The Inbox fixture's threads its thread lines are on, by the ids, keys and titles `fixture-inbox.ts` gives them (`fixtureId(3)`, `fixtureId(5)`). */
-const STEERED_THREAD = {
-  LIMITS: {
-    id: "81e2a425-6d9f-4ab7-92df-000000000003",
-    key: "invite-limits",
-    title: "Invite limits",
-  },
-  EXPIRED: {
-    id: "81e2a425-6d9f-4ab7-92df-000000000005",
-    key: "expired-copy",
-    title: "What the expired invite page says",
-  },
-} as const;
-
-/** A line steered into the agent, `at` milliseconds into the run: the words the agent read, the metadata the service wrote beside them, and who sent it. */
-function steered(
-  id: string,
-  at: number,
-  text: string,
-  metadata: WireRecord,
-  sentBy: NonNullable<AgentTranscriptMessage["sentBy"]>,
-): AgentTranscriptMessage {
-  return {
-    id,
-    role: MESSAGE_ROLE.USER,
-    parts: [{ type: "text", text }],
-    metadata,
-    sentAt: at,
-    sentBy,
-  };
-}
-
-/**
- * The lines that reach the agent between the review's answer and the
- * funnel's ask, each with the metadata the service writes beside it, so a
- * transcript draws its head and the member's words rather than the
- * instructions the agent read: a teammate writing in a thread
- * (`inbox-procedures.ts`), the reader answering one, the reader's comment on
- * the task's page (`comment-ask.ts`), a teammate's message to the Slack bot
- * (`slack-agent-starts.ts`); then a turn that books a wakeup, the wakeup the
- * agent set coming back as its own line (`agent-wakeups.ts`), a turn its
- * runner stopped answering in, and the carry-on line the service sent after
- * it (`carry-on.ts`), and the turn that carried on.
- */
-function steeredLines(
-  startedAt: number,
-  reader: { readonly userId: string; readonly name: string },
-): readonly AgentTranscriptMessage[] {
-  const teammate = { kind: AGENT_SENDER.MEMBER, userId: TEAMMATE.userId, name: TEAMMATE.name };
-  const own = { kind: AGENT_SENDER.MEMBER, userId: reader.userId, name: reader.name };
-  const limitWords = "Ten pending invites per member is plenty; owners can lift it.";
-  const commentWords = "Nine expired is more than I expected. Is the seven-day window too short?";
-  const slackWords = "Can the invite email say who sent it? Ours read like spam.";
-
-  return [
-    steered(
-      "fixture-invites-thread-limits",
-      startedAt + 25 * MINUTE,
-      inboxThreadMessage(STEERED_THREAD.LIMITS, limitWords),
-      {
-        channel: MESSAGE_CHANNEL.THREAD,
-        event: THREAD_LINE_EVENT.MESSAGE,
-        item_id: STEERED_THREAD.LIMITS.id,
-      },
-      teammate,
-    ),
-    steered(
-      "fixture-invites-thread-expired",
-      startedAt + 26 * MINUTE,
-      inboxAnswerMessage(STEERED_THREAD.EXPIRED, {
-        reply: INBOX_REPLY.CHOSE,
-        choices: ["Offer a resend"],
-        note: "And name who invited them.",
-      }),
-      {
-        channel: MESSAGE_CHANNEL.THREAD,
-        event: THREAD_LINE_EVENT.ANSWER,
-        item_id: STEERED_THREAD.EXPIRED.id,
-      },
-      own,
-    ),
-    steered(
-      "fixture-invites-comment",
-      startedAt + 27 * MINUTE,
-      [
-        `${reader.name} sent you a comment thread on the page "${FIXTURE_PAGE.title}" of the task "Teammate invitations" to answer (thread fixture-comment-thread).`,
-        "",
-        `${reader.name}: ${commentWords}`,
-        "",
-        "Answer it on the thread.",
-      ].join("\n"),
-      {
-        channel: MESSAGE_CHANNEL.COMMENT,
-        thread_id: "fixture-comment-thread",
-        task_id: FIXTURE_IDS.TASK,
-        quote: "Expired 9",
-        words: commentWords,
-        page_id: FIXTURE_IDS.PAGE,
-        page_title: FIXTURE_PAGE.title,
-      },
-      own,
-    ),
-    steered(
-      "fixture-invites-slack",
-      startedAt + 28 * MINUTE,
-      `${TEAMMATE.name} wrote to you in Slack:\n\n${slackWords}`,
-      {
-        channel: MESSAGE_CHANNEL.SLACK,
-        words: slackWords,
-        url: "https://ada-relay.slack.com/archives/C0FIXTURE/p1760000000000100",
-      },
-      teammate,
-    ),
-    {
-      id: "fixture-invites-wait",
-      role: MESSAGE_ROLE.ASSISTANT,
-      parts: [
-        { type: "step-start" },
-        {
-          type: "text",
-          text: "I'll look again once preview has deployed the email's sender line.",
-        },
-        toolPart(
-          AGENT_TOOL.SCHEDULE_WAKEUP,
-          "fixture-invites-wakeup",
-          { delaySeconds: 300, prompt: "Check the preview deploy and send a test invite." },
-          { status: "accepted", wakeup: { delaySeconds: 300 } },
-        ),
-      ],
-      startedAt: startedAt + 28 * MINUTE,
-      finishedAt: startedAt + 29 * MINUTE,
-    },
-    steered(
-      "fixture-invites-woke",
-      startedAt + 34 * MINUTE,
-      "Check the preview deploy and send a test invite.",
-      { channel: MESSAGE_CHANNEL.APP },
-      { name: INVITES_AGENT.name, agent: true, agentId: INVITES_AGENT.id },
-    ),
-    {
-      id: "fixture-invites-cut",
-      role: MESSAGE_ROLE.ASSISTANT,
-      parts: [
-        { type: "step-start" },
-        { type: "text", text: "Preview has the sender line. Sending a test invite now." },
-      ],
-      startedAt: startedAt + 34 * MINUTE,
-      finishedAt: startedAt + 35 * MINUTE,
-    },
-    steered(
-      "fixture-invites-carry-on",
-      startedAt + 36 * MINUTE,
-      `From ${PRODUCT_NAME}: your previous turn was interrupted before it ended: your run stopped answering before the turn ended. Nothing was sent to you meanwhile. Whatever that turn had under way may be half done: check the state of your work first, your files, your branch, and any command or background task it had running, then carry on from where it stopped. If it had finished, say so and end your turn.`,
-      { channel: MESSAGE_CHANNEL.CARRY_ON, reason: CARRY_ON_REASON.RUNNER_LOST },
-      { kind: AGENT_SENDER.APP, name: PRODUCT_NAME },
-    ),
-    {
-      id: "fixture-invites-carried",
-      role: MESSAGE_ROLE.ASSISTANT,
-      parts: [
-        { type: "step-start" },
-        {
-          type: "text",
-          text: "The test invite went out on preview, signed by who sent it.",
-        },
-      ],
-      startedAt: startedAt + 36 * MINUTE,
-      finishedAt: startedAt + 38 * MINUTE,
-    },
-  ];
-}
-
 /**
  * The transcript, its instants counted from `startedAt`, its turns written
  * by `reader`, the account the fixture signs in as: the ask that began the
@@ -498,7 +310,6 @@ function transcriptMessages(
       startedAt: startedAt + 20 * MINUTE,
       finishedAt: startedAt + 24 * MINUTE,
     },
-    ...steeredLines(startedAt, reader),
     asked(
       "fixture-invites-funnel-ask",
       startedAt + 40 * MINUTE,
