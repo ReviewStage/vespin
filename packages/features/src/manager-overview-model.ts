@@ -73,13 +73,42 @@ export interface ManagerOverview {
   readonly openPullRequests: number;
 }
 
+/** What a Manager's card says, on the panel's hover card and the iPhone's long press preview alike: the word before how long ago it last moved, where its turn ended as a turn should, and its counts' labels. */
+export const MANAGER_CARD_WORDS = {
+  IDLE: "Idle",
+  LABEL: "What the Manager is doing",
+  WAITING: "Waiting on you",
+  AT_WORK: "Agents at work",
+  OPEN_PULL_REQUESTS: "Open pull requests",
+} as const;
+
+/** One count a Manager's card says, by its label. */
+export interface ManagerCardCount {
+  readonly label: string;
+  readonly count: number;
+}
+
+/** An agent as a Manager's card counts it: who started it, whether it is archived, and where it stands. */
+interface CardAgent {
+  readonly id: string;
+  readonly status: ListedAgent["status"];
+  readonly startedByAgentId?: string | undefined;
+  readonly archivedAt?: number | undefined;
+}
+
+/** A pull request as a Manager's card counts it: the agent whose row names it, and its state. */
+interface CardPullRequest {
+  readonly agentId: string;
+  readonly state: AgentPullRequest["state"];
+}
+
 /** Whether an agent is at work, starting or running, as a Manager's overview and its card count it. */
-export function agentAtWork(status: ListedAgent["status"]): boolean {
+function agentAtWork(status: ListedAgent["status"]): boolean {
   return AT_WORK.has(status);
 }
 
 /** Whether a pull request is still open, a draft among them, as a Manager's overview and its card count it. */
-export function pullRequestOpen(state: AgentPullRequest["state"]): boolean {
+function pullRequestOpen(state: AgentPullRequest["state"]): boolean {
   return OPEN_PULL_REQUEST.has(state);
 }
 
@@ -153,4 +182,44 @@ export function managerOverview({
     working: atWork.length,
     openPullRequests: open.length,
   };
+}
+
+/**
+ * What a Manager's card counts, each said only where it is not none: how
+ * many of its threads wait on the reader now (`waiting`, as the Inbox counts
+ * them), how many of the agents it started are at work, its archived ones
+ * left out, and how many of the pull requests their rows name are still
+ * open, a draft among them, as its overview counts them. Unlike the
+ * overview, an agent counts whether or not the list holds its task, since a
+ * card reads only the agents and their pull requests.
+ */
+export function managerCardCounts({
+  managerId,
+  agents,
+  pullRequests,
+  waiting,
+}: {
+  managerId: string;
+  agents: readonly CardAgent[];
+  pullRequests: readonly CardPullRequest[];
+  waiting: number;
+}): readonly ManagerCardCount[] {
+  const started = agents.filter(
+    (agent) => agent.startedByAgentId === managerId && agent.archivedAt === undefined,
+  );
+
+  const theirs = new Set(started.map((agent) => agent.id));
+
+  return [
+    { label: MANAGER_CARD_WORDS.WAITING, count: waiting },
+    {
+      label: MANAGER_CARD_WORDS.AT_WORK,
+      count: started.filter((agent) => agentAtWork(agent.status)).length,
+    },
+    {
+      label: MANAGER_CARD_WORDS.OPEN_PULL_REQUESTS,
+      count: pullRequests.filter((each) => theirs.has(each.agentId) && pullRequestOpen(each.state))
+        .length,
+    },
+  ].filter(({ count }) => count > 0);
 }
