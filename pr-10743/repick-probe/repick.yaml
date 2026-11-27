@@ -1,0 +1,23 @@
+# repick.yaml (3134f892 04:45 UTC Nov 27, for c006ee71): an Apple three-column app in portrait, a sidebar row picked, the sidebar shown over the list, the selected row tapped again; signs in to nothing
+appId: ${APP}
+---
+- launchApp:
+    stopApp: false
+- setOrientation: PORTRAIT
+- tapOn: { text: "Not Now", optional: true }
+- tapOn: { text: "Continue", optional: true }
+- tapOn: { text: "Not Now", optional: true }
+- waitForAnimationToEnd
+- takeScreenshot: 0-launched
+- tapOn: { text: "Show Sidebar", optional: true }
+- waitForAnimationToEnd
+- takeScreenshot: 1-sidebar
+- tapOn: { text: "${ROW}", optional: true }
+- waitForAnimationToEnd
+- takeScreenshot: 2-picked
+- tapOn: { text: "Show Sidebar", optional: true }
+- waitForAnimationToEnd
+- takeScreenshot: 3-sidebar-over-list
+- tapOn: { text: "${ROW}", optional: true }
+- waitForAnimationToEnd
+- takeScreenshot: 4-after-retap
