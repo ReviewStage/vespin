@@ -1,0 +1,46 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on Rig iPhone 18 Pro (lane B) - iOS 27.2 - D2E5EAB5-4ACE-4AE7-B7C9-7984D6FD7999
+ > Flow sent-picture-pending
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox, agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5})... COMPLETED
+Assert that "2 queued" is visible... COMPLETED
+Assert that "Send" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot sent-picture-held... COMPLETED
+Tap on "Send"... COMPLETED
+Assert that "Stop" is visible... COMPLETED
+Wait for animation to end within 5000 ms... COMPLETED
+Take screenshot sent-picture-pending... COMPLETED
+Assert that "The button is cut off in \[Picture 1\]\." is not visible...Exception in thread "main" UnknownFailure(errorResponse=Request for viewHierarchy failed, code: 500, body: )
+	at xcuitest.XCTestDriverClient.handleExceptions(XCTestDriverClient.kt:355)
+	at xcuitest.XCTestDriverClient.processResponse(XCTestDriverClient.kt:300)
+	at xcuitest.XCTestDriverClient.executeJsonRequest$lambda$7(XCTestDriverClient.kt:279)
+	at xcuitest.XCTestDriverClient.transportCall(XCTestDriverClient.kt:67)
+	at xcuitest.XCTestDriverClient.executeJsonRequest(XCTestDriverClient.kt:267)
+	at xcuitest.XCTestDriverClient.executeJsonRequest$default(XCTestDriverClient.kt:266)
+	at xcuitest.XCTestDriverClient.viewHierarchy(XCTestDriverClient.kt:83)
+	at ios.xctest.XCTestIOSDevice.viewHierarchy$lambda$1(XCTestIOSDevice.kt:39)
+	at ios.xctest.XCTestIOSDevice.execute(XCTestIOSDevice.kt:240)
+	at ios.xctest.XCTestIOSDevice.viewHierarchy(XCTestIOSDevice.kt:37)
+	at ios.LocalIOSDevice.viewHierarchy(LocalIOSDevice.kt:49)
+	at maestro.drivers.IOSDriver.viewHierarchy(IOSDriver.kt:198)
+	at maestro.drivers.IOSDriver.contentDescriptor$lambda$22$lambda$21(IOSDriver.kt:193)
+	at maestro.drivers.IOSDriver.runDeviceCall(IOSDriver.kt:655)
+	at maestro.drivers.IOSDriver.contentDescriptor$lambda$22(IOSDriver.kt:193)
+	at maestro.utils.Metrics.measured(Metrics.kt:48)
+	at maestro.drivers.IOSDriver.contentDescriptor(IOSDriver.kt:192)
+	at maestro.ViewHierarchy$Companion.from-8JJjmZI(ViewHierarchy.kt:29)
+	at maestro.Maestro$findElementWithTimeout$found$1$1.invoke-prqvCes(Maestro.kt:547)
+	at maestro.Maestro$findElementWithTimeout$found$1$1.invoke(Maestro.kt:546)
+	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
+	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
+	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
+	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
