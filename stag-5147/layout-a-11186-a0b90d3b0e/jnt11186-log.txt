@@ -1,0 +1,19 @@
+-- jnt11186: main pinned to 604f24d955: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to a0b90d3b0e
+== bundle PJjnt11186 base a0b90d3b0e
+  built a0b90d3b0e base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+base in use: Vmain-current.app, pin a0b90d3b0e
+iphone-light-after: fails 2 shots 4   Assert that "Repository" is visible... FAILED
+iphone-dark-after: fails 0 shots 1 
+ipad27-light-after: fails 0 shots 1 
+== bundle PJjnt11186B base 21c8a5869e
+  built 21c8a5869e base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+ipad27-light-before-main-21c8a5869e: fails 0 shots 1 
