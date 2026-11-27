@@ -1,0 +1,34 @@
+pinned to 11f539d371
+== bundle PJj11079w base 11f539d371
+  built 11f539d371 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn-2947.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+main for A and B: 21c8a5869e; LT1 head 55627d8c9d; A = 11f539d371
+== bundle PJj11079wB base 21c8a5869e
+  built 21c8a5869e base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn-2947.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+ipad27-light-inbox-B:  
+b-first (main 21c8a5869e, fresh install, busy account): rc 0; app-ready {"launch_ms":2069.1728328466415,"local_ms":578.1005408763885,"started_ms":1109.606999874115,"screens_ms":1920.525790810585,"inbox_ms":1574.6257498264313,"active_ms":382.2129158973694,"first_rows":"kept"}; seed says: busy account at 1x: 3240 plans, 4831 agents, 639 Inbox threads (419 on old tasks read alone), 171 kept; local copy at /var/folders/02/3d6brh9d6ss5g3whvb48sq1w0000gn/T/tmp.v8N50XrkzQ/accounts/stub-acco
+  b-first db: 
+n2A-write-1x seed: rc 0
+n2A-write-1x fn2mark: 25 steps,  marked [Thread 372: decide how a partial cent rounds in the description editor] settled [Thread 351: decide how a partial cent rounds in the search index]
+  n2A search: s1 [Thread 372] 11 steps ; s2 [Thread 351 on All] 14 steps 
+  n2A db after rows: at 1795758906814 file host/accounts/stub-account/collections.sqlite;tables: applied_tx cache_generation_sequence collection_version c_5eogvr_1i collection_expected_keys leader_term c_6d4efh_1i collection_metadata persisted_index_registry cache_generation collection_registry t_5eogvr_1i cache_generation_claim collection_reset_epoch t_6d4efh_1i ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:4f5d67fe-ea1c-4613-92b3-dc6958e6d631|c_5eogvr_1i|t_5eo
+  n2A written.json: NO status after 121 polls (331677 ms after the relaunch): {"5eed0004-0000-4000-8000-0000003d0a81":{"carried":true,"unread":true}}
+  n2A times: second_launch_T=1795758596379 terminate_T=1795758819833 mark_end_T=1795758820112 relaunch_T=1795758820195 s1_end_T=1795758859542 s2_end_T=1795758965230 written_status_T=1795759151872 tries=121 
+  n2A tap/kill times: 
+  n2A db at the end: at 1795759154073 file host/accounts/stub-account/collections.sqlite;tables: applied_tx cache_generation_sequence collection_version c_5eogvr_1i collection_expected_keys leader_term c_6d4efh_1i collection_metadata persisted_index_registry cache_generation collection_registry t_5eogvr_1i cache_generation_claim collection_reset_epoch t_6d4efh_1i ;registry:;collection_id|table_name|tombstone_table_name|schema_version|updated_at;tanstack-db-cache:4f5d67fe-ea1c-4613-92b3-dc6958e6d631|c_5eogvr_1i|t_5eo
+  n2A requests (inbox and writes): 3 lines; 
+  write-check db: 
+  thread-open thread: Thread 309 (unmoved by inbox-moves.json: no moves file)
+  thread-open first launch: app-ready 
+  thread-open second launch: app-ready 
+thread-open: fails NOSTART (steps 0, shots 0): WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldB 
+  thread-open db: file host/accounts/stub-account/words.sqlite 262144 bytes;  message_words 251 rows, 212992 bytes;file host/accounts/stub-account/local.sqlite 28819456 bytes;  row 8244 rows, 27418624 bytes;  held 8244 rows, 618496 bytes;  cursor 4 rows, 143360 bytes;  outbox 0 rows, 4096 bytes;  sqlite_sequence 1 rows, 4096 bytes;  refused 0 rows, 4096 bytes;  meta 1 rows, 4096 bytes;file host/accounts/stub-account/collections.sqlite 11300864 bytes;  cache_generation 2 rows, 4096 bytes;  cache_generation_sequence 0 rows, 4096 bytes;  cache_generation_claim 6 rows, 4096 bytes;  collection_registry 2 rows, 4096 bytes;  persisted_index_registry 0 rows, 4096 bytes;  applied_tx 275 rows, 10182656 bytes;  collection_version 2 rows, 4096 bytes;  collection_expected_keys 369 rows, 53248 bytes;  collection_metadata 1 rows, 102400 bytes;  leader_term 2 rows, 4096 bytes;  collection_reset_epoch 2 rows, 4096 bytes; 
