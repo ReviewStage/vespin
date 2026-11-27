@@ -3743,7 +3743,7 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
 
 /** The list's View options, its members' photos read as files for the menu, built anew only as the view or the members change. */
 function useViewMenu(read: ReadListing): BarMenu {
-  const { treeView, setTreeView, shared, members } = read;
+  const { treeView, shared, members } = read;
   const pictureOf = useMemberPictures();
 
   const photoOf = useMenuPhotos(
@@ -3752,8 +3752,17 @@ function useViewMenu(read: ReadListing): BarMenu {
   );
 
   return useMemo(
-    () => tasksViewMenu({ view: treeView, setView: setTreeView, shared, members, photoOf }),
-    [treeView, setTreeView, shared, members, photoOf],
+    () =>
+      tasksViewMenu({
+        view: treeView.view,
+        change: treeView.change,
+        reset: treeView.reset,
+        changed: treeView.changed,
+        shared,
+        members,
+        photoOf,
+      }),
+    [treeView, shared, members, photoOf],
   );
 }
 
