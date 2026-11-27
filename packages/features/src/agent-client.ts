@@ -2,6 +2,7 @@ import {
   type CommandPrefix,
   HTTP_METHOD,
   HTTP_STATUS,
+  literalsReadingUnknown,
   type UnparsedWireValue,
   unparsedWire,
 } from "@repo/wire";
@@ -377,8 +378,14 @@ function rowWritten<Answer extends object>(answer: Answer) {
   return unansweredBare(writtenAlreadyKept(answer));
 }
 
-/** The types an inbox item's attachment is served under: a block's picture's or recording's, a recording's MP4 copy to a reader that plays MP4, or any a file an answer carried traveled as. */
-const inboxFileTypeSchema = Schema.Literals([...Object.values(INBOX_FILE_TYPE), MP4_TYPE]);
+/**
+ * The types an inbox item's attachment is served under: a block's picture's or recording's, a recording's MP4 copy to a reader that plays MP4, or any a file an answer carried traveled as.
+ * Note that a type this build does not know reads as a file of any other kind, whose chip saves its bytes, so a type a later build serves is never a failed read.
+ */
+const inboxFileTypeSchema = literalsReadingUnknown(
+  [...Object.values(INBOX_FILE_TYPE), MP4_TYPE],
+  INBOX_FILE_TYPE.OTHER,
+);
 
 /** The headers a byte read asks for the video it plays by: `video/mp4` for MP4, and none for the WebM a read answers by default. */
 function playableHeaders(playable: PlayableVideoType): Record<string, string> | undefined {
@@ -387,8 +394,8 @@ function playableHeaders(playable: PlayableVideoType): Record<string, string> | 
 
 /**
  * A served file written to a file of the device by the client that carried
- * it, as the type it was served as: unanswered under any other type, since
- * its bytes cannot be drawn. Note that the bytes are never read here; the
+ * it, as the type it was served as, a type this build does not know as a
+ * file of any other kind (`inboxFileTypeSchema`). Note that the bytes are never read here; the
  * client wrote them where it was told and answers the status and headers
  * alone.
  */
@@ -400,7 +407,7 @@ function writtenFileOf(response: Response): AgentPictureFileView {
   return contentType === undefined ? UNANSWERED : { contentType };
 }
 
-/** A served file's bytes in base64 under its type: a picture, a recording, or a file an inbox answer carried or a queued message holds; unanswered under any other type. */
+/** A served file's bytes in base64 under its type: a picture, a recording, or a file an inbox answer carried or a queued message holds, one of a type this build does not know as a file of any other kind. */
 function readInboxFile(response: Response): Effect.Effect<AgentInboxAttachmentView> {
   return Effect.map(imageBodyOf(response, inboxFileTypeSchema), imageAnswerOf);
 }

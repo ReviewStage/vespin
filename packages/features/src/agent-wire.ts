@@ -594,8 +594,19 @@ export type AgentAttachmentType =
 const AGENT_ATTACHMENT_TYPES: ReadonlySet<string> = new Set(Object.values(AGENT_ATTACHMENT_TYPE));
 
 /** Whether a type read off the wire is one a message's file may be. */
-export function isAgentAttachmentType(type: string): type is AgentAttachmentType {
+function isAgentAttachmentType(type: string): type is AgentAttachmentType {
   return AGENT_ATTACHMENT_TYPES.has(type);
+}
+
+/**
+ * The type a message's file read back off the wire is carried as: its own
+ * where this build knows it, and a file of any other kind otherwise
+ * (`AGENT_ATTACHMENT_TYPE.OTHER`). Note that a type a later build adds is
+ * read so, because its file still opens and travels as bytes to save, where
+ * refusing it would drop the file or close the edit that holds it.
+ */
+export function agentAttachmentTypeOf(type: string): AgentAttachmentType {
+  return isAgentAttachmentType(type) ? type : AGENT_ATTACHMENT_TYPE.OTHER;
 }
 
 /** The most bytes one file of each type may hold. */
