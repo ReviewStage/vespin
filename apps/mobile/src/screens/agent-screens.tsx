@@ -9,6 +9,7 @@ import {
   failedLineWords,
   settledFailure,
 } from "@repo/features/agent-continue-model";
+import { TRANSCRIPT_EMPTY_LINE } from "@repo/features/agent-parts";
 import {
   AGENT_PORTS_WORDS,
   PORT_ACT,
@@ -215,7 +216,7 @@ const UNLISTED_AGENT = "Agent";
 /** What stands in the transcript's place while it is read, once read with nothing to draw, and where it could not be, with what reads it again. */
 const TRANSCRIPT_WORDS = {
   READING: "Reading the transcript",
-  EMPTY: "No messages yet",
+  EMPTY: TRANSCRIPT_EMPTY_LINE,
   FAILED: "The transcript could not be read.",
   RETRY: "Try again",
 } as const;

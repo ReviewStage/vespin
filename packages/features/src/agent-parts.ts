@@ -130,6 +130,9 @@ export function cutPartText(cut: Pick<AgentPartCut, "head" | "tail" | "bytes">):
   return `${cut.head}\n\n… ${formatBytes(cut.bytes)} in all; only its start and end could be read …\n\n${cut.tail}`;
 }
 
+/** What a transcript read whole says where none of its messages draws a row, as a brand-new agent's before its first; the panel's own empty lines say what the agent waits on instead (`AgentBootLine`). */
+export const TRANSCRIPT_EMPTY_LINE = "No messages yet";
+
 /** What a thought's folded line says, before its preview. */
 export const THOUGHT_LINE = "Thought";
 

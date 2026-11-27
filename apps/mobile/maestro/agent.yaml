@@ -589,7 +589,7 @@ env:
       fixture: inbox
       agent: 00000000-0000-4000-8000-000000000000
 - extendedWaitUntil:
-    visible: "Reading the transcript|The transcript could not be read\\."
+    visible: "Reading the transcript|No messages yet|The transcript could not be read\\."
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
