@@ -1,7 +1,6 @@
 import {
   type CommandPrefix,
   HTTP_METHOD,
-  HTTP_STATUS,
   literalsReadingUnknown,
   type UnparsedWireValue,
   unparsedWire,

@@ -43,7 +43,6 @@ import { type EntityPool, entityPool } from "@repo/sync";
 import { nodeKeptCollections } from "@repo/sync/testing";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { fakeHttpClient } from "@repo/wire/testing";
 import { createLiveQueryCollection } from "@tanstack/db";
 import {
   Deferred,

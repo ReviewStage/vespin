@@ -15,7 +15,7 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import { sizeLabel } from "@repo/features/attachment-model";
-import { base64PictureSize, type ImageDimensions } from "@repo/features/image-signature";
+import type { ImageDimensions } from "@repo/features/image-signature";
 import type { InboxFields, InboxRow } from "@repo/features/inbox-digest";
 import {
   INBOX_MEDIA,
