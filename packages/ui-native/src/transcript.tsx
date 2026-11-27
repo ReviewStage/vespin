@@ -10,6 +10,7 @@ import {
   chatWorkWords,
 } from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
+import { BRIEF_LABEL } from "@repo/features/transcript-copy";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { Predicate } from "effect";
@@ -46,7 +47,7 @@ import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { FileChip } from "./file-chip.js";
 import { GitHubLineCard } from "./github-line-card.js";
 import { BAR_EDGE, BAR_MARGIN, useDockKeyboard, useDockRoom } from "./glass-bar.js";
-import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import {
   CardMenu,
@@ -77,7 +78,9 @@ import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
+  CARD_LEAD,
   type CallStanding,
+  type CardLead,
   type ChatSender,
   type OriginPart,
   RULE_LOOK,
@@ -193,21 +196,21 @@ const styles = StyleSheet.create({
   // Note that the turn's acts stand their first glyph flush with the words above it, each glyph centered in its 44 pt target.
   turnActs: { alignSelf: "flex-start", marginStart: -(PRESS_SIZE - MARK_SIZE.GLYPH) / 2 },
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
-  // Note that a prompt's card spans the row, as the panel's Prompt card spans the message's measure.
-  promptCard: {
+  // Note that an opening card spans the row, as the panel's Prompt and Description cards span the message's measure.
+  openingCard: {
     alignSelf: "stretch",
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: RADIUS.CARD,
     overflow: "hidden",
   },
-  promptHead: {
+  openingHead: {
     flexDirection: "row",
     alignItems: "center",
     gap: SPACE.ROW - 2,
     paddingHorizontal: SPACE.EDGE - 4,
     paddingVertical: SPACE.ROW,
   },
-  promptWords: { gap: SPACE.ROW, paddingHorizontal: SPACE.EDGE - 4, paddingBottom: SPACE.ROW },
+  openingWords: { gap: SPACE.ROW, paddingHorizontal: SPACE.EDGE - 4, paddingBottom: SPACE.ROW },
   stamp: { alignSelf: "center", fontWeight: "500", paddingBottom: SPACE.TIGHT },
   callLine: { flexDirection: "row", alignItems: "center", gap: SPACE.ROW - 2, minHeight: 28 },
   callWords: { flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 },
@@ -725,8 +728,15 @@ function CallRow({
 /** What a webhook call's body is called, folded under the prompt it rode in with, and its block's title, as the panel names them. */
 const WEBHOOK_BODY = { LABEL: "Webhook body", KIND: "body" } as const;
 
-/** What an automation's prompt's card is called, as the panel's Prompt card names it. */
-const PROMPT_CARD = { LABEL: "Prompt", JOIN: " · " } as const;
+/** What each opening card is called and led by, as the panel's leads name and mark it: an automation's prompt by its zap, the task's description by its page, a worker's task by the agent's mark. */
+const CARD_LOOK = {
+  [CARD_LEAD.PROMPT]: { label: BRIEF_LABEL.PROMPT, glyph: GLYPH.AUTOMATION },
+  [CARD_LEAD.DESCRIPTION]: { label: BRIEF_LABEL.DESCRIPTION, glyph: GLYPH.FILE_TEXT },
+  [CARD_LEAD.WORKER]: { label: BRIEF_LABEL.SUBAGENT_TASK, glyph: GLYPH.AGENT },
+} as const satisfies Record<CardLead, { readonly label: string; readonly glyph: Glyph }>;
+
+/** What joins a closed card's label to its title. */
+const CARD_JOIN = " · ";
 
 /** What a part of a sender line that opens somewhere is offered to VoiceOver as, and the name its action goes by before its place in the line. */
 const OPEN_WORD = "Open";
@@ -858,15 +868,16 @@ function OriginBody({ body }: { readonly body: string }) {
 }
 
 /**
- * An automation's prompt as the panel's Prompt card stands: closed under
- * its label and its first line, the chevron iOS opens a row by at its
- * lead, and once a press opens it, the prompt's words and the webhook's
+ * An automation's prompt, the description an agent was handed, or the task
+ * a worker was, as the panel's Prompt, Description and Subagent task cards
+ * stand: closed under its label and its first line, the chevron iOS opens a
+ * row by at its lead, and once a press opens it, its words and a webhook's
  * body under a head that names the label alone, since the words then say
  * their own first line. Note that the words stand in the card itself, never
- * inside its long press menu's host, which holds the head alone, so a prompt
- * however long is laid out as the transcript's own rows are.
+ * inside its long press menu's host, which holds the head alone, so words
+ * however long are laid out as the transcript's own rows are.
  */
-function PromptCard({
+function OpeningCard({
   item,
   card,
   drawing,
@@ -880,11 +891,12 @@ function PromptCard({
   const chevron = useScaledSize(MARK_SIZE.GLYPH - 3);
   const glyph = useScaledSize(MARK_SIZE.GLYPH);
   const { open } = card;
+  const look = CARD_LOOK[card.lead];
 
   return (
     <View
       style={[
-        styles.promptCard,
+        styles.openingCard,
         { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
       ]}
     >
@@ -897,8 +909,8 @@ function PromptCard({
           onPress={() => drawing.onToggle(item)}
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
-          accessibilityLabel={`${PROMPT_CARD.LABEL}, ${card.title}`}
-          style={styles.promptHead}
+          accessibilityLabel={`${look.label}, ${card.title}`}
+          style={styles.openingHead}
         >
           <SymbolView
             name={glyphSymbol(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
@@ -908,7 +920,7 @@ function PromptCard({
             accessibilityElementsHidden
           />
           <SymbolView
-            name={glyphSymbol(GLYPH.AUTOMATION)}
+            name={glyphSymbol(look.glyph)}
             size={glyph}
             tintColor={colors.TEXT_MUTED}
             accessibilityElementsHidden
@@ -917,10 +929,10 @@ function PromptCard({
             numberOfLines={large ? undefined : 1}
             style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
           >
-            {PROMPT_CARD.LABEL}
+            {look.label}
             {open || card.title === "" ? null : (
               <>
-                {PROMPT_CARD.JOIN}
+                {CARD_JOIN}
                 <Text style={{ color: colors.TEXT, fontWeight: "500" }}>{card.title}</Text>
               </>
             )}
@@ -928,7 +940,7 @@ function PromptCard({
         </Press>
       </CardMenu>
       {open ? (
-        <View style={styles.promptWords}>
+        <View style={styles.openingWords}>
           <Markdown
             words={item.words}
             typed
@@ -1246,9 +1258,9 @@ function TranscriptRow({
               onRetry={sentFileRetry(drawing, item.place.row, file)}
             />
           ))}
-          {/* Note that a line of files alone draws no empty bubble under them, and an automation's prompt stands in its card rather than a bubble. */}
+          {/* Note that a line of files alone draws no empty bubble under them, and an automation's prompt or an agent's description stands in its card rather than a bubble. */}
           {item.card !== undefined ? (
-            <PromptCard item={item} card={item.card} drawing={drawing} />
+            <OpeningCard item={item} card={item.card} drawing={drawing} />
           ) : item.words.trim() === "" &&
             (item.pictures ?? []).length + (item.files ?? []).length > 0 ? null : (
             <MessageMenu

@@ -1,0 +1,53 @@
+# agent-description.yaml -- an agent started on its task's description opens on the Description card, closed under its first line, as the panel stands it, rather than the whole description as a bubble; a press opens it in place on the description's words.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+#
+# Note that an iPad stands in landscape, where the transcript stands in the
+# detail column beside the list, so it is scrolled well inside that column
+# (`BESIDE`), and that the window is turned back upright however the flow
+# ends, because a run left in landscape fails every flow after it.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose description agent was handed a
+# description many screens long and finished one turn on it
+# (`@repo/host/fixture-description-agent`), and opened on its page by
+# `-agent <id>`; nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: c526e869-a1d2-4efb-96bd-d2e3f405162c
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+# Note that the launch waits up to half a minute for its first words, as
+# `agent.yaml`'s does.
+- extendedWaitUntil:
+    visible: "The export now writes one file per currency.*"
+    timeout: 30000
+# The description stands closed in its card under its label and its first
+# line, its words drawn nowhere.
+- assertVisible: "Description, Split ledger exports by currency"
+- assertNotVisible: "The monthly export sums every currency.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-description-closed
+# A press opens it in place on the description's words, its head naming the
+# label alone.
+- tapOn: "Description, Split ledger exports by currency"
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "The monthly export sums every currency.*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-description-open

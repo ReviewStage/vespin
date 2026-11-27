@@ -123,8 +123,8 @@ const SPEAKER = {
 
 type Speaker = (typeof SPEAKER)[keyof typeof SPEAKER];
 
-/** What the brief's heading calls it: the description an agent was handed, or a prompt in its place, or the task a worker was handed. */
-const BRIEF_LABEL = {
+/** What the brief's heading calls it, as a transcript's card is called where it opens on it: the description an agent was handed, or a prompt in its place or an automation's, or the task a worker was handed. */
+export const BRIEF_LABEL = {
   DESCRIPTION: "Description",
   PROMPT: "Prompt",
   SUBAGENT_TASK: "Subagent task",
