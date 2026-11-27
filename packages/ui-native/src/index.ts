@@ -597,3 +597,4 @@ export {
 } from "./workspace-switcher.js";
 
 export { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
+export { GlyphImage } from "./glyph-label.js";

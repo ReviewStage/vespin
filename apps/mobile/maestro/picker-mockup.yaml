@@ -1,0 +1,43 @@
+# picker-mockup.yaml -- THROWAWAY prototype, never merged: stills of the proposed face and section icon picker sheets (src/picker-mockup.tsx), each opened by a launch argument over synthetic data.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# B: the face sheet, a large preview, the palette row, Recent, Smileys.
+- launchApp:
+    clearState: true
+    arguments:
+      pickerMockup: face
+- extendedWaitUntil:
+    visible: "Manager face"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: picker-face
+# D + E: People & Body with a tone applied, the section index, then the tone menu.
+- launchApp:
+    clearState: true
+    arguments:
+      pickerMockup: index
+- extendedWaitUntil:
+    visible: "Manager face"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: picker-index
+- tapOn: "Skin tone"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: picker-tone
+# A: the section icon sheet, live-recolored grid, F's inks.
+- launchApp:
+    clearState: true
+    arguments:
+      pickerMockup: section
+- extendedWaitUntil:
+    visible: "Section icon"
+    timeout: 20000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: picker-section

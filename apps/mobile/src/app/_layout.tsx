@@ -22,6 +22,7 @@ import { HostProvider } from "../host/host-provider.js";
 import { InboxAttentionProvider } from "../inbox/inbox-groups.js";
 import { useKeeping } from "../keeping.js";
 import { LAUNCH_PHASE, noteLaunchPhase } from "../launch-phases.js";
+import { PickerMockup, pickerMockupKind } from "../picker-mockup.js";
 import { notePick } from "../row-picks.js";
 import { AppSidebarPane } from "../screens/app-sidebar.js";
 import { PlaceListColumn, PlacesHeldProvider } from "../screens/place-columns.js";
@@ -148,10 +149,15 @@ function KeptScreens() {
  * drew light beside the dark tab bar. Every tap on it is traced
  * (`withTapTraces`).
  */
+/** THROWAWAY prototype: the picker mockup a launch asks for (`-pickerMockup`), read once. */
+const MOCKUP = pickerMockupKind();
+
 function RootLayout() {
   const dark = useColorScheme() === "dark";
   const colors = useColors();
   const theme = useMemo(() => navigationTheme(colors, dark), [colors, dark]);
+
+  if (MOCKUP !== undefined) return <PickerMockup kind={MOCKUP} />;
 
   return (
     <ThemeProvider value={theme}>
