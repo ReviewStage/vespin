@@ -14,7 +14,7 @@ import {
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuickActionRouting } from "expo-quick-actions/router";
-import { Slot, usePathname, useSegments } from "expo-router";
+import { Slot, usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
 import { useInboxChoosingOn } from "../../../inbox/inbox-choosing.js";
@@ -23,6 +23,7 @@ import { useInboxBadge } from "../../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../../member-pictures.js";
 import { useNewTaskAfterSetup } from "../../../setup/setup-place.js";
 import { APP_SIDEBAR, useSidebarChoiceLapse } from "../../../sidebar-shown.js";
+import { SPLIT_TAB } from "../../../split-route.js";
 import { useTabSurfaceOpen } from "../../../surface-open.js";
 import { tabGroupOf, tabSegmentsOf, useKeepStandingTab } from "../../../tab-route.js";
 import { useStandingCallCard } from "../../../voice-call.js";
@@ -143,7 +144,15 @@ function useTabsKept(): readonly string[] {
  * last pick kept for its return (`useSplitSelection`).
  */
 function PlacesSlot() {
-  useTabsKept();
+  const segments = useTabsKept();
+  const inboxShown = useInboxShown();
+  const router = useRouter();
+  const onInbox = iosTabOfGroup(tabGroupOf(segments)) === IOS_TAB.INBOX;
+
+  // Note that the Inbox turned off while it stands gives way to Tasks, as the iPhone's tab bar moves off a tab it hides, since the sidebar no longer offers it; it is heard once a sheet over it, such as Settings, has gone, as the route under the sheet comes back to stand.
+  useEffect(() => {
+    if (!inboxShown && onInbox) router.replace(SPLIT_TAB.TASKS);
+  }, [inboxShown, onInbox, router]);
 
   return <Slot />;
 }

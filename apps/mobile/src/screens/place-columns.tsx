@@ -3,6 +3,7 @@
 import { IOS_TAB, type IosTab, iosTabOfGroup } from "@repo/features/ios-app-links";
 import { useSegments } from "expo-router";
 import { type ReactNode, useEffect, useState } from "react";
+import { useInboxShown } from "../inbox/inbox-shown.js";
 import { tabGroupOf } from "../tab-route.js";
 import { AutomationsListColumn, AutomationsSearchProvider } from "./automation-screens.js";
 import { InboxHeldProvider, InboxListColumn } from "./inbox-screens.js";
@@ -11,17 +12,22 @@ import { TasksListColumn } from "./task-screens.js";
 
 /**
  * The place standing, by the route's tab group; while none stands, as under
- * a sheet, the one that stood last, so the column keeps its list.
+ * a sheet, the one that stood last, so the column keeps its list; Tasks in
+ * the Inbox's place while the member has it off.
  */
 function usePlaceStanding(): IosTab | undefined {
   const here = iosTabOfGroup(tabGroupOf(useSegments()));
+  const inboxShown = useInboxShown();
   const [kept, keep] = useState(here);
 
   useEffect(() => {
     if (here !== undefined) keep(here);
   }, [here]);
 
-  return here ?? kept;
+  const place = here ?? kept;
+
+  // Note that a list column never stands the Inbox the member turned off, not even under a sheet, where the place kept from before it would; Tasks stands in its place, where the place's route goes too (`PlacesSlot`).
+  return place === IOS_TAB.INBOX && !inboxShown ? IOS_TAB.TASKS : place;
 }
 
 /**
