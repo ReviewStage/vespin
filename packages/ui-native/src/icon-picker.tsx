@@ -1,4 +1,4 @@
-// icon-picker.tsx -- the app's one icon picker on iOS, as the panel's `IconPicker` is the desktop's: a sheet with a search, and tabs where it has them, over named groups of choices, each a picture or an emoji in a grid, the one chosen ringed in copper, a choice with options opening the system's menu of them.
+// icon-picker.tsx -- the app's one icon picker on iOS, as the panel's `IconPicker` is the desktop's: a sheet with the choice large at its top, its colors as the system's palette under it, a search, and tabs where it has them, over named groups of choices, each a picture or an emoji in a grid, the one chosen ringed in copper, confirmed by Done and dropped by Cancel.
 
 import {
   BottomSheet,
@@ -9,6 +9,7 @@ import {
   HStack,
   Image,
   NavigationStack,
+  Picker,
   Section,
   Spacer,
   Button as SwiftUIButton,
@@ -23,14 +24,17 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
+  disabled,
   font,
   foregroundStyle,
   frame,
+  labelsHidden,
   listRowBackground,
   listRowInsets,
   navigationBarTitleDisplayMode,
   navigationTitle,
   onAppear,
+  pickerStyle,
   presentationBackground,
   presentationDetents,
   presentationDragIndicator,
@@ -38,27 +42,28 @@ import {
   scrollContentBackground,
   searchable,
   strokeBorder,
+  tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import type { TaskSectionIconColor } from "@repo/features/task-section-wire";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useColorScheme } from "react-native";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { type ListScopes, ScopeControl } from "./button.js";
-import { headerMenu } from "./interactions.js";
 import { MANAGER_FACE_EDGE_WIDTH, MANAGER_FACE_EMOJI_SCALE } from "./manager-face-look.js";
-import { type ChoiceMark, choicePressAt, choiceTree, type MenuChoice } from "./row-menu-model.js";
-import { sectionInk } from "./section-ink.js";
 import { Text } from "./text.js";
-import { ElevatedGround, toneColor, useColors } from "./tokens/colors.js";
+import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
-import type { StatusTone } from "./tokens/status-tone.js";
 
-/** How many choices stand in one row of the grid: six, so a Manager's six colors fill a row on the narrowest phone. */
-const GRID_COLUMNS = 6;
+/** How many choices stand in one row of the grid: eight, as the system's emoji keyboard lays out a row, so a Manager's six characters stand on one. */
+const GRID_COLUMNS = 8;
 
-/** A choice's side in the grid, in points at the default text size, a little larger than a row's lead, so a finger finds each. */
-const CHOICE_SIDE = 32;
+/** A choice's side in the grid, in points at the default text size, so eight with their rings fill a row on the narrowest phone. */
+const CHOICE_SIDE = 30;
+
+/** The grid's room from its section's edges, in points, narrower than a row's, so its eight columns have the width. */
+const GRID_INSET = 2 * SPACE.TIGHT;
+
+/** The preview's side at the sheet's top, in points at the default text size, as Messages shows a contact's photo while it is picked. */
+const PREVIEW_SIDE = 96;
 
 /** The room between a choice and the ring the chosen one wears, and the ring's width, in points. */
 const RING_GAP = 3;
@@ -78,8 +83,11 @@ const DRAWN_AHEAD = 120;
 /** No color at all, for a ring's room where no choice is chosen and the tabs' row. */
 const CLEAR = "#00000000";
 
-/** What the sheet's bar names its act. */
-const DONE = "Done";
+/** What the sheet's bar names its acts. */
+const WORDS = {
+  DONE: "Done",
+  CANCEL: "Cancel",
+} as const;
 
 /** What a choice is drawn as: a picture of the asset catalog, or an emoji, on a disc of its color where it has one. */
 export const ICON_PICKER_LOOK = {
@@ -98,21 +106,33 @@ type IconPickerLook =
       readonly edge?: string | undefined;
     };
 
-/** One of a choice's options, such as a face's color: its name, led by its mark, checked where it stands, and what VoiceOver calls it. */
-type IconPickerOption = {
-  readonly label: string;
-  readonly mark: ChoiceMark;
-  readonly on: boolean;
-  readonly heard: string;
-};
-
-/** One choice of the picker: what tells it apart, its name, which it is heard as, how it is drawn, whether it is the one chosen, and the options a press offers, where it offers any rather than picking it at once. */
+/** One choice of the picker: what tells it apart in its group, its name, which it is heard as, how it is drawn, and whether it is the one chosen. */
 type IconPickerChoice = {
   readonly key: string;
   readonly label: string;
   readonly look: IconPickerLook;
   readonly picked: boolean;
-  readonly options?: readonly IconPickerOption[] | undefined;
+};
+
+/** One color of the sheet's color row: what tells it apart, its name, which VoiceOver hears, and its fill in the theme's shade. */
+type IconPickerColor = {
+  readonly key: string;
+  readonly label: string;
+  readonly fill: string;
+};
+
+/** The sheet's color row: what it chooses, heard by VoiceOver, its colors, the one chosen, and what hears a choice. */
+type IconPickerColors = {
+  readonly label: string;
+  readonly options: readonly IconPickerColor[];
+  readonly chosen: string;
+  readonly onChoose: (key: string) => void;
+};
+
+/** The sheet's preview: the choice standing, as it is drawn and as it is heard. */
+type IconPickerPreview = {
+  readonly look: IconPickerLook;
+  readonly heard: string;
 };
 
 /** A named group of the picker's choices, such as a character's faces. */
@@ -130,18 +150,24 @@ type IconPickerSheetProps = {
   /** What the sheet says where a search finds nothing. */
   readonly empty: string;
   readonly presented: boolean;
-  readonly onDismiss: () => void;
+  /** The choice standing, drawn large at the sheet's top; none before a pick, which draws the chosen color alone and leaves Done unlit. */
+  readonly preview: IconPickerPreview | undefined;
+  readonly colors: IconPickerColors;
+  /** Drops what was picked and puts the sheet away, as Cancel and a swipe down do. */
+  readonly onCancel: () => void;
+  /** Keeps what was picked and puts the sheet away. */
+  readonly onDone: () => void;
   /** Hears the search's words as they are typed, which the caller narrows its groups by. */
   readonly onQuery: (query: string) => void;
   /** Its tabs, the system's segmented control over its groups, where it has them, which the caller stands only while nothing is searched. */
   readonly scopes?: ListScopes | undefined;
   readonly groups: readonly IconPickerGroup[];
-  /** Hands on the key of the choice pressed, and the place of the option chosen among its options where it has them. */
-  readonly onPick: (key: string, option: number | undefined) => void;
+  /** Hands on the key of the group and of the choice pressed, which the caller shows in the preview. */
+  readonly onPick: (group: string, key: string) => void;
 };
 
-/** What the grid hands a press: the choice's key, and its option's place where it has options. */
-type PickChoice = (key: string, option: number | undefined) => void;
+/** What the grid hands a press: its group's key and its choice's. */
+type PickChoice = (group: string, key: string) => void;
 
 /** A choice's face: its picture, or its emoji, on its disc where it has one. */
 function ChoiceFace({ look, side }: { readonly look: IconPickerLook; readonly side: number }) {
@@ -177,92 +203,77 @@ function ChoiceFace({ look, side }: { readonly look: IconPickerLook; readonly si
 
 /**
  * One choice to press: its face, ringed in copper while it is the one
- * chosen, heard as its name and as selected where it is. One with options
- * opens the system's menu of them on a tap, built natively from their tree as
- * it opens (`headerMenu`), so a grid of thousands holds no views of menus
- * nobody opened; any other picks it at once. Note that it draws again only
- * when its own choice changes, so a group drawn as the reader scrolls near
- * it redraws none of the groups drawn before.
+ * chosen, heard as its name and as selected where it is, each column of its
+ * row as wide as the next. Note that it draws again only when its own
+ * choice changes, so a group drawn as the reader scrolls near it redraws
+ * none of the groups drawn before.
  */
 const Choice = memo(function Choice({
+  group,
   choice,
   onPick,
 }: {
+  readonly group: string;
   readonly choice: IconPickerChoice;
   readonly onPick: PickChoice;
 }) {
   const colors = useColors();
-  const dark = useColorScheme() === "dark";
   const side = useScaledSize(CHOICE_SIDE);
   const ringed = side + 2 * (RING_GAP + RING_WIDTH);
-  const options = choice.options;
-
-  const menu = useMemo(() => {
-    if (options === undefined) return undefined;
-
-    const choices = options.map(
-      (option, at): MenuChoice => ({ ...option, onPress: () => onPick(choice.key, at) }),
-    );
-
-    const inks = {
-      act: colors.TEXT_MUTED,
-      tone: (tone: StatusTone) => toneColor(colors, tone),
-      section: (color: TaskSectionIconColor) => sectionInk(color, dark),
-    };
-
-    return { choices, tree: JSON.stringify({ groups: choiceTree(choices, inks) }) };
-  }, [options, onPick, choice.key, colors, dark]);
 
   const heard = [
     accessibilityLabel(choice.label),
     ...(choice.picked ? [accessibilityAddTraits(["isSelected"])] : []),
   ];
 
-  const face = (
-    <ZStack
-      modifiers={[
-        frame({ width: ringed, height: ringed }),
-        // Note that every choice keeps its ring's room, clear where it is not chosen, so a pick never shifts the grid.
-        strokeBorder({
-          content: choice.picked ? colors.ACCENT : CLEAR,
-          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-          shape: "circle",
-          style: { lineWidth: RING_WIDTH },
-        }),
-      ]}
-    >
-      <ChoiceFace look={choice.look} side={side} />
-    </ZStack>
-  );
-
-  if (menu !== undefined)
-    return (
-      <HStack
-        modifiers={[
-          headerMenu(menu.tree, (path) => choicePressAt(menu.choices, path)?.(), undefined),
-          buttonStyle("plain"),
-          ...heard,
-        ]}
-      >
-        {face}
-      </HStack>
-    );
-
   return (
     <SwiftUIButton
-      onPress={() => onPick(choice.key, undefined)}
-      modifiers={[buttonStyle("plain"), ...heard]}
+      onPress={() => onPick(group, choice.key)}
+      modifiers={[buttonStyle("plain"), frame({ maxWidth: Number.POSITIVE_INFINITY }), ...heard]}
     >
-      {face}
+      <ZStack
+        modifiers={[
+          frame({ width: ringed, height: ringed }),
+          // Note that every choice keeps its ring's room, clear where it is not chosen, so a pick never shifts the grid.
+          strokeBorder({
+            content: choice.picked ? colors.ACCENT : CLEAR,
+            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+            shape: "circle",
+            style: { lineWidth: RING_WIDTH },
+          }),
+        ]}
+      >
+        <ChoiceFace look={choice.look} side={side} />
+      </ZStack>
     </SwiftUIButton>
   );
 });
 
-/** A group's choices in rows of `GRID_COLUMNS`, each row standing from the section's leading edge, so the columns line up down the group. */
+/** A row's room past its last choice, as wide as a choice's column, so a short row's columns line up with a full one's. */
+function EmptyColumn() {
+  const ringed = useScaledSize(CHOICE_SIDE) + 2 * (RING_GAP + RING_WIDTH);
+
+  return (
+    <Spacer
+      modifiers={[
+        frame({
+          minWidth: ringed,
+          maxWidth: Number.POSITIVE_INFINITY,
+          minHeight: ringed,
+          maxHeight: ringed,
+        }),
+      ]}
+    />
+  );
+}
+
+/** A group's choices in rows of `GRID_COLUMNS` even columns across the section, a short row keeping the room of those it lacks, so the columns line up down the group and the groups. */
 function ChoiceGrid({
+  group,
   choices,
   onPick,
 }: {
+  readonly group: string;
   readonly choices: readonly IconPickerChoice[];
   readonly onPick: PickChoice;
 }) {
@@ -271,11 +282,13 @@ function ChoiceGrid({
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
       {rows.map((row) => (
-        <HStack key={row[0]?.key ?? "empty"} spacing={SPACE.ROW}>
+        <HStack key={row[0]?.key ?? "empty"} spacing={0}>
           {row.map((choice) => (
-            <Choice key={choice.key} choice={choice} onPick={onPick} />
+            <Choice key={choice.key} group={group} choice={choice} onPick={onPick} />
           ))}
-          <Spacer />
+          {Array.from({ length: GRID_COLUMNS - row.length }, (_, at) => (
+            <EmptyColumn key={at} />
+          ))}
         </HStack>
       ))}
     </VStack>
@@ -320,7 +333,54 @@ function drawnGroups(
   return drawn;
 }
 
-/** The picker's page: its search in the bar's drawer, its tabs where it has them, its groups under their names, and Done. */
+/** The sheet's top: the choice standing, large, or the chosen color's disc alone before a pick, heard by its name. */
+function Preview({
+  preview,
+  colors: row,
+}: {
+  readonly preview: IconPickerPreview | undefined;
+  readonly colors: IconPickerColors;
+}) {
+  const side = useScaledSize(PREVIEW_SIDE);
+  const fill = row.options.find((each) => each.key === row.chosen)?.fill;
+
+  return (
+    <HStack modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY })]}>
+      {preview === undefined ? (
+        <Circle
+          modifiers={[foregroundStyle(fill ?? CLEAR), frame({ width: side, height: side })]}
+        />
+      ) : (
+        <ZStack modifiers={[accessibilityLabel(preview.heard)]}>
+          <ChoiceFace look={preview.look} side={side} />
+        </ZStack>
+      )}
+    </HStack>
+  );
+}
+
+/** The sheet's colors as the system's palette picker, each a filled circle in its own fill, heard by its name, the one chosen marked as the system marks it. */
+function ColorRow({ colors: row }: { readonly colors: IconPickerColors }) {
+  return (
+    <Picker<string>
+      label={row.label}
+      selection={row.chosen}
+      onSelectionChange={row.onChoose}
+      modifiers={[pickerStyle("palette"), labelsHidden()]}
+    >
+      {row.options.map((each) => (
+        <Image
+          key={each.key}
+          systemName="circle.fill"
+          color={each.fill}
+          modifiers={[tint(each.fill), tag(each.key), accessibilityLabel(each.label)]}
+        />
+      ))}
+    </Picker>
+  );
+}
+
+/** The picker's page: the preview and its colors, its search in the bar's drawer, its tabs where it has them, its groups under their names, and Cancel and Done. */
 function IconPickerPage(props: IconPickerSheetProps) {
   const colors = useColors();
   const query = useNativeState("");
@@ -333,8 +393,15 @@ function IconPickerPage(props: IconPickerSheetProps) {
   useEffect(() => {
     latestPick.current = props.onPick;
   });
-  const onPick = useCallback<PickChoice>((key, option) => latestPick.current(key, option), []);
+  const onPick = useCallback<PickChoice>((group, key) => latestPick.current(group, key), []);
   const reach = (key: string) => setReached((before) => new Set(before).add(key));
+
+  const clearRow = [
+    listRowBackground(CLEAR),
+    listRowInsets({ top: 0, leading: 0, bottom: 0, trailing: 0 }),
+  ];
+
+  const gridRow = listRowInsets({ leading: GRID_INSET, trailing: GRID_INSET });
 
   return (
     <NavigationStack modifiers={[tint(colors.TEXT)]}>
@@ -352,14 +419,17 @@ function IconPickerPage(props: IconPickerSheetProps) {
             }),
           ]}
         >
+          <Section>
+            <HStack modifiers={clearRow}>
+              <Preview preview={props.preview} colors={props.colors} />
+            </HStack>
+          </Section>
+          <Section>
+            <ColorRow colors={props.colors} />
+          </Section>
           {props.scopes === undefined ? null : (
             <Section>
-              <HStack
-                modifiers={[
-                  listRowBackground(CLEAR),
-                  listRowInsets({ top: 0, leading: 0, bottom: 0, trailing: 0 }),
-                ]}
-              >
+              <HStack modifiers={clearRow}>
                 <ScopeControl {...props.scopes} />
               </HStack>
             </Section>
@@ -371,18 +441,27 @@ function IconPickerPage(props: IconPickerSheetProps) {
           ) : (
             props.groups.map((group) => (
               <Section key={group.key} title={group.name}>
-                {drawn.has(group.key) ? (
-                  <ChoiceGrid choices={group.choices} onPick={onPick} />
-                ) : (
-                  <WaitingGrid count={group.choices.length} onReach={() => reach(group.key)} />
-                )}
+                <VStack modifiers={[gridRow]}>
+                  {drawn.has(group.key) ? (
+                    <ChoiceGrid group={group.key} choices={group.choices} onPick={onPick} />
+                  ) : (
+                    <WaitingGrid count={group.choices.length} onReach={() => reach(group.key)} />
+                  )}
+                </VStack>
               </Section>
             ))
           )}
         </Form>
         <Toolbar.Content>
+          <ToolbarItem placement="cancellationAction">
+            <SwiftUIButton label={WORDS.CANCEL} onPress={props.onCancel} />
+          </ToolbarItem>
           <ToolbarItem placement="confirmationAction">
-            <SwiftUIButton label={DONE} onPress={props.onDismiss} />
+            <SwiftUIButton
+              label={WORDS.DONE}
+              onPress={props.onDone}
+              modifiers={[disabled(props.preview === undefined)]}
+            />
           </ToolbarItem>
         </Toolbar.Content>
       </Toolbar>
@@ -392,20 +471,20 @@ function IconPickerPage(props: IconPickerSheetProps) {
 
 /**
  * The app's one icon picker, the panel's `IconPicker` in the way iOS picks
- * an icon: a sheet over the screen that opens it, rising to half height and
- * dragged to full, its title and Done in its bar and the system's search
- * field in the bar's drawer, its tabs, where it has them, as the system's
- * segmented control, over the choices in named groups, each group a grid
- * six wide of pictures or emoji, the one chosen ringed in copper, as a
- * picked option is. A choice with options, such as a face's colors, opens
- * the system's menu of them, as the panel's pops its colors up; any other
- * is chosen at once. A long grid draws its groups as the reader scrolls
- * near them (`DRAWN_AHEAD`). The caller narrows its groups by the search's
- * words (`onQuery`), so a search finds what the panel's would; a press
- * hands on the choice's key, and its option's place, and the caller decides
- * whether the sheet goes. It stands
- * on the lifted ground in a host of its own beside its screen, as every
- * sheet of choices does.
+ * a contact's photo in Messages: a sheet over the screen that opens it,
+ * rising to half height and dragged to full, its title, Cancel, and Done in
+ * its bar and the system's search field in the bar's drawer; the choice
+ * standing large at its top, its colors under it as the system's palette;
+ * its tabs, where it has them, as the system's segmented control; and the
+ * choices in named groups, each group a grid eight wide of pictures or
+ * emoji, the one chosen ringed in copper, as a picked option is. A press
+ * hands on the choice, which the caller shows in the preview, and a color
+ * chosen recolors it; Done keeps it and Cancel, or a swipe down, drops it.
+ * A long grid draws its groups as the reader scrolls near them
+ * (`DRAWN_AHEAD`). The caller narrows its groups by the search's words
+ * (`onQuery`), so a search finds what the panel's would. It stands on the
+ * lifted ground in a host of its own beside its screen, as every sheet of
+ * choices does.
  */
 export function IconPickerSheet(props: IconPickerSheetProps) {
   return (
@@ -424,7 +503,7 @@ function IconPickerHost(props: IconPickerSheetProps) {
       <BottomSheet
         isPresented={props.presented}
         onIsPresentedChange={(shown) => {
-          if (!shown) props.onDismiss();
+          if (!shown) props.onCancel();
         }}
       >
         <Group

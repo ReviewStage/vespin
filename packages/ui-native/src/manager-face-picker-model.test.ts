@@ -1,4 +1,4 @@
-// manager-face-picker-model.test.ts -- the face picker offers Recent and the characters, finds a character or an emoji by name, and a color picked from a face's menu is that face in that color.
+// manager-face-picker-model.test.ts -- the face picker offers Recent atop each tab, draws and picks every face but a recent one in the color row's color, and finds a character or an emoji by name.
 
 import { emojiGroups } from "@repo/features/emoji-model";
 import type { ManagerFace } from "@repo/features/manager-face";
@@ -34,6 +34,7 @@ const STATE: FacePickerState = {
   query: "",
   recent: [],
   standing: STANDING,
+  color: "blue",
   emoji: EMOJI,
 };
 
@@ -43,10 +44,10 @@ function listed(state: FacePickerState) {
 }
 
 describe("faceGroups", () => {
-  // Note that the regression this catches is a grid that loses Recent, draws every character in its color rather than the one standing, or lists the characters in another order than the panel's.
-  it("offers Recent, then the characters, the one standing in its color and the rest gray", () => {
+  // Note that the regression this catches is a grid that loses Recent, draws a recent face in the row's color rather than its own, draws a character in another color than the row's, rings another face than the preview's, or lists the characters in another order than the panel's.
+  it("offers Recent in its own colors, then the characters in the row's color, the one shown ringed", () => {
     const recent: ManagerFace[] = [{ character: "cat", color: "red", emoji: "🚀" }];
-    const groups = faceGroups({ ...STATE, recent });
+    const groups = faceGroups({ ...STATE, recent, color: "teal" });
 
     expect(groups.map((group) => [group.name, group.cells.map((cell) => cell.label)])).toEqual([
       ["Recent", ["🚀"]],
@@ -54,13 +55,14 @@ describe("faceGroups", () => {
     ]);
     expect(groups[0]?.cells[0]).toMatchObject({ face: recent[0], disc: true, picked: false });
     expect(groups[1]?.cells.map((cell) => [cell.face.color, cell.picked])).toEqual([
-      ["gray", false],
-      ["blue", true],
-      ["gray", false],
-      ["gray", false],
-      ["gray", false],
-      ["gray", false],
+      ["teal", false],
+      ["teal", true],
+      ["teal", false],
+      ["teal", false],
+      ["teal", false],
+      ["teal", false],
     ]);
+    expect(groups[1]?.cells[2]?.face).toEqual({ character: "cat", color: "teal" });
   });
 
   // Note that the regression this catches is a search that finds no emoji by its name, drops a typed emoji, or stops finding a character.
@@ -79,44 +81,22 @@ describe("faceGroups", () => {
     expect(listed({ ...STATE, query })).toEqual(found);
   });
 
-  it("offers every emoji by category on the Emoji tab, the one standing on its disc", () => {
+  // Note that the regression this catches is an Emoji tab without Recent atop it, an emoji picked in another color than the row's, or an emoji lost from the face it is worn over.
+  it("offers Recent, then every emoji by category on the Emoji tab, each in the row's color", () => {
+    const recent: ManagerFace[] = [{ character: "mug", color: "green" }];
     const standing = { character: "planet", color: "teal", emoji: "🚀" } as const;
-    const groups = faceGroups({ ...STATE, tab: FACE_TAB.EMOJI, standing });
+    const groups = faceGroups({ ...STATE, tab: FACE_TAB.EMOJI, recent, standing, color: "pink" });
 
     expect(groups.map((group) => [group.name, group.cells.map((cell) => cell.label)])).toEqual([
+      ["Recent", ["Mug"]],
       ["Animals & Nature", ["🦊", "🐱"]],
       ["Travel & Places", ["🚀"]],
     ]);
-    expect(groups[1]?.cells[0]).toMatchObject({ face: standing, disc: true, picked: true });
-    expect(groups[0]?.cells[0]).toMatchObject({ disc: false, picked: false });
-  });
-});
-
-describe("a face's colors", () => {
-  // Note that the regression this catches is a color that picks another face than the one pressed, an emoji lost from the pick, or a menu that checks a face the Manager does not wear.
-  it("offers nine colors, gray first, checks the face standing, and picks the face in the color chosen", () => {
-    const standing = { character: "ghost", color: "pink", emoji: "🦊" } as const;
-    const fox = faceGroups({ ...STATE, query: "fox", standing })[0]?.cells[0];
-
-    expect(fox?.colors.map((color) => color.label)).toEqual([
-      "Gray",
-      "Red",
-      "Orange",
-      "Yellow",
-      "Green",
-      "Teal",
-      "Blue",
-      "Purple",
-      "Pink",
-    ]);
-    expect(fox?.colors.filter((color) => color.on).map((color) => color.heard)).toEqual([
-      "Pink 🦊",
-    ]);
-    expect(fox?.colors[1]?.face).toEqual({ character: "ghost", color: "red", emoji: "🦊" });
-
-    const cat = faceGroups({ ...STATE, query: "cat" })[0]?.cells[0];
-
-    expect(cat?.colors[5]?.face).toEqual({ character: "cat", color: "teal" });
+    expect(groups[2]?.cells[0]).toMatchObject({ picked: true, disc: false });
+    expect(groups[1]?.cells[0]).toMatchObject({
+      face: { character: "planet", color: "pink", emoji: "🦊" },
+      picked: false,
+    });
   });
 });
 
