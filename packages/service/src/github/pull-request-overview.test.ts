@@ -236,8 +236,12 @@ function reactedById(
   );
 }
 
-/** A comment or a review as GitHub's GraphQL names the one its REST listing names: a bot's login without its suffix, its words as rendered, and the reactions `reacted` gives it, else those its rollup counts. */
-function graphEntryOf(entry: ListedEntry, reacted: ReadonlyMap<number, readonly unknown[]>) {
+/** A comment or a review as GitHub's GraphQL names the one its REST listing names: a bot's login without its suffix, and where `asked` asks them, its words as rendered and the reactions `reacted` gives it, else those its rollup counts. */
+function graphEntryOf(
+  entry: ListedEntry,
+  reacted: ReadonlyMap<number, readonly unknown[]>,
+  asked: { readonly rendered: boolean; readonly reactions: boolean },
+) {
   const { user, reactions } = entry;
 
   const rolled = ROLLUP_CONTENT.flatMap(([key, content]) => {
@@ -259,14 +263,16 @@ function graphEntryOf(entry: ListedEntry, reacted: ReadonlyMap<number, readonly 
             databaseId: user.id,
           },
     body: entry.body ?? "",
-    bodyHTML: entry.body_html ?? "",
+    ...(asked.rendered ? { bodyHTML: entry.body_html ?? "" } : undefined),
     createdAt: entry.created_at ?? "",
     // Note that GraphQL names every entry's page, so one a listing names none of stands at the pull request's.
     url: entry.html_url ?? PAGE,
     ...(entry.state === undefined
       ? undefined
       : { state: entry.state, submittedAt: entry.submitted_at ?? null }),
-    reactionGroups: (entry.id === undefined ? undefined : reacted.get(entry.id)) ?? rolled,
+    ...(asked.reactions
+      ? { reactionGroups: (entry.id === undefined ? undefined : reacted.get(entry.id)) ?? rolled }
+      : undefined),
   };
 }
 
@@ -306,12 +312,18 @@ function conversationAnswer(
   const reacted = Option.getOrUndefined(Schema.decodeUnknownOption(FixtureReactedSchema)(graphql));
   const named = reacted?.data.repository.pullRequest;
 
+  // Note that GitHub answers only the fields a query names, so a page asked without rendering or reactions carries none.
+  const asked = {
+    rendered: query.includes("bodyHTML"),
+    reactions: query.includes("reactionGroups"),
+  };
+
   const comments = (answers.comments ?? []).map((each) =>
-    graphEntryOf(each, reactedById(named?.comments)),
+    graphEntryOf(each, reactedById(named?.comments), asked),
   );
 
   const reviews = (answers.reviews ?? []).map((each) =>
-    graphEntryOf(each, reactedById(named?.reviews)),
+    graphEntryOf(each, reactedById(named?.reviews), asked),
   );
 
   const pullRequest = query.startsWith("query ConversationComments")
@@ -982,6 +994,80 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
       assert.equal(many.conversation[0]?.url, `${PAGE}#issuecomment-5`, "the newest are kept");
       assert.equal(many.earlier, 5);
     }),
+  );
+
+  it.effect(
+    "an entry read on an older page that the newest hundred leave standing keeps its rendering and its reactions",
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+        const before = Date.parse("2026-10-15T10:00:00Z");
+
+        // A reply's wrapper review says nothing and starts no thread, so the conversation leaves each out.
+        const wrappers = Array.from({ length: OVERVIEW_BOUNDS.MAX_ENTRIES }, (_, at) => ({
+          id: 100 + at,
+          user: PRIYA,
+          state: "COMMENTED",
+          body: "",
+          submitted_at: new Date(before + (at + 2) * 60_000).toISOString(),
+          html_url: `${PAGE}#pullrequestreview-${100 + at}`,
+        }));
+
+        const overview = yield* overviewOf(
+          workspace,
+          repository({
+            pull: pull(),
+            comments: [
+              {
+                id: 11,
+                user: CHARLES,
+                body: "See #3.",
+                body_html:
+                  '<p dir="auto">See <a href="https://github.com/acme/relay/issues/3">#3</a>.</p>',
+                created_at: new Date(before).toISOString(),
+                html_url: `${PAGE}#issuecomment-11`,
+                reactions: { heart: 2 },
+              },
+              ...Array.from({ length: OVERVIEW_BOUNDS.MAX_ENTRIES }, (_, at) => ({
+                id: 200 + at,
+                user: CHARLES,
+                body: "",
+                created_at: new Date(before + (at + 2) * 60_000).toISOString(),
+                html_url: `${PAGE}#issuecomment-${200 + at}`,
+              })),
+            ],
+            reviews: [
+              {
+                id: 5,
+                user: PRIYA,
+                state: "APPROVED",
+                body: "Looks **good**.",
+                body_html: '<p dir="auto">Looks <strong>good</strong>.</p>',
+                submitted_at: new Date(before + 60_000).toISOString(),
+                html_url: `${PAGE}#pullrequestreview-5`,
+              },
+              ...wrappers,
+            ],
+          }),
+        );
+
+        assert.ok(overview !== undefined);
+        assert.deepEqual(
+          overview.conversation.map(({ url, html, reactions }) => ({ url, html, reactions })),
+          [
+            {
+              url: `${PAGE}#issuecomment-11`,
+              html: '<p dir="auto">See <a href="https://github.com/acme/relay/issues/3">#3</a>.</p>',
+              reactions: [{ content: REACTION.HEART, count: 2 }],
+            },
+            {
+              url: `${PAGE}#pullrequestreview-5`,
+              html: '<p dir="auto">Looks <strong>good</strong>.</p>',
+              reactions: undefined,
+            },
+          ],
+        );
+      }),
   );
 
   it.effect(

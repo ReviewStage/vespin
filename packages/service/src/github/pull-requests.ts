@@ -1530,29 +1530,29 @@ function wordsOf(body: string | null | undefined, html: string | null | undefine
 const ENTRY_FIELDS = `databaseId id author { __typename login avatarUrl ... on User { databaseId } ... on Bot { databaseId } } body createdAt url`;
 
 /**
- * The pull request's older comments, a page before `$before`, as the
- * conversation counts them past its newest: who wrote each and its words,
- * none of its rendering or reactions, since an entry past the newest
- * hundred is counted rather than drawn.
+ * The pull request's older comments, a page before `$before`, with their
+ * words as GitHub renders them and how many of each reaction they wear,
+ * since an older one is still drawn where the newest hundred are mostly
+ * empty, which the conversation leaves out.
  */
 const OLDER_COMMENTS_QUERY = `query ConversationComments($owner: String!, $name: String!, $number: Int!, $before: String!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       comments(last: ${OVERVIEW_BOUNDS.MAX_ENTRIES}, before: $before) {
         pageInfo { hasPreviousPage startCursor }
-        nodes { ${ENTRY_FIELDS} }
+        nodes { ${ENTRY_FIELDS} bodyHTML reactionGroups { content reactors { totalCount } } }
       }
     }
   }
 }`;
 
-/** The pull request's older reviews, a page before `$before`, which a reviewer's standing and the conversation's count read. */
+/** The pull request's older reviews, a page before `$before`, which a reviewer's standing and the conversation's count read, with their words as GitHub renders them, since an older one is still drawn where the newest hundred are mostly reply wrappers. */
 const OLDER_REVIEWS_QUERY = `query ConversationReviews($owner: String!, $name: String!, $number: Int!, $before: String!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       reviews(last: ${OVERVIEW_BOUNDS.MAX_ENTRIES}, before: $before) {
         pageInfo { hasPreviousPage startCursor }
-        nodes { ${ENTRY_FIELDS} state submittedAt }
+        nodes { ${ENTRY_FIELDS} state submittedAt bodyHTML }
       }
     }
   }
@@ -1970,10 +1970,27 @@ function restAccountOf(
     : { login: account.login, id: account.id, type, avatar_url: author.avatarUrl };
 }
 
-/** A comment GraphQL read, in REST's record of it. */
+/** The reactions a comment wears as REST rolls them up, from GraphQL's counts of them; none where the read asked none. */
+function rollupOf(
+  groups: (typeof GraphCommentSchema.Type)["reactionGroups"],
+): ReactionRollup | undefined {
+  if (groups == null) return undefined;
+
+  return Object.fromEntries(
+    groups.flatMap((group) => {
+      const reaction = GRAPHQL_REACTION.get(group.content);
+
+      return reaction === undefined ? [] : [[ROLLUP_KEY[reaction], group.reactors.totalCount]];
+    }),
+  );
+}
+
+/** A comment GraphQL read, in REST's record of it, with the reactions it wears rolled up as REST rolls them, which a comment past the newest page is counted by. */
 function restCommentOf(
   node: typeof GraphCommentSchema.Type,
 ): (typeof IssueCommentsSchema.Type)[number] {
+  const reactions = rollupOf(node.reactionGroups);
+
   return {
     ...(node.databaseId === null ? undefined : { id: node.databaseId }),
     user: restAccountOf(node.author),
@@ -1982,6 +1999,7 @@ function restCommentOf(
     created_at: node.createdAt,
     html_url: node.url,
     ...(node.id === undefined ? undefined : { node_id: node.id }),
+    ...(reactions === undefined ? undefined : { reactions }),
   };
 }
 
@@ -2178,7 +2196,7 @@ function conversationOf(
         at: timeOf(comment.created_at) ?? 0,
         url: comment.html_url,
         threads: [],
-        // Note that a comment read from its REST listing, where GitHub refused the GraphQL read, is counted by its REST rollup instead.
+        // Note that a comment past the GraphQL read's newest page is counted by its rollup instead, as is every comment read from its REST listing where GitHub refused that read.
         reactions:
           comment.id !== undefined && read.commentReactions.has(comment.id)
             ? reactionsAt(read.commentReactions, comment.id)
