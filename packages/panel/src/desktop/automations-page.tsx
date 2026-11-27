@@ -728,7 +728,8 @@ function AutomationList({
 
   return (
     <>
-      {shown.narrow ? null : (
+      {/* Note that a list with no rows stands no heads, since they would head nothing under the line saying there are none yet. */}
+      {shown.narrow || (groups.length === 0 && finished.length === 0) ? null : (
         <AutomationListHeads managers={shown.managers !== undefined} more={!coarse} />
       )}
       {groups.map((group) => {
