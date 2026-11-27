@@ -409,10 +409,15 @@ test("nothing starts before the account's last pick is read, and the task starts
 test("a device picked in this window gives way for good once the account's last Start runs elsewhere", async () => {
   const held = handHostReads({ preferences: heldPreferences({ runsOn: ON_STUDIO }) });
   const { container } = await mount({ devices: devicesWith(Date.now(), Date.now()) });
-  act(() => runsOnChip(container).click());
-  await settle();
-  act(() => row("Build host").click());
-  await settle();
+
+  // Two picks in this window, so the one standing is no longer the first object laid in the cache.
+  for (const name of ["Cloud", "Build host"]) {
+    act(() => runsOnChip(container).click());
+    await settle();
+    act(() => row(name).click());
+    await settle();
+  }
+
   assert.equal(runsOnChip(container).getAttribute("aria-label"), "Machine: Build host");
 
   act(() =>

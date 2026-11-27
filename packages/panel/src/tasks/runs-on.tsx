@@ -248,10 +248,15 @@ function expireOnMove(
     if (event.type !== "updated" || event.query.queryHash !== hash) return;
     const read = queries.getQueryData(preferences.queryKey);
 
-    if (read === undefined || accountRow(read.runsOn) === pick.over) return;
-    stop();
+    if (read === undefined) return;
+    const moved = accountRow(read.runsOn);
 
-    if (queries.getQueryData(windowPickQuery.queryKey) === pick) {
+    if (moved === pick.over) return;
+    stop();
+    // Note that the pick standing is read by what it was made over, never by identity, because the cache shares structure and may hold a copy of it.
+    const standing = queries.getQueryData(windowPickQuery.queryKey);
+
+    if (standing !== undefined && standing !== null && standing.over !== moved) {
       queries.setQueryData(windowPickQuery.queryKey, null);
     }
   });
