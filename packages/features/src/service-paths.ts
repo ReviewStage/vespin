@@ -177,6 +177,13 @@ export const HOSTED_SERVICE_PATH = {
    * whole, or `unavailable`. `live-wire.ts` declares the answer.
    */
   LIVE_INBOX_ITEMS: "/api/live/inbox-items",
+  /**
+   * One page of the account's settled inbox items older than the items read
+   * carries, the latest changed first, past `?before=` where named, each
+   * whole as that read answers it: none the account may not read.
+   * `inbox-live.ts` declares the answer.
+   */
+  LIVE_INBOX_OLDER: "/api/live/inbox-older",
   /** One task's pages and calls under `?id=`, each part's mark sealed for following over Neon Realtime (GET), or `not-found` or `unavailable`. */
   LIVE_TASK_RECORD: "/api/live/task-record",
   /** One task's pages under `?id=`, each at its newest version, sealed for following over Neon Realtime (GET), or with `?poll=true` their rows inline; or `not-found`. */

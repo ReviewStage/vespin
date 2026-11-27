@@ -40,6 +40,11 @@
  * settled tasks and every agent of them, the newest finished first, past
  * `beforeAt` and `beforeId` where named (`taskPageRead`), for a list that
  * shows finished work the task list does not hold.
+ * `GET /api/live/inbox-older` answers one page of the account's settled
+ * inbox items older than its inbox items read carries, the latest changed
+ * first, past `before` where named, each whole as that read answers it,
+ * with the page after it beside them (`inboxOlderRead`), for an Inbox that
+ * lists items past what that read holds.
  * `GET /api/live/task-relations?id=` answers the tasks related to the task
  * `id` names, its sub-tasks, its parent, and its blocks, and every agent of
  * them, the same way (`taskRelationsRead`), for a window drawing an open or
@@ -264,6 +269,7 @@ import {
 import { agentBrowserTabsRead, taskBrowserTabsRead } from "./reads/browser-tabs.js";
 import { hostsRead } from "./reads/hosts.js";
 import { inboxItemsRead } from "./reads/inbox-items.js";
+import { inboxOlderRead } from "./reads/inbox-older.js";
 import { installedSkillsRead } from "./reads/installed-skills.js";
 import { integrationStatusesRead } from "./reads/integration-statuses.js";
 import { machineAsksRead } from "./reads/machine-asks.js";
@@ -1126,6 +1132,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
   return {
     inbox: signedIn.inbox.effect(answerBoundRead(accountInboxRead)),
     inboxItems: signedIn.inboxItems.effect(answerBoundRead(inboxItemsRead)),
+    inboxOlder: signedIn.inboxOlder.effect(answerBoundRead(inboxOlderRead)),
     tasks: signedIn.tasks.effect(answerBoundRead(tasksRead)),
     taskRows: signedIn.taskRows.effect(answerBoundRead(taskRowsRead)),
     taskSearch: signedIn.taskSearch.effect(answerBoundRead(taskSearchRead)),
