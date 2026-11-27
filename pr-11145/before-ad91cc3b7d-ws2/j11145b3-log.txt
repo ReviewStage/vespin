@@ -1,0 +1,10 @@
+pinned to ad91cc3b7d
+== bundle PJj11145b3 base ad91cc3b7d
+  built ad91cc3b7d base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  bundle patch n2a4-reqlog-opendrawn-2947.patch applied (rig-only)
+  export 0 (simulator-bundle.sh)
+  signed 0
+  light link find: 3 answered; GET /api/workspaces/engines/tasks/99999 passed to the plain stub at 1795772117405 took 2; GET /api/workspaces/engines/tasks/99999 passed to the plain stub at 1795772118426 took 2; GET /api/workspaces/engines/tasks/99999 passed to the plain stub at 1795772120442 took 2
+light (light): flow pass, cold frames 37 (0.25 s apart from the launch; the recording began 25 ms before the launch was seen), recording 12686456 bytes
