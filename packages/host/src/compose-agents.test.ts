@@ -60,6 +60,7 @@ import {
 import { TestClock } from "effect/testing";
 import type { AppManagerChats, AppTranscript } from "./app-state.js";
 import { INBOX_CHANGE, INBOX_ITEM } from "./inbox-collections.js";
+import { LIVE_RESTART } from "./live-follow.js";
 import { localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
@@ -73,7 +74,7 @@ import {
   GATE_CLOSED_SIGNED_OUT,
   holding,
   ITEM,
-  type ITEMS_PARTS,
+  type ItemsLive,
   LIVE_ANSWERED,
   MESSAGE_ID,
   NOW,
@@ -2378,7 +2379,7 @@ function stampOf(item: InboxItem, taskId: string, moved: WireRecord = {}) {
 
 /** The account's items' read moved to the stamps given, the items given its rows, each as `row` writes it. */
 function deliverItems(
-  live: { readonly items: PolledLive<(typeof ITEMS_PARTS)[number]> },
+  live: { readonly items: ItemsLive },
   stamps: readonly unknown[],
   items: readonly (InboxItem | WireRecord)[],
 ) {
@@ -2600,6 +2601,74 @@ it.effect(
         "the next launch reads past the sync id kept, never whole",
       );
     }).pipe(Effect.provide(keptPlatform)),
+);
+
+/** The ids of every item the account's Inbox holds as its last telling drew them, by plan. */
+function toldItemIds(told: readonly unknown[]): readonly string[] {
+  // SAFETY: the account's items are told as wire values.
+  const last = told.at(-1) as WireValue | undefined;
+  const rows = isRecord(last) && isRecord(last.rows) ? last.rows[INBOX_SCOPE_KIND.TASK] : undefined;
+  const items = isRecord(rows) ? Object.values(rows).flatMap((list) => list ?? []) : [];
+
+  return items
+    .flatMap((item) => (isRecord(item) && Predicate.isString(item.id) ? [item.id] : []))
+    .sort();
+}
+
+it.effect.each([
+  {
+    holds: "the local database keeps each answer",
+    platform: localPlatform,
+    launch: (root: string) =>
+      Effect.map(localLaunch(root), (launch) => ({
+        ...launch,
+        heldIds: Effect.sync(() => toldItemIds(launch.accountItems())),
+      })),
+  },
+  {
+    holds: "the account's database keeps the Inbox kind",
+    platform: keptPlatform,
+    launch: (root: string) =>
+      Effect.map(keptLaunch(root), (launch) => ({ ...launch, heldIds: keptItemIds(launch.pool) })),
+  },
+])(
+  "where $holds, an Inbox follow started again reads past the sync id of the last answer it took, never whole, and stands on every item it held",
+  ({ platform, launch }) =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-inbox-restart-");
+      const { open, sealItems, live, accountItems, itemsAsked, heldIds } = yield* launch(root);
+      sealItems(LIVE_ANSWERED);
+      yield* open;
+      yield* settled;
+      deliverItems(live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* toldTimes(accountItems, 1);
+      yield* nextPoll;
+      const firstAt = itemsAsked.at(-1);
+
+      const moved = { ...HELD_ITEM, revision: 3, updatedAt: HELD_ITEM.updatedAt + 1_000 };
+      const other = stampOf(OTHER_ITEM, OTHER_TASK_ID);
+      deliverItems(live, [stampOf(moved, TASK_ID), other], [moved, OTHER_ITEM]);
+      yield* nextPoll;
+      const standsAt = itemsAsked.at(-1);
+
+      // The session is refused as signed out while the account still stands, as a Mac just woken may be, so the follow ends and starts again after a rest; an item moves meanwhile.
+      live.items.refuse(LIVE_SIGNED_OUT);
+      yield* settled;
+      live.items.refuse(undefined);
+      const again = { ...moved, revision: 4, updatedAt: moved.updatedAt + 1_000 };
+      deliverItems(live, [stampOf(again, TASK_ID), other], [again, OTHER_ITEM]);
+      const restartedAt = itemsAsked.length;
+      yield* TestClock.adjust(LIVE_RESTART);
+      yield* settled;
+
+      assert.ok(standsAt !== undefined && standsAt !== "" && standsAt !== firstAt);
+      assert.deepEqual(
+        itemsAsked.slice(restartedAt, restartedAt + 1),
+        [standsAt],
+        "the follow started again reads past the last answer's sync id, not the launch's or none",
+      );
+      assert.deepEqual(yield* heldIds, [HELD_ITEM.id, OTHER_ITEM.id].sort());
+    }).pipe(Effect.provide(platform)),
 );
 
 it.effect(
