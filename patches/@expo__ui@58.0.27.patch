@@ -27,10 +27,10 @@ index b542a50431f0a501a81c96d06d8705e745364a81..25de3ea1f08148cf00abb15c275fc229
       * Description of why the content is not available.
       */
 diff --git a/build/swift-ui/Image/index.d.ts b/build/swift-ui/Image/index.d.ts
-index f1aeaae3b55fd5cb2d30b952c096b086391575a6..0fe813da8de960aab286e492de433acb1e212a90 100644
+index f1aeaae3b55fd5cb2d30b952c096b086391575a6..df8517b2ddf4e7cec70400cb61330d076b83c681 100644
 --- a/build/swift-ui/Image/index.d.ts
 +++ b/build/swift-ui/Image/index.d.ts
-@@ -28,6 +28,48 @@ export interface ImageProps extends CommonViewModifierProps {
+@@ -28,6 +28,53 @@ export interface ImageProps extends CommonViewModifierProps {
       * Can be a color name like '#ff00ff', 'red', 'blue', etc.
       */
      color?: ColorValue;
@@ -76,6 +76,11 @@ index f1aeaae3b55fd5cb2d30b952c096b086391575a6..0fe813da8de960aab286e492de433acb
 +     * on it, as a Manager's emoji face stands on its color.
 +     */
 +    emojiDisc?: ColorValue;
++    /**
++     * A hairline drawn inside `emojiDisc`'s edge, 0.5 points wide, as a
++     * Manager's emoji face stands inside one in the light.
++     */
++    emojiDiscEdge?: ColorValue;
      /**
       * The variable value that alters the symbol's appearance.
       * A number between 0.0 and 1.0.
@@ -206,10 +211,10 @@ index 56dc559f87456e0b6b86f1b91529d9395d4c6a61..495964269db54444a1344d045cb893a4
    }
  }
 diff --git a/ios/ImageView.swift b/ios/ImageView.swift
-index 170de73445439a3ba4e5495643ee5f7c3eb332ab..8f43d979d20bdbc7d269c91c2bdc9533a24e59ef 100644
+index 170de73445439a3ba4e5495643ee5f7c3eb332ab..474c462fe54f6aab8eedbc717f8fabdadf6d89b2 100644
 --- a/ios/ImageView.swift
 +++ b/ios/ImageView.swift
-@@ -8,6 +8,22 @@ public final class ImageViewProps: UIBaseViewProps {
+@@ -8,6 +8,24 @@ public final class ImageViewProps: UIBaseViewProps {
    @Field var systemName: String?
    @Field var assetName: String?
    @Field var variableValue: Double?
@@ -229,10 +234,12 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..8f43d979d20bdbc7d269c91c2bdc9533
 +  @Field var emojiSize: Double?
 +  // A disc drawn under the emoji, filling its square, the emoji set smaller on it, as a Manager's emoji face stands on its color.
 +  @Field var emojiDisc: Color?
++  // A hairline drawn inside the disc's edge, 0.5 points wide, as a Manager's emoji face stands inside one in the light.
++  @Field var emojiDiscEdge: Color?
    @Field var useTapGesture: Bool?
    var onTap = EventDispatcher()
  }
-@@ -19,7 +35,91 @@ public struct ImageView: ExpoSwiftUI.View {
+@@ -19,7 +37,97 @@ public struct ImageView: ExpoSwiftUI.View {
      self.props = props
    }
  
@@ -293,6 +300,12 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..8f43d979d20bdbc7d269c91c2bdc9533
 +      if let disc = props.emojiDisc {
 +        UIColor(disc).setFill()
 +        UIBezierPath(ovalIn: CGRect(origin: .zero, size: size)).fill()
++        if let edge = props.emojiDiscEdge {
++          let ring = UIBezierPath(ovalIn: CGRect(origin: .zero, size: size).insetBy(dx: 0.25, dy: 0.25))
++          ring.lineWidth = 0.5
++          UIColor(edge).setStroke()
++          ring.stroke()
++        }
 +      }
 +      words.draw(at: CGPoint(x: (side - face.width) / 2, y: (side - face.height) / 2))
 +    }
@@ -324,7 +337,7 @@ index 170de73445439a3ba4e5495643ee5f7c3eb332ab..8f43d979d20bdbc7d269c91c2bdc9533
      if let systemName = props.systemName {
        if #available(iOS 16.0, tvOS 16.0, *) {
          return Image(systemName: systemName, variableValue: props.variableValue)
-@@ -41,6 +141,18 @@ public struct ImageView: ExpoSwiftUI.View {
+@@ -41,6 +149,18 @@ public struct ImageView: ExpoSwiftUI.View {
        symbolImage
          .applyImageModifiers(props.modifiers, appContext: props.appContext)
          .applyOnTapGesture(useTapGesture: props.useTapGesture, eventDispatcher: props.onTap)

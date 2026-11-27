@@ -5,7 +5,7 @@ import { type ManagerFace, managerFaceName } from "@repo/features/manager-face";
 import { useEffect, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
 import { ICON_PICKER_LOOK, IconPickerSheet } from "./icon-picker.js";
-import { managerFaceAsset, managerFaceFill } from "./manager-face-look.js";
+import { managerFaceAsset, managerFaceEdge, managerFaceFill } from "./manager-face-look.js";
 import {
   FACE_PICKER_WORDS,
   FACE_TAB,
@@ -88,6 +88,7 @@ function faceChoice(cell: FaceCell, dark: boolean) {
             kind: ICON_PICKER_LOOK.EMOJI,
             emoji: face.emoji,
             disc: cell.disc ? managerFaceFill(face, dark) : undefined,
+            edge: cell.disc ? managerFaceEdge(dark) : undefined,
           },
     picked: cell.picked,
     options: cell.colors,

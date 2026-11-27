@@ -134,6 +134,7 @@ export function LookIcon({
           {...(look.disc === undefined
             ? {}
             : { emojiDisc: dark ? look.disc.dark : look.disc.light })}
+          {...(look.disc?.edge === undefined || dark ? {} : { emojiDiscEdge: look.disc.edge })}
         />
       );
     case MENU_ICON.MARK:

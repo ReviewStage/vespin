@@ -44,7 +44,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { type ListScopes, ScopeControl } from "./button.js";
 import { headerMenu } from "./interactions.js";
-import { MANAGER_FACE_EMOJI_SCALE } from "./manager-face-look.js";
+import { MANAGER_FACE_EDGE_WIDTH, MANAGER_FACE_EMOJI_SCALE } from "./manager-face-look.js";
 import { type ChoiceMark, choicePressAt, choiceTree, type MenuChoice } from "./row-menu-model.js";
 import { Text } from "./text.js";
 import { ElevatedGround, toneColor, useColors } from "./tokens/colors.js";
@@ -91,6 +91,8 @@ type IconPickerLook =
       readonly emoji: string;
       /** The disc it stands on, in the theme's shade, as a Manager's emoji face stands on its color; none for an emoji alone. */
       readonly disc?: string | undefined;
+      /** The hairline its disc stands inside, as an emoji face's does in the light; none for a disc that needs none. */
+      readonly edge?: string | undefined;
     };
 
 /** One of a choice's options, such as a face's color: its name, led by its mark, checked where it stands, and what VoiceOver calls it. */
@@ -153,6 +155,18 @@ function ChoiceFace({ look, side }: { readonly look: IconPickerLook; readonly si
   return (
     <ZStack modifiers={[frame({ width: side, height: side })]}>
       {look.disc === undefined ? null : <Circle modifiers={[foregroundStyle(look.disc)]} />}
+      {look.disc === undefined || look.edge === undefined ? null : (
+        <Circle
+          modifiers={[
+            strokeBorder({
+              content: look.edge,
+              // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+              shape: "circle",
+              style: { lineWidth: MANAGER_FACE_EDGE_WIDTH },
+            }),
+          ]}
+        />
+      )}
       <Text modifiers={[font({ size: side * scale })]}>{look.emoji}</Text>
     </ZStack>
   );

@@ -234,7 +234,7 @@ describe("markLook", () => {
       look: {
         kind: MENU_ICON.EMOJI,
         emoji: "🦊",
-        disc: { light: expect.any(String), dark: expect.any(String) },
+        disc: { light: expect.any(String), dark: expect.any(String), edge: expect.any(String) },
       },
     },
   ])("draws a $mark.kind as its rows do", ({ mark, look }) => {

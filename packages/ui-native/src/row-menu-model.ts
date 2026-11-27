@@ -11,7 +11,7 @@ import {
 import { TASK_STATUS, type TaskPriority, type TaskStatus } from "@repo/features/task-wire";
 import { GLYPH, type Glyph, glyphImage, type MarkLayer, UNASSIGNED_UNDER } from "./glyph.js";
 import { INTEGRATION_MARK_ASSET } from "./integration-marks.js";
-import { managerFaceAsset, managerFaceFill } from "./manager-face-look.js";
+import { managerFaceAsset, managerFaceEdge, managerFaceFill } from "./manager-face-look.js";
 import { HARNESS_MARK_ASSET, REPOSITORY_CORNER } from "./mark-look.js";
 import {
   PRIORITY_MARK_SYMBOL,
@@ -196,8 +196,12 @@ export type ChoiceLook =
       readonly sized: boolean;
     };
 
-/** The fill an emoji's disc stands in, in the light theme and the dark, which a menu picks between as it opens. */
-type EmojiDisc = { readonly light: string; readonly dark: string };
+/** The fill an emoji's disc stands in, in the light theme and the dark, which a menu picks between as it opens, and the hairline it stands inside in the light, where it has one. */
+type EmojiDisc = {
+  readonly light: string;
+  readonly dark: string;
+  readonly edge?: string | undefined;
+};
 
 /** An entity's mark as its choice's head, as its rows draw it. */
 export function markLook(mark: ChoiceMark): ChoiceLook {
@@ -252,6 +256,7 @@ export function markLook(mark: ChoiceMark): ChoiceLook {
             disc: {
               light: managerFaceFill(mark.face, false),
               dark: managerFaceFill(mark.face, true),
+              edge: managerFaceEdge(false),
             },
           };
   }
