@@ -78,6 +78,8 @@ export {
   chipMarkOf,
 } from "./chip-mark-model.js";
 
+export { ChipNamesProvider, type UseChipNames } from "./chip-names.js";
+
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";

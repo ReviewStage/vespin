@@ -1,4 +1,5 @@
 import {
+  type Entity,
   entityKindName,
   entityName,
   entityOfDestination,
@@ -59,4 +60,25 @@ export function placeChipLook(
   const name = (live ? (held ?? label) : (label ?? held)) ?? entityKindName(entity.kind);
 
   return { name, under };
+}
+
+/**
+ * What a chip drawn from words says once the client finds the entity it
+ * names among what it holds, as `placeChipLook` reads a place: the name
+ * held where the entity is named live, or where the link was written bare;
+ * else `shown`, the name the words gave it, which also stands where the
+ * client holds no name of it yet: one still read, one the reader may not
+ * open, or one deleted.
+ */
+export function heldChipName(
+  entity: Entity,
+  shown: string,
+  bare: boolean,
+  known: KnownNames,
+): string {
+  const { live, held } = entityName(entity, known, NOTHING_SAID);
+
+  if (held === undefined) return shown;
+
+  return live || bare ? held : shown;
 }
