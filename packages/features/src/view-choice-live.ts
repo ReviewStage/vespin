@@ -19,7 +19,12 @@ import {
 } from "./live-read.js";
 import { LIVE_READ, LIVE_USER_QUERY } from "./live-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
-import { VIEW_CHOICE, type ViewChoiceKey, type ViewChoiceValue } from "./view-choice-wire.js";
+import {
+  VIEW_CHOICE,
+  type ViewChoiceKey,
+  type ViewChoiceValue,
+  type ViewChoiceWrite,
+} from "./view-choice-wire.js";
 
 /**
  * The account's view choices: one part, every choice it keeps. Note that
@@ -71,4 +76,23 @@ export function viewChoiceOf<Key extends ViewChoiceKey>(
   const schema: Schema.Codec<ViewChoiceValue<Key>, unknown> = VIEW_CHOICE[key].schema;
 
   return Schema.decodeUnknownOption(schema)(row.value);
+}
+
+/**
+ * The write of `key` in its place with `value` (null forgets it): under
+ * the id of the row standing there, where the account keeps one, so the
+ * service and the device's draw write over it, and under `made` where none
+ * stands, the id the device mints for the row it draws before the service
+ * answers.
+ */
+export function viewChoiceWrite<Key extends ViewChoiceKey>(
+  rows: readonly ViewChoiceLiveRow[],
+  key: Key,
+  workspaceId: string | null,
+  value: ViewChoiceValue<Key> | null,
+  made: string,
+): ViewChoiceWrite {
+  const standing = rows.find((row) => row.key === key && row.workspaceId === workspaceId);
+
+  return { id: standing?.id ?? made, key, workspaceId, value };
 }

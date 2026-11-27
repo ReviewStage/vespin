@@ -1,5 +1,9 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import { type ViewChoiceLiveRow, viewChoiceOf } from "@repo/features/view-choice-live";
+import {
+  type ViewChoiceLiveRow,
+  viewChoiceOf,
+  viewChoiceWrite,
+} from "@repo/features/view-choice-live";
 import type { ViewChoiceKey, ViewChoiceValue } from "@repo/features/view-choice-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -36,18 +40,6 @@ export interface ViewChoiceControl<Key extends ViewChoiceKey> {
 /** No choices, one list for every draw. */
 const NO_CHOICES: readonly ViewChoiceLiveRow[] = [];
 
-/** The write of `key` in its place with `value`, under the standing row's id where one stands. */
-function writeOf<Key extends ViewChoiceKey>(
-  rows: readonly ViewChoiceLiveRow[],
-  key: Key,
-  workspaceId: string | null,
-  value: ViewChoiceValue<Key> | null,
-) {
-  const standing = rows.find((row) => row.key === key && row.workspaceId === workspaceId);
-
-  return { id: standing?.id ?? crypto.randomUUID(), key, workspaceId, value };
-}
-
 /**
  * The account's choice of `key`, in `workspaceId` for a workspace's choice
  * and in none for the account's own. A surface with no place yet, a
@@ -68,7 +60,7 @@ export function useViewChoice<Key extends ViewChoiceKey>(
     answered: workspaceId !== undefined && read.data !== undefined,
     choose: (value) => {
       if (workspaceId === undefined) return;
-      writing.mutate(writeOf(rows, key, workspaceId, value));
+      writing.mutate(viewChoiceWrite(rows, key, workspaceId, value, crypto.randomUUID()));
     },
   };
 }
@@ -96,7 +88,7 @@ export function useKeptMovedUp<Key extends ViewChoiceKey>(
   useEffect(() => {
     if (!answered || kept === undefined || workspaceId === undefined || rows === undefined) return;
 
-    if (unkept) moveUp(writeOf(rows, key, workspaceId, kept));
+    if (unkept) moveUp(viewChoiceWrite(rows, key, workspaceId, kept, crypto.randomUUID()));
     forget();
   }, [answered, kept, unkept, key, workspaceId, rows, forget, moveUp]);
 }
