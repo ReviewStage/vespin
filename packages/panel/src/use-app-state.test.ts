@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { ENTITY_KIND, type KnownNames } from "@repo/features/entity-kind";
+import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
@@ -8,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
+import { entityMark } from "./entities/entity-mark.js";
 import { fakeAppBridge } from "./testing/app-bridge.js";
 import { deliveryOf, signedInAs, stateWith } from "./testing/app-state.js";
 import { readAppState, testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
@@ -17,7 +21,8 @@ import { appStateQuery, drawAhead } from "./use-app-state.js";
  * use-app-state.test.ts -- what a window's readers hold across deliveries of
  * the document: each delivery is a new tree, as it is after crossing into the
  * window, and what a reader holds of a slice the delivery did not move is the
- * object it already held.
+ * object it already held; a chip that reads a slice every row shares is drawn
+ * again as that slice moves.
  */
 
 declare global {
@@ -230,4 +235,45 @@ test("a write drawn ahead that is refused leaves the window on the document main
   refuse(false);
   await settle();
   assert.equal(held(), "a0");
+});
+
+test("a workspace renamed reaches a chip of it drawn before the rename", async () => {
+  const acme: Workspace = {
+    id: "workspace-acme",
+    name: "Acme",
+    slug: "acme",
+    role: WORKSPACE_ROLE.OWNER,
+    github: null,
+    personal: false,
+  };
+  const holding = (workspace: Workspace, version: number): AppStateSnapshot => ({
+    ...stateWith({}, { tasks: { ...IDLE_TASKS_VIEW, workspaces: [workspace] } }),
+    version,
+  });
+  const nobody: KnownNames = {
+    tasks: new Map(),
+    agents: new Map(),
+    agentModels: new Map(),
+    pages: new Map(),
+    pagesTaskId: undefined,
+    inboxItems: new Map(),
+    people: new Map(),
+    automations: new Map(),
+  };
+  const { deliver } = await window(holding(acme, 1));
+  // The chip of the workspace by its slug, as an app link to it draws one: its tile, lettered by the workspace's name.
+  const chip = document.body.appendChild(document.createElement("div"));
+  const drawnChip = createRoot(chip);
+  const mark = entityMark(
+    { kind: ENTITY_KIND.WORKSPACE, workspace: "acme" },
+    { name: "acme", known: nobody, workspace: "acme", tiles: undefined, standing: undefined },
+  );
+  act(() => drawnChip.render(withQueryClient(createElement("span", null, mark))));
+  const letter = () => chip.querySelector(".ui-avatar")?.textContent;
+
+  await vi.waitFor(() => assert.equal(letter(), "A"));
+  await deliver(holding({ ...acme, name: "Zenith" }, 2));
+  assert.equal(letter(), "Z", "the chip draws the workspace's new name");
+  act(() => drawnChip.unmount());
+  chip.remove();
 });

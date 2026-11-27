@@ -18,7 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ActorLine, ActorRef } from "../actor-ref.js";
 import { providerKeysQuery } from "../live-reads.js";
 import { planUsageMeters } from "../plan-usage.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import {
   agentPayerParts,
   PAYER_MARK,
@@ -120,7 +120,7 @@ export function usePayerPlan(
   owner: Actor | undefined,
 ): SubscriptionKeySummary | undefined {
   // Note that a plan is read from the reader's own keys, so a teammate's agent reads none of its starter's, nor its usage.
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const keys = useQuery(providerKeysQuery(accountId)).data;
 
   return payerPlanOf(payer, keys?.subscriptions, subscriptionId, next, owner !== undefined);
