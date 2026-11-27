@@ -1,5 +1,33 @@
 WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
 WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
 WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
-
-Invalid File Path at /Users/deanstratakos/vespin-ipad-agent/flows/fask11195b.yaml:14:3
+Running on iPhone 18 Pro - iOS 27.2 - CE9E34B9-693F-475C-8AC7-308952029222
+ > Flow fask11195b
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by com.oracle.truffle.api.dsl.InlineSupport$UnsafeField (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/truffle-api-24.2.0.jar)
+WARNING: Please consider reporting this to the maintainers of class com.oracle.truffle.api.dsl.InlineSupport$UnsafeField
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+Launch app "dev.vespin.ios" with clear state (launch arguments: {fixture=inbox})... COMPLETED
+Assert that "Who can withdraw an invite?" is visible... COMPLETED
+Run subflows/to-row.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Scrolling DOWN until "${ROW}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run clear-of-tabs.yaml...
+    Run flow when "${ROW}", Above id: search-tab is not visible and ${FLOATING_TABS != 'true'} is true...
+    Run flow when "Verify the digest's sender domain", Above id: search-tab is not visible and true is true... SKIPPED
+    Wait for animation to end... COMPLETED
+  Run clear-of-tabs.yaml... COMPLETED
+Run subflows/to-row.yaml... COMPLETED
+Run flow when ${NAMED == 'true'} is true...
+Run flow when false is true... SKIPPED
+Tap on "Verify the digest's sender domain"... COMPLETED
+Assert that "Mark done" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Run flow when ${NAMED == 'true'} is true...
+Run flow when false is true... SKIPPED
+Take screenshot ask-do-step... COMPLETED
+Run flow when ${CHIP == 'true'} is true...
+Run flow when false is true... SKIPPED
