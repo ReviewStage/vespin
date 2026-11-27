@@ -3584,15 +3584,12 @@ function useTaskDetail(
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
 
-  // Note that the menu's Edit description edits it in place, as the pushed page's does, but for a description too long to, which it opens in the sheet.
+  // Note that a description edited in place offers no Edit description, since its words are the way in, a press on them taking the keyboard there, as Notion's and Linear's are; one too long to stands read as its rows, and the menu opens it in the sheet.
   const inPlace =
     overview?.document !== undefined &&
     overview.document.description.body.length <= INLINE_EDIT_MOST_CHARS;
 
-  const editDescription =
-    editDoor === undefined
-      ? undefined
-      : (task: TaskSummary) => (inPlace ? chrome.start() : editDoor(task));
+  const editDescription = inPlace ? undefined : editDoor;
 
   const detail =
     overview !== undefined ? (
@@ -3891,15 +3888,12 @@ export function TaskScreen() {
   // What the page holds of its description edited in place, its section editing it, so its Done stands in the bar and what an `@` offers docks over the keyboard.
   const chrome = useInlineChrome();
 
-  // Note that the menu's Edit description edits it in place too, the caret at its start, but for a description too long to, which it opens in the sheet.
+  // Note that a description edited in place offers no Edit description, since its words are the way in, a press on them taking the keyboard there, as Notion's and Linear's are; one too long to stands read as its rows, and the menu opens it in the sheet.
   const inPlace =
     overview?.document !== undefined &&
     overview.document.description.body.length <= INLINE_EDIT_MOST_CHARS;
 
-  const editDescription =
-    editDoor === undefined
-      ? undefined
-      : (task: TaskSummary) => (inPlace ? chrome.start() : editDoor(task));
+  const editDescription = inPlace ? undefined : editDoor;
 
   const menu =
     overview === undefined
