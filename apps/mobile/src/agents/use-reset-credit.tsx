@@ -10,7 +10,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, ConfirmAsk, type UsageLimitReset } from "@repo/ui-native";
 import { randomUUID } from "expo-crypto";
-import { type ReactElement, useRef, useState } from "react";
+import { type ReactElement, useState } from "react";
 import { useAgentKeys } from "../agent-keys/agent-keys.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -21,13 +21,21 @@ interface ResetCreditOffer {
   readonly ask: ReactElement | null;
 }
 
+/** The question a press opened, bound to the plan it names, so a payer that moves while it stands never has its yes spend another plan's credit. */
+interface AskedSpend {
+  readonly subscriptionId: string;
+  readonly words: string;
+  readonly body: string;
+  /** Minted once a press, so the notice's Try again sends the same one and ChatGPT spends one credit for it. */
+  readonly idempotencyKey: string;
+}
+
 /**
  * The reset credit the agent's plan offers, by the plan's id, read only
  * while the transcript holds a pause that could offer it (`wanted`): the
  * reader's own ChatGPT plan of that id, holding one. Its press asks first,
- * in red, since a credit spent is not given back; its yes spends the
- * soonest under a key minted for the press, which a Try again sends again,
- * so ChatGPT spends one credit for it.
+ * in red, since a credit spent is not given back, naming the plan as it
+ * stood at the press; its yes spends the soonest credit of that plan.
  */
 export function useResetCredit(planId: string | undefined, wanted: boolean): ResetCreditOffer {
   const acts = useHostActs();
@@ -37,16 +45,10 @@ export function useResetCredit(planId: string | undefined, wanted: boolean): Res
   const plan =
     planId === undefined ? undefined : keys?.subscriptions?.find((one) => one.id === planId);
 
-  const [asking, setAsking] = useState(false);
+  const [asked, setAsked] = useState<AskedSpend | undefined>(undefined);
   const [busy, setBusy] = useState(false);
-  const key = useRef("");
 
-  if (!wanted || !offersResetCredit(plan)) return { reset: undefined, ask: null };
-  const words = resetCreditPressWords(plan.resetCredits ?? 0);
-  const subscriptionId = plan.id;
-
-  const spend = () => {
-    const idempotencyKey = key.current;
+  const spend = ({ subscriptionId, idempotencyKey }: AskedSpend) => {
     setBusy(true);
     void write(
       () => acts[ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT]({ subscriptionId, idempotencyKey }),
@@ -64,30 +66,39 @@ export function useResetCredit(planId: string | undefined, wanted: boolean): Res
     ).finally(() => setBusy(false));
   };
 
+  // Note that a question already open stands on the plan it named, whatever the offer reads since.
+  const ask =
+    asked === undefined ? null : (
+      <ConfirmAsk
+        title={`${asked.words}?`}
+        message={asked.body}
+        act={RESET_CREDIT_WORDS.VERB}
+        destructive
+        presented
+        onAct={() => {
+          setAsked(undefined);
+          spend(asked);
+        }}
+        onDismiss={() => setAsked(undefined)}
+      />
+    );
+
+  if (!wanted || !offersResetCredit(plan)) return { reset: undefined, ask };
+  const words = resetCreditPressWords(plan.resetCredits ?? 0);
+
   return {
     reset: {
       words,
       running: RESET_CREDIT_WORDS.RUNNING,
       busy,
-      use: () => {
-        // Note that the key is minted once a press, so the notice's Try again sends the same one.
-        key.current = randomUUID();
-        setAsking(true);
-      },
+      use: () =>
+        setAsked({
+          subscriptionId: plan.id,
+          words,
+          body: resetCreditQuestionBody(plan),
+          idempotencyKey: randomUUID(),
+        }),
     },
-    ask: (
-      <ConfirmAsk
-        title={`${words}?`}
-        message={resetCreditQuestionBody(plan)}
-        act={RESET_CREDIT_WORDS.VERB}
-        destructive
-        presented={asking}
-        onAct={() => {
-          setAsking(false);
-          spend();
-        }}
-        onDismiss={() => setAsking(false)}
-      />
-    ),
+    ask,
   };
 }
