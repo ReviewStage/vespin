@@ -48,6 +48,13 @@ export const TOPIC = {
    */
   WORKSPACE_CHAPTERS: "workspace-chapters",
   /**
+   * A workspace's people, by organization id: narrower than the workspace's
+   * own topic, which every task, agent, turn, and sandbox write names, so a
+   * membership or a member's account moving wakes the open people reads of
+   * that workspace and no write of its work does.
+   */
+  WORKSPACE_PEOPLE: "workspace-people",
+  /**
    * A workspace's memories, by organization id: narrower than the
    * workspace's own topic, so an agent's `save_memory` wakes the open memory
    * reads of that workspace and never its members' task lists.

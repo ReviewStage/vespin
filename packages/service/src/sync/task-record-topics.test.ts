@@ -236,7 +236,11 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
         yield* wakes(removeGitHubToken(teammate), [teammateTopic], reads);
         yield* wakes(
           leaveWorkspace(task.workspaceId, teammate),
-          [teammateTopic, [TOPIC.WORKSPACE, task.workspaceId]],
+          [
+            teammateTopic,
+            [TOPIC.WORKSPACE, task.workspaceId],
+            [TOPIC.WORKSPACE_PEOPLE, task.workspaceId],
+          ],
           reads,
         );
       }),

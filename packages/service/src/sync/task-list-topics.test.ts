@@ -205,7 +205,12 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
         const teammate = yield* openAccount;
         const teamId = yield* openWorkspace(teammate);
         const team: SyncTopic = [TOPIC.WORKSPACE, teamId];
-        const notified: readonly SyncTopic[] = [team, [TOPIC.ACCOUNT, userId]];
+
+        const notified: readonly SyncTopic[] = [
+          team,
+          [TOPIC.WORKSPACE_PEOPLE, teamId],
+          [TOPIC.ACCOUNT, userId],
+        ];
 
         yield* wakesTheTaskList(joinWorkspace(teamId, userId), notified, userId);
         assert.ok(

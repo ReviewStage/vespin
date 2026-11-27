@@ -112,7 +112,7 @@ it.effect(
               body: { userId: teammate, organizationId: workspaceId, role: WORKSPACE_ROLE.MEMBER },
             }),
           ),
-          [workspace, [TOPIC.ACCOUNT, teammate]],
+          [workspace, [TOPIC.WORKSPACE_PEOPLE, workspaceId], [TOPIC.ACCOUNT, teammate]],
           owner,
         );
         yield* wakesTheWorkspaces(

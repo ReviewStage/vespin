@@ -279,10 +279,11 @@ export const managerChatReactionSync = defineSyncTable(managerChatReaction, {
   topics: [{ kind: TOPIC.AGENT, column: managerChatReaction.agentId }],
 });
 
-/** An account's membership of a workspace, on the workspace's topic and the account's. */
+/** An account's membership of a workspace, on the workspace's topic, its people's, and the account's. */
 export const memberSync = defineSyncTable(member, {
   topics: [
     { kind: TOPIC.WORKSPACE, column: member.organizationId },
+    { kind: TOPIC.WORKSPACE_PEOPLE, column: member.organizationId },
     { kind: TOPIC.ACCOUNT, column: member.userId },
   ],
   log: LOG.EVERY,
@@ -290,8 +291,8 @@ export const memberSync = defineSyncTable(member, {
 
 /**
  * An account, on its own topic and, through its memberships, every
- * workspace it is in, so a teammate's new name or picture reaches the
- * workspace's reads. Note that when it last moved and how it last signed in
+ * workspace it is in and its people, so a teammate's new name or picture
+ * reaches the workspace's reads. Note that when it last moved and how it last signed in
  * are ignored, because every sign-in rewrites both and no view reads them,
  * and so is its time zone, which only an agent's turn reads.
  * The admin plugin's ban columns stay watched, since nothing of ours writes
@@ -304,7 +305,10 @@ export const userSync = defineSyncTable(user, {
       through: member,
       key: member.userId,
       by: user.id,
-      topics: [{ kind: TOPIC.WORKSPACE, column: member.organizationId }],
+      topics: [
+        { kind: TOPIC.WORKSPACE, column: member.organizationId },
+        { kind: TOPIC.WORKSPACE_PEOPLE, column: member.organizationId },
+      ],
     },
   ],
   ignore: [user.updatedAt, user.lastLoginMethod, user.timeZone],
