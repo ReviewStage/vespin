@@ -208,32 +208,28 @@ it.effect(
     }),
 );
 
-/** One page of the account's inbox items as the service answers a page: each part's rows as text, where the whole answer stands, and the next page where one follows. */
+/** One page of the account's inbox items as the service answers a page: each part's rows as text, and where the page stands (`sync`, and the snapshot the last page carries). */
 function inboxItemsPage(
   ids: readonly string[],
-  standing: { readonly next: string; readonly page?: string; readonly snapshot?: string },
-) {
-  const sealed = { capability: "cap-1", queryFingerprint: "fp-1", expiresAt: 1 };
-  const sync = {
-    next: standing.next,
-    ...(standing.page === undefined ? {} : { page: standing.page }),
+  standing: { readonly sync: { readonly [key: string]: string }; readonly snapshot?: string },
+): JsonValue {
+  const part = (rows: readonly JsonValue[]) => {
+    const sealed = {
+      capability: "cap-1",
+      queryFingerprint: "fp-1",
+      expiresAt: 1,
+      rows: JSON.stringify(rows),
+      sync: standing.sync,
+    };
+
+    return standing.snapshot === undefined ? sealed : { ...sealed, snapshot: standing.snapshot };
   };
 
-  const part = (rows: readonly object[]) => ({
-    ...sealed,
-    rows: JSON.stringify(rows),
-    sync,
-    ...(standing.snapshot === undefined ? {} : { snapshot: standing.snapshot }),
-  });
+  const rows = ids.map((id) => ({ id }));
 
   return {
     url: `${BASE_URL}/poll`,
-    queries: {
-      stamps: part(ids.map((id) => ({ id }))),
-      items: part(ids.map((id) => ({ id }))),
-      messages: part([]),
-      files: part([]),
-    },
+    queries: { stamps: part(rows), items: part(rows), messages: part([]), files: part([]) },
   };
 }
 
@@ -244,8 +240,8 @@ it.effect(
       const recording = recordingHttpClient((request) =>
         jsonResponse(
           request.searchParams.get(LIVE_POLL.PAGE) === "page-2"
-            ? inboxItemsPage(["item-3"], { next: "70", snapshot: "70:70:" })
-            : inboxItemsPage(["item-1", "item-2"], { next: "70", page: "page-2" }),
+            ? inboxItemsPage(["item-3"], { sync: { next: "70" }, snapshot: "70:70:" })
+            : inboxItemsPage(["item-1", "item-2"], { sync: { next: "70", page: "page-2" } }),
         ),
       );
 
@@ -278,7 +274,7 @@ it.effect(
       const recording = recordingHttpClient((request) =>
         request.searchParams.get(LIVE_POLL.PAGE) === "page-2"
           ? jsonResponse({ error: HOSTED_API_ERROR.UNAVAILABLE }, SERVICE_UNAVAILABLE)
-          : jsonResponse(inboxItemsPage(["item-1"], { next: "70", page: "page-2" })),
+          : jsonResponse(inboxItemsPage(["item-1"], { sync: { next: "70", page: "page-2" } })),
       );
 
       const hosted = hostedClient({ baseUrl: BASE_URL, credential: account("token-1") });
