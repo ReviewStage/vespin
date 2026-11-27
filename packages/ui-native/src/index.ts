@@ -590,6 +590,7 @@ export {
   type SwitcherLook,
   WorkspaceSwitcher,
   WorkspaceSwitcherItem,
+  workspaceSettingsAction,
 } from "./workspace-switcher.js";
 
 export { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";

@@ -1,4 +1,4 @@
-# workspace.yaml -- the workspace switcher: the chosen workspace named in the Inbox's bar as its one leading button, its list open with every workspace, New workspace, the chosen workspace's Manage under its name, then the account opening Settings, another chosen and the Inbox and Tasks following it, and New workspace's sheet.
+# workspace.yaml -- the workspace switcher: the chosen workspace named in the Inbox's bar as its one leading button, its list open with every workspace, New workspace and Workspace settings, then the account opening Settings, another chosen and the Inbox and Tasks following it, and New workspace's sheet.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -29,7 +29,7 @@ appId: dev.vespin.ios
 - assertVisible: "Relay, 6 members"
 - assertVisible: "Settings"
 - assertVisible: "New workspace"
-- assertVisible: "Manage"
+- assertVisible: "Workspace settings"
 - waitForAnimationToEnd
 - takeScreenshot: workspace-menu
 # Relay holds no threads, so the Inbox empties once it is chosen, and Tasks

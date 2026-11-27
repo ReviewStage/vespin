@@ -17,7 +17,7 @@ appId: dev.vespin.ios
     timeout: 30000
 - tapOn:
     id: "workspace-switcher"
-- tapOn: "Manage"
+- tapOn: "Workspace settings"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "GitHub"

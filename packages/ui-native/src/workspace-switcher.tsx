@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- the switcher a tab's root bar names the workspace with: its tile, opening the system's menu of every workspace by its photo or tile, then New workspace, the chosen workspace's Manage under its name, and the account by its photo opening Settings, each on one line.
+// workspace-switcher.tsx -- the switcher a tab's root bar names the workspace with: its tile, opening the system's menu of every workspace by its photo or tile, then New workspace and Workspace settings, and the account by its photo opening Settings, each on one line.
 
 import {
   Host,
@@ -70,9 +70,6 @@ export type SwitcherAccount = {
 /** What the account's row is named: where it goes, ahead of whose it is, so it never reads as a third workspace; one line, with no address under it. */
 const SETTINGS = "Settings";
 
-/** What the chosen workspace's settings row is named under the section the workspace's name heads, so it fits one line and never stands as a second Settings beside the account's. */
-const MANAGE = "Manage";
-
 /** An act under the list's workspaces, such as New workspace. */
 export type SwitcherAction = {
   readonly label: string;
@@ -88,10 +85,8 @@ type WorkspaceSwitcherProps = {
   readonly onChoose: (id: string) => void;
   /** The signed-in account, whose row last in the list opens Settings; none while nobody is signed in, or where the window leads to Settings itself, as a landscape iPad's sidebar does at its foot. */
   readonly account?: SwitcherAccount | undefined;
-  /** The acts after the workspaces, such as New workspace. */
+  /** The acts after the workspaces, in the panel's order: New workspace, then Workspace settings. */
   readonly actions: readonly SwitcherAction[];
-  /** Opens the chosen workspace's settings, Manage standing after the acts in a section the workspace's name heads; none where it has no settings page. */
-  readonly onWorkspaceSettings?: (() => void) | undefined;
   /** How its button stands; the tile and the name where none is given. */
   readonly look?: SwitcherLook | undefined;
   /** How large the tile stands where the look is the tile alone; the bar's face where none is given. */
@@ -170,9 +165,8 @@ function SwitcherFace({
  * column bar: the chosen workspace's tile and name and a chevron, or its tile
  * alone, opening the system's menu, as Notion's one workspace button does:
  * every workspace by its photo or tile, its name and who shares it, the
- * chosen one checked; then the acts, such as New workspace; then the chosen
- * workspace's settings as Manage in a section its name heads, so the row
- * fits one line and never reads as a second Settings; and last, where a
+ * chosen one checked; then the acts, New workspace and Workspace settings,
+ * in the panel's words and order; and last, where a
  * caller hands one, the row into Settings, led by the account's photo, with
  * no line under it, so every row stands on one line at the default text
  * size. A menu runs a
@@ -188,7 +182,6 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
     onChoose,
     account,
     actions,
-    onWorkspaceSettings,
     look = SWITCHER_LOOK.NAMED,
     tileSize = MARK_SIZE.BAR_FACE,
   } = props;
@@ -227,11 +220,6 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
           ))}
         </Section>
       )}
-      {onWorkspaceSettings === undefined ? null : (
-        <Section title={chosen.name}>
-          <SwiftUIButton {...actContent(MANAGE, GLYPH.SETTINGS)} onPress={onWorkspaceSettings} />
-        </Section>
-      )}
       {account === undefined ? null : (
         <Section>
           <SwiftUIButton
@@ -266,4 +254,9 @@ export const WorkspaceSwitcher = memo(function WorkspaceSwitcher(props: Workspac
 /** The menu's act that makes a workspace, as the panel words it. */
 export function newWorkspaceAction(onPress: () => void): SwitcherAction {
   return { label: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE, symbol: GLYPH.ADD, onPress };
+}
+
+/** The menu's act that opens the chosen workspace's settings, as the panel words it. */
+export function workspaceSettingsAction(onPress: () => void): SwitcherAction {
+  return { label: WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS, symbol: GLYPH.SETTINGS, onPress };
 }
