@@ -6,20 +6,21 @@
  * workspace it left reads as nothing. The statement reads the account's own
  * rows alone, so no account reads another's choices, a teammate's included.
  * It is woken on the account's topic by a choice made, changed, or
- * forgotten (`accountViewChoiceSync`).
+ * forgotten (`accountViewChoiceSync`), and by the account joining or
+ * leaving a workspace (`memberSync`), which shows or hides its choices.
  */
 
 import { queryBuilder } from "@repo/database/core/query";
 import { workspaceReachableBy } from "@repo/database/models/workspace-store";
 import { accountViewChoice } from "@repo/database/schemas";
 import { TOPIC } from "@repo/database/sync/notification";
-import { accountViewChoiceSync } from "@repo/database/sync/tables";
+import { accountViewChoiceSync, memberSync } from "@repo/database/sync/tables";
 import { VIEW_CHOICES_READ } from "@repo/features/view-choice-live";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { bindLiveRead, columnAs, liveRowsStatement } from "../live-read-binding.js";
 
 export const viewChoicesRead = bindLiveRead(VIEW_CHOICES_READ, {
-  reads: [accountViewChoiceSync],
+  reads: [accountViewChoiceSync, memberSync],
   topics: ({ userId }) => [[TOPIC.ACCOUNT, userId]],
   statements: ({ userId }) => ({
     choices: liveRowsStatement(
