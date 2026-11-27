@@ -3505,8 +3505,9 @@ export function runUnarchiveAgent(
  * moved to another choice the catalog takes, pinned or unpinned for the
  * caller's member, given another list of servers switched off, or, a
  * Manager alone, given another face, by the one operation the app's menu and
- * a Manager's Settings run (`agent-change.ts`), as the member who asked
- * (`askingMember`). A choice and a face are checked before anything is
+ * a Manager's Settings run (`agent-change.ts`), written as the member who
+ * asked (`askingMember`); a choice is checked against the catalog
+ * `list_models` reads. A choice and a face are checked before anything is
  * written, so one refused changes nothing, and every change asked is written
  * in one transaction, so none stands where another failed.
  */
@@ -3537,8 +3538,8 @@ export function runUpdateAgent(
         return agentToolRejected(UPDATE_AGENT_REFUSAL.NOT_A_MANAGER);
       }
 
-      const userId = yield* askingMember(caller);
-      const choices = yield* Effect.result(accountModelChoices(userId));
+      // Note that the choices are read as list_models reads them, so what it lists is what is taken.
+      const choices = yield* Effect.result(accountModelChoices(callerUserId(caller)));
 
       if (Result.isFailure(choices)) return agentToolRejected(UPDATE_AGENT_REFUSAL.UNAVAILABLE);
       const { offered } = choices.success;
@@ -3579,7 +3580,7 @@ export function runUpdateAgent(
       // The catalog's own reading of the choice is written, a window the model does not offer apart dropped.
       const choice = accepted === undefined ? undefined : Result.getOrUndefined(accepted);
 
-      const written = yield* changedAgent(userId, found.value.agent, {
+      const written = yield* changedAgent(yield* askingMember(caller), found.value.agent, {
         title,
         choice,
         pinned,
