@@ -1,0 +1,14 @@
+-- j11144s: main pinned to 604f24d955: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to 49a7ee590b
+== bundle PJj11144s base 49a7ee590b
+  built 49a7ee590b base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-busy-cold: script rc 0, app-ready {"lauch_ms":1506.5073747634888,"local_ms":426.5482077598572,"started_ms":785.3307907581329,"screes_ms":1369.4802907705307,"ibox_ms":1157.897582769394,"active_ms":293.149790763855,"first_rows":"kept"} | rows standing: 10 | 379 on screen: yes | red-box words: none
+  iphone-light-busy-cold: PASS
+iphone-light-inbox: fails 0 shots 15 
+ipad27-light-busy-cold: script rc 0, app-ready {"lauch_ms":1926.1587491035461,"local_ms":408.00883305072784,"started_ms":819.3452081680298,"screes_ms":1744.9454990625381,"ibox_ms":1532.296916127205,"active_ms":291.76933312416077,"first_rows":"kept"} | rows standing: 14 | 379 on screen: no | red-box words: none
+  ipad27-light-busy-cold: FAIL
+ipad27-light-inbox: fails 0 shots 13 
