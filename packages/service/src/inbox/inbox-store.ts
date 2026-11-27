@@ -4436,17 +4436,22 @@ export function accountWaitingStamps(userId: string): InboxStoreEffect<readonly 
   );
 }
 
-/** How many open items the reader may read wait on them with no reminder set for later than `now`, in epoch milliseconds. */
+/** How many open items the reader may read wait on them with no reminder set for later than `now`, in epoch milliseconds, in the workspace named, or in every one where it names none. */
 const countWaitingDue = SqlSchema.findOne({
-  Request: Schema.Struct({ userId: Schema.String, now: Schema.Number }),
+  Request: Schema.Struct({
+    userId: Schema.String,
+    now: Schema.Number,
+    workspaceId: Schema.NullOr(Schema.String),
+  }),
   Result: Schema.Struct({ waiting: Schema.Number }),
-  execute: ({ userId, now }) =>
+  execute: ({ userId, now, workspaceId }) =>
     Database.use((db) =>
       db
         .select({ waiting: sql<number>`count(*)::int` })
         .from(inboxItem)
         .where(
           and(
+            workspaceId === null ? undefined : eq(inboxItem.organizationId, workspaceId),
             itemVisibleTo(userId),
             waitingOnReader(userId),
             sql`coalesce(${remindAtMillisFor(userId)} <= ${now}, true)`,
@@ -4460,10 +4465,17 @@ const countWaitingDue = SqlSchema.findOne({
  * them (`@repo/host/agent-notices`): every open item, a question and a
  * notice not yet acknowledged alike, that waits on them (`WAITS_ON`), but
  * those whose reminder is set for later than `now`; what a push to their
- * phone sets its badge to.
+ * phone sets its badge to. Note that only the workspace `workspaceId` names
+ * is counted where it names one, because the phone lists one workspace's
+ * Inbox at a time, and a badge counting another's threads too would stand
+ * above the Inbox it opens.
  */
-export function inboxWaitingCount(userId: string, now: number): InboxStoreEffect<number> {
-  return countWaitingDue({ userId, now }).pipe(
+export function inboxWaitingCount(
+  userId: string,
+  now: number,
+  workspaceId: string | null = null,
+): InboxStoreEffect<number> {
+  return countWaitingDue({ userId, now, workspaceId }).pipe(
     // A count that returned no row is the database breaking its own contract, not an outcome.
     Effect.catchTag("NoSuchElementError", Effect.die),
     Effect.map((row) => row.waiting),

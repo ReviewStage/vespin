@@ -1,4 +1,5 @@
 import { Schema as EffectSchema } from "effect";
+import { workspaceIdSchema } from "./task-wire.js";
 
 /**
  * push-device-wire.ts -- a phone registered for pushes, as the iOS app registers and unregisters it: its APNs device token, the gateway the token belongs to, and the app it was issued to.
@@ -57,11 +58,18 @@ const pushDeviceBundleIdSchema = EffectSchema.String.check(
   EffectSchema.isPattern(BUNDLE_ID_PATTERN),
 );
 
-/** Registering the phone (POST): its token, the gateway the token belongs to, and the app Apple issued it to. */
+/**
+ * Registering the phone (POST): its token, the gateway the token belongs to,
+ * the app Apple issued it to, and the workspace the phone works in, whose
+ * Inbox alone it lists, so its badge counts that workspace's threads alone.
+ * A build from before the workspace was sent names none, and its badge
+ * counts every workspace's.
+ */
 export const pushDeviceRegisterRequestSchema = EffectSchema.Struct({
   token: pushDeviceTokenSchema,
   environment: pushEnvironmentSchema,
   bundleId: pushDeviceBundleIdSchema,
+  workspaceId: EffectSchema.optionalKey(workspaceIdSchema),
 });
 
 /** Unregistering the phone (POST to `/unregister`): the token and its gateway; one the account does not hold is passed over. */

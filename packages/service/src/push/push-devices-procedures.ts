@@ -7,7 +7,8 @@
  * idempotent, and a token another account registered moves to the caller,
  * since the phone is signed in here now; it keeps the hosted API version
  * the app's request named, so a push shaped for a newer build reaches only
- * a phone that reads it; an unregister of a token the
+ * a phone that reads it, and the workspace it named, whose threads alone
+ * the phone's badge counts; an unregister of a token the
  * account does not hold is done all the same, so a phone signing out after
  * its token moved answers no differently. The token is kept in lower case,
  * however the app spelled its hex, so one token is one row. A read of the
@@ -52,6 +53,7 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
           environment: input.environment,
           bundleId: input.bundleId,
           ...(client === undefined ? undefined : { apiVersion: client.apiVersion }),
+          ...(input.workspaceId === undefined ? undefined : { workspaceId: input.workspaceId }),
         }),
       );
 

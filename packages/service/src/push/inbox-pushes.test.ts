@@ -244,6 +244,39 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
   );
 
   it.effect(
+    "an alert's badge counts the threads of the workspace the phone works in, and every workspace's on a phone that names none",
+    () => {
+      const sender = recordingApnsSender();
+
+      return Effect.gen(function* () {
+        const { poster, phoneOfA } = yield* openWorkspaceAgent;
+        const here = yield* phoneOf(poster.userId);
+        yield* registerPushDevice(poster.userId, { ...here, workspaceId: poster.organizationId });
+
+        // A thread in another workspace the member is in waits on them too.
+        const elsewhere = yield* openWorkspaceAgent;
+        yield* joinWorkspace(elsewhere.poster.organizationId, poster.userId);
+        yield* postToInbox(elsewhere.poster, decide("elsewhere", poster.userId), noSandbox);
+        const before = sender.sent.length;
+
+        yield* postToInbox(poster, decide("here", poster.userId), noSandbox);
+
+        const badges = new Map(
+          sender.sent.slice(before).map(({ device, payload }) => [device.token, payload.aps.badge]),
+        );
+
+        assert.deepEqual(
+          badges,
+          new Map([
+            [here.token, 1],
+            [phoneOfA.token, 2],
+          ]),
+        );
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
+  it.effect(
     "a post past Apple's bound carries its Markdown's whole first paragraphs, within 4 KB",
     () => {
       const sender = recordingApnsSender();

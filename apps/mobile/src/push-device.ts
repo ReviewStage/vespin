@@ -32,6 +32,7 @@ import {
   type PushNotify,
 } from "@repo/features/push-device-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { selectWorkspaces } from "@repo/host/app-state-reads";
 import type { ActPortClient } from "@repo/host/contract";
 import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Predicate } from "effect";
@@ -42,6 +43,7 @@ import {
   getDevicePushTokenAsync,
 } from "expo-notifications";
 import { useEffect, useState } from "react";
+import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
 import {
@@ -180,28 +182,49 @@ export function usePushDeviceKey(): PushDeviceKey | undefined {
   return allowed ? key : undefined;
 }
 
-/** This launch's register of the phone under the account signed in, and the token it named, which a read of its standing waits for. */
-let registration: { readonly token: string; readonly done: Promise<void> } | undefined;
+/** The workspace the phone works in, as the app's screens last chose it, which each register names; none until the account's workspaces are read. */
+let workspaceChosen: string | undefined;
+
+/** This launch's register of the phone under the account signed in, and the token and workspace it named, which a read of its standing waits for. */
+let registration:
+  | {
+      readonly token: string;
+      readonly workspaceId: string | undefined;
+      readonly done: Promise<void>;
+    }
+  | undefined;
 
 /** The latest register sent, which the next one waits on, so a late answer for an account signed out of can never land after the next account's. */
 let lastRegister: Promise<void> = Promise.resolve();
 
 /**
- * The phone registered under the account signed in, once for its token
- * until a sign-out unregisters it: the register under way, or done, where
- * one was asked already. Note that a read of the phone's standing, and a
- * Live Activity's token (`live-activity/`), wait on it, so the service holds
- * the phone each names.
+ * The phone registered under the account signed in, once for its token and
+ * the workspace it works in until a sign-out unregisters it: the register
+ * under way, or done, where one was asked already. The workspace is named so
+ * the badge a push sets counts the threads of the Inbox the phone lists,
+ * that workspace's alone, and a choice of another registers it again. Note
+ * that a read of the phone's standing, and a Live Activity's token
+ * (`live-activity/`), wait on it, so the service holds the phone each names.
  */
 export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): Promise<void> {
   const bundleId = Constants.expoConfig?.ios?.bundleIdentifier;
 
   if (bundleId === undefined) return Promise.resolve();
 
-  if (registration?.token === key.token) return registration.done;
+  const workspaceId = workspaceChosen;
+
+  if (registration?.token === key.token && registration.workspaceId === workspaceId) {
+    return registration.done;
+  }
 
   const done = lastRegister
-    .then(() => acts[ACT_KIND.PUSH_DEVICE_REGISTER]({ ...key, bundleId }))
+    .then(() =>
+      acts[ACT_KIND.PUSH_DEVICE_REGISTER]({
+        ...key,
+        bundleId,
+        ...(workspaceId === undefined ? undefined : { workspaceId }),
+      }),
+    )
     .then(
       (answer) => {
         // Note that a register the service did not take is asked again by the next screen that reads.
@@ -213,7 +236,7 @@ export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): P
       },
     );
 
-  registration = { token: key.token, done };
+  registration = { token: key.token, workspaceId, done };
   lastRegister = done;
 
   return done;
@@ -221,7 +244,8 @@ export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): P
 
 /**
  * The phone registered under the account signed in, once a launch while iOS
- * lets it notify; nothing while signed out. Note that nothing here asks iOS's
+ * lets it notify, and again as another workspace is chosen; nothing while
+ * signed out. Note that nothing here asks iOS's
  * prompt: the Inbox asks it in place, saying why first (`notification-ask.tsx`),
  * since iOS raises it once an install and a prompt raised the moment an
  * account signs in was refused before any ask had been seen.
@@ -229,7 +253,11 @@ export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): P
 export function usePushRegistration(signedIn: boolean): void {
   const acts = useHostActs();
   const key = usePushDeviceKey();
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const workspaceId = useChosenWorkspace(workspaces).chosen?.id;
   useEffect(() => {
+    workspaceChosen = workspaceId;
+
     if (!signedIn) {
       // Note that a sign-out the app did not start, such as a refused renewal, runs no unregister, so the next account registers afresh.
       registration = undefined;
@@ -239,7 +267,7 @@ export function usePushRegistration(signedIn: boolean): void {
 
     if (key === undefined) return;
     registeredPushDevice(acts, key).catch(() => undefined);
-  }, [acts, signedIn, key]);
+  }, [acts, signedIn, key, workspaceId]);
 }
 
 /**

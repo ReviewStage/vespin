@@ -40,7 +40,9 @@
  * does (`PUSH_KIND.RUN_FAILED`), saying its own words, since that is the
  * kind a released app opens the agent from, and a kind of its own would
  * open nothing there. Its badge is the member's Inbox count as the
- * desktop's Dock counts it (`inboxWaitingCount`).
+ * desktop's Dock counts it (`inboxWaitingCount`), in the workspace the
+ * phone works in, whose Inbox alone it lists, or in every workspace for a
+ * build that names none.
  *
  * Once a thread settles anywhere, an ask answered or withdrawn, a notice
  * acknowledged or closed, the member it waits on is sent a background push
@@ -246,7 +248,13 @@ function readsNotification(device: PushDevice, notification: MemberNotification)
   );
 }
 
-/** Sends the notification `compose` writes for the member's badge to each phone named whose build reads it; nothing for none, and the badge is counted only once one stands. */
+/**
+ * Sends the notification `compose` writes for each phone's badge to each
+ * phone named whose build reads it; nothing for none, and a badge is counted
+ * only once a phone stands for it. Each phone's badge counts the workspace
+ * it works in, or every workspace where it names none
+ * (`inboxWaitingCount`), counted once for the phones that share it.
+ */
 function sendToDevices(
   userId: string,
   devices: readonly PushDevice[],
@@ -256,13 +264,26 @@ function sendToDevices(
     const sender = yield* Effect.serviceOption(ApnsSender);
 
     if (Option.isNone(sender) || devices.length === 0) return;
-    const composed = compose(yield* inboxWaitingCount(userId, yield* Clock.currentTimeMillis));
-    const { minApiVersion: _gate, ...notification } = composed;
+    const now = yield* Clock.currentTimeMillis;
+    const badges = new Map<string | null, number>();
+
+    for (const { workspaceId } of devices) {
+      if (!badges.has(workspaceId)) {
+        badges.set(workspaceId, yield* inboxWaitingCount(userId, now, workspaceId));
+      }
+    }
 
     yield* Effect.forEach(
-      devices.filter((device) => readsNotification(device, composed)),
-      ({ token, environment, bundleId }) =>
-        sender.value.send({ ...notification, device: { token, environment, bundleId } }),
+      devices,
+      (device) => {
+        const composed = compose(badges.get(device.workspaceId) ?? 0);
+        const { minApiVersion: _gate, ...notification } = composed;
+        const { token, environment, bundleId } = device;
+
+        return readsNotification(device, composed)
+          ? sender.value.send({ ...notification, device: { token, environment, bundleId } })
+          : Effect.void;
+      },
       { discard: true },
     );
   });

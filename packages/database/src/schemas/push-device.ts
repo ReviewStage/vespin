@@ -27,6 +27,14 @@ import { user } from "./auth.js";
  * for a phone that has not registered since the column was added, which
  * reads only what every released build reads.
  *
+ * `workspace_id` is the workspace the phone works in, as its latest
+ * register named it: the app lists one workspace's Inbox at a time, so the
+ * badge a push sets counts that workspace's threads alone. It holds no
+ * foreign key, because the id is the phone's word and a workspace deleted
+ * since must not refuse its register; a workspace the account cannot read
+ * counts nothing (`inboxWaitingCount`). Null for a phone whose build names
+ * none, whose badge counts every workspace's threads.
+ *
  * `notify` is the phone's own "Notify me" (`PUSH_NOTIFY`), which the app's
  * Settings sets and a register leaves alone. What became of its pushes is
  * kept beside it, so a push that fails quietly shows on the phone: when one
@@ -63,6 +71,8 @@ export const pushDevice = pgTable(
     failingSince: timestamptz("failing_since"),
     /** Apple's reason for the latest failure, or ours where Apple gave none (`PUSH_FAILURE_REASON`); null while they reach Apple. */
     failureReason: text("failure_reason"),
+    /** The workspace the phone works in, as its latest register named it, whose threads alone its badge counts; null where it named none. */
+    workspaceId: text("workspace_id"),
   },
   (table) => [
     // A token is one phone on one gateway, whichever account it is registered under.

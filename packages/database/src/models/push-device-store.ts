@@ -37,10 +37,11 @@ export interface PushDeviceToken {
   readonly environment: PushEnvironment;
 }
 
-/** What a phone registers: its token and gateway, the app Apple issued the token to, and the hosted API version that app was built against, none where its request named none. */
+/** What a phone registers: its token and gateway, the app Apple issued the token to, the hosted API version that app was built against, and the workspace it works in, each none where its request named none. */
 export interface PushDeviceRegistration extends PushDeviceToken {
   readonly bundleId: string;
   readonly apiVersion?: number;
+  readonly workspaceId?: string;
 }
 
 const TokenKeySchema = Schema.Struct({
@@ -48,7 +49,7 @@ const TokenKeySchema = Schema.Struct({
   environment: pushEnvironmentSchema,
 });
 
-/** One phone as a push reads it: whose it is, where to address it, when it last registered and the API version it named then, and when it takes an alert. */
+/** One phone as a push reads it: whose it is, where to address it, when it last registered and the API version and workspace it named then, and when it takes an alert. */
 const PushDeviceSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
@@ -58,6 +59,7 @@ const PushDeviceSchema = Schema.Struct({
   createdAt: InstantColumnSchema,
   lastSeenAt: InstantColumnSchema,
   apiVersion: Schema.NullOr(Schema.Number),
+  workspaceId: Schema.NullOr(Schema.String),
   notify: pushNotifySchema,
 });
 
@@ -80,6 +82,7 @@ const PUSH_DEVICE_COLUMNS = {
   createdAt: pushDevice.createdAt,
   lastSeenAt: pushDevice.lastSeenAt,
   apiVersion: pushDevice.apiVersion,
+  workspaceId: pushDevice.workspaceId,
   notify: pushDevice.notify,
 };
 
@@ -89,9 +92,10 @@ const upsertDevice = SqlSchema.void({
     userId: Schema.String,
     bundleId: Schema.String,
     apiVersion: Schema.NullOr(Schema.Number),
+    workspaceId: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
-  execute: ({ userId, token, environment, bundleId, apiVersion, now }) =>
+  execute: ({ userId, token, environment, bundleId, apiVersion, workspaceId, now }) =>
     Database.use((db) =>
       db
         .insert(pushDevice)
@@ -101,13 +105,14 @@ const upsertDevice = SqlSchema.void({
           environment,
           bundleId,
           apiVersion,
+          workspaceId,
           createdAt: now,
           lastSeenAt: now,
         })
         .onConflictDoUpdate({
           target: [pushDevice.environment, pushDevice.token],
-          // The phone is signed in to this account now, whichever held the token before, and runs the build that named its version now.
-          set: { userId, bundleId, apiVersion, lastSeenAt: now },
+          // The phone is signed in to this account now, whichever held the token before, and runs the build that named its version and workspace now.
+          set: { userId, bundleId, apiVersion, workspaceId, lastSeenAt: now },
         }),
     ),
 });
@@ -262,7 +267,14 @@ export function registerPushDevice(
     const { token, environment } = registration;
     yield* deleteMovedLiveActivity({ userId, token, environment });
     const apiVersion = registration.apiVersion ?? null;
-    yield* upsertDevice({ userId, ...registration, apiVersion, now: yield* DateTime.nowAsDate });
+    const workspaceId = registration.workspaceId ?? null;
+    yield* upsertDevice({
+      userId,
+      ...registration,
+      apiVersion,
+      workspaceId,
+      now: yield* DateTime.nowAsDate,
+    });
   });
 }
 
