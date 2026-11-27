@@ -40,8 +40,7 @@ import {
 } from "@repo/host/contract";
 import type { WireBoundaryInput } from "@repo/wire";
 import { installActPortClient, installAppBridge } from "../app-bridge.js";
-import { viewChoicesQuery } from "../live-reads.js";
-import { appStateQuery } from "../use-app-state.js";
+import { appStateQuery, drawAhead } from "../use-app-state.js";
 import { testQueryClientNow } from "./copy-feedback.js";
 
 let answering: Partial<AppBridge> = {};
@@ -220,38 +219,38 @@ export function heldUntilClosed<Kind extends HoldKind>(
   return Promise.resolve(stream as PortActResult<Kind>);
 }
 
+/** A promise that never settles, so a patch drawn ahead over it stands for the window's life, as the host goes on holding what it drew. */
+const NEVER_SETTLED = new Promise<never>(() => undefined);
+
 /**
- * A view choice kept or forgotten, drawn over the account's choices in the
- * test's document and its read at once, in its place, as the host draws it
- * before the service answers (`@repo/host`'s `viewChoiceWritten`), and
- * handed again with the document wherever the window reads it anew, as the
- * host goes on holding it. A window with no account signed in draws
- * nothing, as the host keeps nothing for it.
+ * A view choice kept or forgotten, drawn over the account's choices at
+ * once, in its place, as the host draws it before the service answers
+ * (`@repo/host`'s `viewChoiceWritten`): over the test's document and over
+ * every document the window is handed after it (`drawAhead`), so a later
+ * push or a window drawn anew still reads it, as the host goes on holding
+ * it. A window with no account signed in draws nothing, as the host keeps
+ * nothing for it.
  */
 export function drawnViewChoice(write: ViewChoiceWriteParams): Promise<ViewChoiceWrittenView> {
   const client = testQueryClientNow();
   const document = client.getQueryData<AppStateSnapshot>(appStateQuery.queryKey);
   const accountId = document === undefined ? undefined : signedInAccountId(document.account);
 
-  if (document === undefined || accountId === undefined) return Promise.resolve({});
+  if (accountId === undefined) return Promise.resolve({});
   const { id, key, workspaceId, value } = write;
-  const held = document[LIVE_READ.VIEW_CHOICES][accountId]?.rows ?? [];
-  const others = held.filter((row) => row.key !== key || row.workspaceId !== workspaceId);
-  const rows = value === null ? others : [...others, { id, key, workspaceId, value }];
 
-  const drawn = (snapshot: AppStateSnapshot): AppStateSnapshot => ({
-    ...snapshot,
-    [LIVE_READ.VIEW_CHOICES]: { ...snapshot[LIVE_READ.VIEW_CHOICES], [accountId]: { rows } },
-  });
+  const drawn = (snapshot: AppStateSnapshot): AppStateSnapshot => {
+    const held = snapshot[LIVE_READ.VIEW_CHOICES][accountId]?.rows ?? [];
+    const others = held.filter((row) => row.key !== key || row.workspaceId !== workspaceId);
+    const rows = value === null ? others : [...others, { id, key, workspaceId, value }];
 
-  const handed = answering.requestAppState;
+    return {
+      ...snapshot,
+      [LIVE_READ.VIEW_CHOICES]: { ...snapshot[LIVE_READ.VIEW_CHOICES], [accountId]: { rows } },
+    };
+  };
 
-  if (handed !== undefined) {
-    fakeAppBridge({ ...answering, requestAppState: () => handed().then(drawn) });
-  }
-
-  client.setQueryData(appStateQuery.queryKey, drawn(document));
-  client.setQueryData(viewChoicesQuery(accountId).queryKey, rows);
+  drawAhead(client, drawn, NEVER_SETTLED);
 
   return Promise.resolve({});
 }

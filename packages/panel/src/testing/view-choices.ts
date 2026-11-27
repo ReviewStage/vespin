@@ -8,7 +8,7 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import type { ViewChoiceLiveRow } from "@repo/features/view-choice-live";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { appStateQuery } from "../use-app-state.js";
+import { appStateQuery, drawAhead } from "../use-app-state.js";
 import {
   drawnViewChoice,
   fakeActPort,
@@ -18,6 +18,9 @@ import {
 } from "./app-bridge.js";
 import { stateWith } from "./app-state.js";
 import { testQueryClientNow, writeAppState } from "./copy-feedback.js";
+
+/** A promise that never settles, so the choices handed stand for the window's life. */
+const NEVER_SETTLED = new Promise<never>(() => undefined);
 
 /** The id the account signed in goes by where the test's document names none. */
 const CHOOSER_ID = "user-chooser";
@@ -49,8 +52,8 @@ export function hearViewChoices(): ViewChoiceWriteParams[] {
  * the document the test handed, or an idle one where it handed none: its
  * account signed in, by its own id or one given here, and each write drawn
  * over the choices at once as the host draws one ahead. Answers the writes
- * heard, oldest first. Call it after the test hands its document and its act
- * port; the window reads the choices as it reads the document.
+ * heard, oldest first. Call it after the test hands its act port, before or
+ * after the window draws.
  */
 export function keepViewChoices(rows: readonly ViewChoiceLiveRow[] = []): ViewChoiceWriteParams[] {
   const patched = (snapshot: AppStateSnapshot): AppStateSnapshot => {
@@ -64,19 +67,20 @@ export function keepViewChoices(rows: readonly ViewChoiceLiveRow[] = []): ViewCh
     };
   };
 
-  const { requestAppState: handed, onAppState } = fakeAppBridgeCalls();
+  // Note that the choices are drawn over every document the window is handed (`drawAhead`), so a push laid after them never takes them back; and that a window handed no document is laid an idle one, as a surface drawn with none still reads its choice back.
+  const client = testQueryClientNow();
+  drawAhead(client, patched, NEVER_SETTLED);
+
+  if (client.getQueryData(appStateQuery.queryKey) === undefined) {
+    writeAppState(patched(stateWith({}, {})));
+  }
+
+  const { requestAppState, onAppState } = fakeAppBridgeCalls();
   fakeAppBridge({
     ...fakeAppBridgeCalls(),
     onAppState: onAppState ?? (() => () => undefined),
-    requestAppState: () =>
-      (handed === undefined ? Promise.resolve(stateWith({}, {})) : handed()).then(patched),
+    requestAppState: requestAppState ?? (() => Promise.resolve(stateWith({}, {}))),
   });
-  writeAppState(
-    patched(
-      testQueryClientNow().getQueryData<AppStateSnapshot>(appStateQuery.queryKey) ??
-        stateWith({}, {}),
-    ),
-  );
 
   return hearViewChoices();
 }
