@@ -27,6 +27,7 @@ import {
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  withEndLine,
   withSending,
   withWaitingLine,
 } from "./transcript-model.js";
@@ -790,6 +791,20 @@ describe("withWaitingLine", () => {
 
     expect(folds(items)).toEqual([true]);
     expect(folds(withWaitingLine(items, "Waiting on you · 1 approval"))).toEqual([false]);
+  });
+});
+
+describe("withEndLine", () => {
+  it("ends a transcript that holds no message on the line, as an agent whose first launch failed before it wrote one", () => {
+    const end = {
+      words: "Failed: the agent never started",
+      failed: true,
+      press: undefined,
+    };
+
+    expect(
+      withEndLine([], end).map((item) => (item.kind === TRANSCRIPT_ITEM.END ? item.words : "")),
+    ).toEqual(["Failed: the agent never started"]);
   });
 });
 

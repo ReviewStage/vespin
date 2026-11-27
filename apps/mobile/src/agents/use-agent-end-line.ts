@@ -52,6 +52,7 @@ function endLineOf(input: {
   readonly status: AgentStatus | undefined;
   readonly readerId: string | undefined;
   readonly hostLost: { readonly host: string } | undefined;
+  readonly loaded: boolean;
   readonly offersContinue: boolean;
   readonly offersPress: boolean;
 }):
@@ -64,7 +65,9 @@ function endLineOf(input: {
   | undefined {
   const { agent, status, readerId } = input;
 
-  if (agent === undefined || status === undefined || agentStillWriting(status)) return undefined;
+  // Note that the line waits for the transcript's first page, as the panel's does, so it never stands over a read still out, and stands alone where the page holds no message.
+  if (!input.loaded || agent === undefined || status === undefined || agentStillWriting(status))
+    return undefined;
   const failure = settledFailure({ status, turn: agent.turn });
   const { startedBy } = agent;
 
@@ -108,6 +111,7 @@ export function useAgentEndLine({
   hostLost,
   taskId,
   archived,
+  loaded,
   onContinue,
   onOpenKeys,
 }: {
@@ -119,6 +123,8 @@ export function useAgentEndLine({
   readonly hostLost: { readonly host: string } | undefined;
   readonly taskId: string | undefined;
   readonly archived: boolean;
+  /** Whether the transcript's first page was read, which the line waits for. */
+  readonly loaded: boolean;
   readonly onContinue: () => void;
   readonly onOpenKeys: () => void;
 }): AgentEndLine {
@@ -136,6 +142,7 @@ export function useAgentEndLine({
     readerId,
     hostLost,
     offersContinue: taskId !== undefined,
+    loaded,
     offersPress: !archived,
   });
 

@@ -1254,6 +1254,7 @@ const AgentConversation = memo(function AgentConversation({
     hostLost: transcript?.word?.hostLost,
     taskId,
     archived,
+    loaded: (transcript?.pages ?? 0) > 0,
     onContinue: continueAgent,
     onOpenKeys: () => router.push("/settings/agents"),
   });

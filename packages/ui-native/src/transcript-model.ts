@@ -1907,29 +1907,28 @@ export interface TranscriptEnd {
   readonly press: EndPress | undefined;
 }
 
+/** Where the end line stands: after every row, apart from any message, so it stands where the transcript holds none, as an agent that failed before writing one; there is one at most. */
+const END_PLACE: TranscriptPlace = {
+  message: "",
+  row: "",
+  member: undefined,
+  piece: TRANSCRIPT_PIECE.END,
+};
+
 /**
  * The items with the end line after their last, as the panel's transcript
  * ends on its `TurnEnd`: once the agent's turn was stopped or failed and it
- * writes no more; the items as they stand where it has none, or where no
- * row stands yet, since the panel's waits for a first page.
+ * writes no more, alone where no row stands, as for an agent whose first
+ * launch failed before it wrote any; the items as they stand where it has
+ * none.
  */
 export function withEndLine(
   items: readonly TranscriptItem[],
   end: TranscriptEnd | undefined,
 ): readonly TranscriptItem[] {
-  const last = items.at(-1)?.place.message;
+  if (end === undefined) return items;
 
-  if (end === undefined || last === undefined) return items;
-
-  return [
-    ...items,
-    {
-      place: { ...linePlace(last, last), piece: TRANSCRIPT_PIECE.END },
-      depth: 0,
-      kind: TRANSCRIPT_ITEM.END,
-      ...end,
-    },
-  ];
+  return [...items, { place: END_PLACE, depth: 0, kind: TRANSCRIPT_ITEM.END, ...end }];
 }
 
 /** The calls the items draw a row for, by id, so a call the agent holds that none draws, such as a subagent's, is answered elsewhere. */
