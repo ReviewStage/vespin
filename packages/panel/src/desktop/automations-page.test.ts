@@ -396,10 +396,18 @@ test("View options orders each owner's automations by name, and the order is kep
     ["Morning digest", "Only you"],
   ];
 
-  await vi.waitFor(() => assert.deepEqual(rows(page), byName));
-  assert.deepEqual(
-    written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value })),
-    [{ key: VIEW_CHOICE_KEY.AUTOMATIONS_ORDER, workspaceId: null, value: AUTOMATIONS_ORDER.NAME }],
+  assert.deepEqual(rows(page), byName);
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value })),
+      [
+        {
+          key: VIEW_CHOICE_KEY.AUTOMATIONS_ORDER,
+          workspaceId: null,
+          value: AUTOMATIONS_ORDER.NAME,
+        },
+      ],
+    ),
   );
   act(() => world.root?.unmount());
   document.body.innerHTML = "";

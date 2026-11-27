@@ -278,19 +278,6 @@ function pressInBar(label: string): void {
   act(() => button.click());
 }
 
-/** Turns on the find's search of calls and thinking by the bar's button named `label`, as the account keeps it, and waits until the bar says it searches them. */
-async function searchDetails(label: string): Promise<void> {
-  pressInBar(label);
-  await vi.waitFor(() =>
-    assert.equal(
-      document
-        .querySelector('[aria-label="Search tool calls and thinking"]')
-        ?.getAttribute("aria-pressed"),
-      "true",
-    ),
-  );
-}
-
 test("⌘F finds words in a row the log has not drawn, scrolls the log to it, and lights the match there", async () => {
   const held = messages(0, 400);
   held[7] = message(7, "The lantern is lit in the seventh reply.");
@@ -467,7 +454,7 @@ test("⌘F leaves a closed call's answer far up the log out until asked, then co
     "the bar says the calls hold a match",
   );
 
-  await searchDetails("Include");
+  pressInBar("Include");
   await act(settled);
   assert.equal(findTally(), "1 of 1");
   assert.ok(drawnRows(container).includes("m-7"), "the seventh reply's row is drawn");
@@ -510,7 +497,7 @@ async function farTally(far: AgentTranscriptMessage, query: string) {
   act(() => {
     runAppCommand(APP_COMMAND.FIND);
   });
-  await searchDetails("Search tool calls and thinking");
+  pressInBar("Search tool calls and thinking");
   typeFind(query);
   await act(settled);
 

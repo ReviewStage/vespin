@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { AGENT_ARCHIVER, AGENT_STATUS, type AgentArchivedBy } from "@repo/features/agent-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, test, vi } from "vitest";
+import { afterEach, beforeEach, test } from "vitest";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -70,15 +70,6 @@ function archivedFold(container: HTMLElement): HTMLButtonElement | undefined {
   );
 }
 
-/** Presses Archived's fold, and waits until it stands the other way, as the account keeps it. */
-async function pressFold(container: HTMLElement): Promise<void> {
-  const was = archivedFold(container)?.getAttribute("aria-expanded");
-  act(() => archivedFold(container)?.click());
-  await vi.waitFor(() =>
-    assert.notEqual(archivedFold(container)?.getAttribute("aria-expanded"), was),
-  );
-}
-
 /** The archived agent's row's press. */
 function archivedRow(container: HTMLElement): HTMLButtonElement {
   return (
@@ -110,7 +101,7 @@ function drawArchived(onOpen: (agentId: string) => void = () => undefined): HTML
   return drawPhoneAgents(agents, onOpen);
 }
 
-test("the archived agents fold under a group header that counts them folded and lists them unfolded", async () => {
+test("the archived agents fold under a group header that counts them folded and lists them unfolded", () => {
   const agent = {
     taskId: "plan-1",
     model: "anthropic/claude-opus-5.5",
@@ -134,51 +125,48 @@ test("the archived agents fold under a group header that counts them folded and 
 
   assert.equal(fold().getAttribute("aria-expanded"), "false");
   assert.equal(fold().textContent, "Archived2 archived agents");
-  await pressFold(container);
+  act(() => fold().click());
   assert.equal(fold().getAttribute("aria-expanded"), "true");
   assert.ok(container.querySelector('[aria-label="Archived agents"]'), "the agents are listed");
 });
 
-test("an unfolded Archived stands open as the Overview is drawn again, and one never unfolded stays folded", async () => {
+test("an unfolded Archived stands open as the Overview is drawn again, and one never unfolded stays folded", () => {
   const fold = archivedFold;
   const first = drawArchived();
   assert.equal(fold(first)?.getAttribute("aria-expanded"), "false");
-  await pressFold(first);
+  act(() => fold(first)?.click());
   assert.equal(fold(first)?.getAttribute("aria-expanded"), "true");
 
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
   const again = drawArchived();
   assert.equal(fold(again)?.getAttribute("aria-expanded"), "true", "it stands as it was left");
-  await pressFold(again);
+  act(() => fold(again)?.click());
 
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
   assert.equal(fold(drawArchived())?.getAttribute("aria-expanded"), "false", "and folded again");
 });
 
-test("an archived agent's row hangs its tab's card beside it, its name and when it was archived", async () => {
+test("an archived agent's row hangs its tab's card beside it, its name and when it was archived", () => {
   const container = drawArchived();
-  await pressFold(container);
+  act(() => archivedFold(container)?.click());
   restOn(archivedRow(container));
   const card = document.querySelector(".ui-tooltip-card [data-agent-card]");
   assert.equal(card?.querySelector(".ui-hover-card-name")?.textContent, "Retry audit");
   assert.match(card?.querySelector(".ui-hover-card-corner")?.textContent ?? "", /^Archived · /u);
 });
 
-test("a press on an archived agent's row opens it, whose tab is gone", async () => {
+test("a press on an archived agent's row opens it, whose tab is gone", () => {
   const opened: string[] = [];
   const container = drawArchived((agentId) => opened.push(agentId));
-  await pressFold(container);
+  act(() => archivedFold(container)?.click());
   act(() => archivedRow(container).click());
   assert.deepEqual(opened, ["agent-8"]);
 });
 
 /** The notes the card hung over the archived agent's row says, with the reader and who archived it given. */
-async function archivedCardNotes(
-  me: string | undefined,
-  archivedBy: AgentArchivedBy,
-): Promise<string[]> {
+function archivedCardNotes(me: string | undefined, archivedBy: AgentArchivedBy): string[] {
   // Note that each draw unfolds Archived afresh, in a world of its own, so the fold the last one kept is let go.
   for (const root of roots.splice(0)) act(() => root.unmount());
   startQueriesAfresh();
@@ -205,7 +193,7 @@ async function archivedCardNotes(
   };
 
   const container = drawPhoneAgents(agents);
-  await pressFold(container);
+  act(() => archivedFold(container)?.click());
   restOn(archivedRow(container));
 
   return [
@@ -213,10 +201,10 @@ async function archivedCardNotes(
   ].map((note) => note.textContent ?? "");
 }
 
-test("an archived agent's card says who archived it, an agent or Vespin for a member, the reader as you, the reason given, and an archive made with its task", async () => {
+test("an archived agent's card says who archived it, an agent or Vespin for a member, the reader as you, the reason given, and an archive made with its task", () => {
   const dean = { userId: "user-dean", name: "Dean Stratakos" };
 
-  const byAgent = await archivedCardNotes("user-sam", {
+  const byAgent = archivedCardNotes("user-sam", {
     by: AGENT_ARCHIVER.AGENT,
     member: dean,
     agent: { id: "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b", name: "Bill by seat" },
@@ -227,13 +215,13 @@ test("an archived agent's card says who archived it, an agent or Vespin for a me
     for (const root of roots.splice(0)) root.unmount();
   });
   document.body.innerHTML = "";
-  const byApp = await archivedCardNotes("user-dean", { by: AGENT_ARCHIVER.APP, member: dean });
+  const byApp = archivedCardNotes("user-dean", { by: AGENT_ARCHIVER.APP, member: dean });
   act(() => {
     for (const root of roots.splice(0)) root.unmount();
   });
   document.body.innerHTML = "";
 
-  const withTask = await archivedCardNotes("user-sam", {
+  const withTask = archivedCardNotes("user-sam", {
     by: AGENT_ARCHIVER.MEMBER,
     member: dean,
     withTask: true,

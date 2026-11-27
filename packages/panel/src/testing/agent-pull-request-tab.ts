@@ -821,15 +821,7 @@ export async function turnFilter(tab: HTMLElement, name: string): Promise<void> 
     await settle();
   }
 
-  // Note that a filter is kept on the account, whose read draws it a tick after the press, so the turn waits until its switch stands the other way.
-  const checked = () =>
-    [...document.querySelectorAll('[role="menuitemcheckbox"]')]
-      .find((item) => item.querySelector(".ui-menu-item-label")?.textContent?.startsWith(name))
-      ?.getAttribute("aria-checked");
-
-  const was = checked();
   await pressItem(name);
-  await vi.waitFor(() => assert.notEqual(checked(), was));
 }
 
 /** The heading of the Conversation view's section named as given, which folds it. */

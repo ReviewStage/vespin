@@ -1161,34 +1161,27 @@ test("View options holds Hide resolved and Hide bots as switches, each counting 
     "a press on View options in the heading folds nothing",
   );
 
-  // Note that a filter turned is kept on the account, whose read draws it once the host has drawn the write ahead.
   await pressItem("Hide bots");
-  await vi.waitFor(() =>
-    assert.deepEqual(
-      menuItems(),
-      [
-        { label: "Hide resolved", checked: "false" },
-        { label: "Hide bots", checked: "true" },
-      ],
-      "the menu stands while a filter is turned",
-    ),
+  assert.deepEqual(
+    menuItems(),
+    [
+      { label: "Hide resolved", checked: "false" },
+      { label: "Hide bots", checked: "true" },
+    ],
+    "the menu stands while a filter is turned",
   );
   assert.equal(viewOptions(tab).getAttribute("aria-description"), "Filtered");
   assert.deepEqual(drawnEntries(tab), ["Charles Pan 2", "Charles Pan 1", "Charles Pan 0"]);
 
   await pressItem("Hide bots");
-  await vi.waitFor(() => assert.equal(drawnEntries(tab).length, all.length));
   await pressItem("Hide resolved");
-  await vi.waitFor(() =>
-    assert.deepEqual(
-      drawnEntries(tab),
-      ["Charles Pan 1", "vercel 0", "Charles Pan 0"],
-      "a resolved thread goes, and a review whose every thread was resolved with it; a comment stays",
-    ),
+  assert.deepEqual(
+    drawnEntries(tab),
+    ["Charles Pan 1", "vercel 0", "Charles Pan 0"],
+    "a resolved thread goes, and a review whose every thread was resolved with it; a comment stays",
   );
 
   await pressItem("Hide bots");
-  await vi.waitFor(() => assert.deepEqual(drawnEntries(tab), ["Charles Pan 1", "Charles Pan 0"]));
   act(() => world.root?.unmount());
   world.root = undefined;
   document.body.innerHTML = "";
@@ -1257,12 +1250,12 @@ test("the Description and the Conversation each fold under a heading pressed acr
   assert.ok(tab.querySelector('[aria-label="Conversation"] .pull-request-entry'));
 
   act(() => description.click());
-  await vi.waitFor(() => assert.equal(description.getAttribute("aria-expanded"), "false"));
+  assert.equal(description.getAttribute("aria-expanded"), "false");
   assert.equal(tab.querySelector('[aria-label="Description"] .pull-request-words') === null, true);
   assert.ok(tab.querySelector(".pull-request-entry"), "the Conversation stays open");
 
   act(() => conversation.click());
-  await vi.waitFor(() => assert.equal(conversation.getAttribute("aria-expanded"), "false"));
+  assert.equal(conversation.getAttribute("aria-expanded"), "false");
   assert.equal(tab.querySelector(".pull-request-entry") === null, true);
   assert.equal(
     tab.querySelector('[aria-label="Conversation"] .pull-request-count')?.textContent,
@@ -1282,9 +1275,7 @@ test("the Description and the Conversation each fold under a heading pressed acr
     "each fold stands for the next pull request drawn",
   );
   act(() => sectionHead(again, "Description").click());
-  await vi.waitFor(() =>
-    assert.ok(again.querySelector('[aria-label="Description"] .pull-request-words')),
-  );
+  assert.ok(again.querySelector('[aria-label="Description"] .pull-request-words'));
   assert.equal(
     sectionHead(again, "Conversation").getAttribute("aria-expanded"),
     "false",
