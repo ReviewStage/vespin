@@ -548,12 +548,15 @@ protected by your Mac's disk encryption (FileVault) where you turn it on. The
 app deletes it when you sign out. The Vespin iOS app keeps the same database
 on your iPhone, in its own storage, protected by the iPhone's Data
 Protection, and deletes it when you sign out. On the Mac your sign-in tokens
-are kept encrypted under a key in the macOS Keychain. On the iPhone they are
-kept in the iPhone's Keychain itself, readable after the phone's first unlock
-since it started, never synced to iCloud or moved to another device, and
-deleted when you sign out. Earlier versions of the app kept them encrypted in
-its own files under a key in the Keychain; once the tokens moved into the
-Keychain itself, the app deletes that key.
+are kept encrypted under a key in the macOS Keychain. That key stays in the
+Keychain, and a build of Vespin signed by another Apple developer team than
+the one that made it can read it only when you allow it, which macOS asks
+once; if you refuse, the app signs you out, and you sign in again. On the
+iPhone they are kept in the iPhone's Keychain itself, readable after the
+phone's first unlock since it started, never synced to iCloud or moved to
+another device, and deleted when you sign out. Earlier versions of the app
+kept them encrypted in its own files under a key in the Keychain; once the
+tokens moved into the Keychain itself, the app deletes that key.
 
 When you close New task in the Vespin iOS app and choose Save draft, the
 app keeps that draft's words on your iPhone or iPad, one draft for each
