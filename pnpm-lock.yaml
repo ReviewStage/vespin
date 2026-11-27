@@ -289,6 +289,9 @@ patchedDependencies:
   '@sentry/browser@11.8.0':
     hash: af32b6645b074a081cae42956870b6c779240a52fac319191531b3724c5be619
     path: patches/@sentry__browser@11.8.0.patch
+  '@shopify/flash-list@2.3.2':
+    hash: b14daaecc5aad0871cb9f14ea4536e30b2bf7a54685e55e447bbdf7740f9ab12
+    path: patches/@shopify__flash-list@2.3.2.patch
   '@tanstack/db@1.0.0-rc.1.5':
     hash: aedfc14cba2dc65a1d37d22cadf0cf3e6c487dd23050853daeda2e8677d40c3f
     path: patches/@tanstack__db@1.0.0-rc.1.5.patch
@@ -1027,8 +1030,8 @@ importers:
         version: 4.0.4
     devDependencies:
       '@cursor/sdk':
-        specifier: 1.5.0
-        version: 1.5.0(zod@4.6.7)
+        specifier: 1.5.2
+        version: 1.5.2(zod@4.6.7)
       '@effect/vitest':
         specifier: 'catalog:'
         version: 4.0.4(effect@4.0.4)(vitest@5.1.2)
@@ -1215,6 +1218,9 @@ importers:
       '@types/ws':
         specifier: 'catalog:'
         version: 8.18.2
+      emojibase-data:
+        specifier: 18.0.0
+        version: 18.0.0(emojibase@18.0.0)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
@@ -1528,9 +1534,6 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
-      unicode-emoji-json:
-        specifier: 0.9.0
-        version: 0.9.0
       vitest:
         specifier: 'catalog:'
         version: 5.1.2(@opentelemetry/api@1.9.1)(@types/node@26.6.11)(jsdom@30.0.1)(msw@3.0.8)(vite@7.3.8)
@@ -1857,9 +1860,6 @@ importers:
       tailwind-merge:
         specifier: 3.7.1
         version: 3.7.1
-      unicode-emoji-json:
-        specifier: 0.9.0
-        version: 0.9.0
     devDependencies:
       '@effect/vitest':
         specifier: 'catalog:'
@@ -1914,7 +1914,7 @@ importers:
         version: link:../wire
       '@shopify/flash-list':
         specifier: 2.3.2
-        version: 2.3.2(@babel/runtime@7.29.10)(react-native@0.88.1)(react@19.3.0)
+        version: 2.3.2(patch_hash=b14daaecc5aad0871cb9f14ea4536e30b2bf7a54685e55e447bbdf7740f9ab12)(@babel/runtime@7.29.10)(react-native@0.88.1)(react@19.3.0)
       effect:
         specifier: 'catalog:'
         version: 4.0.4
@@ -2859,8 +2859,8 @@ packages:
     os: [darwin]
     hasBin: true
 
-  '@cursor/sdk-darwin-arm64@1.5.0':
-    resolution: {integrity: sha512-BbNXAZNDnfSr2CVCxXO2MuKQx05tY8YqtMgy7wgfNEN4bl3K9q0ug3FvfWeeml8oj5namyNu+oHenYuzviT7sg==}
+  '@cursor/sdk-darwin-arm64@1.5.2':
+    resolution: {integrity: sha512-j5ffFDbpJeM0Ea4JFOU5TJFMlj6EpB1yXh/POMXvyh4z4VscPQao2rc/nbhHKZg9B0CcqKtW682FiK/gvjIklQ==}
     cpu: [arm64]
     os: [darwin]
     hasBin: true
@@ -2871,8 +2871,8 @@ packages:
     os: [darwin]
     hasBin: true
 
-  '@cursor/sdk-darwin-x64@1.5.0':
-    resolution: {integrity: sha512-20ZOpKYaCFUxggUEmZsXmnsPDc3Qc7dSiBCKd94xvZ/dVhy1zpX8D7TyB2pQG5kLcQhOI72eKttoOzXiVpNr8Q==}
+  '@cursor/sdk-darwin-x64@1.5.2':
+    resolution: {integrity: sha512-OWRw1ya6bjasiVhLNfbiCHpD6UUciJTUSvKZuuDAuZo8RpjiFqD9VhaA4TwjqdMVZIgwMTkXWQhn3ZxfZsVupQ==}
     cpu: [x64]
     os: [darwin]
     hasBin: true
@@ -2883,8 +2883,8 @@ packages:
     os: [linux]
     hasBin: true
 
-  '@cursor/sdk-linux-arm64@1.5.0':
-    resolution: {integrity: sha512-96BZjj6S4zn4UeV9BCSz8ZvcH6jIGx+oon5+avhQeaTin8s1GI8vzk+/+XcQXCIUiO5CMaOvMB27/kCmN8Xcyg==}
+  '@cursor/sdk-linux-arm64@1.5.2':
+    resolution: {integrity: sha512-ggM4g82XAlxqBo6v8BMAn+WsSNlb4Fx5+iUAZ5fUPe2Nvv+NXMqL/eQtX8is/L8muYwYlILVf8BRxD01T9bN1g==}
     cpu: [arm64]
     os: [linux]
     hasBin: true
@@ -2895,8 +2895,8 @@ packages:
     os: [linux]
     hasBin: true
 
-  '@cursor/sdk-linux-x64@1.5.0':
-    resolution: {integrity: sha512-nerO1mIGRqmF9N+u+YAwtjtFL5+5B/KS4bDLr2Npj8kOzMaB1G4t9EeZpZmM40Rs7kwb2IHmdpPZ/z9DyWJK6Q==}
+  '@cursor/sdk-linux-x64@1.5.2':
+    resolution: {integrity: sha512-XdOFdMUuKQptHiPbhxMJ0fApoAiByqvt/kaTxLZ0fllWVv6XBY3AH4mTq5doyn/PZlUmMqsvP0xeMusUmn5/5w==}
     cpu: [x64]
     os: [linux]
     hasBin: true
@@ -2907,8 +2907,8 @@ packages:
     os: [win32]
     hasBin: true
 
-  '@cursor/sdk-win32-x64@1.5.0':
-    resolution: {integrity: sha512-veeYScNOnpC7oEFkZCT96Dk3rLt/mGDeFQL/iqvvPPwYlEz3Kl0EbBd3Rjf2Q9THoUIWV5GlXsn9ZBwXwCcKww==}
+  '@cursor/sdk-win32-x64@1.5.2':
+    resolution: {integrity: sha512-rA1i+VxKkiUn80jKJRqmEpTOURxcP6R9seksjPO2OSD1KYxuLTRf0k3of6anIeNKrrTNP1bVO8L1t5ku5szaDg==}
     cpu: [x64]
     os: [win32]
     hasBin: true
@@ -2919,8 +2919,8 @@ packages:
     peerDependencies:
       zod: 4.6.7
 
-  '@cursor/sdk@1.5.0':
-    resolution: {integrity: sha512-BebvKzDhzxblSDH4pslOjJQIgqBO/Z2bhaVMWAfbkfWEDy8Oz32BZhAEppFnGMcT/5PZRayReqAGteYB4XQSkw==}
+  '@cursor/sdk@1.5.2':
+    resolution: {integrity: sha512-cJVKICD9Rj+WeBt/bZ7+6j4UnkRFHFOXDQHoQLgaF8PU1ybneJBYizSSU6dCvob9RwoXTFGEAfWjBSxXKdRDxQ==}
     engines: {node: '>=22.13'}
     peerDependencies:
       zod: 4.6.7
@@ -7681,6 +7681,15 @@ packages:
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
 
+  emojibase-data@18.0.0:
+    resolution: {integrity: sha512-TPPRRYv2zPd0jKI+pTpMquwWNZXYAsC3IVsCMeg2X8y8fEzKwOks4/5bz0YavF5r6d71aGPpb6oDnUEwSLLMoA==}
+    peerDependencies:
+      emojibase: '*'
+
+  emojibase@18.0.0:
+    resolution: {integrity: sha512-5PG+EEt5zQ9qvqdHZw61+T9iz96g+r621QS/w8jEzPg+3mjzAdjl8LPLc+e9ABv/yboNfMwEair7aK9qKnwAbQ==}
+    engines: {node: '>=20.0.0'}
+
   encodeurl@1.0.2:
     resolution: {integrity: sha512-TPJXq8JqFaVYm2CWmPvnP2Iyo4ZSM7/QKcSmuMLDObfpH5fi7RUGmd/rTDf+rut/saiDiQEeVTNgAmJEdAOx0w==}
     engines: {node: '>= 0.8'}
@@ -10818,9 +10827,6 @@ packages:
     resolution: {integrity: sha512-dA8WbNeb2a6oQzAQ55YlT5vQAWGV9WXOsi3SskE3bcCdM0P4SDd+24zS/OCacdRq5BkdsRj9q3Pg6YyQoxIGqg==}
     engines: {node: '>=4'}
 
-  unicode-emoji-json@0.9.0:
-    resolution: {integrity: sha512-HdrQW/7SdbXUsTd8uTATv7LvQJkCSgbAgRCDCtOhQ6xn3EAx+xZHQtRniOXWJK3ywIqPegkNhP4U4EbuFsiQng==}
-
   unicode-match-property-ecmascript@2.0.0:
     resolution: {integrity: sha512-5kaZCrbp5mmbz5ulBkDkbY0SsPOjKqVS35VpL9ulMPfSl0J0Xsm+9Evphv9CoIZFwre7aJoa94AY6seMKGVN5Q==}
     engines: {node: '>=4'}
@@ -12045,31 +12051,31 @@ snapshots:
   '@cursor/sdk-darwin-arm64@1.4.0':
     optional: true
 
-  '@cursor/sdk-darwin-arm64@1.5.0':
+  '@cursor/sdk-darwin-arm64@1.5.2':
     optional: true
 
   '@cursor/sdk-darwin-x64@1.4.0':
     optional: true
 
-  '@cursor/sdk-darwin-x64@1.5.0':
+  '@cursor/sdk-darwin-x64@1.5.2':
     optional: true
 
   '@cursor/sdk-linux-arm64@1.4.0':
     optional: true
 
-  '@cursor/sdk-linux-arm64@1.5.0':
+  '@cursor/sdk-linux-arm64@1.5.2':
     optional: true
 
   '@cursor/sdk-linux-x64@1.4.0':
     optional: true
 
-  '@cursor/sdk-linux-x64@1.5.0':
+  '@cursor/sdk-linux-x64@1.5.2':
     optional: true
 
   '@cursor/sdk-win32-x64@1.4.0':
     optional: true
 
-  '@cursor/sdk-win32-x64@1.5.0':
+  '@cursor/sdk-win32-x64@1.5.2':
     optional: true
 
   '@cursor/sdk@1.4.0(zod@4.6.7)':
@@ -12086,19 +12092,16 @@ snapshots:
       '@cursor/sdk-linux-x64': 1.4.0
       '@cursor/sdk-win32-x64': 1.4.0
 
-  '@cursor/sdk@1.5.0(zod@4.6.7)':
+  '@cursor/sdk@1.5.2(zod@4.6.7)':
     dependencies:
-      '@bufbuild/protobuf': 1.10.0
-      '@connectrpc/connect': 1.7.0(@bufbuild/protobuf@1.10.0)
-      '@connectrpc/connect-web': 1.7.0(@bufbuild/protobuf@1.10.0)(@connectrpc/connect@1.7.0)
       '@statsig/js-client': 3.31.0
       zod: 4.6.7
     optionalDependencies:
-      '@cursor/sdk-darwin-arm64': 1.5.0
-      '@cursor/sdk-darwin-x64': 1.5.0
-      '@cursor/sdk-linux-arm64': 1.5.0
-      '@cursor/sdk-linux-x64': 1.5.0
-      '@cursor/sdk-win32-x64': 1.5.0
+      '@cursor/sdk-darwin-arm64': 1.5.2
+      '@cursor/sdk-darwin-x64': 1.5.2
+      '@cursor/sdk-linux-arm64': 1.5.2
+      '@cursor/sdk-linux-x64': 1.5.2
+      '@cursor/sdk-win32-x64': 1.5.2
 
   '@drizzle-team/brocli@0.12.1': {}
 
@@ -14657,7 +14660,7 @@ snapshots:
 
   '@shikijs/vscode-textmate@10.1.0': {}
 
-  '@shopify/flash-list@2.3.2(@babel/runtime@7.29.10)(react-native@0.88.1)(react@19.3.0)':
+  '@shopify/flash-list@2.3.2(patch_hash=b14daaecc5aad0871cb9f14ea4536e30b2bf7a54685e55e447bbdf7740f9ab12)(@babel/runtime@7.29.10)(react-native@0.88.1)(react@19.3.0)':
     dependencies:
       '@babel/runtime': 7.29.10
       react: 19.3.0
@@ -16701,6 +16704,12 @@ snapshots:
   emoji-regex@10.6.0: {}
 
   emoji-regex@8.0.0: {}
+
+  emojibase-data@18.0.0(emojibase@18.0.0):
+    dependencies:
+      emojibase: 18.0.0
+
+  emojibase@18.0.0: {}
 
   encodeurl@1.0.2: {}
 
@@ -20600,8 +20609,6 @@ snapshots:
     optional: true
 
   unicode-canonical-property-names-ecmascript@2.0.1: {}
-
-  unicode-emoji-json@0.9.0: {}
 
   unicode-match-property-ecmascript@2.0.0:
     dependencies:

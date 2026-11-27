@@ -19,7 +19,7 @@ import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useMemo } from "react";
 import { linkStandingQuery } from "../live-reads.js";
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
-import { appStateIn, appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { appStateIn, selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
 import { useTaskFound } from "./use-task-outside.js";
 
 /**
@@ -78,7 +78,7 @@ function connectedFor(workspace: Workspace | undefined): workspace is Workspace 
 
 /** The workspaces of the document; none before the first read. */
 function useWorkspaces(): readonly Workspace[] | undefined {
-  return useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  return useAppStateSlice(selectWorkspaces);
 }
 
 /** The workspace of the task given, else the one named by its id; none where neither is listed. */

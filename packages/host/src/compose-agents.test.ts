@@ -2431,42 +2431,45 @@ it.effect(
     }),
 );
 
+/** One launch as the host makes it on `root`'s local database: the pool on the local copy, the agents on the pool, then the database opened. */
+function localLaunch(
+  root: string,
+  tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[],
+) {
+  return Effect.gen(function* () {
+    const local = yield* localCopy(root);
+
+    const pool = yield* entityPool({
+      mintKey: () => "key",
+      replayRefused: Effect.void,
+      store: local.store,
+    });
+
+    const launch = yield* subject({
+      pool,
+      ...(tasksListed === undefined ? undefined : { tasksListed }),
+    });
+
+    yield* local.open("user-dana", {
+      kept: () => [],
+      moves: Stream.empty,
+      restored: () => Effect.void,
+    });
+
+    return launch;
+  });
+}
+
 it.effect(
   "the Inbox kept on the local database is told at the next launch beside the tasks its items stand on, as the task list summed them up when they were kept, before the service answers",
   () =>
     Effect.gen(function* () {
       const root = yield* temporaryDirectoryScoped("compose-agents-kept-inbox-");
       const holder = taskSummaryOf(planListRow(TASK_ID, "Teammate invitations"), undefined);
-
-      /** One launch as the host makes it: the pool on the local copy, the agents on the pool, then the database opened. */
-      const launched = (tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[]) =>
-        Effect.gen(function* () {
-          const local = yield* localCopy(root);
-
-          const pool = yield* entityPool({
-            mintKey: () => "key",
-            replayRefused: Effect.void,
-            store: local.store,
-          });
-
-          const launch = yield* subject({
-            pool,
-            ...(tasksListed === undefined ? undefined : { tasksListed }),
-          });
-
-          yield* local.open("user-dana", {
-            kept: () => [],
-            moves: Stream.empty,
-            restored: () => Effect.void,
-          });
-
-          return launch;
-        });
-
       const quit = yield* Scope.make();
 
       const first = yield* Scope.provide(quit)(
-        launched((taskIds) => (taskIds.includes(TASK_ID) ? [holder] : [])),
+        localLaunch(root, (taskIds) => (taskIds.includes(TASK_ID) ? [holder] : [])),
       );
 
       first.sealItems(LIVE_ANSWERED);
@@ -2476,7 +2479,7 @@ it.effect(
       yield* toldTimes(first.accountItems, 1);
       yield* Scope.close(quit, Exit.void);
 
-      const next = yield* launched();
+      const next = yield* localLaunch(root);
       yield* next.open;
       yield* settled;
 
@@ -2485,6 +2488,35 @@ it.effect(
         kept: true,
         keptHolders: [holder],
       });
+    }).pipe(Effect.provide(localPlatform)),
+);
+
+it.effect(
+  "an Inbox kept on the local database however large is kept whole, so the next launch reads past the sync id kept rather than whole",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-kept-large-inbox-");
+      // Note that its JSON runs past a megabyte, as a busy account's Inbox does.
+      const large: InboxItem = { ...HELD_ITEM, title: "Review ".repeat(200_000) };
+      const quit = yield* Scope.make();
+      const first = yield* Scope.provide(quit)(localLaunch(root));
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+      deliverItems(first.live, [stampOf(large, TASK_ID)], [large]);
+      yield* toldTimes(first.accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      const next = yield* localLaunch(root);
+      next.sealItems(LIVE_ANSWERED);
+      yield* next.open;
+      yield* settled;
+
+      assert.deepEqual(
+        next.asked.filter((each) => each.startsWith("account-items-")),
+        [],
+        "the next launch reads past the sync id kept, never whole",
+      );
     }).pipe(Effect.provide(localPlatform)),
 );
 

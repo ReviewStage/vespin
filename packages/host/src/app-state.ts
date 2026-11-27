@@ -69,6 +69,7 @@ import {
   type TaskListParts,
   type TasksView,
 } from "@repo/features/tasks-view";
+import type { ViewChoiceLiveRow } from "@repo/features/view-choice-live";
 import type { StandingCall } from "@repo/features/voice-wire";
 import type { WorkspaceIntegrations } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
@@ -547,6 +548,9 @@ export type AppMachines = Readonly<Record<string, AppHostRead<readonly MachineLi
 /** The asks the account's machines hold for its answer, by the account, as the host's read of them stands. */
 export type AppMachineAsks = Readonly<Record<string, AppHostRead<readonly MachineAskLine[]>>>;
 
+/** The account's view choices the windows hold, by the account, as the host's read of them stands, every choice still out drawn over them. */
+export type AppViewChoices = Readonly<Record<string, AppHostRead<readonly ViewChoiceLiveRow[]>>>;
+
 /**
  * Each workspace's pending invitations the host holds for an owner's or an
  * admin's windows (`workspace-invitations-read.ts`): those a window draws,
@@ -809,6 +813,7 @@ export interface AppHostReads {
   [LIVE_READ.HOSTS]: AppHostsHeld;
   [LIVE_READ.MACHINES]: readonly MachineLine[];
   [LIVE_READ.MACHINE_ASKS]: readonly MachineAskLine[];
+  [LIVE_READ.VIEW_CHOICES]: readonly ViewChoiceLiveRow[];
   [LIVE_READ.WORKSPACE_INVITATIONS]: readonly WorkspaceInvitation[];
   [LIVE_READ.THIS_MAC_HOST]: AppThisMacHost;
   [LIVE_READ.TRANSCRIPT]: AppTranscript;
@@ -989,6 +994,8 @@ export interface AppState {
   [LIVE_READ.MACHINES]: AppMachines;
   /** The asks the account's machines hold for its answer, held while a window could draw one: what an agent's tab asks over its box, and what a row counts as needing you. */
   [LIVE_READ.MACHINE_ASKS]: AppMachineAsks;
+  /** The account's view choices (a sort, a filter, a fold), held while a window draws a surface that reads one: what each such surface stands in. */
+  [LIVE_READ.VIEW_CHOICES]: AppViewChoices;
   /** Each workspace's pending invitations an owner's or an admin's windows draw, held while a window draws them and a while after: what Settings › Workspace lists under Invitations. */
   [LIVE_READ.WORKSPACE_INVITATIONS]: AppWorkspaceInvitations;
   /** Which machine This Mac is and the device its host's record names, held for the signed-in session and told as it moves: what Settings › Hosts and Runs on name This Mac by. */
@@ -1206,6 +1213,7 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.HOSTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.MACHINES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.MACHINE_ASKS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  [LIVE_READ.VIEW_CHOICES]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.WORKSPACE_INVITATIONS]: {
     keys: READ_KEYS.ONE,
     on: KEYS_ON.SLICE,

@@ -12,9 +12,13 @@ import {
   type PullRequestState,
 } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
+import { LIVE_READ } from "@repo/features/live-wire";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { type MacOffer, MODEL_PROVIDER } from "@repo/features/models-wire";
 import type { ListedPullRequest } from "@repo/features/task-wire";
+import type { ViewChoiceLiveRow } from "@repo/features/view-choice-live";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
+import { MANAGER_SORT, type ManagerSort } from "@repo/features/workspace-managers-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
@@ -29,8 +33,8 @@ import {
   type ModelsRead,
 } from "../tasks/use-agents.js";
 import { NEW_TASK_UNSHOWN, type NewTask } from "../tasks/use-new-task.js";
-import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
-import { handHostReads, handState, writeListedTasks } from "../testing/app-state.js";
+import { fakeActPort, fakeActPortCalls, refusedOnPort } from "../testing/app-bridge.js";
+import { handHostReads, handState, signedInAs, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { hoveredCard } from "../testing/desktop-inbox.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
@@ -42,6 +46,7 @@ import {
   tasksControl,
   withNewTaskShown,
 } from "../testing/tasks-control.js";
+import { hearViewChoices } from "../testing/view-choices.js";
 
 /**
  * sidebar-managers.test.ts -- the sidebar's Managers: the workspace's
@@ -115,6 +120,17 @@ const NOT_MANAGERS: readonly ListedAgent[] = [
   },
 ];
 
+/** The account signed in, whose view choices a test hands. */
+const ACCOUNT_ID = "user-ada";
+
+/** The account's choice of the workspace's Managers sort, as its read carries it. */
+const sortChoice = (value: ManagerSort): ViewChoiceLiveRow => ({
+  id: "0a1b2c3d-0000-4000-8000-0000000000f0",
+  key: VIEW_CHOICE_KEY.MANAGER_SORT,
+  workspaceId: WORKSPACE.id,
+  value,
+});
+
 /** A second model, which a Manager's Settings picks. */
 const SONNET = "anthropic/claude-sonnet-5.5";
 
@@ -158,8 +174,17 @@ async function mountSidebar(
   chosen: { agentId: string; model: string }[] = [],
   faced: { agentId: string; face: ManagerFace }[] = [],
   work: ManagerWork = NO_WORK,
+  choices?: readonly ViewChoiceLiveRow[],
 ): Promise<HTMLElement> {
-  handState({ [EXPERIMENT.MANAGERS]: on });
+  handState(
+    { [EXPERIMENT.MANAGERS]: on },
+    choices === undefined
+      ? {}
+      : {
+          account: signedInAs({ id: ACCOUNT_ID, email: "ada@example.com", name: "Ada" }).account,
+          [LIVE_READ.VIEW_CHOICES]: { [ACCOUNT_ID]: { rows: choices } },
+        },
+  );
   writeListedTasks({
     taskAgentPins: pinned.map((agentId) => ({ agentId, taskId: null, pinnedAt: 5 })),
     agentPullRequests: work.pullRequests,
@@ -306,8 +331,9 @@ test("a Manager's row hangs the Manager's card: where it stands, how many of the
   assert.ok(words?.includes("Open pull requests1"), "the card counts the one open pull request");
 });
 
-test("View options' Sort by › Recent activity lists the Manager that moved last first", async () => {
-  const sidebar = await mountSidebar(true, []);
+test("View options' Sort by keeps the sort on the account, whose sort lists the Manager that moved last first", async () => {
+  const sidebar = await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, []);
+  const written = hearViewChoices();
   const list = sidebar.querySelector('nav[aria-label="Managers"]') ?? assert.fail("Managers");
   const order = () => list.textContent?.indexOf("Frontend Manager") ?? -1;
 
@@ -326,10 +352,67 @@ test("View options' Sort by › Recent activity lists the Manager that moved las
 
   act(() => item("Sort by").click());
   act(() => item("Recent activity").click());
+  await settleQueries();
+
+  assert.deepEqual(
+    written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value })),
+    [
+      {
+        key: VIEW_CHOICE_KEY.MANAGER_SORT,
+        workspaceId: WORKSPACE.id,
+        value: MANAGER_SORT.RECENT_ACTIVITY,
+      },
+    ],
+  );
+
+  act(() => {
+    for (const root of roots.splice(0)) root.unmount();
+  });
+
+  const sorted = await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, [
+    sortChoice(MANAGER_SORT.RECENT_ACTIVITY),
+  ]);
+
+  const managers = sorted.querySelector('nav[aria-label="Managers"]') ?? assert.fail("Managers");
 
   assert.ok(
-    order() < (list.textContent?.indexOf("Billing Manager") ?? -1),
+    (managers.textContent?.indexOf("Frontend Manager") ?? -1) <
+      (managers.textContent?.indexOf("Billing Manager") ?? -1),
     "the Manager that settled last stands first",
+  );
+});
+
+test("a Managers sort this Mac kept itself moves up to the account once, and leaves the Mac", async () => {
+  window.localStorage.setItem(
+    "app.sidebarManagerSorts",
+    JSON.stringify({ [WORKSPACE.id]: MANAGER_SORT.NAME }),
+  );
+  const written = hearViewChoices();
+  await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, []);
+  await settleQueries();
+
+  assert.deepEqual(
+    written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value })),
+    [{ key: VIEW_CHOICE_KEY.MANAGER_SORT, workspaceId: WORKSPACE.id, value: MANAGER_SORT.NAME }],
+  );
+  assert.equal(window.localStorage.getItem("app.sidebarManagerSorts"), "{}");
+});
+
+test("a Managers sort the account refused to keep stays on this Mac, for the next launch to move up", async () => {
+  window.localStorage.setItem(
+    "app.sidebarManagerSorts",
+    JSON.stringify({ [WORKSPACE.id]: MANAGER_SORT.NAME }),
+  );
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.VIEW_CHOICE_WRITE]: () => Promise.reject(refusedOnPort("Not kept.")),
+  });
+  await mountSidebar(true, [], undefined, [], [], [], [], NO_WORK, []);
+  await settleQueries();
+
+  assert.equal(
+    window.localStorage.getItem("app.sidebarManagerSorts"),
+    JSON.stringify({ [WORKSPACE.id]: MANAGER_SORT.NAME }),
   );
 });
 

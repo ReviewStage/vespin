@@ -774,6 +774,7 @@ export function ListSection({
   const reduceMotion = useReduceMotion();
   const inset = useRowInset();
   const colors = useColors();
+  const dark = useColorScheme() === "dark";
 
   const setFolded = (next: boolean) => {
     setOwn(next);
@@ -820,6 +821,7 @@ export function ListSection({
         groups: menuTree(menu, {
           act: colors.TEXT_MUTED,
           tone: (tone) => toneColor(colors, tone),
+          section: (color) => sectionInk(color, dark),
         }),
       })
     : undefined;

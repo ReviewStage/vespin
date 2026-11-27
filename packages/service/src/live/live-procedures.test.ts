@@ -68,7 +68,7 @@ import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { BROWSER_CURSOR_KIND } from "@repo/features/browser-agent-actions";
 import { TASK_BROWSER_TABS_READ } from "@repo/features/browser-tabs-live";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
-import { CLIENT_HEADER } from "@repo/features/client-identity";
+import { CLIENT_HEADER, HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
 import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
@@ -2635,7 +2635,7 @@ const askHeld = (
   path: string,
   sync?: string,
   hub?: SyncService,
-  paging?: { readonly page?: string },
+  paging?: { readonly page?: string; readonly build?: Readonly<Record<string, string>> },
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
@@ -2664,7 +2664,7 @@ const askHeld = (
       new Request(url, {
         headers: {
           authorization: `Bearer ${bearer}`,
-          ...(paging === undefined ? undefined : PAGED_BUILD),
+          ...(paging === undefined ? undefined : (paging.build ?? PAGED_BUILD)),
         },
       }),
     );
@@ -2676,7 +2676,13 @@ const askHeld = (
   });
 
 /** The headers of a build that reads a whole answer in pages: an iPhone's at the first hosted API version that does. */
-const PAGED_BUILD = { [CLIENT_HEADER.CLIENT]: "ios/1.0", [CLIENT_HEADER.API_VERSION]: "10" };
+const PAGED_BUILD = { [CLIENT_HEADER.CLIENT]: "ios/1.0", [CLIENT_HEADER.API_VERSION]: "12" };
+
+/** The headers of a build at the hosted API version the clients ship, none of which follows a page. */
+const SHIPPED_BUILD = {
+  [CLIENT_HEADER.CLIENT]: "desktop/1.0",
+  [CLIENT_HEADER.API_VERSION]: String(HOSTED_API_VERSION),
+};
 
 /** The task list asked as a build that reads pages, as `bearer`, past `sync`, or the page `page` names, its parts decoded. */
 const askTaskPage = (bearer: string, sync: string, page?: string) =>
@@ -2827,6 +2833,48 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
 
         const caught = yield* askTasks(dana, at);
         assert.deepEqual(idsOf(caught.tasks), [renamed]);
+      }),
+  );
+
+  it.effect(
+    "a build at the hosted API version the clients ship is answered the task list whole in one answer, past a page's length",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        const base = (yield* Clock.currentTimeMillis) + 86_400_000;
+
+        const { seed, ids } = yield* writeTasks(
+          dana,
+          Array.from(
+            { length: 80 },
+            (_, at) => [`Task ${at}`, new Date(base + at * 1_000)] as const,
+          ),
+        );
+
+        const answer = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(
+          yield* askHeld(dana, "/api/live/tasks", "", undefined, { build: SHIPPED_BUILD }),
+        ).queries;
+
+        assert.equal(answer.tasks.sync?.page, undefined);
+        assert.deepEqual(idsOf(answer.tasks), [seed, ...ids].toSorted());
+      }),
+  );
+
+  it.effect(
+    "a build at a version answered first pages it never followed, past a sync id from before they stopped, is answered the task list whole",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        const kept = yield* startTask(dana, { name: "Teammate invitations" });
+        const past = (yield* askTasks(dana, "")).tasks.sync?.next;
+        assert.ok(past !== undefined);
+
+        const answer = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(
+          yield* askHeld(dana, "/api/live/tasks", past, undefined, { build: SHIPPED_BUILD }),
+        ).queries;
+
+        assert.equal(answer.tasks.sync?.past, undefined);
+        assert.deepEqual(idsOf(answer.tasks), [kept.id]);
       }),
   );
 

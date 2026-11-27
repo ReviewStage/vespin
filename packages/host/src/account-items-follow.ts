@@ -67,16 +67,20 @@ import {
  * read again after `LIVE_RESTART`, whole, keeping what it told; one refused
  * before it ever answered is told as failed.
  *
- * Each answer is kept in the local database (`PoolRead.kept`): the items
+ * Each answer is kept in the local database (`PoolRead.kept`): every item
  * as the follow took them from the service, never with a write drawn over
- * them, the first in the order a plan's list draws them that fit in
- * `KEPT_CHARACTERS`, with the plan each is on and the sync id they were
- * read at as the read's cursor. The follow draws what the database held as
- * its read stands, before it reads, so a launch draws the Inbox at once,
- * and its first attempt reads past the sync id kept where the database
- * kept every item, since a read past an id answers every item that moved
- * since it; where it kept only the first, the first read is whole, since
- * an item left out that never moved would never be answered again.
+ * them, with the plan each is on and the sync id they were read at as the
+ * read's cursor, each answer writing only the items that moved. The follow
+ * draws what the database held as its read stands, before it reads, so a
+ * launch draws the Inbox at once, and its first attempt reads past the sync
+ * id kept where the database kept every item, since a read past an id
+ * answers every item that moved since it; where it kept fewer, as one kept
+ * by a build that kept only the first items, the first read is whole, since
+ * an item left out that never moved would never be answered again. Note
+ * that the items are kept however many there are, because the read the
+ * kept Inbox spares, a busy account's whole Inbox, costs the service
+ * seconds and carries the same items the launch would decode anyway; a
+ * phone keeps its Inbox on disk row by row instead (`account-items-stored.ts`).
  *
  * Beside them it keeps the tasks the items stand on as the task list summed
  * them up when the items were kept (`keptHolders`), the latest changed
@@ -88,23 +92,6 @@ import {
  * than waiting on the whole list, which on a phone with thousands of tasks
  * is most of a launch.
  */
-
-/**
- * The most characters of items kept on disk, as JSON: about 1 MB, an Inbox
- * of some 130 threads whole, so its first read goes past the sync id it was
- * kept at, and the first 600 or so of a larger one. Note that it is bound,
- * because the items are read and decoded whole before a launch draws the
- * Inbox: the kept rows' decode on Hermes is about 55 ms a MB on the iPhone
- * 18 Pro and the iOS 26.5 iPad alike, so this many add about 60 ms, where a
- * 640-thread Inbox's 4.8 MB would add about 0.3 s to every launch.
- */
-const KEPT_CHARACTERS = 1_000_000;
-
-/** The items the local database keeps: the first, in the order a plan's list draws them, whose JSON fits in `KEPT_CHARACTERS`. */
-const KEPT_INBOX_BOUND = {
-  size: (item: InboxItem) => JSON.stringify(item).length,
-  within: KEPT_CHARACTERS,
-};
 
 /**
  * The most tasks kept beside the items, the latest changed first: every task
@@ -219,9 +206,7 @@ function withinWindow(held: Map<string, HeldItem>, now: number): void {
 /**
  * What the local database keeps beside the items, as the read's cursor: the
  * sync id they were read at, where they were, and the plan each item held
- * is on, since an item names none of its own. The pool keeps it whole even
- * where the bound left items out, so the plans of the items it kept are
- * always among it.
+ * is on, since an item names none of its own.
  */
 const keptInboxSchema = Schema.Struct({
   at: Schema.optionalKey(Schema.String),
@@ -506,7 +491,7 @@ export function followAccountItems(
 
             return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
           },
-          kept: { ...KEPT_LIST.INBOX, bound: KEPT_INBOX_BOUND },
+          kept: KEPT_LIST.INBOX,
           owns: true,
         },
       );

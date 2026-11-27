@@ -24,6 +24,7 @@
  */
 
 import { accountSound, accountSoundChoice } from "../schemas/account-sound.js";
+import { accountViewChoice } from "../schemas/account-view-choice.js";
 import { agentDelegationTable, agentTable } from "../schemas/agent.js";
 import { agentApproval } from "../schemas/agent-approval.js";
 import { agentBootTable } from "../schemas/agent-boot.js";
@@ -279,19 +280,22 @@ export const managerChatReactionSync = defineSyncTable(managerChatReaction, {
   topics: [{ kind: TOPIC.AGENT, column: managerChatReaction.agentId }],
 });
 
-/** An account's membership of a workspace, on the workspace's topic and the account's. */
+/** An account's membership of a workspace, on the workspace's topic, its people's, and the account's. */
 export const memberSync = defineSyncTable(member, {
   topics: [
     { kind: TOPIC.WORKSPACE, column: member.organizationId },
+    { kind: TOPIC.WORKSPACE_PEOPLE, column: member.organizationId },
+    { kind: TOPIC.WORKSPACE_AUTOMATIONS, column: member.organizationId },
     { kind: TOPIC.ACCOUNT, column: member.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: member.userId },
   ],
   log: LOG.EVERY,
 });
 
 /**
  * An account, on its own topic and, through its memberships, every
- * workspace it is in, so a teammate's new name or picture reaches the
- * workspace's reads. Note that when it last moved and how it last signed in
+ * workspace it is in and its people, so a teammate's new name or picture
+ * reaches the workspace's reads. Note that when it last moved and how it last signed in
  * are ignored, because every sign-in rewrites both and no view reads them,
  * and so is its time zone, which only an agent's turn reads.
  * The admin plugin's ban columns stay watched, since nothing of ours writes
@@ -304,7 +308,10 @@ export const userSync = defineSyncTable(user, {
       through: member,
       key: member.userId,
       by: user.id,
-      topics: [{ kind: TOPIC.WORKSPACE, column: member.organizationId }],
+      topics: [
+        { kind: TOPIC.WORKSPACE, column: member.organizationId },
+        { kind: TOPIC.WORKSPACE_PEOPLE, column: member.organizationId },
+      ],
     },
   ],
   ignore: [user.updatedAt, user.lastLoginMethod, user.timeZone],
@@ -419,7 +426,10 @@ export const githubInstallationSync = defineSyncTable(githubInstallation, {
 
 /** A member's own GitHub token, on the member's topic. */
 export const githubPersonalTokenSync = defineSyncTable(githubPersonalToken, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: githubPersonalToken.userId }],
+  topics: [
+    { kind: TOPIC.ACCOUNT, column: githubPersonalToken.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: githubPersonalToken.userId },
+  ],
   log: LOG.EVERY,
 });
 
@@ -430,7 +440,10 @@ export const githubPersonalTokenSync = defineSyncTable(githubPersonalToken, {
  * mostly stands, and no read gates on it.
  */
 export const githubRepositoryReadSync = defineSyncTable(githubRepositoryRead, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: githubRepositoryRead.userId }],
+  topics: [
+    { kind: TOPIC.ACCOUNT, column: githubRepositoryRead.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: githubRepositoryRead.userId },
+  ],
   ignore: [githubRepositoryRead.checkedAt],
   log: LOG.EVERY,
 });
@@ -539,6 +552,17 @@ export const accountSoundChoiceSync = defineSyncTable(accountSoundChoice, {
 });
 
 /**
+ * One view choice the account keeps, on the account's topic, which its read
+ * of its view choices is woken on: a choice made, changed, or forgotten.
+ * Its instant is ignored, since no read carries it, so a choice made again
+ * as it stood wakes nothing.
+ */
+export const accountViewChoiceSync = defineSyncTable(accountViewChoice, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: accountViewChoice.userId }],
+  ignore: [accountViewChoice.updatedAt],
+});
+
+/**
  * One account's connection to an account at an integration, on the
  * account's integrations topic, which only its open integration reads are
  * woken on: the account's own topic would wake its task list and its inbox
@@ -640,7 +664,10 @@ export const inboxItemSync = defineSyncTable(inboxItem, {
       through: member,
       key: member.organizationId,
       by: inboxItem.organizationId,
-      topics: [{ kind: TOPIC.ACCOUNT, column: member.userId }],
+      topics: [
+        { kind: TOPIC.ACCOUNT, column: member.userId },
+        { kind: TOPIC.ACCOUNT_INBOX, column: member.userId },
+      ],
     },
   ],
   log: LOG.EVERY,
@@ -667,6 +694,7 @@ export const inboxMessageSync = defineSyncTable(inboxMessage, {
 export const inboxItemReadSync = defineSyncTable(inboxItemRead, {
   topics: [
     { kind: TOPIC.ACCOUNT, column: inboxItemRead.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: inboxItemRead.userId },
     {
       through: inboxItem,
       key: inboxItem.id,
@@ -709,7 +737,9 @@ export const attachmentSync = defineSyncTable(attachment, {
 export const automationSync = defineSyncTable(automation, {
   topics: [
     { kind: TOPIC.WORKSPACE, column: automation.organizationId },
+    { kind: TOPIC.WORKSPACE_AUTOMATIONS, column: automation.organizationId },
     { kind: TOPIC.ACCOUNT, column: automation.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: automation.userId },
   ],
   log: LOG.ROWS,
 });
@@ -725,11 +755,15 @@ export const automationSync = defineSyncTable(automation, {
 export const automationRunSync = defineSyncTable(automationRun, {
   topics: [
     { kind: TOPIC.ACCOUNT, column: automationRun.userId },
+    { kind: TOPIC.ACCOUNT_INBOX, column: automationRun.userId },
     {
       through: automation,
       key: automation.id,
       by: automationRun.automationId,
-      topics: [{ kind: TOPIC.WORKSPACE, column: automation.organizationId }],
+      topics: [
+        { kind: TOPIC.WORKSPACE, column: automation.organizationId },
+        { kind: TOPIC.WORKSPACE_AUTOMATIONS, column: automation.organizationId },
+      ],
     },
   ],
   log: LOG.ROWS,
@@ -991,6 +1025,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   accountPreferenceSync,
   accountSoundSync,
   accountSoundChoiceSync,
+  accountViewChoiceSync,
   integrationConnectionSync,
   runnerLineSync,
   agentQueueSync,

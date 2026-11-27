@@ -22,7 +22,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ActorRef } from "../actor-ref.js";
 import { githubTokenQuery, repositoryListsQuery } from "../live-reads.js";
 import { useOpenSettings } from "../open-settings.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import {
   ANY_OWNER,
   otherOwnersWords,
@@ -145,7 +145,7 @@ export interface RepositoryMend {
 export function useRepositoryMend(chooser: RepositoryChooser): RepositoryMend | undefined {
   const openSettings = useOpenSettings();
   const listed = useQuery(repositoryListsQuery(chooser.scope ?? EVERY_WORKSPACE)).data;
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const token = useQuery(githubTokenQuery(accountId)).data?.token;
   // Note that every workspace's listing speaks for no one workspace, so the press waits for one to be chosen.
   const { scope } = chooser;

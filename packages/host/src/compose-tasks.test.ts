@@ -218,6 +218,25 @@ it.effect(
     }),
 );
 
+it.effect(
+  "a number no task of the account's answers to is answered as not found, told apart from a find the service never answered",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([]);
+      const { call } = yield* subject(service);
+
+      const missing = yield* call("TASKS_FIND", { workspace: "acme", number: 7 });
+
+      service.find = () =>
+        Effect.succeed({ ok: false, failure: TASK_CALL_FAILURE.UNANSWERED } as const);
+
+      const unanswered = yield* call("TASKS_FIND", { workspace: "acme", number: 7 });
+
+      assert.deepEqual(missing, { failure: TASK_CALL_FAILURE.NOT_FOUND });
+      assert.deepEqual(unanswered, { failure: TASK_CALL_FAILURE.UNANSWERED });
+    }),
+);
+
 it.effect("the window's refresh lists the plans and opening one draws its saved document", () =>
   Effect.gen(function* () {
     const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);

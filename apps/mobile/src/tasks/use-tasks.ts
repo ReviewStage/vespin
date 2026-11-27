@@ -31,10 +31,12 @@ import {
 import {
   TASK_SECTION_WRITE,
   type TaskSection,
+  type TaskSectionIcon,
   type TaskSectionWrite,
 } from "@repo/features/task-section-wire";
 import {
   NO_TASK_SECTIONS,
+  newSectionWrites,
   placeWrites,
   SECTION_DELETED,
   SECTION_WRITE_FAILED_NOTE,
@@ -69,6 +71,7 @@ import {
   MARK_FAILED_NOTES,
   PRIORITY_FAILED_NOTE,
   RENAME_FAILED_NOTE,
+  REPOSITORY_PIN_FAILED_NOTES,
   repositoryChangeFailureNote,
   type StopAgentsWords,
   settleFailedNote,
@@ -104,6 +107,7 @@ import {
 } from "@repo/ui-native";
 import { caseWhen, coalesce, eq, gt, inArray, isUndefined, or } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
+import { randomUUID } from "expo-crypto";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -327,6 +331,16 @@ export interface TaskPlacing {
   readonly renameSection: (section: TaskSection, title: string) => void;
   /** Deletes one of the member's sections, its tasks left where they stand, and offers Undo, as the panel's Delete section does. */
   readonly deleteSection: (section: TaskSection) => void;
+  /** Gives one of the member's sections another icon, keeping its name, or none under null, as the panel's Change icon does. */
+  readonly setSectionIcon: (section: TaskSection, icon: TaskSectionIcon | null) => void;
+  /** Makes a section named `title`, and puts `task` on top of it where one is given, as the panel's New section does from the Tasks head and from Move to section: in the task's own workspace, else the listed one; none before the workspace is read. */
+  readonly newSection:
+    | ((title: string, task?: { readonly id: string; readonly workspaceId: string }) => void)
+    | undefined;
+  /** The repositories the account keeps at the top of its list, the first kept first. */
+  readonly pinnedRepositories: readonly string[];
+  /** Keeps a repository's group at the top of the list, or stops, as the panel's Keep at top does. */
+  readonly pinRepository: (repository: string, pinned: boolean) => void;
 }
 
 /**
@@ -347,6 +361,11 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
   const { data: state = NO_TASK_SECTIONS } = useQuery({
     ...appStateQuery,
     select: (snapshot) => snapshot.tasks.taskSections ?? NO_TASK_SECTIONS,
+  });
+
+  const { data: pinnedRepositories = NO_REPOSITORY_PINS } = useQuery({
+    ...appStateQuery,
+    select: selectPinnedRepositories,
   });
 
   const { listed } = useWorkspaceRepositories(workspaceId);
@@ -371,22 +390,53 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
       });
     };
 
-    const renameSection = (section: TaskSection, title: string) => {
-      // Note that a name left blank keeps the one it had, as the panel's rename never leaves a section nameless.
-      const named = title.trim() === "" ? section.title : title.trim();
+    // Note that an edit reads the section as it stands when the write goes, not as the menu or alert that asked found it, because an edit writes its name and its icon together, and a change landing meanwhile from another device would be written back over.
+    const standing = (section: TaskSection) =>
+      current.current.sections.find((each) => each.id === section.id) ?? section;
 
-      if (named === section.title) return;
+    const renameSection = (section: TaskSection, title: string) => {
+      const now = standing(section);
+      // Note that a name left blank keeps the one it had, as the panel's rename never leaves a section nameless.
+      const named = title.trim() === "" ? now.title : title.trim();
+
+      if (named === now.title) return;
       void sendSections(
-        [
-          {
-            kind: TASK_SECTION_WRITE.EDIT,
-            id: section.id,
-            title: named,
-            icon: section.icon ?? null,
-          },
-        ],
-        section.id,
+        [{ kind: TASK_SECTION_WRITE.EDIT, id: now.id, title: named, icon: now.icon ?? null }],
+        now.id,
       );
+    };
+
+    const setSectionIcon = (section: TaskSection, icon: TaskSectionIcon | null) => {
+      const now = standing(section);
+
+      void sendSections(
+        [{ kind: TASK_SECTION_WRITE.EDIT, id: now.id, title: now.title, icon }],
+        now.id,
+      );
+    };
+
+    const newSection = (
+      inWorkspace: string,
+      title: string,
+      task?: { readonly id: string; readonly workspaceId: string },
+    ) => {
+      const id = randomUUID();
+
+      void sendSections(newSectionWrites(id, title, inWorkspace, task, Date.now()), id);
+    };
+
+    const pinRepository = (repository: string, pinned: boolean) => {
+      void write(() => acts[ACT_KIND.TASKS_PIN_REPOSITORY]({ repository, pinned }), {
+        refused: (changed) =>
+          changed
+            ? undefined
+            : pinned
+              ? REPOSITORY_PIN_FAILED_NOTES.PIN
+              : REPOSITORY_PIN_FAILED_NOTES.UNPIN,
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.REPOSITORY_PIN, id: repository },
+        went: BUZZ.SUCCESS,
+      });
     };
 
     const deleteSection = (section: TaskSection) => {
@@ -447,8 +497,16 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
       setRepository,
       renameSection,
       deleteSection,
+      setSectionIcon,
+      newSection:
+        workspaceId === undefined
+          ? undefined
+          : (title: string, task?: { readonly id: string; readonly workspaceId: string }) =>
+              newSection(workspaceId, title, task),
+      pinnedRepositories,
+      pinRepository,
     };
-  }, [acts, write, notices, state, workspaceId, listed, repositoryPictureOf]);
+  }, [acts, write, notices, state, workspaceId, listed, repositoryPictureOf, pinnedRepositories]);
 }
 
 /** What the Tasks tab draws: the tree, what a search finds, each row's look, and the acts on a row. */
@@ -618,6 +676,14 @@ function selectListingParts(state: AppStateSnapshot) {
     repositoryPins: state.tasks.repositoryPins,
     agentsListed: selectTaskListListed(state),
   };
+}
+
+/** No repository kept at top, the same array every render. */
+const NO_REPOSITORY_PINS: readonly string[] = [];
+
+/** The repositories the account keeps at the top of its list, by name, the first kept first. */
+function selectPinnedRepositories(state: AppStateSnapshot): readonly string[] {
+  return (state.tasks.repositoryPins ?? []).map((pin) => pin.repository);
 }
 
 /** The task list's rows as the listing reads them off its collections. */

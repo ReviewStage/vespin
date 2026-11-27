@@ -13,7 +13,7 @@
  * open Manager's row still standing under the fold; its + opens New Manager
  * (`new-manager-dialog.tsx`), and its View options' Sort by lists the
  * Managers by recent activity, name, or date created, kept per workspace on
- * this machine (`manager-sort.ts`), newest started first until one is chosen. A Manager the reader pinned,
+ * the account, so every device lists them alike (`manager-sort.ts`), newest started first until one is chosen. A Manager the reader pinned,
  * from its row's menu, stands under Pinned alone, not here, until Unpin, drawn as the
  * same row (`SidebarManagerRow`, `useManagersByPin`) among the pinned
  * tasks, and dragged among them (`sidebar-entries.tsx`); and one the reader

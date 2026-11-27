@@ -2445,8 +2445,8 @@ test("the owner invites an address as a role, sees it pending with its link to c
   act(() => button(row, "Copy link").click());
   await settle();
   const invitationLink = copied.slice();
-  await chooseAction(row, "Cancel invitation");
-  act(() => button(dialog(), "Cancel invitation").click());
+  await chooseAction(row, "Revoke invitation");
+  act(() => button(dialog(), "Revoke invitation").click());
   await settle();
 
   assert.deepEqual(invitationLink, [
@@ -2525,7 +2525,7 @@ test("an admin's Invite card shows the role, Admin unavailable since only the ow
   );
 });
 
-test("Canceling an invitation asks first, in the accent rather than red, and sends nothing until it is answered", async () => {
+test("Revoking an invitation asks first, in the accent rather than red, and sends nothing until it is answered", async () => {
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
   await invite(page, "alan@example.com", WORKSPACE_ROLE.MEMBER);
 
@@ -2536,9 +2536,9 @@ test("Canceling an invitation asks first, in the accent rather than red, and sen
   const cancels = () =>
     sent.filter((request) => request.kind === ACT_KIND.WORKSPACE_INVITATION_CANCEL).length;
 
-  await chooseAction(row, "Cancel invitation");
+  await chooseAction(row, "Revoke invitation");
   const asked = cancels();
-  const answer = button(dialog(), "Cancel invitation");
+  const answer = button(dialog(), "Revoke invitation");
 
   assert.equal(asked, 0, "nothing is sent while it asks");
   assert.match(dialog().textContent ?? "", /alan@example\.com/u);
@@ -2548,7 +2548,7 @@ test("Canceling an invitation asks first, in the accent rather than red, and sen
   assert.deepEqual(invitationRows(page), []);
 });
 
-test("each pending invitation's ⋯ is named by its address, so a reader hears which one Cancel invitation cancels", async () => {
+test("each pending invitation's ⋯ is named by its address, so a reader hears which one Revoke invitation revokes", async () => {
   invitations = ["sam", "ada"].map((name) => ({
     id: `inv-${name}`,
     email: `${name}@example.com`,

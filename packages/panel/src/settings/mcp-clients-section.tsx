@@ -65,7 +65,7 @@ import { copyThroughShell } from "../copy-feedback.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
 import { mcpClientsQuery, mcpClientsRetryMutation } from "../live-reads.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-sections.js";
@@ -519,7 +519,7 @@ function ConnectRows({
  * stands its sign-in over its install.
  */
 export function McpSection(): React.JSX.Element {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const read = useQuery(mcpClientsQuery(accountId));
   const retry = useMutation(mcpClientsRetryMutation());
   const rows = read.data;

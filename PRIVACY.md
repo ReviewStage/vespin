@@ -420,6 +420,14 @@ settings, outside Vespin. Showing one sends nothing to us or anyone else. It is 
 turn it on. The notification that a command waits on your Mac, which the Mac
 app shows whatever this setting, names no command.
 
+How you choose to have diffs and files drawn in Settings › Appearance (line
+numbers, word wrap, the layout, how changes are marked, backgrounds, the
+light and dark syntax themes, the font and its ligatures, and whether inline
+comments stand minimized) is kept with your account, so each of your
+signed-in apps draws them the same way; the font size and line height stay on
+each device. Only apps signed in to your account read these choices, and they
+are deleted with your account.
+
 If you add your own sounds in Settings › Preferences › Notifications, to play when an
 agent finishes or something needs you, we keep **each sound's audio and the
 name you give it** with your account: its bytes, its audio type, a
@@ -429,6 +437,12 @@ never keep the file's own name, which the app only offers as the name to
 start from, and a sound is sent only to apps signed in to your account.
 You can rename or remove each one in the same place, and all of them are
 deleted with your account.
+
+How you choose to read your own lists, such as how a workspace's Managers
+are sorted, is kept with your account, so each of your signed-in apps shows
+them the same way: **which choice you made, and for which workspace**. A
+choice is read only by apps signed in to your account, never by a teammate,
+and it is deleted with the workspace it was made for or with your account.
 
 If you sign in to the Vespin iOS app and allow notifications, the app
 registers your iPhone's Apple push token with the Service, with which of
@@ -534,12 +548,15 @@ protected by your Mac's disk encryption (FileVault) where you turn it on. The
 app deletes it when you sign out. The Vespin iOS app keeps the same database
 on your iPhone, in its own storage, protected by the iPhone's Data
 Protection, and deletes it when you sign out. On the Mac your sign-in tokens
-are kept encrypted under a key in the macOS Keychain. On the iPhone they are
-kept in the iPhone's Keychain itself, readable after the phone's first unlock
-since it started, never synced to iCloud or moved to another device, and
-deleted when you sign out. Earlier versions of the app kept them encrypted in
-its own files under a key in the Keychain; once the tokens moved into the
-Keychain itself, the app deletes that key.
+are kept encrypted under a key in the macOS Keychain. That key stays in the
+Keychain, and a build of Vespin signed by another Apple developer team than
+the one that made it can read it only when you allow it, which macOS asks
+once; if you refuse, the app signs you out, and you sign in again. On the
+iPhone they are kept in the iPhone's Keychain itself, readable after the
+phone's first unlock since it started, never synced to iCloud or moved to
+another device, and deleted when you sign out. Earlier versions of the app
+kept them encrypted in its own files under a key in the Keychain; once the
+tokens moved into the Keychain itself, the app deletes that key.
 
 When you close New task in the Vespin iOS app and choose Save draft, the
 app keeps that draft's words on your iPhone or iPad, one draft for each
@@ -716,7 +733,7 @@ delete fails or does not finish in time, it may remain. A repository snapshot
 made before default-branch drives expires thirty days after its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
-  preferences, your sounds, integration records, your phones' push
+  preferences, your sounds, your view choices, integration records, your phones' push
   tokens, when you were last active at a client, and the notifications held
   for you) is deleted at once.
 - **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,

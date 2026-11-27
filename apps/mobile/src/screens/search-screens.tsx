@@ -719,7 +719,8 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
   const open = useOpenPicked(foundRoutes(found), leave);
   const goTo = useGoTo(leave);
   // Note that the places found stand under All alone, as Commands, since a kind's own scope lists that kind.
-  const places = scope === SEARCH_SCOPE.ALL ? goToShown(goTo.reached, query) : [];
+  // Note that the places are matched to the words the rows were found for, so the empty state and Commands never disagree while the finding catches up with a key typed.
+  const places = scope === SEARCH_SCOPE.ALL ? goToShown(goTo.reached, found.answered) : [];
 
   const shown = scopedFound(found, scope);
   const reading = scopeReading(found, scope);
@@ -732,9 +733,9 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
     onPress: () => setScope(each),
   }));
 
-  // Note that a scope that found nothing says so only once the lists it searches have answered and the finding has caught up with what is typed; until then it says what it reads, or keeps the last query's rows, as the panel's ⌘K does.
+  // Note that a scope that found nothing says so only once the lists it searches have answered, and until the finding catches up with a key typed it keeps what the last words found, their rows or their empty state alike, as the panel's ⌘K does, so a key typed never blanks the page.
   const unread = scopeUnread(found, scope);
-  const empty = none && (reading !== undefined || unread !== undefined || found.current);
+  const empty = none;
 
   // Note that the scopes stand as the results' first row, so they scroll away with them, and over a scope that found nothing, so another is one tap away, a miss saying it in Apple's own words under the query. The list stands even where the scope found nothing, its words its one row, so a pull still reads the workspace again.
   const results = (
@@ -766,7 +767,7 @@ function useSearchScreen({ query, scope, setScope }: SearchWords, leave?: () => 
           <EmptyState title={unread.title} symbol={GLYPH.FAILED} retry={unread.retry} />
         ) : (
           <EmptyState
-            title={noResultsForWords(query)}
+            title={noResultsForWords(found.answered)}
             symbol={GLYPH.SEARCH}
             description={NO_RESULTS_HINT}
           />

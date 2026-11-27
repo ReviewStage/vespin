@@ -147,7 +147,7 @@ export const CODEX_PIN = {
  * as it looks for it (`CURSOR_SDK_ENTRY`). It needs Node 22.13 or later.
  */
 export const CURSOR_SDK_PIN = {
-  VERSION: "1.5.0",
+  VERSION: "1.5.2",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/cursor-sdk`,
   /** The SDK's ES module entry, under `DIRECTORY`. */
   ENTRY: "node_modules/@cursor/sdk/dist/esm/index.js",
@@ -288,7 +288,7 @@ export const NODE_MAC_PIN: AgentToolPin = {
 const HOST_CLI_VERSION = {
   CLAUDE_CODE: "0.3.332",
   CODEX: "0.172.0",
-  CURSOR_SDK: "1.5.0",
+  CURSOR_SDK: "1.5.2",
   GH: "2.103.3",
 } as const;
 
@@ -352,8 +352,8 @@ export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
   NAME: "cursor-sdk",
   VERSION: HOST_CLI_VERSION.CURSOR_SDK,
   ARCHIVE: npmArchive("@cursor/sdk", `sdk-${HOST_CLI_VERSION.CURSOR_SDK}.tgz`),
-  SHA256: "c4e57d8a830de36bcffc3c7c91b1041e9a4053d4768b9bbc1ee6f57989e95151",
-  BYTES: 5_163_367,
+  SHA256: "9decca492a2cfa1974670501dd3716174c1090ab7a01d047f1ebc37abf98ff57",
+  BYTES: 5_229_143,
   ROOT: "package",
   MEMBERS: ["package.json", "dist"],
   BINARY: "dist/esm/index.js",
@@ -363,15 +363,15 @@ export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
     "node_modules/@cursor/sdk-darwin-arm64/bin/cursorsandbox",
   ],
   FILES: {
-    "dist/esm/index.js": "9458e32dbb377437551599e62dd78d95f9993b8bdc0dd4499486f4d4c450a83a",
+    "dist/esm/index.js": "74e1ba15c22c39672ca8ffd272cbab651d84feceb047dd49b802c57259331ea5",
     "node_modules/@cursor/sdk-darwin-arm64/bin/rg":
-      "23148b6e93ef13b5ce4838820aca3b7864c4360a1b9ce28a1ec55c1027d06e94",
+      "2542d784f76324d63635e9aeaea9955bf367e9ae6f2cef4fb8adfae93793d6d9",
     "node_modules/@cursor/sdk-darwin-arm64/bin/cursorsandbox":
-      "dae99a088745d0c403061aa5bbfe4e4c2be6ea52ea8c05632e0be361b219e5cc",
+      "feff659dbefbe674cdf2a26b7680ac42bb9d001fefef12999bce418801266ba2",
     "node_modules/@cursor/sdk-darwin-arm64/vendor/tree-sitter/binding.node":
-      "f479bf9c7353485b4ebbb5cc06e83b7674fa9826917a54bd18a24c67f2cd77d9",
+      "231acbae51eae85b67f42eaeb26dba3367e935581a77e6c876f8555a1a657348",
     "node_modules/@cursor/sdk-darwin-arm64/vendor/tree-sitter-bash/binding.node":
-      "629b778a0de277a949405b3a3aefbc0290b78e54cc7c49b54a4f628c291be07b",
+      "5eed390dd90de22ea88292a17ab4b4ddf2021ef0c54d58bc1f87f9b8010682ed",
   },
   PARTS: [
     {
@@ -379,31 +379,10 @@ export const CURSOR_SDK_MAC_PIN: AgentToolPin = {
         "@cursor/sdk-darwin-arm64",
         `sdk-darwin-arm64-${HOST_CLI_VERSION.CURSOR_SDK}.tgz`,
       ),
-      SHA256: "3677c47e3ab8e4dad9b450222efd2317d2f14717a2ef2e1ed9d463ea150978ab",
-      BYTES: 3_515_265,
+      SHA256: "86e713a37a83c1dda5348d1010724206e87eea9de489765974071c9f17bbdb48",
+      BYTES: 3_524_335,
       ROOT: "package",
       INTO: "node_modules/@cursor/sdk-darwin-arm64",
-    },
-    {
-      ARCHIVE: npmArchive("@bufbuild/protobuf", "protobuf-1.10.0.tgz"),
-      SHA256: "2219bc26e399a6e8ee56a3daf8a3bf47f4e935f425c22b812d991316dd665266",
-      BYTES: 189_348,
-      ROOT: "package",
-      INTO: "node_modules/@bufbuild/protobuf",
-    },
-    {
-      ARCHIVE: npmArchive("@connectrpc/connect", "connect-1.7.0.tgz"),
-      SHA256: "cdcd4386d3f4d750bcfe5b56d1247eb6c2ed0b2ddd3e496517033f925cfe5206",
-      BYTES: 104_162,
-      ROOT: "package",
-      INTO: "node_modules/@connectrpc/connect",
-    },
-    {
-      ARCHIVE: npmArchive("@connectrpc/connect-web", "connect-web-1.7.0.tgz"),
-      SHA256: "8c3fe6386c920e95cec20f483d228c2ba91e084fc99f9002a4445cd9707e700c",
-      BYTES: 8_004,
-      ROOT: "package",
-      INTO: "node_modules/@connectrpc/connect-web",
     },
     {
       ARCHIVE: npmArchive("@statsig/js-client", "js-client-3.31.0.tgz"),

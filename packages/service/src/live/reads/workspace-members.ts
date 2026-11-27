@@ -7,13 +7,14 @@
  * (`WORKSPACE_MEMBERS_READ`). A workspace the reader is no member of is
  * answered as not found.
  *
- * It is woken on the workspace's topic by a membership, a member's account,
- * and the work that names a former member. Note that a description
- * revision wakes nothing here, since it only decides who counts as a former
- * member and the change that moves that, its task deleted, wakes the
- * workspace through the task; nor does a former member renaming themselves,
- * who is in no membership the account's write looks up: both show at the
- * hold's end.
+ * It is woken on the workspace's people's topic, by a membership and a
+ * member's account alone, never by the workspace's work: every task, agent,
+ * turn, and sandbox write names the workspace's own topic, and woke every
+ * open people read of it to read its former members again, the service's
+ * most read statement, for a list that only membership moves. Note that a
+ * former member's work deleted, the one write of its work that moves who
+ * counts as a former member, and a former member renaming themselves, who
+ * is in no membership the account's write looks up, show at the hold's end.
  */
 
 import { queryBuilder } from "@repo/database/core/query";
@@ -45,7 +46,7 @@ export const workspaceMembersRead = bindLiveRead(WORKSPACE_MEMBERS_READ, {
     descriptionRevisionSync,
     inboxItemSync,
   ],
-  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE, workspaceId]],
+  topics: ({ workspaceId }) => [[TOPIC.WORKSPACE_PEOPLE, workspaceId]],
   statements: ({ userId, workspaceId }) => {
     const reached = workspaceReachableBy(userId, workspaceId);
 

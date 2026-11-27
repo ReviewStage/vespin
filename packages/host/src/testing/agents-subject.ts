@@ -894,6 +894,7 @@ function fakeService() {
       ),
     removeSound: () => Effect.succeed({ sound: null }),
     chooseSound: ({ slot }) => Effect.succeed({ slot, id: null }),
+    writeViewChoice: () => Effect.succeed({}),
     markActive: () => Effect.sync(() => void asked.push("active")),
     registerPushDevice: () => Effect.succeed({ done: true as const }),
     unregisterPushDevice: () => Effect.succeed({ done: true as const }),

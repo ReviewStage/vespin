@@ -1246,7 +1246,8 @@ function useSavedDraft(
  * pictures that go with it, the task it is related to, picked from the +
  * and shown at the page's head once picked, and, as capsules under the
  * composer's field, the repository it works in, the newest one the account's tasks
- * were about until another is picked, or its parent's in another's tree,
+ * were about until another is picked, the one a repository header's + opened it
+ * on, or its parent's in another's tree,
  * its agent's model and effort, and where its agent runs. Start makes the
  * task and starts its agent in one act, as Home does, in the workspace the
  * app works in, or the one a share draft it opens on was kept for. A task's New sub-task opens it as a sub-task of `parent`, in the
@@ -1256,6 +1257,7 @@ function useSavedDraft(
 export function NewTaskScreen({
   parent,
   section,
+  repository: opensIn,
   draft,
   forAutomation = false,
 }: {
@@ -1264,6 +1266,8 @@ export function NewTaskScreen({
   readonly forAutomation?: boolean | undefined;
   /** The member's section the task is filed in once it starts, as the panel's section header's + files it. */
   readonly section?: string | undefined;
+  /** The repository it opens on, chosen already, as the panel's repository header's + opens New task; a draft's own where it opens on one. */
+  readonly repository?: string | undefined;
   readonly draft?: NewTaskDraft | undefined;
 }) {
   const [prompt, setPrompt] = useState(draft?.prompt ?? "");
@@ -1278,7 +1282,7 @@ export function NewTaskScreen({
   const placed = workspaceId !== undefined || parent === undefined;
   // Note that a sub-task's repositories are its parent's workspace's alone, never the chosen one's, so none is offered until that workspace is read.
   const workspace = parent === undefined ? own : workspaces.find((each) => each.id === workspaceId);
-  const repository = useRepositoryPick(workspace, draft?.repository);
+  const repository = useRepositoryPick(workspace, draft?.repository ?? opensIn);
   const relation = useRelationPick(workspaceId, parent);
   const pick = useModelPick();
   const [modelsShown, setModelsShown] = useState(false);

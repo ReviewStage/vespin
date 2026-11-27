@@ -1,4 +1,4 @@
-import { SCROLL_FADE, SCROLL_GUTTER, ScrollArea, TIME_LOOK, Time } from "@repo/ui";
+import { SCROLL_GUTTER, ScrollArea, TIME_LOOK, Time } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import type { ReactNode } from "react";
@@ -41,7 +41,7 @@ export function DocumentScroll({
     // Note that the block sets its own accent, because `--accent` is only ever
     // set by a `data-state` ancestor and nothing above the description carries one:
     // unset, the caret, the writing ring, and the fresh tint all drew nothing.
-    <ScrollArea ref={ref} fade={SCROLL_FADE.BOTH} gutter={SCROLL_GUTTER.STABLE}>
+    <ScrollArea ref={ref} gutter={SCROLL_GUTTER.STABLE}>
       <div
         className={`${DOCUMENT_BODY_CLASS} py-list-inset px-ui-2 select-text [--accent:var(--voice-app)]`}
       >

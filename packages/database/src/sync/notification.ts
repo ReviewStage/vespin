@@ -39,6 +39,15 @@ export const TOPIC = {
    * wakes only the account's open skills reads.
    */
   ACCOUNT_SKILLS: "account-skills",
+  /**
+   * What waits on a user across their workspaces, by user id: narrower than
+   * the account's own topic, which their Macs' beats, commands, and lines,
+   * their sections, pins, read marks, and preferences all name, so an inbox
+   * item, a read mark of one, an automation or its run, or what admits the
+   * account to a workspace or a repository wakes their open account inbox
+   * reads and nothing else of the account's does.
+   */
+  ACCOUNT_INBOX: "account-inbox",
   /** A workspace, by organization id. */
   WORKSPACE: "workspace",
   /**
@@ -47,6 +56,20 @@ export const TOPIC = {
    * chapter reads of that workspace and never its members' task lists.
    */
   WORKSPACE_CHAPTERS: "workspace-chapters",
+  /**
+   * A workspace's people, by organization id: narrower than the workspace's
+   * own topic, which every task, agent, turn, and sandbox write names, so a
+   * membership or a member's account moving wakes the open people reads of
+   * that workspace and no write of its work does.
+   */
+  WORKSPACE_PEOPLE: "workspace-people",
+  /**
+   * A workspace's automations, by organization id: narrower than the
+   * workspace's own topic, which every task, agent, turn, and sandbox write
+   * names, so an automation, its run, or a membership moving wakes the open
+   * automation reads of that workspace and no other write of its work does.
+   */
+  WORKSPACE_AUTOMATIONS: "workspace-automations",
   /**
    * A workspace's memories, by organization id: narrower than the
    * workspace's own topic, so an agent's `save_memory` wakes the open memory
