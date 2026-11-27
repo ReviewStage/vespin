@@ -69,7 +69,7 @@ import { hostsQuery, hostsRetryMutation } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { type MachineLanding, useSettingsMachineLanding } from "../places/routed-exits.js";
 import { showToast } from "../toast.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
 import {
   CommandMachineRow,
@@ -567,7 +567,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
 
   // Note that the clock only redraws the rows as a beat ages, since each standing is read off the book's own monotonic clock.
   useSecond();
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const read = useQuery(hostsQuery(signedIn ? accountId : undefined));
   const retry = useMutation(hostsRetryMutation());
   const hosts = read.data?.hosts;

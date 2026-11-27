@@ -42,7 +42,7 @@ import {
   TokenRepositoryPicker,
   useTokenRepositories,
 } from "../settings/workspace-token-repositories.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 
 /**
  * setup-github.tsx -- setup's GitHub step: the App installed on the workspace's repositories, or the member's own token, chosen as two cards, then the repositories reached.
@@ -103,7 +103,7 @@ function reachedRoute(repositories: readonly GitHubRepository[]): GitHubAccess {
 
 /** The member's own GitHub token as the host holds it, or none where it is unread, refused, or not saved. */
 function useHeldToken(): boolean {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const held = useQuery(githubTokenQuery(accountId));
 
   // Note that a token read that failed is taken for none, so the card offers a paste rather than waiting.

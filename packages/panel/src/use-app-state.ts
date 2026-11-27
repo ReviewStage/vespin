@@ -7,8 +7,9 @@ import {
   shareAppState,
 } from "@repo/host/app-state-reads";
 import { type TaskListCollections, taskListFollowing } from "@repo/host/task-list-following";
-import { type QueryClient, queryOptions } from "@tanstack/react-query";
+import { type QueryClient, queryOptions, useQueryClient } from "@tanstack/react-query";
 import { Data, Effect, Predicate } from "effect";
+import { useSyncExternalStore } from "react";
 import { appBridge } from "./app-bridge.js";
 import { QUERY_ROOT } from "./query-keys.js";
 import { rendererPromise } from "./renderer-runtime.js";
@@ -408,4 +409,115 @@ export const selectWorkspacesFailed = (state: AppStateSnapshot): boolean =>
  */
 export function appStateIn(client: QueryClient): AppStateSnapshot | undefined {
   return client.getQueryData(appStateQuery.queryKey);
+}
+
+/** One slice of a client's document, as every reader of it shares it: the slice now, and a door to hear it change. */
+interface SharedSlice<Slice> {
+  readonly now: () => Slice | undefined;
+  readonly subscribe: (heard: () => void) => () => void;
+}
+
+/** The document a slice was last cut from, and the slice it cut. */
+interface SliceRead<Slice> {
+  readonly state: AppStateSnapshot | undefined;
+  readonly slice: Slice | undefined;
+}
+
+/** The slices read through `useAppStateSlice`, by the client they are read from and the select that cuts each. */
+const sharedSlices = new WeakMap<QueryClient, Map<unknown, SharedSlice<unknown>>>();
+
+/** Whether a cache event is the document's own. */
+function isAppStateQuery(queryKey: readonly unknown[]): boolean {
+  return queryKey.length === 1 && queryKey[0] === QUERY_ROOT.APP_STATE;
+}
+
+/**
+ * The slice `select` cuts from `client`'s document, shared by every reader:
+ * one listener on the client's cache, which tells its readers only as the
+ * slice itself changes. Note that a reader of its own (`useQuery` with a
+ * `select`) is an observer the document query notifies on every write,
+ * whatever moved, and a reader drawn once a row, as a chip's workspaces
+ * are, made hundreds of them.
+ */
+function sharedSlice<Slice>(
+  client: QueryClient,
+  select: (state: AppStateSnapshot) => Slice,
+): SharedSlice<Slice> {
+  const byClient = sharedSlices.get(client) ?? new Map<unknown, SharedSlice<unknown>>();
+  sharedSlices.set(client, byClient);
+  const held = byClient.get(select);
+
+  if (held !== undefined) {
+    // SAFETY: a slice is kept under the select that cuts it, so the one found under `select` is a `Slice`'s.
+    return held as SharedSlice<Slice>;
+  }
+
+  let read: SliceRead<Slice> = { state: undefined, slice: undefined };
+
+  const sliced = (state: AppStateSnapshot | undefined): Slice | undefined => {
+    if (state !== read.state)
+      read = { state, slice: state === undefined ? undefined : select(state) };
+
+    return read.slice;
+  };
+
+  const now = () => sliced(appStateIn(client));
+  const readers = new Set<() => void>();
+  let told = now();
+  let stop: (() => void) | undefined;
+
+  const heard = (state: AppStateSnapshot | undefined) => {
+    const slice = sliced(state);
+
+    if (slice === told) return;
+    told = slice;
+
+    for (const reader of readers) reader();
+  };
+
+  const made: SharedSlice<Slice> = {
+    now,
+    subscribe: (reader) => {
+      if (readers.size === 0) {
+        told = now();
+        // Note that only the document's own write is heard, its data read off the event, because the cache tells every listener of each observer it updated too, hundreds on one write.
+        stop = client.getQueryCache().subscribe((event) => {
+          if (event.type !== "updated" || !isAppStateQuery(event.query.queryKey)) return;
+          // SAFETY: the document's query holds the document.
+          heard(event.query.state.data as AppStateSnapshot | undefined);
+        });
+      }
+
+      readers.add(reader);
+
+      return () => {
+        readers.delete(reader);
+
+        if (readers.size > 0) return;
+        stop?.();
+        stop = undefined;
+      };
+    },
+  };
+
+  byClient.set(select, made);
+
+  return made;
+}
+
+/**
+ * The slice `select` cuts from the window's document, drawn again only as the
+ * slice changes; none before the first read. For a slice many rows read, as
+ * the workspaces and the account are: every reader shares one listener
+ * rather than each being an observer the document query notifies on every
+ * write (`sharedSlice`). `select` is a module's own function, so every
+ * reader of a slice names the same one.
+ */
+export function useAppStateSlice<Slice>(
+  select: (state: AppStateSnapshot) => Slice,
+): Slice | undefined {
+  const slice = sharedSlice(useQueryClient(), select);
+
+  // Note that a surface drawn to a string (`renderToString`) reads the document the client holds, as `useQuery` does there.
+  return useSyncExternalStore(slice.subscribe, slice.now, slice.now);
 }
