@@ -1040,12 +1040,14 @@ const MANAGER_STARTED = LANDED - 2 * HOUR;
 const MANAGER_REPOSITORIES = ["ada/relay", "ada/ledger"] as const;
 
 const MANAGER: AgentSummary = {
-  ...agentOn(AGENT.MANAGER, "", "Release manager", AGENT_STATUS.COMPLETED, 2 * HOUR),
+  ...agentOn(AGENT.MANAGER, "", "Release manager", AGENT_STATUS.RUNNING, 2 * HOUR),
   taskId: null,
   kind: AGENT_KIND.MANAGER,
-  face: { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.BLUE },
-  readThrough: MANAGER_STARTED,
-  saidAt: MANAGER_STARTED + 4 * MINUTE,
+  face: { character: MANAGER_FACE_CHARACTER.PLANET, color: MANAGER_FACE_COLOR.TEAL, emoji: "💼" },
+  readThrough: LANDED,
+  saidAt: LANDED,
+  turnId: "fixture-manager-turn",
+  turn: { id: "fixture-manager-turn", queuedAt: LANDED - 20 * 1000, status: "running" },
 };
 
 /** A task's agents as its row in the list counts them. */
@@ -1786,7 +1788,6 @@ export function inboxTasksView(profile: string, list: ListedTasksView): ListedTa
     ...MANAGER,
     workspaceId: FIXTURE_IDS.WORKSPACE,
     repository: MANAGER_REPOSITORIES[0],
-    settledAt: MANAGER.createdAt,
   };
 
   const invitesAgent = AGENTS.get(TASK.INVITES);
@@ -2232,6 +2233,22 @@ const MANAGER_THREAD_ROOT = "7b2d40e8";
  */
 const MANAGER_CHAT: AppManagerChat = {
   messages: [
+    {
+      id: "mock0001",
+      clientKey: "fixture-manager-chat-mock0001",
+      seq: 6,
+      authorKind: MANAGER_CHAT_AUTHOR.PERSON,
+      authorUserId: ADA.userId,
+      authorName: ADA.name,
+      text: "I think the skeleton for Managers is wrong. Let's fix it.",
+      attachments: [],
+      threadRoot: null,
+      broadcast: false,
+      turnId: null,
+      lineId: null,
+      createdAt: LANDED - 20 * 1000,
+      editedAt: null,
+    },
     {
       id: "c81f0b37",
       clientKey: "fixture-manager-chat-c81f0b37",
