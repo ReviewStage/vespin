@@ -74,6 +74,7 @@ function task(
     createdAt = updatedAt,
     completedAt,
     parent,
+    followers,
   }: {
     status?: TaskStatus;
     priority?: TaskPriority;
@@ -85,6 +86,8 @@ function task(
     completedAt?: number;
     /** The name of the task it is a sub-task of. */
     parent?: string;
+    /** Who follows it, by account id. */
+    followers?: readonly string[];
   } = {},
 ): TaskSummary {
   return {
@@ -98,6 +101,11 @@ function task(
     ...(priority === undefined ? undefined : { priority }),
     ...(completedAt === undefined ? undefined : { completedAt }),
     ...(parent === undefined ? undefined : { parentTaskId: parent }),
+    ...(followers === undefined
+      ? undefined
+      : {
+          followers: followers.map((userId) => ({ userId, assignee: false, machines: false })),
+        }),
     ...(creator === undefined
       ? undefined
       : { ownerId: creator, createdBy: { userId: creator, name: NAMES.get(creator) ?? "" } }),
@@ -200,6 +208,18 @@ test("a filter keeps the tasks holding one of each field's values, its fields an
   const nowhere = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.REPOSITORY, null);
   expect(listed(tasks, { grouping: TASKS_GROUPING.NONE }, nowhere)).toEqual([
     [["all"], ["Dean's unweighed, nowhere"]],
+  ]);
+
+  // A task stands under Followed by where any one of its followers is kept.
+  const followed = [
+    task("Followed by both", { followers: [MAYA, DEAN] }),
+    task("Followed by Maya", { followers: [MAYA] }),
+    task("Followed by no one"),
+  ];
+
+  const deans = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.FOLLOWER, DEAN);
+  expect(listed(followed, { grouping: TASKS_GROUPING.NONE }, deans)).toEqual([
+    [["all"], ["Followed by both"]],
   ]);
   expect(
     toggledFilter(

@@ -536,6 +536,21 @@ test("the Filter narrows the List to the values chosen, several in one visit, a 
   assert.equal(again.querySelector("[data-dot='true']"), null);
 });
 
+test("Followed by, offered though no one else shares the workspace, narrows the List to the tasks the reader follows, its chip naming them You", async () => {
+  const followed = {
+    ...task(39, "Rate limit search", TASK_STATUS.TODO, TASK_PRIORITY.HIGH),
+    followers: [{ userId: DEAN, assignee: false, machines: false }],
+  };
+
+  const page = await mountPage([followed, ...TASKS.filter((each) => each.number !== 39)]);
+  openOptions(page, "Filter");
+  choose("Followed by", "Dean Stratakos");
+  closeMenus();
+
+  assert.deepEqual(groups(page), [["Todo", ["ACME-39"]]]);
+  assert.match(page.textContent ?? "", /Followed by: You/);
+});
+
 test("each workspace's filter this Mac kept moves up to the account as the page lists it, and leaves the Mac", async () => {
   window.localStorage.setItem(
     "app.tasksFilter",

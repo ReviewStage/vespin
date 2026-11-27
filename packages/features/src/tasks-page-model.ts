@@ -16,8 +16,9 @@ import {
  *
  * The page's view is two halves, as Linear's and Stage's boards hold theirs.
  * The filter says which tasks stand at all: each field, Status, Priority,
- * Assignee, Creator, Made by, and Repository, keeps the values a task must hold one of, and a
- * field with none filters nothing; the fields are and-ed. It is one for
+ * Assignee, Creator, Followed by, Made by, and Repository, keeps the values
+ * a task must hold one of, and a field with none filters nothing; the
+ * fields are and-ed. It is one for
  * both views, since the List and the Board are two looks at the same
  * tasks. The display says how the tasks that stand are laid out: what
  * groups them (the Board's columns), how each group orders them, whether a
@@ -60,6 +61,7 @@ export const TASKS_FILTER_FIELD = {
   PRIORITY: "priority",
   ASSIGNEE: "assignee",
   CREATOR: "creator",
+  FOLLOWER: "follower",
   MADE_BY: "madeBy",
   REPOSITORY: "repository",
 } as const;
@@ -68,15 +70,17 @@ export type TasksFilterField = (typeof TASKS_FILTER_FIELD)[keyof typeof TASKS_FI
 
 /**
  * Which tasks stand: for each field, the values a task must hold one of; a
- * field absent or empty filters nothing. An assignee and a creator are an
- * account id, a repository its full name, and `null` the tasks with none
- * named.
+ * field absent or empty filters nothing. An assignee, a creator, and a
+ * follower are an account id, a repository its full name, and `null` the
+ * tasks with none named. A task stands under Followed by where any one of
+ * its followers is kept.
  */
 export interface TasksFilter {
   readonly status?: readonly TaskStatus[];
   readonly priority?: readonly TaskPriority[];
   readonly assignee?: readonly (string | null)[];
   readonly creator?: readonly (string | null)[];
+  readonly follower?: readonly string[];
   readonly madeBy?: readonly TaskMaker[];
   readonly repository?: readonly (string | null)[];
 }
@@ -429,21 +433,23 @@ function makerOf(task: Pick<TaskSummary, "origin">): TaskMaker {
   return task.origin?.actor === DESCRIPTION_ACTOR.AGENT ? TASK_MAKER.AGENT : TASK_MAKER.PERSON;
 }
 
-/** A field's value on one task. */
-function fieldValue(task: TaskSummary, field: TasksFilterField): string | null {
+/** A field's values on one task: one for every field but Followed by, which holds each of its followers. */
+function fieldValues(task: TaskSummary, field: TasksFilterField): readonly (string | null)[] {
   switch (field) {
     case TASKS_FILTER_FIELD.STATUS:
-      return statusOf(task);
+      return [statusOf(task)];
     case TASKS_FILTER_FIELD.PRIORITY:
-      return priorityOf(task);
+      return [priorityOf(task)];
     case TASKS_FILTER_FIELD.ASSIGNEE:
-      return assigneeOf(task);
+      return [assigneeOf(task)];
     case TASKS_FILTER_FIELD.CREATOR:
-      return creatorOf(task);
+      return [creatorOf(task)];
+    case TASKS_FILTER_FIELD.FOLLOWER:
+      return (task.followers ?? []).map((follower) => follower.userId);
     case TASKS_FILTER_FIELD.MADE_BY:
-      return makerOf(task);
+      return [makerOf(task)];
     case TASKS_FILTER_FIELD.REPOSITORY:
-      return task.repository;
+      return [task.repository];
   }
 }
 
@@ -464,9 +470,11 @@ export function filteredFields(filter: TasksFilter): readonly TasksFilterField[]
 
 /** Whether a task holds one of each filtered field's values. */
 function inFilter(task: TaskSummary, filter: TasksFilter): boolean {
-  return filteredFields(filter).every((field) =>
-    filterValues(filter, field).includes(fieldValue(task, field)),
-  );
+  return filteredFields(filter).every((field) => {
+    const kept = filterValues(filter, field);
+
+    return fieldValues(task, field).some((value) => kept.includes(value));
+  });
 }
 
 /** The filter with one value of a field turned on or off; a field left with none is dropped. */
@@ -505,8 +513,7 @@ export function valueCounts(
   const counts = new Map<string | null, number>();
 
   for (const task of tasks) {
-    const value = fieldValue(task, field);
-    counts.set(value, (counts.get(value) ?? 0) + 1);
+    for (const value of fieldValues(task, field)) counts.set(value, (counts.get(value) ?? 0) + 1);
   }
 
   return counts;
