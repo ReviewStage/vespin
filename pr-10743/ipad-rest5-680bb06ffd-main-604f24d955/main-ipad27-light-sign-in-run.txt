@@ -1,0 +1,32 @@
+WARNING: Final field parent in class maestro.cli.command.TestCommand has been mutated reflectively by class picocli.CommandLine$Model$FieldBinding in unnamed module @184cf7cf (file:/opt/homebrew/Cellar/maestro/2.12.1/libexec/lib/picocli-4.6.3.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+Running on iPad Pro 11-inch (M5) - iOS 27.2 - BAD5C9D5-2CB3-466D-8272-09ADD64A74E8
+ > Flow sign-in
+Launch app "dev.vespin.ios" with clear state (launch arguments: {authServer=stub})... COMPLETED
+Assert that "Sign in to Vespin|Don.t Allow" is visible... COMPLETED
+Run flow when "Don.t Allow" is visible...
+Run flow when "Don.t Allow" is visible... SKIPPED
+Assert that "Sign in to Vespin" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot sign-in... COMPLETED
+Tap on "Continue with GitHub"... COMPLETED
+Assert that "Know when an agent needs you" is visible... COMPLETED
+Wait for animation to end... COMPLETED
+Take screenshot inbox-notification-ask... COMPLETED
+Tap on "Turn On Notifications"... COMPLETED
+Assert that "Don.t Allow" is visible... COMPLETED
+Tap on "Don.t Allow"... FAILED
+
+Element not found: Text matching regex: Don.t Allow
+
+Element with Text matching regex: Don.t Allow not found. Check the UI hierarchy in debug artifacts to verify if the element exists.
+
+Possible causes:
+- Element selector may be incorrect - check if there are similar elements with slightly different names/properties.
+- Element may be temporarily unavailable due to loading state.
+- This could be a real regression that needs to be addressed.
+
+==== Debug output (logs & screenshots) ====
+
+/Users/deanstratakos/vespin-ipad-agent/out/sjipadrest5/main-ipad27-light-sign-in/2026-11-27_042118
