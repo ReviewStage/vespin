@@ -1,4 +1,4 @@
-# agent-end-line.yaml -- an agent whose last turn was stopped or failed ends its transcript on the panel's end line: one failed past what a message mends ends on its failure and Continue in new agent, with nothing standing over the composer; one stopped ends on Stopped alone; one whose checkout failed ends on its failure and Try again.
+# agent-end-line.yaml -- an agent whose last turn was stopped or failed ends its transcript on the panel's end line: one failed past what a message mends ends on its failure and Continue in new agent, with nothing standing over the composer; one stopped ends on Stopped alone; one whose checkout failed ends on its failure and Try again; and one whose first launch failed before it wrote a message stands its end line alone, with Continue in new agent.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -76,3 +76,23 @@ env:
 - takeScreenshot: agent-end-try-again
 - assertVisible: "Failed: the sandbox or checkout failed"
 - assertVisible: "Try again"
+# The agent whose first launch failed before it wrote a message: its page
+# holds no row but its end line, which reads it as never started and offers
+# Continue in new agent.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: d637f97a-b2e3-4f0c-87ce-e3f4051627a4
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+- extendedWaitUntil:
+    visible: "Failed: the agent never started"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-end-never-started
+- assertVisible: "Continue in new agent"
