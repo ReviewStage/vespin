@@ -1,18 +1,29 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { act, createElement, type ReactElement, useState } from "react";
+import {
+  act,
+  createElement,
+  createRef,
+  type ReactElement,
+  type RefObject,
+  useRef,
+  useState,
+} from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
-import { InlineEdit, type InlineEditEnd } from "./inline-edit.js";
+import { IconButton } from "../button/button.js";
+import { IconPickerChoice } from "../icon-picker/icon-picker.js";
+import { InlineEdit, type InlineEditEnd, type InlineEditHandle } from "./inline-edit.js";
 
 /**
  * inline-edit.test.ts -- words are shown until the caller edits them, then a
  * field named for a reader opens over them with all of them selected;
  * Return and the focus leaving keep what was typed, Escape keeps the words
  * it opened on and goes no further, an input method's Return and Escape end
- * nothing, words left empty or unchanged change nothing, and an edit ends
- * once.
+ * nothing, words left empty or unchanged change nothing, an edit ends
+ * once, and the focus going into a box beside the field that is the edit's
+ * own, or into a flyout floated from one, ends nothing.
  */
 
 declare global {
@@ -217,4 +228,94 @@ test("an edit ends once, whichever end comes first", () => {
   press(input, { key: "Enter" });
   blur(input);
   assert.deepEqual(ends, [{ value: undefined, byKey: true }]);
+});
+
+/**
+ * A name edited beside a box of the edit's own holding a face's choice,
+ * whose colors float in a flyout once `float` is pressed, as a Manager's
+ * row draws its face well beside its name.
+ */
+function EditedBeside({
+  ends,
+  handle,
+  holding = false,
+}: {
+  ends: InlineEditEnd[];
+  handle: RefObject<InlineEditHandle | null>;
+  holding?: boolean;
+}): React.JSX.Element {
+  const box = useRef<HTMLSpanElement | null>(null);
+  const [floating, setFloating] = useState(false);
+
+  return createElement(
+    "div",
+    null,
+    createElement(
+      "span",
+      { ref: box },
+      createElement(IconPickerChoice, {
+        label: "Cat",
+        pressed: false,
+        stop: true,
+        face: "C",
+        popup: true,
+        flyout: floating
+          ? {
+              label: "Colors",
+              content: createElement(IconButton, { icon: "P", label: "Purple" }),
+              onClose: () => setFloating(false),
+            }
+          : undefined,
+        onPress: () => setFloating(true),
+      }),
+    ),
+    createElement(InlineEdit, {
+      value: "Release manager",
+      label: "Agent name",
+      editing: true,
+      within: [box],
+      holding,
+      ref: handle,
+      onEnd: (end: InlineEditEnd) => ends.push(end),
+    }),
+  );
+}
+
+test("the focus going into the edit's own boxes, or a flyout floated from one, ends nothing, and leaving a box for elsewhere ends it", async () => {
+  const ends: InlineEditEnd[] = [];
+  const handle = createRef<InlineEditHandle>();
+  const container = render(createElement(EditedBeside, { ends, handle }));
+  const cat = container.querySelector<HTMLButtonElement>('button[aria-label="Cat"]');
+  assert.ok(cat);
+  assert.equal(document.activeElement, handle.current?.field());
+
+  act(() => cat.focus());
+  await act(async () => cat.click());
+
+  const purple = document.querySelector<HTMLElement>(
+    '.ui-icon-picker-flyout [aria-label="Purple"]',
+  );
+
+  assert.equal(document.activeElement, purple, "the colors take the focus");
+  act(() => handle.current?.field()?.focus());
+  act(() => purple?.focus());
+
+  assert.deepEqual(ends, [], "neither the box nor the colors it floats end the edit");
+
+  act(() => handle.current?.leave());
+  assert.deepEqual(ends, [], "leave ends nothing while the focus stands in the edit");
+  act(() => cat.focus());
+  act(() => cat.blur());
+  assert.deepEqual(ends, [{ value: undefined, byKey: false }], "the focus leaving the box ends it");
+});
+
+test("while a layer stands the focus leaving ends nothing, and leave ends the edit once the focus stands outside", () => {
+  const ends: InlineEditEnd[] = [];
+  const handle = createRef<InlineEditHandle>();
+  render(createElement(EditedBeside, { ends, handle, holding: true }));
+  act(() => handle.current?.field()?.blur());
+
+  assert.deepEqual(ends, []);
+  act(() => handle.current?.leave());
+  assert.deepEqual(ends, [{ value: undefined, byKey: false }]);
 });

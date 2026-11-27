@@ -5,7 +5,7 @@ import { hostStanding } from "@repo/features/machines-settings-words";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { hostsQuery } from "./live-reads.js";
-import { appStateQuery, selectAccount } from "./use-app-state.js";
+import { selectAccount, useAppStateSlice } from "./use-app-state.js";
 
 /**
  * device-presence.ts -- the one source of where each of the account's hosts stands, which every surface that says whether a host takes an agent reads.
@@ -64,7 +64,7 @@ function bookOf(hosts: readonly HostLine[] | undefined, failed: boolean): Presen
 
 /** The account's hosts while `drawing`, a surface that shows a host's standing; the nothing-known book while it does not, or before the first read lands. */
 export function useDevicePresence(drawing: boolean): PresenceBook {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const { data, isError } = useQuery(hostsQuery(drawing ? accountId : undefined));
   const hosts = data?.hosts;
 

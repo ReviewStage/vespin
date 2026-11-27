@@ -70,8 +70,10 @@ import { menuPressAt, menuTree } from "./row-menu-model.js";
 import {
   RowChoosingContext,
   RowOpenContext,
+  RowPickContext,
   RowSearchedContext,
   RowSelectedContext,
+  RowSystemLookContext,
 } from "./row-open.js";
 import { sectionInk } from "./section-ink.js";
 import { Text } from "./text.js";
@@ -107,6 +109,8 @@ const HEADER_VERTICAL = SPACE.ROW;
 export const LIST_LOOK = {
   PLAIN: "plain",
   DETAIL: "grouped",
+  /** An iPad's own sidebar, the system's sidebar list, so it keeps the system's sidebar metrics, keyboard focus and arrow keys, and pointer hover. */
+  SIDEBAR: "sidebar",
 } as const;
 
 export type ListLook = (typeof LIST_LOOK)[keyof typeof LIST_LOOK];
@@ -288,6 +292,8 @@ export function RowList({
   // Whether a two-finger drag started Select mode before the list was drawn in it.
   const dragged = useRef(false);
   const chooses = choosing !== undefined;
+  const sidebar = look === LIST_LOOK.SIDEBAR;
+  const picked = useContext(RowPickContext);
 
   useEffect(() => {
     if (!chooses) dragged.current = false;
@@ -335,12 +341,15 @@ export function RowList({
 
         const id = selectedId(selection);
 
-        if (id !== undefined) onSelect?.(id);
+        if (id === undefined || onSelect === undefined) return;
+        picked?.();
+        onSelect(id);
       }}
       modifiers={[
         listStyle(look),
         scrollContentBackground("hidden"),
-        ...listGround(colors),
+        // Note that the system's sidebar list paints no ground of ours, so it stands clear on the sidebar's glass.
+        ...(sidebar ? [] : listGround(colors)),
         onGeometryChange(({ width: next }) => setWidth(next)),
         ...(sides > 0 ? [sideMargins(sides)] : []),
         // Note that a page's sections stand as close as the system lets them, since its small headers already part them.
@@ -360,18 +369,20 @@ export function RowList({
       ]}
     >
       <ListLookContext value={look}>
-        <RowOpenContext value={onSelect}>
-          <RowSelectedContext value={choosing === undefined ? selected : undefined}>
-            {/* Note that Select mode leaves the lead out too, since the rows chosen are what the screen acts on then. */}
-            {lead === undefined || choosing !== undefined ? null : lead}
-            {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
-            {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
-            <RowSearchedContext value={searchedWords}>
-              <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
-            </RowSearchedContext>
-            {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
-          </RowSelectedContext>
-        </RowOpenContext>
+        <RowSystemLookContext value={sidebar}>
+          <RowOpenContext value={onSelect}>
+            <RowSelectedContext value={choosing === undefined && !sidebar ? selected : undefined}>
+              {/* Note that Select mode leaves the lead out too, since the rows chosen are what the screen acts on then. */}
+              {lead === undefined || choosing !== undefined ? null : lead}
+              {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
+              {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
+              <RowSearchedContext value={searchedWords}>
+                <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
+              </RowSearchedContext>
+              {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
+            </RowSelectedContext>
+          </RowOpenContext>
+        </RowSystemLookContext>
       </ListLookContext>
     </List>
   );
@@ -763,6 +774,7 @@ export function ListSection({
   const reduceMotion = useReduceMotion();
   const inset = useRowInset();
   const colors = useColors();
+  const dark = useColorScheme() === "dark";
 
   const setFolded = (next: boolean) => {
     setOwn(next);
@@ -809,6 +821,7 @@ export function ListSection({
         groups: menuTree(menu, {
           act: colors.TEXT_MUTED,
           tone: (tone) => toneColor(colors, tone),
+          section: (color) => sectionInk(color, dark),
         }),
       })
     : undefined;

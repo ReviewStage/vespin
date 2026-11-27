@@ -36,14 +36,14 @@ import {
   POPOVER_WIDTH,
   type PopoverWidth,
 } from "../anchored-popover/anchored-popover.js";
+import { iconPickerChoiceOf } from "../icon-picker/icon-picker.js";
 import { OneLine } from "../one-line/one-line.js";
 import { ROVING_STOP, rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
-import { SCROLL_FADE, SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
+import { SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
 import { SPINNER_SIZE, SpinnerRing } from "../spinner/spinner.js";
 import { SwitchMark } from "../switch/switch.js";
 import { hintedControlOf, Tooltip } from "../tooltip/hint.js";
 import type { ContextMenuProps } from "./context-menu.js";
-import { MENU_LINE, type MenuLine, menuCut } from "./menu-cut.js";
 import { MenuReplayUnmasked } from "./menu-replay.js";
 import { inNarrowRoom, MenuSheetFrame } from "./menu-sheet.js";
 import { MenuGlyph } from "./menu-surface.js";
@@ -741,9 +741,11 @@ function keyedEntryOf(
 /**
  * Whether a press landed on the card an item of one of `menus` hangs, or on
  * a card hung from a control on that card, as a person named on an agent's
- * card hangs their own. Each card stands apart from the menu, portaled to
- * the body, so it is traced back through the control it hangs from
- * (`hintedControlOf`), card by card, until one stands in a menu.
+ * card hangs their own, or on the colors an icon picker's choice floats in
+ * a panel, as a Manager's face's do. Each stands apart from the menu,
+ * portaled to the body, so it is traced back through the control it hangs
+ * from (`hintedControlOf`, `iconPickerChoiceOf`), one by one, until one
+ * stands in a menu.
  */
 function onItemCard(target: Node | null, menus: readonly (HTMLElement | null)[]): boolean {
   const seen = new Set<Node>();
@@ -751,7 +753,7 @@ function onItemCard(target: Node | null, menus: readonly (HTMLElement | null)[])
 
   while (on !== null && !seen.has(on)) {
     seen.add(on);
-    const control = hintedControlOf(on);
+    const control = hintedControlOf(on) ?? iconPickerChoiceOf(on);
 
     if (control === undefined) return false;
 
@@ -1196,98 +1198,15 @@ function SteeredItem({
   );
 }
 
-/** What a line of a menu's column is: a rule between its groups, an item, or a note, as its heading or footer. */
-function kindOf(line: Element): MenuLine["kind"] {
-  if (line.tagName === "HR" || line.getAttribute("role") === "separator") return MENU_LINE.RULE;
-
-  const role = line.getAttribute("role");
-
-  return role?.startsWith("menuitem") === true || role === "group"
-    ? MENU_LINE.ITEM
-    : MENU_LINE.NOTE;
-}
-
-/** The lines of a menu's column, from its top; a line of no height, as a submenu's unseen focus guard, is none. */
-function linesOf(column: Element): MenuLine[] {
-  const top = column.getBoundingClientRect().top;
-
-  return [...column.children].flatMap((line) => {
-    const box = line.getBoundingClientRect();
-
-    if (box.height === 0) return [];
-
-    return [{ top: box.top - top, bottom: box.bottom - top, kind: kindOf(line) }];
-  });
-}
-
-/** The sum of the lengths a style names, each as a number of CSS pixels. */
-function lengthsOf(style: CSSStyleDeclaration, names: readonly string[]): number {
-  return names.reduce(
-    (sum, name) => sum + (Number.parseFloat(style.getPropertyValue(name)) || 0),
-    0,
-  );
-}
-
-/**
- * Cuts the rows of the menu scrolling in `area` where its fade lies over
- * words that go on past it (`menuCut`): the menu's surface is held shorter
- * than the room Base UI found for it where that room ends over no words.
- * Note that the hold is let go before the room is read, so the room is
- * Base UI's and never the hold's own.
- */
-function cutRows(area: HTMLElement): void {
-  const popup = area.parentElement;
-  const column = area.firstElementChild;
-
-  if (popup === null || column === null) return;
-  popup.style.maxHeight = "";
-  const computed = getComputedStyle(popup);
-
-  const chrome = lengthsOf(computed, [
-    "padding-top",
-    "padding-bottom",
-    "border-top-width",
-    "border-bottom-width",
-  ]);
-
-  const room = Number.parseFloat(computed.maxHeight) - chrome;
-  const fade = Number.parseFloat(getComputedStyle(area).getPropertyValue("--ui-scroll-fade"));
-
-  if (!Number.isFinite(room) || !Number.isFinite(fade)) return;
-  const cut = menuCut(linesOf(column), column.getBoundingClientRect().height, room, fade);
-
-  if (cut !== undefined) popup.style.maxHeight = `${cut + chrome}px`;
-}
-
 /**
  * A menu's rows, its heading and footer among them, scrolling inside its
- * surface where the room Base UI found for it cannot hold them all, the cut
- * edge fading as every scroller's does, so the surface keeps its edge,
- * corner, and shadow whole rather than being sliced by the window. The cut
- * lies through a line of words (`cutRows`), so its fade says the list goes
- * on, as a phone's taller rows already do; it is cut again as the room Base
- * UI finds, or the rows, change size.
+ * surface where the room Base UI found for it cannot hold them all, so the
+ * surface keeps its edge, corner, and shadow whole rather than being sliced
+ * by the window.
  */
 function MenuRows({ children }: { children: React.ReactNode }): React.JSX.Element {
-  const area = useRef<HTMLDivElement | null>(null);
-  useLayoutEffect(() => {
-    const scroller = area.current;
-    const column = scroller?.firstElementChild;
-
-    if (scroller === null || column === null || column === undefined) return undefined;
-    cutRows(scroller);
-
-    if (!("ResizeObserver" in globalThis)) return undefined;
-    const resized = new ResizeObserver(() => cutRows(scroller));
-
-    if (scroller.parentElement !== null) resized.observe(scroller.parentElement);
-    resized.observe(column);
-
-    return () => resized.disconnect();
-  }, []);
-
   return (
-    <ScrollArea ref={area} size={SCROLL_SIZE.CONTENT} fade={SCROLL_FADE.BOTH}>
+    <ScrollArea size={SCROLL_SIZE.CONTENT}>
       <div className="flex flex-col">{children}</div>
     </ScrollArea>
   );
@@ -1516,9 +1435,18 @@ function namedItemOf(
 /** What in a panel may take the keyboard as it opens, after its search field. */
 const PANEL_CONTROL = 'button, [href], [tabindex]:not([tabindex="-1"])';
 
+/** Whether the focus stands in `panel`, or in the colors an icon picker's choice in it floats (`iconPickerChoiceOf`), portaled to the body. */
+function focusIn(panel: HTMLElement): boolean {
+  const focused = document.activeElement;
+
+  if (focused === null) return false;
+
+  return panel.contains(focused) || panel.contains(iconPickerChoiceOf(focused) ?? null);
+}
+
 /** Takes the keyboard into `panel`, where its own drawing has not already: its search field first, then its first control, else the panel. */
 function focusInto(panel: HTMLElement): void {
-  if (panel.contains(document.activeElement)) return;
+  if (focusIn(panel)) return;
 
   const start =
     panel.querySelector<HTMLElement>('input:not([type="hidden"]), textarea') ??
@@ -2430,7 +2358,7 @@ function sheetPage(
  * (`subject`), else the menu itself, under a grip a finger swipes it down
  * by; its rows are the menu's, its groups,
  * glyphs, and red, at a finger's height and with no shortcuts, scrolling
- * under the fixed head and fading where they are cut, its heading over
+ * under the fixed head, its heading over
  * them and its footer last. A submenu opens in the sheet's place, its head
  * the submenu's with a way back (and Left), which lands focus back on its
  * row; a panel opens there too, under the same head, holding its own keys
@@ -2561,7 +2489,7 @@ function MenuSheet({
       {page !== undefined && isPanel(page) ? (
         <SheetPanel key={page.label} entry={page} onBack={back} onClose={() => onClose(true)} />
       ) : (
-        <ScrollArea size={SCROLL_SIZE.CONTENT} fade={SCROLL_FADE.BOTH}>
+        <ScrollArea size={SCROLL_SIZE.CONTENT}>
           <div
             ref={listed}
             id={id}

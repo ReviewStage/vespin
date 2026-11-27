@@ -516,6 +516,12 @@ export function settleFailedNote(status: TaskStatus, refused: number): string {
   return refused === 1 ? notes.failedOne : notes.failedMany;
 }
 
+/** A repository's Keep at top, which holds its group above the rest, and its undoing, as its header's menu names them. */
+export const REPOSITORY_TOP_WORDS = {
+  KEEP: "Keep at top",
+  STOP: "Stop keeping at top",
+} as const;
+
 /** What the toast says when the service refused a repository's pin, by whether it was a pin or an unpin. */
 export const REPOSITORY_PIN_FAILED_NOTES = {
   PIN: "The repository could not be pinned. Try again.",

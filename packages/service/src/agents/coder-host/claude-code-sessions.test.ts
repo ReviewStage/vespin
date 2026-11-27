@@ -49,7 +49,7 @@ import {
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
 import { readNativeRewind, rewindConversation } from "@repo/database/models/conversation-rewind";
-import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/device-agent-store";
+import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
 import { installSkill } from "@repo/database/models/installed-skill-store";
 import {
@@ -1375,11 +1375,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           (yield* deliveredOpen(sessions, yield* writtenLine(agent, "Go."))).outcome,
           SESSION_SEND_OUTCOME.ACCEPTED,
         );
-        const [launch] = yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId));
+        const [launch] = yield* deviceAgentLinesWaiting(userId, deviceId);
         assert.ok(launch?.kind === DEVICE_AGENT_LINE_KIND.LAUNCH);
 
         const claimed = Option.getOrThrow(
-          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), launch.id).pipe(
+          yield* claimedDeviceAgentLine(userId, deviceId, launch.id).pipe(
             Effect.provide(Layer.succeed(HostedEnvironment, NO_KEYS)),
           ),
         );
@@ -1413,9 +1413,9 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           runtimeRefusal: RUNTIME_REFUSAL.MODES_UNSUPPORTED,
         });
 
-        const launchesWaiting = (yield* deviceAgentLinesWaiting(
-          ownDeviceHost(userId, deviceId),
-        )).filter((line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH);
+        const launchesWaiting = (yield* deviceAgentLinesWaiting(userId, deviceId)).filter(
+          (line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH,
+        );
 
         assert.deepEqual(launchesWaiting, []);
         yield* registerDevice(userId, {
@@ -1425,11 +1425,11 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           capabilities: [DEVICE_CAPABILITY.PERMISSION_MODES],
         });
         assert.equal((yield* asked()).outcome, SESSION_SEND_OUTCOME.ACCEPTED);
-        const relaunch = (yield* deviceAgentLinesWaiting(ownDeviceHost(userId, deviceId))).at(-1);
+        const relaunch = (yield* deviceAgentLinesWaiting(userId, deviceId)).at(-1);
         assert.ok(relaunch?.kind === DEVICE_AGENT_LINE_KIND.LAUNCH && relaunch.id !== launch.id);
 
         const reclaimed = Option.getOrThrow(
-          yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), relaunch.id).pipe(
+          yield* claimedDeviceAgentLine(userId, deviceId, relaunch.id).pipe(
             Effect.provide(Layer.succeed(HostedEnvironment, NO_KEYS)),
           ),
         );

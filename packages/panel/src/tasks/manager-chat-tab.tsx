@@ -24,14 +24,21 @@
  * way, until its row lands; one refused stands marked, with Retry, Edit, and
  * Delete, as any of the agent box's lines does. Each message may be given
  * the reader's 👍 or 👎 from its actions, and wears the reactions it was
- * given under its words (`manager-chat-reactions.tsx`).
+ * given under its words (`manager-chat-reactions.tsx`). The first message
+ * after the reader's mark, where the chat stood unread as the page opened
+ * or where the reader marked one of its messages unread, stands under New
+ * (`manager-chat-looks.ts`).
+ * The reader's own message offers Edit, which writes its words again where
+ * it stands, as a channel's edit does, marking it edited and telling the
+ * Manager, and never takes the Manager back (`manager-chat-edit.tsx`). No
+ * message of the chat offers Rewind conversation to here, as a channel takes
+ * nothing back; the rewind itself stays the agent tab's (`rewind-action.tsx`).
  */
 
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { endLineReason } from "@repo/features/agent-continue-model";
 import { computerAppsOf } from "@repo/features/agent-parts";
 import type { ShownPicture } from "@repo/features/agent-pictures-model";
-import { REWIND_ACTION, rewindPoints } from "@repo/features/agent-rewind-model";
 import type {
   AgentChatSendParams,
   ManagerChatSending,
@@ -45,19 +52,37 @@ import {
 } from "@repo/features/agent-wire";
 import { keptPictureSchema } from "@repo/features/conversation-picture-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import {
+  CHAT_LANDING,
   CHAT_RUN_ALONE,
   type ChatRunPlace,
+  chatMessageLanding,
   type ManagerChatLine,
   managerChatView,
 } from "@repo/features/manager-chat-view";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import type { MessageFileChip } from "@repo/features/message-files";
+import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
-import { ChannelMessage, EmptyState, GlyphSlot, ThreadRule, TIME_LOOK, Time } from "@repo/ui";
+import {
+  ChannelMessage,
+  EmptyState,
+  GlyphSlot,
+  NewMessagesRule,
+  STATUS_TONE,
+  ThreadRule,
+  TIME_LOOK,
+  Time,
+} from "@repo/ui";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationRows,
+  ConversationScrollButton,
+} from "@repo/ui/conversation";
 import { ICON_SIZE } from "@repo/ui/icons";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
@@ -69,18 +94,12 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { AgentActAnswer } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
-import {
-  Conversation,
-  ConversationContent,
-  ConversationRows,
-  ConversationScrollButton,
-} from "../ai-elements/conversation.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { managerChatQuery, managerChatRetryMutation } from "../live-reads.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { keepPictureRead } from "../picture-query.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import { useToast } from "../toast.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import {
   ApprovalsProvider,
@@ -116,7 +135,12 @@ import { TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { useChatMessageMenu } from "./chat-message-menu.js";
 import { type ChatWorkToggle, WorkingWorkAction, WorkMessageAction } from "./chat-work.js";
 import { CopyMessageAction } from "./copy-message.js";
-import { EditComposer } from "./edit-composer.js";
+import {
+  type ChatEdit,
+  ChatEditField,
+  EditChatMessageAction,
+  useChatEdit,
+} from "./manager-chat-edit.js";
 import { useManagerChatLooks } from "./manager-chat-looks.js";
 import {
   type ChatReact,
@@ -130,8 +154,8 @@ import {
   ThreadSummary,
   useThreadDoors,
 } from "./manager-chat-threads.js";
+import { CHAT_MESSAGE_GONE, useMessageReveal } from "./message-links.js";
 import { useMoveToCloud } from "./move-agent.js";
-import { RewindProvider, useMessageEdit } from "./rewind-action.js";
 import { SentMessage } from "./skill-chip.js";
 import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
 import { TranscriptWords } from "./transcript-blocks.js";
@@ -157,6 +181,8 @@ interface ChatManagerLook {
 
 /** What each message of the chat reads beside its row: the Manager it is the chat of, the reader, and how each turn's work is drawn. */
 interface ChatDoors {
+  /** The Manager whose chat it is, which each message's link names it under. */
+  readonly agentId: string;
   readonly manager: ChatManagerLook;
   readonly readerId: string | undefined;
   readonly delegation: DelegationDoors;
@@ -166,6 +192,10 @@ interface ChatDoors {
   readonly thread?: ChatThreadDoors | undefined;
   /** Gives a message the reader's 👍 or 👎, or takes it off. */
   readonly react: ChatReact;
+  /** The reader's edit of their own messages: which stands open, and its presses. */
+  readonly edit: ChatEdit;
+  /** Moves the reader's mark of the chat back to just before one of its messages, which its menu's Mark as unread presses; none in a thread's tab. */
+  readonly markUnread?: ((message: ManagerChatLiveMessage) => void) | undefined;
 }
 
 /** The chat's threads as its rows read them: each root's replies by the root's id, the thread its page's side panel shows, and the press that opens one there. */
@@ -181,17 +211,20 @@ interface RowThread {
   readonly summary: ReactNode;
   /** Opens the thread, which its menu's Reply in thread presses; none in a thread's tab. */
   readonly onOpen: (() => void) | undefined;
+  /** Whether this message's thread stands open beside the chat. */
+  readonly open: boolean;
 }
 
 function threadOf(message: ManagerChatLiveMessage, doors: ChatDoors): RowThread {
   const { thread } = doors;
 
-  if (thread === undefined) return { action: null, summary: null, onOpen: undefined };
+  if (thread === undefined) return { action: null, summary: null, onOpen: undefined, open: false };
   const root = message.threadRoot ?? message.id;
   const onOpen = () => thread.onOpen(root);
 
   return {
     onOpen,
+    open: thread.open === root,
     action: <ThreadReplyAction onOpen={onOpen} />,
     summary: (
       <ThreadSummary
@@ -202,6 +235,11 @@ function threadOf(message: ManagerChatLiveMessage, doors: ChatDoors): RowThread 
       />
     ),
   };
+}
+
+/** The place a message of the chat is linked by: under its Manager, by the chat's own id for it, as a transcript's message is (`message-links.tsx`), whether it stands in the chat or in a thread. */
+function chatMessagePlace(doors: ChatDoors, messageId: string): LinkDestination {
+  return { kind: LINK_DESTINATION.MESSAGE, agentId: doors.agentId, messageId };
 }
 
 /** When a message was sent, as its row's head names it. */
@@ -288,7 +326,8 @@ function ManagerGreeting({
 /**
  * One of the Manager's messages: its words in a bubble at the column's left,
  * under its name where it opens its run, beside its face, with Reply in
- * thread and Copy beside it and in its menu; Show work there too where it is the
+ * thread and Copy beside it and in its menu, and Mark as unread in its menu
+ * where the chat offers it; Show work there too where it is the
  * first the Manager sent in a turn that did work, which opens the turn's
  * work under it; its files over the words; when it was sent under the run's
  * last.
@@ -306,7 +345,10 @@ function ManagerMessage({
   const thread = threadOf(message, doors);
   const toggle = useWorkToggle();
   const workToggle = work === null ? undefined : toggle;
-  const menu = useChatMessageMenu(message.text, thread.onOpen, workToggle);
+  const link = chatMessagePlace(doors, message.id);
+  const { markUnread } = doors;
+  const onMarkUnread = markUnread === undefined ? undefined : () => markUnread(message);
+  const menu = useChatMessageMenu(message.text, thread.onOpen, workToggle, link, onMarkUnread);
   const workAction = workToggle === undefined ? null : <WorkMessageAction toggle={workToggle} />;
   // Note that while a find stands open the closed work is drawn hidden until found, so ⌘F reaches it and a match there opens it, as a closed fold's body is.
   const finding = useFindOpen();
@@ -328,6 +370,7 @@ function ManagerMessage({
         name={doors.manager.name}
         at={sentTime(message.createdAt)}
         continues={!place.opens}
+        open={thread.open}
         contextMenu={menu.contextMenu}
         actions={
           // Note that a message of files alone has no words to copy, so it offers its reactions, its thread, and its work alone.
@@ -340,9 +383,8 @@ function ManagerMessage({
           ) : (
             <CopyMessageAction
               words={message.text}
-              // Note that a turn's journal stands under the turn's own id, which Rewind conversation to here names it by.
+              // Note that a turn's journal stands under the turn's own id, which its Copy link names it by; a Manager's chat offers no rewind, as a channel takes nothing back.
               messageId={place.closes && message.turnId !== null ? message.turnId : undefined}
-              rewind={place.closes && message.turnId !== null ? REWIND_ACTION.REVERT : undefined}
               lead={
                 <>
                   {reactions}
@@ -384,8 +426,11 @@ function ManagerMessage({
  * and anyone else's at its left, under their name where it opens their run
  * and beside their picture, each of which opens their page as their name
  * does wherever the window names them (`ActorRef`), its files over the words, Reply in thread and
- * Copy beside it and in its menu, as every message of the chat offers them, and when it
- * was sent under the run's last.
+ * Copy beside it and in its menu, as every message of the chat offers them, Mark as unread in
+ * its menu where the chat offers it, and when it
+ * was sent under the run's last. The reader's own offers Edit beside them,
+ * which opens its words in a box where they stand; one edited says so after
+ * its words.
  */
 function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoors }): ReactNode {
   const { message, place } = line;
@@ -400,13 +445,40 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
   const files = fileChipsOf(message, NONE_SHOWN);
   const lineId = own ? (message.lineId ?? undefined) : undefined;
   const ownLine = lineId === undefined ? undefined : doors.lines.get(lineId);
-  const editor = useMessageEdit(lineId ?? "");
   const thread = threadOf(message, doors);
-  const menu = useChatMessageMenu(message.text, thread.onOpen, undefined);
+  const link = chatMessagePlace(doors, message.id);
+  const { markUnread } = doors;
+  const onMarkUnread = markUnread === undefined ? undefined : () => markUnread(message);
+  const menu = useChatMessageMenu(message.text, thread.onOpen, undefined, link, onMarkUnread);
   const reactions = <ReactMessageActions message={message} react={doors.react} />;
+  const { edit } = doors;
 
-  if (ownLine !== undefined && editor !== undefined) {
-    return <EditComposer message={ownLine} words={message.text} edit={editor} />;
+  const editAction = own ? <EditChatMessageAction onEdit={() => edit.onOpen(message.id)} /> : null;
+
+  // Note that the message open for writing again stands in its own row under its sender, its files over the box as over its words, since an edit writes its words alone.
+  if (own && edit.editing === message.id) {
+    return (
+      <SentMessage files={files} words={message.text}>
+        {(body) => (
+          <ChannelMessage
+            messageId={message.id}
+            avatar={<ActorRef actor={sender} size={ACTOR_SIZE.CARD} faceOnly />}
+            name={<ActorRef actor={sender} nameOnly byName />}
+            at={sentTime(message.createdAt)}
+            continues={!place.opens}
+          >
+            {body.files}
+            <ChatEditField
+              messageId={message.id}
+              words={message.text}
+              box={edit.box}
+              onSave={(text) => edit.onSave(message.id, text, message.text)}
+              onCancel={edit.onClose}
+            />
+          </ChannelMessage>
+        )}
+      </SentMessage>
+    );
   }
 
   return (
@@ -419,23 +491,26 @@ function PersonMessage({ line, doors }: { line: ManagerChatLine; doors: ChatDoor
             name={<ActorRef actor={sender} nameOnly byName />}
             at={sentTime(message.createdAt)}
             continues={!place.opens}
+            open={thread.open}
             contextMenu={menu.contextMenu}
+            edited={message.editedAt !== null}
             actions={
-              // Note that a message of files alone has no words to copy, so it offers its reactions and its thread alone.
+              // Note that a message of files alone has no words to copy, so it offers its reactions, its thread, and its Edit alone.
               message.text === "" ? (
                 <>
                   {reactions}
                   {thread.action}
+                  {editAction}
                 </>
               ) : (
                 <CopyMessageAction
                   words={message.text}
                   messageId={ownLine === undefined ? undefined : lineId}
-                  rewind={ownLine === undefined ? undefined : REWIND_ACTION.EDIT}
                   lead={
                     <>
                       {reactions}
                       {thread.action}
+                      {editAction}
                     </>
                   }
                 />
@@ -635,6 +710,17 @@ function chatRowsOf(
   ];
 }
 
+/** Each message's row key by the message's id, as a log keeps its rows (`messageRowOf`), but for `but`, a thread's own root. */
+function rowKeysById(rows: readonly ChatRow[], but?: string): ReadonlyMap<string, string> {
+  return new Map(
+    rows.flatMap((row) =>
+      row.kind === CHAT_ROW.MESSAGE && row.line.message.id !== but
+        ? [[row.line.message.id, row.key] as const]
+        : [],
+    ),
+  );
+}
+
 /** A thread's log as rows: the message it stands on, the rule counting its replies, its replies oldest first, and the reader's on their way after them. */
 function threadRowsOf(
   root: ManagerChatLine,
@@ -651,24 +737,27 @@ function threadRowsOf(
 
 /**
  * Each row's class in its log: a message going on its sender's run stands
- * close under the one before it, as a chat app stands one sender's bubbles,
- * and every other row a step from it (tasks.css).
+ * right under the one before it, the two parted only by the padding each
+ * message keeps alike above and below (`ChannelMessage`), as a channel
+ * stands one sender's run, and every other row a step from it (tasks.css).
  */
-function useChatRowClass(rows: readonly ChatRow[]): (index: number) => string {
+function useChatRowClass(
+  rows: readonly ChatRow[],
+  newKey?: string | undefined,
+): (index: number) => string {
   return useCallback(
     (index: number) => {
       if (index === 0) return LOG_ROW_CLASS;
       const row = rows[index];
 
+      // Note that the message under New opens a run of its own (`newKeyOf`).
       const continues =
-        (row?.kind === CHAT_ROW.MESSAGE && !row.line.place.opens) ||
+        (row?.kind === CHAT_ROW.MESSAGE && !row.line.place.opens && row.key !== newKey) ||
         (row?.kind === CHAT_ROW.SENDING && !row.place.opens);
 
-      return continues
-        ? `${LOG_ROW_CLASS} agent-log-row-run`
-        : `${LOG_ROW_CLASS} agent-log-row-next`;
+      return continues ? LOG_ROW_CLASS : `${LOG_ROW_CLASS} agent-log-row-next`;
     },
-    [rows],
+    [rows, newKey],
   );
 }
 
@@ -695,6 +784,22 @@ function ownLastOf(rows: readonly ChatRow[], readerId: string | undefined): stri
   )?.key;
 }
 
+/** The key of the row New stands over: the first message after `newAfter`, skipping the reader's own where `readerId` names them; none where New stands nowhere. */
+function newKeyOf(
+  rows: readonly ChatRow[],
+  newAfter: number | undefined,
+  readerId: string | undefined,
+): string | undefined {
+  if (newAfter === undefined) return undefined;
+
+  return rows.find(
+    (row) =>
+      row.kind === CHAT_ROW.MESSAGE &&
+      row.line.message.createdAt > newAfter &&
+      (readerId === undefined || row.line.message.authorUserId !== readerId),
+  )?.key;
+}
+
 /** No row for ⌘F to read, while no find stands. */
 const NO_FIND_ROWS: readonly FindRow[] = [];
 
@@ -706,6 +811,9 @@ const NONE_SENDING: readonly ManagerChatSending[] = [];
 
 /** No row, while a thread's message is not read yet. */
 const NO_ROWS: readonly ChatRow[] = [];
+
+/** Nothing to do. */
+const NOTHING = (): void => {};
 
 /** No reply in a thread. */
 const NO_LINES: readonly ManagerChatLine[] = [];
@@ -786,16 +894,8 @@ function useManagerChatBox({
   };
 
   // Note that a message to the chat answers as a message to the agent does, with the id the chat holds it under beside it, which the host draws it by.
-  const send: MessageSender = useApprovingSend(async (agentId, message) => {
+  const send: MessageSender = useApprovingSend((agentId, message) => {
     keepFiles(message.clientKey, message);
-
-    // Note that an edit takes the Manager back to just before its line first, which drops the line's row from the chat, and then sends its words to the chat as a message of its own.
-    if (message.rewinds !== undefined) {
-      const { messageId, restoreFiles } = message.rewinds;
-      const rewound = await control.onRewind(agentId, messageId, restoreFiles);
-
-      if ("failure" in rewound) return rewound;
-    }
 
     return sendChat({
       agentId,
@@ -835,8 +935,6 @@ function useManagerChatBox({
     running: agent.status === AGENT_STATUS.RUNNING,
     send,
     unsend,
-    // Note that a line is written again only where it stands in the chat itself, so a thread's box takes the Manager back nowhere.
-    rewind: thread === undefined ? control.onRewind : undefined,
     starter,
     shown,
   });
@@ -893,10 +991,18 @@ function useManagerChatBox({
 
   const react = useChatReact(agent.id);
 
+  // Note that the edit box reads what the chat's own box reads, so it offers the same lists and dictation.
+  const editBox = useMemo(
+    () => ({ agentId: agent.id, keywords: control.keywords, skills: control.readSkills }),
+    [agent.id, control.keywords, control.readSkills],
+  );
+
+  const edit = useChatEdit(editBox);
+
   // Note that these doors open no thread; the chat's own rows add theirs.
   const doors: ChatDoors = useMemo(
-    () => ({ manager, readerId: control.me, delegation, lines, react }),
-    [manager, control.me, delegation, lines, react],
+    () => ({ agentId: agent.id, manager, readerId: control.me, delegation, lines, react, edit }),
+    [agent.id, manager, control.me, delegation, lines, react, edit],
   );
 
   /** The rows of one turn's work, by the transcript line that opened it, which Show work opens under the Manager's first message of the turn. */
@@ -1002,47 +1108,9 @@ export function ManagerChatTab({
   const queueEditing = useQueueEditing(composer, queue, pictures);
   const list = useRef<HTMLDivElement>(null);
   const rowsHandle = useRef<VirtualRowsHandle>(null);
-  useManagerChatLooks(agent.id, agent.saidAt);
+  const { newAfter, newOverOwn, markUnread } = useManagerChatLooks(agent.id, agent);
 
   const { endPress, endTrail, continuable } = ends;
-
-  // A rewind writes in the box, so it is offered only while the box takes words, and nothing is rewound under a call into the Manager.
-  const rewinds = chatBox.boxOpen && transcript.calls.length === 0;
-
-  const restores =
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.REWIND_FILES) }).data === true;
-
-  const pendingSends = composer.sent.length > 0;
-
-  const points = useMemo(
-    () => rewindPoints(transcript.messages, pendingSends, control.me, composer.going, restores),
-    [transcript.messages, pendingSends, control.me, composer.going, restores],
-  );
-
-  // Note that the line's box reads what the tab's own box reads, as it opens.
-  const editorProps = useRef({
-    agentId: agent.id,
-    keywords: control.keywords,
-    skills: control.readSkills,
-  });
-
-  editorProps.current = {
-    agentId: agent.id,
-    keywords: control.keywords,
-    skills: control.readSkills,
-  };
-
-  const rewind = rewinds
-    ? {
-        editing: composer.editing,
-        onEdit: composer.edit,
-        onCancelEdit: composer.dropEdit,
-        onSendEdit: composer.sendEdit,
-        onRevert: composer.revert,
-        editor: () => editorProps.current,
-        ...points,
-      }
-    : undefined;
 
   // Note that a message's thread opens in its page's side panel, where one stands beside the chat; elsewhere its messages offer none.
   const opener = useThreadDoors();
@@ -1050,12 +1118,13 @@ export function ManagerChatTab({
   const doors = useMemo(
     () =>
       opener === undefined
-        ? chatBox.doors
+        ? { ...chatBox.doors, markUnread }
         : {
             ...chatBox.doors,
+            markUnread,
             thread: { replies: view.threads, open: opener.open, onOpen: opener.onOpen },
           },
-    [chatBox.doors, view.threads, opener],
+    [chatBox.doors, view.threads, opener, markUnread],
   );
 
   const ended =
@@ -1083,11 +1152,61 @@ export function ManagerChatTab({
 
   const keys = useMemo(() => rows.map((row) => row.key), [rows]);
   const ownLast = ownLastOf(rows, control.me);
+  const newKey = newKeyOf(rows, newAfter, newOverOwn ? undefined : control.me);
   const finding = useFindOpen();
   const findRows = useMemo(() => (finding ? rows.map(findRowOf) : NO_FIND_ROWS), [finding, rows]);
   useVirtualFind({ root: list, rows: findRows, handle: rowsHandle, findable: keys.length > 0 });
-  const rowClassOf = useChatRowClass(rows);
+  const rowClassOf = useChatRowClass(rows, newKey);
   const asks = approvals.asks;
+
+  // A link to a message of the chat lands on it once read, older pages read for it: on its row in the chat,
+  // or, for a reply that stands in its thread alone, in the thread's tab, which the chat opens beside it to land there.
+  const toast = useToast();
+  const rowKeys = useMemo(() => rowKeysById(rows), [rows]);
+
+  useMessageReveal({
+    agentId: agent.id,
+    shown,
+    caughtUp: chat !== undefined,
+    whole: before === undefined,
+    olderFailed,
+    loadOlder: () => onNearTop?.(),
+    pages: chat?.messages.length ?? 0,
+    // Note that the chat is followed as it is written, so a message read whole and not found is gone.
+    settled: true,
+    drawn: (messageId) => {
+      const landing = chatMessageLanding(view, messageId).kind;
+
+      return (
+        landing === CHAT_LANDING.CHAT || (landing === CHAT_LANDING.THREAD && opener !== undefined)
+      );
+    },
+    bringIn: (messageId, then) => {
+      const landing = chatMessageLanding(view, messageId);
+      const key = rowKeys.get(messageId);
+
+      if (landing.kind === CHAT_LANDING.CHAT && key !== undefined) {
+        return rowsHandle.current?.bringIn(key, then) ?? false;
+      }
+
+      if (landing.kind !== CHAT_LANDING.THREAD || opener === undefined) return false;
+      opener.onOpen(landing.root);
+
+      return true;
+    },
+    gone: () =>
+      toast({
+        replayUnmasked: true,
+        words: CHAT_MESSAGE_GONE,
+        tone: STATUS_TONE.DANGER,
+        failure: {
+          surface: FAILURE_SURFACE.MESSAGE_REVEAL,
+          cause: FAILURE_CONDITION.GONE,
+          about: { agentId: agent.id },
+          refused: true,
+        },
+      }),
+  });
 
   const workingWords =
     approvals.waiting > 0
@@ -1155,7 +1274,15 @@ export function ManagerChatTab({
 
     if (row.kind === CHAT_ROW.RULE) return <ThreadRule count={row.count} />;
 
-    return drawLine(row.line, doors);
+    // Note that the message under New opens a run of its own, under its sender's name, as a channel heads the first message past its New line.
+    return row.key === newKey ? (
+      <>
+        <NewMessagesRule />
+        {drawLine({ ...row.line, place: { ...row.line.place, opens: true } }, doors)}
+      </>
+    ) : (
+      drawLine(row.line, doors)
+    );
   };
 
   const log = (() => {
@@ -1207,18 +1334,16 @@ export function ManagerChatTab({
     <AgentTabFrame label={name}>
       <AgentPicturesProvider value={pictures}>
         <UndeliveredLines value={marks}>
-          <RewindProvider value={rewind}>
-            {log}
-            <AgentTabFoot>
-              <ThreadsDock threads={threads} />
-              {chatBox.dock({
-                box,
-                approvalsWaiting: approvals.waiting,
-                transcript,
-                queue: { controls: true, working: standing.working, editing: queueEditing },
-              })}
-            </AgentTabFoot>
-          </RewindProvider>
+          {log}
+          <AgentTabFoot>
+            <ThreadsDock threads={threads} />
+            {chatBox.dock({
+              box,
+              approvalsWaiting: approvals.waiting,
+              transcript,
+              queue: { controls: true, working: standing.working, editing: queueEditing },
+            })}
+          </AgentTabFoot>
         </UndeliveredLines>
       </AgentPicturesProvider>
     </AgentTabFrame>
@@ -1334,6 +1459,27 @@ export function ManagerThreadTab({
   const findRows = useMemo(() => (finding ? rows.map(findRowOf) : NO_FIND_ROWS), [finding, rows]);
   useVirtualFind({ root: list, rows: findRows, handle: rowsHandle, findable: keys.length > 0 });
   const rowClassOf = useChatRowClass(rows);
+
+  // Note that a link to a reply is the chat's to find, which opens its thread here to land on it, so the thread never says one gone.
+  const replyKeys = useMemo(() => rowKeysById(rows, root), [rows, root]);
+
+  useMessageReveal({
+    agentId: agent.id,
+    shown,
+    caughtUp: rootLine !== undefined,
+    whole: false,
+    olderFailed: false,
+    loadOlder: NOTHING,
+    pages: 0,
+    settled: false,
+    drawn: (messageId) => replyKeys.has(messageId),
+    bringIn: (messageId, then) => {
+      const key = replyKeys.get(messageId);
+
+      return key !== undefined && (rowsHandle.current?.bringIn(key, then) ?? false);
+    },
+    gone: NOTHING,
+  });
 
   /** One row of the thread, as its kind draws it. */
   const drawRow = (row: ChatRow): ReactNode => {

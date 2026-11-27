@@ -12,10 +12,12 @@ import {
 } from "@repo/features/task-section-wire";
 import {
   type DrawnSection,
+  NEW_SECTION,
   placeMemberWrites,
   REMOVE_FROM_SECTION,
   restoreWrites,
   SECTION_DELETED,
+  SECTION_ICON_ACT,
   type SectionEntry,
   type SectionManager,
   type SectionMember,
@@ -133,12 +135,6 @@ const SECTION_HANDLE = ".ui-group-header-head";
 
 /** Why a blank title was not kept. */
 const TITLE_ASKED = "Name the section.";
-
-/** What opens a section's head with its icon's picker open, on its menu: Change icon where it wears one, Add icon where it wears none. */
-const ICON_ACT = { CHANGE: "Change icon", ADD: "Add icon" } as const;
-
-/** What makes a section, as the Tasks head's button and every Move to section name it. */
-export const NEW_SECTION = "New section";
 
 /** What the dialog was opened to do: make a section in a workspace, perhaps with more written with it, and the words saying what moves into it. */
 interface SectionAsk {
@@ -708,7 +704,7 @@ function sectionActionGroups(
   const edit: MenuEntry[] = [
     commandAction(PANEL_COMMAND.RENAME, () => edits.beginEdit(section.id, false), undefined),
     {
-      label: section.icon === undefined ? ICON_ACT.ADD : ICON_ACT.CHANGE,
+      label: section.icon === undefined ? SECTION_ICON_ACT.ADD : SECTION_ICON_ACT.CHANGE,
       icon: <SmilePlusIcon />,
       onSelect: () => edits.beginEdit(section.id, true),
     },
@@ -1171,6 +1167,7 @@ export function SidebarSections({
 
   const drag = useRowDrag(move, { handle: SECTION_HANDLE });
   const keys = useRowMoveKeys(move);
+  const phone = usePhoneRoom();
   const { edits } = context;
 
   const creating =
@@ -1217,7 +1214,14 @@ export function SidebarSections({
         {creating === undefined ? null : (
           <li className="sidebar-sections-item sidebar-sections-new">
             <div className="sidebar-repository sidebar-own-section">
-              <SectionEditor title="" icon={undefined} picking={false} onEnd={created} />
+              {/* Note that the new section's field stands in a head of its own, so it holds the place a section's head holds. */}
+              <GroupHeader
+                {...sidebarHead(undefined, phone)}
+                label=""
+                editing={
+                  <SectionEditor title="" icon={undefined} picking={false} onEnd={created} />
+                }
+              />
             </div>
           </li>
         )}

@@ -13,6 +13,7 @@ import {
   BAR_TITLE,
   BUTTON_LOOK,
   Composer,
+  EditingLine,
   GLYPH,
   GlassDock,
   MentionSuggestions,
@@ -24,6 +25,7 @@ import {
   shownMediaIds,
   shownPictureIds,
   type TranscriptItem,
+  type TranscriptReveal,
   type TranscriptToggles,
   toggledAt,
   type UndeliveredLine,
@@ -32,6 +34,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMessageLink } from "../agents/message-link.js";
 import {
   useAgentMedia,
   useAgentTranscript,
@@ -46,6 +49,7 @@ import {
 import { useAgentComposer } from "../agents/use-agent-composer.js";
 import { useChatFaces } from "../agents/use-managers.js";
 import { useMessageActs } from "../agents/use-message-acts.js";
+import { usePlaceAddress } from "../agents/use-suggestions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useNewestNote } from "../newest-note.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -70,7 +74,9 @@ const READ_WORDS = {
  * leaves out what acts on the Manager rather than on a reply, as the panel's
  * thread box does: Stop, the queue, the model chip, the MCP servers, where
  * it runs, and Talk, since a call's lines land in the chat; so its + attaches
- * photos at once.
+ * photos at once. While it holds one of the reader's replies' words to save
+ * in place, it says so with Cancel over the field, as the chat's own box
+ * does, and takes no photo.
  */
 function ThreadComposer({
   composer,
@@ -83,6 +89,7 @@ function ThreadComposer({
   const said = useNewestNote([composer.note, dictated.note, note]);
 
   const head =
+    composer.cancelMessageEdit === undefined &&
     composer.skills === undefined &&
     composer.mentions === undefined &&
     said === undefined ? undefined : (
@@ -101,6 +108,9 @@ function ThreadComposer({
             crumb={composer.mentions.crumb}
             onPick={composer.mentions.pick}
           />
+        )}
+        {composer.cancelMessageEdit === undefined ? null : (
+          <EditingLine onCancel={composer.cancelMessageEdit} />
         )}
         {said === undefined ? null : <AskNote words={said} />}
       </>
@@ -137,7 +147,17 @@ function ThreadComposer({
  * a time, and a root gone from the chat, as a rewind drops it, says so.
  */
 export function ManagerThreadScreen() {
-  const { id = "", root = "" } = useLocalSearchParams<{ id: string; root: string }>();
+  const {
+    id = "",
+    root = "",
+    message,
+  } = useLocalSearchParams<{
+    id: string;
+    root: string;
+    /** The reply a link names, which the thread lands on once it holds it. */
+    message?: string;
+  }>();
+
   const colors = useColors();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
@@ -156,6 +176,8 @@ export function ManagerThreadScreen() {
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const whole = useWholeParts(id);
   const openLink = useOpenLink(shown?.workspaceId);
+  const messageLink = useMessageLink(id, shown?.workspaceId);
+  const placeAddress = usePlaceAddress(shown?.workspaceId);
   const retry = useManagerChatRetry(id);
   const older = useOlderChatPages(id, chatPage?.before);
   const composer = useAgentComposer(id, agent, transcript, status, undefined, undefined, root);
@@ -181,9 +203,10 @@ export function ManagerThreadScreen() {
               sending: chatPage.sending,
               managerName: chatFaces?.managerName,
               readerName: chatFaces?.readerName,
+              placeAddress,
             },
           ),
-    [chatPage, messages, running, root, readerId, toggles, whole.read, chatFaces],
+    [chatPage, messages, running, root, readerId, toggles, whole.read, chatFaces, placeAddress],
   );
 
   // Note that a root older than the pages read is read for, a page at a time, until it stands or the chat's start is read, as the panel's thread tab reads for it.
@@ -194,6 +217,15 @@ export function ManagerThreadScreen() {
   }, [lacksRoot, readOlder]);
 
   const rows = items ?? NO_ROWS;
+  const [reveal, setReveal] = useState<TranscriptReveal | undefined>(undefined);
+
+  // Note that a link to a reply lands on it here once the thread holds it, the chat having found the thread it stands in.
+  useEffect(() => {
+    if (message === undefined || reveal !== undefined) return;
+
+    if (rows.some((item) => item.place.row === message))
+      setReveal({ messageId: message, serial: 1 });
+  }, [message, reveal, rows]);
   // A call opened in a turn's work on an answer its page carried cut reads it whole, as the chat's page reads it.
   const cuts = useMemo(() => openCuts(rows), [rows]);
   useEffect(() => whole.ask(cuts), [whole, cuts]);
@@ -209,9 +241,9 @@ export function ManagerThreadScreen() {
   const media = useAgentMedia(id, mediaIds);
   const sentFiles = useSentFiles(useMemo(() => shownFiles(rows), [rows]));
 
-  // Note that each message of the thread offers Reply, which quotes it into the thread's box, and never Edit, since a line is written again only where it stands in the chat itself, as the panel's thread box takes the Manager back nowhere.
-  const chatLines = useMemo(
-    () => new Map((chatPage?.messages ?? []).map((message) => [message.id, null])),
+  // Note that only a message the chat holds is edited in place, never a reply still on its way or refused, which goes by its send's key.
+  const chatMessages = useMemo(
+    () => new Set((chatPage?.messages ?? []).map((message) => message.id)),
     [chatPage?.messages],
   );
 
@@ -222,7 +254,7 @@ export function ManagerThreadScreen() {
     readerId,
     composer,
     calling: false,
-    chatLines,
+    chatMessages,
   });
 
   // A reply of the reader's the service refused, marked Not delivered where it went, with Retry, Edit, and Delete, by the key it went under.
@@ -277,6 +309,7 @@ export function ManagerThreadScreen() {
             items={rows}
             head={null}
             empty={empty}
+            reveal={reveal}
             older={lacksRoot ? older : undefined}
             repository={agent?.repository}
             onOpenLink={openLink}
@@ -296,6 +329,7 @@ export function ManagerThreadScreen() {
               pictureSet.has(mediaId) ? pictures.retry(mediaId) : media.retry(mediaId)
             }
             onOpenAddress={openInSafari}
+            messageLink={messageLink}
             messageMore={messageActs.more}
             channel={chatFaces?.faces}
             undelivered={undelivered}

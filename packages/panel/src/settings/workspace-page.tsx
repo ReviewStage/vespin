@@ -881,7 +881,7 @@ function InviteButton({ workspace }: { workspace: Workspace }): React.JSX.Elemen
 
 /**
  * The workspace's invitations still pending, for an owner or an admin.
- * Cancel invitation asks first in the accent rather than red: inviting the
+ * Revoke invitation asks first in the accent rather than red: inviting the
  * address again undoes it, but the link already sent to the invitee stops
  * working. A cancel is drawn by the host on the press, and one refused, its
  * invitation back, is said in a toast.

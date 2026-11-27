@@ -1,4 +1,4 @@
-# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, its title edited from a tap on it, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, its Checks row opening their list, its review opened whole in its conversation and reacted to from its long press, its thread replied to on its own screen and resolved and reopened from its long press, a new comment's field opened, turned to a draft and back from its state chip, then closed from its ⋯, with Undo reopening it; and one in the merge queue, its long description folded behind Show more, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
+# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, its title edited from a tap on it, then merged from the press under its heading after the question; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed, its Checks row opening their list, its review opened whole in its conversation and reacted to from its long press, its thread replied to on its own screen and resolved and reopened from its long press, a new comment's field opened, turned to a draft and back from its state chip, its ⋯ holding only the GitHub link's acts, then closed from its state chip, with Undo reopening it; its Description and Conversation folded under their headings and opened again; and one in the merge queue, its long description folded behind Show more, whose Close from its state chip asks first, taken out of it after the question, and opened on GitHub.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -78,6 +78,18 @@ env:
 - assertVisible: "Adds Invite by email.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-ready
+# The Description folds under its heading, as the panel's does: a tap on
+# the heading folds it away, its chevron turning, and a second opens it.
+- tapOn: "Description"
+- extendedWaitUntil:
+    notVisible: "Adds Invite by email.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-description-section-folded
+- tapOn: "Description"
+- extendedWaitUntil:
+    visible: "Adds Invite by email.*"
+    timeout: 10000
 # Its title is edited where it stands: a tap on it opens the system's name
 # alert, as a task is renamed, and Save keeps the words, which the heading
 # draws at once and keeps once GitHub took them.
@@ -93,31 +105,30 @@ env:
     timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-title-edited
-# Note that the description stands above the checks, so the reviewers' rows,
-# the page's last, may stand below the fold on a phone and are scrolled to,
-# dragged at three quarters across as the card is, so a landscape iPad's
-# drag lands on the page rather than the list column beside it.
-- repeat:
-    while:
-      notVisible: "relay-review"
-    times: 10
-    commands:
-      - swipe:
-          start: "75%, 75%"
-          end: "75%, 35%"
-          duration: 400
-- assertVisible: "grace"
-# A review App's bot is named as the panel names it, its login without
-# GitHub's "[bot]", in its rounded square with the bot tag after its name.
-- assertVisible: "relay-review"
+# Its reviewers stand as faces in its heading after who opened it, as the
+# panel's people line draws them, each wearing where they stand at its
+# corner, heard as one element; the page holds no Reviews section.
+- assertVisible: "Reviewers"
+- assertNotVisible: "Reviews.*"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-reviewers
+# A press on the faces opens the system's menu of every reviewer, by name
+# and where they stand, as the panel's faces reveal those past their count;
+# a press on one closes it, since it only names them.
+# Note that a menu's act reads its name and its standing as one label
+# ("grace, Approved"), so each is matched by both, which no other row reads.
+- tapOn: "Reviewers"
+- assertVisible: "relay-review.*Commented"
+- assertVisible: "grace.*Approved"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-reviewers-menu
+- tapOn: "grace.*Approved"
+- waitForAnimationToEnd
 # Merging is the press under the heading, in every window, and it asks
-# first, as the card's Merge does, scrolled back up to after the reviewer.
+# first, as the card's Merge does, with the page dragged to its top.
 # Note that it is dragged back to the page's top every time, rather than
-# while the press reads as not visible, because the tree still names the
-# press in its place from before the reviewer's drag while the list glides,
-# and the tap went there, above the press. The list is then let settle,
+# while the press reads as not visible, because the tree can still name the
+# press in an old place while the list glides, and the tap went there. The list is then let settle,
 # since a tap on a list still gliding only stops it and presses nothing.
 - swipe:
     start: "75%, 35%"
@@ -240,13 +251,16 @@ env:
 - extendedWaitUntil:
     visible: "Expire an invite after seven days.*"
     timeout: 30000
-- assertVisible: "Changes requested"
+# Its head says changes were asked for, in GitHub's sentence, its
+# reviewers standing as faces beside who opened it.
+- assertVisible: "Changes were requested.*"
 # Its head says its one review thread still stands unresolved, beside
 # GitHub's sentence.
 - assertVisible: ".*1 unresolved conversation"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-failing
-# Its Checks row sums them up, the failure first, and pushes their list,
+# Its Checks row counts them as the panel's tab does, the failed one by a
+# red cross, and pushes their list,
 # each check where it stands and how long it ran; Back returns to the page.
 - assertVisible: "Checks.*"
 - runFlow:
@@ -262,7 +276,7 @@ env:
 - tapOn:
     id: "BackButton"
 - extendedWaitUntil:
-    visible: "Changes requested"
+    visible: "Changes were requested.*"
     timeout: 10000
 # Its conversation stands inline under the rows: the review that asked for
 # changes, its words a short preview, and the thread it started on a file's
@@ -272,6 +286,18 @@ env:
     direction: DOWN
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-conversation
+# The Conversation folds under its heading too, its count standing, and a
+# second tap opens it again.
+- tapOn: "Conversation.*"
+- extendedWaitUntil:
+    notVisible: "src/invites/expiry.ts.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-conversation-folded
+- tapOn: "Conversation.*"
+- extendedWaitUntil:
+    visible: "src/invites/expiry.ts.*"
+    timeout: 10000
 - tapOn:
     text: "grace"
     below: "Conversation.*"
@@ -353,10 +379,24 @@ env:
 - scrollUntilVisible:
     element: "Expire an invite after seven days.*"
     direction: UP
+# Note that the page is then dragged to its top and let settle before its
+# state chip is tapped, as the merge's press is, because a scroll up stops
+# once the title peeks in under the bar, and a tap there, or on a list
+# still gliding, scrolls the page or stops it and opens no menu.
+- swipe:
+    start: "75%, 35%"
+    end: "75%, 75%"
+    duration: 400
+- swipe:
+    start: "75%, 35%"
+    end: "75%, 75%"
+    duration: 400
+- waitForAnimationToEnd
 # Its state chip offers what may change where it stands, as the panel's
 # pill does: Convert to draft, and Close pull request in red. Each lands on
 # the chip; Close, which can be taken back, acts at once and says so in the
-# app's notice, whose Undo reopens it. The bar's ⋯ offers the same changes.
+# app's notice, whose Undo reopens it. The bar's ⋯ repeats none of them, as
+# the panel's toolbar ⋯ doesn't.
 - tapOn: "Pull request, Open"
 - assertVisible: "Convert to draft"
 - assertVisible: "Close pull request"
@@ -376,7 +416,16 @@ env:
     timeout: 30000
 - runFlow:
     file: subflows/more.yaml
-- assertVisible: "Convert to draft"
+- assertVisible: "Open on GitHub"
+- assertNotVisible: "Convert to draft"
+- assertNotVisible: "Edit title"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-more-menu
+# Note that the menu is closed by its own Copy GitHub link, an act that
+# changes nothing on the page, rather than a tap off it at a point.
+- tapOn: "Copy GitHub link"
+- waitForAnimationToEnd
+- tapOn: "Pull request, Open"
 - tapOn: "Close pull request"
 - extendedWaitUntil:
     visible: "Pull request closed"

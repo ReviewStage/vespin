@@ -43,6 +43,7 @@ import {
   agentPinParamsSchema,
   agentRenameParamsSchema,
   agentStartParamsSchema,
+  type ManagerChatEditParams,
   type ManagerChatReactParams,
   type ReplyButtonPressParams,
 } from "@repo/features/agent-view";
@@ -72,7 +73,7 @@ import type { ModelsAnswer } from "@repo/features/models-wire";
 import { REPOSITORY_PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
 import { REPOSITORY_PULL_REQUEST_MOVED_READ } from "@repo/features/pull-request-moved-live";
 import type { RepositoryPullRequestPartParams } from "@repo/features/pull-request-view";
-import { markedAs } from "@repo/features/read-mark";
+import { markedAs, unreadThroughOf } from "@repo/features/read-mark";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
@@ -258,6 +259,7 @@ export type AgentClient = Pick<
   | "messagesBefore"
   | "message"
   | "chatReact"
+  | "chatEdit"
   | "chatSend"
   | "choose"
   | "rename"
@@ -997,6 +999,11 @@ function composed(
     asked(client.chatReact(agentId, messageId, request)),
   );
 
+  /** A member's edit of their own message of a Manager's chat, after every write of the agent's asked before it, so the Manager is told of its messages and edits in the order they were written. */
+  const chatEdited = queues.inTurn(({ agentId, messageId, ...request }: ManagerChatEditParams) =>
+    asked(client.chatEdit(agentId, messageId, request)),
+  );
+
   /** A suggestion in an agent's reply sent from its draft, after every write of the agent's asked before it, so the agent takes the lines in the order they were sent. */
   const pressed = queues.inTurn((params: ReplyButtonPressParams) =>
     asked(client.pressReplyButton(params)),
@@ -1041,12 +1048,19 @@ function composed(
     { name: AGENT_QUEUED_WRITE.PIN, input: agentPinParamsSchema },
   );
 
-  /** A look at a Manager's chat, drawn on the reader's mark of its row at once, never moved back, and kept once the list carries the service's instant. */
+  /**
+   * A look at a Manager's chat, drawn on the reader's mark of its row at
+   * once, never moved back, or Mark unread from one of its messages, drawn
+   * just before it; each kept once the list carries the service's instant.
+   */
   const markedRead = agentWrite<AgentMarkReadParams>(
-    ({ readMark }) =>
+    ({ readMark, unreadFrom }) =>
       (row) =>
-        markedAs(readMark, row, kernel.now()),
-    ({ agentId, readMark }, key) => asked(client.markRead(agentId, readMark, key)),
+        unreadFrom === undefined
+          ? markedAs(readMark, row, kernel.now())
+          : { readThrough: unreadThroughOf(unreadFrom.sentAt), markedUnread: true },
+    ({ agentId, readMark, unreadFrom }, key) =>
+      asked(client.markRead(agentId, readMark, key, unreadFrom?.messageId)),
   );
 
   /**
@@ -1350,6 +1364,8 @@ function composed(
     AGENTS_CHAT_UNSEND: managerChats.unsend,
     // Note that a reaction the service takes is written into the chat held, so it stands before the chat's next read carries it.
     AGENTS_CHAT_REACT: managerChats.reacting(declaredWrite(dependencies.pool, chatReacted)),
+    // Note that an edit the service takes is written into the chat held, so its words stand before the chat's next read carries them.
+    AGENTS_CHAT_EDIT: managerChats.editing(declaredWrite(dependencies.pool, chatEdited)),
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),

@@ -74,18 +74,10 @@ import { heldUpdateOver, putBackRefused } from "./refused-send.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { useRepositoryDefault } from "./repository-default.js";
 import { keptSkills } from "./repository-skills.js";
-import {
-  deviceOfPlace,
-  NewTaskRunsOnChip,
-  newTaskRunsOn,
-  placeIdOf,
-  useDevicesRead,
-  useNewTaskRunsOn,
-  useOwnedMachines,
-} from "./runs-on.js";
+import { NewTaskRunsOnChip, newTaskRunsOn, useDevicesRead, useNewTaskRunsOn } from "./runs-on.js";
 import { SkillFiles } from "./skill-chip.js";
 import type { SkillWithFile } from "./skill-ref.js";
-import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
+import { TaskMentions, useTasklessMentions } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 import {
   type AgentAsk,
@@ -552,9 +544,7 @@ export function NewTaskComposer({
     if (runsOnStands) readModels.current();
   }, [runsOnStands]);
   const devices = (runsOnStands ? newTask.devices : undefined) ?? NO_DEVICES;
-  const owned = useOwnedMachines(runsOnStands ? workspaceId : undefined);
-  const [place, choosePlace, keptDevice] = useNewTaskRunsOn(devices, owned);
-  const device = deviceOfPlace(place);
+  const [device, chooseDevice, keptDevice] = useNewTaskRunsOn(devices);
 
   // Start is held until a read made since the card opened lands, where the member's last pick is a device (`useDevicesRead`).
   const { modelsRead } = useNewTaskShown();
@@ -568,7 +558,7 @@ export function NewTaskComposer({
   const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
 
   // Note that a card whose chip says Cloud names the cloud, because the service keeps the pick as where the tasks an agent makes for the member run.
-  const runsOn = runsOnStands ? newTaskRunsOn(place) : undefined;
+  const runsOn = runsOnStands ? newTaskRunsOn(device) : undefined;
   const { repository: picked, judged, drop } = repositoryDefault;
 
   // A tree's two tasks work in one repository, the other task's, which the chip is held to.
@@ -585,21 +575,14 @@ export function NewTaskComposer({
 
   const canStart = !devicesUnread && unpaid === undefined && filled;
   // What an `@` and a `/` offer: the chosen repository's, read through the workspace, as on an agent's page no task holds.
-  const readMentionAgents = useMentionAgentsReader(workspaceId, relatable, newTask.models);
   const reader = useMentionedReader();
-  const slug = workspace?.slug;
-  const { onShowMention } = newTask;
 
-  const mentions = useMemo(
-    () =>
-      workspaceId === undefined
-        ? undefined
-        : tasklessMentions(
-            { workspace: slug ?? workspaceId, workspaceId, repository },
-            onShowMention,
-            readMentionAgents,
-          ),
-    [workspaceId, slug, repository, onShowMention, readMentionAgents],
+  const mentions = useTasklessMentions(
+    workspaceId === undefined
+      ? undefined
+      : { workspace: workspace?.slug ?? workspaceId, workspaceId, repository },
+    { tasks: relatable, models: newTask.models },
+    newTask.onShowMention,
   );
 
   // A `/` offers no skill while the Skills experiment is off.
@@ -680,7 +663,7 @@ export function NewTaskComposer({
     const ask: AgentAsk = {
       repository,
       workspaceId,
-      deviceId: placeIdOf(place),
+      deviceId: device?.deviceId,
       relations: relationsAsked(relations),
       agent: {
         prompt,
@@ -716,7 +699,7 @@ export function NewTaskComposer({
     const ask: AgentAsk = {
       repository,
       workspaceId,
-      deviceId: placeIdOf(place),
+      deviceId: device?.deviceId,
       relations: relationsAsked(relations),
       agent: {
         prompt: "",
@@ -894,11 +877,10 @@ export function NewTaskComposer({
             ? (narrow) => (
                 <NewTaskRunsOnChip
                   devices={devices}
-                  owned={owned}
-                  place={place}
+                  device={device}
                   disabled={starting}
                   narrow={narrow}
-                  onChoose={choosePlace}
+                  onChoose={chooseDevice}
                 />
               )
             : undefined

@@ -23,7 +23,7 @@ import {
   recordAutomationRun,
 } from "@repo/database/models/automation-store";
 import { listRevisions } from "@repo/database/models/description-revisions";
-import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/device-agent-store";
+import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
 import { childConversationId } from "@repo/database/models/ids";
 import { linkIntegrationInstallation } from "@repo/database/models/integration-installation-store";
@@ -62,7 +62,6 @@ import {
   MESSAGE_SENDER,
 } from "@repo/database/storage-vocabulary";
 import {
-  connectWorkspaceMachine,
   DEVICE_LAYOUT,
   joinWorkspace,
   leaveWorkspace,
@@ -1436,7 +1435,7 @@ async function managerOn(userId: string, workspaceId: string): Promise<CallingAg
   return { ...target, sessionId: session };
 }
 
-test("start_agent from a Manager, with Managers act for whoever asked on, starts the agent as the member whose line opened its turn, refuses one whose asker pays for none of the model rather than paying as the owner, and with it off starts the owner's", async () => {
+test("start_agent from a Manager starts the agent as the member whose line opened its turn, and refuses one whose asker pays for none of the model rather than paying as the owner", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const owner = agents.caller.userId;
   const asker = agents.teammates.userId;
@@ -1447,7 +1446,6 @@ test("start_agent from a Manager, with Managers act for whoever asked on, starts
   const manager = await managerOn(owner, workspaceId);
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), manager, agentSessions.services);
-  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, true);
 
   const start = (callId: string) =>
     call(
@@ -1473,10 +1471,6 @@ test("start_agent from a Manager, with Managers act for whoever asked on, starts
     reason:
       "Not started: an agent you start is Test User's, who asked for this turn, and no subscription or API key of theirs pays for that model, and Vespin's key pays for no agent. Start it on a model whose provider they connected, or tell them to connect one in Settings › Agents.",
   });
-
-  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGER_ACTS_FOR_ASKER, false);
-  const owners = await storedStart(owner, await start("call-off"));
-  assert.equal(owners.userId, owner);
 });
 
 test("start_agent leaves an unassigned backlog task's assignee and status as they stood", async () => {
@@ -1736,7 +1730,7 @@ test("start_agent naming a device by its name runs on the caller's member's own 
   assert.deepEqual([stored.machine, stored.deviceId], [AGENT_MACHINE.DEVICE, studio]);
 });
 
-test("list_machines lists the cloud and the starter's own devices to start on, and only machines the agent's Mac tools may reach, a teammate's and the workspace's in neither; a start naming a workspace's machine is refused as unreadable", async () => {
+test("list_machines lists the cloud and the starter's own devices to start on, and only machines the agent's Mac tools may reach, a teammate's in neither", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -1750,7 +1744,6 @@ test("list_machines lists the cloud and the starter's own devices to start on, a
         name: "Garage",
         ...DEVICE_LAYOUT,
       });
-      yield* connectWorkspaceMachine(workspaceId, agents.teammates.userId);
     }),
   );
 
@@ -1772,24 +1765,6 @@ test("list_machines lists the cloud and the starter's own devices to start on, a
     listed.macTools.map((machine) => (isRecord(machine) ? machine.id : undefined)),
     [studio],
   );
-
-  const onBox = await call(
-    AGENT_TOOL.START_AGENT,
-    {
-      ...CHOSEN,
-      taskId: agents.caller.taskId,
-      branch: DEFAULT_BRANCH,
-      prompt: "Bill by seat.",
-      runsOn: { machine: AGENT_MACHINE.WORKSPACE, name: "build-box" },
-    },
-    "call-on-box",
-  );
-
-  assert.deepEqual(onBox, {
-    status: ACTION_RESULT_STATUS.REJECTED,
-    reason: START_AGENT_REFUSAL.UNREADABLE,
-  });
-  assert.equal(agentSessions.sent.length, 0, "nothing was started");
 });
 
 test("start_agent hands over a prompt and a note each as long as a start allows, whole in the agent's first message, and refuses either past it, starting nothing", async () => {
@@ -3604,10 +3579,7 @@ test("archive_agent's archive of a teammate's agent on its starter's device queu
 
   await call(AGENT_TOOL.ARCHIVE_AGENT, { agentId: teammates.id, reason: "Merged." });
 
-  const waiting = await database.run(
-    deviceAgentLinesWaiting(ownDeviceHost(teammates.userId, deviceId)),
-  );
-
+  const waiting = await database.run(deviceAgentLinesWaiting(teammates.userId, deviceId));
   assert.deepEqual(
     waiting.map((line) => [line.agentId, line.kind]),
     [[teammates.id, DEVICE_AGENT_LINE_KIND.DISCARD]],

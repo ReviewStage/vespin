@@ -14,7 +14,7 @@ import { copyThroughShell } from "./copy-feedback.js";
 import { machinesQuery } from "./live-reads.js";
 import { useOtherMachinesAsks } from "./machine-asks.js";
 import { macAppIconAddress } from "./tasks/mac-apps.js";
-import { appStateQuery, selectAccount } from "./use-app-state.js";
+import { selectAccount, useAppStateSlice } from "./use-app-state.js";
 import { useHeldThroughExit } from "./use-held-through-exit.js";
 
 /**
@@ -38,7 +38,7 @@ const SOME_MACHINE = "your machine";
 
 /** The name of each of the account's machines, by its id. */
 function useMachineNames(): ReadonlyMap<string, string> {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const machines = useQuery(machinesQuery(accountId)).data ?? [];
 
   return new Map(machines.map((machine) => [machine.id, machine.name]));

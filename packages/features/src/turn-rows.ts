@@ -579,7 +579,7 @@ export function calledFile(
 
 /** How many files a call named past the first, which its row says after the first one's chip; none for one file. */
 export function moreFiles(files: readonly string[] | undefined): string | undefined {
-  return files === undefined || files.length < 2 ? undefined : `+${files.length - 1}`;
+  return files === undefined || files.length < 2 ? undefined : `+${files.length - 1} more`;
 }
 
 /** A web address, as a website chip reads one. */
@@ -623,7 +623,7 @@ type RowPart = (typeof ROW_PART)[keyof typeof ROW_PART];
 export interface RowReading<B> {
   readonly key: (block: B, index: number) => string;
   readonly part: (block: B) => RowPart;
-  /** Whether the block still moves, which a group of calls shimmers for. */
+  /** Whether the block still moves, which a group of calls is drawn quiet for. */
   readonly running: (block: B) => boolean;
 }
 

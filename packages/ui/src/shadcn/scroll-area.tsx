@@ -34,7 +34,7 @@ import { cn } from "../cn.js";
  *   the window (`vespin/no-shadcn-focus-ring`).
  *
  * `@repo/ui`'s `ScrollArea` (`components/scroll-area/scroll-area.tsx`) is
- * what an app draws, and its sheet keeps the edge fade; this is its inside.
+ * what an app draws, and its sheet keeps the axis; this is its inside.
  */
 
 function ScrollArea({ className, children, ...props }: React.ComponentProps<"div">) {

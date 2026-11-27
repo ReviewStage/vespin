@@ -5,7 +5,7 @@ import { MacAppCard } from "@repo/ui";
 import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { useQuery } from "@tanstack/react-query";
 import { machinesQuery } from "../live-reads.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import { useComputerApps, useKeptPicture } from "./agent-pictures.js";
 import { useAllowedAppIcon, useMacAppIcon } from "./mac-apps.js";
 import { OnMachine } from "./transcript-blocks.js";
@@ -34,7 +34,7 @@ function useAlwaysAllowed(
   machineId: string | undefined,
   spellings: readonly (string | undefined)[],
 ): boolean | undefined {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const machines = useQuery(machinesQuery(machineId === undefined ? undefined : accountId)).data;
   const settings = machines?.find((machine) => machine.id === machineId)?.settings;
 

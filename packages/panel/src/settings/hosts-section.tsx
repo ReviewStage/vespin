@@ -18,7 +18,6 @@ import {
   readingWords,
   SIGNED_OUT_WORDS,
 } from "@repo/features/words";
-import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ANNOUNCE,
@@ -70,7 +69,7 @@ import { hostsQuery, hostsRetryMutation } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { type MachineLanding, useSettingsMachineLanding } from "../places/routed-exits.js";
 import { showToast } from "../toast.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
 import {
   CommandMachineRow,
@@ -85,7 +84,6 @@ import { type MachineAgentFacts, MachineMark, MachineStandingLine } from "./mach
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
-import { WorkspaceMachinesSection } from "./workspace-machines-section.js";
 
 /**
  * hosts-section.tsx -- Settings › Hosts: the member's own machines that run their local agents, Linux servers and Macs alike, and Add a host, which shows the install command and names each host it adds as it joins.
@@ -124,11 +122,6 @@ import { WorkspaceMachinesSection } from "./workspace-machines-section.js";
  * since nothing enrolls it again unasked. A Mac whose host is another
  * account's says so where turning it on or off is refused. A browser tab has no This
  * Mac, so it draws none.
- *
- * Under the member's own machines stand the machines the workspace Settings
- * shows owns, which every member's agents may run on
- * (`workspace-machines-section.tsx`), connected through the same Add a
- * machine.
  *
  * The list opens with the member's default machine, where agents' calls go
  * that name none (`DefaultMachineRow`), and under each machine stands what
@@ -567,21 +560,14 @@ function useMachineLanding(landing: MachineLanding | undefined, drawn: boolean):
 }
 
 /** The Hosts page: the member's machines as the host holds them, or why they cannot be drawn, and Add a host, first while there is none. */
-export function HostsSection({
-  signedIn,
-  workspace,
-}: {
-  signedIn: boolean;
-  /** The workspace Settings shows, whose own machines stand under the member's; none where it shows none. */
-  workspace?: Workspace | undefined;
-}): React.JSX.Element | null {
+export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Element | null {
   const { mutateAsync: sendHostsRemove, ...hostRemoving } = useMutation(
     actMutation(ACT_KIND.HOSTS_REMOVE),
   );
 
   // Note that the clock only redraws the rows as a beat ages, since each standing is read off the book's own monotonic clock.
   useSecond();
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const read = useQuery(hostsQuery(signedIn ? accountId : undefined));
   const retry = useMutation(hostsRetryMutation());
   const hosts = read.data?.hosts;
@@ -895,9 +881,6 @@ export function HostsSection({
     </SettingsSection>
   );
 
-  // Note that the workspace's own machines stand under the member's, and are added through the same step.
-  const shared = <WorkspaceMachinesSection signedIn={signedIn} workspace={workspace} />;
-
   // Note that signed out the add step is not drawn, so the list holds its search anchor instead.
   const add = loaded ? (
     <AddHostSection
@@ -915,12 +898,10 @@ export function HostsSection({
         <>
           {add}
           {list}
-          {shared}
         </>
       ) : (
         <>
           {list}
-          {shared}
           {add}
         </>
       )}

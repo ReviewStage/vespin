@@ -18,7 +18,6 @@ import {
   GLYPH,
   LIST_LOOK,
   ListSection,
-  MARK_FACE,
   MarkRow,
   RowList,
   Screen,
@@ -65,10 +64,7 @@ function checkFace(check: PullRequestCheck) {
 
   if (picture === undefined) return undefined;
 
-  return {
-    of: { name: check.app ?? check.name, picture, kind: FACE_KIND.APP },
-    stands: MARK_FACE.BESIDE,
-  };
+  return { name: check.app ?? check.name, picture, kind: FACE_KIND.APP };
 }
 
 /**

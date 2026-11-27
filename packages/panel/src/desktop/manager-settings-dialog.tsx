@@ -86,10 +86,11 @@ import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-pl
 import { CHIP_PLACE, RepositoriesChip } from "../tasks/repository-chip.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state.js";
+import { selectAccount, selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuAction } from "./action-menu.js";
 import { AutomationRows } from "./automations-page.js";
+import { RECENT_MANAGER_FACES } from "./manager-face-recent.js";
 import { ManagerPeopleSection } from "./manager-people-section.js";
 import { useAutomations } from "./use-automations.js";
 
@@ -219,6 +220,7 @@ function IdentityRow({
       leading={
         <ManagerFaceWell
           face={agent.face}
+          recent={RECENT_MANAGER_FACES}
           open={picking}
           onOpenChange={setPicking}
           onChange={pick}
@@ -245,9 +247,10 @@ function IdentityRow({
 
 /**
  * Who pays for the Manager's turns, said under its Model: its starter's
- * subscriptions, named as the reader's own where they started it. With the
- * Manager acting for whoever asks (`MANAGER_ACTS_FOR_ASKER`), what it starts
- * for a reader who is not its starter runs on that reader's, as the experiment's own line says; its starter hears nothing more, since everything already runs on theirs.
+ * subscriptions, named as the reader's own where they started it. What it
+ * starts for a reader who is not its starter runs on that reader's, since a
+ * Manager acts for whoever asked; its starter hears nothing more, since
+ * everything already runs on theirs.
  */
 function PayerLine({
   agent,
@@ -257,20 +260,15 @@ function PayerLine({
   me: string | undefined;
 }): React.JSX.Element {
   const owner = teammateStarter(agent.startedBy, me);
-  const forAsker = useWorkspaceExperiment(agent.workspaceId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER);
+
+  if (owner === undefined) return <>{WORDS.RUNS_ON_YOURS}</>;
 
   return (
     <>
-      {owner === undefined ? (
-        WORDS.RUNS_ON_YOURS
-      ) : (
-        <>
-          {WORDS.RUNS_ON_PREFIX}
-          <ReplayMask>{owner}</ReplayMask>
-          {WORDS.RUNS_ON_SUFFIX}
-        </>
-      )}
-      {forAsker && owner !== undefined ? WORDS.STARTS_ON_YOURS : null}
+      {WORDS.RUNS_ON_PREFIX}
+      <ReplayMask>{owner}</ReplayMask>
+      {WORDS.RUNS_ON_SUFFIX}
+      {WORDS.STARTS_ON_YOURS}
     </>
   );
 }
@@ -426,7 +424,7 @@ function AutomationsSection({
   // Note that the rows answer the room as the Automations page's do, the dialog then taking the phone's whole width.
   const phone = usePhoneRoom();
   const { onOpen } = useAutomationsOpen();
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const workspaces = useAppStateSlice(selectWorkspaces);
   const workspace = workspaces?.find((each) => each.id === agent.workspaceId);
   const { read, reload } = automations;
   const listed = read !== undefined && "automations" in read ? read.automations : [];
@@ -490,8 +488,8 @@ function AutomationsSection({
 
 /** Memory: the Manager's own memories, in the workspace it stands in, as workspace Settings › Memory lists the workspace's. */
 function MemoryOfManager({ agent }: { agent: SettingsManager }): React.JSX.Element {
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const account = useAppStateSlice(selectAccount);
+  const workspaces = useAppStateSlice(selectWorkspaces);
   const readerId = signedInAccountId(account);
   // Note that Memory stands on its skeleton until the Manager's own read names its workspace.
   const workspace = workspaces?.find((each) => each.id === agent.workspaceId);

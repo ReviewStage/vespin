@@ -85,6 +85,9 @@ function actionAs(
   });
 }
 
+/** Where a list GitHub's GraphQL answered whole stands: no older page left. */
+const NO_OLDER_PAGE = { hasPreviousPage: false, startCursor: null } as const;
+
 /** How the published pull request may be merged, as GitHub's GraphQL answers the merge box's fields, which ride in the stack's listing of the repository's open pull requests, here none but it. */
 const MERGING_ANSWER = {
   data: {
@@ -1203,6 +1206,8 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
                         reactionGroups: [
                           { content: "HEART", reactors: { totalCount: 1, nodes: [] } },
                         ],
+                        comments: { pageInfo: NO_OLDER_PAGE, nodes: [] },
+                        reviews: { pageInfo: NO_OLDER_PAGE, nodes: [] },
                         reviewThreads: { totalCount: 0, nodes: [] },
                       },
                 },

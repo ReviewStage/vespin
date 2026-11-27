@@ -222,7 +222,7 @@ test("a call's row names the first file it edited by the file's chip and how man
 
   const edited = drawnElement(
     page,
-    fileCall(CALL_KIND.EDIT, "src/members/list.ts +1", {
+    fileCall(CALL_KIND.EDIT, "src/members/list.ts +1 more", {
       files: ["src/members/list.ts", "src/members/invite.ts"],
     }),
   );
@@ -241,7 +241,7 @@ test("a call's row names the first file it edited by the file's chip and how man
 
   assert.deepEqual(chips(edited), [[MENTION_KIND.FILE, "list.ts"]]);
   // Note that the chip says what it names to a reader who hears it, "file".
-  assert.equal(edited.querySelector("summary")?.textContent, "Edited file list.ts +1");
+  assert.equal(edited.querySelector("summary")?.textContent, "Edited file list.ts +1 more");
   assert.equal(fetched.querySelector("[data-site-chip]")?.textContent, "rfc-editor.org");
   assert.deepEqual(chips(elsewhere), []);
   assert.equal(elsewhere.querySelector("summary")?.textContent, "Read src/members/list.ts");

@@ -103,8 +103,6 @@ import {
   OutsideLink,
   PAGE_FRAME,
   PaneBar,
-  SCROLL_FADE,
-  SCROLL_FADE_INSET,
   SCROLL_GUTTER,
   ScrollArea,
   SKELETON_KIND,
@@ -128,7 +126,7 @@ import {
   VisuallyHidden,
 } from "@repo/ui";
 import { actorName } from "@repo/ui/actor-model";
-import { renderingText } from "@repo/ui/github-html";
+import { renderedAddresses, renderingText } from "@repo/ui/github-html";
 import {
   ExternalLinkIcon,
   GLYPH,
@@ -305,7 +303,7 @@ import {
   useLandedThread,
   useWindowThreadReveal,
 } from "./thread-reveal.js";
-import { type GitHubPictureDrawer, GitHubWords, TranscriptWords } from "./transcript-blocks.js";
+import { type GitHubPictureDrawer, GitHubWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
 import { usePlaceStanding } from "./use-link-standing.js";
 import { linkPressOf, type OpenHere, OpenHereFirst, useOpenLink } from "./use-open-link.js";
@@ -358,9 +356,9 @@ const chaptersTabLoaded = (): boolean => chaptersTabLanded;
 /**
  * A view of the tab, filling the room under the header and the tabs, the
  * others kept drawn but hidden, so switching back draws what each last read.
- * Note that it hands the tab's band down as its scroller's own, so the fade
- * begins beneath a section's heading at whatever height it stands
- * (`SCROLL_FADE_INSET.BAND`).
+ * Note that it hands the tab's band down as its scroller's own, so a
+ * section's heading stands, and the scroller's scroll padding clears it, at
+ * whatever height the band stands.
  */
 const VIEW_CLASS =
   "pull-request-view [--ui-scroll-band:var(--pull-request-band)] [&[hidden]]:hidden";
@@ -1012,7 +1010,7 @@ function Anchored({ children }: { children: ReactNode }): ReactNode {
   return open === undefined ? children : <OpenHereFirst open={open}>{children}</OpenHereFirst>;
 }
 
-/** Words GitHub rendered, or, where it rendered none the read could carry, the words as markdown. */
+/** Words GitHub rendered, or, where it rendered none the read could carry, the words as markdown, drawn through the same steps (`GitHubWords`). */
 function EntryWords({
   entry,
   picture,
@@ -1030,7 +1028,7 @@ function EntryWords({
       <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
         <EntryPictures html={entry.html}>
           <Anchored>
-            <GitHubWords html={entry.html} picture={picture} taskTick={taskTick} />
+            <GitHubWords source={{ html: entry.html }} picture={picture} taskTick={taskTick} />
           </Anchored>
         </EntryPictures>
         {note}
@@ -1041,7 +1039,7 @@ function EntryWords({
   return entry.body === "" ? null : (
     <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
       <Anchored>
-        <TranscriptWords text={entry.body} />
+        <GitHubWords source={{ markdown: entry.body }} picture={picture} />
       </Anchored>
     </div>
   );
@@ -2201,12 +2199,37 @@ function DescriptionWords({
     <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
       <EntryPictures html={html}>
         <Anchored>
-          <GitHubWords html={html} picture={picture} taskTick={taskTick} />
+          <GitHubWords source={{ html }} picture={picture} taskTick={taskTick} />
         </Anchored>
       </EntryPictures>
       {note}
     </div>
   );
+}
+
+/**
+ * A block of the description the editor keeps as written, its HTML say,
+ * drawn as GitHub renders it (`GitHubWords`), so an HTML comment stands
+ * hidden and a bot's buttons as their pictures while the description is
+ * open; each picture read where GitHub's rendering reads it.
+ */
+function DescriptionRawBlock({
+  source,
+  html,
+  picture,
+}: {
+  source: string;
+  html: string;
+  picture: GitHubPictureDrawer;
+}): React.JSX.Element {
+  const addresses = useMemo(() => renderedAddresses(html), [html]);
+
+  const rendered = useCallback<GitHubPictureDrawer>(
+    (src, ...rest) => picture(addresses.get(src) ?? src, ...rest),
+    [addresses, picture],
+  );
+
+  return <GitHubWords source={{ markdown: source }} picture={rendered} />;
 }
 
 /** The description, as the pull request's read carries it, edited in place where the member may edit it (`./pull-request-description.tsx`), with the reactions it wears once the conversation's read, which carries them, lands; a skeleton while its read is out, and nothing where it failed, whose failure stands under the title. */
@@ -2253,6 +2276,9 @@ function DescriptionPart({
           pullRequest={part.value}
           body={part.value.body}
           drawn={words}
+          drawRaw={(source) => (
+            <DescriptionRawBlock source={source} html={part.value.html} picture={picture} />
+          )}
           onRead={onRead}
         />
       ) : (
@@ -2702,10 +2728,8 @@ function ConversationViewOptions({
  * comment is written in at its foot. Each of the two sections folds under
  * its heading, the choice kept for every pull request
  * (`conversation-filters.ts`), and its heading sticks to the scroller's top
- * while it is in view, what scrolls under it fading beneath it
- * (`SCROLL_FADE_INSET.BAND`) rather than cut at its edge. A thread or an
- * entry brought into view opens a folded Conversation, so its card is drawn
- * to land on.
+ * while it is in view. A thread or an entry brought into view opens a folded
+ * Conversation, so its card is drawn to land on.
  */
 function ConversationView({
   pictures,
@@ -2770,8 +2794,6 @@ function ConversationView({
       role="region"
       aria-label="Pull request conversation"
       tabIndex={0}
-      fade={SCROLL_FADE.START}
-      fadeInset={SCROLL_FADE_INSET.BAND}
       gutter={SCROLL_GUTTER.STABLE}
     >
       {/* Its words at the measure, as far in from the sides as a `DetailPage` at a column's inset
@@ -2840,8 +2862,7 @@ interface ThreadJump {
  * A card brought into sight in the Conversation's own scroller, never by
  * `scrollIntoView`, which would scroll every box around it (panel
  * AGENTS.md): centered in the room under the heading stuck at the scroller's
- * top and the fade beneath it, which the scroller's own scroll padding
- * clears, and, where it is taller than that room, its top standing just
+ * top, which the scroller's own scroll padding clears, and, where it is taller than that room, its top standing just
  * under them rather than behind the heading.
  */
 function centerCard(card: HTMLElement): void {

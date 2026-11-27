@@ -35,6 +35,9 @@ const MESSAGE_ID_ATTRIBUTE = "data-message-id";
 /** What the tab says where the message a link names is not in its transcript. */
 export const MESSAGE_GONE = "That message is no longer in the agent's transcript.";
 
+/** What a Manager's chat says where the message a link names is not among its messages. */
+export const CHAT_MESSAGE_GONE = "That message is no longer in the chat.";
+
 const MessagePlaceContext = createContext<
   ((messageId: string) => LinkDestination | undefined) | undefined
 >(undefined);
@@ -65,6 +68,13 @@ const MessageRevealContext = createContext<
 
 /** Hands down the standing ask to bring a message into view, and its letting go. */
 export const MessageRevealProvider = MessageRevealContext.Provider;
+
+/** The count of the standing ask to bring one of `agentId`'s messages into view, which a page showing the agent elsewhere than its messages goes back to them on; none while none stands. */
+export function useMessageAsked(agentId: string): number | undefined {
+  const reveal = useContext(MessageRevealContext)?.reveal;
+
+  return reveal?.agentId === agentId ? reveal.ask : undefined;
+}
 
 /**
  * Answers the standing ask to bring one of `agentId`'s messages into view

@@ -178,14 +178,6 @@ const REFUSAL_ROWS: Readonly<Record<keyof typeof WORKSPACE_ACTS, RefusalRow>> = 
     refusal: "Could not read that workspace's machines on this system.",
     payload: WORKSPACE,
   },
-  WORKSPACE_OWNED_MACHINE_RENAME: {
-    refusal: "Could not rename that machine on this system.",
-    payload: { ...WORKSPACE, id: "0b4d6c1e-8f2a-4c3b-9d5e-7a6f1e2d3c4b", name: "Build box" },
-  },
-  WORKSPACE_OWNED_MACHINE_REMOVE: {
-    refusal: "Could not remove that machine on this system.",
-    payload: { ...WORKSPACE, id: "0b4d6c1e-8f2a-4c3b-9d5e-7a6f1e2d3c4b" },
-  },
   WORKSPACE_INSTALL_SCRIPT_PUT: {
     refusal: "Could not save that install script on this system.",
     payload: { ...WORKSPACE, script: "sudo apt-get install -y redis-server" },

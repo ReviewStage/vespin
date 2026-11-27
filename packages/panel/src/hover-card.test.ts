@@ -216,13 +216,12 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
   );
   assert.match(agentHead.sub ?? "", /High/u, "the model and effort stand under the name");
 
-  // Note that the pull request's card wears its mark as its glyph and keys itself by its repository, the agent whose it is standing on a row under the head rather than in it.
+  // Note that the pull request's card wears its mark as its glyph, keys itself by its repository, and says where it stands in its corner, as its tab's pill does, the agent whose it is standing at its foot rather than in its head.
   const pullRequest = drawn(
     createElement(PullRequestCard, {
       pullRequest: PULL_REQUEST,
       place: { taskId: null },
       lines: PULL_REQUEST,
-      files: PULL_REQUEST.changedFiles,
       agent: {
         subject: agentSubject(
           {
@@ -256,8 +255,8 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
   assert.deepEqual(headOf(pullRequest), {
     glyph: true,
     name: "Expire invitations",
-    sub: "acme/relay#42 · Open",
-    corner: undefined,
+    sub: "acme/relay#42",
+    corner: "Open",
   });
 
   const skills: SkillSource = () =>
@@ -294,7 +293,7 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
   );
 });
 
-test("a pull request's corner says the age of the moment its state names, and nothing where the service answered only when a merged one was opened", () => {
+test("a pull request's line says the age of the moment its state names, and none where the service answered only when a merged one was opened", () => {
   vi.useFakeTimers({ now: STARTED_AT, toFake: ["Date"] });
   const opened = { moment: PULL_REQUEST_MOMENT.OPENED, at: STARTED_AT - 5 * 86_400_000 };
 
@@ -307,10 +306,10 @@ test("a pull request's corner says the age of the moment its state names, and no
           when: opened,
         }),
       ),
-    ).corner;
+    ).sub;
 
-  assert.equal(card(PULL_REQUEST_STATE.OPEN), "5d");
-  assert.equal(card(PULL_REQUEST_STATE.MERGED), undefined);
+  assert.equal(card(PULL_REQUEST_STATE.OPEN), "acme/relay#42 · 5d ago");
+  assert.equal(card(PULL_REQUEST_STATE.MERGED), "acme/relay#42");
 });
 
 test("a plan's card says under its name when the task last saw activity, its agent's later turn over its description's save, as its row does", () => {

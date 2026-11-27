@@ -45,7 +45,6 @@ import {
   GlyphSlot,
   INSET,
   Inline,
-  SCROLL_FADE,
   SCROLL_SIZE,
   ScrollArea,
   SearchField,
@@ -409,7 +408,7 @@ export function AddSkillDialog({
         ) : null}
       </Stack>
       {preview === undefined || line !== undefined ? null : (
-        <ScrollArea size={SCROLL_SIZE.CONTENT} fade={SCROLL_FADE.BOTH}>
+        <ScrollArea size={SCROLL_SIZE.CONTENT}>
           <Stack gap={GAP.CONTROL} inset={INSET.RING} aria-label={SKILLS_LINE.TO_INSTALL}>
             {preview.kind === SKILL_PASTE_KIND.TEXT ? (
               <TextFields fill={fill} disabled={installing} onFill={setFill} />

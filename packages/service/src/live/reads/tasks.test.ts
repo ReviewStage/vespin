@@ -4,7 +4,12 @@ import { it } from "@effect/vitest";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { expireTurnApprovals, recordApprovalAsked } from "@repo/database/models/agent-approvals";
-import { markAgentRead, stampAgentSaid } from "@repo/database/models/agent-chat-reads";
+import {
+  markAgentRead,
+  markAgentSeen,
+  markAgentUnread,
+  stampAgentSaid,
+} from "@repo/database/models/agent-chat-reads";
 import {
   recordAgentSandboxBooted,
   recordAgentSandboxBooting,
@@ -40,7 +45,6 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { TOPIC } from "@repo/database/sync/notification";
 import { taskSync } from "@repo/database/sync/tables";
 import {
-  connectWorkspaceMachine,
   DEVICE_LAYOUT,
   getTestDB,
   joinWorkspace,
@@ -88,6 +92,7 @@ import {
   TASK_STATUS,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { managerChatUnread } from "@repo/features/workspace-managers-model";
 import { SANDBOX_IDLE } from "@repo/sandbox";
 import {
   MESSAGE_AUTHOR,
@@ -106,10 +111,6 @@ import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/code
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
 import { withTaskAgents } from "../../agents/task-agents.js";
 import { TASKLESS_LIVE } from "../../agents/taskless-reads.js";
-import {
-  WORKSPACE_MACHINE_LIVE,
-  type WorkspaceMachineLive,
-} from "../../agents/workspace-machine-reads.js";
 import { TURN_FAILURE } from "../../core.js";
 import type { SyncMoved } from "../../sync/live-query.js";
 import {
@@ -245,12 +246,9 @@ const liveRowsOf = (
   userId: string,
   liveSince = EVERY_TASK,
   taskless: (typeof TASKLESS_LIVE)[keyof typeof TASKLESS_LIVE] = TASKLESS_LIVE.LEFT_OUT,
-  workspaceMachines: WorkspaceMachineLive = WORKSPACE_MACHINE_LIVE.CARRIED,
 ) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(
-      tasksRead.statements({ userId, liveSince, taskless, workspaceMachines }),
-    );
+    const statements = Option.getOrThrow(tasksRead.statements({ userId, liveSince, taskless }));
 
     return yield* Schema.decodeUnknownEffect(TASK_LIST_READ.rows)({
       tasks: yield* runLive(statements.tasks),
@@ -261,9 +259,7 @@ const liveRowsOf = (
 /** The rows one task's read delivers to the account, by the task or the agent `id` names, decoded as the desktop decodes them. */
 const taskRowsOf = (userId: string, id: string) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(
-      taskRowsRead.statements({ userId, id, workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED }),
-    );
+    const statements = Option.getOrThrow(taskRowsRead.statements({ userId, id }));
 
     const rows = yield* Schema.decodeUnknownEffect(TASK_ROWS_READ.rows)({
       tasks: yield* runLive(statements.tasks),
@@ -279,13 +275,7 @@ const taskRowsOf = (userId: string, id: string) =>
 /** The tasks related to the task `id` names and their agents, as its relations' read delivers them to the account, decoded as the desktop decodes them. */
 const relatedOf = (userId: string, id: string) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(
-      taskRelationsRead.statements({
-        userId,
-        id,
-        workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
-      }),
-    );
+    const statements = Option.getOrThrow(taskRelationsRead.statements({ userId, id }));
 
     const rows = yield* Schema.decodeUnknownEffect(TASK_RELATIONS_READ.rows)({
       tasks: yield* runLive(statements.tasks),
@@ -301,13 +291,7 @@ const relatedOf = (userId: string, id: string) =>
 /** The tasks and agents a search delivers to the account, decoded as the desktop decodes them. */
 const searchedOf = (userId: string, query: string) =>
   Effect.gen(function* () {
-    const statements = Option.getOrThrow(
-      taskSearchRead.statements({
-        userId,
-        query,
-        workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
-      }),
-    );
+    const statements = Option.getOrThrow(taskSearchRead.statements({ userId, query }));
 
     const rows = yield* Schema.decodeUnknownEffect(TASK_SEARCH_READ.rows)({
       tasks: yield* runLive(statements.tasks),
@@ -327,7 +311,6 @@ const settledPageOf = (userId: string, workspaceId: string, before?: SettledPage
       taskPageRead.statements({
         userId,
         workspaceId,
-        workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
         beforeAt: before === undefined ? "" : String(before.finishedAt),
         beforeId: before?.taskId ?? "",
       }),
@@ -355,12 +338,7 @@ const settledPageOf = (userId: string, workspaceId: string, before?: SettledPage
 const personPageOf = (userId: string, workspaceId: string, personId: string) =>
   Effect.gen(function* () {
     const statements = Option.getOrThrow(
-      personPageRead.statements({
-        userId,
-        workspaceId,
-        personId,
-        workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
-      }),
+      personPageRead.statements({ userId, workspaceId, personId }),
     );
 
     const rows = yield* Schema.decodeUnknownEffect(PERSON_PAGE_READ.rows)({
@@ -662,7 +640,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           userId: "user-immutable",
           liveSince: LIVE_SINCE,
           taskless: TASKLESS_LIVE.CARRIED,
-          workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
         }),
       );
 
@@ -1053,37 +1030,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
-    "an agent on a workspace's machine reads on that machine, by its name, for a build that reads one, and stays off an older build's list",
-    () =>
-      Effect.gen(function* () {
-        const owner = yield* openUser;
-        const plan = yield* startTask(owner, { name: "Teammate invitations" });
-        const agent = yield* openAgent(owner, { taskId: plan.id }, 60_000);
-        const box = yield* connectWorkspaceMachine(plan.workspaceId, owner);
-        yield* (yield* Database)
-          .update(agentTable)
-          .set({ machine: AGENT_MACHINE.WORKSPACE, deviceId: box })
-          .where(eq(agentTable.id, agent.id));
-
-        const listedTo = (workspaceMachines: WorkspaceMachineLive) =>
-          Effect.map(
-            liveRowsOf(owner, EVERY_TASK, TASKLESS_LIVE.LEFT_OUT, workspaceMachines),
-            (rows) =>
-              taskAgentsOfLiveRows(rows, NOW).map((each) => [
-                each.id,
-                each.machine,
-                each.mac?.name,
-              ]),
-          );
-
-        assert.deepEqual(yield* listedTo(WORKSPACE_MACHINE_LIVE.CARRIED), [
-          [agent.id, AGENT_MACHINE.WORKSPACE, "build-box"],
-        ]);
-        assert.deepEqual(yield* listedTo(WORKSPACE_MACHINE_LIVE.LEFT_OUT), []);
-      }),
-  );
-
-  it.effect(
     "a Manager on no task reads as a Manager with its face and sandbox for a build that reads one, and stays off an older build's list",
     () =>
       Effect.gen(function* () {
@@ -1172,6 +1118,48 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
 
         assert.deepEqual(yield* marksOf(owner), [[looked, said]]);
         assert.deepEqual(yield* marksOf(teammate), [[agent.createdAt.getTime(), said]]);
+      }),
+  );
+
+  it.effect(
+    "a Manager's row Mark unread left past its last message, on the reader's own last line or a teammate's the Manager has not answered, reads unread for that reader alone until they open it, leaving it keeping it so",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const workspaceId = yield* openWorkspace(owner);
+        yield* joinWorkspace(workspaceId, teammate);
+
+        const { agent } = Option.getOrThrow(
+          yield* createAgent(owner, {
+            taskId: null,
+            workspaceId,
+            idempotencyKey: randomUUID(),
+            model: "anthropic/claude-opus-5.5",
+            effort: "high",
+            repository: null,
+            descriptionSnapshot: null,
+            prompt: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+            kind: AGENT_KIND.MANAGER,
+          }),
+        );
+
+        // The Manager said its last, then the owner wrote a line it has not answered, which both mark unread.
+        const said = agent.createdAt.getTime() + 60_000;
+        const line = said + 60_000;
+        yield* stampAgentSaid(agent.id, new Date(said));
+        yield* markAgentUnread(owner, agent.id, new Date(line - 1));
+        yield* markAgentUnread(teammate, agent.id, new Date(line - 1));
+        yield* markAgentSeen(teammate, agent.id, new Date(line + 60_000));
+        yield* markAgentRead(owner, agent.id, new Date(line + 120_000));
+
+        const unreadFor = (userId: string) =>
+          Effect.map(liveRowsOf(userId, EVERY_TASK, TASKLESS_LIVE.CARRIED), (rows) =>
+            taskAgentsOfLiveRows(rows, NOW).map(managerChatUnread),
+          );
+
+        assert.deepEqual([yield* unreadFor(owner), yield* unreadFor(teammate)], [[false], [true]]);
       }),
   );
 
@@ -1528,12 +1516,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
 
         const statements = Option.getOrThrow(
           delta.statements(
-            {
-              userId: teammate,
-              liveSince: EVERY_TASK,
-              taskless: TASKLESS_LIVE.LEFT_OUT,
-              workspaceMachines: WORKSPACE_MACHINE_LIVE.CARRIED,
-            },
+            { userId: teammate, liveSince: EVERY_TASK, taskless: TASKLESS_LIVE.LEFT_OUT },
             moved,
           ),
         );

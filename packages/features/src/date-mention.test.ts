@@ -139,6 +139,14 @@ test("a moment is a real day, or a real time with an offset; a range's ends are 
   assert.equal(isDateRange("2026-10-20", "2026-10-24"), true);
   assert.equal(isDateRange("2026-10-24", "2026-10-20"), false);
   assert.equal(isDateRange("2026-10-20", "2026-10-20T15:00-07:00"), false);
+  assert.equal(isDateMoment("2026-11-26T12:29:06-08:00"), true);
+  assert.equal(isDateMoment("2026-11-26T12:29:06.123456-08:00"), true);
+  assert.equal(isDateMoment("2026-11-26T20:29Z"), true);
+  assert.equal(isDateMoment("2026-11-26T12:29:60-08:00"), false);
+  assert.equal(isDateMoment("2026-11-26T12:29:06.-08:00"), false);
+  // Note that ends of different precision compare as instants: 20:29:06Z is 12:29:06 in Los Angeles, after its 12:29.
+  assert.equal(isDateRange("2026-11-26T12:29-08:00", "2026-11-26T20:29:06Z"), true);
+  assert.equal(isDateRange("2026-11-26T20:29:06.5Z", "2026-11-26T12:29:06-08:00"), false);
 });
 
 test("a date is written in full, a time with its zone's name, and a range's end on its start's day by its time", () => {
@@ -174,6 +182,15 @@ test("a chip says a time in the reader's own zone, and a range's end on its star
   assert.equal(dateChipText(meeting, NOW, LOS_ANGELES), "Tomorrow 3:00 PM → 5:00 PM");
   // Note that it is already Tuesday in Tokyo, so Wednesday morning there is tomorrow.
   assert.equal(dateChipText(meeting, NOW, TOKYO), "Tomorrow 7:00 AM → 9:00 AM");
+  assert.equal(
+    dateChipText({ start: "2026-10-20T15:00:06-07:00" }, NOW, LOS_ANGELES),
+    "Tomorrow 3:00:06 PM",
+  );
+  assert.equal(
+    dateChipText({ start: "2026-10-20T22:00:32.3Z" }, NOW, LOS_ANGELES),
+    "Tomorrow 3:00:32.3 PM",
+  );
+  assert.equal(dateLabel({ start: "2026-10-20T22:00:06Z" }), "Oct 20, 2026, 10:00:06 PM UTC");
   assert.equal(
     dateChipText({ start: "2026-10-23", end: "2026-10-26" }, NOW, LOS_ANGELES),
     "Friday → Oct 26",

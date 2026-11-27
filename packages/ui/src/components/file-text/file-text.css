@@ -1,6 +1,6 @@
 /* file-text.css -- a file's words as written: mono, wrapped line for line, on
-   the code's ground in a control's corner; a peek clipped to its head and
-   faded at its foot, the whole scrolling inside a reading height, a brief one
+   the code's ground in a control's corner; a peek clipped to its head, the
+   whole scrolling inside a reading height, a brief one
    inside a peek's. Its edge, ground, and corner are a code `Card`'s, or the
    code card's it is the body of (`file-text.tsx`). */
 
@@ -26,7 +26,6 @@
   .ui-file-text[data-extent="peek"] {
     max-height: calc(var(--ui-file-text-peek) + var(--ui-space-16));
     overflow: clip;
-    mask-image: linear-gradient(to bottom, black calc(100% - var(--ui-scroll-fade)), transparent);
   }
 
   .ui-file-text[data-extent="whole"] {
