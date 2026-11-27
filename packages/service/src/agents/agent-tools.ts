@@ -15,12 +15,7 @@ import {
   taskNamesOf,
 } from "@repo/database/models/agent-store";
 import { currentAutomationRun } from "@repo/database/models/automation-store";
-import {
-  type Device,
-  devicesSeenSince,
-  type WorkspaceOwnedMachine,
-  workspaceOwnedMachinesOf,
-} from "@repo/database/models/device-store";
+import { type Device, devicesSeenSince } from "@repo/database/models/device-store";
 import {
   listMessagesBefore,
   listMessagesFrom,
@@ -79,7 +74,6 @@ import {
   LOCAL_AGENT_REFUSAL,
   type LocalAgentRefusal,
   MAC_PRESENCE,
-  personalRunsOnSchema,
   type RefusedDevice,
   startBranchSchema,
 } from "@repo/features/agent-wire";
@@ -491,7 +485,6 @@ export const START_AGENT_REFUSAL = {
   BILLING_REQUIRED: `Not started: the workspace has used its free cloud usage for the month and has no billing set up, or its last payment failed; an owner or admin sets up or manages billing in Settings › Billing, or start it on a member's Mac.`,
   DEVICE_REMOVED: `Not started: the machine it would run on was removed. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add the machine again.`,
   NO_DEVICES: `Not started: the member has no device registered to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add a machine in Settings › Machines.`,
-  NO_WORKSPACE_MACHINES: `Not started: the workspace owns no machine to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask a workspace admin to connect one in Settings › Machines.`,
   NO_SOURCE:
     "Not started: no agent of your workspace has that id to start from; " +
     `${AGENT_TOOL.LIST_AGENTS} names them.`,
@@ -586,31 +579,6 @@ function namedMachines<M extends { readonly name: string }>(
   const wanted = cleanMachineName(name).toLowerCase();
 
   return machines.filter((machine) => cleanMachineName(machine.name).toLowerCase() === wanted);
-}
-
-/**
- * Why a start naming a workspace's machine by its name started nothing: the
- * name matches none of the workspace's machines, or more than one, said
- * with every one of them by name, id, and whether it is online, so the call
- * can be made again naming one; or the workspace has none to list.
- */
-function workspaceMachineNameRefusal(
-  name: string,
-  matched: number,
-  machines: readonly WorkspaceOwnedMachine[],
-  now: number,
-): string {
-  if (machines.length === 0) return START_AGENT_REFUSAL.NO_WORKSPACE_MACHINES;
-  const named = JSON.stringify(name);
-
-  const why =
-    matched === 0
-      ? `no machine of the workspace's is named ${named}`
-      : `${matched} machines of the workspace's are named ${named}, so name the one you mean by its deviceId`;
-
-  const listed = machines.map((machine) => listedDevice(machine, now)).join("; ");
-
-  return `Not started: ${why}. Its machines: ${listed}. Name one by its name or its deviceId, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`;
 }
 
 /**
@@ -799,34 +767,21 @@ const DEVICE_BY_NAME = Schema.Struct({
 
 /**
  * Where an automation's runs start, as its tools name it: as the automation
- * keeps it (`personalRunsOnSchema`), the cloud or one of its creator's
+ * keeps it (`agentRunsOnRequestSchema`), the cloud or one of its creator's
  * devices by its id, or one of those devices by its name.
  */
-export const AUTOMATION_RUNS_ON = Schema.Union([...personalRunsOnSchema.members, DEVICE_BY_NAME]);
-
-/**
- * Where a started agent may run, as a start names it: as a start request
- * does (`agentRunsOnRequestSchema`), or one of the member's own devices, or
- * a machine the workspace owns, by its name, which the call matches to its
- * id (`runsOnOfStart`) before the start is asked.
- */
-const START_RUNS_ON = Schema.Union([
+export const AUTOMATION_RUNS_ON = Schema.Union([
   ...agentRunsOnRequestSchema.members,
   DEVICE_BY_NAME,
-  Schema.Struct({
-    machine: Schema.Literal(AGENT_MACHINE.WORKSPACE),
-    name: deviceAgentRegisterRequestSchema.fields.name,
-  }),
 ]);
 
 /**
- * Where `start_agent` offers to run an agent: the cloud or one of the
- * member's own devices, by its id or its name, and no machine the workspace
- * owns, since every launch on one is refused until a machine of ours runs
- * it (`machine/agent-machines.ts`). Note that PR 8 of the workspace-hosts
- * rollout (STAG-3712), which runs them, offers `START_RUNS_ON` here again.
+ * Where a started agent may run, as a start names it: as a start request
+ * does (`agentRunsOnRequestSchema`), or one of the member's own devices by
+ * its name, which the call matches to its id (`runsOnOfStart`) before the
+ * start is asked.
  */
-const OFFERED_START_RUNS_ON = Schema.Union([...personalRunsOnSchema.members, DEVICE_BY_NAME]);
+const START_RUNS_ON = Schema.Union([...agentRunsOnRequestSchema.members, DEVICE_BY_NAME]);
 
 const START_FROM_AGENT_ID = describeWire(
   wireUuidSchema,
@@ -941,7 +896,7 @@ const START_CHOICE_FIELDS = {
     ),
     runsOn: Schema.optionalKey(
       describeWire(
-        OFFERED_START_RUNS_ON,
+        START_RUNS_ON,
         START_RUNS_ON_WORDS +
           "Leave it out to run where you run, the runsOn your instructions' own values name, " +
           "or with from where the agent it starts from runs; naming another place moves it there.",
@@ -969,7 +924,7 @@ const START_CHOICE_FIELDS = {
     ),
     runsOn: Schema.optionalKey(
       describeWire(
-        OFFERED_START_RUNS_ON,
+        START_RUNS_ON,
         START_RUNS_ON_WORDS +
           "Every start names it but one with from, which runs where the agent it starts from " +
           "runs unless it names another place, which moves it there.",
@@ -2529,8 +2484,8 @@ function startModeRefusal(
 
 /**
  * Where the agent its row names runs, as `start_agent`'s runsOn names it: the
- * cloud, its starter's device, or its workspace's machine, each by its id;
- * none for one on a device or machine whose row is gone.
+ * cloud, or its starter's device by its id; none for one on a device whose
+ * row is gone.
  */
 export function agentRunsOnOf(
   agent: Pick<Agent, "machine" | "deviceId">,
@@ -2640,16 +2595,13 @@ function startValuesOf(
 /**
  * The place a start's runsOn names, as a start request names it: a device
  * named by its name is the starting member's own registered device of that
- * name, any case, by its id, and a workspace's machine named by its name is
- * one of that name the workspace the start lands in owns (`workspaceId`);
- * a name that matches none of those, or more than one, is refused with them
- * listed (`machineNameRefusal`). Note that only the member's own devices
- * and the workspace's own machines are read, so a teammate's device of that
- * name never matches and is never listed.
+ * name, any case, by its id; a name that matches none of them, or more than
+ * one, is refused with them listed (`deviceNameRefusal`). Note that only the
+ * member's own devices are read, so a teammate's device of that name never
+ * matches and is never listed.
  */
 const runsOnOfStart = Effect.fnUntraced(function* (
   userId: string,
-  workspaceId: string,
   runsOn: typeof START_RUNS_ON.Type | undefined,
 ): Effect.fn.Return<
   Result.Result<AgentRunsOnRequest | undefined, string>,
@@ -2672,29 +2624,14 @@ const runsOnOfStart = Effect.fnUntraced(function* (
     return Result.fail(deviceNameRefusal(runsOn.device, matched.length, devices, now));
   }
 
-  if ("name" in runsOn) {
-    const machines = yield* workspaceOwnedMachinesOf(userId, workspaceId);
-    const matched = namedMachines(machines, runsOn.name);
-    const [only] = matched;
-
-    if (matched.length === 1 && only !== undefined) {
-      return Result.succeed({ machine: AGENT_MACHINE.WORKSPACE, deviceId: only.id });
-    }
-
-    const now = yield* Clock.currentTimeMillis;
-
-    return Result.fail(workspaceMachineNameRefusal(runsOn.name, matched.length, machines, now));
-  }
-
   return Result.succeed(runsOn);
 });
 
 /**
- * The account a start makes its agent under. A Manager's fresh start, where
- * its workspace has Managers act for whoever asked on, is the account of the
- * member whose line opened the Manager's turn under way (`turnAsker`), so
- * their payer, machines, skills, and GitHub identity carry the work and the
- * agent is theirs; a turn no member opened has no asker, and the Manager's
+ * The account a start makes its agent under. A Manager's fresh start is the
+ * account of the member whose line opened the Manager's turn under way
+ * (`turnAsker`), so their payer, machines, skills, and GitHub identity carry
+ * the work and the agent is theirs; a turn no member opened has no asker, and the Manager's
  * owner stands in. Every other start is the caller's own: a coding agent on
  * a task acts for its starter, and a start from another agent lands where
  * that agent stands, which the caller reads as itself.
@@ -2705,10 +2642,6 @@ const startAccountOf = (caller: AgentCaller, from: AgentStartFrom | undefined) =
     const owner = callerUserId(caller);
 
     if (calling?.kind !== AGENT_KIND.MANAGER || from !== undefined) return owner;
-
-    if (!(yield* experimentOnIn(calling.organizationId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER))) {
-      return owner;
-    }
 
     return yield* turnAsker({ userId: calling.userId, conversationId: calling.conversationId });
   });
@@ -2880,7 +2813,7 @@ export function runStartAgent(
         return agentToolRejected(`Not started: ${forwardedImageRefusalWords(images.failure)}`);
       }
 
-      const runsOn = yield* runsOnOfStart(account, callerWorkspaceId(caller), runsOnAsked);
+      const runsOn = yield* runsOnOfStart(account, runsOnAsked);
 
       if (Result.isFailure(runsOn)) return agentToolRejected(runsOn.failure);
       const place: StartWhere = landing?.success.place ?? { taskId };

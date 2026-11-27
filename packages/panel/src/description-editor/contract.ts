@@ -222,6 +222,14 @@ export interface DescriptionEditorProps {
    */
   readonly drawDiagram?: DiagramDrawer | undefined;
   /**
+   * Draws a block the editor keeps byte for byte but cannot edit (block
+   * HTML, a paragraph holding inline HTML) into its element as the read view
+   * draws its source, a pull request's description as GitHub renders it;
+   * answers what takes the drawing down. None where the read view draws the
+   * source as its words, as the editor then does.
+   */
+  readonly drawRaw?: RawDrawer | undefined;
+  /**
    * Draws a task item's box into the element the editor stands in its
    * item's gutter, as the read view draws it, the shared `Checkbox`, so the
    * box looks and stands the same open or drawn; answers what takes the
@@ -375,6 +383,9 @@ export interface EditorTaskBox {
   readonly checked: boolean;
   readonly toggle: (checked: boolean) => void;
 }
+
+/** Draws a block kept as written into its element by its source; answers what takes the drawing down. */
+export type RawDrawer = (element: HTMLElement, source: string) => () => void;
 
 /** Draws a task item's box into its element; answers what takes the drawing down. */
 export type TaskBoxDrawer = (element: HTMLElement, box: EditorTaskBox) => () => void;

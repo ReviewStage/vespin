@@ -10,8 +10,12 @@ import { distanceText } from "./time-format.js";
  * A date is held as Notion holds one, a start and perhaps an end, each in
  * ISO 8601: a day alone, `2026-10-20`, which names the same day wherever it
  * is read, or a time on a day with the offset it was written at,
- * `2026-10-20T15:00-07:00`, which names one instant. A range's two ends are
- * both days or both times, its end after its start.
+ * `2026-10-20T15:00-07:00`, which names one instant. A time may name its
+ * seconds and a fraction of one, `2026-10-20T15:00:06.5-07:00`, and UTC as
+ * `Z`; it is said to the precision it was written with. A range's two ends
+ * are both days or both times, its end after its start, compared as
+ * instants whatever each one's precision. Every writer here spells a time
+ * to the minute, the form every released client reads.
  *
  * Its written label is the date in full, `Oct 20, 2026` or `Oct 20, 2026,
  * 3:00 PM PDT`, so the words read as the date wherever they are read, an
@@ -37,8 +41,12 @@ const LOCALE = "en-US";
 /** A day as a date mention spells it. */
 const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/u;
 
-/** A time on a day as a date mention spells it, to the minute, with its offset. */
-const TIME_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})([+-])(\d{2}):(\d{2})$/u;
+/** A time on a day as a date mention spells it: to the minute, the second, or a fraction of one, with its offset or `Z`. */
+const TIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(?:Z|([+-])(\d{2}):(\d{2}))$/u;
+
+/** The digits of a second's fraction a chip may say, as many as `Intl` shows. */
+const FRACTION_DIGITS = [1, 2, 3] as const;
 
 /** The widest offset a zone is ever set at, in hours. */
 const MAX_OFFSET_HOURS = 14;
@@ -114,6 +122,17 @@ interface Day {
 interface Clock {
   readonly hour: number;
   readonly minute: number;
+}
+
+/** A time on a day as a mention spells it, read: the instant it names, and the precision it was written to. */
+interface Timed {
+  readonly instant: number;
+  /** Whether it names its seconds. */
+  readonly seconds: boolean;
+  /** How many digits of a second's fraction it names, 0 for none. */
+  readonly fraction: number;
+  /** Its offset as `Intl` names a zone, `-07:00`, or UTC for `Z`. */
+  readonly zone: string;
 }
 
 /** One end of a range as read: its day, and its time where the words named one. */
@@ -397,30 +416,59 @@ function spelled(moment: Moment, zone: string): string | undefined {
   return `${wall}${DateTime.zonedOffsetIso(zoned.value)}`;
 }
 
-/** The instant a time names, or a day's UTC midnight, to order a range's ends by. */
-function instantOf(moment: string): number {
+/**
+ * A time as a mention spells it, read, the one parse every reader of a
+ * time shares; nothing where it is no time, or names no real day, hour,
+ * minute, second, or offset.
+ */
+function timedOf(moment: string): Timed | undefined {
   const time = TIME_PATTERN.exec(moment);
 
-  if (time === null) return utcOf(dayOfIso(moment) ?? { year: 0, month: 1, day: 1 });
+  if (time === null) return undefined;
 
-  return Date.parse(moment);
+  const [, year, month, day, hour, minute, second, fraction, sign, offsetHours, offsetMinutes] =
+    time;
+
+  const real = realDay(Number(year), Number(month), Number(day));
+
+  if (real === undefined || Number(hour) > 23 || Number(minute) > 59) return undefined;
+
+  if (Number(second ?? "0") > 59) return undefined;
+
+  if (Number(offsetHours ?? "0") > MAX_OFFSET_HOURS || Number(offsetMinutes ?? "0") > 59)
+    return undefined;
+
+  // Note that the instant is counted here rather than by `Date.parse`, which not every engine reads past milliseconds with.
+  const offset =
+    sign === undefined
+      ? 0
+      : (sign === "-" ? -1 : 1) * (Number(offsetHours) * 60 + Number(offsetMinutes)) * 60_000;
+
+  const wall = Date.UTC(real.year, real.month - 1, real.day, Number(hour), Number(minute));
+  // Note that the fraction is read as whole milliseconds, because `32.3 * 1000` is 32299.999… and would lose one.
+  const milliseconds = Number((fraction ?? "").padEnd(3, "0").slice(0, 3));
+  const seconds = Number(second ?? "0") * 1000 + milliseconds;
+
+  return {
+    instant: wall + seconds - offset,
+    seconds: second !== undefined,
+    fraction: fraction?.length ?? 0,
+    zone: sign === undefined ? "UTC" : `${sign}${offsetHours}:${offsetMinutes}`,
+  };
+}
+
+/** The instant a time names, or a day's UTC midnight, to order a range's ends by. */
+function instantOf(moment: string): number {
+  const timed = timedOf(moment);
+
+  if (timed === undefined) return utcOf(dayOfIso(moment) ?? { year: 0, month: 1, day: 1 });
+
+  return timed.instant;
 }
 
 /** Whether a moment is spelled as a mention holds one, and names a real day and time. */
 export function isDateMoment(moment: string): boolean {
-  if (dayOfIso(moment) !== undefined) return true;
-  const time = TIME_PATTERN.exec(moment);
-
-  if (time === null) return false;
-  const [, year, month, day, hour, minute, , offsetHours, offsetMinutes] = time;
-
-  return (
-    realDay(Number(year), Number(month), Number(day)) !== undefined &&
-    Number(hour) <= 23 &&
-    Number(minute) <= 59 &&
-    Number(offsetHours) <= MAX_OFFSET_HOURS &&
-    Number(offsetMinutes) <= 59
-  );
+  return dayOfIso(moment) !== undefined || timedOf(moment) !== undefined;
 }
 
 /** Whether a moment names a time rather than a whole day. */
@@ -500,8 +548,10 @@ function wallOf(moment: string, zone: string): Moment | undefined {
 
   if (day !== undefined) return { day, clock: undefined };
 
-  if (!isDateMoment(moment)) return undefined;
-  const zoned = DateTime.makeZoned(Date.parse(moment), { timeZone: zone });
+  const timed = timedOf(moment);
+
+  if (timed === undefined) return undefined;
+  const zoned = DateTime.makeZoned(timed.instant, { timeZone: zone });
 
   if (Option.isNone(zoned)) return undefined;
   const parts = DateTime.toParts(zoned.value);
@@ -514,11 +564,7 @@ function wallOf(moment: string, zone: string): Moment | undefined {
 
 /** The zone a time's own offset is, as Intl names one: `+05:30`; UTC for none. */
 function offsetZone(moment: string): string {
-  const time = TIME_PATTERN.exec(moment);
-
-  if (time === null) return "UTC";
-
-  return `${time[6]}${time[7]}:${time[8]}`;
+  return timedOf(moment)?.zone ?? "UTC";
 }
 
 /** A day in words, set in UTC since a day names no zone. */
@@ -526,17 +572,28 @@ function dayWords(day: Day, options: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat(LOCALE, { ...options, timeZone: "UTC" }).format(utcOf(day));
 }
 
-/** A time in words as `zone` reads it, its zone's short name after it where asked. */
+/** A time in words as `zone` reads it, to the precision it was written with, its zone's short name after it where asked. */
 function timeWords(moment: string, zone: string, named: boolean): string {
+  const timed = timedOf(moment);
+
+  if (timed === undefined) return moment;
+
   const options: Intl.DateTimeFormatOptions = {
     hour: "numeric",
     minute: "2-digit",
     timeZone: zone,
   };
 
+  if (timed.seconds) options.second = "2-digit";
+
+  if (timed.fraction > 0) {
+    options.fractionalSecondDigits =
+      FRACTION_DIGITS[Math.min(timed.fraction, FRACTION_DIGITS.length) - 1];
+  }
+
   if (named) options.timeZoneName = "short";
 
-  return new Intl.DateTimeFormat(LOCALE, options).format(Date.parse(moment));
+  return new Intl.DateTimeFormat(LOCALE, options).format(timed.instant);
 }
 
 /** Whether two moments fall on one day as `zone` reads them. */
@@ -660,7 +717,7 @@ export function dateDistance(span: DateSpan, now: number, zone: string): string 
   const days = daysBetween(today, wall.day);
 
   if (isTimed(span.start)) {
-    const ahead = Date.parse(span.start) - now;
+    const ahead = instantOf(span.start) - now;
 
     if (Math.abs(ahead) < DAY_MS) return distanceText(ahead);
   }

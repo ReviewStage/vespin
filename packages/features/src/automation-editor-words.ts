@@ -142,7 +142,7 @@ export const AUTOMATION_EDITOR_WORDS = {
   TIME_ZONE: "Time zone",
   SEARCH_ZONES: "Search time zones",
   NO_ZONES: "No time zones match",
-  PROMPT_PLACEHOLDER: "Find the flakiest test in CI this week and fix it.",
+  PROMPT_PLACEHOLDER: "Tell the agent what to do each run",
   REPOSITORY: "Repository",
   NO_REPOSITORY: "None",
   TASK_REPOSITORY: "Its task's repository.",

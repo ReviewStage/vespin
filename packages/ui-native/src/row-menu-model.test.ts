@@ -19,7 +19,11 @@ import {
 import { MARK_SIZE } from "./tokens/space.js";
 
 // Note that the inks are a fixture's, which the tree hands on as given.
-const INKS: MenuInks = { act: "#4d4d4d", tone: (tone) => `ink:${tone}` };
+const INKS: MenuInks = {
+  act: "#4d4d4d",
+  tone: (tone) => `ink:${tone}`,
+  section: (color) => `section:${color}`,
+};
 
 /** A glyph's icon as the native module reads it, worked out by hand from the asset catalog's name. */
 function glyph(name: ReturnType<typeof glyphImage>) {
@@ -75,6 +79,12 @@ describe("menuTree", () => {
               detail: "3 tasks",
               on: false,
               onPress: () => pressed.push("Garden"),
+            },
+            {
+              label: "Rockets",
+              mark: { kind: CHOICE_MARK.SECTION_GLYPH, glyph: GLYPH.FOLDER, color: "red" },
+              on: false,
+              onPress: () => pressed.push("Rockets"),
             },
           ],
         },
@@ -146,6 +156,13 @@ describe("menuTree", () => {
               icon: { kind: MENU_ICON.EMOJI, emoji: "🌱", size: MARK_SIZE.MENU_PHOTO },
               on: false,
               heard: "Move to: Garden",
+            },
+            {
+              kind: MENU_NODE.CHOICE,
+              label: "Rockets",
+              icon: { ...glyph(glyphImage(GLYPH.FOLDER)), color: "section:red" },
+              on: false,
+              heard: "Move to: Rockets",
             },
           ],
         },

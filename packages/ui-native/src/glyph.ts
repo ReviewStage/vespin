@@ -124,6 +124,8 @@ export const GLYPH = {
   BLOCKS: lucide(LUCIDE_SYMBOL.HAND),
   HEADING: lucide(LUCIDE_SYMBOL.HEADING),
   CHANGES: lucide(LUCIDE_SYMBOL.FILE_DIFF),
+  /** A pull request's checks, as the panel's Checks tab leads with them. */
+  CHECKS: catalogLucide("ClipboardCheck"),
   ISSUE: lucide(LUCIDE_SYMBOL.CIRCLE_DOT),
   FILE: lucide(LUCIDE_SYMBOL.FILE),
   FILE_TEXT: lucide(LUCIDE_SYMBOL.FILE_TEXT),
@@ -205,8 +207,8 @@ export const GLYPH = {
   EDIT: lucide(LUCIDE_SYMBOL.PENCIL_LINE),
   WRITE: lucide(LUCIDE_SYMBOL.FILE_PEN),
   COPY: lucide(LUCIDE_SYMBOL.COPY),
-  /** Reply in thread, which opens a Manager chat message's thread, the panel's Lucide MessageSquareReply, among every glyph the catalog holds. */
-  REPLY_IN_THREAD: catalogLucide("MessageSquareReply"),
+  /** Reply in thread, which opens a Manager chat message's thread, the panel's Lucide MessageSquareText, among every glyph the catalog holds. */
+  REPLY_IN_THREAD: catalogLucide("MessageSquareText"),
   SAVE: lucide(LUCIDE_SYMBOL.DOWNLOAD),
   LINK: lucide(LUCIDE_SYMBOL.LINK),
   UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),
@@ -236,6 +238,14 @@ export const GLYPH = {
   MOVE_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   ADD_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_PLUS),
   REMOVE_FROM_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_MINUS),
+  /** A section's Change icon and Add icon, the panel's Lucide SmilePlus, which the catalog's Lucide names FaceSlightlySmilingPlus, among every glyph it holds. */
+  CHANGE_ICON: catalogLucide("FaceSlightlySmilingPlus"),
+  /** A section's icon's Color, the colors its glyph may wear, Lucide's Palette, among every glyph the catalog holds. */
+  ICON_COLOR: catalogLucide("Palette"),
+  /** A repository's Keep at top, the panel's arrow to the top rather than a pin so it never reads as Pinned, among every glyph the catalog holds. */
+  KEEP_AT_TOP: catalogLucide("ArrowUpToLine"),
+  /** A repository's Stop keeping at top, the panel's arrow down from the top, among every glyph the catalog holds. */
+  STOP_KEEPING_AT_TOP: catalogLucide("ArrowDownFromLine"),
   NEW_THREAD: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE_PLUS),
   NEW_FILE: lucide(LUCIDE_SYMBOL.FILE_PLUS),
   NEW_ISSUE: lucide(LUCIDE_SYMBOL.CIRCLE_PLUS),
@@ -295,6 +305,8 @@ export const GLYPH = {
   GOES_OUT: system("arrow.up.forward"),
   MENU_OPENS: system("chevron.up.chevron.down"),
   STOP_TURN: system("stop.fill"),
+  // A video still's play mark, the system's own, as Messages and Photos mark a video at rest.
+  VIDEO_PLAY: system("play.circle.fill"),
   // A sheet's confirm, the system's checkmark in its prominent bar button, as iOS 26's own sheets close on it.
   CONFIRM: system("checkmark"),
   // A task's status ring, the panel's own mark.

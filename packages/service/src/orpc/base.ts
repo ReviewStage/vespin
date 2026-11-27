@@ -26,15 +26,18 @@
 import { presentedClient } from "@repo/features/client-identity";
 import "@orpc/experimental-effect/extensions/effect";
 import { middlewareGen, type WithEffectContext } from "@orpc/experimental-effect";
-import { implement, type MergedContext, type RouterImplementerWithMiddlewares } from "@orpc/server";
+import {
+  implement,
+  type MergedContext,
+  type RouterImplementer,
+  type RouterImplementerWithMiddlewares,
+} from "@orpc/server";
 import type { ResponseHeadersHandlerPluginContext } from "@orpc/server/plugins";
 import type { DatabaseServices } from "@repo/database/core/query";
-import type { HostPrincipal } from "@repo/database/models/device-agent-store";
 import { type KeyRing, parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { keepWriteReceipt, writeReceiptStands } from "@repo/database/models/write-receipts";
 import { IDEMPOTENCY_KEY } from "@repo/features";
 import { type HostedContract, hostedContract } from "@repo/features/contract";
-import { MACHINE_OWNER } from "@repo/features/device-agent-wire";
 import { Clock, Context, Effect, Option, References, Result, Tracer } from "effect";
 import { Headers } from "effect/http";
 import {
@@ -191,11 +194,22 @@ function forAccount(context: HostedContext, userId: string): WithEffectContext<W
 /** The context every hosted procedure runs in: the request's, with the web runtime's services, as a resource's declared type names it. */
 export type HostedProcedureContext = MergedContext<HostedContext, WithEffectContext<WebServices>>;
 
+/**
+ * The hosted contract implemented with no middleware of its own, which the
+ * router of every resource is assembled on (`hostedRouter`). Note that the
+ * router is never assembled on `hosted` itself, because a router built on an
+ * implementer puts that implementer's middlewares before every procedure
+ * again, so each procedure, already built from `hosted`, would run
+ * `procedureTraced` twice and open two server spans for one call.
+ */
+export const hostedRoot: RouterImplementer<HostedContract, HostedContext> =
+  implement(hostedContract).$context<HostedContext>();
+
 export const hosted: RouterImplementerWithMiddlewares<
   HostedContract,
   HostedContext,
   WithEffectContext<WebServices>
-> = implement(hostedContract).$context<HostedContext>().use(procedureTraced);
+> = hostedRoot.use(procedureTraced);
 
 /**
  * A read whose answer is held until its rows move: its services lose the
@@ -239,8 +253,10 @@ export function bearerOnlyMiddleware(resolveUserId: UserIdResolver) {
   });
 }
 
-/** A device's caller: the enrolled machine its device secret names, the one device it may act for, and that device's owner (`HostPrincipal`). */
-export type DeviceCaller = HostPrincipal;
+/** A device's caller: the enrolled machine its device secret names, by its account and its device, the one device it may act for. */
+export interface DeviceCaller extends HostedCaller {
+  readonly deviceId: string;
+}
 
 /**
  * The caller as a device: an enrolled machine by its device secret, of any
@@ -260,45 +276,19 @@ const deviceCallerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
 });
 
-/** Whether a device's caller may act for the device named: an enrolled machine for itself alone, whoever owns it, every route alike. */
+/** Whether a device's caller may act for the device named: an enrolled machine for itself alone, every route alike. */
 export function actsForDevice(caller: DeviceCaller, deviceId: string): boolean {
   return caller.deviceId === deviceId;
 }
 
-/**
- * The services handed on with a device's owner among their log
- * annotations: a member's own device as `userId`, as `forAccount` names an
- * account, and a workspace's machine as `workspaceId`, since it acts for no
- * member.
- */
-function forHost(context: HostedContext, host: HostPrincipal): WithEffectContext<WebServices> {
-  switch (host.owner.kind) {
-    case MACHINE_OWNER.USER:
-      return forAccount(context, host.owner.userId);
-    case MACHINE_OWNER.WORKSPACE: {
-      const services = context["effect/context"];
-
-      return {
-        "effect/context": Context.add(services, References.CurrentLogAnnotations, {
-          ...Context.get(services, References.CurrentLogAnnotations),
-          workspaceId: host.owner.workspaceId,
-        }),
-      };
-    }
-  }
-}
-
 /** The caller as a device (`deviceCallerOf`), by its bearer alone, on `bearerOnlyMiddleware`'s terms. */
 export function deviceMiddleware() {
-  return middlewareGen<HostedContext, DeviceCaller & WithEffectContext<WebServices>>(function* ({
-    context,
-    next,
-  }) {
+  return middlewareGen<HostedContext, AccountContext<DeviceCaller>>(function* ({ context, next }) {
     if (!hostedCarriesBearer(context.request))
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     const caller = yield* deviceCallerOf(context.request);
 
-    return yield* next({ context: { ...caller, ...forHost(context, caller) } });
+    return yield* next({ context: { ...caller, ...forAccount(context, caller.userId) } });
   });
 }
 

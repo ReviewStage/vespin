@@ -44,7 +44,12 @@ import { useMemberDirectory } from "../member-directory.js";
 import { memberRows } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { useToast } from "../toast.js";
-import { appStateQuery, selectAccount, selectFixtureStaged } from "../use-app-state.js";
+import {
+  appStateQuery,
+  selectAccount,
+  selectFixtureStaged,
+  useAppStateSlice,
+} from "../use-app-state.js";
 import { DeviceStandingGlyph, STANDING_WORDS } from "./runs-on.js";
 
 /**
@@ -292,7 +297,7 @@ function FollowingShown({
   const { members, readerId } = useMemberDirectory();
   const view = followersView(followers, readerId);
   const actors = useFollowerActors(view.followers, task.assignee);
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const machines = useQuery(machinesQuery(view.reader !== undefined ? accountId : undefined));
   // Note that nothing is said until the machines are read, so a switch never flashes None set up.
   const noneSetUp = machines.data !== undefined && !machines.data.some(machineLetsAgents);

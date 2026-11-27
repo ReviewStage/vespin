@@ -19,6 +19,7 @@ import {
 } from "./mention-kind.js";
 import { encodeMention, MENTION_KIND, type MentionPlace, sectionAnchors } from "./mention-link.js";
 import { searchHit } from "./search-score.js";
+import { sinceText } from "./time-format.js";
 import { noMatchWords, showMoreWords, TERM } from "./words.js";
 
 /** The groups an `@` offers, in the panel's words (`MENTION_GROUP`). */
@@ -118,6 +119,13 @@ const DESCRIPTION_WORDS = {
 
 /** What stands where nothing typed matches, in the panel's words. */
 export const MENTION_NO_MATCH = noMatchWords(TERM.RESULT);
+
+/** What a row says after its name where the panel's picker says a fixed word: the reader among the people, a pull request no agent is named for, and a page past its first version. */
+const MENTION_DETAIL = {
+  YOU: "You",
+  PULL_REQUEST: "Pull request",
+  VERSION: (version: number) => `Version ${version}`,
+} as const;
 
 /** One thing an `@` may name: what it is called, what its row says after its name, what else finds it, and the link a pick writes. */
 export interface MentionCandidate {
@@ -362,6 +370,103 @@ export function pathCandidates(
   });
 }
 
+/** An agent an `@` offers, as the panel's picker offers it: by its name, a pick writing its link. */
+export function agentCandidate(
+  agent: { readonly id: string; readonly name: string },
+  workspace: string,
+): MentionCandidate {
+  return {
+    id: agent.id,
+    kind: MENTION_OFFER_KIND.AGENT,
+    name: agent.name,
+    target: linkOf({ kind: LINK_DESTINATION.AGENT, agentId: agent.id }, workspace),
+  };
+}
+
+/** A task an `@` offers, as the panel's picker offers it: by its name, its key beside it and found by it, a pick writing its link. */
+export function taskCandidate(
+  task: { readonly id: string; readonly name: string },
+  key: string | undefined,
+  workspace: string,
+): MentionCandidate {
+  return {
+    id: task.id,
+    kind: MENTION_OFFER_KIND.TASK,
+    name: task.name,
+    detail: key,
+    key,
+    target: linkOf({ kind: LINK_DESTINATION.TASK, taskId: task.id }, workspace),
+  };
+}
+
+/** A person an `@` offers, as the panel's picker offers them: by their name, said as You where they are the reader and else by their address, found by it, a pick writing their link. */
+export function personCandidate(
+  person: { readonly userId: string; readonly name: string; readonly email: string },
+  you: boolean,
+  workspace: string,
+): MentionCandidate {
+  return {
+    id: person.userId,
+    kind: MENTION_OFFER_KIND.PERSON,
+    name: person.name,
+    detail: you ? MENTION_DETAIL.YOU : person.email,
+    terms: [person.email],
+    target: linkOf({ kind: LINK_DESTINATION.PERSON, userId: person.userId }, workspace),
+  };
+}
+
+/** A page of a task an `@` offers, as the panel's picker offers it: by its title, its version past its first and else when it was shown, a pick writing its link. */
+export function pageCandidate(
+  page: {
+    readonly id: string;
+    readonly title: string;
+    readonly version: number;
+    readonly at: number;
+  },
+  taskId: string,
+  now: number,
+  workspace: string,
+): MentionCandidate {
+  return {
+    id: page.id,
+    kind: MENTION_OFFER_KIND.PAGE,
+    name: page.title,
+    detail: page.version > 1 ? MENTION_DETAIL.VERSION(page.version) : sinceText(page.at, now),
+    target: linkOf({ kind: LINK_DESTINATION.PAGE, taskId, pageId: page.id }, workspace),
+  };
+}
+
+/** An Inbox thread an `@` offers, as the panel's picker offers it: by its title, said and found by what holds it, a pick writing the thread's link, by itself alone. */
+export function threadCandidate(
+  item: { readonly id: string; readonly title: string },
+  holder: string,
+  workspace: string,
+): MentionCandidate {
+  return {
+    id: item.id,
+    kind: MENTION_OFFER_KIND.THREAD,
+    name: item.title,
+    detail: holder,
+    terms: [holder],
+    target: linkOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id }, workspace),
+  };
+}
+
+/** A pull request an `@` offers, as the panel's picker offers it: by its number and title, said by the agent that published it, a pick writing its GitHub address. */
+export function pullRequestCandidate(
+  pullRequest: { readonly url: string; readonly number: number; readonly title: string },
+  publisher: string | undefined,
+): MentionCandidate {
+  return {
+    id: pullRequest.url,
+    kind: MENTION_OFFER_KIND.PULL_REQUEST,
+    name: `#${pullRequest.number} ${pullRequest.title}`,
+    detail: publisher ?? MENTION_DETAIL.PULL_REQUEST,
+    terms: [MENTION_DETAIL.PULL_REQUEST],
+    target: pullRequest.url,
+  };
+}
+
 /** An automation an `@` offers, as the panel's picker offers it: by its name, saying what fires it, a pick writing its page's link. */
 export function automationCandidate(
   automation: { readonly id: string; readonly name: string },
@@ -378,7 +483,7 @@ export function automationCandidate(
   };
 }
 
-/** A machine a workspace owns, as an `@` offers it: its id, its name, who connected it, and what it runs. */
+/** A workspace member's machine, as an `@` offers it: its id, its name, whose it is, and what it runs. */
 export interface OfferedMachine {
   readonly id: string;
   readonly name: string;

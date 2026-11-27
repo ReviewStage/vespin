@@ -42,7 +42,7 @@ import { ChipOrLink, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ReviewBadge } from "./pull-request-people.js";
 import { EntryPictures, usePictureDrawer } from "./pull-request-pictures.js";
 import { useMentionDoors } from "./task-mentions.js";
-import { type GitHubPictureDrawer, GitHubWords, TranscriptWords } from "./transcript-blocks.js";
+import { type GitHubPictureDrawer, GitHubWords } from "./transcript-blocks.js";
 
 /**
  * line-cards.tsx -- a line steered into an agent drawn from what its metadata says carried it: a thread's, a comment's, or a Slack message's line under its head, and GitHub's word as its card.
@@ -304,7 +304,7 @@ const NO_PICTURE: GitHubPictureDrawer = () => undefined;
  * line kept that, drawn as the Pull request tab draws a comment, its
  * pictures read through the service as the agent's and opening the viewer
  * over them; else, on a line kept before it did or whose rendering could
- * not be read, the words as markdown.
+ * not be read, the words as markdown, through the same steps.
  */
 function GitHubLineWords({
   words,
@@ -317,11 +317,13 @@ function GitHubLineWords({
   const scope = useMemo(() => ({ agentId: agentId ?? "" }), [agentId]);
   const drawn = usePictureDrawer(scope);
 
-  if (html === undefined) return <TranscriptWords text={words} />;
+  const picture = agentId === undefined ? NO_PICTURE : drawn;
+
+  if (html === undefined) return <GitHubWords source={{ markdown: words }} picture={picture} />;
 
   return (
     <EntryPictures html={html}>
-      <GitHubWords html={html} picture={agentId === undefined ? NO_PICTURE : drawn} />
+      <GitHubWords source={{ html }} picture={picture} />
     </EntryPictures>
   );
 }

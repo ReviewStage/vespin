@@ -396,14 +396,17 @@ export class HostedTaskClient {
     );
   }
 
-  /** The id of the task a link names by its workspace, by slug or id, and its number there; nothing where none the account reaches is found, or the service did not answer. */
+  /** The id of the task a link names by its workspace, by slug or id, and its number there; or that none the account reaches is found, or that the service did not answer, told apart. */
   find(
     workspace: string,
     number: number,
-  ): Effect.Effect<string | undefined, never, HttpClient.HttpClient> {
+  ): Effect.Effect<TaskCallResult<string, TaskCallFailure>, never, HttpClient.HttpClient> {
     return Effect.map(
       hostedCall(this.#hosted.tasks.find, { workspace, number: String(number) }),
-      (found) => ("failure" in found ? undefined : found.taskId),
+      (found) =>
+        "failure" in found
+          ? failedAs(found, [TASK_CALL_FAILURE.NOT_FOUND])
+          : succeeded(found.taskId),
     );
   }
 

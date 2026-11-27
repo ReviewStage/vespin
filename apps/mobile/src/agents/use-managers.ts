@@ -12,27 +12,29 @@
  * message with its sender's face and name (`useChatFaces`).
  */
 
-import { managerCreateRefusalWords } from "@repo/features/agent-refusal-words";
+import { managerCreateRefusalWords, messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import { AGENT_KIND, type AgentRunsOnRequest, type ListedAgent } from "@repo/features/agent-wire";
+import { AGENT_KIND, type ListedAgent } from "@repo/features/agent-wire";
 import { type ManagerFace, sameManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
-import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
-import { placeIdOf } from "@repo/features/runs-on-places";
+import { READ_MARK, type ReadMark, unreadThroughOf } from "@repo/features/read-mark";
 import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { type FollowedAgent, selectWorkspaceExperiment } from "@repo/host/app-state-reads";
+import { windowRows } from "@repo/host/read-window";
 import { EXPERIMENT } from "@repo/settings";
 import type { ChannelFaces } from "@repo/ui-native";
-import { and, eq, isNull, isUndefined, useLiveQuery } from "@tanstack/react-db";
+import { and, eq, isNull, isUndefined } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
+import { useWindow } from "../host/use-window.js";
 import { useMemberFaces } from "../member-pictures.js";
-import { startRefusalWords } from "../tasks/use-start.js";
+import { runsOnOf, startRefusalWords } from "../tasks/use-start.js";
+import { useWrite } from "../use-write.js";
 
 /** No Manager, the same array every render. */
 const NO_MANAGERS: readonly ListedAgent[] = [];
@@ -63,49 +65,96 @@ export function useWorkspaceManagers(workspaceId: string | undefined): readonly 
   const listed = useManagersListed(workspaceId);
   const { agents } = useTaskListCollections();
 
-  const held = useLiveQuery((q) =>
-    !listed || workspaceId === undefined
-      ? undefined
-      : q
-          .from({ agent: agents })
-          .where(({ agent }) =>
-            and(
-              eq(agent.kind, AGENT_KIND.MANAGER),
-              isNull(agent.taskId),
-              eq(agent.workspaceId, workspaceId),
-              isUndefined(agent.archivedAt),
+  const held = windowRows(
+    useWindow((q) =>
+      !listed || workspaceId === undefined
+        ? undefined
+        : q
+            .from({ agent: agents })
+            .where(({ agent }) =>
+              and(
+                eq(agent.kind, AGENT_KIND.MANAGER),
+                isNull(agent.taskId),
+                eq(agent.workspaceId, workspaceId),
+                isUndefined(agent.archivedAt),
+              ),
             ),
-          ),
-  ).data;
+    ),
+  );
 
   return useMemo(
-    () =>
-      held === undefined || workspaceId === undefined
-        ? NO_MANAGERS
-        : workspaceManagersOf(held, workspaceId),
+    () => (workspaceId === undefined ? NO_MANAGERS : workspaceManagersOf(held, workspaceId)),
     [held, workspaceId],
   );
+}
+
+/** What a Manager's page reads of the reader's mark: where New stands, and Mark as unread from one of its messages. */
+export interface ManagerChatMark {
+  /** The instant New stands after: the mark the page found as it opened where the chat then read unread, or the one Mark as unread left; none where nothing stood unread. */
+  readonly newAfter: number | undefined;
+  /** Whether New may stand over the reader's own message, as it does where they marked the chat unread from it; else it skips their own. */
+  readonly newOverOwn: boolean;
+  /** Moves the reader's mark back to just before the message, by its id and when it was sent, and holds it there while the page stands; none for an agent that is no Manager. */
+  readonly markUnread: ((messageId: string, sentAt: number) => void) | undefined;
+}
+
+/** One stay on a Manager's page: the agent, where New stands, and whether it may stand over the reader's own message. */
+interface ChatStay {
+  readonly agentId: string | undefined;
+  readonly newAfter: number | undefined;
+  readonly newOverOwn: boolean;
+}
+
+/** The reader's mark of the chat as its row carries it, and when the Manager last said something. */
+type ChatMarkRead = Pick<ListedAgent, "saidAt" | "readThrough" | "markedUnread">;
+
+/** A stay as the page opens on the agent: New after the mark it finds, where the reader marked the chat unread, over their own message too, or where it said something after the mark. */
+function openedStay(agentId: string | undefined, mark: ChatMarkRead | undefined): ChatStay {
+  const said =
+    mark?.saidAt !== undefined && mark.readThrough !== undefined && mark.saidAt > mark.readThrough;
+
+  const marked = mark?.markedUnread === true;
+
+  return {
+    agentId,
+    newAfter: marked || said ? mark?.readThrough : undefined,
+    newOverOwn: marked,
+  };
 }
 
 /**
  * Moves the reader's mark of a Manager's chat while its page stands open, as
  * the panel's page does (`manager-chat-looks.ts`): read through as it opens,
  * seen as it is left, and seen again whenever the chat says something while
- * it stands open, so the unread dot its row draws is one the phone clears.
- * Nothing for an agent that is no Manager. Note that each look goes
- * quietly, whatever comes back, since no person pressed for it.
+ * it stands open, so the unread dot its row draws is one the phone clears;
+ * and offers Mark as unread, which moves the mark back to just before any
+ * message of the chat, marks it unread by hand, and holds the mark there
+ * for the rest of the stay, so the chat stays unread, New over that
+ * message, until the reader opens it again. Nothing for an agent that is no
+ * Manager. Note that each look goes quietly, whatever comes back, since no
+ * person pressed for it.
  */
 export function useManagerChatLooks(
-  agent: Pick<ListedAgent, "id" | "kind" | "saidAt"> | undefined,
-): void {
+  agent: Pick<ListedAgent, "id" | "kind" | "saidAt" | "readThrough" | "markedUnread"> | undefined,
+): ManagerChatMark {
   const acts = useHostActs();
+  const write = useWrite();
   const agentId = agent?.kind === AGENT_KIND.MANAGER ? agent.id : undefined;
   const saidAt = agent?.saidAt;
+  const [stay, setStay] = useState(() => openedStay(agentId, agent));
+
+  // Note that a page opening on another agent is a stay of its own, found before its first look moves the mark.
+  if (stay.agentId !== agentId) setStay(openedStay(agentId, agent));
+
+  // Note that the closing look reads whether the reader marked the chat unread as it runs, after the stay's last render.
+  const markedUnread = useRef(false);
 
   useEffect(() => {
     if (agentId === undefined) return;
+    markedUnread.current = false;
 
     const look = (readMark: ReadMark) => {
+      if (markedUnread.current) return;
       acts[ACT_KIND.AGENTS_MARK_READ]({ agentId, readMark }).catch(lookRefused);
     };
 
@@ -123,15 +172,58 @@ export function useManagerChatLooks(
 
     if (agentId === undefined || was?.agentId !== agentId || was.saidAt === saidAt) return;
 
+    if (markedUnread.current) return;
     acts[ACT_KIND.AGENTS_MARK_READ]({ agentId, readMark: READ_MARK.SEEN }).catch(lookRefused);
   }, [acts, agentId, saidAt]);
+
+  const markUnread = useCallback(
+    (messageId: string, sentAt: number) => {
+      if (agentId === undefined) return;
+      const before = stay;
+      const held = markedUnread.current;
+      markedUnread.current = true;
+      setStay({ agentId, newAfter: unreadThroughOf(sentAt), newOverOwn: true });
+
+      void write(
+        () =>
+          acts[ACT_KIND.AGENTS_MARK_READ]({
+            agentId,
+            readMark: READ_MARK.UNREAD,
+            unreadFrom: { messageId, sentAt },
+          }),
+        {
+          refused: (answer) =>
+            "failure" in answer ? messageFailureWords(answer.failure) : undefined,
+          unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+        },
+      ).then((went) => {
+        if (went) return;
+
+        // Note that a mark the service did not take is let go, as the host lets its drawn mark go, back to the stay as it stood: one marked unread earlier in it stays held, and one that held nothing catches the looks it held up by one.
+        markedUnread.current = held;
+        setStay((standing) => (standing.agentId === agentId ? before : standing));
+
+        if (held) return;
+        acts[ACT_KIND.AGENTS_MARK_READ]({ agentId, readMark: READ_MARK.SEEN }).catch(lookRefused);
+      });
+    },
+    [acts, agentId, stay, write],
+  );
+
+  const current = stay.agentId === agentId;
+
+  return {
+    newAfter: current ? stay.newAfter : undefined,
+    newOverOwn: current && stay.newOverOwn,
+    markUnread: agentId === undefined ? undefined : markUnread,
+  };
 }
 
 /** What New Manager makes: its name, its repositories, the first its checkout, where it runs (`CLOUD` or a device's id), its model and effort, and its face, the service's pick where none is named. */
 export interface ManagerAsk {
   readonly name: string;
   readonly repositories: readonly [string, ...string[]];
-  readonly runsOn: AgentRunsOnRequest;
+  readonly runsOn: string;
   readonly choice: ModelChoice;
   readonly face?: ManagerFace | undefined;
 }
@@ -143,8 +235,7 @@ export type ManagerMade = { readonly agentId: string } | { readonly refused: str
 function sameAsk(one: ManagerAsk, other: ManagerAsk): boolean {
   return (
     one.name === other.name &&
-    one.runsOn.machine === other.runsOn.machine &&
-    placeIdOf(one.runsOn) === placeIdOf(other.runsOn) &&
+    one.runsOn === other.runsOn &&
     one.choice.model === other.choice.model &&
     one.choice.effort === other.choice.effort &&
     sameManagerFace(one.face, other.face) &&
@@ -182,7 +273,7 @@ export function useCreateManager(
       workspaceId,
       name: ask.name,
       repositories: [...ask.repositories],
-      runsOn: ask.runsOn,
+      runsOn: runsOnOf(ask.runsOn),
       model: ask.choice.model,
       effort: ask.choice.effort,
       // Note that a face is sent only once picked, so one left alone is the service's pick, as the desktop's card sends it.

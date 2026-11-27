@@ -36,7 +36,7 @@ import { ReadFailed } from "../settings/marks.js";
 import { MenuRow } from "../settings/menu-row.js";
 import { SwitchRow } from "../settings/switch-row.js";
 import { useToast } from "../toast.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 
 /**
  * manager-people-section.tsx -- Manager Settings › People: who follows the Manager, whether it may use each one's machines, the reader's own switch, and adding or removing a follower.
@@ -270,7 +270,7 @@ function OwnMachines({
   reader: AgentFollowerWire | undefined;
   writes: FollowerWrites;
 }): React.JSX.Element {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const machines = useQuery(machinesQuery(accountId));
   // Note that nothing is said until the machines are read, so the switch never flashes None set up.
   const noneSetUp = machines.data !== undefined && !machines.data.some(machineLetsAgents);

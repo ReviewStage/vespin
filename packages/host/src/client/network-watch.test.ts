@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { accountCall, NO_CREDENTIAL, ServiceReach, type ServiceReachState } from "@repo/features";
+import { ForegroundClock } from "@repo/runtime/effect";
+import { testForegroundClock } from "@repo/runtime/testing";
 import { HTTP_METHOD } from "@repo/wire";
 import { jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { Effect, Exit, Scope, SubscriptionRef } from "effect";
@@ -42,9 +44,11 @@ function watched(
     const regained = { times: 0 };
     const reported: string[] = [];
 
+    const foreground = yield* ForegroundClock;
+
     const reach = yield* SubscriptionRef.make<ServiceReachState>({
       reachable: true,
-      answeredAt: 0,
+      answeredAt: foreground.now(),
     });
 
     const state = new AppStateStore(initialAppState(RUN, false, []), yield* Effect.context());
@@ -60,7 +64,7 @@ function watched(
       report: (message) => reported.push(message),
     }).pipe(Scope.provide(scope), Effect.provideService(ServiceReach, reach));
 
-    return { machine, reach, state, regained, reported };
+    return { machine, reach, state, regained, reported, at: foreground.now() };
   });
 }
 
@@ -105,9 +109,9 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const scope = yield* Scope.make();
-      const { machine, reach, state, regained } = yield* watched(scope);
+      const { machine, reach, state, regained, at } = yield* watched(scope);
 
-      yield* SubscriptionRef.set(reach, { reachable: false, answeredAt: 0 });
+      yield* SubscriptionRef.set(reach, { reachable: false, answeredAt: at });
       yield* SubscriptionRef.set(machine, false);
       yield* Effect.yieldNow;
       assert.deepEqual(state.snapshot().network, {
@@ -119,10 +123,7 @@ it.effect(
       yield* Effect.yieldNow;
       assert.equal(regained.times, 0, "the network back while the service still does not answer");
 
-      yield* SubscriptionRef.set(reach, {
-        reachable: true,
-        answeredAt: 12_000,
-      });
+      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: at });
       yield* Effect.yieldNow;
       assert.deepEqual(state.snapshot().network, {
         online: true,
@@ -183,7 +184,7 @@ it.effect(
         reachable: true,
       });
       yield* Scope.close(scope, Exit.void);
-    }),
+    }).pipe(Effect.provideServiceEffect(ForegroundClock, testForegroundClock)),
 );
 
 it.effect(
@@ -191,11 +192,11 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const scope = yield* Scope.make();
-      const { reach, state } = yield* watched(scope);
-      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1, updateNeeded: true });
+      const { reach, state, at } = yield* watched(scope);
+      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: at, updateNeeded: true });
       yield* Effect.yieldNow;
       assert.equal(state.snapshot().network.updateNeeded, true);
-      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 2 });
+      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: at });
       yield* Effect.yieldNow;
       assert.equal(state.snapshot().network.updateNeeded, undefined);
       yield* Scope.close(scope, Exit.void);

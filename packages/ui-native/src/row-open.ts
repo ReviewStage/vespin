@@ -10,12 +10,28 @@ import { createContext } from "react";
 export const RowOpenContext = createContext<((id: string) => void) | undefined>(undefined);
 
 /**
+ * Told each time a tap on a list's row reaches JavaScript to open it, before
+ * the list's `onSelect` runs, so the app can count how many of a reader's
+ * taps came through ahead of the page they opened; nothing of which row.
+ * None where nothing listens.
+ */
+export const RowPickContext = createContext<(() => void) | undefined>(undefined);
+
+/**
  * The id of the row its list stands selected, such as the thread open in a
  * split view's detail, so the row draws the selection's fill itself, since
  * every row clears the system's ground for the list's own. None where the
  * list keeps no selection.
  */
 export const RowSelectedContext = createContext<string | undefined>(undefined);
+
+/**
+ * Whether its list is the system's sidebar list, as an iPad's own sidebar
+ * is, whose own selection highlight, metrics and pointer hover each row
+ * keeps rather than drawing its own fill over a cleared ground. False
+ * elsewhere.
+ */
+export const RowSystemLookContext = createContext(false);
 
 /**
  * The words a search typed, read into the words each row's title marks in

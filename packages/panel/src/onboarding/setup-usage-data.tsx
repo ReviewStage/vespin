@@ -24,6 +24,7 @@ import {
   selectAccount,
   selectAppSettingsView,
   selectRun,
+  useAppStateSlice,
 } from "../use-app-state.js";
 
 /** What setup says of usage data, in `PRIVACY.md`'s terms. */
@@ -36,7 +37,7 @@ const USAGE_DATA_WORDS = {
 /** The usage data section on setup's first card; nothing until the settings are read. */
 export function SetupUsageData(): React.JSX.Element | null {
   const settings = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data;
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
   const capabilities = useQuery({ ...appStateQuery, select: selectRun }).data?.capabilities;
 
   if (account === undefined || capabilities === undefined) return null;

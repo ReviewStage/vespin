@@ -46,11 +46,11 @@ export interface CliRelease {
  * published, and the script served meanwhile says there is none yet.
  */
 export const CLI_RELEASE: CliRelease | undefined = {
-  VERSION: "0.4.0",
+  VERSION: "0.5.0",
   SHA256: {
-    [HOST_TARGET.LINUX_X64]: "23f4ccc9ee4f5f95a82223f2c5c3ab262282189d4c1f7f6b2c6db23c25799bba",
-    [HOST_TARGET.LINUX_ARM64]: "2f43d58f438fdab77263c07411b36d80b1b62c0bc7593a053705192ba8f0189e",
-    [HOST_TARGET.DARWIN_ARM64]: "b834cef9f1d0ffeb938f2de92b14b01e3e3c949a3cbd8a09e69bf650c4b796d0",
+    [HOST_TARGET.LINUX_X64]: "18be4cff4c8d66d24481616450c130a1b3de256813c298ade5c8b15edb46e83a",
+    [HOST_TARGET.LINUX_ARM64]: "140059ac944a2b15fbc332ffde3a7a73c2478ebceff36dd150a33aeda7a9865a",
+    [HOST_TARGET.DARWIN_ARM64]: "30630021dd35ea790e051ddb721023c8a77043878f15b6ad2c68961269bb0f6f",
   },
 };
 

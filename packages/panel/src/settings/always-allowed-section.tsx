@@ -49,7 +49,7 @@ import { allowedCommandsQuery, allowedCommandsRetryMutation } from "../live-read
 import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { agentActor } from "../tasks/agent-model.js";
 import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-sections.js";
@@ -527,7 +527,7 @@ function CommandRows({
 
 /** Always allowed for the account signed in: Add command on its heading, its commands once read, a skeleton through the same rows while they are read, and Retry where the read failed. */
 export function AlwaysAllowedSection(): React.JSX.Element {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const read = useQuery(allowedCommandsQuery(accountId));
   const retry = useMutation(allowedCommandsRetryMutation());
   const [edit, setEdit] = useState<CommandEdit | undefined>(undefined);

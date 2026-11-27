@@ -43,8 +43,8 @@ import {
   AGENT_KIND,
   AGENT_MACHINE,
   AGENT_PAYER,
+  type AgentRunsOnRequest,
   CHECK_SUMMARY,
-  type PersonalRunsOn,
   PULL_REQUEST_STATE,
   type PullRequestState,
 } from "@repo/features/agent-wire";
@@ -211,7 +211,7 @@ const openAutomation = (
     readonly disabledServers?: readonly IntegrationProvider[];
     readonly prompt?: string;
     readonly trigger?: AutomationTrigger;
-    readonly runsOn?: PersonalRunsOn;
+    readonly runsOn?: AgentRunsOnRequest;
   } = {},
 ) =>
   Effect.gen(function* () {

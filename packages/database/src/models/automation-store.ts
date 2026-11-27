@@ -1,4 +1,4 @@
-import { AGENT_MACHINE, type PersonalRunsOn } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentRunsOnRequest } from "@repo/features/agent-wire";
 import type { AutomationPresetName } from "@repo/features/automation-presets";
 import {
   AUTOMATION_RUN_REASON,
@@ -128,7 +128,7 @@ export const AUTOMATION_COLUMNS = {
 };
 
 /** The machine an automation's runs start on, as a Start names it; none where it was made naming none, or its row holds a machine this release does not know or a device with no id. */
-export function automationRunsOn(made: Automation): PersonalRunsOn | null {
+export function automationRunsOn(made: Automation): AgentRunsOnRequest | null {
   if (made.runsOnMachine === AGENT_MACHINE.VERCEL) return { machine: AGENT_MACHINE.VERCEL };
 
   if (made.runsOnMachine === AGENT_MACHINE.DEVICE && made.runsOnDeviceId !== null) {
@@ -139,7 +139,7 @@ export function automationRunsOn(made: Automation): PersonalRunsOn | null {
 }
 
 /** The columns a machine is kept in: the machine, and a device's id beside it, both null for none. */
-function runsOnColumns(runsOn: PersonalRunsOn | null) {
+function runsOnColumns(runsOn: AgentRunsOnRequest | null) {
   return {
     runsOnMachine: runsOn?.machine ?? null,
     runsOnDeviceId: runsOn?.machine === AGENT_MACHINE.DEVICE ? runsOn.deviceId : null,
@@ -170,7 +170,7 @@ export interface NewAutomation {
   /** The suggestion it is made from; none where left out. No change names it again. */
   readonly preset?: AutomationPresetName | null;
   /** The machine its runs start on; none where left out, so a run is placed as a Start naming none is. */
-  readonly runsOn?: PersonalRunsOn | null;
+  readonly runsOn?: AgentRunsOnRequest | null;
 }
 
 /**
@@ -193,7 +193,7 @@ export interface AutomationChanges {
   readonly archiveSuccessful?: boolean;
   readonly slackDelivery?: boolean;
   /** The machine its runs start on, null for none, which places a run as a Start naming none is. */
-  readonly runsOn?: PersonalRunsOn | null;
+  readonly runsOn?: AgentRunsOnRequest | null;
 }
 
 const RunRowSchema = Schema.Struct({

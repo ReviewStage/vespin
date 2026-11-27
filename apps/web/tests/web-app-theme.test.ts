@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import assert from "node:assert/strict";
 import "@repo/panel/testing/match-media";
-import "@repo/panel/testing/resize-observer";
+import "@repo/ui/testing/resize-observer";
 import { ACT_KIND } from "@repo/host/acts";
 import { askAct } from "@repo/panel/act";
 import { THEME } from "@repo/settings";

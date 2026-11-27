@@ -24,10 +24,6 @@ import {
 } from "@repo/database/sync/tables";
 import { AGENT_INBOX_READ, TASK_INBOX_READ } from "@repo/features/inbox-live";
 import { Effect, Option } from "effect";
-import {
-  WORKSPACE_MACHINE_LIVE,
-  workspaceMachineLiveParam,
-} from "../../agents/workspace-machine-reads.js";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import {
   memberAgentInboxLiveStatements,
@@ -70,10 +66,7 @@ function found<A, R>(read: Effect.Effect<Option.Option<A>, StoreFailure, R>) {
 export const taskInboxRead = bindLiveRead(TASK_INBOX_READ, {
   reads: SCOPE_INBOX_READS,
   topics: ({ id }) => [[TOPIC.TASK, id]],
-  serve: (_params, _query, request) =>
-    Effect.succeed({ workspaceMachines: workspaceMachineLiveParam(request) }),
-  statements: ({ userId, id, workspaceMachines }) =>
-    taskInboxLiveStatements(userId, id, workspaceMachines === WORKSPACE_MACHINE_LIVE.CARRIED),
+  statements: ({ userId, id }) => taskInboxLiveStatements(userId, id),
   admit: ({ userId, id }) => found(readTaskHeader(userId, id)),
 });
 

@@ -100,7 +100,9 @@ const answerOf = Effect.fn("web/runnerTranscriptAnswer")(function* (
     }
 
     case RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE: {
-      const page = yield* loadSessionEntryPage(userId, conversationId, call.key, call.after);
+      const page = yield* loadSessionEntryPage(userId, conversationId, call.key, call.after, {
+        fromLatestCompaction: call.fromLatestCompaction === true,
+      });
 
       return page satisfies RunnerTranscriptPage;
     }

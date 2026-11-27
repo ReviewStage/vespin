@@ -23,6 +23,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxTask, AppInboxTaskHolding } from "@repo/host/app-state";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -40,7 +41,6 @@ import {
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { overListedTasks } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
-import { relayout } from "../testing/resize-observer.js";
 import { layScrollerOut } from "../testing/scroller.js";
 import { handInbox, tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";

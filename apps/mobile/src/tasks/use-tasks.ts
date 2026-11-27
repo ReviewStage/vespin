@@ -10,7 +10,7 @@
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
-import { holderTask, waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import type { InboxWaiting } from "@repo/features/inbox-list-model";
 import { LINK_DESTINATION, taskNumberOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
@@ -31,10 +31,12 @@ import {
 import {
   TASK_SECTION_WRITE,
   type TaskSection,
+  type TaskSectionIcon,
   type TaskSectionWrite,
 } from "@repo/features/task-section-wire";
 import {
   NO_TASK_SECTIONS,
+  newSectionWrites,
   placeWrites,
   SECTION_DELETED,
   SECTION_WRITE_FAILED_NOTE,
@@ -69,6 +71,7 @@ import {
   MARK_FAILED_NOTES,
   PRIORITY_FAILED_NOTE,
   RENAME_FAILED_NOTE,
+  REPOSITORY_PIN_FAILED_NOTES,
   repositoryChangeFailureNote,
   type StopAgentsWords,
   settleFailedNote,
@@ -89,6 +92,7 @@ import {
   selectTaskListListed,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
+import { windowRows } from "@repo/host/read-window";
 import {
   BUZZ,
   type Buzz,
@@ -101,17 +105,9 @@ import {
   useFailureNotices,
   useHeldValue,
 } from "@repo/ui-native";
-import {
-  caseWhen,
-  coalesce,
-  eq,
-  gt,
-  inArray,
-  isUndefined,
-  or,
-  useLiveQuery,
-} from "@tanstack/react-db";
+import { caseWhen, coalesce, eq, gt, inArray, isUndefined, or } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
+import { randomUUID } from "expo-crypto";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -124,7 +120,8 @@ import {
   useWholeListRead,
 } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
-import { useInboxRowGroupsIn } from "../inbox/inbox-groups.js";
+import { useWindow } from "../host/use-window.js";
+import { useInboxWaiting } from "../inbox/inbox-groups.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { useMenuPhotos, useMenuRepositoryPictures } from "../menu-photos.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
@@ -146,33 +143,9 @@ export function useTasksWorkspace(): Workspace | undefined {
   return useChosenWorkspace(workspaces).chosen;
 }
 
-/** How many of the reader's threads wait on them, by the task holding them and by the agent that posted them, in the chosen workspace. */
-export function useWaiting(workspaceId: string | undefined): {
-  readonly byTask: ReadonlyMap<string, number>;
-  readonly byAgent: ReadonlyMap<string, number>;
-} {
-  const groups = useInboxRowGroupsIn(workspaceId);
-
-  const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-
-  return useMemo(() => {
-    const now = Date.now();
-    const byTask = new Map<string, number>();
-    const byAgent = new Map<string, number>();
-
-    for (const { holder, items } of groups) {
-      const waiting = items.filter((item) => waitsOnReaderNow(item, readerId, now));
-
-      for (const item of waiting) byAgent.set(item.agentId, (byAgent.get(item.agentId) ?? 0) + 1);
-
-      const task = holderTask(holder);
-
-      // Note that a Manager's threads, on no task, count toward their agent alone.
-      if (waiting.length > 0 && task !== undefined) byTask.set(task.id, waiting.length);
-    }
-
-    return { byTask, byAgent };
-  }, [groups, readerId]);
+/** How many of the reader's threads wait on them, by the task holding them and by the agent that posted them, in the workspace `workspaceId` names, read from the app's one read of the Inbox (`useInboxWaiting`). */
+export function useWaiting(workspaceId: string | undefined): InboxWaiting {
+  return useInboxWaiting(workspaceId);
 }
 
 /** Sets a task's status, stopping its working agents with it where the reader confirmed that. */
@@ -358,6 +331,16 @@ export interface TaskPlacing {
   readonly renameSection: (section: TaskSection, title: string) => void;
   /** Deletes one of the member's sections, its tasks left where they stand, and offers Undo, as the panel's Delete section does. */
   readonly deleteSection: (section: TaskSection) => void;
+  /** Gives one of the member's sections another icon, keeping its name, or none under null, as the panel's Change icon does. */
+  readonly setSectionIcon: (section: TaskSection, icon: TaskSectionIcon | null) => void;
+  /** Makes a section named `title`, and puts `task` on top of it where one is given, as the panel's New section does from the Tasks head and from Move to section: in the task's own workspace, else the listed one; none before the workspace is read. */
+  readonly newSection:
+    | ((title: string, task?: { readonly id: string; readonly workspaceId: string }) => void)
+    | undefined;
+  /** The repositories the account keeps at the top of its list, the first kept first. */
+  readonly pinnedRepositories: readonly string[];
+  /** Keeps a repository's group at the top of the list, or stops, as the panel's Keep at top does. */
+  readonly pinRepository: (repository: string, pinned: boolean) => void;
 }
 
 /**
@@ -378,6 +361,11 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
   const { data: state = NO_TASK_SECTIONS } = useQuery({
     ...appStateQuery,
     select: (snapshot) => snapshot.tasks.taskSections ?? NO_TASK_SECTIONS,
+  });
+
+  const { data: pinnedRepositories = NO_REPOSITORY_PINS } = useQuery({
+    ...appStateQuery,
+    select: selectPinnedRepositories,
   });
 
   const { listed } = useWorkspaceRepositories(workspaceId);
@@ -402,22 +390,53 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
       });
     };
 
-    const renameSection = (section: TaskSection, title: string) => {
-      // Note that a name left blank keeps the one it had, as the panel's rename never leaves a section nameless.
-      const named = title.trim() === "" ? section.title : title.trim();
+    // Note that an edit reads the section as it stands when the write goes, not as the menu or alert that asked found it, because an edit writes its name and its icon together, and a change landing meanwhile from another device would be written back over.
+    const standing = (section: TaskSection) =>
+      current.current.sections.find((each) => each.id === section.id) ?? section;
 
-      if (named === section.title) return;
+    const renameSection = (section: TaskSection, title: string) => {
+      const now = standing(section);
+      // Note that a name left blank keeps the one it had, as the panel's rename never leaves a section nameless.
+      const named = title.trim() === "" ? now.title : title.trim();
+
+      if (named === now.title) return;
       void sendSections(
-        [
-          {
-            kind: TASK_SECTION_WRITE.EDIT,
-            id: section.id,
-            title: named,
-            icon: section.icon ?? null,
-          },
-        ],
-        section.id,
+        [{ kind: TASK_SECTION_WRITE.EDIT, id: now.id, title: named, icon: now.icon ?? null }],
+        now.id,
       );
+    };
+
+    const setSectionIcon = (section: TaskSection, icon: TaskSectionIcon | null) => {
+      const now = standing(section);
+
+      void sendSections(
+        [{ kind: TASK_SECTION_WRITE.EDIT, id: now.id, title: now.title, icon }],
+        now.id,
+      );
+    };
+
+    const newSection = (
+      inWorkspace: string,
+      title: string,
+      task?: { readonly id: string; readonly workspaceId: string },
+    ) => {
+      const id = randomUUID();
+
+      void sendSections(newSectionWrites(id, title, inWorkspace, task, Date.now()), id);
+    };
+
+    const pinRepository = (repository: string, pinned: boolean) => {
+      void write(() => acts[ACT_KIND.TASKS_PIN_REPOSITORY]({ repository, pinned }), {
+        refused: (changed) =>
+          changed
+            ? undefined
+            : pinned
+              ? REPOSITORY_PIN_FAILED_NOTES.PIN
+              : REPOSITORY_PIN_FAILED_NOTES.UNPIN,
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.REPOSITORY_PIN, id: repository },
+        went: BUZZ.SUCCESS,
+      });
     };
 
     const deleteSection = (section: TaskSection) => {
@@ -478,8 +497,16 @@ export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
       setRepository,
       renameSection,
       deleteSection,
+      setSectionIcon,
+      newSection:
+        workspaceId === undefined
+          ? undefined
+          : (title: string, task?: { readonly id: string; readonly workspaceId: string }) =>
+              newSection(workspaceId, title, task),
+      pinnedRepositories,
+      pinRepository,
     };
-  }, [acts, write, notices, state, workspaceId, listed, repositoryPictureOf]);
+  }, [acts, write, notices, state, workspaceId, listed, repositoryPictureOf, pinnedRepositories]);
 }
 
 /** What the Tasks tab draws: the tree, what a search finds, each row's look, and the acts on a row. */
@@ -651,11 +678,13 @@ function selectListingParts(state: AppStateSnapshot) {
   };
 }
 
-/** No task: what the listing reads while its tab stands behind, never yet brought forward. */
-const NO_LISTED_TASKS: readonly TaskSummary[] = [];
+/** No repository kept at top, the same array every render. */
+const NO_REPOSITORY_PINS: readonly string[] = [];
 
-/** No agent: what the listing reads while its tab stands behind, never yet brought forward. */
-const NO_LISTED_AGENTS: readonly ListedAgent[] = [];
+/** The repositories the account keeps at the top of its list, by name, the first kept first. */
+function selectPinnedRepositories(state: AppStateSnapshot): readonly string[] {
+  return (state.tasks.repositoryPins ?? []).map((pin) => pin.repository);
+}
 
 /** The task list's rows as the listing reads them off its collections. */
 interface ListedRows {
@@ -674,8 +703,8 @@ interface ListedRows {
 function useListedRows(reading: boolean): ListedRows {
   const collections = useTaskListCollections();
 
-  const tasks =
-    useLiveQuery((q) =>
+  const tasks = windowRows(
+    useWindow((q) =>
       reading
         ? q.from({ task: collections.tasks }).orderBy(({ task }) => {
             const agentsAt = coalesce(task.agents?.activityAt, 0);
@@ -683,14 +712,16 @@ function useListedRows(reading: boolean): ListedRows {
             return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
           }, "desc")
         : undefined,
-    ).data ?? NO_LISTED_TASKS;
+    ),
+  );
 
-  const agents =
-    useLiveQuery((q) =>
+  const agents = windowRows(
+    useWindow((q) =>
       reading
         ? q.from({ agent: collections.agents }).where(({ agent }) => isUndefined(agent.archivedAt))
         : undefined,
-    ).data ?? NO_LISTED_AGENTS;
+    ),
+  );
 
   return { tasks, agents };
 }
@@ -953,15 +984,6 @@ function idNamed(named: string | undefined): string | undefined {
     : undefined;
 }
 
-/** No pull request: what a page reads before its task is named. */
-const NO_PULL_REQUESTS: readonly ListedPullRequest[] = [];
-
-/** No task: what a page reads before its task is named. */
-const NO_PAGE_TASKS: readonly TaskSummary[] = [];
-
-/** No agent: what a page reads while none of its tasks is held. */
-const NO_PAGE_AGENTS: readonly ListedAgent[] = [];
-
 /** The rows a task's page draws (`usePageRows`). */
 interface PageRows {
   readonly tasks: readonly TaskSummary[];
@@ -982,8 +1004,8 @@ function usePageRows(
 ): PageRows {
   const collections = useTaskListCollections();
 
-  const tasks =
-    useLiveQuery((q) =>
+  const tasks = windowRows(
+    useWindow((q) =>
       taskId === undefined || !reading
         ? undefined
         : q
@@ -997,12 +1019,13 @@ function usePageRows(
             )
             .orderBy(({ task }) => task.createdAt, "desc")
             .orderBy(({ task }) => task.id, { direction: "desc", stringSort: "lexical" }),
-    ).data ?? NO_PAGE_TASKS;
+    ),
+  );
 
   const ids = tasks.map(({ id }) => id);
 
-  const agents =
-    useLiveQuery((q) =>
+  const agents = windowRows(
+    useWindow((q) =>
       ids.length === 0
         ? undefined
         : q
@@ -1010,7 +1033,8 @@ function usePageRows(
             .where(({ agent }) => inArray(agent.taskId, ids))
             .orderBy(({ agent }) => agent.createdAt)
             .orderBy(({ agent }) => agent.id, { stringSort: "lexical" }),
-    ).data ?? NO_PAGE_AGENTS;
+    ),
+  );
 
   return { tasks, agents };
 }
@@ -1092,14 +1116,15 @@ export function useTaskOverview(
     [reading, heldRow, pageTasks],
   );
 
-  const pullRequests =
-    useLiveQuery((q) =>
+  const pullRequests = windowRows(
+    useWindow((q) =>
       taskId === undefined || !reading
         ? undefined
         : q
             .from({ pullRequest: collections.agentPullRequests })
             .where(({ pullRequest }) => eq(pullRequest.taskId, taskId)),
-    ).data ?? NO_PULL_REQUESTS;
+    ),
+  );
 
   const { held: statuses, setStatus } = useStatusWrites(tasks);
   const listed = useMemo(() => withHeld(tasks, statuses), [tasks, statuses]);

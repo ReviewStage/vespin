@@ -55,13 +55,13 @@ Every token is a `--ui-*` custom property under `src/tokens/`.
   | `--ui-type-toolbar-title-*` | 15 / 20 | 15 / 20 | 15 / 20 |
   | `--ui-page-inset` | 48px (24px under 480px of content) | 24px | 24px |
   | `--ui-control-gap`, `--ui-icon-gap` | 8px | 8px | 8px |
+  | `--ui-icon-gap-compact`, `--ui-icon-gap-regular` (with `--ui-icon-gap` the row step) | 4 / 6px | 4 / 6px | 4 / 6px |
   | `--ui-field-gap`, `--ui-section-gap` | 16px | 16px | 16px |
   | `--ui-page-section-gap` | 32px | 32px | 32px |
   | `--ui-tight-gap`, `--ui-item-gap`, `--ui-block-gap` | 4 / 6 / 12px | 4 / 6 / 12px | 4 / 6 / 12px |
   | `--ui-row-inset`, `--ui-list-inset` | 8 / 12px | 8 / 12px | 8 / 12px |
   | `--ui-menu-row-height` | 32px | 44px | 32px |
   | `--ui-touch-target` | 44px | 44px | 44px |
-  | `--ui-scroll-fade` | 26px | 24px | 24px |
   | `--ui-scroll-band` | 32px | 32px | 32px |
 
   A compact site's roles hold only with a fine pointer: on a coarse one
@@ -262,7 +262,7 @@ sheets and tests read. What stays in their sheets is what a utility would
 get wrong: what a `Stack` asks of the items it holds, which the held
 component's own sheet must still outrank; the narrow-room container
 queries, and the properties those queries undo, since a sheet's rule cannot
-undo a utility; the `:has()` rules; the settings page's scroll fade; and a
+undo a utility; the `:has()` rules; and a
 skeleton's boxes, whose classes name themselves a skeleton's.
 
 ## Icons

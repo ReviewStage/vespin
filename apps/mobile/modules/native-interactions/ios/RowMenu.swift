@@ -1,4 +1,4 @@
-// RowMenu.swift -- a row's long press menu, its preview, and its swipes, and a section header's menu, built by SwiftUI from the plain tree a row hands over (`packages/ui-native/src/row-menu-model.ts`, `row-preview-model.ts`), so a list's rows hold no views of a menu nobody opened.
+// RowMenu.swift -- a row's long press menu, its preview, and its swipes, and a section header's menu, built by SwiftUI, or by UIKit for a held chip (`ContextMenuView.swift`), from the plain tree a row hands over (`packages/ui-native/src/row-menu-model.ts`, `row-preview-model.ts`), so a list's rows hold no views of a menu nobody opened.
 //
 // The tree arrives as JSON in one string. The menu's items and its preview
 // are read from it only inside SwiftUI's `contextMenu` closures, which run as
@@ -121,20 +121,13 @@ private func glyphUIImage(asset: String?, system: String?) -> UIImage? {
   return nil
 }
 
-/// A glyph in a system menu, as `@expo/ui`'s patched image draws one (`GlyphImage`): in its own color drawn into the image, kept as it is, with a faint glyph under it where it has one, since a menu templates any other icon in its ink; a template otherwise.
-private func glyphIcon(_ icon: MenuIconData) -> Image? {
-  guard let color = icon.color else {
-    if let asset = icon.asset { return Image(asset) }
-    if let system = icon.system { return Image(systemName: system) }
-    return nil
-  }
+/// A glyph in a system menu, as `@expo/ui`'s patched image draws one (`GlyphImage`): in its own color drawn into the image, kept as it is, with a faint glyph under it where it has one, since a menu templates any other icon in its ink; the bare glyph, a template, otherwise.
+private func glyphIcon(_ icon: MenuIconData) -> UIImage? {
+  let glyph = glyphUIImage(asset: icon.asset, system: icon.system)
+  guard let color = icon.color else { return glyph }
   let ink = UIColor(vespinHex: color)
-  guard let tinted = glyphUIImage(asset: icon.asset, system: icon.system)?.withTintColor(ink, renderingMode: .alwaysOriginal) else {
-    return nil
-  }
-  guard let under = icon.under, let faintGlyph = UIImage(named: under.asset) else {
-    return Image(uiImage: tinted)
-  }
+  guard let tinted = glyph?.withTintColor(ink, renderingMode: .alwaysOriginal) else { return nil }
+  guard let under = icon.under, let faintGlyph = UIImage(named: under.asset) else { return tinted }
   let faint = faintGlyph.withTintColor(ink.withAlphaComponent(under.opacity), renderingMode: .alwaysOriginal)
   let size = CGSize(width: max(tinted.size.width, faint.size.width), height: max(tinted.size.height, faint.size.height))
   // Note that both stand centered in one image, the faint glyph under the lit one, since a menu holds one image per item.
@@ -143,11 +136,11 @@ private func glyphIcon(_ icon: MenuIconData) -> Image? {
       image.draw(at: CGPoint(x: (size.width - image.size.width) / 2, y: (size.height - image.size.height) / 2))
     }
   }
-  return Image(uiImage: layered.withRenderingMode(.alwaysOriginal))
+  return layered.withRenderingMode(.alwaysOriginal)
 }
 
 /// A person's photo in a system menu, drawn into its circle at its size and kept as it is (`MenuPhoto`). Note that it reads only a file on this device, never the network, since a menu is built at once.
-private func photoIcon(_ icon: MenuIconData) -> Image? {
+private func photoIcon(_ icon: MenuIconData) -> UIImage? {
   guard let side = icon.size, side > 0,
         let path = icon.photo, let url = URL(string: path), url.isFileURL,
         let photo = UIImage(contentsOfFile: url.path),
@@ -164,7 +157,7 @@ private func photoIcon(_ icon: MenuIconData) -> Image? {
     let drawn = CGSize(width: photo.size.width * scale, height: photo.size.height * scale)
     photo.draw(in: CGRect(origin: CGPoint(x: (side - drawn.width) / 2, y: (side - drawn.height) / 2), size: drawn))
   }
-  return Image(uiImage: round.withRenderingMode(.alwaysOriginal))
+  return round.withRenderingMode(.alwaysOriginal)
 }
 
 /// How much of a disc's side the emoji on it fills, as a Manager's emoji face is drawn (`manager-face-look.ts`'s `MANAGER_FACE_EMOJI_SCALE`), and how much of a bare emoji's square it fills, since its line stands taller than its face.
@@ -198,42 +191,56 @@ private func emojiSquare(_ emoji: String, side: Double, fill: UIColor?, edge: UI
 }
 
 /// An emoji in a system menu, drawn into a square at its size and kept as it is, as `@expo/ui`'s patched image draws one (`emojiContent`), so a menu keeps its colors and lines its words up with its glyphs' items; on its disc where it has one, as a Manager's emoji face stands on its color. Note that a disc's light and dark fills are kept as one image's two appearances, so the menu draws the one its theme asks for.
-private func emojiIcon(_ icon: MenuIconData) -> Image? {
+private func emojiIcon(_ icon: MenuIconData) -> UIImage? {
   guard let side = icon.size, side > 0, let emoji = icon.emoji, !emoji.isEmpty else { return nil }
   guard let disc = icon.disc else {
-    return Image(uiImage: emojiSquare(emoji, side: side, fill: nil))
+    return emojiSquare(emoji, side: side, fill: nil)
   }
   let light = UITraitCollection(userInterfaceStyle: .light)
   let dark = UITraitCollection(userInterfaceStyle: .dark)
   let appearances = UIImageAsset()
   appearances.register(emojiSquare(emoji, side: side, fill: UIColor(vespinHex: disc.light), edge: disc.edge.map { UIColor(vespinHex: $0) }), with: light)
   appearances.register(emojiSquare(emoji, side: side, fill: UIColor(vespinHex: disc.dark)), with: dark)
-  return Image(uiImage: appearances.image(with: UITraitCollection.current))
+  return appearances.image(with: UITraitCollection.current)
 }
 
 /// A catalog mark, such as a model's harness, fit in a square of its size, as `@expo/ui`'s patched image draws one (`assetSize`), a template mark such as Cursor's cube staying a template so it takes the menu's ink; the mark as the catalog keeps it where it has no size.
-private func markIcon(_ icon: MenuIconData) -> Image? {
+private func markIcon(_ icon: MenuIconData) -> UIImage? {
   guard let name = icon.asset else { return nil }
   guard let side = icon.size, side > 0, let asset = UIImage(named: name),
         asset.size.width > 0, asset.size.height > 0 else {
-    return Image(name)
+    return UIImage(named: name)
   }
   let scale = min(side / asset.size.width, side / asset.size.height)
   let drawn = CGSize(width: asset.size.width * scale, height: asset.size.height * scale)
   let fitted = UIGraphicsImageRenderer(size: CGSize(width: side, height: side)).image { _ in
     asset.draw(in: CGRect(origin: CGPoint(x: (side - drawn.width) / 2, y: (side - drawn.height) / 2), size: drawn))
   }
-  return Image(uiImage: fitted.withRenderingMode(asset.renderingMode == .alwaysTemplate ? .alwaysTemplate : .alwaysOriginal))
+  return fitted.withRenderingMode(asset.renderingMode == .alwaysTemplate ? .alwaysTemplate : .alwaysOriginal)
 }
 
-/// A node's icon as an image, or nothing for a node of words alone.
-private func iconImage(_ icon: MenuIconData?) -> Image? {
+/// A node's icon as UIKit's image, which UIKit's own menu takes (`treeUIMenu`), or nothing for a node of words alone.
+private func iconUIImage(_ icon: MenuIconData?) -> UIImage? {
   guard let icon else { return nil }
   switch icon.kind {
   case .glyph: return glyphIcon(icon)
   case .photo: return photoIcon(icon)
   case .mark: return markIcon(icon)
   case .emoji: return emojiIcon(icon)
+  }
+}
+
+/// A node's icon as SwiftUI's image, or nothing for a node of words alone.
+private func iconImage(_ icon: MenuIconData?) -> Image? {
+  guard let icon else { return nil }
+  // Note that a glyph of no color of its own, and a mark of no size, stand as SwiftUI's named images, which a menu templates in its ink or draws as the catalog keeps them.
+  switch icon.kind {
+  case .glyph where icon.color == nil:
+    return icon.asset.map { Image($0) } ?? icon.system.map { Image(systemName: $0) }
+  case .mark where icon.size == nil:
+    return icon.asset.map { Image($0) }
+  default:
+    return iconUIImage(icon).map { Image(uiImage: $0) }
   }
 }
 
@@ -321,6 +328,33 @@ private struct RowMenuPreview: View {
       PreviewCard(tree: tree)
     }
   }
+}
+
+// MARK: - UIKit's menu
+
+/// One node as UIKit's own menu element, as `menuNode` stands it in SwiftUI's: an act, red where destructive and dimmed where it takes no press; a choice the system checks; or a menu of its nodes. Note that UIKit's menu takes no tint of an item's own, so each stands in the menu's ink.
+private func menuElement(_ node: MenuNodeData, at place: [Int], press: @escaping PressPlace) -> UIMenuElement {
+  let image = iconUIImage(node.icon)
+  switch node.kind {
+  case .act, .choice:
+    let action = UIAction(title: node.label, subtitle: node.detail, image: image) { _ in press(place) }
+    if node.destructive == true { action.attributes.insert(.destructive) }
+    if node.disabled == true { action.attributes.insert(.disabled) }
+    if node.kind == .choice { action.state = node.on == true ? .on : .off }
+    return action
+  case .menu:
+    let nodes = (node.nodes ?? []).enumerated().map { index, inner in menuElement(inner, at: place + [index], press: press) }
+    return UIMenu(title: node.label, image: image, children: nodes)
+  }
+}
+
+/// A menu's tree as UIKit's own menu, for a view UIKit holds rather than SwiftUI (`ContextMenuView`): headed by its title where it has one, each group inline after a divider, as `RowMenuItems` stands them, a press sending the item's place as a row's menu sends it; nothing where the tree reads as none or holds nothing.
+func treeUIMenu(_ json: String, press: @escaping ([Int]) -> Void) -> UIMenu? {
+  guard let tree = readTree(json, as: RowMenuData.self), !tree.groups.isEmpty else { return nil }
+  let groups = tree.groups.enumerated().map { group, nodes in
+    UIMenu(options: .displayInline, children: nodes.enumerated().map { index, node in menuElement(node, at: [group, index], press: press) })
+  }
+  return UIMenu(title: tree.title ?? "", children: groups)
 }
 
 // MARK: - Modifiers

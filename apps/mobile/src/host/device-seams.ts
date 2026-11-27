@@ -1,5 +1,5 @@
 /**
- * device-seams.ts -- what the host reads of the device, answered by Expo and React Native: its files, its ids, how an address opens, its socket, whether the app is in the foreground, whether the device has a network, the sign-in's authentication session, the share sheet's token, the local database's SQLite, and where the host's own lines are kept for a crash report.
+ * device-seams.ts -- what the host reads of the device, answered by Expo and React Native: its files, its ids, how an address opens, its socket, whether the app is in the foreground, the clock its deadlines run on, whether the device has a network, the sign-in's authentication session, the share sheet's token, the local database's SQLite, and where the host's own lines are kept for a crash report.
  *
  * `compose-mobile.ts` takes these as one value rather than reaching for the
  * device itself, so a test composes the same host over a folder and seams of
@@ -15,7 +15,7 @@ import { openURL } from "expo-linking";
 import { openDatabaseAsync, openDatabaseSync } from "expo-sqlite";
 import { AppState } from "react-native";
 import { keepHostLine } from "../crash-reports.js";
-import { launchBeganAway } from "../launch-state.js";
+import { foregroundClock, launchBeganAway } from "../launch-state.js";
 import { liveActivityModule } from "../live-activity/live-activity-module.js";
 import { openSheetUntilClosed, openSignInSheet, webAuthSession } from "./auth-session.js";
 import type { DeviceSeams } from "./compose-mobile.js";
@@ -93,6 +93,7 @@ export function deviceSeams(): DeviceSeams {
     openSocket: openRelaySocket,
     launchedIn: launchBeganAway() ? PRODUCT_LAUNCHED_IN.BACKGROUND : PRODUCT_LAUNCHED_IN.FRONT,
     onAppActiveChanged,
+    foregroundClock,
     onNetworkChanged,
     tokenVault: keychainTokens,
     authSession: webAuthSession,

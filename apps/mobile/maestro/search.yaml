@@ -1,8 +1,10 @@
-# search.yaml -- the Search tab: what it says before anything is typed, the tasks, Inbox items, and agents a query finds, each in its own section, a task opened from them, what it says where nothing matches, and the task opened standing under Recent once nothing is typed.
+# search.yaml -- the Search tab: what it says before anything is typed, a place a query finds as a "Go to …" command, the tasks, Inbox items, agents, people, and automations a query finds, each in its own section, a task opened from them, what it says where nothing matches, and the task opened standing under Recent once nothing is typed.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, as `tasks.yaml` is, so the search
 # finds the fixture's tasks, the Inbox's threads, and the agents on the
@@ -24,14 +26,15 @@ appId: dev.vespin.ios
     commands:
       - tapOn:
           id: "search-tab"
-# The iPad's top tab bar carries no id, so there the tab is the Search right of Tasks.
+# An iPad stands no tabs, so there Search is its sidebar's row, as a reader picks it.
 - runFlow:
     when:
-      notVisible: "Search Vespin"
+      true: ${FLOATING_TABS == 'true'}
     commands:
-      - tapOn:
-          text: "Search"
-          rightOf: "Tasks"
+      - runFlow:
+          file: subflows/tab.yaml
+          env:
+            TAB: Search
 - assertVisible: "Search Vespin"
 - takeScreenshot: search-empty
 # The field is focused as the tab opens; it is pressed anyway, which a
@@ -40,6 +43,13 @@ appId: dev.vespin.ios
 - inputText: "zzqx"
 - assertVisible: "No results for “zzqx”"
 - takeScreenshot: search-no-results
+# A place found once something is typed stands under Commands as "Go to …",
+# as ⌘K finds it, where Go to stood before anything was typed.
+- eraseText
+- inputText: "settings"
+- assertVisible: "Commands"
+- assertVisible: "Go to settings"
+- takeScreenshot: search-go-to
 # The task "Ledger rounding" leads Tasks, its agent "Fix ledger rounding"
 # stands under Agents, and a task the words do not name is left out.
 - eraseText
@@ -50,6 +60,20 @@ appId: dev.vespin.ios
     element: "Fix ledger rounding"
     direction: DOWN
 - takeScreenshot: search-results
+# A person stands under People and an automation under Automations, as ⌘K
+# finds them, under the scopes All, Tasks, Inbox, People, and Automations.
+- eraseText
+- inputText: "grace"
+- assertVisible: "People"
+- assertVisible: "Grace Hopper"
+- takeScreenshot: search-people
+- eraseText
+- inputText: "deploy"
+- assertVisible: "Check each deploy"
+- takeScreenshot: search-automations
+- eraseText
+- inputText: "rounding"
+- assertVisible: "Ledger rounding"
 # A task found opens on its Overview, in the Tasks tab, as its row there
 # opens it. It comes last, since the Tasks tab then stands over the search.
 # Note that the agent's row names its task too, so the task's own row is found

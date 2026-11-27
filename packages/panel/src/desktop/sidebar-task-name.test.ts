@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import type { AppStateDelivery } from "@repo/host/app-state";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -12,7 +13,6 @@ import { deliveryOf, handState, type ListedAppState, stateWith } from "../testin
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
-import { relayout } from "../testing/resize-observer.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { windowRouter } from "../testing/window-router.js";
 import { DesktopSidebar } from "./desktop-sidebar.js";

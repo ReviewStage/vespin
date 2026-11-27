@@ -252,6 +252,10 @@ const SEND_WAY = {
 export const COMPOSER_ROOM_CLASS =
   "agent-composer relative flex flex-col gap-control-gap px-ui-16 pt-0 pb-list-inset";
 
+/** The room of a box that writes words again where they stand: no dock's room, so no dock's inset reaches it, its card overhanging the words (`tasks.css`'s `.agent-composer-in-place`). */
+const COMPOSER_IN_PLACE_ROOM_CLASS =
+  "agent-composer-in-place relative flex flex-col gap-control-gap";
+
 /**
  * What docks over the composer, the to-do list, the pull request's row, and
  * a forked draft's chip, on the composer's own inset, so each card and the
@@ -261,19 +265,21 @@ export const COMPOSER_ROOM_CLASS =
 export const COMPOSER_DOCK_CLASS = "px-ui-16 pt-0 pb-row-inset";
 
 /**
- * A log that runs right up to the card's top edge, its words dissolving
- * over `--ui-scroll-fade` just above it rather than being sliced short of
- * the card: its foot pads past the fade, so the newest line stands whole
- * above it.
+ * A log that runs right up to the card's top edge: its foot keeps a step
+ * of room, so the newest line stands whole just above the card.
  */
 export const LOG_OVER_COMPOSER_CLASS = "agent-log-over-composer";
 
 export function ComposerCard({
   children,
+  inPlace = false,
   ...props
-}: Omit<ComponentProps<"div">, "className">): React.JSX.Element {
+}: Omit<ComponentProps<"div">, "className"> & {
+  /** Whether it stands over words it writes again in place, in no dock's room. */
+  inPlace?: boolean;
+}): React.JSX.Element {
   return (
-    <div className={COMPOSER_ROOM_CLASS} {...props}>
+    <div className={inPlace ? COMPOSER_IN_PLACE_ROOM_CLASS : COMPOSER_ROOM_CLASS} {...props}>
       {children}
     </div>
   );
@@ -354,6 +360,8 @@ export function AgentComposer({
   replyDoor,
   sendsEmpty = false,
   closedRemedy,
+  inPlace = false,
+  takesFiles = true,
   wording,
   maxLength = AGENT_BOUNDS.MAX_MESSAGE_CHARS,
   tools,
@@ -422,6 +430,10 @@ export function AgentComposer({
   sendsEmpty?: boolean;
   /** What mends a box closed for good, drawn after its note: Continue in new agent (`continue-agent.tsx`); none where nothing does. */
   closedRemedy?: ReactNode;
+  /** Whether the box takes files at all; one that writes words alone, as a Manager chat message's edit, offers no + and takes no drop or pasted file. */
+  takesFiles?: boolean;
+  /** Whether the box writes words again where they stand, as a Manager chat message's edit: it stands in no dock's room, and its card overhangs the words by its own edge and its field's inset, so they stay where they stood. */
+  inPlace?: boolean;
   /** What the box asks for, calls its field, and calls its round button, where its owner says other than an agent's box does, as New task's does. */
   wording?: ComposerWords | undefined;
   /** The most the words may spell: a message to an agent's bound, unless the owner sends them elsewhere, as New task's Plan mode sends a task's brief. */
@@ -537,6 +549,7 @@ export function AgentComposer({
     label: wording?.label ?? "Message to the agent",
     maxLength,
     held,
+    takesFiles,
     holder: {
       attachments: composer.held.attachments,
       update: (next) =>
@@ -881,7 +894,12 @@ export function AgentComposer({
   );
 
   return (
-    <ComposerCard data-status={status} data-closed={closed ? "" : undefined} {...files.drop.target}>
+    <ComposerCard
+      data-status={status}
+      data-closed={closed ? "" : undefined}
+      inPlace={inPlace}
+      {...files.drop.target}
+    >
       {/* A box closed for good wears the held look a box sending does, faded, so the note and Continue under it read as the way on. */}
       <MessageBox
         box={box}

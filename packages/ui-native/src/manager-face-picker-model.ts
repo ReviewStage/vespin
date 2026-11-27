@@ -174,7 +174,7 @@ function foundGroups(state: FacePickerState): readonly FaceGroup[] {
   const typedOne = isEmoji(typed) ? [typed] : [];
 
   const named = findEmoji(state.emoji ?? [], state.query)
-    .flatMap((group) => group.emojis.map((one) => one.emoji))
+    .map((one) => one.emoji)
     .filter((one) => one !== typed);
 
   const characters = charactersFound(tokens).map((one) => characterCell(one, state.standing));
