@@ -24,6 +24,7 @@ import { type ReactElement, type ReactNode, useMemo } from "react";
 import { useColorScheme } from "react-native";
 import { useComposerDraftsSignOut } from "../agents/composer-drafts.js";
 import { MachineAsks } from "../agents/machine-asks.js";
+import { useHeldSendsSignOut } from "../agents/use-agent-composer.js";
 import { useAppNotReadyCount } from "../app-ready.js";
 import { useCrashReports, withTapTraces } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -206,6 +207,7 @@ function GuardedScreens() {
   useRecentOpenedSignOut(signedIn);
   useComposerDraftsSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
+  useHeldSendsSignOut(signedIn);
   useCrashReports();
   useOfflineNotice();
   useNoticeForAccount();
