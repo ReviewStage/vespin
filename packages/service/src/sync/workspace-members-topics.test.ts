@@ -123,7 +123,11 @@ it.effect(
         ];
 
         // Note that a membership also wakes what waits on the teammate, which their account's own row does not.
-        const membership: readonly SyncTopic[] = [...moved, [TOPIC.ACCOUNT_INBOX, teammate]];
+        const membership: readonly SyncTopic[] = [
+          ...moved,
+          [TOPIC.WORKSPACE_AUTOMATIONS, workspaceId],
+          [TOPIC.ACCOUNT_INBOX, teammate],
+        ];
 
         yield* wakesTheWorkspace(
           Effect.promise(() =>
@@ -247,7 +251,12 @@ it.effect(
             nextRunAt: null,
             webhookSecretHash: null,
           }),
-          [workspace, [TOPIC.ACCOUNT, teammate], [TOPIC.ACCOUNT_INBOX, teammate]],
+          [
+            workspace,
+            [TOPIC.WORKSPACE_AUTOMATIONS, workspaceId],
+            [TOPIC.ACCOUNT, teammate],
+            [TOPIC.ACCOUNT_INBOX, teammate],
+          ],
           reader,
           [workspaceInvitationsRead],
         );

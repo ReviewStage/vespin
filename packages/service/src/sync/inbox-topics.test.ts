@@ -239,6 +239,7 @@ it.layer(SUITE)("what moves an inbox notifies", (it) => {
         const ownerTopics: readonly SyncTopic[] = [
           [TOPIC.WORKSPACE, world.workspaceId],
           [TOPIC.ACCOUNT, world.owner],
+          [TOPIC.WORKSPACE_AUTOMATIONS, world.workspaceId],
           [TOPIC.ACCOUNT_INBOX, world.owner],
         ];
 

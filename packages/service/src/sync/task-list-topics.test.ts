@@ -209,6 +209,7 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
         const notified: readonly SyncTopic[] = [
           team,
           [TOPIC.WORKSPACE_PEOPLE, teamId],
+          [TOPIC.WORKSPACE_AUTOMATIONS, teamId],
           [TOPIC.ACCOUNT, userId],
           [TOPIC.ACCOUNT_INBOX, userId],
         ];
