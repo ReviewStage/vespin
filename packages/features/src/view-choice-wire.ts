@@ -154,6 +154,7 @@ export const keptTasksFilterSchema = Schema.Struct({
   priority: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PRIORITY_ORDER))),
   assignee: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
   creator: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
+  follower: Schema.optionalKey(Schema.Array(Schema.String)),
   madeBy: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_MAKER_ORDER))),
   repository: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
 });
