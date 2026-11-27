@@ -1,0 +1,71 @@
+# comment-audit.yaml -- throwaway audit shots for STAG-5232 (not for merge): a task's description comments and a pull request's review thread over synthetic fixture words that carry Markdown, mentions, code, suggestions, alerts, bot HTML, edited and resolved state.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- scrollUntilVisible:
+    element: "Teammate invitations"
+    direction: DOWN
+- waitForAnimationToEnd
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- scrollUntilVisible:
+    element: "Show resolved comments"
+    direction: DOWN
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: audit-task-comment-row
+- tapOn: "Should an owner.*"
+- assertVisible: "Resolve"
+- waitForAnimationToEnd
+- takeScreenshot: audit-task-thread
+- scrollUntilVisible:
+    element: ".*Invites expire after seven days.*"
+    direction: UP
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: audit-task-thread-top
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: "127"
+- extendedWaitUntil:
+    visible: "Expire an invite after seven days.*"
+    timeout: 30000
+- scrollUntilVisible:
+    element: "src/invites/expiry.ts.*"
+    direction: DOWN
+- scrollUntilVisible:
+    element: "relay-review.*"
+    direction: DOWN
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: audit-pr-conversation
+- tapOn:
+    text: "relay-review.*"
+    index: 1
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: audit-pr-bot-open
+- tapOn:
+    text: "src/invites/expiry.ts.*"
+    index: 0
+- extendedWaitUntil:
+    visible: ".*Good catch, it takes the request's time now.*"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: audit-pr-thread
+- scrollUntilVisible:
+    element: "src/invites/expiry.ts.*"
+    direction: UP
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: audit-pr-thread-top
