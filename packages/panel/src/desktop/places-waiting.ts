@@ -6,6 +6,7 @@ import {
   type InboxShow,
   inboxAtNow,
   inboxCounts,
+  inboxWaitingAt,
 } from "@repo/features/inbox-list-model";
 import type { AppInboxTask, AppInboxTaskHolding } from "@repo/host/app-state";
 import { type BarCount, type BarCountTone, STATUS_TONE, useMinute } from "@repo/ui";
@@ -74,16 +75,23 @@ export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number
  * How many threads wait on the developer in each workspace, by the
  * workspace's id, as the Dock counts them across every workspace: each
  * task's items that wait on them (`AppInboxTask`), less those reminded for
- * after `now`, under the workspace the task stands in. A thread on no task,
- * a Manager's, is not among them, since main's slice carries it under no
- * task. A workspace where none waits is left out.
+ * after `now`, under the workspace the task stands in; and a Manager's, on
+ * no task, which main's slice carries under no task, from the threads the
+ * Inbox lists of every workspace's agents on no task (`tasklessByWorkspace`,
+ * `inboxWaitingAt`), under its agent's workspace. A workspace where none
+ * waits is left out.
  */
 function waitingByWorkspace(
   waiting: readonly AppInboxTask[],
   workspaceOf: (taskId: string) => string | undefined,
+  tasklessByWorkspace: ReadonlyMap<string | undefined, { readonly total: number }>,
   now: number,
 ): ReadonlyMap<string, number> {
   const counted = new Map<string, number>();
+
+  for (const [workspaceId, { total }] of tasklessByWorkspace) {
+    if (workspaceId !== undefined && total > 0) counted.set(workspaceId, total);
+  }
 
   for (const { taskId, items } of waiting) {
     const workspaceId = workspaceOf(taskId);
@@ -96,15 +104,30 @@ function waitingByWorkspace(
   return counted;
 }
 
-/** How many threads wait on the developer in each workspace (`waitingByWorkspace`), which the workspace switcher says beside each other workspace; none while signed out. */
+/** How many threads wait on the developer in each workspace (`waitingByWorkspace`), a Manager's among them, which the workspace switcher says beside each other workspace; none while signed out. */
 export function useWorkspacesWaiting(tasks: SidebarTasksControl): ReadonlyMap<string, number> {
   const now = useMinute();
   const waiting = useInboxWaitingTasks();
   const rows = useTaskListRows();
 
+  // Note that no workspace is named, so every workspace's agents on no task are read, as the Dock counts them.
+  const { groups: taskless } = useTasklessInboxGroups(
+    undefined,
+    tasks.agentsCarried,
+    tasks.agents.models,
+  );
+
+  const me = tasks.me;
+
   const byWorkspace = useMemo(
-    () => waitingByWorkspace(waiting, (taskId) => rows.task(taskId)?.workspaceId, now),
-    [waiting, rows, now],
+    () =>
+      waitingByWorkspace(
+        waiting,
+        (taskId) => rows.task(taskId)?.workspaceId,
+        inboxWaitingAt(taskless, me, now).waiting,
+        now,
+      ),
+    [waiting, rows, taskless, me, now],
   );
 
   return tasks.signedIn ? byWorkspace : NO_COUNTS;
