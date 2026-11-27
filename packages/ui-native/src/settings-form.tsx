@@ -226,6 +226,7 @@ function PressedRow({
   onPress,
   children,
   testId,
+  clear = false,
 }: {
   readonly label: string;
   /** The row's other words, read after its name. */
@@ -233,6 +234,8 @@ function PressedRow({
   readonly onPress: () => void;
   readonly children: ReactElement;
   readonly testId?: string | undefined;
+  /** Whether it stands clear on a plain list's ground rather than raised on a form's card. */
+  readonly clear?: boolean | undefined;
 }) {
   const colors = useColors();
 
@@ -242,7 +245,7 @@ function PressedRow({
       modifiers={[
         accessibilityLabel(label),
         ...spokenValue(...(value ?? [])),
-        listRowBackground(colors.RAISED),
+        listRowBackground(clear ? "clear" : colors.RAISED),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
       ]}
     >
@@ -1092,13 +1095,22 @@ export interface MenuRowAct {
 /** One thing a connection's menu does, such as an integration's Disconnect. */
 export type MemberRowAct = MenuRowAct;
 
+/** Where a member's row stands: on a settings form's card, or clear in a plain list, such as Search's People. */
+export const MEMBER_ROW_LOOK = {
+  FORM: "form",
+  LIST: "list",
+} as const;
+
+type MemberRowLook = (typeof MEMBER_ROW_LOOK)[keyof typeof MEMBER_ROW_LOOK];
+
 type MemberRowProps = {
+  readonly look?: MemberRowLook | undefined;
   readonly name: string;
   /** The line under their name: their address, or You on the reader's own row. */
   readonly line: string;
   readonly picture?: string | undefined;
-  /** Their role, in the words the panel says it: Owner, Admin, Member. */
-  readonly role: string;
+  /** Their role, in the words the panel says it: Owner, Admin, Member; none where the list says none, as ⌘K's People says none. */
+  readonly role?: string | undefined;
   /** Opens the member's own page, where what the reader may do to them stands. */
   readonly onOpen: () => void;
 };
@@ -1106,15 +1118,28 @@ type MemberRowProps = {
 /**
  * A member of a workspace, as iOS Settings lists a family member: their
  * photo or letters, their name over a line in the muted ink, their role at
- * the end as the row's value, and the chevron, the whole row one press that
- * opens their page, where what the reader may do to them stands as rows.
+ * the end as the row's value where it says one, and the chevron, the whole
+ * row one press that opens their page, where what the reader may do to them
+ * stands as rows.
  */
-export function MemberRow({ name, line, picture, role, onOpen }: MemberRowProps) {
+export function MemberRow({
+  look = MEMBER_ROW_LOOK.FORM,
+  name,
+  line,
+  picture,
+  role,
+  onOpen,
+}: MemberRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   return (
-    <PressedRow label={name} value={[line, role]} onPress={onOpen}>
+    <PressedRow
+      label={name}
+      value={[line, role]}
+      onPress={onOpen}
+      clear={look === MEMBER_ROW_LOOK.LIST}
+    >
       <HStack
         spacing={SPACE.ROW}
         modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
@@ -1142,7 +1167,9 @@ export function MemberRow({ name, line, picture, role, onOpen }: MemberRowProps)
               </Text>
             </VStack>
           }
-          end={<Text modifiers={[foregroundStyle(VALUE_INK)]}>{role}</Text>}
+          end={
+            role === undefined ? null : <Text modifiers={[foregroundStyle(VALUE_INK)]}>{role}</Text>
+          }
         />
         <GoesMark goes={PUSH_ROW_GOES.PAGE} />
       </HStack>

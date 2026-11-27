@@ -1,14 +1,8 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import {
-  DEVICE_ARCH,
-  DEVICE_PLATFORM,
-  MACHINE_NETWORK,
-  MACHINE_OWNER,
-} from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { HOST_PAIRING_CALL_FAILURE, type HostPairingView } from "@repo/features/host-pairing-view";
-import type { HostPairingAnswer } from "@repo/features/host-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -22,10 +16,7 @@ import { HostConnectDialog } from "./host-connect-dialog.js";
  * host-connect-dialog.test.ts -- a pairing's link asks whose box it is
  * before anything is pressed: Connect approves the code the link named and
  * closes onto the list, and a code that cannot be approved says what to do
- * next. Where the service offers a workspace for the box, the member picks
- * who it is for and whether its agents reach its private network; where it
- * offers none, the box is theirs alone. Synthetic names, codes, and
- * documentation addresses.
+ * next. Synthetic names, codes, and documentation addresses.
  */
 
 declare global {
@@ -53,37 +44,6 @@ const BOX: HostPairingView = {
   ip: "203.0.113.7",
   expiresAt: 1_800_000_000_000,
 };
-
-const WORKSPACE = { id: "workspace-lab", name: "Lab" };
-
-/** The pressable named by its words, which a test expects drawn. */
-function pressable(role: string, name: string): HTMLElement {
-  const found = [...document.querySelectorAll<HTMLElement>(`[role="${role}"], button`)].find(
-    (each) =>
-      (each.getAttribute("role") ?? "button") === role &&
-      (each.getAttribute("aria-label") ?? each.textContent ?? "").includes(name),
-  );
-
-  assert.ok(found !== undefined, `${role} ${name} is drawn`);
-
-  return found;
-}
-
-/** The approves sent once the box's read lands with these workspaces offered. */
-function approvesFor(workspaces: HostPairingAnswer["workspaces"]): unknown[] {
-  const approved: unknown[] = [];
-  fakeActPort({
-    [ACT_KIND.HOSTS_PAIRING_READ]: () =>
-      Promise.resolve(workspaces === undefined ? BOX : { ...BOX, workspaces }),
-    [ACT_KIND.HOSTS_PAIRING_APPROVE]: (payload) => {
-      approved.push(payload);
-
-      return Promise.resolve({ deviceId: "3f6b0c2e-8d1a-4b5e-9c7d-2a4e6f8b0d14" });
-    },
-  });
-
-  return approved;
-}
 
 /** Lets the dialog's read and a press's acts land. */
 async function settle(): Promise<void> {
@@ -118,7 +78,7 @@ async function opened(): Promise<string[]> {
   return told;
 }
 
-test("Connect approves the code the link named, once the box it names is shown, as the member's own where no workspace is offered, and closes onto the list", async () => {
+test("Connect approves the code the link named, once the box it names is shown, and closes onto the list", async () => {
   const approved: unknown[] = [];
   fakeActPort({
     [ACT_KIND.HOSTS_PAIRING_READ]: () => Promise.resolve(BOX),
@@ -135,11 +95,6 @@ test("Connect approves the code the link named, once the box it names is shown, 
   assert.ok(text.includes("Linux server, x64, 203.0.113.7"), "the box is shown as it named itself");
   assert.ok(text.includes("BCDF-GHJK"), "the code is shown as the box shows it");
   assert.deepEqual(approved, [], "nothing is approved before Connect is pressed");
-  assert.equal(
-    document.querySelector('[role="radio"]'),
-    null,
-    "a box offered no workspace asks no one it is for",
-  );
 
   const connect = [...document.querySelectorAll("button")].find(
     (each) => each.textContent === "Connect",
@@ -174,34 +129,4 @@ test("a code no pairing has, or one held after too many such codes, says so and 
     for (const root of roots.splice(0)) act(() => root.unmount());
     document.body.replaceChildren();
   }
-});
-
-test("a workspace picked for the box connects it as that workspace's, its private network off until switched on", async () => {
-  const approved = approvesFor([WORKSPACE]);
-  await opened();
-
-  assert.equal(pressable("radio", "Just me").getAttribute("aria-checked"), "true");
-  assert.equal(
-    document.querySelector('[role="switch"]'),
-    null,
-    "the network is asked only of a workspace",
-  );
-
-  await act(async () => pressable("radio", "Lab").click());
-  const network = pressable("switch", "private network");
-  assert.equal(network.getAttribute("aria-checked"), "false");
-  await act(async () => network.click());
-  await act(async () => pressable("button", "Connect").click());
-  await settle();
-
-  assert.deepEqual(approved, [
-    {
-      code: CODE,
-      target: {
-        kind: MACHINE_OWNER.WORKSPACE,
-        workspaceId: WORKSPACE.id,
-        network: MACHINE_NETWORK.PRIVATE_ALLOWED,
-      },
-    },
-  ]);
 });

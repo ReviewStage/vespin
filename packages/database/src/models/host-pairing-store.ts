@@ -18,17 +18,12 @@
  * on the account's row, so every function instance shares it and guesses
  * the account sends at once are counted one after another.
  *
- * An approve makes the account's host row, or a workspace's machine the
- * account connected, under an id the service minted, never one the box
- * named, so a pairing never takes over a device that stands; the row holds
- * no secret, and is listed as the account's host while its pairing names it
- * (`./host-store.ts`). The box's next poll keys the row with the secret it
- * is handed and deletes the pairing, so the secret is handed over once, and
- * answers whose the box is. A machine is one owner's, never both a
- * member's own and a workspace's: an approve that asks otherwise of a Mac
- * that already stands as a host is refused and leaves its pairing pending,
- * as is one that asks a workspace of a box whose daemon cannot be one's
- * machine.
+ * An approve makes the account's host row under an id the service minted,
+ * never one the box named, so a pairing never takes over a device that
+ * stands; the row holds no secret, and is listed as the account's host
+ * while its pairing names it (`./host-store.ts`). The box's next poll keys
+ * the row with the secret it is handed and deletes the pairing, so the
+ * secret is handed over once.
  *
  * No guess or poll waits on a lapsed row going, since each names a pairing
  * only before it lapses; lapsed rows come only from starts, so each start
@@ -44,18 +39,9 @@ import {
   DEVICE_PLATFORM,
   type DeviceArch,
   type DevicePlatform,
-  MACHINE_OWNER,
-  machineNetworkSchema,
 } from "@repo/features/device-agent-wire";
-import {
-  HOST_PAIRING_POLL_STATUS,
-  HOST_VERSION_FOR,
-  type HostPairingTarget,
-  hostPairingTargetSchema,
-  hostVersionMeets,
-  type PairedHostOwner,
-} from "@repo/features/host-wire";
-import { and, eq, gt, inArray, isNotNull, isNull, lte, ne, or, type SQL, sql } from "drizzle-orm";
+import { HOST_PAIRING_POLL_STATUS } from "@repo/features/host-wire";
+import { and, eq, gt, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { DateTime, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
@@ -81,7 +67,7 @@ export const HOST_PAIRING = {
   CLEAR_BATCH: 100,
 } as const;
 
-/** What a box opens a pairing with: its poll secret's hash, the code it shows, its name, platform, architecture, and daemon version, the machine it runs on and the address it called from where each was named. */
+/** What a box opens a pairing with: its poll secret's hash, the code it shows, its name, platform, architecture, and daemon version, and the address it called from where one was named. */
 export interface HostPairingOpening {
   readonly pollSecretHash: string;
   readonly userCode: string;
@@ -89,12 +75,10 @@ export interface HostPairingOpening {
   readonly platform: DevicePlatform;
   readonly arch: DeviceArch;
   readonly version: string;
-  /** The machine's keyed id (`device.machine_id`), absent from a daemon that names none. */
-  readonly machineId?: string | undefined;
   readonly ip: string | null;
 }
 
-/** What a poll answers: the pairing's state, and where it was handed over, the host, whose it is, and the account that approved it. */
+/** What a poll answers: the pairing's state, and where it was handed over, the host and its account. */
 export type HostPairingPolled =
   | { readonly status: typeof HOST_PAIRING_POLL_STATUS.PENDING }
   | { readonly status: typeof HOST_PAIRING_POLL_STATUS.SLOW_DOWN }
@@ -103,26 +87,7 @@ export type HostPairingPolled =
   | {
       readonly status: typeof HOST_PAIRING_POLL_STATUS.APPROVED;
       readonly deviceId: string;
-      readonly owner: PairedHostOwner;
       readonly userId: string;
-    };
-
-/** What an approve that found its pairing came to. */
-export const HOST_PAIRING_APPROVAL = {
-  /** The host was made for the owner asked. */
-  APPROVED: "approved",
-  /** The Mac the box runs on already stands as another owner's host, a member's own or a workspace's, which it may never be both of; nothing was written. */
-  MACHINE_OWNED_ELSEWHERE: "machine-owned-elsewhere",
-  /** A workspace was asked of a box whose daemon cannot run as one's machine (`workspaceFit`); nothing was written. */
-  UNFIT_FOR_WORKSPACE: "unfit-for-workspace",
-} as const;
-
-export type HostPairingApproval =
-  | { readonly approval: typeof HOST_PAIRING_APPROVAL.APPROVED; readonly deviceId: string }
-  | {
-      readonly approval:
-        | typeof HOST_PAIRING_APPROVAL.MACHINE_OWNED_ELSEWHERE
-        | typeof HOST_PAIRING_APPROVAL.UNFIT_FOR_WORKSPACE;
     };
 
 /** What a guess by user code came to. */
@@ -140,54 +105,16 @@ export type HostPairingGuessed<A> =
   | { readonly guess: typeof HOST_PAIRING_GUESS.MISSED }
   | { readonly guess: typeof HOST_PAIRING_GUESS.HELD; readonly heldUntil: Date };
 
-/** A pending pairing as the approve screen reads it: the box, the address its start came from, and when its code lapses, with the daemon version and machine its start named. */
+/** A pending pairing as the approve screen reads it: the box, the address its start came from, and when its code lapses. */
 const PendingSchema = Schema.Struct({
   name: Schema.String,
   platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
   arch: Schema.Literals(Object.values(DEVICE_ARCH)),
   ip: Schema.NullOr(Schema.String),
   expiresAt: Schema.Date,
-  version: Schema.String,
-  machineId: Schema.NullOr(Schema.String),
 });
 
-/** A pending pairing as the approve screen reads it, and whether a workspace may own the box (`workspaceFit`). */
-export type HostPairingPending = Omit<typeof PendingSchema.Type, "version" | "machineId"> & {
-  readonly workspaceFit: boolean;
-};
-
-/**
- * Whether a box may be a workspace's machine: its daemon at or past
- * `HOST_VERSION_FOR.WORKSPACE_MACHINE`, and its start naming the machine it
- * runs on, which the rule a machine is one owner's is held by.
- */
-function workspaceFit(box: { readonly version: string; readonly machineId: string | null }) {
-  return (
-    box.machineId !== null && hostVersionMeets(box.version, HOST_VERSION_FOR.WORKSPACE_MACHINE)
-  );
-}
-
-/**
- * A standing Mac on the machine given whose owner is not the one an approve
- * asks: for a member's own, any workspace's; for a workspace's, any
- * member's own or another workspace's. Note that only Macs are held to it,
- * as only Macs fold (`./host-store.ts`), because a Linux image may ship one
- * baked machine id to many boxes, which would refuse every box but the
- * first as the machine of another.
- */
-function macOwnedElsewhere(machineId: string, target: HostPairingTarget): SQL | undefined {
-  const elsewhere =
-    target.kind === MACHINE_OWNER.USER
-      ? isNotNull(device.organizationId)
-      : or(isNotNull(device.userId), ne(device.organizationId, target.workspaceId));
-
-  return and(
-    eq(device.machineId, machineId),
-    eq(device.platform, DEVICE_PLATFORM.DARWIN),
-    isNull(device.removedAt),
-    elsewhere,
-  );
-}
+export type HostPairingPending = typeof PendingSchema.Type;
 
 const CodeKeySchema = Schema.Struct({ userCode: Schema.String, now: Schema.Date });
 
@@ -208,7 +135,6 @@ const insertPairing = SqlSchema.findAll({
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     arch: Schema.Literals(Object.values(DEVICE_ARCH)),
     version: Schema.String,
-    machineId: Schema.NullOr(Schema.String),
     ip: Schema.NullOr(Schema.String),
     now: Schema.Date,
     expiresAt: Schema.Date,
@@ -284,26 +210,29 @@ const deleteApproved = SqlSchema.findOneOption({
     ),
 });
 
-/**
- * The host an approve made keyed with its secret, where it still holds none
- * and was not removed, answering whose it is. Note that it is found by the
- * id its pairing names alone, because only an approve names one, and a
- * workspace's machine stands under no account.
- */
+/** The host an approve made keyed with its secret, where it still holds none and was not removed. */
 const keyPairedHost = SqlSchema.findAll({
   Request: Schema.Struct({
     deviceId: Schema.String,
+    userId: Schema.String,
     secretHash: Schema.String,
     now: Schema.Date,
   }),
-  Result: Schema.Struct({ organizationId: Schema.NullOr(Schema.String) }),
-  execute: ({ deviceId, secretHash, now }) =>
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ deviceId, userId, secretHash, now }) =>
     Database.use((db) =>
       db
         .update(device)
         .set({ secretHash, lastSeenAt: now })
-        .where(and(eq(device.id, deviceId), isNull(device.secretHash), isNull(device.removedAt)))
-        .returning({ organizationId: device.organizationId }),
+        .where(
+          and(
+            eq(device.id, deviceId),
+            eq(device.userId, userId),
+            isNull(device.secretHash),
+            isNull(device.removedAt),
+          ),
+        )
+        .returning({ id: device.id }),
     ),
 });
 
@@ -357,42 +286,9 @@ const findPending = SqlSchema.findOneOption({
           arch: hostPairing.arch,
           ip: hostPairing.ip,
           expiresAt: hostPairing.expiresAt,
-          version: hostPairing.version,
-          machineId: hostPairing.machineId,
         })
         .from(hostPairing)
         .where(pendingByCode(userCode, now)),
-    ),
-});
-
-/** A pending pairing's start, its row locked for the approve that reads it, so the approve's checks and its settle see the one row. */
-const findPendingStart = SqlSchema.findOneOption({
-  Request: CodeKeySchema,
-  Result: Schema.Struct({
-    version: Schema.String,
-    machineId: Schema.NullOr(Schema.String),
-  }),
-  execute: ({ userCode, now }) =>
-    Database.use((db) =>
-      db
-        .select({ version: hostPairing.version, machineId: hostPairing.machineId })
-        .from(hostPairing)
-        .where(pendingByCode(userCode, now))
-        .for("update"),
-    ),
-});
-
-/** A standing Mac on the machine whose owner is not the one asked (`macOwnedElsewhere`), its id. */
-const findMacOwnedElsewhere = SqlSchema.findAll({
-  Request: Schema.Struct({ machineId: Schema.String, target: hostPairingTargetSchema }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ machineId, target }) =>
-    Database.use((db) =>
-      db
-        .select({ id: device.id })
-        .from(device)
-        .where(macOwnedElsewhere(machineId, target))
-        .limit(1),
     ),
 });
 
@@ -410,7 +306,6 @@ const settleApproved = SqlSchema.findOneOption({
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     arch: Schema.Literals(Object.values(DEVICE_ARCH)),
     version: Schema.String,
-    machineId: Schema.NullOr(Schema.String),
   }),
   execute: ({ userCode, userId, now, collectBy }) =>
     Database.use((db) =>
@@ -428,28 +323,19 @@ const settleApproved = SqlSchema.findOneOption({
           platform: hostPairing.platform,
           arch: hostPairing.arch,
           version: hostPairing.version,
-          machineId: hostPairing.machineId,
         }),
     ),
 });
 
-/**
- * The host an approve makes: the account's, or a workspace's with who
- * connected it and the networks its agents may reach, under the id given,
- * on the machine its box named, with no secret until its box collects one.
- */
+/** The host an approve makes: the account's, under the id given, with no secret until its box collects one. */
 const insertPairedHost = SqlSchema.void({
   Request: Schema.Struct({
     id: Schema.String,
-    userId: Schema.NullOr(Schema.String),
-    organizationId: Schema.NullOr(Schema.String),
-    connectedBy: Schema.NullOr(Schema.String),
-    network: Schema.NullOr(machineNetworkSchema),
+    userId: Schema.String,
     name: Schema.String,
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     arch: Schema.Literals(Object.values(DEVICE_ARCH)),
     version: Schema.String,
-    machineId: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
   execute: ({ now, ...host }) =>
@@ -606,13 +492,7 @@ export function openHostPairing(opening: HostPairingOpening): PairingEffect<Opti
       const now = yield* DateTime.nowAsDate;
       yield* clearLapsed(now);
       const expiresAt = new Date(now.getTime() + Duration.toMillis(HOST_PAIRING.LIFETIME));
-
-      const opened = yield* insertPairing({
-        ...opening,
-        machineId: opening.machineId ?? null,
-        now,
-        expiresAt,
-      });
+      const opened = yield* insertPairing({ ...opening, now, expiresAt });
 
       return Option.map(Option.fromNullishOr(opened[0]), (row) => row.expiresAt);
     }),
@@ -667,16 +547,11 @@ export function pollHostPairing(
 
           if (Option.isNone(handed)) return { status: HOST_PAIRING_POLL_STATUS.EXPIRED } as const;
           const { deviceId, userId } = handed.value;
-          const [keyed] = yield* keyPairedHost({ deviceId, secretHash, now });
+          const keyed = yield* keyPairedHost({ deviceId, userId, secretHash, now });
 
-          if (keyed === undefined) return { status: HOST_PAIRING_POLL_STATUS.DENIED } as const;
+          if (keyed.length === 0) return { status: HOST_PAIRING_POLL_STATUS.DENIED } as const;
 
-          const owner: PairedHostOwner =
-            keyed.organizationId === null
-              ? { kind: MACHINE_OWNER.USER }
-              : { kind: MACHINE_OWNER.WORKSPACE, workspaceId: keyed.organizationId };
-
-          return { status: HOST_PAIRING_POLL_STATUS.APPROVED, deviceId, owner, userId } as const;
+          return { status: HOST_PAIRING_POLL_STATUS.APPROVED, deviceId, userId } as const;
         }
       }
     }),
@@ -688,90 +563,32 @@ export function readHostPairing(
   userId: string,
   userCode: string,
 ): PairingEffect<HostPairingGuessed<HostPairingPending>> {
-  return guessed(userId, (now) =>
-    Effect.map(
-      findPending({ userCode, now }),
-      Option.map(({ version, machineId, ...box }) => ({
-        ...box,
-        workspaceFit: workspaceFit({ version, machineId }),
-      })),
-    ),
-  );
-}
-
-/** The owner columns the host an approve makes is written with, for the target asked, by the approver given. */
-function ownerColumnsOf(approverId: string, target: HostPairingTarget) {
-  switch (target.kind) {
-    case MACHINE_OWNER.USER:
-      return { userId: approverId, organizationId: null, connectedBy: null, network: null };
-    case MACHINE_OWNER.WORKSPACE:
-      return {
-        userId: null,
-        organizationId: target.workspaceId,
-        connectedBy: approverId,
-        network: target.network,
-      };
-  }
+  return guessed(userId, (now) => findPending({ userCode, now }));
 }
 
 /**
- * Why an approve of the pending pairing named would be refused, read
- * before it settles, so a refused approve leaves its pairing pending for
- * another answer: a workspace asked of a box unfit to be one's machine
- * (`workspaceFit`), or a Mac that already stands as another owner's host
- * (`macOwnedElsewhere`); none where it may be approved.
- */
-const approvalRefusal = (
-  start: { readonly version: string; readonly machineId: string | null },
-  target: HostPairingTarget,
-) =>
-  Effect.gen(function* () {
-    if (target.kind === MACHINE_OWNER.WORKSPACE && !workspaceFit(start)) {
-      return Option.some(HOST_PAIRING_APPROVAL.UNFIT_FOR_WORKSPACE);
-    }
-
-    if (start.machineId === null) return Option.none();
-    const taken = yield* findMacOwnedElsewhere({ machineId: start.machineId, target });
-
-    return taken.length > 0
-      ? Option.some(HOST_PAIRING_APPROVAL.MACHINE_OWNED_ELSEWHERE)
-      : Option.none();
-  });
-
-/**
- * Approves a pending pairing by its code for the account, making the host
- * of the owner asked under the id given, which the service minted: the
- * account's own, or a workspace's it connected, whose owners or admins
- * alone may ask it, which its caller judges. The host stands with the box's
- * name, platform, architecture, and version and no secret, seen now;
- * answers that id. Refused, its pairing left pending, where the box is
- * unfit for the workspace asked or its Mac stands as another owner's
- * (`approvalRefusal`). A guess (`guessed`): two approves racing approve
- * once, and the other finds nothing.
+ * Approves a pending pairing by its code for the account, making the
+ * account's host under the id given, which the service minted, with the
+ * box's name, platform, architecture, and version and no secret, seen now;
+ * answers that id. A guess (`guessed`): two approves racing approve once,
+ * and the other finds nothing.
  */
 export function approveHostPairing(
   userId: string,
   userCode: string,
   deviceId: string,
-  target: HostPairingTarget,
-): PairingEffect<HostPairingGuessed<HostPairingApproval>> {
+): PairingEffect<HostPairingGuessed<string>> {
   return guessed(userId, (now) =>
     Effect.gen(function* () {
-      const start = yield* findPendingStart({ userCode, now });
-
-      if (Option.isNone(start)) return Option.none();
-      const refusal = yield* approvalRefusal(start.value, target);
-
-      if (Option.isSome(refusal)) return Option.some({ approval: refusal.value });
       const collectBy = new Date(now.getTime() + Duration.toMillis(HOST_PAIRING.COLLECT_GRACE));
       const settled = yield* settleApproved({ userCode, userId, now, collectBy });
 
       if (Option.isNone(settled)) return Option.none();
       const { id, ...box } = settled.value;
-      yield* insertPairedHost({ id: deviceId, ...ownerColumnsOf(userId, target), ...box, now });
+      yield* insertPairedHost({ id: deviceId, userId, ...box, now });
       yield* namePairedHost({ id, deviceId });
 
-      return Option.some({ approval: HOST_PAIRING_APPROVAL.APPROVED, deviceId });
+      return Option.some(deviceId);
     }),
   );
 }

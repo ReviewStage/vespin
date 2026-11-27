@@ -77,12 +77,7 @@ import {
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
-import {
-  DEVICE_ARCH,
-  DEVICE_PLATFORM,
-  DEVICE_SETUP,
-  MACHINE_NETWORK,
-} from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import type { HostLine } from "@repo/features/host-live";
 import { HOST_PAIRING_CALL_FAILURE } from "@repo/features/host-pairing-view";
@@ -131,13 +126,16 @@ import type { MachineLine } from "@repo/features/machine-live";
 import {
   MANAGER_CHAT_AUTHOR,
   MANAGER_CHAT_REACTION,
+  type ManagerChatEditPress,
   type ManagerChatReactionPress,
+  withEditPress,
   withReactionPress,
 } from "@repo/features/manager-chat-live";
 import {
   MANAGER_FACE_CHARACTER,
   MANAGER_FACE_COLOR,
   type ManagerFace,
+  sameManagerFace,
 } from "@repo/features/manager-face";
 import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
@@ -186,7 +184,6 @@ import {
   INVITATION_ROLE,
   type WorkspaceInvitation,
 } from "@repo/features/workspace-invitation-wire";
-import type { WorkspaceMachineLine } from "@repo/features/workspace-machine-view";
 import {
   WORKSPACE_ROLE,
   type Workspace,
@@ -220,8 +217,14 @@ import {
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
-import { FIXTURE_PULL_REQUEST, fixtureChanges } from "./fixture-pull-requests.js";
+import {
+  FIXTURE_PULL_REQUEST,
+  fixtureChanges,
+  fixtureGeneratedChapters,
+} from "./fixture-pull-requests.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
+
+export { FIXTURE_RECORDING_ID } from "./fixture-agent-transcript.js";
 
 export {
   FIXTURE_PULL_REQUEST,
@@ -665,7 +668,9 @@ const INVITES_ITEMS: readonly InboxItem[] = [
           114,
           25 * MINUTE,
           [
-            "I walked the invite flow in the preview, from [@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60) to the accepted page:",
+            // Note that the task's chip leads the message's first line, so `keep.yaml` holds it a little in from the line's start, and a hold on the message's other lines lands on no chip; the line is as long as it stood, so the thread opens as it did. It is still a view laid inline in the line's words inside a held message, so its menu is held as a chip mid-line is.
+            // A chip mid-line has no element of its own until React Native's paragraph lists its inline views as accessibility elements, the follow-up to #10919, which moves it back mid-line and holds it by its element.
+            "[@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60): I walked the invite flow in the preview, through to the accepted page:",
             "",
             `![The invite page](${RECORDED_PICTURE_ADDRESS})`,
             "",
@@ -1406,14 +1411,13 @@ const MANAGER_MEMORIES: readonly MemorySummary[] = [
 /** The code of the one pairing waiting on the account, as a machine's link names it (`maestro/settings-machine-connect.yaml`). */
 const PENDING_PAIRING_CODE = "BCDFGHJK";
 
-/** The machine waiting on that code, as it named itself, when its code lapses, ten minutes after the fixture landed, and the workspace the account owns that it may connect it to. */
+/** The machine waiting on that code, as it named itself, and when its code lapses: ten minutes after the fixture landed. */
 const PENDING_PAIRING: HostPairingAnswer = {
   name: "Ada's Mac mini",
   platform: DEVICE_PLATFORM.DARWIN,
   arch: DEVICE_ARCH.ARM64,
   ip: "203.0.113.7",
   expiresAt: LANDED + 10 * 60_000,
-  workspaces: [{ id: FIXTURE_WORKSPACE.id, name: FIXTURE_WORKSPACE.name }],
 };
 
 /** A pairing's read, approve, or deny, as the service answers it: the waiting machine for its code, and no pending pairing for any other. */
@@ -1436,37 +1440,6 @@ const HOSTS: readonly HostLine[] = [
     platform: DEVICE_PLATFORM.LINUX,
     calledIn: true,
     away: true,
-  },
-];
-
-/**
- * The machines Ada's workspace owns, which every member's agents may run on,
- * as Settings › Machines lists them under her own and Runs on offers them:
- * a Linux box online whose agents may reach its private network, and a Mac
- * set aside for it still pulling its agent image, which takes no agent yet.
- * Relay, the team a flow switches to, owns none.
- */
-const WORKSPACE_MACHINES: readonly WorkspaceMachineLine[] = [
-  {
-    id: "5c0f6c84-2a7e-4d1b-9e3f-0b8d6a4c2e71",
-    name: "build-01",
-    platform: DEVICE_PLATFORM.LINUX,
-    arch: DEVICE_ARCH.X64,
-    connectedBy: ADA.userId,
-    network: MACHINE_NETWORK.PRIVATE_ALLOWED,
-    calledIn: true,
-    away: false,
-  },
-  {
-    id: "5c0f6c84-2a7e-4d1b-9e3f-0b8d6a4c2e72",
-    name: "Team Mac Studio",
-    platform: DEVICE_PLATFORM.DARWIN,
-    arch: DEVICE_ARCH.ARM64,
-    connectedBy: ADA.userId,
-    network: MACHINE_NETWORK.PUBLIC_ONLY,
-    setup: DEVICE_SETUP.PREPARING,
-    calledIn: true,
-    away: false,
   },
 ];
 
@@ -2254,7 +2227,8 @@ const MANAGER_THREAD_ROOT = "7b2d40e8";
  * of all stands a picture the account sent with no words with its ask,
  * whose own long press opens its thread. The Manager gave the account's
  * ask its 👍, the account and Grace gave its first answer theirs, and the
- * account gave its 👍 to the answer in the thread.
+ * account gave its 👍 to the answer in the thread. The account edited its
+ * ask a minute after sending it, which it says after its words.
  */
 const MANAGER_CHAT: AppManagerChat = {
   messages: [
@@ -2338,7 +2312,7 @@ const MANAGER_CHAT: AppManagerChat = {
       turnId: MANAGER_TURN,
       lineId: "fixture-manager-ask",
       createdAt: MANAGER_STARTED,
-      editedAt: null,
+      editedAt: MANAGER_STARTED + MINUTE,
       reactions: [{ kind: MANAGER_CHAT_REACTION.THUMBS_UP, count: 1, reacted: false }],
     },
     {
@@ -2369,9 +2343,14 @@ const MANAGER_CHAT: AppManagerChat = {
 /** The account's reactions given the release Manager's chat or taken off it in this run, oldest pressed first, which the chat stands with, as the service would. */
 let managerChatPresses: readonly ManagerChatReactionPress[] = [];
 
-/** The release Manager's chat with the account's reactions in this run drawn on it. */
+/** The account's edits of its own messages of the release Manager's chat in this run, oldest saved first, which the chat stands with, as the service would. */
+let managerChatEdits: readonly ManagerChatEditPress[] = [];
+
+/** The release Manager's chat with the account's edits and reactions in this run drawn on it. */
 function reactedManagerChat(): AppManagerChat {
-  return { messages: managerChatPresses.reduce(withReactionPress, MANAGER_CHAT.messages) };
+  const edited = managerChatEdits.reduce(withEditPress, MANAGER_CHAT.messages);
+
+  return { messages: managerChatPresses.reduce(withReactionPress, edited) };
 }
 
 /** A transcript with two messages of the account's queued behind its turn, which the agent's page lists over its composer with Steer and Delete, two so a flow may put one in the other's place. */
@@ -2925,10 +2904,6 @@ export function inboxAppState(
       [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
     },
     [LIVE_READ.WORKSPACE_INVITATIONS]: { [FIXTURE_IDS.WORKSPACE]: { rows: INVITATIONS } },
-    [LIVE_READ.WORKSPACE_MACHINES]: {
-      [FIXTURE_IDS.WORKSPACE]: { rows: WORKSPACE_MACHINES },
-      [TEAM_WORKSPACE.id]: { rows: [] },
-    },
     [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
       workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),
     ),
@@ -3290,18 +3265,13 @@ const CHANGED_FIELDS = [
   "title",
 ] as const satisfies readonly Exclude<keyof AgentChange, "pinned" | "face" | "archived">[];
 
-/** Whether every field of the change already stands on the agent, a face by its character and color. */
+/** Whether every field of the change already stands on the agent, a face by its character, color, and emoji. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
   const { face, archived } = change;
 
   if (archived !== undefined && archived !== (agent.archivedAt !== undefined)) return false;
 
-  if (
-    face !== undefined &&
-    (face.character !== agent.face?.character || face.color !== agent.face?.color)
-  ) {
-    return false;
-  }
+  if (face !== undefined && !sameManagerFace(face, agent.face)) return false;
 
   return CHANGED_FIELDS.every((key) => {
     const value = change[key];
@@ -3888,6 +3858,8 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.PULL_REQUESTS_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
   // The files the invitations agent's ready pull request changes, so Files changed lists them and opens their diffs.
   [ACT_KIND.PULL_REQUESTS_CHANGES]: ({ number }) => fixtureChanges(number),
+  // A Generate of a pull request's chapters is answered with them told, as the service answers once a model told them.
+  [ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: ({ number }) => fixtureGeneratedChapters(number),
   // An agent's sandbox listens on two ports, one served by Vite, and shares neither, so its Ports sheet lists them and offers Share.
   [ACT_KIND.AGENTS_PORTS]: () => ({
     running: true,
@@ -3937,6 +3909,20 @@ const ANSWERS: StagedAnswers = {
     managerChatPresses = [...others, { messageId, kind, reacted }];
 
     return { changed: message !== undefined && mine !== reacted };
+  },
+  // Note that an edit of one of the account's own messages of the release Manager's chat is kept for the run, as a reaction is, so the chat stands with its words as edited.
+  [ACT_KIND.AGENTS_CHAT_EDIT]: ({ agentId, messageId, text }) => {
+    if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const message = reactedManagerChat().messages.find((each) => each.id === messageId);
+
+    if (message === undefined || message.authorUserId !== ADA.userId) {
+      return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    }
+
+    if (message.text === text) return { changed: false };
+    managerChatEdits = [...managerChatEdits, { messageId, text, editedAt: MANAGER_STARTED + HOUR }];
+
+    return { changed: true };
   },
   [ACT_KIND.AGENTS_QUEUE]: ({ agentId }) => {
     if (stagedAgent(agentId) === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
@@ -4051,14 +4037,33 @@ const ANSWERS: StagedAnswers = {
   },
   // The invitations task's repository's skills, as the service finds them.
   [ACT_KIND.TASKS_SKILLS]: () => ({ skills: SKILLS }),
-  // The invitations task's repository's tree, read whole as an `@` reads its files and folders; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
+  // The invitations task's repository's tree, read whole as an `@` reads its files and folders, through the task or, as the Manager's box reads it, through the workspace; a folder's own listing, the File tab's, stays unanswered, as it stood before the tree was staged.
   [ACT_KIND.TASKS_TREE]: (asked) =>
-    "taskId" in asked &&
-    asked.taskId === TASK.INVITES &&
     asked.recursive === true &&
-    asked.path === ""
+    asked.path === "" &&
+    ("taskId" in asked
+      ? asked.taskId === TASK.INVITES
+      : asked.repository === INVITES_TREE.repository)
       ? { folder: INVITES_TREE }
       : { failure: TASK_CALL_FAILURE.UNANSWERED },
+  // The machines of the workspace's members an `@` offers: Ada's own, the one away offline.
+  [ACT_KIND.WORKSPACE_MACHINES_READ]: () => ({
+    machines: HOSTS.flatMap((host) =>
+      host.platform === undefined
+        ? []
+        : [
+            {
+              id: host.id,
+              name: host.name,
+              platform: host.platform,
+              userId: ADA.userId,
+              online: host.away !== true,
+            },
+          ],
+    ),
+  }),
+  // Ada's machines always allow no app, so an `@` offers none of theirs.
+  [ACT_KIND.HOSTS_ALLOWED_APPS]: () => ({ machines: [] }),
   [ACT_KIND.AGENTS_BOOT]: ({ agentId }) => {
     const held = stagedAgent(agentId);
 

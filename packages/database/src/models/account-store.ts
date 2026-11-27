@@ -19,6 +19,8 @@ import {
   accountPreferencesFromStored,
   COMMIT_AUTHOR_LIST,
   type CommitAuthor,
+  DIFF_DISPLAY_FIELDS,
+  type DiffDisplayField,
   type ExperimentChoices,
   experimentChoicesFrom,
   experimentOn,
@@ -33,6 +35,7 @@ import {
 import { WireValueSchema } from "@repo/wire";
 import { COMPLETION_SOUNDS, type CompletionSound } from "@repo/wire/app-settings";
 import { eq, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -75,6 +78,9 @@ export interface AccountPreferencesWritten extends AccountPreferencesRow {
   readonly txid: string;
 }
 
+/** Each of the diff display's choices a write carries, as its setting stores it. */
+type DiffDisplayWrite = { [Field in DiffDisplayField]?: NonNullable<AccountPreferences[Field]> };
+
 /**
  * What a write carries: each part present replaces what stood, and a part
  * left out stands as it was, so the desktop's settings sync and Settings'
@@ -84,9 +90,10 @@ export interface AccountPreferencesWritten extends AccountPreferencesRow {
  * `preferences` is the shared part; the link choice, the pull request choice, Enter's choice, the
  * commit author, a new agent's permission mode, setup finished, the setup place, when and which sound plays,
  * whether a notification is posted, the survey's answers, and the intros
- * seen are parts of their own, which a build that predates them never sends.
+ * seen are parts of their own, which a build that predates them never sends, as is each of the
+ * diff display's choices.
  */
-export interface AccountPreferencesWrite {
+export interface AccountPreferencesWrite extends DiffDisplayWrite {
   preferences?: AccountPreferences;
   linkOpen?: LinkOpen;
   pullRequestOpen?: PullRequestOpen;
@@ -114,6 +121,21 @@ export interface AccountPreferencesWrite {
 /** What an account seam answers: an effect over the ambient client, composed into the request that made it. */
 export type AccountSeamEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
+/** The diff display's columns, by the setting each stores. */
+const DIFF_DISPLAY_COLUMNS = {
+  lineNumbers: accountPreference.lineNumbers,
+  wordWrap: accountPreference.wordWrap,
+  diffLayout: accountPreference.diffLayout,
+  diffIndicators: accountPreference.diffIndicators,
+  inlineDiff: accountPreference.inlineDiff,
+  diffBackgrounds: accountPreference.diffBackgrounds,
+  diffDarkTheme: accountPreference.diffDarkTheme,
+  diffLightTheme: accountPreference.diffLightTheme,
+  diffFont: accountPreference.diffFont,
+  diffLigatures: accountPreference.diffLigatures,
+  diffMinimizeComments: accountPreference.diffMinimizeComments,
+} as const satisfies { readonly [Field in DiffDisplayField]: AnyPgColumn };
+
 /** The columns every read and the write's `returning` project, so a row decodes one way whatever wrote it. */
 const PREFERENCE_COLUMNS = {
   linkOpen: accountPreference.linkOpen,
@@ -139,6 +161,7 @@ const PREFERENCE_COLUMNS = {
   chaptersModel: accountPreference.chaptersModel,
   experiments: accountPreference.experiments,
   updatedAt: accountPreference.updatedAt,
+  ...DIFF_DISPLAY_COLUMNS,
 };
 
 const PreferenceRowSchema = Schema.Struct({
@@ -165,9 +188,27 @@ const PreferenceRowSchema = Schema.Struct({
   chaptersModel: Schema.NullOr(Schema.String),
   experiments: Schema.NullOr(WireValueSchema),
   updatedAt: Schema.NullOr(InstantColumnSchema),
+  lineNumbers: Schema.NullOr(Schema.Boolean),
+  wordWrap: Schema.NullOr(Schema.Boolean),
+  diffLayout: Schema.NullOr(Schema.String),
+  diffIndicators: Schema.NullOr(Schema.String),
+  inlineDiff: Schema.NullOr(Schema.String),
+  diffBackgrounds: Schema.NullOr(Schema.Boolean),
+  diffDarkTheme: Schema.NullOr(Schema.String),
+  diffLightTheme: Schema.NullOr(Schema.String),
+  diffFont: Schema.NullOr(Schema.String),
+  diffLigatures: Schema.NullOr(Schema.Boolean),
+  diffMinimizeComments: Schema.NullOr(Schema.Boolean),
 });
 
 type PreferenceRow = typeof PreferenceRowSchema.Type;
+
+/** The diff display's choices a row holds, leaving out each it holds none for; each setting's guard reads it the rest of the way. */
+function diffDisplayOf(row: PreferenceRow): Partial<Record<DiffDisplayField, string | boolean>> {
+  return Object.fromEntries(
+    DIFF_DISPLAY_FIELDS.flatMap((field) => (row[field] === null ? [] : [[field, row[field]]])),
+  );
+}
 
 /**
  * The row as the group answers it, its coding-agent default read as the
@@ -200,6 +241,7 @@ function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
         ...(row.githubWakesOff ? { githubWakesOff: row.githubWakesOff } : undefined),
         ...(row.newAgentServersOff ? { newAgentServersOff: row.newAgentServersOff } : undefined),
         ...(row.inbox === null ? undefined : { inbox: row.inbox }),
+        ...diffDisplayOf(row),
       }) ?? {},
     agent: storedAgentChoice(row),
     // Note that a stored model no build lists any more reads as Haiku, as a row never written does.
@@ -341,6 +383,17 @@ const PreferenceWriteSchema = Schema.Struct({
   githubWakesOff: Schema.optionalKey(Schema.String),
   newAgentServersOff: Schema.optionalKey(Schema.String),
   inbox: Schema.optionalKey(Schema.Boolean),
+  lineNumbers: Schema.optionalKey(Schema.Boolean),
+  wordWrap: Schema.optionalKey(Schema.Boolean),
+  diffLayout: Schema.optionalKey(Schema.String),
+  diffIndicators: Schema.optionalKey(Schema.String),
+  inlineDiff: Schema.optionalKey(Schema.String),
+  diffBackgrounds: Schema.optionalKey(Schema.Boolean),
+  diffDarkTheme: Schema.optionalKey(Schema.String),
+  diffLightTheme: Schema.optionalKey(Schema.String),
+  diffFont: Schema.optionalKey(Schema.String),
+  diffLigatures: Schema.optionalKey(Schema.Boolean),
+  diffMinimizeComments: Schema.optionalKey(Schema.Boolean),
   agent: Schema.optionalKey(
     Schema.Struct({
       model: Schema.String,

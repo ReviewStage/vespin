@@ -43,7 +43,9 @@ import {
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
+  ListColumn,
   ListSection,
+  NoSelection,
   ROW_ACTION_TONE,
   RowForEach,
   RowList,
@@ -53,7 +55,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
 import { newAutomationRoute } from "../automations/automation-editor-route.js";
 import {
   AUTOMATION_RUNS_ROUTE,
@@ -80,9 +82,11 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { APP_SIDEBAR } from "../sidebar-shown.js";
+import { TabColumns } from "../split-columns.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { useComposeAction } from "./app-sidebar.js";
+import { useComposeAction, useDetailColumnBar, useSplitBuild } from "./app-sidebar.js";
 
 /** What the list's field says before anything is typed. */
 const SEARCH_AUTOMATIONS = "Search automations";
@@ -98,6 +102,9 @@ const NEW_AUTOMATION = "New automation";
 
 /** What the workspace's runs are called, on the bar's button that opens them, as the desktop's tab names them. */
 const RUNS = "Runs";
+
+/** What an iPad's page column says before an automation is opened beside the list. */
+const NO_AUTOMATION_SELECTED = "No automation selected";
 
 /** What View options is called, on its button and to VoiceOver. */
 const VIEW_OPTIONS = "View options";
@@ -176,6 +183,93 @@ function found(automation: AutomationSummary, tokens: readonly string[]): boolea
  * workspace, so nothing of one workspace's list stands over another's.
  */
 export function AutomationsScreen() {
+  return APP_SIDEBAR ? <AutomationsPageScreen /> : <AutomationsStackScreen />;
+}
+
+/**
+ * The Automations tab's root on an iPad: an automation opened beside its
+ * list, pushed on its own stack, as Mail stands a message beside its
+ * mailbox, and none before one is, New task leading its bar; the list
+ * stands in the middle column (`AutomationsListColumn`).
+ */
+function AutomationsPageScreen() {
+  const detailBar = useDetailColumnBar(undefined);
+  const build = useSplitBuild();
+
+  return (
+    <>
+      <TabColumns
+        build={build}
+        sidebar={null}
+        detail={<NoSelection title={NO_AUTOMATION_SELECTED} />}
+        detailBar={detailBar}
+      />
+    </>
+  );
+}
+
+/** The automations' search, held above an iPad's split view for its list column, so it outlives a turn to another place and back. */
+const AutomationsSearchContext = createContext<
+  { readonly search: string; readonly setSearch: (search: string) => void } | undefined
+>(undefined);
+
+/** What an iPad's Automations holds above the system's split view: its list's search. */
+export function AutomationsSearchProvider({ children }: { readonly children: ReactNode }) {
+  const [search, setSearch] = useState("");
+  const held = useMemo(() => ({ search, setSearch }), [search]);
+
+  return <AutomationsSearchContext value={held}>{children}</AutomationsSearchContext>;
+}
+
+/**
+ * The automations in an iPad's middle column, beside the sidebar: the
+ * workspace's automations under who owns them, under the column's title,
+ * search, View options, Runs and New automation. Note that the sidebar
+ * holds the workspace switcher, so the list's bar stands none.
+ */
+export function AutomationsListColumn() {
+  const held = useContext(AutomationsSearchContext);
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const { chosen } = useChosenWorkspace(workspaces);
+  const { order, setOrder } = useAutomationsOrder();
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+
+  if (held === undefined)
+    throw new Error("An iPad's automations stand under AutomationsSearchProvider.");
+
+  const { search, setSearch } = held;
+
+  return (
+    <ListColumn
+      view={
+        chosen === undefined ? null : (
+          <AutomationsList key={chosen.id} workspace={chosen} order={order} search={search} />
+        )
+      }
+      bar={{
+        title: AUTOMATION_PHONE_WORDS.TITLE,
+        menu: viewMenu(order, setOrder),
+        acts: [
+          {
+            label: RUNS,
+            symbol: GLYPH.HISTORY,
+            onPress: () => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE)),
+          },
+          {
+            label: NEW_AUTOMATION,
+            symbol: GLYPH.ADD,
+            onPress: () => router.push(newAutomationRoute()),
+          },
+        ],
+        search: { placeholder: SEARCH_AUTOMATIONS, text: search, onChange: setSearch },
+      }}
+    />
+  );
+}
+
+/** The Automations tab's root under the Stack's bar, on an iPhone. */
+function AutomationsStackScreen() {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
   const switcher = useWorkspaceSwitcher();
@@ -210,18 +304,24 @@ export function AutomationsScreen() {
           icon={glyphSymbol(GLYPH.HISTORY)}
           accessibilityLabel={RUNS}
           onPress={() => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE))}
-        />
+        >
+          {RUNS}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.ADD)}
           accessibilityLabel={NEW_AUTOMATION}
           onPress={() => router.push(newAutomationRoute())}
-        />
+        >
+          {NEW_AUTOMATION}
+        </Stack.Toolbar.Button>
         {/* Note that New task's compose ends the bar, as every tab root's does. */}
         <Stack.Toolbar.Button
           icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
           accessibilityLabel={compose.label}
           onPress={compose.onPress}
-        />
+        >
+          {compose.label}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         {chosen === undefined ? null : (

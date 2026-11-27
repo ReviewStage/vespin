@@ -1,10 +1,13 @@
-// open-drawn.ts -- counts how long a page pushed open took to start its slide and to stand, once an open, on rungs, as `open:drawn`, with its kind and whether it was the first of its kind since launch.
+// open-drawn.ts -- counts how long a page pushed open took to start its slide and to stand, once an open, on rungs, as `open:drawn`, with its kind, whether it was the first of its kind since launch, and the taps that led to it.
 
 import {
   PRODUCT_OPEN_ORDER,
   PRODUCT_PAGE_DATA,
   PRODUCT_SURFACE_EVENT,
+  type ProductLoadCount,
+  type ProductOpenMilliseconds,
   type ProductSurface,
+  productLoadCount,
   productOpenMilliseconds,
 } from "@repo/features/analytics";
 import Constants from "expo-constants";
@@ -12,12 +15,56 @@ import { type NativeStackNavigationProp, useNavigation } from "expo-router";
 import { useLayoutEffect, useState } from "react";
 import { AppState } from "react-native";
 import { useHostCount } from "./host/host-provider.js";
+import { picksBetween } from "./row-picks.js";
+import { lastTouchBetween } from "./taps.js";
 
 /** The build number this build was released as (`CFBundleVersion`), which an open is read beside; none where the build names none. */
 const BUILD_NUMBER = Constants.expoConfig?.ios?.buildNumber;
 
 /** The kinds of page counted open since this launch, so each kind's first, which draws views the app has not drawn before, is told from the rest. */
 const openedKinds = new Set<ProductSurface>();
+
+/** How long before a page's first render the taps that led to it may have landed; one earlier led to something else. */
+const LED_WITHIN_MS = 10_000;
+
+/** When the latest page counted here first rendered, on the performance clock, so the taps before it are never counted for the next. */
+let lastOpenAt = Number.NEGATIVE_INFINITY;
+
+/** Where an open's taps are looked for: after the last open and no longer before its first render, and by that render. */
+interface LedWindow {
+  readonly from: number;
+  readonly to: number;
+}
+
+/** The taps that led to an open its list's row picked, as `open:drawn` counts them. */
+interface OpenLed {
+  readonly tap_ms: ProductOpenMilliseconds;
+  readonly presses: ProductLoadCount;
+}
+
+/**
+ * The taps that led to a page, in the window laid as it first rendered,
+ * where a row's pick reached JavaScript to open it: how long from the touch
+ * that ended in the window just before the first pick to the render (from
+ * the pick itself where event timing kept no such touch), and how many
+ * picks reached JavaScript. A long wait from one pick is an open the app
+ * was slow to answer; several picks are taps that queued behind it. None
+ * where no pick led to it, such as a notification's open. Note that it is
+ * read as the open is counted, not as the page renders, so a touch whose
+ * entry event timing had not yet handed over is still found.
+ */
+function openLed({ from, to }: LedWindow): OpenLed | undefined {
+  const picks = picksBetween(from, to);
+  const firstPick = picks[0];
+
+  if (firstPick === undefined) return undefined;
+  const tapAt = lastTouchBetween(from, firstPick) ?? firstPick;
+
+  return {
+    tap_ms: productOpenMilliseconds(to - tapAt),
+    presses: productLoadCount(picks.length),
+  };
+}
 
 /** How long the long tasks in `tasks` held the JS thread between `from` and `to`, each clipped to that span. */
 function heldBetween(tasks: readonly PerformanceEntry[], from: number, to: number): number {
@@ -41,12 +88,15 @@ function heldBetween(tasks: readonly PerformanceEntry[], from: number, to: numbe
  * stretch of 50 ms or more with no chance to yield) that fell in that span,
  * such as the host's work ahead of the push; and whether the page's own
  * thread, task, or agent was held as it first drew (`held`) or still to be
- * read. Note that the slide's first frame falls between the push's start and
- * its standing, once UIKit has laid the page out for its transition, which
- * no event marks. A page that pushes nothing, such as one handing its item
- * to a split view (`surface` none), counts nothing, and so does one whose
- * push stands after the app left the front, since its time would hold a wait
- * nobody sat through.
+ * read. Beside them, for an open a list's row picked, the taps that led to
+ * it (`openLed`): from the touch that got through to the first render, and
+ * how many picks reached JavaScript. Note that the slide's
+ * first frame falls between the push's start and its standing, once UIKit
+ * has laid the page out for its transition, which no event marks. A page
+ * that pushes nothing, such as one handing its item to a split view
+ * (`surface` none), counts nothing, and so does one whose push stands after
+ * the app left the front, since its time would hold a wait nobody sat
+ * through.
  */
 export function useOpenDrawnCount(surface: ProductSurface | undefined, held: boolean): void {
   const count = useHostCount();
@@ -54,9 +104,14 @@ export function useOpenDrawnCount(surface: ProductSurface | undefined, held: boo
   const [renderedAt] = useState(() => performance.now());
   const [heldAtFirst] = useState(held);
 
+  const [ledWindow] = useState(
+    (): LedWindow => ({ from: Math.max(lastOpenAt, renderedAt - LED_WITHIN_MS), to: renderedAt }),
+  );
+
   // Note that the watch starts as the page commits, so an early push is never missed, and that the long task its render and commit ran in is reported as that task ends, after the watch began.
   useLayoutEffect(() => {
     if (surface === undefined) return;
+    lastOpenAt = Math.max(lastOpenAt, renderedAt);
     let startedAt: number | undefined;
     let counted = false;
     const longTasks: PerformanceEntry[] = [];
@@ -90,6 +145,7 @@ export function useOpenDrawnCount(surface: ProductSurface | undefined, held: boo
         open_order: order,
         busy_ms: productOpenMilliseconds(busy),
         page_data: heldAtFirst ? PRODUCT_PAGE_DATA.HELD : PRODUCT_PAGE_DATA.READ,
+        ...openLed(ledWindow),
         ...(BUILD_NUMBER === undefined ? undefined : { app_build: BUILD_NUMBER }),
       });
     });
@@ -99,5 +155,5 @@ export function useOpenDrawnCount(surface: ProductSurface | undefined, held: boo
       stopStart();
       stopEnd();
     };
-  }, [count, navigation, surface, renderedAt, heldAtFirst]);
+  }, [count, navigation, surface, renderedAt, heldAtFirst, ledWindow]);
 }

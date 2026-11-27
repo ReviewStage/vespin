@@ -6,6 +6,7 @@ import {
 } from "@repo/features/analytics";
 import type { FeedbackResult, FeedbackSubmission } from "@repo/features/feedback";
 import { feedbackDeliveryFromEnvironment } from "@repo/features/feedback";
+import { followConnections, spanWithConnection } from "@repo/features/node";
 import {
   eventWithoutAccessTokens,
   SPANS_NAMING_ACCESS_TOKENS,
@@ -73,7 +74,7 @@ let usageData: boolean | undefined;
  * Main reports on behalf of every renderer, so what leaves goes through the
  * same token filters as the preload's and the renderers' own.
  *
- * Every window profiles while it is in use (`SENTRY_PROFILING`,
+ * About one window in ten profiles while it is in use (`SENTRY_PROFILING`,
  * `renderer/desktop-sentry-sdk.ts`), so the spans it times and its
  * interactions carry the stack frames that ran under them: the SDK serves
  * every document with `Document-Policy: js-profiling`, which the browser's
@@ -96,6 +97,7 @@ let usageData: boolean | undefined;
  */
 export function initializeCrashReporting(runMode: RunMode, environment: SentryEnvironment): void {
   startMainLoopStalls();
+  followConnections();
   Sentry.init({
     dsn: PACKAGED_SENTRY_DSN,
     enabled: sentryReportingEnabled(runMode.sendsNetwork, PACKAGED_SENTRY_DSN),
@@ -103,7 +105,11 @@ export function initializeCrashReporting(runMode: RunMode, environment: SentryEn
     environment,
     tracesSampler: sentryTracesSampler,
     enableRendererProfiling: true,
-    integrations: [Sentry.startupTracingIntegration()],
+    // Each request's span says the connection it went out on (`spanWithConnection`).
+    integrations: [
+      Sentry.startupTracingIntegration(),
+      Sentry.nativeNodeFetchIntegration({ responseHook: spanWithConnection }),
+    ],
     beforeBreadcrumb: withoutAccessTokens,
     beforeSend: eventWithoutAccessTokens,
     ignoreSpans: SPANS_NAMING_ACCESS_TOKENS,

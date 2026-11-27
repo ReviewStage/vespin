@@ -42,6 +42,11 @@ type ResolvedSettingField =
   | "diffFont"
   | "diffFontSize"
   | "diffLineHeight"
+  | "lineNumbers"
+  | "wordWrap"
+  | "diffBackgrounds"
+  | "diffLigatures"
+  | "diffMinimizeComments"
   | "linkOpen"
   | "pullRequestOpen"
   | "commitAuthor"
@@ -66,6 +71,12 @@ export function appSettingsView(settings: AppSettings): AppSettingsView {
     diffFont: settings.stored.diffFont ?? APP_SETTING_DEFAULTS.diffFont,
     diffFontSize: settings.stored.diffFontSize ?? APP_SETTING_DEFAULTS.diffFontSize,
     diffLineHeight: settings.stored.diffLineHeight ?? APP_SETTING_DEFAULTS.diffLineHeight,
+    lineNumbers: settings.stored.lineNumbers ?? APP_SETTING_DEFAULTS.lineNumbers,
+    wordWrap: settings.stored.wordWrap ?? APP_SETTING_DEFAULTS.wordWrap,
+    diffBackgrounds: settings.stored.diffBackgrounds ?? APP_SETTING_DEFAULTS.diffBackgrounds,
+    diffLigatures: settings.stored.diffLigatures ?? APP_SETTING_DEFAULTS.diffLigatures,
+    diffMinimizeComments:
+      settings.stored.diffMinimizeComments ?? APP_SETTING_DEFAULTS.diffMinimizeComments,
     linkOpen: settings.stored.linkOpen ?? APP_SETTING_DEFAULTS.linkOpen,
     pullRequestOpen: settings.stored.pullRequestOpen ?? APP_SETTING_DEFAULTS.pullRequestOpen,
     commitAuthor: settings.stored.commitAuthor ?? APP_SETTING_DEFAULTS.commitAuthor,

@@ -1,7 +1,7 @@
 import { BOOT_WORDS } from "@repo/features/agent-boot-words";
 import { readingWords } from "@repo/features/words";
 import { CHAT_RUN, CHAT_SIDE, ChatBubble, ComposerFoot, Skeleton, SkeletonRegion } from "@repo/ui";
-import { ConversationLead } from "../ai-elements/conversation.js";
+import { ConversationLead } from "@repo/ui/conversation";
 import { Message, MessageContent } from "../ai-elements/message.js";
 import { PromptInputCard } from "../ai-elements/prompt-input.js";
 import { BUTTON, ComposerCard, PLACEHOLDER } from "./agent-composer.js";

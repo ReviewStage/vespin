@@ -242,16 +242,20 @@ export const IDENTITY = {
 
 // A Manager's face (@repo/ui's ManagerFace): the soft fills a React Kawaii
 // character's body, or an emoji's disc, is drawn in, one to each of
-// @repo/features/manager-face's MANAGER_FACE_COLOR. Each is FILE_ICON's ink
-// of the same word, a section icon's color, mixed toward white as
-// color-mix(in oklab, <ink> 58%, white) mixes it, so a face wears a section's
-// color soft enough to hold the character's near-black features. Peach, no
-// longer offered, takes orange's fills. Each is its light fill, then its dark.
+// @repo/features/manager-face's MANAGER_FACE_COLOR. Each wears a section
+// icon's hue (FILE_ICON's ink of the same word) soft enough to hold the
+// character's near-black features: most were mixed from that ink toward white
+// as color-mix(in oklab, <ink> 58%, white) mixes it, before yellow's, teal's,
+// and orange's inks were darkened for contrast, and are kept, since a face
+// needs no contrast of its own and wears a hairline in the light (manager-face.css).
+// Pink's light fill leans to rose (oklch hue 350), not the ink's 8, so it no
+// longer reads as red's beside it. Peach, no longer offered, takes orange's
+// fills. Each is its light fill, then its dark.
 export const MANAGER_FACE = {
   YELLOW: ["#e7ce8d", "#ffe7a5"],
   GREEN: ["#8ac893", "#a7e3ad"],
   BLUE: ["#86b9e9", "#aad3ff"],
-  PINK: ["#ee8ea0", "#ffabbc"],
+  PINK: ["#e88eb9", "#ffabbc"],
   PURPLE: ["#ce8fdc", "#e9abf5"],
   PEACH: ["#eab08a", "#ffcba3"],
   RED: ["#f08f89", "#ffaba3"],
@@ -265,15 +269,17 @@ export const MANAGER_FACE = {
 // tree, and the colors a sidebar section's glyph may wear (the panel's
 // section icon picker). The window (file-icon.css) and the iOS app
 // (file-icon-inks.ts) both draw them, so they are written from here rather
-// than kept twice. Each is its light ink, then its dark.
+// than kept twice. Each is its light ink, then its dark. A section's colors'
+// light inks (@repo/features/task-section-wire's TASK_SECTION_ICON_COLOR) hold
+// WCAG 1.4.11's 3:1 on white and on iOS's grouped ground, #f2f2f7.
 export const FILE_ICON = {
   GRAY: ["#84848a", "#adadb1"],
   RED: ["#d52c36", "#ff6762"],
   VERMILION: ["#ff8c5b", "#d5512f"],
-  ORANGE: ["#d47628", "#ffa359"],
-  YELLOW: ["#d5a910", "#ffd452"],
+  ORANGE: ["#d07427", "#ffa359"],
+  YELLOW: ["#aa870d", "#ffd452"],
   GREEN: ["#199f43", "#5ecc71"],
-  TEAL: ["#17a5af", "#64d1db"],
+  TEAL: ["#169aa4", "#64d1db"],
   CYAN: ["#1ca1c7", "#68cdf2"],
   BLUE: ["#1a85d4", "#69b1ff"],
   INDIGO: ["#693acf", "#9d6afb"],

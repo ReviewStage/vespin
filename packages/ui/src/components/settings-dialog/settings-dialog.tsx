@@ -8,7 +8,7 @@ import { DIALOG_SIZE, Dialog, type DialogHandle } from "../dialog/dialog.js";
 import { GAP, LAYOUT_ELEMENT, Stack } from "../layout/layout.js";
 import { NAV_CURRENT, NavItem } from "../nav-item/nav-item.js";
 import { useRovingKeys } from "../roving-keys/roving-keys.js";
-import { SCROLL_FADE, ScrollArea } from "../scroll-area/scroll-area.js";
+import { ScrollArea } from "../scroll-area/scroll-area.js";
 import { SETTINGS_PAGE_LOOK, SettingsPageColumn } from "../settings-page/settings-page.js";
 import {
   type SettingsSectionSkeletonLayout,
@@ -268,7 +268,7 @@ export function SettingsDialog<Id extends string>({
               </Text>
             </div>
             <div className={LIST_ROOM}>
-              <ScrollArea fade={SCROLL_FADE.BOTH}>
+              <ScrollArea>
                 <div {...roving} className="p-ring-reach">
                   <Stack as={LAYOUT_ELEMENT.UL} gap={GAP.ROW} aria-labelledby={titleId}>
                     {sections.map((section) => (

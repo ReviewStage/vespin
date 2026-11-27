@@ -92,7 +92,7 @@ import { WorkingTime } from "./working-time.js";
  */
 
 /** What a card's head says at its right. */
-const CARD_CORNER = {
+export const CARD_CORNER = {
   /** The agent works: how long its run has gone where its start is known, its tile's mark saying that it works. */
   WORKING: "working",
   /** The agent ended: how it ended where its glyph does not say it, a stop or a failure, and how long ago it last moved, where known. */
@@ -190,7 +190,7 @@ function cornerSays(corner: CardCorner): boolean {
  * had where the window cannot read it, deleted or a teammate's; else a
  * teammate, by their face and name, which hang their card; else nobody.
  */
-function StartedBy({
+export function StartedBy({
   by,
   agentId,
   automationId,
@@ -393,6 +393,45 @@ export function taskFoot(words: string): CardFoot {
 }
 
 /**
+ * An agent's card's head, as every card about an agent draws it: its tile
+ * at a card's size, its name, the model and effort it runs on under it, and
+ * its corner; and, while it works, the word a reader hears in place of the
+ * working mark its tile wears.
+ */
+export function AgentCardHead({
+  name,
+  untitled = false,
+  models,
+  tile,
+  choice,
+  corner,
+}: {
+  name: string;
+  /** Whether the name is a subagent's task standing in until it has a title. */
+  untitled?: boolean;
+  models: readonly CatalogModel[];
+  tile: Actor | undefined;
+  choice: ModelChoice | undefined;
+  corner: CardCorner;
+}): React.JSX.Element {
+  return (
+    <>
+      <HoverCardHead
+        mark={tile === undefined ? undefined : <ActorMark actor={tile} size={ACTOR_SIZE.CARD} />}
+        name={name}
+        oneLine={untitled}
+        sub={choice === undefined ? undefined : <ModelLabel choice={choice} models={models} />}
+        corner={cornerSays(corner) ? <Corner corner={corner} /> : undefined}
+      />
+      {corner.kind === CARD_CORNER.WORKING ? (
+        // Note that the word is a reader's alone, because the tile that shows the work hides its mark from a reader and nothing drawn says it.
+        <VisuallyHidden>{glyphStateWords(GLYPH_STATE.WORKING, false)}</VisuallyHidden>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * The card: the agent's tile, the name, its model under it, and its
  * corner, then who started it and its pull request, the latest step where
  * the tab holds one current, and what a tab of the agent's other than its
@@ -431,23 +470,16 @@ export function AgentTabCard({
     fromSlack,
   } = read();
 
-  const head = (
-    <HoverCardHead
-      mark={tile === undefined ? undefined : <ActorMark actor={tile} size={ACTOR_SIZE.CARD} />}
-      name={name}
-      oneLine={untitled}
-      sub={choice === undefined ? undefined : <ModelLabel choice={choice} models={models} />}
-      corner={cornerSays(corner) ? <Corner corner={corner} /> : undefined}
-    />
-  );
-
   return (
     <HoverCard data-agent-card="">
-      {head}
-      {corner.kind === CARD_CORNER.WORKING ? (
-        // Note that the word is a reader's alone, because the tile that shows the work hides its mark from a reader and nothing drawn says it.
-        <VisuallyHidden>{glyphStateWords(GLYPH_STATE.WORKING, false)}</VisuallyHidden>
-      ) : null}
+      <AgentCardHead
+        name={name}
+        untitled={untitled}
+        models={models}
+        tile={tile}
+        choice={choice}
+        corner={corner}
+      />
       <StartedBy
         by={startedBy}
         agentId={startedByAgentId}

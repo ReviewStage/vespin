@@ -35,8 +35,15 @@ import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
  * (`storedToolName`) once the floor reaches 8. An iOS build from 9 on opens a
  * thread's push that names no task, a Manager's, on the thread in its Inbox,
  * so a service may push one to a phone that registered at 9 or later alone.
+ * A build from 10 on reads and draws a reaction to a Manager's chat message
+ * of any kind, by its Slack name and its emoji, and sends one, so a service
+ * may give and take kinds beyond 👍 and 👎 once the floor reaches 10. A
+ * build from 11 on never asks for the machines a workspace owns
+ * (`workspaceMachines.*`, `LIVE_READ.WORKSPACE_MACHINES`) or approves a host
+ * for a workspace, so a service may stop serving those once the floor
+ * reaches 11.
  */
-export const HOSTED_API_VERSION = 9;
+export const HOSTED_API_VERSION = 11;
 
 /** The headers a client names itself in: which app and version, as `platform/version`, and the hosted API version it was built against. */
 export const CLIENT_HEADER = {

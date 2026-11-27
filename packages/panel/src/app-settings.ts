@@ -28,6 +28,7 @@ import {
   selectAudio,
   selectNotifications,
   selectRun,
+  useAppStateSlice,
 } from "./use-app-state.js";
 
 /** What the window hands Settings: the page it shows, and the doors it answers through. */
@@ -77,7 +78,7 @@ export function useSettingsPanel(doors: SettingsDoors): SettingsPanelProps | und
     pressMutation(ACT_KIND.NOTIFICATIONS_OPEN_SETTINGS),
   );
 
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
   const run = useQuery({ ...appStateQuery, select: selectRun }).data;
   const settings = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data;
   const audio = useQuery({ ...appStateQuery, select: selectAudio }).data;

@@ -141,6 +141,7 @@ import { SETTINGS_ROW_EXAMPLE } from "./examples/settings-row";
 import { SETTINGS_SECTION_EXAMPLE } from "./examples/settings-section";
 import { SHORTCUTS_EXAMPLE } from "./examples/shortcuts";
 import { SHOW_MORE_ROWS_EXAMPLE } from "./examples/show-more-rows";
+import { SIDE_SPLITS_EXAMPLE } from "./examples/side-splits";
 import { SIDEBAR_PARTS_EXAMPLE } from "./examples/sidebar-parts";
 import { SKELETONS_EXAMPLE } from "./examples/skeletons";
 import { SLIDER_EXAMPLE } from "./examples/slider";
@@ -345,6 +346,7 @@ export const EXAMPLES: readonly Example[] = [
   CORNER_COUNTS_EXAMPLE,
   COUNT_FIGURES_EXAMPLE,
   RESIZE_EDGES_EXAMPLE,
+  SIDE_SPLITS_EXAMPLE,
   REVEALS_EXAMPLE,
   FOLD_MOTION_EXAMPLE,
   NESTED_ROWS_EXAMPLE,

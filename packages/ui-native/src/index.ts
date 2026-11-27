@@ -329,12 +329,12 @@ export {
 export {
   BotTag,
   githubFace,
-  MARK_FACE,
-  type MarkFace,
+  type HeadReviewer,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,
   PullRequestHead,
+  type RowCount,
   WriteNoteRow,
 } from "./pull-request-page.js";
 
@@ -375,6 +375,8 @@ export {
   unassignedChoice,
 } from "./row-menu-model.js";
 
+export { RowPickContext } from "./row-open.js";
+
 export {
   agentPreview,
   latestStep,
@@ -394,6 +396,8 @@ export { SealedPage } from "./sealed-page.js";
 
 export { sectionGlyphColor, sectionInk } from "./section-ink.js";
 
+export { type SentPictures, sentPictures } from "./sent-pictures-model.js";
+
 export {
   AccountHead,
   AccountRow,
@@ -408,6 +412,7 @@ export {
   type FormSpacing,
   LOADING_ROW_LOOK,
   LoadingRow,
+  MEMBER_ROW_LOOK,
   MemberRow,
   type MemberRowAct,
   MenuRow,
@@ -442,9 +447,11 @@ export {
   groupKey,
   isBarMenu,
   isMenuEntry,
+  ListColumn,
   menuOfGroups,
   menuWithout,
   PATH_PART,
+  SidebarColumn,
   SplitView,
   StackBarMenu,
 } from "./split-view.js";
@@ -489,6 +496,7 @@ export {
   LINK_ROW_TONE,
   LinkRow,
   type LinkRowTone,
+  PlaceRow,
   RelationRow,
   TaskHead,
   VERSION_WRITER,
@@ -585,6 +593,7 @@ export {
   type SwitcherLook,
   WorkspaceSwitcher,
   WorkspaceSwitcherItem,
+  WorkspaceSwitcherRow,
 } from "./workspace-switcher.js";
 
 export { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";

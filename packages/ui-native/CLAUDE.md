@@ -140,10 +140,10 @@ builds a control of its own.
   offers (`TurnActs`), since a phone has no hover to show the panel's; the
   app answers them through `KeepingProvider`. A
   mention's chip, which stands inside a line of words where no SwiftUI menu
-  can wrap it, is held for the system's sheet of Open link and Copy link
-  instead, as the panel's link menu offers them, a popover from the chip in
-  a regular window, its hold a little shorter than the system's so it wins
-  over a message's own. An agent's transcript is `AgentTranscript`, the app's one React
+  can wrap it, opens UIKit's own context menu instead (`ContextMenu`, from
+  the same tree), Open link and Copy link, as the panel's link menu offers
+  them; UIKit gives a hold to the innermost menu, so the chip's wins over
+  the message's own, as a link held in a Messages bubble does. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (FlashList's chat list, drawn newest last, opening at its
   newest row and keeping it in view as rows land, its `maintainVisibleContentPosition`
   rather than timers of ours, with
@@ -458,22 +458,44 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
-  its checks and reviewers as rows, each glyph the panel's own
-  (`pull-request-look.ts`); the merge's press under the heading in every
+  its checks, chapters, and files changed as rows counting them as the
+  panel's tabs do ("✓ 5", "3", "4"), each pushing a page of its own, the
+  chapters' told from `@repo/features/pull-request-chapters-shown` as the
+  panel's Chapters view tells them, each glyph the panel's own (`pull-request-look.ts`), the
+  lines it changes after its branches; its reviewers as faces in its heading after who
+  opened it, each wearing where they stand at its corner, as the panel's
+  people line draws them; its Description and Conversation folding under
+  their headings (`ListSection`'s `foldable`), as the panel's do; the merge's
+  press under the heading in every
   window, as the panel's head stands Merge under the title, a large button
   as wide as its words (`MergeActRow`), and a split button where the
   repository merges more than one way, its chevron choosing the way as the
-  panel's merge box does; and the rest of its acts in the bar's ⋯, an act
-  that asks first asking in `ConfirmAsk`. The bar holds no press of words,
+  panel's merge box does; its title edited from a tap on it and where it
+  stands changed from its state chip, as the panel's title and pill change
+  them, an act that asks first asking in `ConfirmAsk`; and in the bar's ⋯
+  only Copy GitHub link and Open on GitHub, as the panel's toolbar ⋯. The bar holds no press of words,
   which pushed the page's path out of a compact bar.
 - **The tab bar** is `NativeTabs`: each tab labeled in every window, since a
   compact window's icons alone read as empty (the developer, Nov 23, 2026),
   the Inbox count in copper, and Search on the system's own round glass,
   with no round + for New task, which each tab root's bar offers as its
   compose instead; a regular window's
-  bar is
-  `sidebarAdaptable`, so iPadOS stands it as its own tab sidebar, as Apple's
-  tab guidance has it. A compact window hides it while a
+  bar, on an iPhone, is `sidebarAdaptable`, so the unfolded Duo stands it as
+  a sidebar rail. An iPad stands no tabs: the system's own three-column
+  split view stands at the app's root (UISplitViewController, expo-router's
+  `SplitView`), as Mail's does: its sidebar column the app's sidebar
+  (`SidebarColumn`, the system's sidebar list, `LIST_LOOK.SIDEBAR`, headed
+  by the workspace switcher with New task's glyph at its end,
+  `WorkspaceSwitcherRow`, whose menu holds the account and Settings, then a
+  `PlaceRow` for each place and the tasks), then the list of the place
+  picked (`ListColumn`, reading what the place holds above the split view,
+  as its page does), then the picked
+  row's page with every page pushed over it, standing bare in its screen's
+  host under the screen's own native-stack header, as an iPhone's pushed page
+  stands, since a SwiftUI column around it left its hosted React Native views
+  undrawn there; the system draws
+  the sidebar's glass, selection, toggle and swipe, and the columns' edges a
+  person drags, the list's never folding away. A compact window hides it while a
   conversation stands in front (a thread, an agent's page, or a pull
   request it opened), as Messages does, so the composer stands alone at
   the foot (the developer, Nov 12, 2026).

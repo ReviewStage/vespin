@@ -218,6 +218,44 @@ test("the box takes the caret as it opens, Enter sends what was typed, and the b
   assert.equal(box.shown(), "and the next one");
 });
 
+test("a message sent after the box's agent changed goes to the agent it shows now, not the one it was first drawn for", async () => {
+  const sentTo: string[] = [];
+
+  const sender: MessageSender = (agentId) => {
+    sentTo.push(agentId);
+
+    return new Promise(ignore);
+  };
+
+  function BoxOf({ agentId }: { agentId: string }): ReactNode {
+    const composer = useAgentComposer({
+      sending: useOutbox(agentId),
+      unsend: unsendOutbox,
+      agentId,
+      taskId: "plan-1",
+      messages: [],
+      send: outboxed(sender),
+    });
+
+    return createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined });
+  }
+
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () => root.render(withQueryClient(createElement(BoxOf, { agentId: "agent-1" }))));
+  await settle();
+  // The same box, drawn again for the agent the tab shows now, as a tab moved to another agent is.
+  await act(async () => root.render(withQueryClient(createElement(BoxOf, { agentId: "agent-2" }))));
+  await settle();
+
+  typeInComposer(container, "Fix the bug");
+  pressInComposer(container, "Enter");
+  await settle();
+
+  assert.deepEqual(sentTo, ["agent-2"]);
+});
+
 test("a paste past the box's cap and too large for a file is cut to the room left and the note says so, until the words change", async () => {
   const box = await mounted();
   const cap = AGENT_BOUNDS.MAX_MESSAGE_CHARS;

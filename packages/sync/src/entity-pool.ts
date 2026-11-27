@@ -507,6 +507,14 @@ export interface PoolOptions {
 export interface StandingRows<Row extends object> {
   readonly collection: RowCollection<Row, string>;
   readonly pending: ReadonlyMap<string, Row | typeof ROW_GONE>;
+  /**
+   * The rows the writes standing draw, those they take away left out, in
+   * one collection held in memory for as long as the kind's: made once with
+   * it, and moved before the pool's watchers hear each moving of `pending`,
+   * so a query over it is declared once and sees what `pending` names,
+   * wherever the kind's rows are held.
+   */
+  readonly drawn: RowCollection<Row, string>;
 }
 
 /** Every row the reads hold, and the writes drawn over them. */
@@ -661,7 +669,9 @@ interface KindRows<Row extends object, Change> {
   readonly lastWrites: Map<string, Turn>;
   /** The sync id each key's row was taken at, where an answer named one. */
   readonly takenAt: Map<string, bigint>;
-  /** Tells the pool's watchers that the writes standing over the kind, or the rows they draw, moved. */
+  /** The rows the writes standing draw, held in memory beside the kind's collection (`StandingRows.drawn`). */
+  readonly drawn: SyncedCollection<Row, string>;
+  /** Tells the pool's watchers that the writes standing over the kind, or the rows they draw, moved, once `drawn` holds them. */
   readonly heard: () => void;
 }
 
@@ -681,6 +691,36 @@ function drawnRow<Row extends object, Change>(
   }
 
   return row;
+}
+
+/**
+ * Each key a write stands over with the row the writes draw, or `ROW_GONE`
+ * where they take it away; a key whose synced row the pool does not hold
+ * in memory, as one kept on disk alone, is left out, since nothing can be
+ * drawn over it.
+ */
+function pendingOf<Row extends object, Change>(
+  rows: KindRows<Row, Change>,
+): ReadonlyMap<string, Row | typeof ROW_GONE> {
+  const pending = new Map<string, Row | typeof ROW_GONE>();
+
+  for (const key of new Set(rows.standing.flatMap((write) => write.keys))) {
+    const drawn = drawnRow(rows, key);
+
+    if (drawn !== undefined) pending.set(key, drawn);
+    else if (rows.synced.row(key) !== undefined) pending.set(key, ROW_GONE);
+  }
+
+  return pending;
+}
+
+/** Takes the rows the writes standing draw into the kind's `drawn` collection, writing only those that moved. */
+function drawnTaken<Row extends object, Change>(rows: KindRows<Row, Change>): void {
+  const drawn = new Map<string, Row>();
+
+  for (const [key, row] of pendingOf(rows)) if (row !== ROW_GONE) drawn.set(key, row);
+
+  rows.drawn.take(drawn);
 }
 
 /** Whether the read shows `key`'s row: one it answered, one it adopted, one it keeps beside the pool, or any where it shows every row. */
@@ -1744,8 +1784,16 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
         inFlight.set(kind, Deferred.await(handed));
 
         const makingRows = Effect.flatMap(
-          Scope.provide(place.scope)(syncedCollection(kind.key, place.keep)),
-          (synced) => {
+          Scope.provide(place.scope)(
+            Effect.gen(function* () {
+              const synced = yield* syncedCollection(kind.key, place.keep);
+              // Note that every kind holds its drawn rows in a collection, made once with it, wherever its rows are held, so a screen whose query lays the writes over the kind's rows itself reads one overlay, as a phone whose database would not open reads its kind from memory.
+              const drawn = yield* syncedCollection(kind.key);
+
+              return { synced, drawn };
+            }),
+          ),
+          ({ synced, drawn }) => {
             // Note that a kind made meanwhile by another fiber is the one kept, so a kind has one collection.
             const raced = made();
 
@@ -1754,11 +1802,16 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
             const fresh: KindRows<Row, Change> = {
               kind,
               synced,
+              drawn,
               reads: new Set(),
               standing: [],
               lastWrites: new Map(),
               takenAt: new Map(),
-              heard,
+              // Note that the drawn rows are taken before the watchers hear, so a reader drawn again at once finds them already there.
+              heard: () => {
+                drawnTaken(fresh);
+                heard();
+              },
             };
 
             kinds.set(kind, fresh);
@@ -1792,16 +1845,12 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
         const rows = placeOf(kind.stored).kinds.get(kind) as KindRows<Row, Change> | undefined;
 
         if (rows === undefined) return undefined;
-        const pending = new Map<string, Row | typeof ROW_GONE>();
 
-        for (const key of new Set(rows.standing.flatMap((write) => write.keys))) {
-          const drawn = drawnRow(rows, key);
-
-          if (drawn !== undefined) pending.set(key, drawn);
-          else if (rows.synced.row(key) !== undefined) pending.set(key, ROW_GONE);
-        }
-
-        return { collection: rows.synced.collection, pending };
+        return {
+          collection: rows.synced.collection,
+          pending: pendingOf(rows),
+          drawn: rows.drawn.collection,
+        };
       },
       watch: (watcher) => {
         watchers.add(watcher);

@@ -8,6 +8,9 @@ import { TASK_BOUNDS, type Task } from "./task-wire.js";
  * and every other section itself (`docs/TASKS.md`, "Copy").
  */
 
+/** What the act that puts the description's Markdown on the clipboard is called, wherever a task's menu offers it. */
+export const COPY_DESCRIPTION = "Copy description";
+
 /** A run of whitespace, line breaks among it, which a title spells as one space. */
 const WHITESPACE_RUN = /\s+/gu;
 

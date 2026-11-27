@@ -12,14 +12,7 @@ import { createAgent, latestTurnsOfReached } from "@repo/database/models/agent-s
 import { storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import {
-  DEVICE_LAYOUT,
-  getTestDB,
-  joinWorkspace,
-  openWorkspace,
-  startTask,
-  WORKSPACE_ROLE,
-} from "@repo/database/testing";
+import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import {
   DEVICE_ARCH,
@@ -27,11 +20,9 @@ import {
   DEVICE_SETUP,
   type DeviceSetup,
   HOST_UPDATE,
-  MACHINE_NETWORK,
-  MACHINE_OWNER,
 } from "@repo/features/device-agent-wire";
 import { HOST_RELEASE } from "@repo/features/host-release";
-import { HOST_VERSION_FOR, HOST_WIRE } from "@repo/features/host-wire";
+import { HOST_WIRE } from "@repo/features/host-wire";
 import { RUN_EVENT, RUN_TURN_ORIGIN, TURN_TRIGGER } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
@@ -51,7 +42,6 @@ import type { WebServices } from "../runtime.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { deviceAgentsProcedures } from "./device-agents-procedures.js";
 import { hostsProcedures } from "./hosts-procedures.js";
-import { workspaceMachinesProcedures } from "./workspace-machines-procedures.js";
 
 const ORIGIN = "https://app.test";
 
@@ -70,9 +60,6 @@ const PATH = {
   PAIRING: "/api/hosts/pairing",
   PAIRING_APPROVE: "/api/hosts/pairing/approve",
   PAIRING_DENY: "/api/hosts/pairing/deny",
-  WORKSPACE_MACHINES: "/api/workspaces/machines",
-  WORKSPACE_MACHINE_RENAME: "/api/workspaces/machines/rename",
-  WORKSPACE_MACHINE_REMOVE: "/api/workspaces/machines/remove",
 } as const;
 
 /** A daemon below the floor. */
@@ -155,7 +142,6 @@ const answerOf = (incoming: Request) =>
     const handle = hostedFetch({
       deviceAgents: deviceAgentsProcedures(seams),
       hosts: hostsProcedures(seams),
-      workspaceMachines: workspaceMachinesProcedures(seams),
     });
 
     // SAFETY: the procedures yield the database, the clock, the environment, and the analytics alone, which is all a test provides of the web runtime's services.
@@ -263,64 +249,15 @@ function publishedRelease() {
   return HOST_RELEASE;
 }
 
-/** A box's pairing start with no credential, from the address given where one is, at the version given or the floor's, on the platform and machine given where one is. */
+/** A box's pairing start with no credential, from the address given where one is, at the version given or the floor's. */
 function startPairing(
-  init: {
-    readonly version?: string;
-    readonly ip?: string;
-    readonly name?: string;
-    readonly platform?: typeof DEVICE_PLATFORM.LINUX | typeof DEVICE_PLATFORM.DARWIN;
-    readonly machineId?: string;
-  } = {},
+  init: { readonly version?: string; readonly ip?: string; readonly name?: string } = {},
 ) {
   return request(undefined, PATH.PAIRING_START, {
     version: init.version ?? HOST_VERSION.FLOOR,
     ...(init.ip !== undefined && { ip: init.ip }),
-    body: {
-      name: init.name ?? "fra-01",
-      platform: init.platform ?? DEVICE_PLATFORM.LINUX,
-      arch: DEVICE_ARCH.X64,
-      ...(init.machineId !== undefined && { machineId: init.machineId }),
-    },
+    body: { name: init.name ?? "fra-01", platform: DEVICE_PLATFORM.LINUX, arch: DEVICE_ARCH.X64 },
   });
-}
-
-/** A pairing started by a box whose daemon may be a workspace's machine, on the platform and machine given where one is: its poll secret and the code it shows. */
-const startedWorkspaceBox = (
-  init: {
-    readonly platform?: typeof DEVICE_PLATFORM.LINUX | typeof DEVICE_PLATFORM.DARWIN;
-    readonly machineId?: string;
-  } = {},
-) =>
-  Effect.gen(function* () {
-    const started = yield* answerOf(
-      startPairing({
-        version: HOST_VERSION_FOR.WORKSPACE_MACHINE,
-        machineId: init.machineId ?? "f".repeat(64),
-        ...(init.platform !== undefined && { platform: init.platform }),
-      }),
-    );
-
-    assert.equal(started.status, HOSTED_HTTP_STATUS.OK);
-    const { pollSecret, userCode }: { pollSecret: string; userCode: string } = started.body;
-
-    return { pollSecret, userCode };
-  });
-
-/** A member's approve of a pairing by its code for the workspace given, on their bearer, its agents kept to the open internet. */
-function approveToWorkspace(bearer: string, code: string, workspaceId: string) {
-  return answerOf(
-    request(bearer, PATH.PAIRING_APPROVE, {
-      body: {
-        code,
-        target: {
-          kind: MACHINE_OWNER.WORKSPACE,
-          workspaceId,
-          network: MACHINE_NETWORK.PUBLIC_ONLY,
-        },
-      },
-    }),
-  );
 }
 
 /** A pairing box's poll on its poll secret, at the floor's version. */
@@ -863,7 +800,6 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
             arch: DEVICE_ARCH.X64,
             ip: "203.0.113.7",
             expiresAt: startedAt + 10 * 60 * 1_000,
-            workspaces: [],
           },
         });
         assert.deepEqual(
@@ -872,7 +808,6 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         );
         assert.equal(handed.body.status, "approved");
         assert.equal(handed.body.deviceId, deviceId);
-        assert.deepEqual(handed.body.owner, { kind: MACHINE_OWNER.USER });
         assert.ok(secret.startsWith("lkd_"));
         assert.deepEqual(again.body, { status: "expired" }, "the secret is handed over once");
         assert.equal(register, HOSTED_HTTP_STATUS.OK);
@@ -1036,200 +971,6 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
           [first.body, soon.body, later.body],
           [{ status: "pending" }, { status: "slow-down" }, { status: "pending" }],
         );
-      }),
-  );
-  it.effect(
-    "an admin connects a box to the workspace: its poll names the workspace, its secret registers, beats, and reads its live agents, its members list it, and an admin renames and removes it, its secret refused from then on",
-    () =>
-      Effect.gen(function* () {
-        const admin = yield* account();
-        const workspace = yield* openWorkspace(admin);
-        const { pollSecret, userCode } = yield* startedWorkspaceBox();
-
-        const approved = yield* approveToWorkspace(admin, userCode, workspace);
-        const handed = yield* pollPairing(pollSecret);
-
-        const { deviceId, deviceSecret: secret }: { deviceId: string; deviceSecret: string } =
-          handed.body;
-
-        const host = { version: HOST_VERSION.FLOOR };
-
-        const register = yield* statusOf(
-          request(secret, PATH.DEVICES, {
-            ...host,
-            body: { ...registered(deviceId), platform: DEVICE_PLATFORM.LINUX },
-          }),
-        );
-
-        const beat = yield* statusOf(hostBeat(secret, deviceId));
-        const live = yield* answerOf(request(secret, PATH.LIVE_AGENTS, { ...host, deviceId }));
-
-        const renamed = yield* statusOf(
-          request(admin, PATH.WORKSPACE_MACHINE_RENAME, {
-            body: { workspaceId: workspace, id: deviceId, name: "Build farm" },
-          }),
-        );
-
-        const listed = yield* answerOf(
-          request(admin, `${PATH.WORKSPACE_MACHINES}?workspaceId=${workspace}`),
-        );
-
-        const removed = yield* statusOf(
-          request(admin, PATH.WORKSPACE_MACHINE_REMOVE, {
-            body: { workspaceId: workspace, id: deviceId },
-          }),
-        );
-
-        assert.equal(approved.status, HOSTED_HTTP_STATUS.OK);
-        assert.deepEqual(handed.body.owner, {
-          kind: MACHINE_OWNER.WORKSPACE,
-          workspaceId: workspace,
-        });
-        assert.deepEqual(
-          [register, beat, live.status, renamed, removed],
-          Array.from({ length: 5 }, () => HOSTED_HTTP_STATUS.OK),
-        );
-        assert.deepEqual(live.body, { agentIds: [] });
-        assert.deepEqual(
-          listed.body.machines.map(
-            (machine: { readonly name: string; readonly connectedBy: string | null }) => [
-              machine.name,
-              machine.connectedBy,
-            ],
-          ),
-          [["Build farm", admin]],
-        );
-        assert.deepEqual((yield* answerOf(request(admin, PATH.HOSTS))).body.hosts, []);
-        assert.equal(yield* statusOf(hostBeat(secret, deviceId)), HOSTED_HTTP_STATUS.UNAUTHORIZED);
-      }),
-  );
-
-  it.effect(
-    "a member who is no owner or admin is never offered the workspace, cannot approve a box to it, and cannot rename or remove its machine",
-    () =>
-      Effect.gen(function* () {
-        const admin = yield* account();
-        const member = yield* account();
-        const workspace = yield* openWorkspace(admin);
-        yield* joinWorkspace(workspace, member, WORKSPACE_ROLE.MEMBER);
-        const connected = yield* startedWorkspaceBox({ machineId: "1".repeat(64) });
-        yield* approveToWorkspace(admin, connected.userCode, workspace);
-        const { deviceId } = (yield* pollPairing(connected.pollSecret)).body;
-        const pending = yield* startedWorkspaceBox({ machineId: "2".repeat(64) });
-
-        const offered = yield* byCode(member, PATH.PAIRING, pending.userCode);
-        const approve = yield* approveToWorkspace(member, pending.userCode, workspace);
-
-        const rename = yield* answerOf(
-          request(member, PATH.WORKSPACE_MACHINE_RENAME, {
-            body: { workspaceId: workspace, id: deviceId, name: "Mine" },
-          }),
-        );
-
-        const remove = yield* answerOf(
-          request(member, PATH.WORKSPACE_MACHINE_REMOVE, {
-            body: { workspaceId: workspace, id: deviceId },
-          }),
-        );
-
-        const notPermitted = {
-          status: HOSTED_HTTP_STATUS.FORBIDDEN,
-          body: { error: "not-permitted" },
-        };
-
-        assert.deepEqual(offered.body.workspaces, []);
-        assert.deepEqual([approve, rename, remove], [notPermitted, notPermitted, notPermitted]);
-        assert.deepEqual(
-          (yield* byCode(admin, PATH.PAIRING, pending.userCode)).body.workspaces,
-          [{ id: workspace, name: "Test Workspace" }],
-          "the pairing still waits, offered to its admin",
-        );
-      }),
-  );
-
-  it.effect(
-    "an admin of another workspace neither lists, renames, nor removes the workspace's machine, naming that workspace or their own",
-    () =>
-      Effect.gen(function* () {
-        const admin = yield* account();
-        const outsider = yield* account();
-        const workspace = yield* openWorkspace(admin);
-        const theirs = yield* openWorkspace(outsider);
-        const connected = yield* startedWorkspaceBox({ machineId: "5".repeat(64) });
-        yield* approveToWorkspace(admin, connected.userCode, workspace);
-        const { deviceId } = (yield* pollPairing(connected.pollSecret)).body;
-
-        const asked = yield* Effect.forEach([workspace, theirs], (workspaceId) =>
-          Effect.all([
-            answerOf(
-              request(outsider, PATH.WORKSPACE_MACHINE_RENAME, {
-                body: { workspaceId, id: deviceId, name: "Mine" },
-              }),
-            ),
-            answerOf(
-              request(outsider, PATH.WORKSPACE_MACHINE_REMOVE, {
-                body: { workspaceId, id: deviceId },
-              }),
-            ),
-          ]),
-        );
-
-        const listed = yield* answerOf(
-          request(outsider, `${PATH.WORKSPACE_MACHINES}?workspaceId=${workspace}`),
-        );
-
-        assert.deepEqual(
-          [listed, ...asked.flat()],
-          Array.from({ length: 5 }, () => NOT_FOUND),
-        );
-        assert.deepEqual(
-          (yield* answerOf(
-            request(admin, `${PATH.WORKSPACE_MACHINES}?workspaceId=${workspace}`),
-          )).body.machines.map((machine: { readonly id: string; readonly name: string }) => [
-            machine.id,
-            machine.name,
-          ]),
-          [[deviceId, "fra-01"]],
-          "the machine still stands under its own name",
-        );
-      }),
-  );
-
-  it.effect(
-    "a box whose daemon is older than workspace machines is never offered a workspace",
-    () =>
-      Effect.gen(function* () {
-        const admin = yield* account();
-        yield* openWorkspace(admin);
-
-        const started = yield* answerOf(
-          startPairing({ version: "0.13.0", machineId: "3".repeat(64) }),
-        );
-
-        const read = yield* byCode(admin, PATH.PAIRING, started.body.userCode);
-
-        assert.equal(read.status, HOSTED_HTTP_STATUS.OK);
-        assert.deepEqual(read.body.workspaces, []);
-      }),
-  );
-
-  it.effect(
-    "a Mac that stands as a member's own host is refused as the workspace's, as owned elsewhere",
-    () =>
-      Effect.gen(function* () {
-        const admin = yield* account();
-        const workspace = yield* openWorkspace(admin);
-        const machineId = "4".repeat(64);
-        const mine = yield* startedWorkspaceBox({ platform: DEVICE_PLATFORM.DARWIN, machineId });
-        yield* byCode(admin, PATH.PAIRING_APPROVE, mine.userCode);
-        const shared = yield* startedWorkspaceBox({ platform: DEVICE_PLATFORM.DARWIN, machineId });
-
-        const refused = yield* approveToWorkspace(admin, shared.userCode, workspace);
-
-        assert.deepEqual(refused, {
-          status: HOSTED_HTTP_STATUS.CONFLICT,
-          body: { error: "machine-owned-elsewhere" },
-        });
       }),
   );
 });

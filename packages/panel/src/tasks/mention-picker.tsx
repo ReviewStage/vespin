@@ -132,7 +132,12 @@ import { memberRows, YOU_WORD } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { Highlighted } from "../search-field.js";
 import { useTaskListCollections, useTaskListRowAs } from "../task-list-collections.js";
-import { appStateQuery, selectMachineCommandDevice, selectWorkspaces } from "../use-app-state.js";
+import {
+  appStateQuery,
+  selectMachineCommandDevice,
+  selectWorkspaces,
+  useAppStateSlice,
+} from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
 import { useComputerApps } from "./agent-pictures.js";
@@ -2190,7 +2195,7 @@ export function useMentionPicker({
 
   // The tasks offered are the workspace's the words stand in: the one that names it, else the plan's, else the one its slug names.
   const collections = useTaskListCollections();
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
+  const workspaces = useAppStateSlice(selectWorkspaces) ?? NO_WORKSPACES;
 
   // Note that the words' own task is read for the three facts the list takes of it, so a turn of its agents, which moves its row, leaves the list as it was.
   const ownTaskId = taskId ?? undefined;

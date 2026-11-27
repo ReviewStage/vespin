@@ -34,6 +34,8 @@ export const HOSTED_SERVICE_PATH = {
   ACCOUNT_SOUNDS: "/api/account/sounds",
   /** Which of the account's sounds one of its two sounds plays (PUT). */
   ACCOUNT_SOUND_CHOICE: "/api/account/sounds/choice",
+  /** One of the account's view choices kept, or forgotten with a null value (PUT). `view-choice-wire.ts` declares the body. */
+  ACCOUNT_VIEW_CHOICES: "/api/account/view-choices",
   /** One of the account's subscriptions named, or its name cleared (PUT). */
   ACCOUNT_SUBSCRIPTION_LABEL: "/api/account/provider-keys/label",
   /** One of a ChatGPT plan's rate-limit reset credits spent (POST). */
@@ -251,6 +253,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_INTEGRATION_STATUSES: "/api/live/integration-statuses",
   /** The account's preferences row, its default agent, chapters model, and Slack notifications as stored, sealed for following over Neon Realtime (GET), or its row inline where polled, none for an account that stored nothing. `account-preferences-live.ts` declares the answer. */
   LIVE_ACCOUNT_PREFERENCES: "/api/live/account-preferences",
+  /** The account's view choices, each by its key and the workspace it is kept for, sealed for following over Neon Realtime (GET), or their rows inline where polled. `view-choice-live.ts` declares the answer. */
+  LIVE_VIEW_CHOICES: "/api/live/view-choices",
   /**
    * A workspace's agents, on any task, newest started first and
    * the archived ones left out unless the query asks for them, narrowed to
@@ -307,11 +311,11 @@ export const HOSTED_SERVICE_PATH = {
   HOST_PAIRING_APPROVE: "/api/hosts/pairing/approve",
   /** A pending pairing denied by its code, so its box is answered denied (POST). */
   HOST_PAIRING_DENY: "/api/hosts/pairing/deny",
-  /** The machines one workspace owns, to a member of it (GET, `WORKSPACE_MACHINES_QUERY`). `workspace-machine-wire.ts` declares the bodies. */
+  /** The machines one workspace owns, to a member of it (GET, `WORKSPACE_MACHINES_QUERY`), answered with none to a released build until the floor reaches 11. `workspace-machine-wire.ts` declares the bodies. */
   WORKSPACE_MACHINES: "/api/workspaces/machines",
-  /** One of a workspace's machines renamed by an owner or an admin of it (POST). */
+  /** One of a workspace's machines renamed, as a released build asks, answered not found until the floor reaches 11 (POST). */
   WORKSPACE_MACHINE_RENAME: "/api/workspaces/machines/rename",
-  /** One of a workspace's machines removed by an owner or an admin of it, its secret refused at once (POST). */
+  /** One of a workspace's machines removed, as a released build asks, answered not found until the floor reaches 11 (POST). */
   WORKSPACE_MACHINE_REMOVE: "/api/workspaces/machines/remove",
   /**
    * The shell commands the account's agents asked to run on the developer's

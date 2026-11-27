@@ -223,7 +223,6 @@ export function tabCard(subject: CardSubject): React.JSX.Element | null {
           pullRequest={pullRequest}
           place={{ taskId: subject.subject.agent.taskId }}
           lines={pullRequest}
-          files={pullRequest.changedFiles}
           opener={people?.author ?? openerOf(pullRequest)}
           agent={{ subject: subject.subject, models: subject.models, onOpen: subject.onOpenAgent }}
           reviewers={people?.reviewers}
