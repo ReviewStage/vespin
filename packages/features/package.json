@@ -141,6 +141,8 @@
     "./agent-transcript-live": "./src/agent-transcript-live.js",
     "./agent-warm": "./src/agent-warm.js",
     "./agent-wire": "./src/agent-wire.js",
+    "./emoji-data": "./src/generated/emoji-data.js",
+    "./emoji-model": "./src/emoji-model.js",
     "./emoji-wire": "./src/emoji-wire.js",
     "./manager-face": "./src/manager-face.js",
     "./manager-greeting": "./src/manager-greeting.js",
@@ -400,6 +402,7 @@
   },
   "types": "./src/index.ts",
   "scripts": {
+    "emoji:data": "tsx scripts/emoji-data.ts",
     "test:vitest": "vitest run",
     "typecheck": "tsc --project tsconfig.json"
   },
@@ -428,6 +431,7 @@
     "@types/mdast": "catalog:",
     "@types/node": "catalog:",
     "@types/ws": "catalog:",
+    "emojibase-data": "18.0.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
