@@ -233,6 +233,13 @@ export const GLYPH = {
   ARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE),
   UNARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE_RESTORE),
   MOVE: lucide(LUCIDE_SYMBOL.FOLDER_INPUT),
+  // A transcript's quiet notices, as the panel leads each, among every glyph the catalog holds: the conversation compacted, a new session, a lost connection, and the goal, its end once met, and its verdict that it can never hold.
+  COMPACTED: catalogLucide("FoldVertical"),
+  NEW_SESSION: catalogLucide("Eraser"),
+  CONNECTION_LOST: catalogLucide("Unplug"),
+  GOAL: catalogLucide("Target"),
+  GOAL_MET: lucide(LUCIDE_SYMBOL.CIRCLE_CHECK),
+  GOAL_BLOCKED: lucide(LUCIDE_SYMBOL.CIRCLE_SLASH),
   SUGGEST: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
   // A queued message's acts, as the panel's queue dock draws Steer; Move Up and Move Down are its drag's reorder as a long press offers it.
   STEER: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),

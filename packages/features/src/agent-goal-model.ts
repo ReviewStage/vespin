@@ -188,6 +188,78 @@ export function goalVerdict(
   return undefined;
 }
 
+/** What a goal's notice says it did, as its trail or its card's head reads. */
+const GOAL_NOTICE_WORDS = {
+  [GOAL_EVENT.SET]: "Goal set.",
+  [GOAL_EVENT.NOT_MET]: "Goal not met yet",
+  [GOAL_EVENT.MET]: "Goal met",
+  [GOAL_EVENT.IMPOSSIBLE]: "Goal blocked",
+  [GOAL_EVENT.PAUSED]: "Goal paused. The agent stops after this turn.",
+  [GOAL_EVENT.RESUMED]: "Goal resumed",
+  [GOAL_EVENT.BUDGET_LIMITED]: "Goal stopped at its token budget",
+  [GOAL_EVENT.CLEARED]: "Goal cleared",
+} as const satisfies Record<GoalNotice["event"], string>;
+
+/** The moves said as a trail rather than a card, since they carry nothing to read: the goal's end once met, and each move of its standing. */
+const GOAL_TRAILS: ReadonlySet<GoalNotice["event"]> = new Set([
+  GOAL_EVENT.MET,
+  GOAL_EVENT.PAUSED,
+  GOAL_EVENT.RESUMED,
+  GOAL_EVENT.CLEARED,
+]);
+
+/** How a goal's notice stands in the transcript: a one-line trail, or a card whose reason folds under its head. */
+export const GOAL_NOTICE_LOOK = {
+  TRAIL: "trail",
+  CARD: "card",
+} as const;
+
+/** A goal's notice as the transcript draws it: its event, which picks its glyph, and its words; a card also its reason, folded, and the turn it came on. */
+export type GoalNoticeShown =
+  | {
+      readonly look: typeof GOAL_NOTICE_LOOK.TRAIL;
+      readonly event: GoalNotice["event"];
+      readonly words: string;
+    }
+  | {
+      readonly look: typeof GOAL_NOTICE_LOOK.CARD;
+      readonly event: GoalNotice["event"];
+      readonly words: string;
+      /** The checker's or the harness's reason, which folds under the head; null where it said none. */
+      readonly reason: string | null;
+      /** The turn it came on ("Turn 3"); none where the harness did not count it. */
+      readonly turn: string | undefined;
+    };
+
+/**
+ * A goal's notice as the transcript draws it, where the goals' conditions
+ * are given (`goalConditions`): none for its setting, since the
+ * developer's own `/goal` line says it just above, nor for a project's own
+ * Stop hook, as before goals; a trail for its end once met and each move of
+ * its standing; and a card for each verdict and any other end.
+ */
+export function goalNoticeShown(
+  stored: GoalNotice,
+  conditions: ReadonlySet<string>,
+): GoalNoticeShown | undefined {
+  const notice = stored.event === GOAL_EVENT.NOT_MET ? goalVerdict(stored, conditions) : stored;
+
+  if (notice === undefined || notice.event === GOAL_EVENT.SET) return undefined;
+  const words = GOAL_NOTICE_WORDS[notice.event];
+
+  if (GOAL_TRAILS.has(notice.event)) {
+    return { look: GOAL_NOTICE_LOOK.TRAIL, event: notice.event, words };
+  }
+
+  return {
+    look: GOAL_NOTICE_LOOK.CARD,
+    event: notice.event,
+    words,
+    reason: notice.reason,
+    turn: notice.turns === null ? undefined : `Turn ${notice.turns}`,
+  };
+}
+
 /** The goal after one more of its notices, in `message`; none where the notice cleared it. */
 function moved(
   goal: AgentGoal | undefined,

@@ -19,6 +19,7 @@
  * open, the words stand where the line's do, past its glyph, keeping their
  * breaks.
  */
+import { compactedWords, movedWords, NEW_SESSION_WORDS } from "@repo/features/agent-notice-words";
 import type { CompactedNotice } from "@repo/wire/ui-messages";
 import { ICON_SIZE } from "../../icons/icon-size.js";
 import { GLYPH } from "../../icons/icons.js";
@@ -33,16 +34,11 @@ import { LineSummary } from "../line-button/line-button.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
 import { Tooltip } from "../tooltip/hint.js";
 
-/** A token count as the line says it: "148K". */
-const TOKENS = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 0 });
-
 /** The line where the harness compacted its session. */
 export function CompactedLine({ notice }: { notice: CompactedNotice }): React.JSX.Element {
   return (
     <NoteLine look={NOTE_LINE_LOOK.STEP} glyph={<GLYPH.COMPACT />} data-compacted="">
-      {notice.tokensBefore === null
-        ? "Compacted the conversation"
-        : `Compacted the conversation from ${TOKENS.format(notice.tokensBefore)} tokens`}
+      {compactedWords(notice)}
     </NoteLine>
   );
 }
@@ -51,7 +47,7 @@ export function CompactedLine({ notice }: { notice: CompactedNotice }): React.JS
 export function MovedLine({ to }: { to: string | undefined }): React.JSX.Element {
   return (
     <NoteLine look={NOTE_LINE_LOOK.STEP} glyph={<GLYPH.MOVE />} data-agent-moved="">
-      {`Moved to ${to ?? "the cloud"}`}
+      {movedWords(to)}
     </NoteLine>
   );
 }
@@ -60,7 +56,7 @@ export function MovedLine({ to }: { to: string | undefined }): React.JSX.Element
 export function NewSessionLine(): React.JSX.Element {
   return (
     <NoteLine look={NOTE_LINE_LOOK.STEP} glyph={<GLYPH.NEW_SESSION />} data-session-cleared="">
-      New session. The agent no longer has the messages above.
+      {NEW_SESSION_WORDS}
     </NoteLine>
   );
 }

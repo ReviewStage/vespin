@@ -90,6 +90,7 @@ import {
   type TranscriptItem,
   type TranscriptPlace,
 } from "./transcript-model.js";
+import { NoticeRow } from "./transcript-notice.js";
 import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
 
@@ -1550,6 +1551,19 @@ function TranscriptRow({
               ]}
             />
           </InlineHost>
+        </View>
+      );
+    case TRANSCRIPT_ITEM.NOTICE:
+      // Note that a notice stands among the rows in place, between the stretches of work it parts, as the panel keeps it.
+      return (
+        <View style={[styles.row, inset(item.depth), { paddingVertical: SPACE.TIGHT + 2 }]}>
+          <NoticeRow
+            notice={item.notice}
+            width={rowWidth(drawing.column, item.depth)}
+            repository={drawing.repository}
+            onToggle={() => drawing.onToggle(item)}
+            onOpenLink={drawing.onOpenLink}
+          />
         </View>
       );
     default: {

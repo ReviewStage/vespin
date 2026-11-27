@@ -8,6 +8,7 @@ import {
   goalControlWords,
   goalReachOf,
 } from "@repo/features/agent-goal-model";
+import { movedTo } from "@repo/features/agent-notice-words";
 import {
   AGENT_PART,
   type AgentPart,
@@ -59,7 +60,6 @@ import { FAILURE_REASON, type FailureReason } from "@repo/features/failure-remed
 import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { NumberedAddress } from "@repo/features/link-grammar";
-import { isThisMac, THIS_MAC } from "@repo/features/machine-name";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import { messageFileChips } from "@repo/features/message-files";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
@@ -1290,16 +1290,8 @@ function ToolPartView({
 /** Where the agent moved, naming the Mac it moved to as the reader's machines call it: This Mac where it is the one the window runs on, else the name it had as the agent moved, else "a Mac". */
 function AgentMovedLine({ mark }: { mark: AgentMovedMark }): React.JSX.Element {
   const thisMac = useThisMac();
-  const { deviceId, name } = mark.to;
 
-  const to =
-    deviceId === undefined
-      ? undefined
-      : isThisMac({ deviceId, name: name ?? "" }, thisMac)
-        ? THIS_MAC
-        : (name ?? "a Mac");
-
-  return <MovedLine to={to} />;
+  return <MovedLine to={movedTo(mark, thisMac)} />;
 }
 
 /** One part of the agent's turn, drawn by its kind. */

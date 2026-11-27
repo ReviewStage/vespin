@@ -10,9 +10,10 @@ import {
   AGENT_GOAL_STATE,
   type AgentGoal,
   GOAL_ASK_WAIT_MS,
+  GOAL_NOTICE_LOOK,
   goalAsShown,
+  goalNoticeShown,
   goalSettled,
-  goalVerdict,
   readGoal,
 } from "@repo/features/agent-goal-model";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
@@ -55,28 +56,8 @@ import { TranscriptWords } from "./transcript-blocks.js";
 /** The words the goal is named by where a menu or a list says what it acts on. */
 const GOAL_THING = "Goal";
 
-/** What a goal's notice says it did, as its card's head reads. */
-const NOTICE_WORDS = {
-  [GOAL_EVENT.SET]: "Goal set.",
-  [GOAL_EVENT.NOT_MET]: "Goal not met yet",
-  [GOAL_EVENT.MET]: "Goal met",
-  [GOAL_EVENT.IMPOSSIBLE]: "Goal blocked",
-  [GOAL_EVENT.PAUSED]: "Goal paused. The agent stops after this turn.",
-  [GOAL_EVENT.RESUMED]: "Goal resumed",
-  [GOAL_EVENT.BUDGET_LIMITED]: "Goal stopped at its token budget",
-  [GOAL_EVENT.CLEARED]: "Goal cleared",
-} as const satisfies Record<GoalNotice["event"], string>;
-
 /** A token count as the row says it: "184k", "1.2M". */
 const TOKENS = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
-
-/** The moves said as a trail rather than a card, since they carry nothing to read: the goal's end once met, and each move of its standing. */
-const TRAILS: ReadonlySet<GoalNotice["event"]> = new Set([
-  GOAL_EVENT.MET,
-  GOAL_EVENT.PAUSED,
-  GOAL_EVENT.RESUMED,
-  GOAL_EVENT.CLEARED,
-]);
 
 /** The conditions the transcript's goals stand under (`goalConditions`), which a verdict must name to be drawn as a goal's: Claude Code says a project's own Stop hook in the same shape. */
 export const GoalConditions = createContext<ReadonlySet<string>>(new Set());
@@ -298,27 +279,26 @@ function trailGlyph(event: GoalNotice["event"]): ReactNode {
   }
 }
 
-/** One move of the goal where it happened in the transcript: nothing for its setting, a trail for its end once met and each move of its standing, and a card for each verdict and any other end, the reason in its fold. */
+/** One move of the goal where it happened in the transcript (`goalNoticeShown`): nothing for its setting, a trail for its end once met and each move of its standing, and a card for each verdict and any other end, the reason in its fold. */
 export function GoalNoticeView({ notice: stored }: { notice: GoalNotice }): ReactNode {
   const goalsOn = useGoalsOn();
   const conditions = useContext(GoalConditions);
-  const notice = stored.event === GOAL_EVENT.NOT_MET ? goalVerdict(stored, conditions) : stored;
+  const notice = goalNoticeShown(stored, conditions);
 
-  // Note that the goal's setting draws nothing, because the developer's own `/goal` message says it just above, and a project's own Stop hook draws nothing, as before goals.
-  if (!goalsOn || notice === undefined || notice.event === GOAL_EVENT.SET) return null;
+  if (!goalsOn || notice === undefined) return null;
 
-  if (TRAILS.has(notice.event)) {
+  if (notice.look === GOAL_NOTICE_LOOK.TRAIL) {
     return (
       <NoteLine look={NOTE_LINE_LOOK.TRAIL} glyph={trailGlyph(notice.event)} data-goal-trail="">
-        {NOTICE_WORDS[notice.event]}
+        {notice.words}
       </NoteLine>
     );
   }
 
   const body = notice.reason;
   const folds = body !== null && body !== "";
-  const said = NOTICE_WORDS[notice.event];
-  const turn = notice.turns === null ? undefined : `Turn ${notice.turns}`;
+  const said = notice.words;
+  const turn = notice.turn;
 
   // Note that a notice stands at a received line's measure, as a check's card does, rather than across the column.
   return (

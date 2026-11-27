@@ -19,9 +19,27 @@
  * holds it. A call whose answer its page carried cut is read whole as it
  * opens, as the panel's is (`AGENTS_PART`): its body says so while the read
  * is under way, draws the call read whole once it lands, and its two ends
- * where it could not be read.
+ * where it could not be read. The quiet notices a harness keeps between
+ * stretches of work stand in place in the panel's words
+ * (`@repo/features/agent-notice-words`): a compaction, a new session, a
+ * move, a lost connection, and, while the Goals experiment is on, each move
+ * of the goal as the panel draws it (`goalNoticeShown`).
  */
 
+import {
+  GOAL_NOTICE_LOOK,
+  type GoalNoticeShown,
+  goalConditions,
+  goalNoticeShown,
+} from "@repo/features/agent-goal-model";
+import {
+  compactedWords,
+  connectionLostCaption,
+  connectionLostWords,
+  movedTo,
+  movedWords,
+  NEW_SESSION_WORDS,
+} from "@repo/features/agent-notice-words";
 import {
   AGENT_PART,
   type AgentPart,
@@ -137,6 +155,7 @@ import {
 } from "@repo/features/turn-rows";
 import { delegatedTurnsOf, isAgentTurn } from "@repo/features/voice-call-lines";
 import { isRecord, isWireNumber, isWireString, MESSAGE_ROLE } from "@repo/wire";
+import { GOAL_EVENT } from "@repo/wire/ui-messages";
 
 /** The kinds of item the transcript's list draws. */
 export const TRANSCRIPT_ITEM = {
@@ -162,7 +181,57 @@ export const TRANSCRIPT_ITEM = {
   WORKING: "working",
   /** The rule under a Manager chat thread's message that counts the replies after it. */
   RULE: "rule",
+  /** A quiet notice kept between stretches of work: the conversation compacted, a new session, a move, a lost connection, or a move of the goal. */
+  NOTICE: "notice",
 } as const;
+
+/** Which notice a notice item draws: a quiet line led by its glyph, the card a lost connection stands in, or the card a goal's verdict folds its reason in. */
+export const TRANSCRIPT_NOTICE = {
+  LINE: "line",
+  CONNECTION_LOST: "connection-lost",
+  GOAL_CARD: "goal-card",
+} as const;
+
+/** What leads a notice's quiet line, as the panel's glyph for it does. */
+export const NOTICE_MARK = {
+  COMPACTED: "compacted",
+  NEW_SESSION: "new-session",
+  MOVED: "moved",
+  GOAL: "goal",
+  GOAL_MET: "goal-met",
+  GOAL_PAUSED: "goal-paused",
+  GOAL_RESUMED: "goal-resumed",
+} as const;
+
+export type NoticeMark = (typeof NOTICE_MARK)[keyof typeof NOTICE_MARK];
+
+/** A notice as its item draws it. */
+export type TranscriptNotice =
+  | {
+      readonly kind: typeof TRANSCRIPT_NOTICE.LINE;
+      readonly mark: NoticeMark;
+      readonly words: string;
+    }
+  | {
+      readonly kind: typeof TRANSCRIPT_NOTICE.CONNECTION_LOST;
+      readonly words: string;
+      /** That the agent waits, or when it came back. */
+      readonly caption: string;
+      /** Whether the agent still waits for the connection, which the card says in the working tone. */
+      readonly waiting: boolean;
+    }
+  | {
+      readonly kind: typeof TRANSCRIPT_NOTICE.GOAL_CARD;
+      readonly words: string;
+      /** Why, as the checker or the harness said it, which folds under the head; none where it said nothing. */
+      readonly reason: string | undefined;
+      /** The turn it came on ("Turn 3"); none where the harness did not count it. */
+      readonly turn: string | undefined;
+      /** Whether the checker judged the goal can never hold, which leads it with the blocked glyph rather than the goal's. */
+      readonly blocked: boolean;
+      /** Whether its reason stands open under its head. */
+      readonly open: boolean;
+    };
 
 /** Which piece of a row an item draws: its line, the page it showed, or what it showed. */
 export const TRANSCRIPT_PIECE = {
@@ -427,6 +496,7 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly additions: number | undefined;
       readonly deletions: number | undefined;
     }
+  | { readonly kind: typeof TRANSCRIPT_ITEM.NOTICE; readonly notice: TranscriptNotice }
 );
 
 /** Which folds the reader turned from how they stand on their own, by their turn and then their row, and which calls they opened, by the call. */
@@ -463,6 +533,8 @@ interface TranscriptReading {
   readonly placeAddress?: ((place: LinkDestination) => string | undefined) | undefined;
   /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
   readonly waitingCalls?: ReadonlySet<string> | undefined;
+  /** Whether the Goals experiment is on, which a goal's notices stand behind, as the panel's do; off where not said. */
+  readonly goalsOn?: boolean | undefined;
 }
 
 /** How a Manager's chat is read for its list: as a transcript is, and the greeting it opens on. */
@@ -481,8 +553,23 @@ interface ChatReading extends Omit<TranscriptReading, "origin"> {
   readonly newOverOwn?: boolean | undefined;
 }
 
-/** What the items are read with: the page's reading, and the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`). */
-type ItemsReading = TranscriptReading & { readonly computerApps: ComputerApps };
+/** What the items are read with: the page's reading, the apps the transcript's computer calls used, each named once, which a call's row wears the icon of (`computerAppsOf`), and the conditions its goals stand under, which a verdict must name to be drawn as a goal's (`goalConditions`), none while goals are off. */
+type ItemsReading = TranscriptReading & {
+  readonly computerApps: ComputerApps;
+  readonly goals: ReadonlySet<string> | undefined;
+};
+
+/** The page's reading with what the transcript's items are read with besides. */
+function itemsReading(
+  reading: Omit<TranscriptReading, "origin">,
+  messages: readonly AgentTranscriptMessage[],
+): ItemsReading {
+  return {
+    ...reading,
+    computerApps: computerAppsOf(messages),
+    goals: reading.goalsOn === true ? goalConditions(messages) : undefined,
+  };
+}
 
 /** What an automation is called where it can't be named: by the panel's words (`namedAutomationActor`). */
 const ORIGIN_WORDS = {
@@ -1151,6 +1238,98 @@ function callItems(
   return [call, ...page, ...mediaItem];
 }
 
+/** What leads a goal's trail, as the panel's glyph for each move of its standing. */
+function goalMark(event: GoalNoticeShown["event"]): NoticeMark {
+  switch (event) {
+    case GOAL_EVENT.MET:
+      return NOTICE_MARK.GOAL_MET;
+    case GOAL_EVENT.PAUSED:
+      return NOTICE_MARK.GOAL_PAUSED;
+    case GOAL_EVENT.RESUMED:
+      return NOTICE_MARK.GOAL_RESUMED;
+    default:
+      return NOTICE_MARK.GOAL;
+  }
+}
+
+/** A goal's notice as the panel draws it (`goalNoticeShown`): a trail, or a card whose reason folds under its head; none for its setting, a project's own Stop hook, or while goals are off. */
+function goalNotice(
+  shown: GoalNoticeShown | undefined,
+  place: TranscriptPlace,
+  toggles: TranscriptToggles,
+): TranscriptNotice | undefined {
+  if (shown === undefined) return undefined;
+
+  if (shown.look === GOAL_NOTICE_LOOK.TRAIL) {
+    return { kind: TRANSCRIPT_NOTICE.LINE, mark: goalMark(shown.event), words: shown.words };
+  }
+
+  const reason = shown.reason === null || shown.reason === "" ? undefined : shown.reason;
+
+  return {
+    kind: TRANSCRIPT_NOTICE.GOAL_CARD,
+    words: shown.words,
+    reason,
+    turn: shown.turn,
+    blocked: shown.event === GOAL_EVENT.IMPOSSIBLE,
+    // Note that a card stands closed as it lands, as the panel's does, its head already saying what happened; a notice is always a row of its own (`turnRows`), so its place folds it alone.
+    open: reason !== undefined && foldTurned(toggles, place),
+  };
+}
+
+/** A quiet notice kept between stretches of work, as its item, in the panel's words (`@repo/features/agent-notice-words`). */
+function noticeItems(
+  part: AgentPart,
+  base: ItemBase,
+  reading: ItemsReading,
+): readonly TranscriptItem[] {
+  const notice = noticeOf(part, base.place, reading);
+
+  return notice === undefined ? [] : [{ ...base, kind: TRANSCRIPT_ITEM.NOTICE, notice }];
+}
+
+/** The notice a part draws as; none for a part that is no notice, or one that draws nothing. */
+function noticeOf(
+  part: AgentPart,
+  place: TranscriptPlace,
+  reading: ItemsReading,
+): TranscriptNotice | undefined {
+  switch (part.kind) {
+    case AGENT_PART.COMPACTED:
+      return {
+        kind: TRANSCRIPT_NOTICE.LINE,
+        mark: NOTICE_MARK.COMPACTED,
+        words: compactedWords(part.notice),
+      };
+    case AGENT_PART.SESSION_CLEARED:
+      return {
+        kind: TRANSCRIPT_NOTICE.LINE,
+        mark: NOTICE_MARK.NEW_SESSION,
+        words: NEW_SESSION_WORDS,
+      };
+    case AGENT_PART.AGENT_MOVED:
+      // Note that a phone is never the Mac an agent moved to, so a Mac is named as it was as the agent moved.
+      return {
+        kind: TRANSCRIPT_NOTICE.LINE,
+        mark: NOTICE_MARK.MOVED,
+        words: movedWords(movedTo(part.mark, undefined)),
+      };
+    case AGENT_PART.CONNECTION_LOST:
+      return {
+        kind: TRANSCRIPT_NOTICE.CONNECTION_LOST,
+        words: connectionLostWords(part.notice),
+        caption: connectionLostCaption(part.notice, reading.now),
+        waiting: part.notice.restoredAt === null,
+      };
+    case AGENT_PART.GOAL:
+      return reading.goals === undefined
+        ? undefined
+        : goalNotice(goalNoticeShown(part.notice, reading.goals), place, reading.toggles);
+    default:
+      return undefined;
+  }
+}
+
 /** One part as its items; none for what the agent thought, or a part with nothing to draw. */
 function partItems(
   part: AgentPart,
@@ -1166,6 +1345,12 @@ function partItems(
       return callItems(part, base, reading);
     case AGENT_PART.ARRIVED:
       return [saidItem(part.line, base, reading)];
+    case AGENT_PART.COMPACTED:
+    case AGENT_PART.SESSION_CLEARED:
+    case AGENT_PART.AGENT_MOVED:
+    case AGENT_PART.CONNECTION_LOST:
+    case AGENT_PART.GOAL:
+      return noticeItems(part, base, reading);
     default:
       return [];
   }
@@ -1377,7 +1562,7 @@ export function transcriptItems(
   // A turn a call's delegation opened folds its written words with its work, as the panel's does.
   const delegated = delegatedTurnsOf(placed);
   const { origin } = reading;
-  const read: ItemsReading = { ...reading, computerApps: computerAppsOf(messages) };
+  const read = itemsReading(reading, messages);
 
   // Note that an automation's prompt is the first line anyone sent, which the run's card stands in place of.
   const head =
@@ -1749,7 +1934,7 @@ export function managerChatItems(
   transcript: readonly AgentTranscriptMessage[],
   reading: ChatReading,
 ): readonly TranscriptItem[] {
-  const read: ItemsReading = { ...reading, computerApps: computerAppsOf(transcript) };
+  const read = itemsReading(reading, transcript);
   // Note that a turn's journal message stands under the turn's id, which a message's work names.
   const turns = new Map(transcript.map((message) => [message.id, message]));
 
@@ -1827,7 +2012,7 @@ export function managerThreadItems(
   );
 
   if (rootLine === undefined) return undefined;
-  const read: ItemsReading = { ...reading, computerApps: computerAppsOf(transcript) };
+  const read = itemsReading(reading, transcript);
   const turns = new Map(transcript.map((message) => [message.id, message]));
   const replies = view.threads.get(root) ?? [];
   const sending = chatSendingItems(sendingTo(reading.sending, root), view.sending.channel, reading);
