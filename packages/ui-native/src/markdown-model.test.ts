@@ -5,6 +5,7 @@ import {
   LINK_TARGET,
   MARKDOWN_BLOCK,
   MARKDOWN_RUN,
+  type MarkdownBlock,
   markdownBlocks,
   markdownGithubPages,
   markdownReplyButtons,
@@ -221,6 +222,36 @@ describe("markdownBlocks", () => {
       },
     ]);
     expect(markdownShows("<!-- What changed and why? -->\n", { githubHtml: true })).toBe(false);
+  });
+
+  it.each([
+    ['<a href="javascript:alert(1)">x</a>'],
+    ['<a href="data:text/html,<p>hi</p>">x</a>'],
+    ['<img src="data:image/png;base64,AAAA" alt="x">'],
+    ['<img src="javascript:alert(1)" alt="x">'],
+  ])("draws only the words of a link or picture GitHub's HTML names off the web: %s", (html) => {
+    expect(markdownBlocks(`<p>${html}</p>`, { ...READING, githubHtml: true })).toEqual([
+      { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("x")] },
+    ]);
+  });
+
+  // A comment of tags opened and never closed read each one to the words' end and nested a block per tag, past the stack's depth.
+  it("reads 100 kB of GitHub's tags left open in one pass, nesting no deeper than a few", () => {
+    const blocks = markdownBlocks(`${"<details>".repeat(11_000)}end`, {
+      ...READING,
+      githubHtml: true,
+    });
+
+    const detailsDepth = (within: readonly MarkdownBlock[]): number => {
+      const [first] = within;
+
+      return first?.kind === MARKDOWN_BLOCK.DETAILS ? 1 + detailsDepth(first.blocks) : 0;
+    };
+
+    const depth = detailsDepth(blocks);
+
+    expect(depth).toBeLessThanOrEqual(8);
+    expect(JSON.stringify(blocks)).toContain('"end"');
   });
 
   it("draws a table as rows as wide as its header, each column aligned as written", () => {

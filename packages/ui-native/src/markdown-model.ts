@@ -267,6 +267,8 @@ interface Reader {
   readonly definitions: Definitions;
   /** Every marker spelled outside code in the words read, in order; none where no picture is drawn by its marker. */
   readonly spelled?: readonly SpelledMarker[] | undefined;
+  /** How many of GitHub's HTML tags stand around the pieces read (`MAX_HTML_DEPTH`); none outside any. */
+  readonly htmlDepth?: number | undefined;
 }
 
 function folded(identifier: string): string {
@@ -838,8 +840,47 @@ const HEADING_TAGS: ReadonlyMap<string, 1 | 2 | 3 | 4 | 5 | 6> = new Map([
 /** What a `<details>` says where it holds no summary, as GitHub's page says. */
 const DETAILS_WORDS = "Details";
 
+/**
+ * The most of GitHub's HTML tags read inside one another, past which a tag
+ * is left unseen, its words kept, so words that open tag after tag and
+ * close none cost no more to read than their length, and never a stack's
+ * depth. Note that GitHub's own words nest a few: a bot's folded section in
+ * a quote in a table's cell.
+ */
+const MAX_HTML_DEPTH = 8;
+
+/** The tags that draw blocks of their own (`htmlTagBlocks`), each read whole up to where it closes. */
+const BLOCK_TAGS: ReadonlySet<string> = new Set([
+  "details",
+  "table",
+  "ul",
+  "ol",
+  "blockquote",
+  "pre",
+  "hr",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+]);
+
+/** The addresses a link or a picture written in GitHub's HTML may name: a page on the web. Any other, such as `javascript:` or `data:`, leaves its words alone. */
+const WEB_ADDRESS = /^https?:\/\//iu;
+
 /** Space as HTML folds it: a run of it is one space. Note that a no-break space is no such space. */
 const HTML_SPACE = /[ \t\n\r\f]+/gu;
+
+/** The reader for the pieces a tag of GitHub's wraps, one tag deeper. */
+function deeper(reader: Reader): Reader {
+  return { ...reader, htmlDepth: (reader.htmlDepth ?? 0) + 1 };
+}
+
+/** Whether a tag of GitHub's wrapping pieces is read here, rather than left unseen past `MAX_HTML_DEPTH`. */
+function withinDepth(reader: Reader): boolean {
+  return (reader.htmlDepth ?? 0) < MAX_HTML_DEPTH;
+}
 
 function isHtml(node: { readonly type: string }): node is Html {
   return node.type === "html";
@@ -922,10 +963,10 @@ function tagInlines(token: Extract<HtmlToken, { kind: "open" }>, marks: WordMark
   if (token.name === "br") return [{ run: { kind: MARKDOWN_RUN.BREAK } }];
 
   if (token.name !== "img") return [];
-  const source = token.attributes.get("src") ?? "";
+  const source = (token.attributes.get("src") ?? "").trim();
   const alt = token.attributes.get("alt") ?? "";
 
-  if (PICTURE_SOURCE.test(source)) return [{ picture: { source, alt } }];
+  if (WEB_ADDRESS.test(source)) return [{ picture: { source, alt } }];
 
   return wordsRun(alt, marks).map((run) => ({ run }));
 }
@@ -944,9 +985,9 @@ function spanInlines(
   }
 
   const runs = () => runsOnly(inlinesOf(inner, marks, reader));
-  const href = token.attributes.get("href");
+  const href = token.attributes.get("href")?.trim();
 
-  if (href === undefined) return runs().map((run) => ({ run }));
+  if (href === undefined || !WEB_ADDRESS.test(href)) return runs().map((run) => ({ run }));
 
   return [{ run: linkRunOf(href, piecesWords(inner).trim(), runs, reader) }];
 }
@@ -988,10 +1029,16 @@ function inlinesOf(
 
       if (last !== -1) open.splice(last, 1);
     } else if (MARK_TAGS.has(token.name)) {
-      if (!token.alone) open.push({ name: token.name, marks: MARK_TAGS.get(token.name) ?? {} });
-    } else if ((token.name === "a" || token.name === "code") && !token.alone) {
+      if (!token.alone && open.length < MAX_HTML_DEPTH) {
+        open.push({ name: token.name, marks: MARK_TAGS.get(token.name) ?? {} });
+      }
+    } else if (
+      (token.name === "a" || token.name === "code") &&
+      !token.alone &&
+      withinDepth(reader)
+    ) {
       const end = closeAt(pieces, at, token.name);
-      inlines.push(...spanInlines(token, pieces.slice(at + 1, end), marked(), reader));
+      inlines.push(...spanInlines(token, pieces.slice(at + 1, end), marked(), deeper(reader)));
       at = end;
     } else if (UNSEEN_TAGS.has(token.name) && !token.alone) {
       at = closeAt(pieces, at, token.name);
@@ -1173,13 +1220,20 @@ function htmlBlocksOf(pieces: readonly Piece<RootContent>[], reader: Reader): Ma
 
     const { token } = piece;
 
-    const end =
-      token.kind === HTML_TOKEN.OPEN && !token.alone ? closeAt(pieces, at, token.name) : at;
+    // Note that only a block's tag is matched to where it closes, and only within `MAX_HTML_DEPTH`, so tags left open never send the read back over the words after them again and again.
+    const block =
+      token.kind === HTML_TOKEN.OPEN &&
+      (BLOCK_TAGS.has(token.name) || UNSEEN_TAGS.has(token.name)) &&
+      withinDepth(reader)
+        ? token
+        : undefined;
+
+    const end = block === undefined || block.alone ? at : closeAt(pieces, at, block.name);
 
     const drawn =
-      token.kind === HTML_TOKEN.OPEN
-        ? htmlTagBlocks(token, pieces.slice(at + 1, end), reader)
-        : undefined;
+      block === undefined
+        ? undefined
+        : htmlTagBlocks(block, pieces.slice(at + 1, end), deeper(reader));
 
     if (drawn !== undefined) {
       close();
