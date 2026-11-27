@@ -137,6 +137,18 @@
       calc(100% - var(--ui-scroll-fade)) 100%;
   }
 
+  /* A fading area that fills its parent's room is sized by that room alone.
+     Note that it holds its size in (`contain: size`), because Chromium lays
+     out again every item of a flex or grid row each time any one of them
+     changes, and repaints and rasters the whole of a masked scroller's
+     contents each time it is laid out. Without it, a key typed in a
+     composer re-rastered the transcript beside it and every other fading
+     pane on the page. A filled area takes nothing from what it holds, so
+     the containment changes no box. */
+  .ui-scroll-area[data-size="fill"]:not([data-fade="none"]) {
+    contain: size;
+  }
+
   /* The bars an area keeps whole over its fade: its one, or both where it
      scrolls both ways. */
   .ui-scroll-area {
