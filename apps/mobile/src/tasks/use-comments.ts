@@ -22,6 +22,7 @@ import type { AgentAttachment } from "@repo/features/agent-wire";
 import { ATTACHMENT_VIEW, attachmentView, chipSize } from "@repo/features/attachment-model";
 import type { DescriptionBlock } from "@repo/features/description-blocks";
 import {
+  COMMENT_ACT,
   COMMENT_EVENT_WORDS,
   type CommentEvent,
   commentThreadLines,
@@ -46,15 +47,19 @@ import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
+import type { ActPortClient } from "@repo/host/contract";
 import {
   BUZZ,
   buzz,
   GLYPH,
+  type LongPressGroup,
+  NOTICE_KIND,
   type PictureById,
   THREAD_MEDIA,
   type ThreadEvent,
   type ThreadMedia,
   type ThreadMessage,
+  useFailureNotices,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
@@ -356,12 +361,14 @@ function threadEvent(
   };
 }
 
-/** A thread's comments as its page draws them, each by its writer, its words typed line by line, the files it carries after them, whether it was edited, and the resolves and reopens after it, as the panel's thread stands them between its comments. */
+/** A thread's comments as its page draws them, each by its writer, its words typed line by line, the files it carries after them, whether it was edited, its long press menu, and the resolves and reopens after it, as the panel's thread stands them between its comments. */
 export function threadMessages(
   thread: DescriptionCommentThread,
   agents: ReadonlyMap<string, CommentAgent>,
   pictureOf: PictureOf,
   media: CommentMedia,
+  /** What a comment's long press holds after Copy message, such as Copy link, Edit, and Delete. */
+  menuOf: (entry: DescriptionCommentEntry) => readonly LongPressGroup[],
 ): ThreadDrawn {
   const { opening, comments } = commentThreadLines(thread);
   const event = (entry: CommentEvent) => threadEvent(entry, agents, pictureOf);
@@ -378,6 +385,7 @@ export function threadMessages(
       media: commentMedia(entry, media),
       edited: entry.editedAt !== undefined,
       after: after.map(event),
+      menu: menuOf(entry),
     })),
   };
 }
@@ -651,6 +659,170 @@ export function useCommentSettle(taskId: string): (thread: DescriptionCommentThr
       },
     );
   };
+}
+
+/** A comment being edited in its thread's field: which, the words it holds now, the field's words, the names of the files it carries, which its markers name as pills, and what a save that did not land said. */
+export interface CommentEditing {
+  readonly entryId: string;
+  readonly was: string;
+  readonly words: string;
+  readonly files: ReadonlySet<string>;
+  readonly note?: string | undefined;
+}
+
+/** A delete asked and not yet answered: a reply alone, or the whole thread from its first comment. */
+export interface CommentDeleting {
+  readonly act: typeof COMMENT_ACT.DELETE | typeof COMMENT_ACT.DELETE_THREAD;
+  readonly entryId: string;
+}
+
+/** What a thread's own comments' acts hold: the edit in its field, the delete being asked, and what starts, saves, and lets each go. */
+export interface CommentActs {
+  readonly editing: CommentEditing | undefined;
+  /** Moves each time an edit starts, so the field takes the keyboard (`Composer`'s `focusAsk`). */
+  readonly editAsk: number;
+  readonly startEdit: (entry: DescriptionCommentEntry) => void;
+  readonly onEditWords: (words: string) => void;
+  readonly cancelEdit: () => void;
+  /** Saves the words Save took out of the field in the comment's place, answering whether it took them (`ComposerSend`). */
+  readonly saveEdit: (typed: string) => boolean;
+  readonly deleting: CommentDeleting | undefined;
+  readonly askDelete: (deleting: CommentDeleting) => void;
+  readonly confirmDelete: () => void;
+  readonly dismissDelete: () => void;
+}
+
+/** What the host answers a thread's act. */
+type CommentActAnswer = Awaited<ReturnType<ActPortClient[typeof ACT_KIND.TASKS_COMMENT_ACT]>>;
+
+/** The words a refused edit or delete of a comment is said in, as the panel's thread says them; none for one that landed. */
+function changeRefusal(answer: CommentActAnswer): string | undefined {
+  if ("thread" in answer || "deleted" in answer) return undefined;
+
+  return "refused" in answer ? commentRefusalNote(answer.refused) : COMMENT_NOTE.NOT_CHANGED;
+}
+
+/**
+ * Edits and deletes a thread's comments, as the panel's comment menu does
+ * (`TASKS_COMMENT_ACT` with `edit`, `delete`, or `delete-thread`). An edit
+ * lays the comment's words in the thread's field, which saves them in its
+ * place, its files kept as they are; the host draws it at once, and one
+ * refused comes back in the field with why. A delete asks first, since
+ * none comes back, then goes; a whole thread's goes with its page
+ * (`onThreadGone`), and one refused is said in the notice, as a resolve is.
+ */
+export function useCommentActs(
+  taskId: string,
+  threadId: string,
+  onThreadGone: () => void,
+): CommentActs {
+  const acts = useHostActs();
+  const write = useWrite();
+  const [editing, setEditingState] = useState<CommentEditing | undefined>(undefined);
+  const [editAsk, setEditAsk] = useState(0);
+  const [deleting, setDeleting] = useState<CommentDeleting | undefined>(undefined);
+  const notices = useFailureNotices();
+  // Note that the edit open now is kept beside the state as each press moves it, since a save's refusal may land before the render that closed it, or after another edit was opened.
+  const editingNow = useRef(editing);
+
+  const setEditing = useCallback((next: CommentEditing | undefined) => {
+    editingNow.current = next;
+    setEditingState(next);
+  }, []);
+
+  return useMemo(() => {
+    const saveEdit = (typed: string): boolean => {
+      const kept = typed.trim();
+
+      if (editing === undefined || kept === "") return false;
+      // Note that words saved as the comment holds them change nothing, so the edit just closes.
+      setEditing(undefined);
+
+      if (kept === editing.was.trim()) return true;
+      const { entryId, was, files } = editing;
+
+      void write(
+        () =>
+          acts[ACT_KIND.TASKS_COMMENT_ACT]({
+            taskId,
+            threadId,
+            action: { action: DESCRIPTION_COMMENT_ACTION.EDIT, entry: entryId, words: kept },
+          }),
+        {
+          refused: changeRefusal,
+          unanswered: COMMENT_NOTE.NOT_CHANGED,
+          // Note that an edit refused comes back in the field with why, so its words are never lost, unless another edit was opened since, whose words stay and the notice says why this one did not go.
+          inPlace: (note, noticed) => {
+            if (editingNow.current === undefined) {
+              setEditing({ entryId, was, words: kept, files, note });
+            } else if (!noticed) {
+              notices.say({ kind: NOTICE_KIND.REFUSED, words: note });
+            }
+          },
+          went: BUZZ.SUCCESS,
+        },
+      );
+
+      return true;
+    };
+
+    const confirmDelete = () => {
+      if (deleting === undefined) return;
+      setDeleting(undefined);
+
+      const action =
+        deleting.act === COMMENT_ACT.DELETE_THREAD
+          ? { action: DESCRIPTION_COMMENT_ACTION.DELETE_THREAD }
+          : { action: DESCRIPTION_COMMENT_ACTION.DELETE, entry: deleting.entryId };
+
+      // Note that an edit of what goes goes with it.
+      if (deleting.act === COMMENT_ACT.DELETE_THREAD || editing?.entryId === deleting.entryId) {
+        setEditing(undefined);
+      }
+
+      if (deleting.act === COMMENT_ACT.DELETE_THREAD) onThreadGone();
+
+      void write(() => acts[ACT_KIND.TASKS_COMMENT_ACT]({ taskId, threadId, action }), {
+        refused: changeRefusal,
+        unanswered: COMMENT_NOTE.NOT_CHANGED,
+        went: BUZZ.SUCCESS,
+      });
+    };
+
+    return {
+      editing,
+      editAsk,
+      startEdit: (entry) => {
+        // Note that the field holds the words as written, so a file's marker stays where it stands and its file stays named.
+        const words = entry.words ?? "";
+        const files = new Set((entry.files ?? []).map((file) => file.name));
+        setEditing({ entryId: entry.id, was: words, words, files });
+        setEditAsk((at) => at + 1);
+      },
+      onEditWords: (words) => {
+        const was = editingNow.current;
+
+        if (was !== undefined) setEditing({ ...was, words });
+      },
+      cancelEdit: () => setEditing(undefined),
+      saveEdit,
+      deleting,
+      askDelete: setDeleting,
+      confirmDelete,
+      dismissDelete: () => setDeleting(undefined),
+    };
+  }, [
+    acts,
+    write,
+    notices,
+    taskId,
+    threadId,
+    editing,
+    setEditing,
+    editAsk,
+    deleting,
+    onThreadGone,
+  ]);
 }
 
 /** The open threads standing on each block of a description, by the block's start, the oldest started first. */
