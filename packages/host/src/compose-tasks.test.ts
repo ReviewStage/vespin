@@ -56,6 +56,7 @@ import type { AppDescriptionComments } from "./app-state.js";
 import type { TasksClient } from "./compose-tasks.js";
 import { FIXTURE_IDS, FIXTURE_PAGE } from "./fixture-stage.js";
 import { localCopy } from "./local-copy.js";
+import { sqliteBackend } from "./local-sqlite.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
 import { polledLive } from "./testing/polled-live.js";
 import { agentListRow } from "./testing/task-list-rows.js";
@@ -218,6 +219,25 @@ it.effect(
     }),
 );
 
+it.effect(
+  "a number no task of the account's answers to is answered as not found, told apart from a find the service never answered",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([]);
+      const { call } = yield* subject(service);
+
+      const missing = yield* call("TASKS_FIND", { workspace: "acme", number: 7 });
+
+      service.find = () =>
+        Effect.succeed({ ok: false, failure: TASK_CALL_FAILURE.UNANSWERED } as const);
+
+      const unanswered = yield* call("TASKS_FIND", { workspace: "acme", number: 7 });
+
+      assert.deepEqual(missing, { failure: TASK_CALL_FAILURE.NOT_FOUND });
+      assert.deepEqual(unanswered, { failure: TASK_CALL_FAILURE.UNANSWERED });
+    }),
+);
+
 it.effect("the window's refresh lists the plans and opening one draws its saved document", () =>
   Effect.gen(function* () {
     const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
@@ -264,7 +284,7 @@ it.effect(
 
       /** One launch as the host makes it: the pool on the local copy, the composers on the pool, then the database opened and the gate opened. */
       const launched = Effect.gen(function* () {
-        const local = yield* localCopy(root);
+        const local = yield* localCopy(yield* sqliteBackend(root));
 
         const pool = yield* entityPool({
           mintKey: () => "key",
@@ -321,7 +341,7 @@ const LOCAL_PLATFORM = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer, node
 /** One launch of Dana's account over `directory`: a pool whose waiting writes, each sent under `key`, are kept in the local database, and the writes it held at the last quit, to lay back. */
 const launchedOver = (directory: string, key: string) =>
   Effect.gen(function* () {
-    const copy = yield* localCopy(directory);
+    const copy = yield* localCopy(yield* sqliteBackend(directory));
 
     const pool = yield* entityPool({
       mintKey: () => key,
@@ -3463,16 +3483,25 @@ it.effect(
 );
 
 it.effect(
-  "a resync reads a followed list again at once, once for a wake's several events, without saying it is behind, and asks nothing of a list not followed; a regain right after a wake reads it again",
+  "a resync reads a followed list again at once, past the sync id it stands at, once for a wake's several events, without saying it is behind, and asks nothing of a list not followed; a regain right after a wake reads it again",
   () =>
     Effect.gen(function* () {
       yield* TestClock.setTime(LIVE_NOW);
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
+      const asked: (string | undefined)[] = [];
+      const { listLive } = service;
+
+      service.listLive = (userId, sync) => {
+        asked.push(sync);
+
+        return listLive(userId, sync);
+      };
+
       const { call, last, told, settled } = yield* subject(service);
 
       yield* call(GATEWAY_METHOD.TASKS_RESYNC);
       yield* settled;
-      assert.equal(service.liveListReads, 0, "nothing is followed before the Tasks tab asks");
+      assert.equal(asked.length, 0, "nothing is followed before the Tasks tab asks");
 
       yield* call("TASKS_REFRESH", undefined);
       yield* listAnswers(service, {
@@ -3480,14 +3509,22 @@ it.effect(
         agents: [],
         issues: [],
       });
-      const before = service.liveListReads;
+      const before = asked.length;
+      const standsAt = asked.at(-1);
+      const wholeReads = service.liveListReads;
       const toldBefore = told.length;
 
       // The Mac woke: a resume and an unlock land together.
       yield* call(GATEWAY_METHOD.TASKS_RESYNC);
       yield* call(GATEWAY_METHOD.TASKS_RESYNC);
       yield* settled;
-      assert.equal(service.liveListReads, before + 1, "one wake reads the list once");
+      assert.equal(asked.length, before + 1, "one wake reads the list once");
+      assert.ok(standsAt !== undefined && standsAt !== "");
+      assert.deepEqual(
+        [asked.at(-1), service.liveListReads],
+        [standsAt, wholeReads],
+        "a wake reads past the sync id the list stands at, never whole",
+      );
       assert.ok(
         told.slice(toldBefore).every((view) => view.live !== HOST_LIVE.CATCHING_UP),
         "a read asked again is loading, not behind",
@@ -3497,13 +3534,14 @@ it.effect(
       // The connection comes back a moment after the wake, which may have read the list before the network was there.
       yield* call(GATEWAY_METHOD.TASKS_REGAINED);
       yield* settled;
-      assert.equal(service.liveListReads, before + 2, "a regain reads the list again");
+      assert.equal(asked.length, before + 2, "a regain reads the list again");
 
       yield* TestClock.adjust(Duration.seconds(10));
-      const later = service.liveListReads;
+      const later = asked.length;
       yield* call(GATEWAY_METHOD.TASKS_RESYNC);
       yield* settled;
-      assert.equal(service.liveListReads, later + 1, "a later wake reads it again");
+      assert.equal(asked.length, later + 1, "a later wake reads it again");
+      assert.equal(service.liveListReads, wholeReads, "no wake read the list whole");
     }),
 );
 

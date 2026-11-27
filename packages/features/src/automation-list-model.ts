@@ -6,6 +6,7 @@ import {
   AUTOMATION_RUN_REASON,
   AUTOMATION_RUN_STATUS,
   AUTOMATION_SCOPE,
+  AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
   type AutomationRunReason,
   type AutomationRunSummary,
@@ -398,6 +399,23 @@ function scheduleTriggerText(trigger: ScheduleTrigger, reader: string): string {
 /** Who owns an automation; one a service before scopes answered is its creator's own. */
 export function automationOwner(automation: AutomationSummary): AutomationScope {
   return automation.scope ?? AUTOMATION_SCOPE.PERSONAL;
+}
+
+/**
+ * The Manager an automation hands every run to, among `managers`, the
+ * workspace's, as its row names it: none for one that starts a new agent
+ * each run, one whose agent its first run is still to start, or one whose
+ * agent is no Manager the workspace lists, a coding agent or one archived.
+ */
+export function automationManager<Manager extends { readonly id: string }>(
+  automation: Pick<AutomationSummary, "target">,
+  managers: readonly Manager[],
+): Manager | undefined {
+  const target = automation.target;
+
+  if (target?.kind !== AUTOMATION_TARGET.SAME_AGENT || target.agentId === null) return undefined;
+
+  return managers.find((manager) => manager.id === target.agentId);
 }
 
 /**

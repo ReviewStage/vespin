@@ -69,7 +69,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import {
   memo,
   type RefObject,
@@ -148,7 +148,7 @@ import {
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useToast } from "../toast.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import {
@@ -905,7 +905,7 @@ function TaskMenuFooter({
 }): React.JSX.Element {
   const now = useMinute();
   const reader = useEditReader({ readerId: tasks.me });
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
   const you = account?.status === ACCOUNT_STATUS.SIGNED_IN ? accountActor(account) : undefined;
   const origin = useTaskMaker(task)?.actor;
   // Note that the open task's last editor is its description's, so while its workspace has Descriptions off it is said only by when the task last changed, as another task is.

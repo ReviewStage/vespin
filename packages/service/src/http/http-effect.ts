@@ -84,7 +84,6 @@ export const HOSTED_REFUSAL_STATUS = {
   [HOSTED_API_ERROR.TASK_PARENT_CYCLE]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.TASK_PARENT_HELD]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.HOST_PAIRING_HELD]: HOSTED_HTTP_STATUS.TOO_MANY_REQUESTS,
-  [HOSTED_API_ERROR.MACHINE_OWNED_ELSEWHERE]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.ALREADY_WRITTEN]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.MEMORY_OFF]: HOSTED_HTTP_STATUS.FORBIDDEN,
   [HOSTED_API_ERROR.MEMORY_CREDENTIAL]: HOSTED_HTTP_STATUS.BAD_REQUEST,
@@ -217,8 +216,6 @@ export const HOSTED_REFUSAL = {
   TASK_PARENT_HELD: { error: HOSTED_API_ERROR.TASK_PARENT_HELD },
   /** The account named too many pairing codes no pending pairing has (`hostPairingHeld`, which names until when); nothing was read or written. */
   HOST_PAIRING_HELD: { error: HOSTED_API_ERROR.HOST_PAIRING_HELD },
-  /** A box's approve named an owner other than the one its machine already stands as a host of; nothing was written. */
-  MACHINE_OWNED_ELSEWHERE: { error: HOSTED_API_ERROR.MACHINE_OWNED_ELSEWHERE },
   /** A write sent again under an idempotency key it was taken under before; nothing ran again. */
   ALREADY_WRITTEN: { error: HOSTED_API_ERROR.ALREADY_WRITTEN },
   /** The member has Memory off; nothing was read or written. */

@@ -224,10 +224,11 @@ const ICON_MARK = 0.78;
 
 // App icon, one per mode, on Apple's macOS icon grid: an 824-unit tile with a
 // 185.4-unit corner, centered on a 1024 canvas, the disc spanning ICON_MARK of
-// the tile. The packaged `.icns` is cut from the dark set, and the running
-// app swaps the Dock image between the two as the theme changes. Note that
-// the Dock and the app switcher draw the whole canvas at one size, so a tile
-// that filled it would stand a fifth larger than every other app's.
+// the tile. Before macOS 26, and in a development run, the running app swaps
+// the Dock image between the two as the theme changes; the packaged app's own
+// icon is the Icon Composer bundle below. Note that the Dock and the app
+// switcher draw the whole canvas at one size, so a tile that filled it would
+// stand a fifth larger than every other app's.
 const ICON_GRID = { canvas: 1024, tile: 824, radius: 185.4 };
 
 {
@@ -244,13 +245,13 @@ const ICON_GRID = { canvas: 1024, tile: 824, radius: 185.4 };
   }
 }
 
-// iOS app icon, an Icon Composer bundle (`Vespin.icon`) that iOS 26 and later
-// draw in Liquid Glass: light, dark, clear, and tinted from the one layer. The
-// bundle holds the mark alone, white and full canvas, on the grid's 1024
-// units with the disc at ICON_MARK of them; the tile is the bundle's fill,
-// which the system rounds itself, so no corner is drawn here. Each mode's
-// tile and ink are TILES', and the clear and tinted looks are the system's
-// own from the layer's ratio.
+// iOS and macOS app icon, an Icon Composer bundle (`Vespin.icon`) that iOS 26
+// and macOS 26 and later draw in Liquid Glass: light, dark, clear, and tinted
+// from the one layer. The bundle holds the mark alone, white and full canvas,
+// on the grid's 1024 units with the disc at ICON_MARK of them; the tile is the
+// bundle's fill, which the system rounds itself, so no corner is drawn here.
+// Each mode's tile and ink are TILES', and the clear and tinted looks are the
+// system's own from the layer's ratio.
 const IOS_ICON = { canvas: 1024, name: "ios/Vespin.icon" };
 
 const iosColor = (hex) => {

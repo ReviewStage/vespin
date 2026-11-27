@@ -131,6 +131,9 @@ const IOS = {
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
   PINNED_TABS: byDesign("iOS pins no tab to a sidebar, so no pinned tab's task is read for one"),
+  VIEW_CHOICES: notYet(
+    "iOS keeps its sorts, filters, and folds on the phone until it reads the account's view choices, in the pull request after the panel's",
+  ),
   MACHINE_ASKS_RETRY: notYet(
     "iOS follows a machine's asks and the machines that name them, but doesn't read either again after a failed read yet",
   ),
@@ -148,9 +151,6 @@ const IOS = {
   ),
   MENTION_APPS: notYet(
     "iOS's composers offer skills after a `/` and no `@` list yet, so no app is offered to mention",
-  ),
-  MENTION_MACHINES: notYet(
-    "iOS's composers offer skills after a `/` and no `@` list yet, so no machine is offered to mention",
   ),
   BILLING: byDesign("iOS v1 leaves billing to the desktop and the web"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
@@ -181,9 +181,6 @@ const IOS = {
   ),
   REPOSITORY_FILES: byDesign(
     "iOS opens a repository's files on GitHub, as it does the diff; it has no File tab",
-  ),
-  REPOSITORY_PINS: byDesign(
-    "iOS's Tasks lists sections, not repositories, so it has no repository list to pin in",
   ),
   UPDATER: byDesign("The App Store updates the app"),
 } as const;
@@ -292,6 +289,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MACHINES_REMOVE]: panel(IOS.MACHINE_SETTINGS),
   [PORT_ACT_KIND.MACHINE_ASKS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.MACHINE_ASKS_RETRY]: panel(IOS.MACHINE_ASKS_RETRY),
+  [PORT_ACT_KIND.VIEW_CHOICES_FOLLOW]: panel(IOS.VIEW_CHOICES),
+  [PORT_ACT_KIND.VIEW_CHOICES_RETRY]: panel(IOS.VIEW_CHOICES),
+  [PORT_ACT_KIND.VIEW_CHOICE_WRITE]: panel(IOS.VIEW_CHOICES),
   [PORT_ACT_KIND.MACHINE_ASK_ANSWER]: EVERYWHERE,
   [PORT_ACT_KIND.HOSTS_THIS_MAC_SET]: desktopOnly(
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
@@ -389,9 +389,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.BROWSER_LIVE_ATTACH]: desktopOnly(WEB.LIVE_VIEW, IOS.DESK_TOOLS),
   [PORT_ACT_KIND.BROWSER_LIVE_DETACH]: desktopOnly(WEB.LIVE_VIEW, IOS.DESK_TOOLS),
 
-  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW]: panel(IOS.DIFF),
-  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_RETRY]: panel(IOS.DIFF),
-  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: panel(IOS.DIFF),
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.CHAPTERS_REPOSITORY_GENERATE]: EVERYWHERE,
 
   [PORT_ACT_KIND.CLI_INSTALL]: desktopOnly(WEB.CLI, IOS.DESKTOP_ONLY),
 
@@ -461,7 +461,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_RENAME]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PIN]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_MARK_READ]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: panel(IOS.REPOSITORY_PINS),
+  [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_WRITE_SECTION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: EVERYWHERE,
@@ -607,9 +607,5 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WORKSPACE_BILLING_SETUP]: panel(IOS.BILLING),
   [PORT_ACT_KIND.WORKSPACE_BILLING_PORTAL]: panel(IOS.BILLING),
   [PORT_ACT_KIND.WORKSPACE_MERGE_QUEUE_READ]: EVERYWHERE,
-  [PORT_ACT_KIND.WORKSPACE_MACHINES_READ]: panel(IOS.MENTION_MACHINES),
-  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINES_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINES_RETRY]: EVERYWHERE,
-  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINE_RENAME]: EVERYWHERE,
-  [PORT_ACT_KIND.WORKSPACE_OWNED_MACHINE_REMOVE]: EVERYWHERE,
+  [PORT_ACT_KIND.WORKSPACE_MACHINES_READ]: EVERYWHERE,
 } as const satisfies Record<PortActKind, ClientParityRow>;

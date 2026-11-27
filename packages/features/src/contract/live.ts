@@ -32,7 +32,8 @@
  * for its answer; and one workspace's Sentry installations and
  * Slack bot, named by `?workspaceId=`, with whether this deployment holds
  * each integration; and the account's preferences row, its default agent,
- * chapters model, and Slack notifications as stored. Each
+ * chapters model, and Slack notifications as stored; and the account's
+ * view choices, each by its key and the workspace it is kept for. Each
  * asked with `?poll=true` answers each statement's rows inline instead, for
  * a reader polling while Realtime fails or is off; with `&after=` too, the
  * poll is held until the rows move past it, or answered unchanged. The task
@@ -61,6 +62,7 @@ import {
   ACCOUNT_INBOX_READ,
   AGENT_INBOX_READ,
   INBOX_ITEMS_READ,
+  INBOX_OLDER_READ,
   TASK_INBOX_READ,
 } from "../inbox-live.js";
 import { INSTALLED_SKILLS_READ } from "../installed-skill-live.js";
@@ -88,6 +90,7 @@ import {
 } from "../task-list-live.js";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "../task-pages-live.js";
 import { TASK_RECORD_READ } from "../task-record-live.js";
+import { VIEW_CHOICES_READ } from "../view-choice-live.js";
 import { WORKSPACE_INTEGRATIONS_READ } from "../workspace-integrations-live.js";
 import {
   WORKSPACE_INVITATIONS_READ,
@@ -99,6 +102,7 @@ import { WORKSPACE_MACHINES_READ } from "../workspace-machine-live.js";
 export const liveContract = {
   [ACCOUNT_INBOX_READ.name]: liveProcedure(ACCOUNT_INBOX_READ),
   [INBOX_ITEMS_READ.name]: liveProcedure(INBOX_ITEMS_READ),
+  [INBOX_OLDER_READ.name]: liveProcedure(INBOX_OLDER_READ),
   [TASK_RECORD_READ.name]: liveProcedure(TASK_RECORD_READ),
   [TASK_PAGES_READ.name]: liveProcedure(TASK_PAGES_READ),
   [AGENT_PAGES_READ.name]: liveProcedure(AGENT_PAGES_READ),
@@ -140,4 +144,5 @@ export const liveContract = {
   [REPOSITORY_PULL_REQUEST_MOVED_READ.name]: liveProcedure(REPOSITORY_PULL_REQUEST_MOVED_READ),
   [INTEGRATION_STATUSES_READ.name]: liveProcedure(INTEGRATION_STATUSES_READ),
   [ACCOUNT_PREFERENCES_READ.name]: liveProcedure(ACCOUNT_PREFERENCES_READ),
+  [VIEW_CHOICES_READ.name]: liveProcedure(VIEW_CHOICES_READ),
 };

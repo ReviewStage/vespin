@@ -9,8 +9,8 @@ import { followsContractOf, HOLD, liveFollow, liveFollows } from "./live-follow.
 /**
  * chapters.ts -- a Pull request tab's asks of the host about a pull request's chapters, through its agent or by its repository and number: a Generate declared, and their live follow beside it.
  *
- * Only a panel draws the Pull request tab, so every ask is the panel's
- * alone. A refusal or a defect of the host's is drawn as the coding-agent
+ * The panel's Pull request tab and the iOS app's pull request page both
+ * ask them. A refusal or a defect of the host's is drawn as the coding-agent
  * calls' unanswered failure. The
  * hold and its Try again are a live follow, declared once
  * (`live-follow.ts`): a live read, not a plain act.

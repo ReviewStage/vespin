@@ -73,6 +73,38 @@
   --ui-page-inset-narrow: var(--ui-space-24);
   /* Between two items of a list, close enough that they read as one. */
   --ui-list-gap: var(--ui-space-2);
+  /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
+     in place of a control's height, the body's size, the list's and
+     section's gaps, a control's corner, a row's inset and a glyph's gap: how
+     tall a row stands, the size of its words, the room between two rows and
+     between the places at its top, the room over each group, a row's corner,
+     how far it holds its glyph from its edge, and the room between its glyph
+     and its words. */
+  --ui-sidebar-row-height: var(--ui-control-height);
+  --ui-sidebar-text-size: var(--ui-type-body-size);
+  --ui-sidebar-row-gap: var(--ui-list-gap);
+  --ui-sidebar-places-gap: var(--ui-list-gap);
+  --ui-sidebar-group-gap: var(--ui-section-gap);
+  --ui-sidebar-row-radius: var(--ui-control-radius);
+  --ui-sidebar-row-inset: var(--ui-row-inset);
+  --ui-sidebar-icon-gap: var(--ui-icon-gap);
+  /* A task list's row: the room it keeps over and under a control's height. */
+  --ui-task-row-block: var(--ui-space-6);
+  /* How many lines an agent's empty box stands, before it grows with its words. */
+  --ui-composer-least-lines: 1;
+  /* The work's sheet on the window's frame (the panel's `.desktop-shell`):
+     how far in from the frame it stands and how round its corners are. */
+  --ui-sheet-gap: var(--ui-space-8);
+  --ui-sheet-radius: var(--ui-radius-14);
+  /* The room over and under a control in the window's top row, which sets
+     how tall the title row and every pane's top row stand. */
+  --ui-title-bar-inset: var(--ui-space-8);
+  /* The faces a list row and the account draw, and the inset a chip and a
+     badge keep at their ends. */
+  --ui-avatar-row: var(--ui-space-20);
+  --ui-avatar-account: 26px; /* off-scale: the account's disc */
+  --ui-chip-inset: var(--ui-space-8);
+  --ui-badge-inline: var(--ui-space-8);
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's
@@ -283,13 +315,9 @@
   --ui-popover-width-regular: 340px;
   --ui-popover-width-wide: 420px;
 
-  /* How deep a scroller's edge dissolves where content runs past it
-     (`ScrollArea`'s fade); the window's has stood a step off the scale. */
-  --ui-scroll-fade: 26px;
   /* How far a label cut short fades out at its end, in place of an ellipsis. */
   --ui-label-fade: 20px;
-  /* How tall a band stuck at a scroller's start stands, a section's heading,
-     which its fade begins beneath (`ScrollArea`'s `fadeInset`). */
+  /* How tall a band stuck at a scroller's start stands, a section's heading. */
   --ui-scroll-band: var(--ui-space-32);
 
   /* How thick the keyboard's ring is and how far it stands off the control's
@@ -370,6 +398,38 @@
   --ui-page-inset-narrow: var(--ui-space-24);
   /* Between two items of a list, close enough that they read as one. */
   --ui-list-gap: var(--ui-space-2);
+  /* The sidebar's own rows (the panel's `.desktop-sidebar`), which it reads
+     in place of a control's height, the body's size, the list's and
+     section's gaps, a control's corner, a row's inset and a glyph's gap: how
+     tall a row stands, the size of its words, the room between two rows and
+     between the places at its top, the room over each group, a row's corner,
+     how far it holds its glyph from its edge, and the room between its glyph
+     and its words. */
+  --ui-sidebar-row-height: var(--ui-control-height);
+  --ui-sidebar-text-size: var(--ui-type-body-size);
+  --ui-sidebar-row-gap: var(--ui-list-gap);
+  --ui-sidebar-places-gap: var(--ui-list-gap);
+  --ui-sidebar-group-gap: var(--ui-section-gap);
+  --ui-sidebar-row-radius: var(--ui-control-radius);
+  --ui-sidebar-row-inset: var(--ui-row-inset);
+  --ui-sidebar-icon-gap: var(--ui-icon-gap);
+  /* A task list's row: the room it keeps over and under a control's height. */
+  --ui-task-row-block: var(--ui-space-6);
+  /* How many lines an agent's empty box stands, before it grows with its words. */
+  --ui-composer-least-lines: 1;
+  /* The work's sheet on the window's frame (the panel's `.desktop-shell`):
+     how far in from the frame it stands and how round its corners are. */
+  --ui-sheet-gap: var(--ui-space-8);
+  --ui-sheet-radius: var(--ui-radius-14);
+  /* The room over and under a control in the window's top row, which sets
+     how tall the title row and every pane's top row stand. */
+  --ui-title-bar-inset: var(--ui-space-8);
+  /* The faces a list row and the account draw, and the inset a chip and a
+     badge keep at their ends. */
+  --ui-avatar-row: var(--ui-space-20);
+  --ui-avatar-account: 26px; /* off-scale: the account's disc */
+  --ui-chip-inset: var(--ui-space-8);
+  --ui-badge-inline: var(--ui-space-8);
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's
@@ -574,11 +634,9 @@
   --ui-popover-width-regular: 340px;
   --ui-popover-width-wide: 420px;
 
-  /* How deep a scroller's edge dissolves where content runs past it (`ScrollArea`'s fade). */
-  --ui-scroll-fade: var(--ui-space-24);
   /* How far a label cut short fades out at its end, in place of an ellipsis. */
   --ui-label-fade: 20px;
-  /* How tall a band stuck at a scroller's start stands, which its fade begins beneath. */
+  /* How tall a band stuck at a scroller's start stands, a section's heading. */
   --ui-scroll-band: var(--ui-space-32);
 
   /* How thick the keyboard's ring is and how far it stands off the control's

@@ -79,7 +79,7 @@ import { flushSync } from "react-dom";
 /** How far the pointer goes any way, in CSS pixels, before a press is a drag rather than a click. */
 const DRAG_THRESHOLD = 4;
 
-/** How near the scrolling column's top or foot, in CSS pixels, a held row runs it along: about its faded edge. */
+/** How near the scrolling column's top or foot, in CSS pixels, a held row runs it along. */
 const EDGE_REACH = 32;
 
 /** The most the column runs along in a frame, in CSS pixels, with the pointer at its edge or past it. */
@@ -405,7 +405,7 @@ function mark(press: RowPress, landing: ZoneLanding | undefined): void {
  * classes, inside its scope's classes worn with no box of their own, so the
  * rules that draw the row draw the copy, and in the list's own type and
  * color, which it inherits there. The shell keeps none of a column's
- * scrolling, inset, or faded edge. The layer is hidden from assistive
+ * scrolling or inset. The layer is hidden from assistive
  * technology, since the row it copies is still there.
  */
 function liftCopy(row: HTMLElement, list: HTMLElement, scope: Element | null): HTMLElement {

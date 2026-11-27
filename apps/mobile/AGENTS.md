@@ -13,7 +13,7 @@ and `expo prebuild` generates it on every build.
 
 The app's agents run on the developer's own Mac, which has Xcode 27 and the
 simulators; the cloud sandboxes have no Xcode and see the app only through
-the macOS run below, or on Revyl's hosted devices (In a cloud sandbox, below).
+the Mac queue agent (In a cloud sandbox, below).
 Every command here runs from `apps/mobile`.
 
 | Command | What it does |
@@ -59,54 +59,10 @@ with it. Touch nothing of the developer's outside the checkout.
 
 ## In a cloud sandbox
 
-A cloud agent has no Xcode, so it builds and runs the app on Revyl's Macs and
-hosted iPhones. The `revyl` CLI reads its recipe from `.revyl/config.yaml`:
-`scripts/simulator-build.sh` on Revyl's Xcode 27.2 image. It signs in with the
-workspace's `REVYL_API_KEY`, and the workspace's install script puts it in
-`/usr/local/bin`; just after a sandbox starts it may not be there yet, so
-check `revyl --version` again a minute later. Every command here runs from
-`apps/mobile`.
-
-Which to use: an agent on the developer's Mac builds there (above), since a
-Debug build with Metro shows each JavaScript change in seconds and the Mac has
-Xcode, every simulator, the debugger, and the Maestro flows. Revyl is for a
-cloud agent, or when the Mac is off or already has two app agents: to check a
-finished change before its pull request, with the session's recording as
-proof; to see the Duo folded and unfolded; and for any agent whose starter's
-Mac it cannot reach. Each look costs a build of about 7 minutes and spends free
-minutes, so iterate on the Mac and check on Revyl. Neither replaces
-`ios-simulators.yml` for the release screenshots.
-
-| Command | What it does |
-| --- | --- |
-| `revyl build --profile preview --platform ios` | Build a Release app for the simulator on Revyl's cloud Mac from this checkout, uncommitted edits included, and upload it (about 7 minutes) |
-| `revyl device start --platform ios --app-id b5b2a8c5-4a8d-4948-bf6f-df9882474c0b --device-model "iPhone Duo" --launch-arg=-fixture --launch-arg=inbox --no-open` | Start a hosted iPhone Duo (iOS 27.1) on the newest build of this Git branch and launch it on the Inbox fixture, as the Maestro flows do; it prints the session's ID and a viewer link. Without `--platform` and `--app-id` (the `app_id` in `.revyl/config.yaml`) it installs nothing and leaves the phone on its home screen |
-| `revyl device tap --target "<label>"` | Tap an element by its label; `--x`/`--y` tap a point |
-| `revyl device screenshot --out <file>` | One screenshot of the session |
-| `revyl device set-fold-state folded` | Fold the Duo (or `unfolded`), which no local simulator command can do |
-| `revyl device stop` | End the session; always run it when done |
-| `revyl session download <session-id> --include-full-video --no-clips --output-directory /tmp/revyl-session` | The session's recording as `video.mp4`, once it has ended; without `--output-directory` it writes into the checkout |
-
-`revyl device logs --session-id <id> --no-follow` prints the session's
-device log, the app's `NSLog` lines among it, which is how a probe written
-in Swift is read. Note that a probe whose code is Swift only runs in a
-native build of it, here or on the Mac: a run that bundles a branch's
-JavaScript over a native app built from another commit, as the Mac queue's
-preview and timing lanes do over their kept bases, never compiles its
-Swift, so it logs nothing (STAG-3784's VoiceOver Actions check).
-Other launch arguments from the table above pass the same way, one
-`--launch-arg` per token. Builds and sessions spend the workspace's free Revyl
-minutes (1,200 a month). A build carries the JavaScript inside it, so build
-once per change you want to see and reuse that build for every session on it.
-Stop every session you start. Never install the Revyl GitHub App or add a
-`pr_review` block to the config: Proof of Changes stays off.
-
-Revyl can't tell a tap from a long press on its iPad Pro 13-inch on iOS 26.2.
-`revyl device tap` and a zero-distance `revyl device drag` both land as long
-presses there: one opened a plain button's context menu, and one opened a menu
-button's menu where its tap should run (STAG-3808). Neither command takes a
-duration, so check a tap against a long press with Maestro's `tapOn` and
-`longPressOn` on the Mac's simulators instead.
+A cloud agent has no Xcode. All iOS simulator and device work (builds, Maestro
+flows, screenshots, recordings) goes through the workspace's Mac queue agent,
+and waits for it when the Mac is busy or offline. Never use Revyl or any other
+cloud device service, and never dispatch `ios-simulators.yml` from an agent.
 
 ## CI
 
@@ -114,7 +70,7 @@ duration, so check a tap against a long press with Maestro's `tapOn` and
   vitest tests, and `export:ios` on every pull request, through the same turbo
   tasks as every workspace. It is the pull request's only gate.
 - **macOS** (`.github/workflows/ios-simulators.yml`, on GitHub's `xcode-27`
-  image) runs only by hand, on any branch. It generates
+  image) runs only by hand, never from an agent. It generates
   the native project, builds the Release simulator app, runs the Maestro flows
   on the iPhone 18 Pro, the iPhone Duo as it boots, and the iPad Pro 11-inch,
   each a job of its own on its own runner, in parallel, and uploads each
@@ -123,15 +79,9 @@ duration, so check a tap against a long press with Maestro's `tapOn` and
   passed.
 
 A pull request merges on the Linux checks alone, with no device check first;
-device problems show in the TestFlight builds. For screenshots, ask for a run
-on your branch: Vespin's GitHub App cannot dispatch a workflow, so it is
-started from the developer's Mac (`gh workflow run ios-simulators.yml --ref
-<branch>`). Each simulator takes about an hour, every flow in the light
-appearance and the dark, after a 20-minute build, so name fewer simulators or
-flows for a quicker look (`-f simulators="iPhone 18 Pro" -f flows=inbox,tasks`),
-each flow as its file under `maestro/` is named without `.yaml`, and the
-notification flow as `notification`.
-Then read its screenshots:
+device problems show in the TestFlight builds. For screenshots, ask the Mac
+queue agent; do not dispatch `ios-simulators.yml`. Its artifacts, where one
+exists, are read like this:
 
 ```
 gh run list --branch <your branch> --workflow "iOS simulators" --limit 1 --json databaseId --jq '.[0].databaseId'
@@ -352,9 +302,13 @@ A flow is written one way throughout:
   `composer-field`), and a row or a line by its words. A tab is opened
   through `maestro/subflows/tab.yaml`, by its id (`inbox-tab`, `tasks-tab`,
   `search-tab`), since a list's title and a back button share its name; an
-  iPad's floating bar carries no id, so `simulator-screenshots.sh` passes
-  `FLOATING_TABS=true` there and the tab is found by name. A flow chooses its
-  way by the device it runs on, never by what is on screen a moment.
+  iPad stands no tabs, so `simulator-screenshots.sh` passes
+  `FLOATING_TABS=true` there and the place is its sidebar's row, found by
+  its words beside the row's kind (`place-row`), the sidebar shown first
+  where it is hidden (`show-sidebar.yaml`), as a reader picks it; the
+  workspace switcher, which heads that sidebar, is opened through
+  `switcher.yaml` the same way. A flow chooses its way by the device it
+  runs on, never by what is on screen a moment.
 - **A repeated step is a subflow** under `maestro/subflows/`, run with
   `runFlow` and its `env`: `open-row.yaml` and `row-menu.yaml` scroll to a
   row (`to-row.yaml`, which draws an iPad's list column itself), move it clear of the tab bar (`clear-of-tabs.yaml`), and let the list

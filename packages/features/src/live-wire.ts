@@ -258,6 +258,8 @@ export type TranscriptNowAnswer = typeof transcriptNowAnswerSchema.Type;
 export const LIVE_READ = {
   /** The account's preferences row, its default agent, chapters model, and Slack notifications as stored, by the account: the service's `accountPreferences` query, held for the signed-in session into the sync engine's pool, every write to one drawn over it the moment it is asked. */
   ACCOUNT_PREFERENCES: "accountPreferences",
+  /** The account's view choices (a sort, a filter, a fold), by the account: the service's `viewChoicesRead`, declared as `VIEW_CHOICES_READ`, held for the signed-in session, so a choice made on one device is drawn on every other. */
+  VIEW_CHOICES: "viewChoices",
   /** The shell commands the account always allows its coding agents to run unasked, by the account: fetched by the host while a window holds it, and laid from each write's own answer. */
   ALLOWED_COMMANDS: "allowedCommands",
   /** The run of an automation that started one agent, by the agent: the service's `agentOriginLive` query, held for the windows that show the agent's page and a few they showed lately. */
@@ -320,7 +322,7 @@ export const LIVE_READ = {
   HOSTS: "hosts",
   /** The account's machines with their own settings for agents' commands and apps, by the account: the service's `machinesRead`, declared as `MACHINES_READ`, held while Settings › Machines draws them and a while after. */
   MACHINES: "machines",
-  /** The machines one workspace owns, by the workspace: the service's `workspaceMachinesRead`, declared as `WORKSPACE_MACHINES_READ`, held while Settings › Machines draws them and a while after. */
+  /** The machines one workspace owns, by the workspace: the service's `workspaceMachinesRead`, declared as `WORKSPACE_MACHINES_READ`, which answers a released build's Settings › Machines with none until the floor reaches 11. */
   WORKSPACE_MACHINES: "workspaceMachines",
   /** The asks the account's machines hold for its answer, by the account: the service's `machineAsksRead`, declared as `MACHINE_ASKS_READ`, held while a window could draw one and by each machine of the account, which takes its answers from it. */
   MACHINE_ASKS: "machineAsks",

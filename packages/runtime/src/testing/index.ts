@@ -13,4 +13,6 @@
 
 export { temporaryDirectory } from "@repo/wire/testing";
 
+export { testForegroundClock } from "./foreground-clock.js";
+
 export { temporaryDirectoryScoped } from "./temporary-directory.effect.js";

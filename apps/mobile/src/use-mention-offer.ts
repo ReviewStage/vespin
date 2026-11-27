@@ -93,9 +93,9 @@ import {
 } from "./host/host-provider.js";
 import { useLiveFollow } from "./host/live-follow.js";
 import { useInboxRows } from "./inbox/inbox-rows.js";
+import { useMemberMachines } from "./member-machines.js";
 import { useListedMembers } from "./member-pictures.js";
 import { useModelCatalog } from "./tasks/use-start.js";
-import { useWorkspaceMachines } from "./workspace-machines.js";
 
 /** The glyph each kind's row leads with, as the panel's rows lead with their kind's. */
 const KIND_GLYPH = {
@@ -268,7 +268,7 @@ function useMentionState(
   const acts = useHostActs();
   const members = useListedMembers(readWorkspace);
   const automations = useWorkspaceAutomations(readWorkspace).rows;
-  const machines = useWorkspaceMachines(readWorkspace).machines;
+  const machines = useMemberMachines(readWorkspace);
   const agents = useListedAgents(reading);
   const tasks = useListedTasks(reading);
   useLiveFollow(reading ? taskId : undefined, (id) =>
@@ -417,10 +417,10 @@ function useMentionState(
         (machines ?? []).map((machine) => ({
           id: machine.id,
           name: machine.name,
-          ownerId: machine.connectedBy,
+          ownerId: machine.userId,
           terms: [
-            members.find((member) => member.userId === machine.connectedBy)?.name,
-            machine.platform === undefined ? undefined : DEVICE_PLATFORM_NAME[machine.platform],
+            members.find((member) => member.userId === machine.userId)?.name,
+            DEVICE_PLATFORM_NAME[machine.platform],
           ].filter((term) => term !== undefined),
         })),
         {

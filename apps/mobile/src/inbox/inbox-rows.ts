@@ -4,35 +4,28 @@
  * The kept collection loads from the account's database only what the
  * query's filter finds there, and hands the query each change as it lands,
  * so a delivery costs the rows it moved. The rows the writes standing draw
- * are few, held in a collection of their own made anew each time they move,
- * so the query runs over them with the same filter, and the merge takes each
- * key a write stands over from them.
+ * are few, held by the pool in one collection of their own made with the
+ * kind (`StandingRows.drawn`), so the same query, declared once, runs over
+ * them with the same filter, and the merge takes each key a write stands
+ * over from them.
  */
 
 import {
   INBOX_REACH,
   type InboxReach,
   type InboxRowsSource,
-  inboxRowsDrawn,
   inboxRowsMerged,
   inboxRowsWhere,
   type PlacedInboxItem,
 } from "@repo/host/inbox-rows";
-import {
-  type Collection,
-  createCollection,
-  type InitialQueryBuilder,
-  localOnlyCollectionOptions,
-  useLiveQuery,
-} from "@tanstack/react-db";
+import { WINDOW_READ, windowRows } from "@repo/host/read-window";
+import type { Collection, InitialQueryBuilder } from "@tanstack/react-db";
 import { useEffect, useMemo, useReducer } from "react";
 import { useInboxRowsSource } from "../host/host-provider.js";
+import { useWindow } from "../host/use-window.js";
 
 /** No write standing over any row. */
 const NONE_PENDING: ReadonlyMap<string, PlacedInboxItem> = new Map();
-
-/** No row drawn by a write. */
-const NONE_DRAWN: readonly PlacedInboxItem[] = [];
 
 /** The query a screen reads `source`'s rows by, as far as `reach` reads. */
 function rowsQuery(
@@ -73,39 +66,23 @@ export function useInboxRows(
 ): readonly PlacedInboxItem[] | undefined {
   const standing = useStanding(useInboxRowsSource());
   const collection = standing?.collection;
+  const drawnSource = standing?.drawn;
   const pending = standing?.pending ?? NONE_PENDING;
 
-  // Note that the drawn rows stand in a collection only while any does, so a screen with no write standing runs one query.
-  const drawnSource = useMemo(() => {
-    const rows = inboxRowsDrawn(pending);
-
-    return reach === undefined || rows.length === 0
-      ? undefined
-      : createCollection(
-          localOnlyCollectionOptions<PlacedInboxItem, string>({
-            getKey: (row) => row.id,
-            initialData: [...rows],
-          }),
-        );
-  }, [pending, reach === undefined]);
-
-  useEffect(
-    () => () => {
-      void drawnSource?.cleanup();
-    },
-    [drawnSource],
-  );
-
-  const kept = useLiveQuery((q) =>
+  const kept = useWindow((q) =>
     reach === undefined || collection === undefined ? undefined : rowsQuery(q, collection, reach),
   );
 
-  const drawn = useLiveQuery((q) =>
-    reach === undefined || drawnSource === undefined ? undefined : rowsQuery(q, drawnSource, reach),
+  const drawnRows = windowRows(
+    useWindow((q) =>
+      reach === undefined || drawnSource === undefined
+        ? undefined
+        : rowsQuery(q, drawnSource, reach),
+    ),
   );
 
-  const keptRows = kept.isReady ? kept.data : undefined;
-  const drawnRows = drawn.data ?? NONE_DRAWN;
+  // Note that only a settled read's rows stand here for now, never the last read's held over, since the thread's screen reads them as answered (`@repo/host/inbox-thread-standing`); the Inbox's screens take the window itself next.
+  const keptRows = kept.status === WINDOW_READ.ROWS && kept.settled ? kept.rows : undefined;
 
   return useMemo(
     () => (keptRows === undefined ? undefined : inboxRowsMerged(keptRows, drawnRows, pending)),

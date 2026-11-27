@@ -1,18 +1,21 @@
 /**
- * runs-on-pick.ts -- where an account last chose to run an agent, kept as the fallback for a start naming no place.
+ * runs-on-pick.ts -- where an account last chose to run an agent, kept as the fallback for a start naming no place and as where New task starts.
  *
  * A start may name where its agent runs, but one that names none is made
  * where no window chose, so the service keeps the last place a start named
  * on the account's preference row, read where nothing nearer decides: a
  * start's source or the account's newest agent on the task comes first. A
  * task holds no place of its own. It holds the cloud, or one of the
- * account's devices by id. Note
+ * account's devices by id. Every client follows it on the account's
+ * preferences live read, where New task's Runs on starts on it. Note
  * that it is written alone, never through the preferences snapshot, and
  * moves no `updated_at`, because that instant tells a Mac the preferences
  * part was written and a pick is no part of it.
  */
 
-import { AGENT_MACHINE, type PersonalRunsOn } from "@repo/features/agent-wire";
+import { storedRunsOn } from "@repo/features/account-preferences-live";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import type { TaskRunsOnRequest } from "@repo/features/task-wire";
 import { eq } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
@@ -20,13 +23,13 @@ import { Database, type DatabaseServices, type StoreFailure } from "../core/quer
 import { accountPreference } from "../schemas/preferences.js";
 
 const PICK_COLUMNS = {
-  machine: accountPreference.runsOnMachine,
-  deviceId: accountPreference.runsOnDeviceId,
+  runsOnMachine: accountPreference.runsOnMachine,
+  runsOnDeviceId: accountPreference.runsOnDeviceId,
 } as const;
 
 const PickRowSchema = Schema.Struct({
-  machine: Schema.NullOr(Schema.String),
-  deviceId: Schema.NullOr(Schema.String),
+  runsOnMachine: Schema.NullOr(Schema.String),
+  runsOnDeviceId: Schema.NullOr(Schema.String),
 });
 
 const PickWriteSchema = Schema.Struct({
@@ -70,30 +73,21 @@ const upsertPick = SqlSchema.void({
     ),
 });
 
-/** The pick a row holds; none where it holds none, or a device row lost its id. */
-function pickOf(row: typeof PickRowSchema.Type): Option.Option<PersonalRunsOn> {
-  if (row.machine === AGENT_MACHINE.VERCEL) {
-    return Option.some({ machine: AGENT_MACHINE.VERCEL });
-  }
-
-  if (row.machine === AGENT_MACHINE.DEVICE && row.deviceId !== null) {
-    return Option.some({ machine: AGENT_MACHINE.DEVICE, deviceId: row.deviceId });
-  }
-
-  return Option.none();
-}
-
 /** Where the account last chose to run an agent; none where no start has named one. */
 export function readRunsOnPick(
   userId: string,
-): Effect.Effect<Option.Option<PersonalRunsOn>, StoreFailure, DatabaseServices> {
-  return Effect.map(findPick(userId), Option.flatMap(pickOf));
+): Effect.Effect<Option.Option<TaskRunsOnRequest>, StoreFailure, DatabaseServices> {
+  // Note that the row is read as every client's live read reads it (`storedRunsOn`), so the two never disagree.
+  return Effect.map(
+    findPick(userId),
+    Option.flatMap((row) => Option.fromUndefinedOr(storedRunsOn(row))),
+  );
 }
 
 /** Keeps where the account chose to run an agent as its last pick, over what stood. */
 export function keepRunsOnPick(
   userId: string,
-  pick: PersonalRunsOn,
+  pick: TaskRunsOnRequest,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return upsertPick({
     userId,

@@ -19,6 +19,7 @@ import {
 import { agentBrowserTabsRead, taskBrowserTabsRead } from "../live/reads/browser-tabs.js";
 import { hostsRead } from "../live/reads/hosts.js";
 import { inboxItemsRead } from "../live/reads/inbox-items.js";
+import { inboxOlderRead } from "../live/reads/inbox-older.js";
 import { installedSkillsRead } from "../live/reads/installed-skills.js";
 import { integrationStatusesRead } from "../live/reads/integration-statuses.js";
 import { machineAsksRead } from "../live/reads/machine-asks.js";
@@ -44,6 +45,7 @@ import {
   taskSearchRead,
   tasksRead,
 } from "../live/reads/tasks.js";
+import { viewChoicesRead } from "../live/reads/view-choices.js";
 import { workspaceIntegrationsRead } from "../live/reads/workspace-integrations.js";
 import { workspaceInvitationsRead } from "../live/reads/workspace-invitations.js";
 import { workspaceMachinesRead } from "../live/reads/workspace-machines.js";
@@ -61,6 +63,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   personPageRead,
   accountInboxRead,
   inboxItemsRead,
+  inboxOlderRead,
   taskInboxRead,
   agentInboxRead,
   agentTranscriptRead,
@@ -68,6 +71,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   machinesRead,
   workspaceMachinesRead,
   machineAsksRead,
+  viewChoicesRead,
   agentOriginRead,
   taskPagesRead,
   agentPagesRead,

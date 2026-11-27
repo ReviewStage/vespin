@@ -164,6 +164,7 @@ export { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
 export {
   GLYPH,
   type Glyph,
+  glyphIcon,
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,
@@ -383,6 +384,8 @@ export {
   unassignedChoice,
 } from "./row-menu-model.js";
 
+export { RowPickContext } from "./row-open.js";
+
 export {
   agentPreview,
   latestStep,
@@ -401,6 +404,8 @@ export { ScreenFailure } from "./screen-failure.js";
 export { SealedPage } from "./sealed-page.js";
 
 export { sectionGlyphColor, sectionInk } from "./section-ink.js";
+
+export { type SentPictures, sentPictures } from "./sent-pictures-model.js";
 
 export {
   AccountHead,
@@ -451,9 +456,11 @@ export {
   groupKey,
   isBarMenu,
   isMenuEntry,
+  ListColumn,
   menuOfGroups,
   menuWithout,
   PATH_PART,
+  SidebarColumn,
   SplitView,
   StackBarMenu,
 } from "./split-view.js";
@@ -498,6 +505,7 @@ export {
   LINK_ROW_TONE,
   LinkRow,
   type LinkRowTone,
+  PlaceRow,
   RelationRow,
   TaskHead,
   VERSION_WRITER,
@@ -594,6 +602,7 @@ export {
   type SwitcherLook,
   WorkspaceSwitcher,
   WorkspaceSwitcherItem,
+  WorkspaceSwitcherRow,
 } from "./workspace-switcher.js";
 
 export { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";

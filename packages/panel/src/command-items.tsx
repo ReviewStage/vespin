@@ -1,3 +1,4 @@
+import { COPY_DESCRIPTION } from "@repo/features/description-markdown";
 import { INBOX_READ_MARK } from "@repo/features/inbox-list-model";
 /**
  * command-items.tsx -- the window's commands as every place offering one words, marks, and keys it: the one list ⌘K and the action menus both read.
@@ -111,7 +112,7 @@ function unkeyed(verb: string, icon: React.JSX.Element, noun?: string): PanelCom
 /** Every command a menu offers beside ⌘K, by what it does. */
 export const PANEL_COMMAND = {
   COPY_CONTENT: keyed(APP_COMMAND.COPY_CONTENT, <GLYPH.COPY />),
-  COPY_DESCRIPTION: keyedAs(APP_COMMAND.COPY_CONTENT, "Copy description", <GLYPH.COPY />),
+  COPY_DESCRIPTION: keyedAs(APP_COMMAND.COPY_CONTENT, COPY_DESCRIPTION, <GLYPH.COPY />),
   COPY_LINK: keyed(APP_COMMAND.COPY_LINK, <GLYPH.LINK />),
   OPEN_IN_NEW_TAB: unkeyed("Open in new tab", <GLYPH.OPEN_EXTERNALLY />),
   MARK_TASK_DONE: unkeyed("Mark done", <GLYPH.DONE />),

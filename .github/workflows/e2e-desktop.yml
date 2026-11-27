@@ -21,13 +21,15 @@ concurrency:
 jobs:
   smoke:
     name: Launch, sign in, and show the task list
-    runs-on: macos-15
+    # The release job's image and Xcode (release.yml): packaging compiles the
+    # app's Icon Composer icon, which needs Xcode 26's actool or later.
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
-          xcode-version: "16.2"
+          xcode-version: "27.1"
       - uses: ./.github/actions/setup
 
       # No signing identity, Sentry DSN, or analytics key is set, so the build

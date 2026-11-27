@@ -1,4 +1,4 @@
-// working-beat.ts -- the one beat every working mark on screen steps on, as the panel's marks share one (`@repo/ui`'s `useOnBeat`): a step each 200 ms, kept running only while a mark listens.
+// working-beat.ts -- the one beat every working mark on screen steps on: a step each 200 ms, kept running only while a mark listens.
 
 import { changeSignal } from "./held-value.js";
 

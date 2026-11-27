@@ -145,6 +145,26 @@ export const accountPreference = pgTable("account_preference", {
    * snapshot of its own, as the link choice is.
    */
   inbox: boolean("inbox"),
+  /*
+   * How a diff and a File tab draw code (`@repo/settings`'s
+   * `DIFF_DISPLAY_FIELDS`), each null until the account chooses, which reads
+   * as the setting's default, and each a part of the snapshot of its own, as
+   * the link choice is. A choice is stored as its setting stores it: a
+   * toggle as a boolean, a one-of as its token, read back through the
+   * setting's own guard, so a token no build lists any more reads as none.
+   * The font's size and the line height stay on each device.
+   */
+  lineNumbers: boolean("line_numbers"),
+  wordWrap: boolean("word_wrap"),
+  diffLayout: text("diff_layout"),
+  diffIndicators: text("diff_indicators"),
+  inlineDiff: text("inline_diff"),
+  diffBackgrounds: boolean("diff_backgrounds"),
+  diffDarkTheme: text("diff_dark_theme"),
+  diffLightTheme: text("diff_light_theme"),
+  diffFont: text("diff_font"),
+  diffLigatures: boolean("diff_ligatures"),
+  diffMinimizeComments: boolean("diff_minimize_comments"),
   /**
    * The model and effort a coding agent starts on when Start is clicked, as
    * AI Gateway's catalog names them (`packages/service/src/providers/model-catalog.ts`); null on both

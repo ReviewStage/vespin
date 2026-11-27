@@ -178,6 +178,8 @@ export {
   accountPreferencesParts,
   accountPreferencesToPush,
   accountPreferencesToWrite,
+  DIFF_DISPLAY_FIELDS,
+  type DiffDisplayField,
   type DrawnSchemaSettingRow,
   describedSettings,
   isAppSettingField,

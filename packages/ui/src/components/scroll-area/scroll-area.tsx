@@ -19,13 +19,6 @@ import { ScrollArea as ShadcnScrollArea } from "../../shadcn/scroll-area.js";
  * - how it fills the room its parent gives it (`size`): the rest of a flex
  *   column, or as tall as what it holds, shrinking to the room where that
  *   runs short; and
- * - its edge fade (`fade`): where content runs past an edge something
- *   pinned stands at, it dissolves over the profile's `--ui-scroll-fade`
- *   rather than being sliced there, the start edge alone or both. The fade
- *   eases in over the first stretch of scrolling, so an area at rest at its
- *   start, or one with nothing to scroll, is left whole. Where a band stands
- *   stuck at the area's start (`fadeInset`), a section's heading, the start fade
- *   begins beneath it, so the band stands whole; and
  * - its gutter (`gutter`): where the system draws a scroll bar that takes
  *   room, a stable gutter keeps that room while nothing scrolls yet, so what
  *   the area holds does not shift sideways the moment it first overflows.
@@ -41,7 +34,7 @@ import { ScrollArea as ShadcnScrollArea } from "../../shadcn/scroll-area.js";
  * It is drawn by shadcn/ui's scroll area (`../../shadcn/scroll-area.tsx`),
  * kept to the one native scroller, so the system's scroll bar and momentum
  * are what it scrolls with; its size, overscroll, and gutter are utilities,
- * and its axis and edge fade stay in `scroll-area.css`.
+ * and its axis stays in `scroll-area.css`.
  */
 
 /** The axes an area scrolls: up and down, with nothing sideways; sideways alone; or both. */
@@ -64,28 +57,6 @@ export const SCROLL_SIZE = {
 } as const;
 
 export type ScrollSize = (typeof SCROLL_SIZE)[keyof typeof SCROLL_SIZE];
-
-/** Which edges of the axis dissolve where content runs past them: none, the start alone, or both. */
-export const SCROLL_FADE = {
-  NONE: "none",
-  START: "start",
-  BOTH: "both",
-} as const;
-
-export type ScrollFade = (typeof SCROLL_FADE)[keyof typeof SCROLL_FADE];
-
-/**
- * Where an up-and-down area's start fade begins: at its edge, or beneath a
- * band of the profile's `--ui-scroll-band` stuck at its start, which
- * stands whole while what scrolls under it dissolves just below it. What
- * the keys move to clears both.
- */
-export const SCROLL_FADE_INSET = {
-  NONE: "none",
-  BAND: "band",
-} as const;
-
-export type ScrollFadeInset = (typeof SCROLL_FADE_INSET)[keyof typeof SCROLL_FADE_INSET];
 
 /**
  * What a swipe that reaches the area's end does: stops there, or carries on
@@ -112,10 +83,6 @@ export type ScrollAreaProps = {
   axis?: ScrollAxis | undefined;
   /** How it fills its parent's room; all of it where none is named. */
   size?: ScrollSize | undefined;
-  /** Which edges fade where content runs past them; none where none is named. */
-  fade?: ScrollFade | undefined;
-  /** Where the start fade begins; at the edge where none is named. */
-  fadeInset?: ScrollFadeInset | undefined;
   /** Whether the scroll bar's room is kept while nothing scrolls; only once it does where none is named. */
   gutter?: ScrollGutter | undefined;
   /** What a swipe past its end does; stops there where none is named. */
@@ -156,32 +123,10 @@ const GUTTER_CLASS = {
   [SCROLL_GUTTER.STABLE]: "scrollbar-gutter-stable",
 } as const satisfies Record<ScrollGutter, string>;
 
-type ScrollFadeMarksResult = {
-  className: string;
-  "data-axis": ScrollAxis;
-  "data-fade": ScrollFade;
-};
-
-/**
- * The area's own class and marks for a box that is its own scroller, whose
- * element another owns (`ComboboxList`, cmdk's list, a `ChoiceBar`'s row),
- * so it fades its cut edges as `fade` says, as an area does, scrolling along
- * `axis` alone, up and down where none is named. Its size, overscroll, and
- * padding stay its own.
- */
-export function scrollFadeMarks(
-  fade: ScrollFade,
-  axis: ScrollAxis = SCROLL_AXIS.VERTICAL,
-): ScrollFadeMarksResult {
-  return { className: "ui-scroll-area", "data-axis": axis, "data-fade": fade };
-}
-
-/** A box scrolling `axis`, filling its parent's room as `size` says, its edges fading as `fade` and `fadeInset` say, a swipe past its end stopping or handed on as `overscroll` says. */
+/** A box scrolling `axis`, filling its parent's room as `size` says, a swipe past its end stopping or handed on as `overscroll` says. */
 export function ScrollArea({
   axis = SCROLL_AXIS.VERTICAL,
   size = SCROLL_SIZE.FILL,
-  fade = SCROLL_FADE.NONE,
-  fadeInset = SCROLL_FADE_INSET.NONE,
   gutter = SCROLL_GUTTER.AUTO,
   overscroll = SCROLL_OVERSCROLL.CONTAIN,
   children,
@@ -193,8 +138,6 @@ export function ScrollArea({
       className={`ui-scroll-area ${SIZE_CLASS[size]} ${OVERSCROLL_CLASS[overscroll]} ${GUTTER_CLASS[gutter]}`}
       data-axis={axis}
       data-size={size}
-      data-fade={fade}
-      data-fade-inset={fadeInset}
       data-gutter={gutter}
       data-overscroll={overscroll}
     >

@@ -13,6 +13,7 @@ import {
   type AgentTranscriptMessage,
   type AgentTurn,
   agentAttachmentsSchema,
+  agentAttachmentTypeOf,
   hasWordsOrFiles,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure, remedyLabel } from "@repo/features/failure-remedy";
@@ -33,6 +34,7 @@ import {
   useDraftWords,
 } from "../composer-drafts.js";
 import { keepPictureRead, pictureNow } from "../picture-query.js";
+import { STEADY_DOORS, useSteadyDoors } from "../steady-door.js";
 import { useToast } from "../toast.js";
 import {
   closesComposer,
@@ -41,6 +43,7 @@ import {
   type SentLine,
 } from "./agent-model.js";
 import type { BoxWords } from "./box-words.js";
+import { sameNotes, sameSet, useKept } from "./kept-draws.js";
 import { type BoxHeld, type HeldUpdate, heldUpdateOver, putBackRefused } from "./refused-send.js";
 
 /**
@@ -220,7 +223,13 @@ function filesHeld(
 
     if (read?.kind !== PICTURE_STATE.READY) return [];
 
-    return [{ name, mediaType, data: read.url.slice(read.url.indexOf(",") + 1) }];
+    return [
+      {
+        name,
+        mediaType: agentAttachmentTypeOf(mediaType),
+        data: read.url.slice(read.url.indexOf(",") + 1),
+      },
+    ];
   });
 
   return Option.getOrElse(
@@ -775,62 +784,76 @@ export function useAgentComposer(input: {
   // Note that a closed box draws none of its words, because Continue carries them with every line refused (`unsent`).
   const words = useDraftWords(place, closed === undefined);
 
-  return {
-    held: { words, attachments: closed === undefined ? kept.draft.attachments : NO_FILES },
-    heldNow: () => (closed === undefined ? kept.now() : EMPTY_DRAFT),
-    updateHeld,
-    sending: suggesting,
-    note: closed === undefined ? (held.revertFailed?.note ?? remediedNote) : undefined,
-    closed,
-    send: () => sendDraft(),
-    retry: () => {
-      const { revertFailed } = held;
-
-      if (revertFailed !== undefined) {
-        return revert(revertFailed.messageId, revertFailed.restoreFiles);
-      }
-
-      if (remedied !== undefined) resend(remedied.id);
-    },
-    notedLine:
-      closed === undefined && remedied !== undefined
-        ? sent.find((line) => line.id === remedied.id)
-        : undefined,
-    retryLine: resend,
-    dropLine,
-    takeBackLine,
-    failedNotes: new Map(
+  // Note that the notes and the lines going are kept while they say the same, and the composer handed back steady, its presses calling the newest, because the tab draws again on every write to the transcript and every part of the box drawn from a composer made afresh drew again with it.
+  const failedNotes = useKept(
+    new Map(
       sending.flatMap((message) => {
         const note = noteOf(message);
 
         return note === undefined ? [] : [[message.id, note] as const];
       }),
     ),
-    sendWords: (text) => {
-      if (text.trim() === "" || closed !== undefined) return;
-      deliver({
-        clientKey: crypto.randomUUID(),
-        text: text.trim(),
-        attachments: [],
-        steers: input.running === true,
-      });
+    sameNotes,
+  );
+
+  const goingIds = useKept(new Set(going.map((line) => line.id)), sameSet);
+
+  const attachments = closed === undefined ? kept.draft.attachments : NO_FILES;
+  const heldDrawn = useMemo(() => ({ words, attachments }), [words, attachments]);
+
+  return useSteadyDoors(
+    {
+      held: heldDrawn,
+      heldNow: () => (closed === undefined ? kept.now() : EMPTY_DRAFT),
+      updateHeld,
+      sending: suggesting,
+      note: closed === undefined ? (held.revertFailed?.note ?? remediedNote) : undefined,
+      closed,
+      send: () => sendDraft(),
+      retry: () => {
+        const { revertFailed } = held;
+
+        if (revertFailed !== undefined) {
+          return revert(revertFailed.messageId, revertFailed.restoreFiles);
+        }
+
+        if (remedied !== undefined) resend(remedied.id);
+      },
+      notedLine:
+        closed === undefined && remedied !== undefined
+          ? sent.find((line) => line.id === remedied.id)
+          : undefined,
+      retryLine: resend,
+      dropLine,
+      takeBackLine,
+      failedNotes,
+      sendWords: (text) => {
+        if (text.trim() === "" || closed !== undefined) return;
+        deliver({
+          clientKey: crypto.randomUUID(),
+          text: text.trim(),
+          attachments: [],
+          steers: input.running === true,
+        });
+      },
+      sent,
+      unsent,
+      suggestion: closed === undefined ? kept.draft.suggestion : undefined,
+      dropSuggestion: () => kept.update((was) => ({ ...was, suggestion: undefined })),
+      editing: held.editing,
+      edit: (messageId) => setHeld((was) => ({ ...was, editing: messageId })),
+      dropEdit: () => setHeld((was) => ({ ...was, editing: undefined })),
+      sendEdit,
+      rewindOut: held.reverting !== undefined,
+      rewoundAt: held.rewoundAt,
+      rewinding: held.reverting !== undefined || going.some((line) => line.rewinds !== undefined),
+      // Note that a line's row may land before its send answers, which ends it going, so the call's own wait holds the line until the answer names the turn.
+      unanswered: going.length > 0 || held.asking.size > 0,
+      turn: held.turn,
+      revert,
+      cut: held.cut,
+      going: goingIds,
     },
-    sent,
-    unsent,
-    suggestion: closed === undefined ? kept.draft.suggestion : undefined,
-    dropSuggestion: () => kept.update((was) => ({ ...was, suggestion: undefined })),
-    editing: held.editing,
-    edit: (messageId) => setHeld((was) => ({ ...was, editing: messageId })),
-    dropEdit: () => setHeld((was) => ({ ...was, editing: undefined })),
-    sendEdit,
-    rewindOut: held.reverting !== undefined,
-    rewoundAt: held.rewoundAt,
-    rewinding: held.reverting !== undefined || going.some((line) => line.rewinds !== undefined),
-    // Note that a line's row may land before its send answers, which ends it going, so the call's own wait holds the line until the answer names the turn.
-    unanswered: going.length > 0 || held.asking.size > 0,
-    turn: held.turn,
-    revert,
-    cut: held.cut,
-    going: new Set(going.map((line) => line.id)),
-  };
+    STEADY_DOORS.OWN_FUNCTIONS,
+  );
 }

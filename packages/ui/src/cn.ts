@@ -350,7 +350,6 @@ const TASK_SURFACES = {
     "annotation-face-x",
     "annotation-gap",
     "annotation-more",
-    "log-over-composer",
     "todos-dock",
     "dictation-clock",
     "viewer-text",

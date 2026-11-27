@@ -14,25 +14,26 @@
 
 import { managerCreateRefusalWords, messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import { AGENT_KIND, type AgentRunsOnRequest, type ListedAgent } from "@repo/features/agent-wire";
+import { AGENT_KIND, type ListedAgent } from "@repo/features/agent-wire";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { READ_MARK, type ReadMark, unreadThroughOf } from "@repo/features/read-mark";
-import { placeIdOf } from "@repo/features/runs-on-places";
 import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { type FollowedAgent, selectWorkspaceExperiment } from "@repo/host/app-state-reads";
+import { windowRows } from "@repo/host/read-window";
 import { EXPERIMENT } from "@repo/settings";
 import type { ChannelFaces } from "@repo/ui-native";
-import { and, eq, isNull, isUndefined, useLiveQuery } from "@tanstack/react-db";
+import { and, eq, isNull, isUndefined } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections } from "../host/host-provider.js";
+import { useWindow } from "../host/use-window.js";
 import { useMemberFaces } from "../member-pictures.js";
-import { startRefusalWords } from "../tasks/use-start.js";
+import { runsOnOf, startRefusalWords } from "../tasks/use-start.js";
 import { useWrite } from "../use-write.js";
 
 /** No Manager, the same array every render. */
@@ -64,26 +65,25 @@ export function useWorkspaceManagers(workspaceId: string | undefined): readonly 
   const listed = useManagersListed(workspaceId);
   const { agents } = useTaskListCollections();
 
-  const held = useLiveQuery((q) =>
-    !listed || workspaceId === undefined
-      ? undefined
-      : q
-          .from({ agent: agents })
-          .where(({ agent }) =>
-            and(
-              eq(agent.kind, AGENT_KIND.MANAGER),
-              isNull(agent.taskId),
-              eq(agent.workspaceId, workspaceId),
-              isUndefined(agent.archivedAt),
+  const held = windowRows(
+    useWindow((q) =>
+      !listed || workspaceId === undefined
+        ? undefined
+        : q
+            .from({ agent: agents })
+            .where(({ agent }) =>
+              and(
+                eq(agent.kind, AGENT_KIND.MANAGER),
+                isNull(agent.taskId),
+                eq(agent.workspaceId, workspaceId),
+                isUndefined(agent.archivedAt),
+              ),
             ),
-          ),
-  ).data;
+    ),
+  );
 
   return useMemo(
-    () =>
-      held === undefined || workspaceId === undefined
-        ? NO_MANAGERS
-        : workspaceManagersOf(held, workspaceId),
+    () => (workspaceId === undefined ? NO_MANAGERS : workspaceManagersOf(held, workspaceId)),
     [held, workspaceId],
   );
 }
@@ -223,7 +223,7 @@ export function useManagerChatLooks(
 export interface ManagerAsk {
   readonly name: string;
   readonly repositories: readonly [string, ...string[]];
-  readonly runsOn: AgentRunsOnRequest;
+  readonly runsOn: string;
   readonly choice: ModelChoice;
   readonly face?: ManagerFace | undefined;
 }
@@ -235,8 +235,7 @@ export type ManagerMade = { readonly agentId: string } | { readonly refused: str
 function sameAsk(one: ManagerAsk, other: ManagerAsk): boolean {
   return (
     one.name === other.name &&
-    one.runsOn.machine === other.runsOn.machine &&
-    placeIdOf(one.runsOn) === placeIdOf(other.runsOn) &&
+    one.runsOn === other.runsOn &&
     one.choice.model === other.choice.model &&
     one.choice.effort === other.choice.effort &&
     one.face?.character === other.face?.character &&
@@ -275,7 +274,7 @@ export function useCreateManager(
       workspaceId,
       name: ask.name,
       repositories: [...ask.repositories],
-      runsOn: ask.runsOn,
+      runsOn: runsOnOf(ask.runsOn),
       model: ask.choice.model,
       effort: ask.choice.effort,
       // Note that a face is sent only once picked, so one left alone is the service's pick, as the desktop's card sends it.

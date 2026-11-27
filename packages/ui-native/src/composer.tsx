@@ -1142,9 +1142,7 @@ export function ComposerFoot(given: ComposerProps) {
   return (
     <SuggestionKeysDoor door={keys.door}>
       <VStack spacing={SPACE.TIGHT * 2}>
-        {props.above === undefined ? null : (
-          <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>{props.above}</VStack>
-        )}
+        {props.above ?? null}
         {/* Note that what the field offers pops over the composer as it does over the bar, the composer standing inside the popover whether or not it is presented, so it is never drawn anew. */}
         {props.pills === undefined ? foot : <OfferPopover offer={props.offer}>{foot}</OfferPopover>}
       </VStack>

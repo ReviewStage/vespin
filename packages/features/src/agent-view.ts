@@ -1,4 +1,4 @@
-import { CommandPrefixSchema } from "@repo/wire";
+import { CommandPrefixSchema, literalsReadingUnknown } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { accountInboxAnswerSchema } from "./account-inbox-wire.js";
 import {
@@ -104,6 +104,7 @@ import {
   soundRenameRequestSchema,
 } from "./sound-clip-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
+import { viewChoiceWriteSchema } from "./view-choice-wire.js";
 import { voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
@@ -170,6 +171,7 @@ const AGENT_ACCOUNT_CALLS = {
     renameSound: accountContract.renameSound,
     removeSound: accountContract.removeSound,
     chooseSound: accountContract.chooseSound,
+    writeViewChoice: accountContract.writeViewChoice,
   },
 };
 
@@ -618,6 +620,16 @@ export type SoundChoiceParams = typeof soundChoiceParamsSchema.Type;
 export const soundChoiceAnswerViewSchema = answerView(accountContract.chooseSound);
 
 export type SoundChoiceAnswerView = typeof soundChoiceAnswerViewSchema.Type;
+
+/** One of the account's view choices kept or forgotten, as a surface asks it. */
+export const viewChoiceWriteParamsSchema = viewChoiceWriteSchema;
+
+export type ViewChoiceWriteParams = typeof viewChoiceWriteParamsSchema.Type;
+
+/** A view choice's write, as the window hears it: the transaction it committed in, or why there is no answer. */
+export const viewChoiceWrittenViewSchema = answerView(accountContract.writeViewChoice);
+
+export type ViewChoiceWrittenView = typeof viewChoiceWrittenViewSchema.Type;
 
 /** A workspace's memories, as the window hears one forgotten: the memories as they stand, or why there are none. */
 export const memoriesAnswerViewSchema = answerView(accountContract.forgetMemory);
@@ -1550,13 +1562,19 @@ export const agentPartViewSchema = answerView(messagesContract.agentPart);
 
 export type AgentPartView = typeof agentPartViewSchema.Type;
 
-/** The type a served file stands under: a transcript's picture may be a WebM an agent recorded, its MP4 copy to a window that plays MP4, or a sound clip, as well as a picture or a file. */
-const servedFileTypeSchema = EffectSchema.Literals([
-  ...Object.values(AGENT_ATTACHMENT_TYPE),
-  CONVERSATION_MEDIA_TYPE.WEBM,
-  MP4_TYPE,
-  ...Object.values(AUDIO_TYPE),
-]);
+/**
+ * The type a served file stands under: a transcript's picture may be a WebM an agent recorded, its MP4 copy to a window that plays MP4, or a sound clip, as well as a picture or a file.
+ * Note that a type this build does not know reads as a file of any other kind, whose chip saves its bytes, so a type a later build serves is never a failed read.
+ */
+const servedFileTypeSchema = literalsReadingUnknown(
+  [
+    ...Object.values(AGENT_ATTACHMENT_TYPE),
+    CONVERSATION_MEDIA_TYPE.WEBM,
+    MP4_TYPE,
+    ...Object.values(AUDIO_TYPE),
+  ],
+  AGENT_ATTACHMENT_TYPE.OTHER,
+);
 
 /**
  * The image, or the file an inbox answer carried, as the window hears it:

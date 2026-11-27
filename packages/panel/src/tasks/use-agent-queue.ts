@@ -6,6 +6,7 @@ import {
   type AgentAttachment,
   type AgentQueueChange,
   agentAttachmentsSchema,
+  agentAttachmentTypeOf,
   hasWordsOrFiles,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
@@ -216,7 +217,11 @@ function readQueuedFiles(
       return client.fetchQuery(pictureQuery(door.owner, id, door.read)).then(
         (read) =>
           read.kind === PICTURE_STATE.READY
-            ? { name, mediaType, data: read.url.slice(read.url.indexOf(",") + 1) }
+            ? {
+                name,
+                mediaType: agentAttachmentTypeOf(mediaType),
+                data: read.url.slice(read.url.indexOf(",") + 1),
+              }
             : undefined,
         () => undefined,
       );

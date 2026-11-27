@@ -98,20 +98,20 @@ import {
   memberActor,
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
-import { GLYPH } from "@repo/ui/icons";
-import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
-import { isWireString } from "@repo/wire";
-import { useQuery } from "@tanstack/react-query";
-import { CheckIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
 import {
   Conversation,
   ConversationContent,
   ConversationRows,
   ConversationScrollButton,
-} from "../ai-elements/conversation.js";
+} from "@repo/ui/conversation";
+import { GLYPH } from "@repo/ui/icons";
+import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
+import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
+import { isWireString } from "@repo/wire";
+
+import { CheckIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import {
   AgentCrumbMenu,
@@ -128,7 +128,7 @@ import { type Directory, useMemberDirectory, usePerson } from "../member-directo
 import { useShortcutTarget } from "../shortcut-target.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import { LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
@@ -371,7 +371,7 @@ const DRAFT_HEAD = {
 
 /** The reader as the window draws them: as the workspace's members list them, else as their account signs in, else by their id alone. */
 function useReader(readerId: string | undefined): Actor {
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
   const { members } = useMemberDirectory();
   const member = members?.find((each) => each.userId === readerId);
 
@@ -1882,9 +1882,7 @@ export function InboxPane({
         {/* Note that the item's words stand around the thread and the docked box alike, so an ask's pictures in the box read and open as the thread's do. */}
         <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
           <Conversation list={board}>
-            <ConversationContent
-              className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
-            >
+            <ConversationContent className={`inbox-board ${LOG_OVER_COMPOSER_CLASS}`}>
               <Subject
                 item={item}
                 heading={setHeading}

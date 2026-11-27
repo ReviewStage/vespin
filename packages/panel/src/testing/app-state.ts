@@ -3,7 +3,11 @@
  */
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import type { AccountPreferencesLive } from "@repo/features/account-preferences-live";
+import {
+  type AccountPreferencesLive,
+  accountPreferencesOfLiveRows,
+  accountSoundsOfLiveRows,
+} from "@repo/features/account-preferences-live";
 import {
   type AgentBrowserTab,
   type BrowserTabsPlace,
@@ -249,8 +253,8 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.HOSTS]: NO_KEYS_HELD,
     [LIVE_READ.MACHINES]: NO_KEYS_HELD,
     [LIVE_READ.MACHINE_ASKS]: NO_KEYS_HELD,
+    [LIVE_READ.VIEW_CHOICES]: NO_KEYS_HELD,
     [LIVE_READ.WORKSPACE_INVITATIONS]: NO_KEYS_HELD,
-    [LIVE_READ.WORKSPACE_MACHINES]: NO_KEYS_HELD,
     [LIVE_READ.THIS_MAC_HOST]: NO_KEYS_HELD,
     [LIVE_READ.TRANSCRIPT]: NO_TRANSCRIPTS,
     [LIVE_READ.WORKSPACE_MEMBERS]: NO_KEYS_HELD,
@@ -541,6 +545,15 @@ function withAccountId(snapshot: AppStateSnapshot): AppStateSnapshot {
   if (account.status !== ACCOUNT_STATUS.SIGNED_IN || account.id !== undefined) return snapshot;
 
   return { ...snapshot, account: { ...account, id: HELD_ACCOUNT_ID } };
+}
+
+/** The account's preferences as the host holds them once read: nothing chosen, as an account that stored no row reads, beside what `chosen` names. */
+export function heldPreferences(
+  chosen: Partial<AccountPreferencesLive> = {},
+): AppHostRead<AccountPreferencesLive> {
+  return {
+    rows: { ...accountPreferencesOfLiveRows([], accountSoundsOfLiveRows([], [])), ...chosen },
+  };
 }
 
 /**

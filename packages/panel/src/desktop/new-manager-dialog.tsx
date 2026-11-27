@@ -34,7 +34,6 @@ import type { CatalogModel, MacOffer, ModelChoice } from "@repo/features/models-
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
 import { readFailedWords, readingWords } from "@repo/features/words";
-import type { WorkspaceMachineLine } from "@repo/features/workspace-machine-view";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   CHIP_LOOK,
@@ -62,13 +61,10 @@ import { AgentModelChip } from "../tasks/agent-model-chip.js";
 import { CHIP_PLACE, RepositoriesChip, type RepositoryChooser } from "../tasks/repository-chip.js";
 import { useRepositoryDefault } from "../tasks/repository-default.js";
 import {
-  deviceOfPlace,
   NewTaskRunsOnChip,
   newTaskRunsOn,
-  type OfferedPlace,
   useDevicesRead,
   useNewTaskRunsOn,
-  useOwnedMachines,
 } from "../tasks/runs-on.js";
 import { useNewTaskShown } from "../tasks/use-new-task.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -159,10 +155,8 @@ function ManagerCard({
   };
   machine: {
     readonly devices: readonly MacOffer[];
-    /** The machines the workspace owns, offered after the member's devices; none on a card that offers none. */
-    readonly owned?: readonly WorkspaceMachineLine[];
-    readonly place: OfferedPlace | undefined;
-    readonly onChoose: (row: string | undefined) => void;
+    readonly device: MacOffer | undefined;
+    readonly onChoose: (deviceId: string | undefined) => void;
   };
   model: ManagerCardModel;
 }): React.JSX.Element {
@@ -239,8 +233,7 @@ function ManagerCard({
           {() => (
             <NewTaskRunsOnChip
               devices={machine.devices}
-              owned={machine.owned}
-              place={machine.place}
+              device={machine.device}
               disabled={form.settling}
               narrow={false}
               look={CHIP_LOOK.FIELD}
@@ -317,13 +310,14 @@ export function useNewManagerDialog({
   const drawnDefault = useAgentDefault();
   const choice = picked ?? drawnDefault.choice;
   const devices = newTask.devices ?? NO_DEVICES;
-  const owned = useOwnedMachines(workspaceId);
-  const [place, choosePlace, keptDevice] = useNewTaskRunsOn(devices, owned);
-  const device = deviceOfPlace(place);
+  const runsOnPick = useNewTaskRunsOn(devices);
+  const { device, choose: chooseDevice } = runsOnPick;
   // Note that the card stays mounted between openings, so each waits on a devices' read made since it opened.
   const [openedOn, setOpenedOn] = useState<number | undefined>(undefined);
   const { modelsRead } = useNewTaskShown();
-  const devicesUnread = useDevicesRead(modelsRead, keptDevice, openedOn).unread;
+  const devicesRead = useDevicesRead(modelsRead, runsOnPick.onDevice, openedOn);
+  // Note that Create waits on the account's last pick too, since it may name a device.
+  const devicesUnread = devicesRead.unread || runsOnPick.unread;
   // Note that a model nothing of the account's pays for runs all the same on a picked device that runs its harness, on the device's own sign-in.
   const models = useMemo(() => modelsRunOn(newTask.models, device), [newTask.models, device]);
 
@@ -341,7 +335,7 @@ export function useNewManagerDialog({
         return refused(createFailureWords(AGENT_CALL_FAILURE.UNANSWERED));
       }
 
-      const runsOn = newTaskRunsOn(place);
+      const runsOn = newTaskRunsOn(device);
 
       if (sentOn.current !== undefined && !sameRunsOn(sentOn.current, runsOn)) {
         key.current = crypto.randomUUID();
@@ -436,10 +430,9 @@ export function useNewManagerDialog({
       }}
       machine={{
         devices,
-        owned,
-        place,
-        onChoose: (row) => {
-          choosePlace(row);
+        device,
+        onChoose: (deviceId) => {
+          chooseDevice(deviceId);
           changed();
         },
       }}

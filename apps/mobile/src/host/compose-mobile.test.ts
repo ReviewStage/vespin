@@ -9,6 +9,7 @@ import { TASKS_READ } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_TRANSCRIPT, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import { inboxGroupsIn, selectExperiment, selectInboxHoldings } from "@repo/host/app-state-reads";
+import { ForegroundClock, foregroundClockOver } from "@repo/runtime/effect";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { EXPERIMENT, THEME } from "@repo/settings";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
@@ -148,6 +149,33 @@ it.effect(
         expect(selectExperiment(EXPERIMENT.SKILLS)(state)).toBe(true);
         // Note that Search says nothing matched only once the task list stands read (`use-search.ts`), so a staged list that stood unread kept a miss reading for good.
         expect(state.tasks.listStatus).toBe(TASKS_READ.READY);
+      }),
+    ),
+);
+
+it.effect(
+  "the host stands on the device's foreground clock, so the loops it arms and the acts it answers measure their deadlines on it",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const services = yield* Effect.context<never>();
+        const foregroundClock = foregroundClockOver(() => 0, true);
+
+        const built = yield* Layer.build(
+          composeMobile({
+            httpClient: noNetwork,
+            fork: (effect) => {
+              Effect.runForkWith(services)(effect);
+            },
+            fixture: undefined,
+            appVersion: "0.1.0",
+            stateRoot: root,
+            device: { ...testDevice, foregroundClock },
+          }),
+        );
+
+        expect(Context.get(built, ForegroundClock)).toBe(foregroundClock);
       }),
     ),
 );

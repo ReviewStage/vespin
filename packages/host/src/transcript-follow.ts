@@ -871,8 +871,16 @@ export function followTranscript<Key>(
           return live;
         });
 
-        // Note that the page past the window's cursor is read at once, beside the live read's first read rather than after it, so a window held or newly read is caught up a round trip sooner; once the live read stands, the page past the cursor is read again as its first rows land, which misses nothing written meanwhile.
-        let wake: Effect.Effect<unknown> = Effect.void;
+        /** The live read's first rows landed, which a page read past the cursor then misses nothing written before. */
+        const firstRows = Effect.flatMap(liveRead, (stood) =>
+          SubscriptionRef.changes(stood).pipe(
+            Stream.filter(movedFrom({ kind: LIVE_STATE.WAITING })),
+            Stream.runHead,
+          ),
+        );
+
+        // Note that a window held is read past its cursor at once, beside the live read's first read rather than after it, so it is caught up a round trip sooner; once the live read stands, the page past the cursor is read again as its first rows land, which misses nothing written meanwhile. A newest page was read just now up to its cursor, so a read past it at once would answer nearly nothing the read as the first rows land does not, and is not asked.
+        let wake: Effect.Effect<unknown> = Option.isSome(recalled) ? Effect.void : firstRows;
 
         /** The last page told, whose word on the agent the rows drawn beside the next read are told with; none before the first. */
         let last: AgentTranscriptPage | undefined;
@@ -990,11 +998,7 @@ export function followTranscript<Key>(
 
           // Note that a page read before the live read stood is read again once its first rows land, since what was written between the two is in neither.
           if (following === undefined) {
-            const stood = yield* liveRead;
-            wake = SubscriptionRef.changes(stood).pipe(
-              Stream.filter(movedFrom({ kind: LIVE_STATE.WAITING })),
-              Stream.runHead,
-            );
+            wake = firstRows;
             continue;
           }
 

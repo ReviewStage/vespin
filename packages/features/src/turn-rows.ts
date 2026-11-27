@@ -623,7 +623,7 @@ type RowPart = (typeof ROW_PART)[keyof typeof ROW_PART];
 export interface RowReading<B> {
   readonly key: (block: B, index: number) => string;
   readonly part: (block: B) => RowPart;
-  /** Whether the block still moves, which a group of calls shimmers for. */
+  /** Whether the block still moves, which a group of calls is drawn quiet for. */
   readonly running: (block: B) => boolean;
 }
 

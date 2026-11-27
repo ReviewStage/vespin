@@ -15,9 +15,10 @@ import { accountPreferencesRead } from "../live/reads/account-preferences.js";
  * The account's preferences on the migrated capture: a default written
  * through its real writer notifies the account's topic, which the
  * preferences' live read is woken on, so a default chosen on another device
- * draws within a coalesce window; and a runs-on pick on a row that stands
- * notifies nothing, since every Start with Runs on writes one and would
- * otherwise wake every read of the account.
+ * draws within a coalesce window; and a runs-on pick that moves notifies it
+ * too, so New task on every device starts where the last Start chose, while
+ * one kept as it stood notifies nothing, since every Start with Runs on
+ * writes one and would otherwise wake every read of the account.
  *
  * Synthetic accounts throughout.
  */
@@ -46,12 +47,16 @@ it.layer(getTestDB())("what moves the account's preferences notifies", (it) => {
     }),
   );
 
-  it.effect("a runs-on pick on an account whose row stands notifies nothing", () =>
-    Effect.gen(function* () {
-      const userId = yield* openAccount;
-      yield* writeAccountPreferences(userId, { setupFinished: true });
+  it.effect(
+    "a runs-on pick notifies the account where it moves, and nothing kept as it stood",
+    () =>
+      Effect.gen(function* () {
+        const userId = yield* openAccount;
+        const account: readonly SyncTopic[] = [[TOPIC.ACCOUNT, userId]];
+        yield* writeAccountPreferences(userId, { setupFinished: true });
 
-      yield* expectTopicsFire(keepRunsOnPick(userId, { machine: AGENT_MACHINE.VERCEL }), []);
-    }),
+        yield* expectTopicsFire(keepRunsOnPick(userId, { machine: AGENT_MACHINE.VERCEL }), account);
+        yield* expectTopicsFire(keepRunsOnPick(userId, { machine: AGENT_MACHINE.VERCEL }), []);
+      }),
   );
 });

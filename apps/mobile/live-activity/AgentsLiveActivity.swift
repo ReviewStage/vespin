@@ -7,15 +7,17 @@
 // the island shows work moving. The expanded one and the Lock Screen list
 // up to three, each with its title, the time its turn has run, and Stop
 // (`StopAgentIntent`). Every such time is an `ElapsedTime`, which fits its
-// widest reading and reads hours and minutes once the screen dims. The
-// count stands by the panel's working mark while agents work, held still
-// since a Live Activity runs no animation of its own (`WorkingMark`), and
-// by its done mark once none does, centered then, since nothing stands
-// beside it, in the working blue or the done green, and copper
-// (`Attention`) marks only what wants the member: the asks waiting, the
-// compact presentation's Inbox glyph, and the keyline while one waits. Nothing in it is a link, so no row or region opens a page of
-// the app: a person swipes it away more often than they open it, and a
-// swipe the system read as a tap opened an agent. A tap still opens the
+// widest reading and reads hours and minutes once the screen dims. While
+// agents work the count stands as words alone, with no mark beside it,
+// since a Live Activity runs no animation of its own and a still working
+// mark read as stuck (`CountLabel`); once none does it stands by the
+// panel's done mark, in the same row and place, in the
+// working blue or the done green, and copper (`Attention`) marks only what
+// wants the member: the asks waiting, the compact presentation's Inbox
+// glyph, and the keyline while one waits.
+// Nothing in it is a link, so no row or region opens a page of the app: a
+// person swipes it away more often than they open it, and a swipe the
+// system read as a tap opened an agent. A tap still opens the
 // app, as iOS opens it on any activity. The colors are the brand's, written
 // into this target's asset catalog by `app.config.ts`. Every presentation
 // has a preview at the end of the file.
@@ -43,7 +45,6 @@ struct AgentsLiveActivity: Widget {
       let state = context.state
       return DynamicIsland {
         // Note that the header stands in from the island's sides as far as the rows do, so its ends line up with the rows' titles and Stop.
-        // Note that once none works the header has no rows under it, so it stands in the island's center region instead of its leading one.
         DynamicIslandExpandedRegion(.leading) {
           if state.running > 0 {
             CountLabel(state: state).padding(.leading, ExpandedInset.side)
@@ -54,14 +55,17 @@ struct AgentsLiveActivity: Widget {
             WaitingLabel(state: state).padding(.trailing, ExpandedInset.side)
           }
         }
-        DynamicIslandExpandedRegion(.center) {
-          if state.running == 0 {
-            DoneHeader(state: state)
-          }
-        }
+        // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
+        // Note that once none works the header stands alone in the rows' place, below the camera where the island centers it top to bottom, and in from the sides as far as the rows, so the done mark and the asks stand at the edges the count and the asks stood at.
         DynamicIslandExpandedRegion(.bottom) {
-          // Note that the rows stand in from the island's sides, since its corners curve in under the rows' ends and clipped a title's first letter.
-          AgentList(state: state).padding(.horizontal, ExpandedInset.side)
+          Group {
+            if state.running > 0 {
+              AgentList(state: state)
+            } else {
+              HeaderRow(state: state)
+            }
+          }
+          .padding(.horizontal, ExpandedInset.side)
         }
       } compactLeading: {
         CompactMark(state: state)
@@ -98,49 +102,61 @@ struct ActivityContentView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding(8)
     default:
-      if state.running > 0 {
-        VStack(alignment: .leading, spacing: 10) {
-          HStack {
-            CountLabel(state: state)
-            Spacer()
-            WaitingLabel(state: state)
-          }
+      // Note that once none works the header stands alone, in the same row as while agents work, so the done mark and the asks stand where the count and the asks stood, centered top to bottom by the even padding.
+      VStack(alignment: .leading, spacing: 10) {
+        HeaderRow(state: state)
+        if state.running > 0 {
           AgentList(state: state)
         }
-        .padding(16)
-      } else {
-        DoneHeader(state: state)
-          .frame(maxWidth: .infinity, alignment: .center)
-          .padding(16)
       }
+      .padding(16)
     }
   }
 }
 
-/// How many agents are working, or that they all finished, by the panel's working mark or its done mark, in the working blue or the done green.
+/// How many agents are working, in words alone, or that they all finished, by the panel's done mark, in the working blue or the done green.
+///
+/// Note that no mark stands beside the working count, since a Live Activity
+/// is drawn once and archived: only time-driven text and a timer's progress
+/// advance on their own, and anything else moves only in the two seconds
+/// after an update, and never with the screen dimmed (WidgetKit's
+/// "Animating data updates in widgets and Live Activities"). So the panel's
+/// working mark stood frozen mid-lap and read as stuck, and the elapsed
+/// times are what show work moving.
 struct CountLabel: View {
   let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
-    Label {
-      Text(state.countText).contentTransition(.numericText(value: Double(state.running)))
-    } icon: {
-      StateMark(state: state)
+    Group {
+      if state.running > 0 {
+        count
+      } else {
+        Label {
+          count
+        } icon: {
+          Image("TaskStatusDone").accessibilityHidden(true)
+        }
+      }
     }
     .font(.subheadline.weight(.semibold))
     .monospacedDigit()
     .foregroundStyle(state.tone)
     .lineLimit(1)
   }
+
+  private var count: some View {
+    Text(state.countText).contentTransition(.numericText(value: Double(state.running)))
+  }
 }
 
-/// The header once none works: the done mark and its words, with any ask still waiting beside them, centered, since no rows stand under it.
-struct DoneHeader: View {
+/// The header: the count or the done mark at the leading edge and any asks waiting at the trailing edge, the same row while agents work and once none does.
+struct HeaderRow: View {
   let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
-    HStack(spacing: 12) {
+    HStack {
       CountLabel(state: state)
+      Spacer()
       WaitingLabel(state: state)
     }
   }
@@ -234,75 +250,18 @@ enum ExpandedInset {
   static let side: CGFloat = 8
 }
 
-/// The compact island's leading mark: the Inbox glyph in copper while an ask needs the member, else the status mark in its tone.
+/// The compact island's leading side: the Inbox glyph in copper while an ask needs the member, else how many work, beside the trailing side's ticking time, or the done mark once none does.
 struct CompactMark: View {
   let state: AgentsActivityAttributes.ContentState
 
   var body: some View {
     if state.waiting > 0 {
       Image("Inbox").foregroundStyle(Color("Attention"))
+    } else if state.running > 0 {
+      RunningCount(state: state)
     } else {
-      StateMark(state: state).foregroundStyle(state.tone)
+      Image("TaskStatusDone").foregroundStyle(state.tone).accessibilityHidden(true)
     }
-  }
-}
-
-/// Where the agents stand, as the panel marks it: its working mark while any works, its done mark once none does.
-struct StateMark: View {
-  let state: AgentsActivityAttributes.ContentState
-
-  var body: some View {
-    if state.running > 0 {
-      WorkingMark()
-    } else {
-      Image("TaskStatusDone")
-    }
-  }
-}
-
-/// The panel's working mark (`@repo/ui`'s `WorkingMark`): eight 3 pt cells
-/// lapped round a 3×3 grid 2 pt apart in a 16 pt side, faint, and two
-/// chasers each with a fainter tail, in the ink around it. Note that it
-/// stands on the panel's resting frame, mid-lap, which lights four cells
-/// and reads as working, since a Live Activity is drawn once for each
-/// update rather than frame by frame, as the app holds its own mark still
-/// where the reader reduces motion.
-struct WorkingMark: View {
-  private static let cell: CGFloat = 3
-  private static let pitch: CGFloat = 5
-  private static let side: CGFloat = 16
-  private static let inset = (Self.side - (2 * Self.pitch + Self.cell)) / 2
-
-  /// The cells of the track, column and row, in the order the chasers lap them.
-  private static let track: [(column: Int, row: Int)] = [
-    (0, 0), (1, 0), (2, 0), (2, 1), (2, 2), (1, 2), (0, 2), (0, 1),
-  ]
-
-  /// The chasers and their tails on the resting frame: the track cell each stands on, and how strong it stands.
-  private static let dots: [(cell: Int, shade: Double)] = [(1, 1), (0, 0.6), (5, 1), (4, 0.6)]
-
-  var body: some View {
-    ZStack(alignment: .topLeading) {
-      ForEach(Self.track.indices, id: \.self) { index in
-        square(index).opacity(0.3)
-      }
-      ForEach(Self.dots.indices, id: \.self) { index in
-        square(Self.dots[index].cell).opacity(Self.dots[index].shade)
-      }
-    }
-    .frame(width: Self.side, height: Self.side, alignment: .topLeading)
-    .accessibilityHidden(true)
-  }
-
-  /// The rounded square on the track cell at `index`.
-  private func square(_ index: Int) -> some View {
-    let place = Self.track[index]
-
-    return RoundedRectangle(cornerRadius: Self.cell / 4)
-      .frame(width: Self.cell, height: Self.cell)
-      .offset(
-        x: Self.inset + CGFloat(place.column) * Self.pitch,
-        y: Self.inset + CGFloat(place.row) * Self.pitch)
   }
 }
 

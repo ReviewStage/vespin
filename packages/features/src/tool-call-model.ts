@@ -1745,6 +1745,9 @@ const AGENT_TOOL_VIEWS = {
     namedCall(CALL_KIND.CHAT_SEARCH, input, output, "keywords"),
   [AGENT_TOOL.REACT_CHAT]: ({ input, output }) =>
     namedCall(CALL_KIND.CHAT_REACT, input, output, "name"),
+  // Note that a Manager made reads as a start, its row naming the new Manager by its chip.
+  [AGENT_TOOL.CREATE_MANAGER]: ({ input, output }) =>
+    namedCall(CALL_KIND.START_AGENT, input, output, "message"),
 } as const satisfies Record<AgentTool, ToolReader>;
 
 /**
@@ -2236,6 +2239,7 @@ const AGENT_CALL_TOOLS: ReadonlySet<string> = new Set([
   AGENT_TOOL.READ_AGENT_CHANGES,
   AGENT_TOOL.MESSAGE_AGENT,
   AGENT_TOOL.START_AGENT,
+  AGENT_TOOL.CREATE_MANAGER,
   AGENT_TOOL.ARCHIVE_AGENT,
   AGENT_TOOL.UNARCHIVE_AGENT,
   AGENT_TOOL.STOP_AGENT,

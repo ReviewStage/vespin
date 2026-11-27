@@ -41,13 +41,13 @@ const SKELETON_ROWS = [
   { name: "30%", trigger: "58%" },
 ] as const;
 
-/** How wide the placeholder owner's name and next run stand, inside the columns the list keeps for them. */
-const SKELETON_META = { OWNER: "64px", NEXT: "96px" } as const;
+/** How wide the placeholder Manager's and owner's names and next run stand, inside the columns the list keeps for them. */
+const SKELETON_META = { MANAGER: "80px", OWNER: "64px", NEXT: "96px" } as const;
 
 /** A row's clock tile, at an actor mark's row size (`ACTOR_SIZE.ROW`, `avatar.css`). */
 const SKELETON_ROW_MARK = "20px";
 
-/** The owner's mark at its inline size (`OWNER_MARK_SIZE.INLINE`, a 16px tile or picture). */
+/** The owner's and the Manager's marks at their inline size (`OWNER_MARK_SIZE.INLINE`, `ACTOR_SIZE.INLINE`: a 16px tile, picture, or face). */
 const SKELETON_OWNER_MARK = "16px";
 
 /** How wide the toolbar's two acts stand while the pages load: Create with an agent, and New automation. */
@@ -119,20 +119,28 @@ export function AutomationGroupList({
   );
 }
 
-/** A row's metadata at its end: its owner's column, then its next run's, set against the switch. */
+/** A row's metadata at its end: the Manager its runs land on, where the list names one, its owner's column, then its next run's, set against the switch. */
 export function AutomationRowMeta({
   lead,
+  manager,
   owner,
   next,
 }: {
   /** What is read before the columns and drawn nowhere: the working word where a run is. */
   lead?: ReactNode;
+  /** The Manager's column: its face and name, or nothing in it for an automation that hands its runs to none; left out, a list that names no Manager draws no column. */
+  manager?: ReactNode;
   owner: ReactNode;
   next: ReactNode;
 }): React.JSX.Element {
   return (
     <span className={AUTOMATION_ROW_META}>
       {lead}
+      {manager === undefined ? null : (
+        <span className="automation-row-manager inline-flex w-automation-manager flex-none items-center gap-item-gap overflow-hidden whitespace-nowrap">
+          {manager}
+        </span>
+      )}
       {owner}
       <span className="automation-row-next inline-flex w-automation-next flex-none items-center justify-end gap-item-gap overflow-hidden">
         {next}
@@ -164,8 +172,8 @@ export function AutomationOwnerFrame({
 
 /**
  * The list while it is first read, in its own list and rows: each row's
- * clock tile, its name over what fires it, its owner and its next run in their
- * columns, and its switch, a narrow room's rows naming neither and ending in
+ * clock tile, its name over what fires it, its Manager, its owner, and its
+ * next run in their columns, and its switch, a narrow room's rows naming neither and ending in
  * a chevron, as a phone's rows do, so the list lands where the blocks stood.
  * The rows open nothing.
  */
@@ -181,6 +189,12 @@ export function AutomationListSkeleton({ narrow }: { narrow: boolean }): React.J
           meta={
             narrow ? undefined : (
               <AutomationRowMeta
+                manager={
+                  <>
+                    <Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_OWNER_MARK} />
+                    <Skeleton width={SKELETON_META.MANAGER} />
+                  </>
+                }
                 owner={
                   <AutomationOwnerFrame
                     mark={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_OWNER_MARK} />}

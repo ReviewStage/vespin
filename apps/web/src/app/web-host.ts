@@ -72,6 +72,7 @@ import {
   hostKernelLayer,
   hostStandingLayer,
   IdSource,
+  LocalStoreBackend,
   RunMode,
   reporterLayer,
   ServiceOrigin,
@@ -92,6 +93,7 @@ import { FILES_KEY, localStorageFileSystem, tabStorage } from "./local-storage-f
 import { type PageLeave, tabLeave } from "./page-leave";
 import { failedChunkAnswer, PART_DID_NOT_LOAD, PRELOAD_ERROR, staleBuildTab } from "./stale-build";
 import { developmentFixtureProfile } from "./web-fixture";
+import { webLocalStore } from "./web-local-store";
 import {
   askTabNotifications,
   onTabShownChanged,
@@ -264,6 +266,24 @@ function tabOnline(): Stream.Stream<boolean> {
  */
 const appVersion = webDeploymentCommit();
 
+/**
+ * The account's kept reads in the browser's IndexedDB (`web-local-store.ts`),
+ * which a page load draws from and reads past; none where the browser keeps
+ * no IndexedDB, so the tab runs in memory.
+ */
+function localStoreLayer(): Layer.Layer<LocalStoreBackend> | Layer.Layer<never> {
+  if (typeof indexedDB === "undefined") return Layer.empty;
+
+  return Layer.succeed(
+    LocalStoreBackend,
+    webLocalStore({
+      databases: indexedDB,
+      keyRange: IDBKeyRange,
+      locks: "locks" in navigator ? navigator.locks : undefined,
+    }),
+  );
+}
+
 /** Every seam the host's kernel and assembly stand on, as the tab answers it. */
 function seamLayers(storage: Storage, fixture: RunProfile | undefined) {
   return Layer.mergeAll(
@@ -283,6 +303,7 @@ function seamLayers(storage: Storage, fixture: RunProfile | undefined) {
     Layer.succeed(ServiceOrigin, location.origin),
     Layer.succeed(TerminalSocket, openTerminalSocketFromPage),
     Layer.succeed(SettingsChangedElsewhere, filesChangedElsewhere(storage)),
+    localStoreLayer(),
   );
 }
 

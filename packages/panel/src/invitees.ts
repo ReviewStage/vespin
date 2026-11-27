@@ -2,10 +2,10 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { INVITATION_ROLE, inviteesOf } from "@repo/features/workspace-invitation-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EMAIL_CHIP_STATE, type EmailChip, type EmailChipState } from "@repo/ui";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { actMutation } from "./act-mutations.js";
-import { appStateQuery, selectAccount } from "./use-app-state.js";
+import { selectAccount, useAppStateSlice } from "./use-app-state.js";
 
 /**
  * invitees.ts -- the addresses a form invites, as setup's team step, New workspace, and Settings' Invite hold them: typed or pasted into chips, checked as the service reads them, and marked as each is sent.
@@ -68,7 +68,7 @@ export interface Invitees {
 
 /** Who is signed in, by the address invitations go to and the name their face is drawn by; nothing while signed out. */
 export function useSignedIn(): { readonly email: string; readonly name: string } | undefined {
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
 
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return undefined;
 
