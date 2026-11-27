@@ -171,6 +171,41 @@ describe("markdownBlocks", () => {
     expect(markdownShows("<!-- What changed and why? -->\n", { hidesHtml: true })).toBe(false);
   });
 
+  // A pull request's `> [!WARNING]` printed its marker inside a plain quote on iOS, where GitHub and the panel draw a callout headed by its kind.
+  it("draws a quote that opens on an alert's marker alone as that alert, and any other as a quote", () => {
+    const written = [
+      "> [!WARNING]",
+      "> The seventh day is still open.",
+      "",
+      "> [!tip]",
+      ">",
+      "> Read the clock once.",
+      "",
+      "> [!NOTE] and words on its line",
+    ].join("\n");
+
+    expect(markdownBlocks(written, READING)).toEqual([
+      {
+        kind: MARKDOWN_BLOCK.ALERT,
+        alert: "warning",
+        blocks: [
+          { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("The seventh day is still open.")] },
+        ],
+      },
+      {
+        kind: MARKDOWN_BLOCK.ALERT,
+        alert: "tip",
+        blocks: [{ kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("Read the clock once.")] }],
+      },
+      {
+        kind: MARKDOWN_BLOCK.QUOTE,
+        blocks: [
+          { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("[!NOTE] and words on its line")] },
+        ],
+      },
+    ]);
+  });
+
   it("draws a table as rows as wide as its header, each column aligned as written", () => {
     const [table] = markdownBlocks("| Name | Count |\n| :-- | --: |\n| a | 1 |\n| b |", READING);
     expect(table).toEqual({
