@@ -62,11 +62,14 @@ import {
  *
  * The run is anchored to its end (`anchorTo: "end"`), as the docs' chat
  * guide anchors a log: rows put before the first leave the row the reader
- * is on where it stood, a row growing at the end keeps a reader at the end
- * there, and a row appended follows on to it where the reader stood within
- * `scrollEndThreshold` of the end (`followOnAppend`). The run opens on its
- * last rows (`scrollToEnd()` once its scroller is laid out), and its caller asks whether it
- * stands at its end and takes it there through its handle. Room after the
+ * is on where it stood, and a row growing at the end keeps a run standing
+ * at its very end there. The run opens on its last rows (`scrollToEnd()`
+ * once its scroller is laid out), and whether it then keeps to its end is
+ * its log's to say (`@repo/ui/end-anchor`), which takes it there through its
+ * handle: the run follows no row appended of its own (`followOnAppend`), and
+ * counts only its very end as its end (`scrollEndThreshold`), so a reader
+ * who scrolled a little way up is never moved by the rows landing under
+ * them. Room after the
  * last row is the virtualizer's own (`paddingEnd`), so nothing the
  * virtualizer does not measure stands after the rows. A scroll the reader
  * starts, by wheel, touch, or key, takes over from one the run is still
@@ -182,8 +185,11 @@ const FIRST_FRAME_OVERSCAN = 0;
 /** The keys that scroll a scroller the reader is in, each of which takes over from a scroll the run is bringing to its target. */
 const SCROLL_KEYS = new Set(["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]);
 
-/** How near its end, in pixels, a run anchored to its end counts as standing there, so a row appended follows on to it: the docs' chat guide's. */
+/** How near its end, in pixels, a run anchored to its start counts as standing there (`isAtEnd()`): the docs' chat guide's. */
 const END_THRESHOLD_PX = 80;
+
+/** How near its end, in pixels, a run anchored to its end counts as standing there, so a row growing keeps it there: the rounding of a scroll that reached it. */
+const AT_END_PX = 2;
 
 /** What a run's block wears for a list of the caller's own (`block`): what holds it, its id, the keys and focus it hears, and its data attributes. */
 export interface VirtualRowsBlock {
@@ -594,8 +600,7 @@ export function VirtualRows({
     rangeExtractor,
     scrollMargin: margin,
     anchorTo: fromEnd ? "end" : "start",
-    followOnAppend: fromEnd,
-    scrollEndThreshold: END_THRESHOLD_PX,
+    scrollEndThreshold: fromEnd ? AT_END_PX : END_THRESHOLD_PX,
     paddingEnd,
     initialMeasurementsCache: seed,
     // Note that a run anchored to its start opens wherever its scroller stands, kept as the reader left it, since several runs may share it.

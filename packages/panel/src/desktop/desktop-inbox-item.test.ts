@@ -1864,6 +1864,7 @@ test("a message written on a settled item's thread from its box goes as a messag
   // The thread is taller than its board, and the reader has scrolled up it, so the new comment lands under its foot.
   layScrollerOut(board, 400, 1_400);
   act(() => {
+    board.dispatchEvent(new WheelEvent("wheel", { deltaY: -120 }));
     board.scrollTop = 200;
   });
 

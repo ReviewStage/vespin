@@ -53,7 +53,8 @@ function twoFrames(page: Page): Promise<void> {
  * turn twice as long, so both transcripts scroll; shown the first, then the
  * second, each stands at its end. The gap is read once the newest words are
  * in view and the window has drawn twice more, since what moves the end
- * lands after the log's own opening scroll.
+ * lands after the log's own opening scroll. Then the reader turns the wheel
+ * up, which the log keeps to, offering the way back to its end.
  */
 test("a transcript opened from another agent's tab opens on its newest line", async ({
   page,
@@ -93,4 +94,15 @@ test("a transcript opened from another agent's tab opens on its newest line", as
     await twoFrames(page);
     expect(await gapToEnd(page)).toBeLessThanOrEqual(1);
   }
+
+  // The reader turns the wheel up: the log stays where they took it and offers the way back, which takes it to its end.
+  const log = page.getByRole("log");
+  await log.hover();
+  await page.mouse.wheel(0, -400);
+  const back = page.getByRole("button", { name: "Scroll to the newest line" });
+  await expect(back).toBeVisible();
+  await twoFrames(page);
+  expect(await gapToEnd(page)).toBeGreaterThan(100);
+  await back.click();
+  await expect.poll(() => gapToEnd(page)).toBeLessThanOrEqual(1);
 });
