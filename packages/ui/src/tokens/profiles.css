@@ -83,10 +83,6 @@
   --ui-sidebar-row-gap: var(--ui-space-6);
   --ui-sidebar-places-gap: var(--ui-space-4);
   --ui-sidebar-group-gap: var(--ui-space-24);
-  /* A task list's row: the room it keeps over and under a control's height. */
-  --ui-task-row-block: var(--ui-space-6);
-  /* How many lines an agent's empty box stands, before it grows with its words. */
-  --ui-composer-least-lines: 1;
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's
@@ -394,10 +390,6 @@
   --ui-sidebar-row-gap: var(--ui-list-gap);
   --ui-sidebar-places-gap: var(--ui-list-gap);
   --ui-sidebar-group-gap: var(--ui-section-gap);
-  /* A task list's row: the room it keeps over and under a control's height. */
-  --ui-task-row-block: var(--ui-space-6);
-  /* How many lines an agent's empty box stands, before it grows with its words. */
-  --ui-composer-least-lines: 1;
   /* The measure a page is read at, about seventy characters of body text: a
      document, a detail page, a collection. Settings reads a step narrower,
      and a page of records compared across a table's columns, or the web's

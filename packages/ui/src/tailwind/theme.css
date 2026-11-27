@@ -322,7 +322,7 @@
   --spacing-new-task-title: calc(100% - 2 * var(--ui-control-height) - var(--ui-item-gap));
   --spacing-card-line: calc(100% + 2 * var(--ui-row-inset));
   --spacing-tasks-board-column: 320px; /* off-scale: a card's width, as Linear's board stands it */
-  --spacing-tasks-list-row: calc(var(--ui-control-height) + var(--ui-task-row-block));
+  --spacing-tasks-list-row: calc(var(--ui-control-height) + var(--ui-space-6));
   /* A quick add's draft, raised as a card, takes its hairline out of the
      row's inset, so its cells stand on the rows' lines. */
   --spacing-task-row-draft: calc(var(--ui-row-inset) - 1px);
