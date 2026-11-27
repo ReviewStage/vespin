@@ -1,0 +1,9 @@
+pinned to 478c70316e
+== bundle PJj11171a base 478c70316e
+  built 478c70316e base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+#11171 22e80d0a99 merged with main 21c8a5869e as 478c70316e: f11171 (Machine chip menu), iPhone 18 Pro light
+iphone-light-machine-menu: fails 0 shots 2 
