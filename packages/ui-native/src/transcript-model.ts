@@ -191,11 +191,11 @@ export interface TranscriptPlace {
   readonly row: string;
   readonly member: number | undefined;
   readonly piece: TranscriptPiece;
-  /** Which work of a Manager's chat it stands in, opened under a message or the working line (`managerChatView`); none for a row of the transcript's own. */
+  /** Which work of a Manager's chat it stands in, opened under a message or at the chat's end from the working line over its box (`managerChatView`); none for a row of the transcript's own. */
   readonly work?: ChatWorkPlace | undefined;
 }
 
-/** Which work of a Manager's chat a row stands in: a message's, under its bubble, or the turn under way's, under its working line. */
+/** Which work of a Manager's chat a row stands in: a message's, under its bubble, or the turn under way's, at the chat's end. */
 const CHAT_WORK_PLACE = {
   MESSAGE: "message",
   LIVE: "live",
@@ -386,12 +386,6 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly words: string;
       /** Whether the agent waits on the reader's answer rather than working, which the line says in the attention ink with no spinner. */
       readonly waiting?: boolean | undefined;
-      /** Whether it is a Manager's chat's, which says it in a row of the Manager's, as a channel shows who is typing. */
-      readonly chat?: boolean | undefined;
-      /** In a Manager's chat, the Manager, whose face and name head the line. */
-      readonly sender?: ChatSender | undefined;
-      /** Whether the turn under way's work stands open under it (Show work); none while it has done none since its last message. */
-      readonly workShown?: boolean | undefined;
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.RULE;
@@ -433,7 +427,7 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
 export interface TranscriptToggles {
   readonly folds: ReadonlyMap<string, ReadonlySet<string>>;
   readonly calls: ReadonlySet<string>;
-  /** Whether the reader opened the turn under way's work under its working line. */
+  /** Whether the reader opened the turn under way's work from the working line over a Manager's chat's box (Show work). */
   readonly liveWork: boolean;
 }
 
@@ -1738,8 +1732,9 @@ function newRuleItem(id: string): TranscriptItem {
  * it where it opens their run, in the runs the panel groups them in, each
  * offering its thread with its replies summed under it, with no turn's
  * foot; the reader's messages on their way to it after them; and while the
- * Manager may still write, its working line, the turn under way's work under
- * it once the reader opens it; and New over the first message after the
+ * Manager may still write, the turn under way's work at its end once the
+ * reader opens it from the working line over the box, which is no row of
+ * the chat (`managerWorkingLine`); and New over the first message after the
  * reader's mark where one is handed (`newAfter`). The transcript is read
  * only for the work its turns did. A thread's replies stand on its own page
  * (`managerThreadItems`).
@@ -1787,24 +1782,11 @@ export function managerChatItems(
     runs,
   );
 
-  if (!reading.writing) return drawn;
+  if (!reading.writing || !reading.toggles.liveWork || view.live.length === 0) return drawn;
   const last = going.at(-1)?.clientKey ?? newest?.id ?? GREETING_PLACE.message;
-  const liveShown = view.live.length > 0 && reading.toggles.liveWork;
 
-  return [
-    ...drawn,
-    {
-      place: { ...linePlace(last, last), piece: TRANSCRIPT_PIECE.WORKING },
-      depth: 0,
-      kind: TRANSCRIPT_ITEM.WORKING,
-      words: WORKING_LINE,
-      chat: true,
-      sender: { name: reading.managerName ?? "", manager: true, userId: undefined },
-      workShown: view.live.length === 0 ? undefined : liveShown,
-    },
-    // Note that the turn under way's work stands under its working line, still moving, as the panel opens it there.
-    ...(liveShown ? workItems(view.live, last, CHAT_WORK_PLACE.LIVE, true, read) : []),
-  ];
+  // Note that the turn under way says so over the box (`managerWorkingLine`), never in a row of the chat, and its work, once Show work there opens it, stands at the chat's end still moving, as the panel opens it.
+  return [...drawn, ...workItems(view.live, last, CHAT_WORK_PLACE.LIVE, true, read)];
 }
 
 /**
@@ -1887,11 +1869,13 @@ export function drawnCallIds(items: readonly TranscriptItem[]): ReadonlySet<stri
   );
 }
 
-/** The toggles with a fold's, by its place, a call's, by its id, or the turn under way's work under a Manager's working line, turned the other way. */
-export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): TranscriptToggles {
-  // Note that a Manager's working line turns the turn under way's work (Show work).
-  if (item.kind === TRANSCRIPT_ITEM.WORKING) return { ...toggles, liveWork: !toggles.liveWork };
+/** The toggles with the turn under way's work in a Manager's chat turned the other way, as Show work beside the working line over its box turns it. */
+export function toggledLiveWork(toggles: TranscriptToggles): TranscriptToggles {
+  return { ...toggles, liveWork: !toggles.liveWork };
+}
 
+/** The toggles with a fold's, by its place, or a call's, by its id, turned the other way. */
+export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): TranscriptToggles {
   if (item.kind === TRANSCRIPT_ITEM.CALL) {
     const calls = new Set(toggles.calls);
 

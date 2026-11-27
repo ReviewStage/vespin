@@ -39,6 +39,7 @@ import {
   CHAT_LANDING,
   chatMessageLanding,
   managerChatView,
+  managerWorkingLine,
 } from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
@@ -90,6 +91,7 @@ import {
   type Glyph,
   glyphSymbol,
   ListSection,
+  ManagerWorkingLine,
   MentionSuggestions,
   MenuRow,
   type MenuRowAct,
@@ -114,6 +116,7 @@ import {
   type TranscriptToggles,
   taskLead,
   toggledAt,
+  toggledLiveWork,
   transcriptItems,
   transcriptOriginOf,
   type UndeliveredLine,
@@ -398,6 +401,7 @@ function AgentComposerBar({
   call,
   otherCall,
   ending,
+  working,
   tools,
   trailing,
   dictation,
@@ -419,6 +423,8 @@ function AgentComposerBar({
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
   /** Continue in new agent and why, where only a new agent goes on past the agent's failed turn; none elsewhere. */
   readonly ending: ReactNode;
+  /** A Manager's working line while a turn runs, which stands over the field rather than in the chat; none elsewhere. */
+  readonly working: ReactNode;
   /** What leads the row under the field after the +: where the agent works. */
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
@@ -461,9 +467,12 @@ function AgentComposerBar({
     composer.mentions === undefined &&
     otherCall === undefined &&
     ending === undefined &&
+    (working === undefined || picking) &&
     note === undefined ? undefined : (
       <>
         {ending}
+        {/* Note that the working line steps aside while a `/` or an `@` offers its list, as the capsules over the box do. */}
+        {picking ? null : working}
         {otherCall === undefined ? null : (
           <CallCardRow call={otherCall.card} onOpen={otherCall.open} />
         )}
@@ -540,6 +549,7 @@ function AgentComposerArea({
   call,
   otherCall,
   ending,
+  working,
   tools,
   trailing,
   onOpenThread,
@@ -563,6 +573,8 @@ function AgentComposerArea({
   readonly call: ComposerCall | undefined;
   readonly otherCall: ReturnType<typeof useStandingCallCard>;
   readonly ending: ReactNode;
+  /** A Manager's working line, over the field while a turn runs; none elsewhere. */
+  readonly working: ReactNode;
   /** What leads the row under the field after the +: where the agent works. */
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
@@ -597,6 +609,7 @@ function AgentComposerArea({
         call={call}
         otherCall={otherCall}
         ending={ending}
+        working={working}
         tools={tools}
         trailing={trailing}
         dictation={dictated.dictation}
@@ -1026,6 +1039,16 @@ const AgentConversation = memo(function AgentConversation({
   const [reveal, setReveal] = useState<TranscriptReveal | undefined>(undefined);
   const waitingCall = approvals.waiting?.callId;
 
+  // Note that a Manager's chat says it works over its box, never in a row of the chat, by the rule the panel's chat reads.
+  const workingLine =
+    chatView === undefined
+      ? undefined
+      : managerWorkingLine(chatView, {
+          working: writing,
+          name: chatFaces?.managerName ?? "",
+          waiting: approvals.waiting?.count ?? 0,
+        });
+
   const showWaiting =
     waitingCall === undefined
       ? undefined
@@ -1340,6 +1363,23 @@ const AgentConversation = memo(function AgentConversation({
       note={note}
       call={talk.call}
       otherCall={otherCall}
+      working={
+        workingLine === undefined ? undefined : (
+          <ManagerWorkingLine
+            face={chatFaces?.faces.manager}
+            words={workingLine.words}
+            waiting={workingLine.waiting}
+            work={
+              workingLine.work
+                ? {
+                    shown: toggles.liveWork,
+                    onToggle: () => setToggles(toggledLiveWork),
+                  }
+                : undefined
+            }
+          />
+        )
+      }
       ending={
         continueOf === undefined ? undefined : (
           <ContinueLine

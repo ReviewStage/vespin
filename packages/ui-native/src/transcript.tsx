@@ -4,11 +4,7 @@ import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
-import {
-  CHAT_EDIT_WORDS,
-  CHAT_THREAD_WORDS,
-  chatWorkWords,
-} from "@repo/features/manager-chat-view";
+import { CHAT_EDIT_WORDS, CHAT_THREAD_WORDS } from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
@@ -73,7 +69,7 @@ import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, ROLE_SIZE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
@@ -1150,22 +1146,6 @@ function ShownMediaView({
   }
 }
 
-/** Show work, or Hide work while it stands open, where a Manager's working line's turn has done work (`workShown`); none where it has done none. A finished turn's work stands in its fold over its first message instead. */
-function workActs(
-  item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.WORKING }>,
-  drawing: RowDrawing,
-): readonly HeldAct[] {
-  if (item.workShown === undefined) return [];
-
-  return [
-    {
-      label: chatWorkWords(item.workShown),
-      symbol: GLYPH.SHOW_WORK,
-      onPress: () => drawing.onToggle(item),
-    },
-  ];
-}
-
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
   item,
@@ -1305,29 +1285,6 @@ function TranscriptRow({
         </View>
       );
     case TRANSCRIPT_ITEM.WORKING:
-      // Note that a Manager's chat says it works in a bubble of the Manager's, as Messages shows the other side typing, and as the panel's chat draws its working line.
-      if (item.chat === true && item.sender !== undefined && drawing.channel !== undefined) {
-        return (
-          <View style={[styles.row, { paddingVertical: SPACE.ROW }]}>
-            <ChannelMessage sender={item.sender} faces={drawing.channel} opens working>
-              {/* Note that a long press offers the turn under way's work, as the press beside the panel's working line does. */}
-              <HeldMenu acts={workActs(item, drawing)}>
-                <View>
-                  <Text
-                    style={{
-                      fontSize: PROSE_SIZE,
-                      color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
-                    }}
-                  >
-                    {item.words}
-                  </Text>
-                </View>
-              </HeldMenu>
-            </ChannelMessage>
-          </View>
-        );
-      }
-
       // Note that the line is words alone, as the panel's Working line is, its mark left to the rows of what runs; and that an agent held for an answer says so in the attention ink, since it waits on the reader rather than working.
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>
