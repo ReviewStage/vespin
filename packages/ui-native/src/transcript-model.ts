@@ -444,14 +444,26 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
     }
 );
 
-/** Which folds the reader turned from how they stand on their own, by their turn and then their row, which calls they opened, by the call, and which thoughts they opened, by their turn, their row, and their place in a group's rows (none for a thought on a row of its own). */
+/** Which folds the reader turned from how they stand on their own, by their turn and then their row, which calls they opened, by the call, and which thoughts they opened (`OpenedThoughts`). */
 export interface TranscriptToggles {
   readonly folds: ReadonlyMap<string, ReadonlySet<string>>;
   readonly calls: ReadonlySet<string>;
-  readonly thoughts: ReadonlyMap<string, ReadonlyMap<string, ReadonlySet<number | undefined>>>;
+  readonly thoughts: OpenedThoughts;
   /** Whether the reader opened the turn under way's work under its working line. */
   readonly liveWork: boolean;
 }
+
+/**
+ * The thoughts a reader opened: by the work of a Manager's chat they stand
+ * in (none for a transcript's own), their turn, their row, and their place
+ * in a group's rows (none for a thought on a row of its own). Note that the
+ * work leads, because a chat's finished work and the turn under way's may
+ * stand under one message, whose thoughts would otherwise open together.
+ */
+type OpenedThoughts = ReadonlyMap<
+  ChatWorkPlace | undefined,
+  ReadonlyMap<string, ReadonlyMap<string, ReadonlySet<number | undefined>>>
+>;
 
 /** Nothing turned. */
 export const NO_TOGGLES: TranscriptToggles = {
@@ -535,7 +547,9 @@ function foldTurned(toggles: TranscriptToggles, place: TranscriptPlace): boolean
 
 /** Whether a reader opened a thought, which stands closed on its own. */
 function thoughtOpened(toggles: TranscriptToggles, place: TranscriptPlace): boolean {
-  return toggles.thoughts.get(place.message)?.get(place.row)?.has(place.member) === true;
+  const { work, message, row, member } = place;
+
+  return toggles.thoughts.get(work)?.get(message)?.get(row)?.has(member) === true;
 }
 
 /** An item's place with another piece of its row. */
@@ -1236,16 +1250,17 @@ function partItems(
   }
 }
 
-/** A turn's rows as items, a group's rows after its line while it stands open. */
+/** A turn's rows as items, a group's rows after its line while it stands open, each in the work of a Manager's chat it stands in, where it stands in one. */
 function rowItems(
   rows: readonly TurnRow<AgentPart>[],
   message: string,
   depth: number,
   reading: ItemsReading,
+  work?: ChatWorkPlace,
 ): readonly TranscriptItem[] {
   return rows.flatMap((row): readonly TranscriptItem[] => {
     const base = {
-      place: { message, row: row.key, member: undefined, piece: TRANSCRIPT_PIECE.LINE },
+      place: { message, row: row.key, member: undefined, piece: TRANSCRIPT_PIECE.LINE, work },
       depth,
     };
 
@@ -1396,10 +1411,8 @@ function workItems(
   moving: boolean,
   reading: ItemsReading,
 ): readonly TranscriptItem[] {
-  return rowItems(workRows(parts, moving), message, 1, reading).map((item) => ({
-    ...item,
-    place: { ...item.place, work },
-  }));
+  // Note that each row stands in the work's place from the start, so a thought's opening is read by it as it is drawn.
+  return rowItems(workRows(parts, moving), message, 1, reading, work);
 }
 
 /** A Manager's greeting as its chat's first message, under its name, though no one sent it and nothing stores it; none where there is none. */
@@ -1952,21 +1965,22 @@ export function drawnCallIds(items: readonly TranscriptItem[]): ReadonlySet<stri
   );
 }
 
-/** The toggles with a fold's, by its place, a call's, by its id, or the turn under way's work under a Manager's working line, turned the other way. */
+/** The toggles with a fold's, by its place, a call's, by its id, a thought's, by its work and its place, or the turn under way's work under a Manager's working line, turned the other way. */
 export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): TranscriptToggles {
   // Note that a Manager's working line turns the turn under way's work (Show work).
   if (item.kind === TRANSCRIPT_ITEM.WORKING) return { ...toggles, liveWork: !toggles.liveWork };
 
   if (item.kind === TRANSCRIPT_ITEM.THOUGHT) {
-    const { message, row, member } = item.place;
-    const rows = new Map(toggles.thoughts.get(message));
+    const { work, message, row, member } = item.place;
+    const turns = new Map(toggles.thoughts.get(work));
+    const rows = new Map(turns.get(message));
     const members = new Set(rows.get(row));
 
     if (!members.delete(member)) members.add(member);
 
     return {
       ...toggles,
-      thoughts: new Map(toggles.thoughts).set(message, rows.set(row, members)),
+      thoughts: new Map(toggles.thoughts).set(work, turns.set(message, rows.set(row, members))),
     };
   }
 

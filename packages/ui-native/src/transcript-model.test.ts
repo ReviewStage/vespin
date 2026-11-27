@@ -1331,4 +1331,52 @@ describe("managerChatItems", () => {
       [TRANSCRIPT_ITEM.SAID, 0],
     ]);
   });
+  it("opens a thought in a finished turn's work apart from one in the turn under way's, though both stand under the same message", () => {
+    const said = row("m1", 1, {
+      authorKind: MANAGER_CHAT_AUTHOR.AGENT,
+      text: "Nothing open.",
+      turnId: "done",
+    });
+
+    const thinking = (id: string, text: string) => ({
+      id,
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [{ type: "reasoning", text }],
+      startedAt: 0,
+    });
+
+    const done = { ...thinking("done", "What finished."), finishedAt: 60_000 };
+    const live = thinking("live", "What runs now.");
+
+    const read = (toggles: typeof NO_TOGGLES) =>
+      managerChatItems(
+        {
+          messages: [{ message: said, place: run(true, true), work: "done" }],
+          top: [{ message: said, place: run(true, true), work: "done" }],
+          threads: new Map(),
+          sending: { messages: new Map(), channel: new Map() },
+          work: new Map([["done", agentParts(done)]]),
+          live: agentParts(live),
+        },
+        [done, live],
+        { writing: true, readerId: "u1", toggles, now: 2 * minute, pullRequests: [] },
+      );
+
+    // Both works opened, the finished one's fold and the turn under way's Show work.
+    const folded = read({ ...NO_TOGGLES, liveWork: true });
+    const unfolded = pressed({ ...NO_TOGGLES, liveWork: true }, folded, TRANSCRIPT_ITEM.FOLD);
+    const both = read(unfolded);
+
+    expect(both.filter((item) => item.kind === TRANSCRIPT_ITEM.THOUGHT)).toMatchObject([
+      { preview: "What finished.", open: false },
+      { preview: "What runs now.", open: false },
+    ]);
+
+    const opened = read(pressed(unfolded, both, TRANSCRIPT_ITEM.THOUGHT, 1));
+
+    expect(opened.filter((item) => item.kind === TRANSCRIPT_ITEM.THOUGHT)).toMatchObject([
+      { preview: "What finished.", open: false },
+      { preview: "What runs now.", open: true, words: "What runs now." },
+    ]);
+  });
 });
