@@ -21,7 +21,7 @@ import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { isAudioDataUrl, isVideoDataUrl, STATUS_TONE } from "@repo/ui";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { ImagePlusIcon } from "lucide-react";
 import { useMemo } from "react";
@@ -32,7 +32,7 @@ import { encodeImage } from "../feedback-images.js";
 import { keepPictureRead } from "../picture-query.js";
 import { useWorkingToast } from "../toast.js";
 import { pressWrite, type UndoWrite } from "../undo-stack.js";
-import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { ViewerAction } from "./attachment-viewer.js";
 import { useTaskMentions } from "./task-mentions.js";
@@ -280,7 +280,7 @@ const NO_WORKSPACES: readonly Workspace[] = [];
 export function useAddToDescription(): ViewerAction | undefined {
   const page = useTaskMentions();
   // The task's workspace, which its page names by its slug.
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
+  const workspaces = useAppStateSlice(selectWorkspaces) ?? NO_WORKSPACES;
 
   const descriptionsOn = useWorkspaceExperiment(
     page?.workspaceId ??

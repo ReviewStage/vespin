@@ -88,6 +88,8 @@ const IOS_ROUTE = {
   PULL_REQUEST_FILES: "files",
   /** The checks run on a pull request's head, under its own route. */
   PULL_REQUEST_CHECKS: "checks",
+  /** A pull request's chapters, under its own route. */
+  PULL_REQUEST_CHAPTERS: "chapters",
   /** One review thread of a pull request, by GitHub's id for it, under its own route. */
   PULL_REQUEST_THREAD: "thread",
   /** A new comment on a pull request, under its own route. */
@@ -300,6 +302,15 @@ export function iosPullRequestChecksRoute(pullRequest: {
   readonly number: number;
 }): string {
   return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_CHECKS}`;
+}
+
+/** The app's route for a pull request's chapters, by its workspace, its repository, and its number, where they are read in order. */
+export function iosPullRequestChaptersRoute(pullRequest: {
+  readonly workspaceId: string;
+  readonly repository: string;
+  readonly number: number;
+}): string {
+  return `${iosRepositoryPullRequestRoute(pullRequest)}/${IOS_ROUTE.PULL_REQUEST_CHAPTERS}`;
 }
 
 /** The app's route for one review thread of a pull request, by GitHub's id for it, where its comments are read and replied to. */

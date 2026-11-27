@@ -67,7 +67,7 @@ import {
   STEP,
   type Step,
 } from "./scenes.ts";
-import { PIN_SCROLL_FADES_SCRIPT, scrollScript } from "./scroll.ts";
+import { scrollScript } from "./scroll.ts";
 import { type Frame, sizedScript } from "./viewport.ts";
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -846,7 +846,6 @@ async function shootBrowser(
       }
 
       await page.waitForTimeout(STEP_SETTLE_MS);
-      await page.evaluate(PIN_SCROLL_FADES_SCRIPT);
       await page
         .locator(".catalog-example")
         .screenshot({ path: file, animations: "disabled", caret: "hide" });
@@ -858,7 +857,6 @@ async function shootBrowser(
       timeout: firstLoad ? FIRST_LOAD_TIMEOUT_MS : READY_TIMEOUT_MS,
     });
     await stageScene(page, CLIENT.WEB, shot.scene, phone, problems);
-    await page.evaluate(PIN_SCROLL_FADES_SCRIPT);
     await page.screenshot({ path: file, animations: "disabled", caret: "hide" });
   } finally {
     await context.close();

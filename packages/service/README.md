@@ -665,6 +665,23 @@ traced, logged, or counted. The account's preferences live read
 never its bytes, and the choices, so a client fetches a sound again only once
 its hash changed.
 
+## Accounts' view choices
+
+`src/accounts/view-choices-procedures.ts` answers `/api/account/view-choices`
+(`PUT`) on the hosted oRPC router: one of the account's view choices (a sort,
+a filter, a fold), kept for a workspace or for the account, or forgotten
+with a null value (`@repo/database/models/account-view-choices`, the
+`account_view_choice` table, deleted with its account or its workspace).
+Each key is declared once in `@repo/features/view-choice-wire`'s
+`VIEW_CHOICE`, with whether it is a workspace's or the account's and the
+Schema its value reads through; a value its key does not hold, or a place
+that is not its key's, is refused as invalid, and a workspace the account is
+not in as not found. The account's live read of them
+(`/api/live/view-choices`, `src/live/reads/view-choices.ts`) carries its own
+choices alone, none of a workspace it has since left. A value's shape never
+changes under its key; a choice whose shape must change is declared again
+under a new key, so a released client never reads a shape it does not know.
+
 ## Accounts' own provider keys
 
 `src/accounts/provider-keys-procedures.ts` answers `/api/account/provider-keys` on the

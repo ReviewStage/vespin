@@ -18,10 +18,25 @@ env:
     timeout: 30000
 # The workspace's one button leads the bar, its menu holding the account and
 # Settings (`workspace.yaml`).
+- runFlow:
+    file: subflows/show-sidebar.yaml
 - assertVisible:
     id: "workspace-switcher"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-list
+# Note that an upright iPad's sidebar, shown for the switcher, stands over
+# the list and its ⋯, which the tree still holds under it, so it is put away
+# by its own toggle first, as a person would.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+      visible: "Hide Sidebar"
+    commands:
+      # Note that the sidebar's own toggle is the last of the two named Hide Sidebar, since the list column's stands under the sidebar first in the tree (vjipadrest2's inbox lane).
+      - tapOn:
+          text: "Hide Sidebar"
+          index: -1
+      - waitForAnimationToEnd
 # The ⋯ menu: the scopes, Open checked, then Mark all as read. A tap off the
 # menu closes it.
 - tapOn: "More"

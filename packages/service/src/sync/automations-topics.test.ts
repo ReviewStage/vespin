@@ -161,6 +161,29 @@ const wakesTheTeammate = <A, E, R>(
     return fired;
   });
 
+/**
+ * Runs the write, held to the topics it notifies, and fails where one of
+ * them wakes any of the teammate's automation reads.
+ */
+const wakesNoTeammate = <A, E, R>(
+  write: Effect.Effect<A, E, R>,
+  topics: readonly SyncTopic[],
+  world: AutomationWorld,
+) =>
+  Effect.gen(function* () {
+    const fired = yield* expectTopicsFire(write, topics);
+
+    for (const [query, params] of teammateReads(world)) {
+      const woken = query.topics(params);
+      assert.ok(
+        !topics.some(([kind, id]) => woken.some((topic) => topic[0] === kind && topic[1] === id)),
+        `${query.name} is woken by none of the topics the write notifies`,
+      );
+    }
+
+    return fired;
+  });
+
 it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
   it.effect(
     "a member joining, an automation made, changed, and deleted, and a run fired and its agent started each wake a teammate's automations and runs",
@@ -168,12 +191,25 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
       Effect.gen(function* () {
         const world = yield* openAutomationWorld;
         const workspace: SyncTopic = [TOPIC.WORKSPACE, world.workspaceId];
-        const owners: readonly SyncTopic[] = [workspace, [TOPIC.ACCOUNT, world.owner]];
+
+        const owners: readonly SyncTopic[] = [
+          workspace,
+          [TOPIC.WORKSPACE_AUTOMATIONS, world.workspaceId],
+          [TOPIC.ACCOUNT, world.owner],
+          [TOPIC.ACCOUNT_INBOX, world.owner],
+        ];
+
         const newcomer = yield* openAccount;
 
         yield* wakesTheTeammate(
           joinWorkspace(world.workspaceId, newcomer),
-          [workspace, [TOPIC.ACCOUNT, newcomer]],
+          [
+            workspace,
+            [TOPIC.WORKSPACE_PEOPLE, world.workspaceId],
+            [TOPIC.WORKSPACE_AUTOMATIONS, world.workspaceId],
+            [TOPIC.ACCOUNT, newcomer],
+            [TOPIC.ACCOUNT_INBOX, newcomer],
+          ],
           world,
         );
         const made = yield* wakesTheTeammate(makeAutomation(world), owners, world);
@@ -202,7 +238,7 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
   );
 
   it.effect(
-    "the run's agent renamed, and its turn queued, started, and settled, each wake a teammate's automations and runs",
+    "the run's agent renamed, and its turn queued, started, and settled, notify the agent's workspace and wake none of a teammate's automation reads",
     () =>
       Effect.gen(function* () {
         const world = yield* openAutomationWorld;
@@ -230,12 +266,12 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
 
         const turn: readonly SyncTopic[] = [[TOPIC.CONVERSATION, world.conversationId], ...agent];
 
-        yield* wakesTheTeammate(
+        yield* wakesNoTeammate(
           renameAgent(world.owner, world.agentId, "Flaky-test sweep"),
           agent,
           world,
         );
-        yield* wakesTheTeammate(
+        yield* wakesNoTeammate(
           writer.enqueueTurn(target, {
             turnId,
             origin: TURN_ORIGIN.TYPED,
@@ -244,7 +280,7 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
           turn,
           world,
         );
-        yield* wakesTheTeammate(
+        yield* wakesNoTeammate(
           writer.consume(target, {
             ...run,
             kind: RUN_EVENT.TURN_STARTED,
@@ -256,7 +292,7 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
           turn,
           world,
         );
-        yield* wakesTheTeammate(
+        yield* wakesNoTeammate(
           writer.consume(target, {
             ...run,
             kind: RUN_EVENT.TURN_ENDED,

@@ -15,6 +15,7 @@
       "!apps/web/fixtures",
       "!packages/agent-runner/src/codex-protocol",
       "!packages/features/fixtures",
+      "!packages/features/src/generated/emoji-data.ts",
       "!packages/service/fixtures",
       "!packages/wire/fixtures",
       "!tools/oxlint/anti-slop"

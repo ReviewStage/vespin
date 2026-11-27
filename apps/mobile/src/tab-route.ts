@@ -19,6 +19,29 @@ export function useOwnTab(): IosTab | undefined {
   return useContext(OwnTabContext);
 }
 
+/** The tabs' own segment (`app/(app)/(tabs)`), which the segment of the tab group in front follows. */
+const TABS_SEGMENT = "(tabs)";
+
+/**
+ * The segment of the tab group in front (`(inbox)`, `(tasks)`, ...), by the
+ * route's segments, the one after the tabs' own; none while no tab stands.
+ * Note that it is found by the tabs' segment rather than at a fixed place,
+ * because the tabs stand under the app's own group (`(app)`), beside an
+ * iPad's split view at the root.
+ */
+export function tabGroupOf(segments: readonly string[]): string | undefined {
+  const at = segments.indexOf(TABS_SEGMENT);
+
+  return at < 0 ? undefined : segments[at + 1];
+}
+
+/** The segments under the tab group in front, its own first (`(inbox)`, `inbox`, `[id]`); none while no tab stands. */
+export function tabSegmentsOf(segments: readonly string[]): readonly string[] {
+  const at = segments.indexOf(TABS_SEGMENT);
+
+  return at < 0 ? [] : segments.slice(at + 1);
+}
+
 /** The segment of the tab group standing in front, as the tabs' layout last saw the route; none while no tab stands, as under a sheet or before the tabs mount. */
 let standingGroup: string | undefined;
 
@@ -31,8 +54,7 @@ let standingGroup: string | undefined;
  * the very render the push stands its first frame in.
  */
 export function useKeepStandingTab(): void {
-  const segments: readonly string[] = useSegments();
-  const group = segments[1];
+  const group = tabGroupOf(useSegments());
   useLayoutEffect(() => {
     standingGroup = group;
 

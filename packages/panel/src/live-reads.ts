@@ -107,7 +107,7 @@ import { actMutation } from "./act-mutations.js";
 import { streamFrom } from "./act-stream.js";
 import { QUERY_ROOT } from "./query-keys.js";
 import { rendererPromise } from "./renderer-runtime.js";
-import { appStateQuery } from "./use-app-state.js";
+import { appStateQuery, onDocumentWritten } from "./use-app-state.js";
 
 /** A live read, by its name. */
 type LiveReadName = keyof AppHostReads;
@@ -500,10 +500,7 @@ function firstAnswer<Read extends LiveReadName>(
     settle();
 
     if (answered) return;
-    // Note that only a write of the document is heard, because every observer of it reports each write again (`observerResultsUpdated`), a thousand times a push in a long transcript.
-    stop = client.getQueryCache().subscribe((event) => {
-      if (isAppState(event.query) && event.type === "updated") settle();
-    });
+    stop = onDocumentWritten(client, settle);
 
     return Effect.sync(() => stop());
   });

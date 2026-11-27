@@ -78,7 +78,11 @@ function failedRunsStatement(userId: string) {
  * by an item written in any of its workspaces, which names every member
  * (`inboxItemSync`), by its own read marks, by its own automations and
  * their runs, and by what admits it to a workspace or a repository, all of
- * which name the account. Note that a task or an agent written itself
+ * which name the account's inbox topic (`TOPIC.ACCOUNT_INBOX`). Note that
+ * it is woken on that rather than the account's own topic, which its Macs'
+ * beats, commands, and lines, its sections, pins, read marks of tasks and
+ * agents, and preferences name too, none of which moves what waits on it.
+ * Note too that a task or an agent written itself
  * wakes no account's inbox, because a description's save rewrites its task every
  * few seconds and every member would read again for nothing: the rare
  * change the inbox shows of either, a task's assignee or an agent's title,
@@ -99,7 +103,7 @@ export const accountInboxRead = bindLiveRead(ACCOUNT_INBOX_READ, {
     githubPersonalTokenSync,
     githubRepositoryReadSync,
   ],
-  topics: ({ userId }) => [[TOPIC.ACCOUNT, userId]],
+  topics: ({ userId }) => [[TOPIC.ACCOUNT_INBOX, userId]],
   serve: (_params, _query, request) => Effect.succeed({ taskless: tasklessLiveParam(request) }),
   statements: ({ userId, taskless }) => ({
     ...accountInboxLiveStatements(userId, { taskless: taskless === TASKLESS_LIVE.CARRIED }),

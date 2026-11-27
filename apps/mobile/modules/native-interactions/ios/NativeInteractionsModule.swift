@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, some of its words in colors of their own, and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses and its search field tucks away as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); and lowering the keyboard whatever field holds it.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list's row, a bar's subtitle under its title, some of its words in colors of their own, and a picture before it, a column's or a stack screen's, the latter's title standing at the bar's leading edge where asked, a list handed to the stack's bar so its large title collapses and its search field tucks away as it scrolls, a list's rows set in from its sides while it keeps its width, a row dragged out as its link, pictures dropped from Photos or Files, a link dropped on a place, and a row's long press menu, preview, swipes, and VoiceOver Actions and a section header's menu built from data (`RowMenu.swift`); a view of React Native views a long press opens UIKit's own menu on, such as a mention's chip (`ContextMenuView.swift`); and lowering the keyboard whatever field holds it.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -82,6 +82,15 @@ public final class NativeInteractionsModule: Module {
 
     OnDestroy {
       ModifierName.all.forEach { ViewModifierRegistry.unregister($0) }
+    }
+
+    // A view of React Native views that a long press opens UIKit's own menu on, from a menu's tree (`ContextMenuView.swift`).
+    View(ContextMenuView.self) {
+      Events("onPressPlace")
+
+      Prop("menu") { (view: ContextMenuView, menu: String) in
+        view.menu = menu
+      }
     }
 
     // Note that the keyboard is lowered by ending editing in every window of every scene, forced, since a SwiftUI field such as a split view's search, unlike React Native's, has no focus JavaScript can reach, and an action sent to the first responder never reached the search field of a split view's column on an iPad. It answers whether any field let go, and logs it, so a run on the simulator shows whether a pick reached it.

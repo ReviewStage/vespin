@@ -18,12 +18,7 @@ import { ArrowDownIcon } from "../../icons/icons.js";
 import { BUTTON_CORNERS, BUTTON_VARIANT, IconButton } from "../button/button.js";
 import { useEndAnchor } from "../end-anchor/end-anchor.js";
 import { Fill } from "../layout/layout.js";
-import {
-  SCROLL_FADE,
-  ScrollArea,
-  type ScrollFade,
-  type ScrollFadeInset,
-} from "../scroll-area/scroll-area.js";
+import { ScrollArea } from "../scroll-area/scroll-area.js";
 import { Tooltip } from "../tooltip/hint.js";
 import {
   VIRTUAL_ROWS_ANCHOR,
@@ -60,8 +55,8 @@ import {
  * guide's example does on a send, and lets go of it as it is scrolled for
  * the reader to one of its lines (its handle's `bringIn` and `scrollBy`).
  *
- * The log scrolls in `@repo/ui`'s `ScrollArea`, which fades its edges as
- * the caller asks, and holds its lines in one block of its own inside it
+ * The log scrolls in `@repo/ui`'s `ScrollArea`, and holds its lines in one
+ * block of its own inside it
  * (`.conversation-log`), which carries the log's padding. That block is
  * not a flex column. A flex item of a container with a definite height has
  * a definite height of its own once flexed, so a percentage height anywhere
@@ -89,6 +84,10 @@ interface ConversationScroll {
   readonly list: RefObject<HTMLDivElement | null>;
   /** The block the lines stand in inside the scroll box, which says the log's room at its end (`--conversation-log-end`). */
   readonly log: RefObject<HTMLDivElement | null>;
+  /** The log's room at its end, in pixels, as its block last said it (`ConversationContent`). */
+  readonly logEnd: number;
+  /** Says the log's room at its end, as its block reads it from the theme. */
+  readonly sayLogEnd: (room: number) => void;
   /** Holds the log's run of lines while it stands (`ConversationRows`); the answer lets it go. */
   readonly hold: (rows: RefObject<VirtualRowsHandle | null>) => () => void;
   /** Asks for older lines where the reader is near the top, or the lines do not fill the box. */
@@ -137,6 +136,14 @@ export function Conversation({
   const own = useRef<HTMLDivElement>(null);
   const list = handed ?? own;
   const log = useRef<HTMLDivElement>(null);
+  // The log's room at its end, as its block says it (`ConversationContent`).
+  const [logEnd, setLogEnd] = useState(0);
+
+  const sayLogEnd = useCallback(
+    (room: number) => setLogEnd((was) => (was === room ? was : room)),
+    [],
+  );
+
   // The log's run of lines, while one stands.
   const rows = useRef<RefObject<VirtualRowsHandle | null> | undefined>(undefined);
 
@@ -198,8 +205,20 @@ export function Conversation({
   );
 
   const scroll = useMemo<ConversationScroll>(
-    () => ({ stuck, stick, release, overEnd, list, log, hold, askOlder, onScroll }),
-    [stuck, stick, release, overEnd, list, hold, askOlder, onScroll],
+    () => ({
+      stuck,
+      stick,
+      release,
+      overEnd,
+      list,
+      log,
+      logEnd,
+      sayLogEnd,
+      hold,
+      askOlder,
+      onScroll,
+    }),
+    [stuck, stick, release, overEnd, list, logEnd, sayLogEnd, hold, askOlder, onScroll],
   );
 
   return (
@@ -221,10 +240,6 @@ export function Conversation({
 export interface ConversationContentProps {
   /** The pane's own class on the block the lines stand in, which holds the log's padding. */
   className?: string | undefined;
-  /** Which of the log's edges fade where lines run past them; both where none is named. */
-  fade?: ScrollFade | undefined;
-  /** Where its start fade begins: beneath a band stuck at its top, as a call's checkpoint is. */
-  fadeInset?: ScrollFadeInset | undefined;
   /**
    * Whether its lines are written as they stream in, as an agent's reply is,
    * so the log is no live region: a reader would hear each chunk as it
@@ -237,22 +252,22 @@ export interface ConversationContentProps {
 /** The scroll box, a log of what follows, its lines in one block inside it. */
 export function ConversationContent({
   className,
-  fade = SCROLL_FADE.BOTH,
-  fadeInset,
   streams = false,
   children,
 }: ConversationContentProps): ReactNode {
-  const { list, log, onScroll } = useConversation();
+  const { list, log, onScroll, sayLogEnd } = useConversation();
+  // The log's room at its end, as the theme says it for the class its block wears, in pixels: a registered length, so it reads as one.
+  // Note that it is read as the block stands and as its class changes, never on each render, because a style read just after React's changes makes the window restyle and lay out there and then: once for every write an agent's stream makes, and once for every key typed.
+  useLayoutEffect(() => {
+    const element = log.current;
+
+    if (element === null) return;
+    const said = Number.parseFloat(getComputedStyle(element).getPropertyValue(LOG_END_PROPERTY));
+    sayLogEnd(Number.isFinite(said) ? said : 0);
+  }, [className, log, sayLogEnd]);
 
   return (
-    <ScrollArea
-      ref={list}
-      role="log"
-      aria-live={streams ? "off" : undefined}
-      fade={fade}
-      fadeInset={fadeInset}
-      onScroll={onScroll}
-    >
+    <ScrollArea ref={list} role="log" aria-live={streams ? "off" : undefined} onScroll={onScroll}>
       <div ref={log} className={cn("conversation-log px-content-inset pt-section-gap", className)}>
         {children}
       </div>
@@ -298,19 +313,9 @@ export function ConversationRows({
   /** Draws the line at an index, which wears `place` where the lines are list items of the caller's own. */
   children: (index: number, place: VirtualRowPlace) => ReactNode;
 }): ReactNode {
-  const { list, log, hold, askOlder, stick, release, overEnd } = useConversation();
+  const { list, hold, askOlder, stick, release, overEnd, logEnd } = useConversation();
   const run = useRef<VirtualRowsHandle>(null);
   useLayoutEffect(() => hold(run), [hold]);
-  // The log's room at its end, as the theme says it, in pixels: a registered length, so it reads as one.
-  const [end, setEnd] = useState(0);
-  useLayoutEffect(() => {
-    const element = log.current;
-
-    if (element === null) return;
-    const said = Number.parseFloat(getComputedStyle(element).getPropertyValue(LOG_END_PROPERTY));
-    const room = Number.isFinite(said) ? said : 0;
-    setEnd((was) => (was === room ? was : room));
-  });
   // The reader's own line landing takes the log back to its end; the line the log opened on does not, since the log opens there.
   const sent = useRef(ownLast);
   useLayoutEffect(() => {
@@ -360,7 +365,7 @@ export function ConversationRows({
       rowClassName={rowClassName}
       aria-label={label}
       handle={run}
-      paddingEnd={end + overEnd}
+      paddingEnd={logEnd + overEnd}
     >
       {children}
     </VirtualRows>

@@ -30,7 +30,7 @@ import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state.js";
+import { selectAccount, selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
 import { TranscriptAgent } from "./line-cards.js";
 import { DeviceGlyph, DeviceStandingGlyph } from "./runs-on.js";
 import { useOpenLink } from "./use-open-link.js";
@@ -105,7 +105,7 @@ interface MachineRead {
 
 /** The machine a chip names, as the workspace its link was written under reads it; none while unread, where the read names it not, or where no machine is named, which reads nothing. */
 function useMachine(machineId: string | undefined, slug: string): MachineRead {
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const workspaces = useAppStateSlice(selectWorkspaces);
   const workspace = workspaces === undefined ? undefined : workspaceOfSlug(workspaces, slug);
 
   const read = useQuery({
@@ -122,7 +122,7 @@ function useMachine(machineId: string | undefined, slug: string): MachineRead {
 /** Who reads the window: the members around the caller say it, else the account signed in. */
 function useReaderId(): string | undefined {
   const directory = useMemberDirectory();
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
 
   return directory.readerId ?? signedInAccountId(account);
 }

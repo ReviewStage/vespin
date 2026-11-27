@@ -33,7 +33,21 @@ import {
   REVIEW_DECISION,
   REVIEW_STATE,
 } from "@repo/features/agent-wire";
+import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LIVE_READ } from "@repo/features/live-wire";
+import {
+  CHAPTER_KIND,
+  CHAPTER_RISK,
+  type Chapter,
+  HEADER_ONLY_OLD_START,
+  LINE_REF_SIDE,
+} from "@repo/features/pull-request-chapters";
+import type { PullRequestChaptersAnswerView } from "@repo/features/pull-request-chapters-view";
+import {
+  PULL_REQUEST_CHAPTERS_STATE,
+  type PullRequestChaptersAnswer,
+  type PullRequestChaptersState,
+} from "@repo/features/pull-request-chapters-wire";
 import type {
   RepositoryChangesAnswerView,
   RepositoryOverviewChecksAnswerView,
@@ -558,6 +572,7 @@ const LAID = {
   [LIVE_READ.REPOSITORY_PULL_REQUEST]: new WeakMap(),
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CHECKS]: new WeakMap(),
   [LIVE_READ.REPOSITORY_PULL_REQUEST_CONVERSATION]: new WeakMap(),
+  [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: new WeakMap(),
 } as const satisfies Record<string, LaidReads>;
 
 /** Every part held of one read, its staged pull requests laid over the repository's in the fixture's workspace. */
@@ -639,6 +654,13 @@ export function pullRequestPartsAppState(
       moves,
       resolves,
       () => resolvedConversations(resolves),
+    ),
+    [LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS]: laid(
+      LAID[LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS],
+      state[LIVE_READ.REPOSITORY_PULL_REQUEST_CHAPTERS],
+      moves,
+      resolves,
+      () => CHAPTERS,
     ),
   };
 }
@@ -805,4 +827,115 @@ export function fixtureChanges(number: number): RepositoryChangesAnswerView {
       truncated: false,
     },
   };
+}
+
+/** The commit each pull request's base stood on as its chapters were told. */
+const CHAPTERS_BASE = "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c";
+
+/** The ready pull request's chapters, as a model would tell them over its files: the story first, "Other changes" last. */
+const READY_CHAPTERS: readonly Chapter[] = [
+  {
+    kind: CHAPTER_KIND.STORY,
+    title: "Resend an expired invitation",
+    summary:
+      "An expired invitation is no longer refused: `resend` renews it for a **week**, saves it, and sends it again. The week is a constant of its own in `expiry.ts`.",
+    hunkRefs: [
+      { path: "src/invites/resend.ts", oldStart: 12 },
+      { path: "src/invites/expiry.ts", oldStart: HEADER_ONLY_OLD_START },
+    ],
+    keyChanges: [
+      {
+        content:
+          "The renewed invitation is saved before it is sent, so a failed send leaves it renewed.",
+        lineRefs: [
+          {
+            path: "src/invites/resend.ts",
+            side: LINE_REF_SIDE.ADDITIONS,
+            startLine: 15,
+            endLine: 19,
+          },
+        ],
+      },
+    ],
+    risk: CHAPTER_RISK.MEDIUM,
+    riskReasons: ["Every expired invitation that was refused is now sent again."],
+  },
+  {
+    kind: CHAPTER_KIND.STORY,
+    title: "Test and document it",
+    summary: "A test sends an expired invitation again, and the docs page takes its new name.",
+    hunkRefs: [
+      { path: "test/invites/resend.test.ts", oldStart: HEADER_ONLY_OLD_START },
+      { path: "docs/invitations.md", oldStart: 1 },
+    ],
+    keyChanges: [],
+    risk: CHAPTER_RISK.LOW,
+    riskReasons: [],
+  },
+  {
+    kind: CHAPTER_KIND.OTHER,
+    title: "Other changes",
+    summary: "Changes no chapter told.",
+    hunkRefs: [
+      { path: "src/invites/legacy-mailer.ts", oldStart: 1 },
+      { path: "assets/invite-banner.png", oldStart: HEADER_ONLY_OLD_START },
+      { path: "pnpm-lock.yaml", oldStart: 1 },
+      { path: "src/generated/invite-messages.ts", oldStart: HEADER_ONLY_OLD_START },
+    ],
+    keyChanges: [],
+    risk: null,
+    riskReasons: [],
+  },
+];
+
+/** The ready pull request's chapters, told for `headSha`. */
+function toldFor(headSha: string): PullRequestChaptersState {
+  return {
+    status: PULL_REQUEST_CHAPTERS_STATE.READY,
+    headSha,
+    baseSha: CHAPTERS_BASE,
+    model: CHAPTERS_MODEL.HAIKU,
+    chapters: READY_CHAPTERS,
+  };
+}
+
+/** The ready pull request's chapters told for its head now. */
+const READY_TOLD = toldFor(READY.merging?.headSha ?? "");
+
+/** A pull request's chapters answer, by its number, generatable on the fixture's run. */
+function chaptersOf(number: number, chapters: PullRequestChaptersState): PullRequestChaptersAnswer {
+  return { pullRequest: { number, generatable: true, chapters } };
+}
+
+/**
+ * Each pull request's chapters as the host holds them: the ready one's told
+ * for its head, none yet for the one whose checks failed, which offers
+ * Generate, and the queued one's being made.
+ */
+const CHAPTERS: ReadonlyMap<number, PullRequestChaptersAnswer> = new Map([
+  [READY.number, chaptersOf(READY.number, READY_TOLD)],
+  [FAILING.number, chaptersOf(FAILING.number, { status: PULL_REQUEST_CHAPTERS_STATE.NONE })],
+  [
+    QUEUED.number,
+    chaptersOf(QUEUED.number, {
+      status: PULL_REQUEST_CHAPTERS_STATE.GENERATING,
+      headSha: QUEUED.merging?.headSha ?? "",
+      baseSha: CHAPTERS_BASE,
+      startedAt: LANDED - 2 * MINUTE,
+    }),
+  ],
+]);
+
+/**
+ * What a Generate of a pull request's chapters answers on the fixture's run:
+ * the ready pull request's chapters, told again for the head of the one
+ * asked, as the service answers once a model told them, so they never read
+ * as stale; nothing for a number the fixture holds none of.
+ */
+export function fixtureGeneratedChapters(number: number): PullRequestChaptersAnswerView {
+  const asked = [READY, FAILING, QUEUED].find((each) => each.number === number);
+
+  if (asked?.merging === undefined) return { pullRequest: null };
+
+  return chaptersOf(number, toldFor(asked.merging.headSha));
 }
