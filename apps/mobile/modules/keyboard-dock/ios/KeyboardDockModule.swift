@@ -9,9 +9,13 @@
 // height stands in the window with its foot pinned to the window's guide, and
 // UIKit moves it with the keyboard on every frame the keyboard moves, inside
 // the keyboard's own animation; the dock hears it move and sets the bar's lift
-// as a transform, which React Native's layout leaves alone. Nothing polls and
-// nothing counts frames: the bar moves only as UIKit moves the keyboard. A
-// view that stops being the bar, as a page goes back with the keyboard up, is
+// as a transform, which React Native's layout leaves alone. Note that the bar
+// moves by a transform rather than a constraint on the guide, because it is
+// React's view, whose frame Yoga sets on each commit, so a constraint would
+// fight Fabric; the accessibility tree is told the layout changed wherever
+// the lift settles, so VoiceOver and XCTest read the bar where it stands.
+// Nothing polls and nothing counts frames: the bar moves only as UIKit moves
+// the keyboard. A view that stops being the bar, as a page goes back with the keyboard up, is
 // set down before Fabric can draw it anew elsewhere still lifted. The bar is
 // the last child React mounted, never a view UIKit adds of its own, such as
 // one a selection in the field stands beside it. JavaScript hears the same
@@ -82,6 +86,9 @@ final class KeyboardDockView: ExpoView {
 
   /// The bottom safe area last told to JavaScript, which the bar pads its foot by while the dock lifts it, so the lift and the padding are one number; none yet.
   private var toldInset: CGFloat?
+
+  /// The lift VoiceOver and the accessibility tree were last told of; none yet.
+  private var announcedLift: CGFloat?
 
   /// Whether the dock is following the keyboard's tracker as it moves, when it moves the bar without telling JavaScript.
   private var tracking = false
@@ -315,6 +322,12 @@ final class KeyboardDockView: ExpoView {
     if tracking { keepEdge() } else { standAsEdge() }
 
     guard !tracking else { return overlap }
+
+    // Note that the accessibility tree is told the layout changed wherever the lift settles, since a transform moves the bar without a layout pass, and VoiceOver and XCTest kept reading it where it stood before, at its foot under the keyboard, so a tap on Send in landscape landed on the keyboard.
+    if abs((announcedLift ?? 0) - lift) >= overlapStep {
+      announcedLift = lift
+      UIAccessibility.post(notification: .layoutChanged, argument: nil)
+    }
 
     // Note that a step to or from no overlap is always told, however small, so the content never keeps room for a keyboard that has gone, and so is a new bottom safe area, which the bar pads its foot by.
     let inset = safeAreaInsets.bottom
