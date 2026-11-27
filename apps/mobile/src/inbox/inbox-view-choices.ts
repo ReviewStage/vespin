@@ -7,7 +7,8 @@
  * (`@repo/panel`'s `folded-groups.ts`), read here through
  * `../view-choices.ts`. A scope or a fold an earlier build kept in this
  * device's `NSUserDefaults` moves up to the account once
- * (`useDeviceKeptMovedUp`), and is drawn meanwhile. Until a choice is made,
+ * (`useDeviceKeptMovedUp`, `../fold-list.ts`), and is drawn meanwhile; a
+ * fold made before the account's runs are read waits for them. Until a choice is made,
  * the Inbox shows Open, the reader's own items, the pinned tasks' first,
  * no run folded, as the panel's opens.
  */
@@ -28,6 +29,7 @@ import {
 import { useHeldValue } from "@repo/ui-native";
 import { Option, Schema } from "effect";
 import { useMemo } from "react";
+import { useFoldList } from "../fold-list.js";
 import {
   type DeviceKept,
   deviceKept,
@@ -43,9 +45,6 @@ const DEVICE_KEPT = {
   SCOPE: deviceKept("inboxScope", Schema.Literals(Object.values(INBOX_SHOW))),
   FOLDED_RUNS: deviceKept("inboxFoldedRuns", Schema.Array(Schema.Literals(INBOX_RUNS))),
 } as const;
-
-/** No run folded. */
-const NO_RUNS: readonly InboxRun[] = [];
 
 /** One of the Inbox's choices as a screen draws it, and the press that keeps another. */
 type InboxChoice<Key extends ViewChoiceKey> = readonly [
@@ -126,21 +125,14 @@ export interface InboxRunFolds {
   readonly onFold: (run: InboxRun, shut: boolean) => void;
 }
 
-/** The Inbox's folded runs, the account's, and the door that folds one or opens it. */
+/** The Inbox's folded runs, the account's, and the door that folds one or opens it. Note that a fold made before the account's runs are read waits for them (`../fold-list.ts`), so it never writes over a run folded on another device. */
 export function useInboxRunFolds(): InboxRunFolds {
-  const [runs, choose] = useMovedUpChoice(
-    VIEW_CHOICE_KEY.INBOX_FOLDED_RUNS,
-    DEVICE_KEPT.FOLDED_RUNS,
-    NO_RUNS,
-  );
+  const [runs, onFold] = useFoldList(VIEW_CHOICE_KEY.INBOX_FOLDED_RUNS, {
+    refused: CHOICE_REFUSED,
+    kept: DEVICE_KEPT.FOLDED_RUNS,
+  });
 
   const folded = useMemo(() => new Set(runs), [runs]);
-
-  const onFold = (run: InboxRun, shut: boolean) => {
-    const others = runs.filter((each) => each !== run);
-
-    choose(shut ? [...others, run] : others);
-  };
 
   return { folded, onFold };
 }
