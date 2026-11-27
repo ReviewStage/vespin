@@ -1,5 +1,6 @@
 // markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, drafts to send elsewhere, links, mention chips, and pictures that open full screen and zoom.
 
+import { CODE_ROW, type CodeRow, type FenceRow } from "@repo/features/code-fence";
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, entityWordHeard } from "@repo/features/entity-kind";
 import { LINK_MENU_WORDS } from "@repo/features/link-menu-words";
@@ -163,6 +164,9 @@ type FirstLine = {
 /** Reports a list item's first line once it is laid out; none where nothing asks. */
 type OnFirstLine = ((line: FirstLine) => void) | undefined;
 
+/** How strongly a suggestion's or a diff's row is tinted, as a hex alpha: 14%, as the panel mixes `bg-code-added`. */
+const ROW_TINT_ALPHA = "24";
+
 /** A quote's rule, the line down its left. */
 const QUOTE_RULE = 3;
 
@@ -174,6 +178,9 @@ const styles = StyleSheet.create({
   quote: { borderLeftWidth: QUOTE_RULE, paddingLeft: SPACE.ROW },
   well: { borderRadius: RADIUS.BLOCK, paddingVertical: SPACE.ROW, overflow: "hidden" },
   wellLines: { paddingHorizontal: SPACE.ROW },
+  wellTitle: { paddingHorizontal: SPACE.ROW, paddingBottom: SPACE.TIGHT },
+  rows: { alignSelf: "flex-start", minWidth: "100%" },
+  codeRow: { paddingHorizontal: SPACE.ROW },
   table: {
     alignSelf: "stretch",
     borderWidth: StyleSheet.hairlineWidth,
@@ -1186,24 +1193,65 @@ function TableView({
   );
 }
 
+/** The tint each row of a suggestion or a diff stands on, by what it does: the done tone for a line added and the danger tone for one removed, faint, as the panel's `bg-code-added` and `bg-code-removed` mix them at 14%, and none for a line as it stood. */
+function rowTint(kind: CodeRow, colors: BrandColors): string | undefined {
+  if (kind === CODE_ROW.ADDED) return `${colors.COMPLETE}${ROW_TINT_ALPHA}`;
+
+  return kind === CODE_ROW.REMOVED ? `${colors.DANGER}${ROW_TINT_ALPHA}` : undefined;
+}
+
 /**
  * A block of code, in the monospaced face on a well, scrolling sideways
  * rather than wrapping its lines, which run under the well's edge into a
- * fade where more of them stands past it.
+ * fade where more of them stands past it. A fence that names its language
+ * is headed by it, muted, as the panel's code card heads one ("TypeScript",
+ * "Suggested change"), and a suggestion's or a diff's lines stand as rows on
+ * the added and removed lines' tints, each as wide as the widest, edge to
+ * edge.
  */
-function CodeView({ text, drawing }: { readonly text: string; readonly drawing: Drawing }) {
+function CodeView({
+  text,
+  title,
+  rows,
+  drawing,
+}: {
+  readonly text: string;
+  readonly title?: string | undefined;
+  readonly rows?: readonly FenceRow[] | undefined;
+  readonly drawing: Drawing;
+}) {
   const { colors } = drawing;
+  const face = { fontFamily: MONOSPACE_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT };
 
   return (
     <View style={[styles.well, { backgroundColor: colors.WELL }]}>
-      <SidewaysScroll ground={colors.WELL} lines={styles.wellLines}>
-        <Text
-          selectable
-          style={{ fontFamily: MONOSPACE_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT }}
-        >
-          {text}
+      {title === undefined ? null : (
+        <Text style={[styles.wellTitle, { fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }]}>
+          {title}
         </Text>
-      </SidewaysScroll>
+      )}
+      {rows === undefined ? (
+        <SidewaysScroll ground={colors.WELL} lines={styles.wellLines}>
+          <Text selectable style={face}>
+            {text}
+          </Text>
+        </SidewaysScroll>
+      ) : (
+        <SidewaysScroll ground={colors.WELL}>
+          <View style={styles.rows}>
+            {rows.map((row, at) => (
+              // Note that two rows may hold the same words, so each is keyed by its place.
+              <Text
+                key={`${at}`}
+                selectable
+                style={[face, styles.codeRow, { backgroundColor: rowTint(row.kind, colors) }]}
+              >
+                {row.text === "" ? " " : row.text}
+              </Text>
+            ))}
+          </View>
+        </SidewaysScroll>
+      )}
     </View>
   );
 }
@@ -1436,7 +1484,7 @@ function BlockView({
     case MARKDOWN_BLOCK.TABLE:
       return <TableView key={drawing.fontScale} block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.CODE:
-      return <CodeView text={block.text} drawing={drawing} />;
+      return <CodeView text={block.text} title={block.title} rows={block.rows} drawing={drawing} />;
     case MARKDOWN_BLOCK.DIAGRAM:
       return (
         <DiagramBlock

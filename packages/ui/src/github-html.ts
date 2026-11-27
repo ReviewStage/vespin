@@ -47,6 +47,7 @@
  * and logs each refusal.
  */
 
+import { SUGGESTED_CHANGE_LANGUAGE } from "@repo/features/code-fence";
 import { githubImageOf } from "@repo/features/github-image";
 import { fromHtml } from "hast-util-from-html";
 
@@ -184,14 +185,6 @@ export function pictureFor(src: string, dark: boolean): string | undefined {
 
 /** The class GitHub wears on a suggested change, the diff table it renders a review comment's ```suggestion as. */
 const SUGGESTION_BLOB = "js-suggested-changes-blob";
-
-/**
- * The language a suggested change GitHub rendered is fenced as, its lines
- * marked `-` and `+`. Note that it is not `suggestion`, the language a
- * suggestion is written in, whose lines are the new ones alone and may
- * start with either mark as words of their own, as a list's do.
- */
-export const SUGGESTED_CHANGE_LANGUAGE = "suggested-change";
 
 /** The mark each of a suggested change's rows is written with, by the class its code cell wears: a line removed, or one added. */
 const SUGGESTION_ROW = [

@@ -1,8 +1,8 @@
+import { addedText, fenceRows, suggests } from "@repo/features/code-fence";
 import { draftKindOf } from "@repo/features/draft-text";
 import { DIAGRAM_LANGUAGE } from "@repo/features/mermaid-diagram";
 import type { CodeLines } from "@repo/features/tasks-view";
-import { CODE_ROW, CodeCard, type CodeRow, DraftCard } from "@repo/ui";
-import { SUGGESTED_CHANGE_LANGUAGE } from "@repo/ui/github-html";
+import { CodeCard, DraftCard } from "@repo/ui";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import { useQuery } from "@tanstack/react-query";
 import { type ComponentProps, createContext, type ReactNode, useContext, useMemo } from "react";
@@ -10,7 +10,7 @@ import { colorable, coloringQueryOptions } from "../code-coloring.js";
 import { copyRichThroughShell, copyThroughShell } from "../copy-feedback.js";
 import { DescriptionDiagram } from "../description-diagram.js";
 import { TextLink } from "../text-link.js";
-import { fenceHeading, SUGGESTION_LANGUAGE, suggests } from "./code-fence-heading.js";
+import { fenceHeading } from "./code-fence-heading.js";
 import { useOpenLink } from "./use-open-link.js";
 
 /**
@@ -36,18 +36,6 @@ import { useOpenLink } from "./use-open-link.js";
  * its header, its one Copy, its cut at 40 lines, and the screen recording's
  * leaving its lines out are the card's.
  */
-
-/** The language a diff is fenced in, whose rows are tinted by what they do. */
-const DIFF_LANGUAGE = "diff";
-
-/** A diff's file header, `--- a/path` or `+++ b/path`: three marks, then a space or nothing. */
-const DIFF_HEADER = /^(?:---|\+\+\+)(?:\s|$)/u;
-
-/** A row of a block drawn as rows: what it does, and the words it shows. */
-interface Row {
-  readonly kind: CodeRow;
-  readonly text: string;
-}
 
 /** The language a fenced block's class names, as Streamdown hands it on. */
 const LANGUAGE_CLASS = /(?:^|\s)language-(\S+)/u;
@@ -116,47 +104,6 @@ function useColoredLines(language: string, code: string, whole: boolean): CodeLi
 }
 
 /**
- * A block's lines as rows tinted by what each does, or none for a block of
- * plain lines. A suggestion as written holds the new lines alone, every one
- * added; a suggested change GitHub rendered marks each line `-` or `+`
- * (`@repo/ui/github-html`), which the row stands for in its mark's place, as
- * GitHub draws one; a diff's lines keep their marks, and its other lines
- * stand untinted.
- */
-function rowsOf(language: string, code: string): readonly Row[] | undefined {
-  const lines = code.split("\n");
-
-  if (language === SUGGESTION_LANGUAGE) {
-    return lines.map((text) => ({ kind: CODE_ROW.ADDED, text }));
-  }
-
-  if (language === SUGGESTED_CHANGE_LANGUAGE) {
-    return lines.map((line) => ({
-      kind: line.startsWith("-") ? CODE_ROW.REMOVED : CODE_ROW.ADDED,
-      text: line.slice(1),
-    }));
-  }
-
-  if (language !== DIFF_LANGUAGE) return undefined;
-
-  return lines.map((text) => ({
-    kind: DIFF_HEADER.test(text)
-      ? CODE_ROW.CONTEXT
-      : text.startsWith("-")
-        ? CODE_ROW.REMOVED
-        : text.startsWith("+")
-          ? CODE_ROW.ADDED
-          : CODE_ROW.CONTEXT,
-    text,
-  }));
-}
-
-/** The words of the rows added, which is what a suggestion copies. */
-function addedText(rows: readonly Row[]): string {
-  return rows.flatMap((row) => (row.kind === CODE_ROW.ADDED ? [row.text] : [])).join("\n");
-}
-
-/**
  * A fenced block as a `CodeCard`: its language in the header, as every
  * fence is headed (`fenceHeading`), over its lines, which keep whole and
  * scroll sideways inside the card rather than widening the transcript. A
@@ -165,7 +112,7 @@ function addedText(rows: readonly Row[]): string {
  * lines' tint, and a suggested change GitHub rendered its removed lines over
  * its added ones on the removed lines' tint; its copy is the new lines
  * alone, which is the suggestion. A diff's rows are tinted the same way
- * (`rowsOf`).
+ * (`fenceRows`).
  */
 function CodeFence({ language, code }: { language: string; code: string }): ReactNode {
   const openTail = useContext(OpenFenceTail);
@@ -174,7 +121,7 @@ function CodeFence({ language, code }: { language: string; code: string }): Reac
   const suggesting = suggests(language);
   // Note that a suggestion names no language of its own to color it in.
   const lines = useColoredLines(language, code, whole && !suggesting);
-  const rows = rowsOf(language, code);
+  const rows = fenceRows(language, code);
   const heading = fenceHeading(language);
 
   return (
