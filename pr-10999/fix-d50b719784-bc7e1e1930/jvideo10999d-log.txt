@@ -1,0 +1,19 @@
+pinned to d50b719784
+== bundle PJjvideo10999d base d50b719784
+  built d50b719784 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+fixture MP4: 9520 bytes
+== bundle PJjvideo10999dF base ed1c15bb33
+  built ed1c15bb33 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+p10999-iphone-light-video-file: fails 0 shots 2 
+p10999-iphone-light-video-http: fails 0 shots 2 
+p10999-ipad27-light-video-file: fails 0 shots 2 
+p10999-ipad27-light-video-http: fails 0 shots 2 
+range server requests: 4: 2026-11-26T23:57:58.170Z GET /fixture-recording.mp4 - 200;2026-11-26T23:57:58.223Z GET /fixture-recording.mp4 bytes=0- 206;2026-11-27T00:05:26.821Z GET /fixture-recording.mp4 - 200;2026-11-27T00:05:26.910Z GET /fixture-recording.mp4 bytes=0- 206;
