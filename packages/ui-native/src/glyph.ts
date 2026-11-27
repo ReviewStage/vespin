@@ -79,19 +79,26 @@ const unassignedMark = (name: (typeof UNASSIGNED_SYMBOL)[keyof typeof UNASSIGNED
 // SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
 const productMark = (name: typeof PRODUCT_MARK_SYMBOL): Glyph => name as Glyph;
 
-/** An SF Symbol, kept where iOS draws the thing its own way, or where the panel draws a mark of its own rather than a Lucide glyph. */
+/** An SF Symbol, where iOS has its own symbol for the job, or where the panel draws a mark of its own rather than a Lucide glyph. */
 // SAFETY: an SF Symbol's name is a glyph's name; this table is where glyphs are minted.
 const system = (name: SfSymbol): Glyph => name as Glyph;
 
 /**
- * Every glyph the app draws, by what it marks. Each is the Lucide glyph the
- * panel draws in the same place (the developer, Nov 12, 2026: the phone's
- * icons are the desktop's), written into the asset catalog as a custom
- * symbol by `@repo/brand`, so it sizes with Dynamic Type and weighs with its
- * words as an SF Symbol does. An SF Symbol stays only where iOS draws the
- * thing its own way (Share, and a sheet's close) or where the panel draws a mark of its own rather
- * than a Lucide glyph (a check box, a face, an MCP server), whose drawings
- * are SF Symbols' nearest. A task's status ring is the panel's own mark,
+ * Every glyph the app draws, by what it marks. A standard act iOS has its
+ * own symbol for (⋯, compose, search, close, add, copy, delete, edit, pin,
+ * mark read, archive, the composer's and a call's buttons) is the SF Symbol
+ * Apple's own apps draw for the same job, so a bar, a menu, and a swipe
+ * read as Mail's and Files' do. Our own places and things (the Inbox,
+ * Tasks, Automations and their runs and triggers, an agent, a Manager, a
+ * task, a pull request, an ask's kind, a status's and a priority's mark)
+ * keep the Lucide glyph the panel draws in the same place, so the brand
+ * reads the same on every client (the developer, Nov 27, 2026, refining
+ * the Nov 12 rule that the phone's icons are the desktop's); so does an act
+ * SF Symbols has no symbol for, such as Unlink. A Lucide glyph is written
+ * into the asset catalog as a custom symbol by `@repo/brand`, so it sizes
+ * with Dynamic Type and weighs with its words as an SF Symbol does. Where
+ * the panel draws a mark of its own rather than a Lucide glyph (a check
+ * box, a face, an MCP server), its drawing is SF Symbols' nearest. A task's status ring is the panel's own mark,
  * written into the asset catalog from the table `@repo/ui`'s
  * `TaskStatusMark` draws (the developer, Nov 13, 2026), and so is the
  * product's Keel, where the panel leads its MCP & CLI page with it.
@@ -100,9 +107,9 @@ export const GLYPH = {
   // Places.
   INBOX: lucide(LUCIDE_SYMBOL.INBOX),
   TASK: lucide(LUCIDE_SYMBOL.LIST_TODO),
-  SEARCH: lucide(LUCIDE_SYMBOL.SEARCH),
-  NEW_TASK: lucide(LUCIDE_SYMBOL.SQUARE_PEN),
-  SETTINGS: lucide(LUCIDE_SYMBOL.SETTINGS),
+  SEARCH: system("magnifyingglass"),
+  NEW_TASK: system("square.and.pencil"),
+  SETTINGS: system("gear"),
   HOME: lucide(LUCIDE_SYMBOL.HOUSE),
   AUTOMATION: lucide(LUCIDE_SYMBOL.ZAP),
   ADMIN: lucide(LUCIDE_SYMBOL.SHIELD_USER),
@@ -145,23 +152,23 @@ export const GLYPH = {
   COMPUTER_USE: lucide(LUCIDE_SYMBOL.MOUSE_POINTER_CLICK),
   PLUG: lucide(LUCIDE_SYMBOL.PLUG),
   // Settings' pages, each the glyph the panel's Settings sidebar leads it with, and About's rows.
-  NOTIFICATIONS: lucide(LUCIDE_SYMBOL.BELL),
+  NOTIFICATIONS: system("bell"),
   ENVIRONMENT: lucide(LUCIDE_SYMBOL.CLOUD_COG),
   WHATS_NEW: lucide(LUCIDE_SYMBOL.SCROLL_TEXT),
-  HELP: lucide(LUCIDE_SYMBOL.CIRCLE_QUESTION_MARK),
+  HELP: system("questionmark.circle"),
   FEEDBACK: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE),
-  EMAIL: lucide(LUCIDE_SYMBOL.MAIL),
-  GLOBE: lucide(LUCIDE_SYMBOL.GLOBE),
+  EMAIL: system("envelope"),
+  GLOBE: system("globe"),
   BROWSER: lucide(LUCIDE_SYMBOL.APP_WINDOW_MAC),
-  DATE: lucide(LUCIDE_SYMBOL.CALENDAR),
-  PERSON: lucide(LUCIDE_SYMBOL.USER),
+  DATE: system("calendar"),
+  PERSON: system("person"),
   /** A list's item moved a step deeper, as Tab moves it. */
   INDENT: lucide(LUCIDE_SYMBOL.LIST_INDENT_INCREASE),
   /** A list's item moved a step back out, as Shift-Tab moves it. */
   OUTDENT: lucide(LUCIDE_SYMBOL.LIST_INDENT_DECREASE),
-  PEOPLE: lucide(LUCIDE_SYMBOL.USERS),
-  FOLLOW: lucide(LUCIDE_SYMBOL.EYE),
-  UNFOLLOW: lucide(LUCIDE_SYMBOL.EYE_OFF),
+  PEOPLE: system("person.2"),
+  FOLLOW: system("eye"),
+  UNFOLLOW: system("eye.slash"),
   IMAGE: lucide(LUCIDE_SYMBOL.IMAGE),
   TERMINAL: lucide(LUCIDE_SYMBOL.TERMINAL),
   PULL_REQUEST: lucide(LUCIDE_SYMBOL.GIT_PULL_REQUEST),
@@ -177,9 +184,9 @@ export const GLYPH = {
   FAILED: lucide(LUCIDE_SYMBOL.CIRCLE_ALERT),
   NOT_FOUND: lucide(LUCIDE_SYMBOL.SEARCH_X),
   OFFLINE: lucide(LUCIDE_SYMBOL.WIFI_OFF),
-  TIME: lucide(LUCIDE_SYMBOL.CLOCK),
+  TIME: system("clock"),
   /** A reminder for tomorrow morning, as Mail's Remind Me draws its Tomorrow. */
-  TOMORROW: lucide(LUCIDE_SYMBOL.SUNRISE),
+  TOMORROW: system("sunrise"),
   QUEUED: lucide(LUCIDE_SYMBOL.LIST_END),
   STATUS: lucide(LUCIDE_SYMBOL.CIRCLE_DASHED),
   CHECK: lucide(LUCIDE_SYMBOL.CHECK),
@@ -188,58 +195,58 @@ export const GLYPH = {
   AUTO_APPROVE: lucide(LUCIDE_SYMBOL.SHIELD_ELLIPSIS),
   FULL_ACCESS: lucide(LUCIDE_SYMBOL.SHIELD_ALERT),
   // Acts.
-  ADD: lucide(LUCIDE_SYMBOL.PLUS),
-  MORE: lucide(LUCIDE_SYMBOL.ELLIPSIS),
-  SEND: lucide(LUCIDE_SYMBOL.ARROW_UP),
-  DICTATE: lucide(LUCIDE_SYMBOL.MIC),
-  // A voice call's presses, as the panel's call controls draw them.
+  ADD: system("plus"),
+  MORE: system("ellipsis"),
+  SEND: system("arrow.up"),
+  DICTATE: system("mic"),
+  // A voice call's presses, as Phone and FaceTime draw them.
   TALK: lucide(LUCIDE_SYMBOL.AUDIO_LINES),
-  MICROPHONE: lucide(LUCIDE_SYMBOL.MIC),
-  MICROPHONE_MUTED: lucide(LUCIDE_SYMBOL.MIC_OFF),
-  SPEAKER: lucide(LUCIDE_SYMBOL.VOLUME_2),
-  SPEAKER_MUTED: lucide(LUCIDE_SYMBOL.VOLUME_OFF),
-  END_CALL: lucide(LUCIDE_SYMBOL.PHONE_OFF),
-  ATTACH: lucide(LUCIDE_SYMBOL.PAPERCLIP),
+  MICROPHONE: system("mic"),
+  MICROPHONE_MUTED: system("mic.slash"),
+  SPEAKER: system("speaker.wave.2"),
+  SPEAKER_MUTED: system("speaker.slash"),
+  END_CALL: system("phone.down"),
+  ATTACH: system("paperclip"),
   OPTIONS: lucide(LUCIDE_SYMBOL.SLIDERS_HORIZONTAL),
-  REMOVE: lucide(LUCIDE_SYMBOL.X),
-  DELETE: lucide(LUCIDE_SYMBOL.TRASH),
-  RENAME: lucide(LUCIDE_SYMBOL.PENCIL),
+  REMOVE: system("xmark"),
+  DELETE: system("trash"),
+  RENAME: system("pencil"),
   // Note that the panel's smile, Lucide's FaceSlightlySmiling, is among every glyph the catalog holds rather than the table the app names, so it is minted from that list.
   CHANGE_FACE: catalogLucide("FaceSlightlySmiling"),
-  EDIT: lucide(LUCIDE_SYMBOL.PENCIL_LINE),
+  EDIT: system("pencil"),
   WRITE: lucide(LUCIDE_SYMBOL.FILE_PEN),
-  COPY: lucide(LUCIDE_SYMBOL.COPY),
+  COPY: system("doc.on.doc"),
   /** Reply in thread, which opens a Manager chat message's thread, the panel's Lucide MessageSquareText, among every glyph the catalog holds. */
   REPLY_IN_THREAD: catalogLucide("MessageSquareText"),
-  SAVE: lucide(LUCIDE_SYMBOL.DOWNLOAD),
-  LINK: lucide(LUCIDE_SYMBOL.LINK),
+  SAVE: system("square.and.arrow.down"),
+  LINK: system("link"),
   UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),
   /** A webhook, what fires an automation called at its address, the panel's Lucide Webhook, among every glyph the catalog holds. */
   WEBHOOK: catalogLucide("Webhook"),
   /** Open, which brings a row's lifted preview up to its whole page in the app; the arrow out is kept for what leaves it. */
   OPEN: lucide(LUCIDE_SYMBOL.MAXIMIZE_2),
-  OPEN_EXTERNALLY: lucide(LUCIDE_SYMBOL.EXTERNAL_LINK),
-  PIN: lucide(LUCIDE_SYMBOL.PIN),
-  UNPIN: lucide(LUCIDE_SYMBOL.PIN_OFF),
-  MARK_READ: lucide(LUCIDE_SYMBOL.MAIL_OPEN),
-  MARK_UNREAD: lucide(LUCIDE_SYMBOL.MAIL),
+  OPEN_EXTERNALLY: system("safari"),
+  PIN: system("pin"),
+  UNPIN: system("pin.slash"),
+  MARK_READ: system("envelope.open"),
+  MARK_UNREAD: system("envelope.badge"),
   /** A draft's header, by where it goes: an email, and one with no place named. */
   DRAFT_EMAIL: lucide(LUCIDE_SYMBOL.MAIL),
   DRAFT_WRITTEN: lucide(LUCIDE_SYMBOL.PEN_LINE),
   /** A Slack draft's header, where the panel draws Slack's own mark, which no glyph set holds: a message's bubble, the nearest. */
   DRAFT_SLACK: system("bubble.left"),
-  MARK_ALL_READ: lucide(LUCIDE_SYMBOL.CHECK_CHECK),
-  SELECT: lucide(LUCIDE_SYMBOL.LIST_CHECKS),
-  ARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE),
-  UNARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE_RESTORE),
-  MOVE: lucide(LUCIDE_SYMBOL.FOLDER_INPUT),
+  MARK_ALL_READ: system("envelope.open"),
+  SELECT: system("checkmark.circle"),
+  ARCHIVE: system("archivebox"),
+  UNARCHIVE: system("tray.and.arrow.up"),
+  MOVE: system("folder"),
   SUGGEST: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
   // A queued message's acts, as the panel's queue dock draws Steer; Move Up and Move Down are its drag's reorder as a long press offers it.
   STEER: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
-  MOVE_UP: lucide(LUCIDE_SYMBOL.ARROW_UP),
-  MOVE_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
-  ADD_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_PLUS),
-  REMOVE_FROM_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_MINUS),
+  MOVE_UP: system("arrow.up"),
+  MOVE_DOWN: system("arrow.down"),
+  ADD_SECTION: system("folder.badge.plus"),
+  REMOVE_FROM_SECTION: system("folder.badge.minus"),
   /** A section's Change icon and Add icon, the panel's Lucide SmilePlus, which the catalog's Lucide names FaceSlightlySmilingPlus, among every glyph it holds. */
   CHANGE_ICON: catalogLucide("FaceSlightlySmilingPlus"),
   /** A section's icon's Color, the colors its glyph may wear, Lucide's Palette, among every glyph the catalog holds. */
@@ -251,22 +258,23 @@ export const GLYPH = {
   NEW_THREAD: lucide(LUCIDE_SYMBOL.MESSAGE_SQUARE_PLUS),
   NEW_FILE: lucide(LUCIDE_SYMBOL.FILE_PLUS),
   NEW_ISSUE: lucide(LUCIDE_SYMBOL.CIRCLE_PLUS),
-  INVITE: lucide(LUCIDE_SYMBOL.USER_PLUS),
-  UNDO: lucide(LUCIDE_SYMBOL.UNDO_2),
-  RETRY: lucide(LUCIDE_SYMBOL.ROTATE_CW),
-  RESTORE: lucide(LUCIDE_SYMBOL.ROTATE_CCW),
+  INVITE: system("person.badge.plus"),
+  UNDO: system("arrow.uturn.backward"),
+  RETRY: system("arrow.clockwise"),
+  RESTORE: system("arrow.counterclockwise"),
+  /** An automation's runs and a page's versions, the panel's own, since Automations is a place of ours (the developer, Nov 27, 2026). */
   HISTORY: lucide(LUCIDE_SYMBOL.ROTATE_CCW_CLOCK),
   // A message's acts, as the panel's message actions draw them: Edit a line of the member's, Rewind conversation to here, and Fork to new agent.
-  EDIT_MESSAGE: lucide(LUCIDE_SYMBOL.PENCIL),
-  REWIND: lucide(LUCIDE_SYMBOL.ROTATE_CCW),
+  EDIT_MESSAGE: system("pencil"),
+  REWIND: system("arrow.counterclockwise"),
   FORK: lucide(LUCIDE_SYMBOL.SPLIT),
   CONTINUE: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
   UPDATE: lucide(LUCIDE_SYMBOL.CIRCLE_ARROW_UP),
   RUN: lucide(LUCIDE_SYMBOL.PLAY),
-  // A sound clip's play and pause, as the panel's audio player draws them.
-  PLAY: lucide(LUCIDE_SYMBOL.PLAY),
-  PAUSE: lucide(LUCIDE_SYMBOL.PAUSE),
-  STOP: lucide(LUCIDE_SYMBOL.CIRCLE_STOP),
+  // A sound clip's play and pause, as the system's players draw them.
+  PLAY: system("play"),
+  PAUSE: system("pause"),
+  STOP: system("stop.circle"),
   WAIT: lucide(LUCIDE_SYMBOL.HOURGLASS),
   SLEEP: lucide(LUCIDE_SYMBOL.TIMER),
   WAKE: lucide(LUCIDE_SYMBOL.ALARM_CLOCK_CHECK),
@@ -277,9 +285,11 @@ export const GLYPH = {
   READ: lucide(LUCIDE_SYMBOL.SCROLL_TEXT),
   MODELS: lucide(LUCIDE_SYMBOL.CPU),
   TOOL: lucide(LUCIDE_SYMBOL.WRENCH),
-  SIGN_OUT: lucide(LUCIDE_SYMBOL.LOG_OUT),
+  SIGN_OUT: system("rectangle.portrait.and.arrow.right"),
   SIDEBAR: lucide(LUCIDE_SYMBOL.PANEL_LEFT),
   SCHEDULES: lucide(LUCIDE_SYMBOL.CALENDAR_CLOCK),
+  /** An automation's schedule as its trigger's mark, the panel's clock, where a reminder's time is the system's. */
+  SCHEDULE_TRIGGER: lucide(LUCIDE_SYMBOL.CLOCK),
   SCHEDULE_ADD: lucide(LUCIDE_SYMBOL.CALENDAR_PLUS),
   SCHEDULE_EDIT: lucide(LUCIDE_SYMBOL.CALENDAR_COG),
   SCHEDULE_DELETE: lucide(LUCIDE_SYMBOL.CALENDAR_X),
@@ -287,9 +297,9 @@ export const GLYPH = {
   JUMP_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   FOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_RIGHT),
   UNFOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
-  // The Inbox's pager in an open thread's bar, as the panel's K and J and Mail's message arrows.
-  PREVIOUS_ITEM: lucide(LUCIDE_SYMBOL.CHEVRON_UP),
-  NEXT_ITEM: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
+  // The Inbox's pager in an open thread's bar, as Mail's message arrows.
+  PREVIOUS_ITEM: system("chevron.up"),
+  NEXT_ITEM: system("chevron.down"),
   // iOS's own: Share is the system's act, a sheet closes with the system's round ✕ (its close role, as Calendar and Reminders close one), a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
   // Select text is the system's act on a held message, as Messages and ChatGPT draw it.
@@ -338,6 +348,45 @@ export const GLYPH = {
   MCP_SERVER: system("server.rack"),
   MCP_TOOL: system("wrench.and.screwdriver"),
   PRODUCT: productMark(PRODUCT_MARK_SYMBOL),
+} as const;
+
+/**
+ * The glyph each kind of an agent's tool call leads its transcript line
+ * with, where the call is an act: the panel's own Lucide glyph, as the
+ * desktop's transcript draws it (`transcript-blocks.tsx`'s `CALL_ICON`).
+ * Note that it is its own table rather than `GLYPH`'s acts, because an
+ * agent's record of its work is ours while a menu's act is the system's
+ * (the developer, Nov 27, 2026), so turning a menu's act to an SF Symbol
+ * never turns a transcript line with it.
+ */
+export const CALL_GLYPH = {
+  SEARCH: lucide(LUCIDE_SYMBOL.SEARCH),
+  GLOBE: lucide(LUCIDE_SYMBOL.GLOBE),
+  STOP: lucide(LUCIDE_SYMBOL.CIRCLE_STOP),
+  ARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE),
+  UNARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE_RESTORE),
+  EDIT: lucide(LUCIDE_SYMBOL.PENCIL_LINE),
+  WRITE: lucide(LUCIDE_SYMBOL.FILE_PEN),
+  ADD_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_PLUS),
+  REMOVE_SECTION: lucide(LUCIDE_SYMBOL.FOLDER_MINUS),
+  MOVE: lucide(LUCIDE_SYMBOL.FOLDER_INPUT),
+  LINK: lucide(LUCIDE_SYMBOL.LINK),
+  UNLINK: lucide(LUCIDE_SYMBOL.UNLINK),
+  CHECK: lucide(LUCIDE_SYMBOL.CHECK),
+  RESOLVED: lucide(LUCIDE_SYMBOL.CIRCLE_CHECK),
+  RUN: lucide(LUCIDE_SYMBOL.PLAY),
+  WAIT: lucide(LUCIDE_SYMBOL.HOURGLASS),
+  SLEEP: lucide(LUCIDE_SYMBOL.TIMER),
+  WAKE: lucide(LUCIDE_SYMBOL.ALARM_CLOCK_CHECK),
+  WAKE_OFF: lucide(LUCIDE_SYMBOL.ALARM_CLOCK_OFF),
+  SUGGEST: lucide(LUCIDE_SYMBOL.CORNER_DOWN_RIGHT),
+  MESSAGE: lucide(LUCIDE_SYMBOL.SEND),
+  READ: lucide(LUCIDE_SYMBOL.SCROLL_TEXT),
+  LIST: lucide(LUCIDE_SYMBOL.LAYOUT_LIST),
+  TODOS: lucide(LUCIDE_SYMBOL.LIST_CHECKS),
+  NEW_FILE: lucide(LUCIDE_SYMBOL.FILE_PLUS),
+  NEW_ISSUE: lucide(LUCIDE_SYMBOL.CIRCLE_PLUS),
+  TOOL: lucide(LUCIDE_SYMBOL.WRENCH),
 } as const;
 
 /** Each glyph the panel's section icon picker suggests (`TASK_SECTION_GLYPH`), as its Lucide glyph, so a section wears on the phone the icon its member chose. */
@@ -457,6 +506,22 @@ export function glyphImage(
 export function glyphSymbol(glyph: Glyph): SfSymbol {
   // SAFETY: the patched `SymbolView` reads a custom symbol's name as well as an SF Symbol's.
   return glyph as SfSymbol;
+}
+
+/**
+ * A glyph as expo-router's bottom bar and tab bar take an icon: an SF Symbol
+ * by `sf`, a custom symbol by its asset's name as `xcasset`, since each
+ * loads only the one kind its prop names. Note that an asset is tinted as a
+ * template, because a bar handed no tint draws an asset in its artwork's
+ * own black, which vanished on a dark bar beside the system's symbols.
+ */
+export function glyphIcon(
+  glyph: Glyph,
+): { readonly sf: SfSymbol } | { readonly xcasset: string; readonly renderingMode: "template" } {
+  // SAFETY: a glyph the asset catalog doesn't hold was minted by `system` from an SF Symbol's name.
+  return CATALOG_SYMBOLS.has(glyph)
+    ? { xcasset: glyph, renderingMode: "template" }
+    : { sf: glyph as SfSymbol };
 }
 
 /** A mark's glyph and the tone it is drawn in. */

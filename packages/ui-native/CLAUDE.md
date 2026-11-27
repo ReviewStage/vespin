@@ -216,23 +216,36 @@ builds a control of its own.
   the line's trailing edge folds its sub-tasks, as Files and Notes fold a
   folder), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
-- **Every glyph is the panel's own Lucide glyph for the same place** (the
-  developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
-  marks: a tab, a row's and a status's mark, a menu's item, a toolbar's
-  button, and a composer's button alike. `@repo/brand`'s generator outlines
-  each, at the `lucide-react` `@repo/ui` pins, into a custom symbol template
-  the app's config writes into the asset catalog as a symbol set, so it
-  sizes with Dynamic Type and weighs with its words as an SF Symbol does. A
-  glyph is a branded `Glyph`, minted only in that table, so no component
-  takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
-  items, which expo-router types as plain names, take `GLYPH.X` too
-  (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
-  where iOS draws the thing its own way (Share, a sheet's close, the chevron
-  at the end of a Settings row that goes on, the small arrow out at the end
-  of one that leaves the app, and the up-and-down chevron at the end of one
-  whose press opens a menu) or where the panel draws a
-  mark of its own rather than a Lucide glyph (a check box, a face, an MCP
-  server, the panel's product mark). A task's status ring is the panel's own
+- **A standard act is the system's symbol; our own things are the panel's glyph**
+  (the developer, Nov 27, 2026, refining the Nov 12 rule that every glyph
+  is the panel's). Every glyph is named once in `glyph.ts`'s `GLYPH`, by
+  what it marks: a tab, a row's and a status's mark, a menu's item, a
+  toolbar's button, and a composer's button alike. A standard act iOS has
+  its own symbol for (⋯ `ellipsis`, compose `square.and.pencil`, search,
+  +, copy, delete, rename, pin, mark read or unread, archive, move, a
+  reminder's time, the composer's and a call's buttons) is the SF Symbol
+  Apple's own apps draw for the same job, as Mail, Files, Notes and
+  Reminders draw it, so a bar, a menu, and a swipe read as theirs do; so
+  are Share, a sheet's close, the chevron at the end of a Settings row that
+  goes on, the small arrow out at the end of one that leaves the app, and
+  the up-and-down chevron at the end of one whose press opens a menu. Our
+  own places and things, which the brand draws the same on every client
+  (the Inbox, Tasks and Automations, the tab bar's included, an
+  automation's runs and triggers, an agent, a Manager, a task, a pull
+  request, a branch, an ask's kind, a skill, a memory), and an act SF
+  Symbols has no symbol for (Unlink), is the panel's own Lucide glyph for
+  the same place:
+  `@repo/brand`'s generator outlines each, at the `lucide-react` `@repo/ui`
+  pins, into a custom symbol template the app's config writes into the
+  asset catalog as a symbol set, so it sizes with Dynamic Type and weighs
+  with its words as an SF Symbol does. Where the panel draws a mark of its
+  own rather than a Lucide glyph (a check box, a face, an MCP server, the
+  panel's product mark), its drawing is SF Symbols' nearest. A glyph is a
+  branded `Glyph`, minted only in that table, so no component takes a bare
+  SF Symbol's name; `apps/mobile`'s tab icons and toolbar items, which
+  expo-router types as plain names, take `GLYPH.X` too (`glyphSymbol` where
+  a symbol's name is asked for, `glyphIcon` where the bottom bar or the tab
+  bar asks for `sf` or `xcasset`). A task's status ring is the panel's own
   mark, cut into the asset catalog from `@repo/brand`'s table
   (`task-status-marks.mjs`) that `@repo/ui`'s `TaskStatusMark` draws too. A SwiftUI button or menu
   holding a glyph takes it as its label's icon (`glyph-label.tsx`), since
