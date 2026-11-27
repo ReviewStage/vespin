@@ -423,12 +423,54 @@ interface SliceRead<Slice> {
   readonly slice: Slice | undefined;
 }
 
+/** Who hears each client's document written, and the one cache listener they share while any does. */
+interface DocumentHearing {
+  readonly heard: Set<(state: AppStateSnapshot | undefined) => void>;
+  stop: (() => void) | undefined;
+}
+
+/** Each client's hearing of its document's writes (`onDocumentWritten`). */
+const documentHearings = new WeakMap<QueryClient, DocumentHearing>();
+
 /** The slices read through `useAppStateSlice`, by the client they are read from and the select that cuts each. */
 const sharedSlices = new WeakMap<QueryClient, Map<unknown, SharedSlice<unknown>>>();
 
 /** Whether a cache event is the document's own. */
 function isAppStateQuery(queryKey: readonly unknown[]): boolean {
   return queryKey.length === 1 && queryKey[0] === QUERY_ROOT.APP_STATE;
+}
+
+/**
+ * Hears each write of `client`'s document, with the document written, until
+ * the returned call stops it. Every hearer shares one listener on the
+ * client's cache, which hears only the document's own write: the cache tells
+ * each of its listeners of every observer a write updates too, hundreds on
+ * one write, so a listener of each hearer's own was called hundreds of times
+ * over on every write.
+ */
+export function onDocumentWritten(
+  client: QueryClient,
+  heard: (state: AppStateSnapshot | undefined) => void,
+): () => void {
+  const hearing = documentHearings.get(client) ?? { heard: new Set(), stop: undefined };
+  documentHearings.set(client, hearing);
+  hearing.heard.add(heard);
+
+  hearing.stop ??= client.getQueryCache().subscribe((event) => {
+    if (event.type !== "updated" || !isAppStateQuery(event.query.queryKey)) return;
+    // SAFETY: the document's query holds the document.
+    const state = event.query.state.data as AppStateSnapshot | undefined;
+
+    for (const each of [...hearing.heard]) each(state);
+  });
+
+  return () => {
+    hearing.heard.delete(heard);
+
+    if (hearing.heard.size > 0) return;
+    hearing.stop?.();
+    hearing.stop = undefined;
+  };
 }
 
 /**
@@ -480,12 +522,7 @@ function sharedSlice<Slice>(
     subscribe: (reader) => {
       if (readers.size === 0) {
         told = now();
-        // Note that only the document's own write is heard, its data read off the event, because the cache tells every listener of each observer it updated too, hundreds on one write.
-        stop = client.getQueryCache().subscribe((event) => {
-          if (event.type !== "updated" || !isAppStateQuery(event.query.queryKey)) return;
-          // SAFETY: the document's query holds the document.
-          heard(event.query.state.data as AppStateSnapshot | undefined);
-        });
+        stop = onDocumentWritten(client, heard);
       }
 
       readers.add(reader);
