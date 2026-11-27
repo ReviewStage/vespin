@@ -566,13 +566,7 @@ export const AGENT_ATTACHMENT_TYPE = {
   PNG: "image/png",
   JPEG: "image/jpeg",
   WEBP: "image/webp",
-  /**
-   * A still GIF (`gif-frames.ts`). Note that no client sends one yet, but
-   * re-encodes it as it does any other picture, because a message box's file
-   * may be kept and served back as its type (a comment's, an Inbox reply's,
-   * a queued message's), which a client released before this reads under
-   * types without it.
-   */
+  /** A still GIF (`gif-frames.ts`); a message box sends an animated one as its first frame. */
   GIF: "image/gif",
   PDF: "application/pdf",
   TEXT: "text/plain",
