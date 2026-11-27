@@ -1,0 +1,24 @@
+-- j11144t: main pinned to 604f24d955: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to d80a20fc22
+== bundle PJj11144t base d80a20fc22
+  built d80a20fc22 base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+A-3x 3x (d80a20fc22): script rc 0, trace ok, minute launch+60..120 s: open1: tap at 56.91s, main 5255 ms, JS 8171 ms
+  A-3x JS holds (whole 150 s): JS thread: 23223 running samples in the first 150 s (from its first sample); holds over 50 ms: 46, total 9831 ms, longest 1518 ms holds over 50 ms (start s after first JS sample, ms): 63.03s 1518, 31.96s 1082, 0.26s 746, 1.25s 519, 76.33s 385, 0.00s 204, 1.02s 189, 81.72s 188, 121.62s 185, 138.70s 1
+  A-3x app:ready launch_ms: 3405.156124830246
+  A-3x launch:load:  | app:ready: {"launch_ms":3405.156124830246,"local_ms":485.02033281326294,"started_ms":1564.6624578237534,"screens_ms":2984.528874874115,"inbox_ms":2669.650540828705,"active_ms":339.1862498521805,"first_rows":"kep
+A-cold (light): flow pass, cold frames 34 (0.25 s apart from the launch; the recording began 27 ms before the launch was seen), thread arrows: no Previous/Next inbox item buttons in the tree, recording 5551973 bytes
+== bundle PJj11144tB base ad91cc3b7d
+  built ad91cc3b7d base app Vmain17.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+B-3x 3x (ad91cc3b7d): script rc 0, trace ok, minute launch+60..120 s: open1: tap at 56.96s, main 5614 ms, JS 11250 ms
+  B-3x JS holds (whole 150 s): JS thread: 28966 running samples in the first 150 s (from its first sample); holds over 50 ms: 51, total 15798 ms, longest 3232 ms holds over 50 ms (start s after first JS sample, ms): 64.48s 3232, 31.99s 2491, 79.83s 1424, 1.01s 753, 0.29s 662, 46.31s 239, 0.00s 234, 2.39s 234, 103.98s 234, 138.48s
+  B-3x app:ready launch_ms: 3464.326166152954
+  B-3x launch:load:  | app:ready: {"launch_ms":3464.326166152954,"local_ms":507.3369162082672,"started_ms":1617.7499581575394,"screens_ms":3015.276041150093,"inbox_ms":2686.656999230385,"active_ms":361.60616624355316,"first_rows":"kep
+B-cold (light): flow pass, cold frames 34 (0.25 s apart from the launch; the recording began 23 ms before the launch was seen), thread arrows: no Previous/Next inbox item buttons in the tree, recording 5082905 bytes
