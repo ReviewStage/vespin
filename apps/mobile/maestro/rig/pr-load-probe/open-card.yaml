@@ -1,0 +1,19 @@
+# open-card.yaml -- PROBE, not for merge: one launch and one open of #128 by its agent, its own read already held, as the agent card holds it, its checks and conversation held back, waited on until it shows.
+appId: dev.vespin.ios
+---
+- launchApp:
+    stopApp: true
+    arguments:
+      fixture: inbox
+      prProbe: "0,3602,2687"
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 30000
+- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128?agent=5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5"
+- runFlow: open-ask.yaml
+- extendedWaitUntil:
+    visible: "Ready to merge"
+    timeout: 30000
+- extendedWaitUntil:
+    visible: ".*passed.*"
+    timeout: 30000

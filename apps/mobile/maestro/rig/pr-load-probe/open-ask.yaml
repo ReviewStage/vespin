@@ -1,0 +1,9 @@
+# open-ask.yaml -- PROBE, not for merge: the system's question before a custom scheme opens the app, answered Open where it stands, and nothing pressed where it does not, since the pull request's own state chip also reads "Open".
+appId: dev.vespin.ios
+---
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible: "Cancel"
+    commands:
+      - tapOn: "Open"
