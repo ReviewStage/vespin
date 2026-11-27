@@ -2,7 +2,7 @@
 
 import { requireNativeView } from "expo";
 import type { ComponentType, ReactElement, ReactNode } from "react";
-import type { NativeSyntheticEvent } from "react-native";
+import { type NativeSyntheticEvent, useColorScheme } from "react-native";
 import { longPressTree } from "./list-row.js";
 import { filledGroups, type LongPressGroup, menuPressAt } from "./row-menu-model.js";
 import { useColors } from "./tokens/colors.js";
@@ -49,12 +49,13 @@ export function ContextMenu({
   readonly children: ReactElement;
 }) {
   const colors = useColors();
+  const dark = useColorScheme() === "dark";
 
   if (filledGroups(groups).length === 0) return children;
 
   return (
     <NativeContextMenu
-      menu={longPressTree(groups, title, colors)}
+      menu={longPressTree(groups, title, colors, dark)}
       onPressPlace={(event) => menuPressAt(groups, event.nativeEvent.path)?.()}
     >
       {children}

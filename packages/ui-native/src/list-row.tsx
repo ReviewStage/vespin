@@ -109,6 +109,7 @@ import {
 } from "./row-open.js";
 import { previewTree, type RowPreview } from "./row-preview-model.js";
 import { searchedTitleMarkdown } from "./searched-title-model.js";
+import { sectionInk } from "./section-ink.js";
 import { sparedMarksDropped } from "./task-row-fit-model.js";
 import { Text } from "./text.js";
 import { type BrandColors, STATUS_TONE, toneColor, useColors } from "./tokens/colors.js";
@@ -513,17 +514,19 @@ export function rowPlacement(
   ];
 }
 
-/** A long press menu's tree as the native module reads it, SwiftUI's menu (`rowMenu`) and UIKit's (`ContextMenu`) alike: its groups (`menuTree`) in the menu's muted ink, headed by `title` where it has one. */
+/** A long press menu's tree as the native module reads it, SwiftUI's menu (`rowMenu`) and UIKit's (`ContextMenu`) alike: its groups (`menuTree`) in the menu's muted ink, a section's glyph in its own color, headed by `title` where it has one. */
 export function longPressTree(
   groups: readonly LongPressGroup[],
   title: string | undefined,
   colors: BrandColors,
+  dark: boolean,
 ): string {
   return JSON.stringify({
     title,
     groups: menuTree(groups, {
       act: colors.TEXT_MUTED,
       tone: (tone) => toneColor(colors, tone),
+      section: (color) => sectionInk(color, dark),
     }),
   });
 }
@@ -550,10 +553,11 @@ export function LongPressMenu({
   readonly children: ReactElement;
 }) {
   const colors = useColors();
+  const dark = useColorScheme() === "dark";
 
   if (filledGroups(groups).length === 0) return children;
 
-  const tree = longPressTree(groups, title, colors);
+  const tree = longPressTree(groups, title, colors, dark);
 
   return (
     <HStack modifiers={[rowMenu(tree, false, (path) => menuPressAt(groups, path)?.())]}>
@@ -661,7 +665,12 @@ export function RowFrame({
 
   // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
   const plain = choosing || (!ownGroup && groups.length === 0 && preview === undefined);
-  const inks: MenuInks = { act: colors.TEXT_MUTED, tone: (tone) => toneColor(colors, tone) };
+
+  const inks: MenuInks = {
+    act: colors.TEXT_MUTED,
+    tone: (tone) => toneColor(colors, tone),
+    section: (color) => sectionInk(color, dark),
+  };
 
   // Note that the menu, its preview, and its VoiceOver Actions reach the native module as one string, read only as a long press opens the menu or while something reads the Actions, so the row holds no view of either and builds nothing for them as it draws; a press comes back as its place, which finds its handler here.
   const tree = plain
