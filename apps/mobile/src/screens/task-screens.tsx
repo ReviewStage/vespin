@@ -126,7 +126,11 @@ import {
   VERB,
 } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
-import { managerChatUnread } from "@repo/features/workspace-managers-model";
+import {
+  MANAGER_SORT,
+  MANAGER_SORT_WORDS,
+  managerChatUnread,
+} from "@repo/features/workspace-managers-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
   selectInboxReader,
@@ -231,6 +235,7 @@ import {
   useState,
 } from "react";
 import { useColorScheme } from "react-native";
+import { useManagerSort } from "../agents/manager-sort.js";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
@@ -1754,7 +1759,12 @@ function TreeSections({
 
   return (
     <>
-      <ManagersSection listed={managersListed} managers={managers} hold={hold} />
+      <ManagersSection
+        workspaceId={listing.workspace?.id}
+        listed={managersListed}
+        managers={managers}
+        hold={hold}
+      />
       {tree.pinned === undefined ? null : (
         <GroupSection group={tree.pinned} listing={listing} hold={hold} />
       )}
@@ -1774,6 +1784,7 @@ function TreeSections({
 /** The Managers section's words: its header, its +, and what it says while it holds none, as the desktop's sidebar says them. */
 const MANAGERS_WORDS = {
   HEAD: "Managers",
+  SORT_BY: "Sort by",
   NEW: "New Manager",
   NONE: "No Managers yet.",
 } as const;
@@ -1788,17 +1799,23 @@ const NEW_MANAGER_ROUTE = "/new-manager";
  * The workspace's Managers as the Tasks list's first section, above Pinned,
  * as the desktop's sidebar stands them (`sidebar-managers.tsx`): each a
  * task's row with its face in the ring's place (`ManagerTaskRow`), newest
- * started first, and its press opening its chat
+ * started first until a sort is chosen, and its press opening its chat
  * (`TasksTree`), its long press and swipes an agent's own. Its header's +
- * opens New Manager, and it says so where it holds none yet. It folds under
+ * opens New Manager, and it says so where it holds none yet. A long press
+ * on its header offers Sort by, as the sidebar's View options does, the
+ * account's sort for the workspace, so every device lists them alike
+ * (`manager-sort.ts`). It folds under
  * its header and count as the other groups do, and stands nowhere while the
  * workspace has the Managers experiment off.
  */
 function ManagersSection({
+  workspaceId,
   listed,
   managers,
   hold,
 }: {
+  /** The workspace whose Managers these are, whose sort the header chooses. */
+  readonly workspaceId: string | undefined;
   /** Whether the workspace has the Managers experiment on. */
   readonly listed: boolean;
   readonly managers: readonly ListedAgent[];
@@ -1806,8 +1823,19 @@ function ManagersSection({
 }) {
   const router = useRouter();
   const asking = useAgentRowAsk();
+  const sorting = useManagerSort(listed ? workspaceId : undefined);
 
   if (!listed) return null;
+
+  const sortBy: RowSubmenu = {
+    label: MANAGERS_WORDS.SORT_BY,
+    symbol: GLYPH.OPTIONS,
+    choices: Object.values(MANAGER_SORT).map((sort) => ({
+      label: MANAGER_SORT_WORDS[sort],
+      on: sorting.sort === sort,
+      onPress: () => sorting.onSort(sort),
+    })),
+  };
 
   return (
     <ListSection
@@ -1817,6 +1845,7 @@ function ManagersSection({
       folded={hold.folded.has(MANAGERS_KEY)}
       onFold={(shut) => hold.setFolded(MANAGERS_KEY, shut)}
       footer={managers.length === 0 ? MANAGERS_WORDS.NONE : undefined}
+      menu={[[sortBy]]}
       add={{
         label: MANAGERS_WORDS.NEW,
         acts: [

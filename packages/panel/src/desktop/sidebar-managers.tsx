@@ -32,7 +32,7 @@ import type { TaskAgentPin } from "@repo/features/task-wire";
 import { TERM } from "@repo/features/words";
 import {
   MANAGER_SORT,
-  type ManagerSort,
+  MANAGER_SORT_WORDS,
   sortedManagers,
 } from "@repo/features/workspace-managers-model";
 import { EXPERIMENT } from "@repo/settings";
@@ -85,13 +85,6 @@ const VIEW_OPTIONS = "View options";
 
 /** The submenu that chooses how the Managers are sorted. */
 const SORT_BY = "Sort by";
-
-/** What each sort is called among Sort by's choices, in the order they are offered. */
-const SORT_WORDS = {
-  [MANAGER_SORT.RECENT_ACTIVITY]: "Recent activity",
-  [MANAGER_SORT.NAME]: "Name",
-  [MANAGER_SORT.CREATED]: "Date created",
-} as const satisfies Record<ManagerSort, string>;
 
 /** No Manager pinned, the same array every render. */
 const NO_MANAGERS: readonly PinnedManager[] = [];
@@ -261,7 +254,7 @@ function ManagerViewOptions({
     label: SORT_BY,
     icon: <ArrowUpDownIcon />,
     items: Object.values(MANAGER_SORT).map((choice) => ({
-      label: SORT_WORDS[choice],
+      label: MANAGER_SORT_WORDS[choice],
       checked: control.sort === choice,
       stays: true,
       onSelect: () => control.onSort(choice),
