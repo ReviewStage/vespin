@@ -74,6 +74,72 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.45.0 — 2026-11-27
+
+### Vespin is now signed by Stage Incorporated
+
+The Mac app is now signed and notarized by Stage Incorporated, the company
+that makes it, rather than a personal Apple developer account. macOS treats a
+build signed by another team as a new app, so on first launch it may ask once
+whether Vespin may use the Keychain item that protects your sign-in (Always
+Allow keeps you signed in; Deny signs you out, and you sign in again once), and
+it asks again for any permission the app held, such as the microphone or a
+folder. An install older than 0.33.0 cannot take this update: download
+Vespin.dmg from vespin.dev once.
+
+[#8683](https://github.com/ReviewStage/vespin/pull/8683)
+
+### Improvements
+
+- A conversation now stays at its end until you scroll away, and lets a find or
+  a screen reader take you anywhere in it
+  ([#11176](https://github.com/ReviewStage/vespin/pull/11176),
+  [#11175](https://github.com/ReviewStage/vespin/pull/11175),
+  [#11180](https://github.com/ReviewStage/vespin/pull/11180),
+  [#11193](https://github.com/ReviewStage/vespin/pull/11193))
+- Hovering a Manager now shows its own card, like a task's or a person's
+  ([#11172](https://github.com/ReviewStage/vespin/pull/11172))
+- You can now attach a file of any kind from the message box, and a still GIF
+  goes as a GIF ([#11163](https://github.com/ReviewStage/vespin/pull/11163),
+  [#11164](https://github.com/ReviewStage/vespin/pull/11164),
+  [#11161](https://github.com/ReviewStage/vespin/pull/11161))
+- A pull request's conversation now loads faster
+  ([#11169](https://github.com/ReviewStage/vespin/pull/11169))
+- The Mac app now reaches the service over one warm connection, so every call
+  is quicker ([#11110](https://github.com/ReviewStage/vespin/pull/11110))
+- The working line now reads in quiet words, without a shimmer
+  ([#11149](https://github.com/ReviewStage/vespin/pull/11149),
+  [#11151](https://github.com/ReviewStage/vespin/pull/11151))
+- On an iPad, Vespin now stands in the system's three-column split view
+  ([#10743](https://github.com/ReviewStage/vespin/pull/10743))
+- On a phone, an agent's Machine chip menu now leads with where the agent runs
+  ([#11171](https://github.com/ReviewStage/vespin/pull/11171))
+
+### Fixes
+
+- Fixed a link the app refuses showing as "[blocked]" instead of its words
+  ([#11148](https://github.com/ReviewStage/vespin/pull/11148))
+- Fixed a date chip with seconds in its time drawing as a plain link
+  ([#11146](https://github.com/ReviewStage/vespin/pull/11146))
+- On a phone, fixed holding a link chip opening two menus at once
+  ([#10919](https://github.com/ReviewStage/vespin/pull/10919))
+- On an iPad, fixed Back from a person's page landing on Tasks instead of where
+  you came from ([#11179](https://github.com/ReviewStage/vespin/pull/11179))
+- On a phone, fixed a sent message showing "[Picture 1]" until its picture
+  arrived ([#11085](https://github.com/ReviewStage/vespin/pull/11085))
+- On a phone, fixed an inline video opening without the system player's
+  controls ([#10999](https://github.com/ReviewStage/vespin/pull/10999))
+- On a phone, fixed Select mode's title missing from the Inbox bar
+  ([#11138](https://github.com/ReviewStage/vespin/pull/11138))
+- On a phone, fixed a crash opening a menu whose photo file was gone
+  ([#11184](https://github.com/ReviewStage/vespin/pull/11184))
+
+### Misc
+
+- The iOS app now records every session as a fully masked Sentry replay, as
+  the Mac and web apps do
+  ([#11134](https://github.com/ReviewStage/vespin/pull/11134))
+
 ## 0.44.0 — 2026-11-26
 
 ### See the pictures your agent's tools looked at
