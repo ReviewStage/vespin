@@ -223,6 +223,12 @@ import {
   fixtureGeneratedChapters,
 } from "./fixture-pull-requests.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
+import {
+  FIXTURE_THINKING_AGENT_ID,
+  fixtureThinkingAgent,
+  fixtureThinkingPart,
+  fixtureThinkingTranscript,
+} from "./fixture-thinking-agent.js";
 
 export { FIXTURE_RECORDING_ID } from "./fixture-agent-transcript.js";
 
@@ -1025,6 +1031,13 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
     agentOn(AGENT.ROUNDING, TASK.ROUNDING, "Fix ledger rounding", AGENT_STATUS.COMPLETED, 5 * DAY),
   ],
 ]);
+
+/** The agent that thinks, whose page draws its thoughts folded: staged for its page, its transcript, and its cut thought's read alone, in no task's list (`fixture-thinking-agent.ts`). */
+const THINKING_AGENT_AGO = 2 * DAY;
+
+const THINKING_AGENT = fixtureThinkingAgent(
+  agentOn(AGENT.INVITES, TASK.INVITES, "", AGENT_STATUS.COMPLETED, THINKING_AGENT_AGO),
+);
 
 /** When the release Manager was started, which its chat counts from. */
 const MANAGER_STARTED = LANDED - 2 * HOUR;
@@ -2209,6 +2222,9 @@ const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix le
 /** The digest agent's run, which the weekly digest automation's newest run opens. */
 const DIGEST_TRANSCRIPT = fixtureDigestTranscript(DIGEST_STARTED, ADA, "Send the weekly digest");
 
+/** The thinking agent's run, its thoughts folded among its calls and its words. */
+const THINKING_TRANSCRIPT = fixtureThinkingTranscript(LANDED - THINKING_AGENT_AGO, ADA);
+
 /** The release Manager's run, whose turns' work its chat keeps a press away. */
 const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
 
@@ -2390,6 +2406,10 @@ function stagedTranscripts(
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
     [AGENT.DIGEST]: { ...held[AGENT.DIGEST], [OWN_TRANSCRIPT]: { rows: DIGEST_TRANSCRIPT } },
     [AGENT.MANAGER]: { ...held[AGENT.MANAGER], [OWN_TRANSCRIPT]: { rows: MANAGER_TRANSCRIPT } },
+    [FIXTURE_THINKING_AGENT_ID]: {
+      ...held[FIXTURE_THINKING_AGENT_ID],
+      [OWN_TRANSCRIPT]: { rows: THINKING_TRANSCRIPT },
+    },
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);
@@ -3348,7 +3368,7 @@ function stagedItem(itemId: string): InboxItem | undefined {
 
 /** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER, THINKING_AGENT].find((each) => each.id === agentId);
 }
 
 /* ----- The automations ----- */
@@ -3814,6 +3834,9 @@ const ANSWERS: StagedAnswers = {
   },
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
   [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
+  // The thinking agent's thought its page carried cut, read whole as the service reads it.
+  [ACT_KIND.AGENTS_PART]: ({ agentId, messageId, index }) =>
+    fixtureThinkingPart(agentId, messageId, index),
   // Note that a picture's source is its own `data:` address, read as its bytes are read above, since a fixture run has no service for the loader to read.
   [ACT_KIND.ACCOUNT_PICTURE_SOURCE]: (picture) => fixturePictureSource(picture),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
