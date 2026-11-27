@@ -173,20 +173,31 @@ const heldSends = new Map<string, Sent>();
 /**
  * The lines sent to an agent whose pictures this phone lets go, by the id
  * each is drawn under, with the agent's id: answered, or let go by Edit or
- * Delete. Note that their pictures are let go only once the host no longer
- * draws the line (`letGoUndrawn`), since a line answered stands until its
- * row lands and draws its pictures from them until then, so its words never
- * fall back to their markers' text between the two.
+ * Delete. Note that their pictures are let go only once the host drew the
+ * line and then no longer draws it (`letGoUndrawn`), since a line answered
+ * stands until its row lands and draws its pictures from them until then,
+ * so its words never fall back to their markers' text between the two.
  */
 const goingSends = new Map<string, string>();
 
-/** Lets go of the pictures of each line of the agent's going whose line the host no longer draws. */
+/**
+ * The lines this phone holds pictures of that the host has drawn, by the id
+ * each is drawn under. Note that a send may be answered before the host's
+ * first drawing of its line reaches the page, so a line never drawn yet is
+ * not taken as one whose row landed.
+ */
+const drawnSends = new Set<string>();
+
+/** Lets go of the pictures of each line of the agent's going that the host drew and no longer draws. */
 function letGoUndrawn(agentId: string, drawn: readonly SendingMessage[] | undefined) {
   const ids = new Set((drawn ?? []).map((line) => line.id));
 
+  for (const lineId of ids) if (heldSends.has(lineId)) drawnSends.add(lineId);
+
   for (const [lineId, owner] of goingSends) {
-    if (owner !== agentId || ids.has(lineId)) continue;
+    if (owner !== agentId || ids.has(lineId) || !drawnSends.has(lineId)) continue;
     goingSends.delete(lineId);
+    drawnSends.delete(lineId);
     heldSends.delete(lineId);
   }
 }
@@ -199,6 +210,7 @@ export function useHeldSendsSignOut(signedIn: boolean): void {
     if (wasSignedIn.current && !signedIn) {
       heldSends.clear();
       goingSends.clear();
+      drawnSends.clear();
     }
 
     wasSignedIn.current = signedIn;
@@ -475,7 +487,7 @@ export function useAgentComposer(
     letGoUndrawn(agentId, drawn);
   }, [agentId, transcript, drawn]);
 
-  /** Lets go of a line's pictures once the host no longer draws it, at once where its row already landed. */
+  /** Lets go of a line's pictures once the host drew it and no longer draws it, at once where its row already landed. */
   const letGo = (lineId: string) => {
     goingSends.set(lineId, agentId);
 
