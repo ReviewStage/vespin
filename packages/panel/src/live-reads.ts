@@ -222,6 +222,7 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.HOSTS]: () => askAct(ACT_KIND.HOSTS_FOLLOW),
   [LIVE_READ.MACHINES]: () => askAct(ACT_KIND.MACHINES_FOLLOW),
   [LIVE_READ.MACHINE_ASKS]: () => askAct(ACT_KIND.MACHINE_ASKS_FOLLOW),
+  [LIVE_READ.VIEW_CHOICES]: () => askAct(ACT_KIND.VIEW_CHOICES_FOLLOW),
   [LIVE_READ.AGENT_ORIGINS]: ([agentId = ""]) =>
     askAct(ACT_KIND.AGENTS_ORIGIN_FOLLOW, { agentId: String(agentId) }),
   [LIVE_READ.HOLDER_INBOX]: ([kind, id]) =>
@@ -348,6 +349,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.HOSTS,
   LIVE_READ.MACHINES,
   LIVE_READ.MACHINE_ASKS,
+  LIVE_READ.VIEW_CHOICES,
   LIVE_READ.THIS_MAC_HOST,
   LIVE_READ.AGENT_ORIGINS,
   LIVE_READ.INBOX_ITEMS,
@@ -574,6 +576,10 @@ export const machinesQuery = (accountId: string | undefined) =>
 /** The asks the account's machines hold for its answer, by the account. */
 export const machineAsksQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.MACHINE_ASKS, accountIds(accountId));
+
+/** The account's view choices (a sort, a filter, a fold), by the account. */
+export const viewChoicesQuery = (accountId: string | undefined) =>
+  liveReadQuery(LIVE_READ.VIEW_CHOICES, accountIds(accountId));
 
 /** This Mac's host, by the account, which the host reads on its own every few seconds and holds for the session. */
 export const thisMacHostQuery = (accountId: string | undefined) =>

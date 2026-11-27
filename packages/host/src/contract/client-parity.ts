@@ -131,6 +131,9 @@ const IOS = {
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
   PINNED_TABS: byDesign("iOS pins no tab to a sidebar, so no pinned tab's task is read for one"),
+  VIEW_CHOICES: notYet(
+    "iOS keeps its sorts, filters, and folds on the phone until it reads the account's view choices, in the pull request after the panel's",
+  ),
   MACHINE_ASKS_RETRY: notYet(
     "iOS follows a machine's asks and the machines that name them, but doesn't read either again after a failed read yet",
   ),
@@ -286,6 +289,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MACHINES_REMOVE]: panel(IOS.MACHINE_SETTINGS),
   [PORT_ACT_KIND.MACHINE_ASKS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.MACHINE_ASKS_RETRY]: panel(IOS.MACHINE_ASKS_RETRY),
+  [PORT_ACT_KIND.VIEW_CHOICES_FOLLOW]: panel(IOS.VIEW_CHOICES),
+  [PORT_ACT_KIND.VIEW_CHOICES_RETRY]: panel(IOS.VIEW_CHOICES),
+  [PORT_ACT_KIND.VIEW_CHOICE_WRITE]: panel(IOS.VIEW_CHOICES),
   [PORT_ACT_KIND.MACHINE_ASK_ANSWER]: EVERYWHERE,
   [PORT_ACT_KIND.HOSTS_THIS_MAC_SET]: desktopOnly(
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
