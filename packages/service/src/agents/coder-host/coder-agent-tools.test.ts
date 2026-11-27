@@ -5746,13 +5746,16 @@ test("list_automations, create_automation, update_automation, and delete_automat
       "Agent audit",
     ],
   );
+
   // An agentId lists only the automations whose runs land on that agent.
   const landingOn = async (agentId: string) => {
     const answer = await call(AGENT_TOOL.LIST_AUTOMATIONS, { agentId });
+
     return Array.isArray(answer.automations)
       ? answer.automations.map((each) => (isRecord(each) ? each.id : undefined))
       : answer;
   };
+
   assert.deepEqual(
     [await landingOn(agents.teammates.id), await landingOn(agents.caller.id)],
     [[id], []],
