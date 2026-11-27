@@ -718,16 +718,17 @@ export function useCommentActs(
 ): CommentActs {
   const acts = useHostActs();
   const write = useWrite();
-  const [editing, setEditing] = useState<CommentEditing | undefined>(undefined);
+  const [editing, setEditingState] = useState<CommentEditing | undefined>(undefined);
   const [editAsk, setEditAsk] = useState(0);
   const [deleting, setDeleting] = useState<CommentDeleting | undefined>(undefined);
   const notices = useFailureNotices();
-  // Note that the edit open now is read when a save's refusal lands, which may be after another edit was opened.
+  // Note that the edit open now is kept beside the state as each press moves it, since a save's refusal may land before the render that closed it, or after another edit was opened.
   const editingNow = useRef(editing);
 
-  useEffect(() => {
-    editingNow.current = editing;
-  }, [editing]);
+  const setEditing = useCallback((next: CommentEditing | undefined) => {
+    editingNow.current = next;
+    setEditingState(next);
+  }, []);
 
   return useMemo(() => {
     const saveEdit = (typed: string): boolean => {
@@ -798,7 +799,11 @@ export function useCommentActs(
         setEditing({ entryId: entry.id, was: words, words, files });
         setEditAsk((at) => at + 1);
       },
-      onEditWords: (words) => setEditing((was) => (was === undefined ? was : { ...was, words })),
+      onEditWords: (words) => {
+        const was = editingNow.current;
+
+        if (was !== undefined) setEditing({ ...was, words });
+      },
       cancelEdit: () => setEditing(undefined),
       saveEdit,
       deleting,
@@ -806,7 +811,18 @@ export function useCommentActs(
       confirmDelete,
       dismissDelete: () => setDeleting(undefined),
     };
-  }, [acts, write, notices, taskId, threadId, editing, editAsk, deleting, onThreadGone]);
+  }, [
+    acts,
+    write,
+    notices,
+    taskId,
+    threadId,
+    editing,
+    setEditing,
+    editAsk,
+    deleting,
+    onThreadGone,
+  ]);
 }
 
 /** The open threads standing on each block of a description, by the block's start, the oldest started first. */
