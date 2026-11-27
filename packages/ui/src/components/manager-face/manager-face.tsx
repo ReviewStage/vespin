@@ -31,9 +31,9 @@ import { Backpack, Cat, Ghost, type KawaiiProps, Mug, Planet, SpeechBubble } fro
  * speech bubble at its top end corner lights three dots in turn, so working
  * changes how the face looks and never which face it is; the face itself
  * never moves. Among words, too small to hold the bubble, the mood says it
- * alone. The dots are an endless loop held by `--ui-loop-motion`, so
- * reduced motion and a capture run hold them on a frame with the first dot
- * lit. The face is a picture its caller's words beside it name, so it is
+ * alone. The dots are an endless loop, an animated image the compositor
+ * steps (`manager-face.css`), held by `--ui-loop-motion`, so reduced motion
+ * and a capture run hold them on a frame with the first dot lit. The face is a picture its caller's words beside it name, so it is
  * hidden from a reader.
  *
  * It sits on a subpath of its own (`@repo/ui/manager-face`), out of the
