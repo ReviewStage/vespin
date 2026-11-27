@@ -1,0 +1,41 @@
+# agent-usage-limit.yaml -- the before shots for #11263: the usage-limit agent's page as the app drew it before the notice, which drew no card for the limit and the worker's raw answer. Throwaway; the after branch holds the real flow.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 3b1f9c2e-6a4d-4e8b-9f17-2c5d8e0a7b43
+      resetCredits: "true"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+- extendedWaitUntil:
+    visible: "Try again on the plan."
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: agent-usage-limit-paused
+# The worker's call, opened on its raw answer.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Check the ledger columns"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- tapOn: "Check the ledger columns"
+- waitForAnimationToEnd
+- takeScreenshot: agent-usage-limit-worker
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Three exports write CSV: invoices, ledger, and payouts."
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- takeScreenshot: agent-usage-limit-moved

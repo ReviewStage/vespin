@@ -228,6 +228,11 @@ import {
   fixtureGeneratedChapters,
 } from "./fixture-pull-requests.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
+import {
+  FIXTURE_USAGE_LIMIT_AGENT_ID,
+  fixtureUsageLimitAgent,
+  fixtureUsageLimitTranscript,
+} from "./fixture-usage-limit-agent.js";
 
 export { FIXTURE_RECORDING_ID } from "./fixture-agent-transcript.js";
 
@@ -242,6 +247,8 @@ export {
   type ThreadResolves,
   threadResolveOf,
 } from "./fixture-pull-requests.js";
+
+export { fixtureResetPlan } from "./fixture-usage-limit-agent.js";
 
 /**
  * When the fixture landed, from which every instant here is counted back.
@@ -1038,6 +1045,15 @@ const NOTICES_AGENT_AGO = 2 * DAY;
 const NOTICES_AGENT = fixtureNoticesAgent(
   agentOn(AGENT.ROUNDING, TASK.ROUNDING, "", AGENT_STATUS.RUNNING, NOTICES_AGENT_AGO),
 );
+
+/** The Codex agent whose transcript holds each way it met its usage limit, whose page draws them: staged for its page and its transcript alone, in no task's list (`fixture-usage-limit-agent.ts`). */
+const USAGE_LIMIT_AGENT_AGO = 6 * HOUR;
+
+const USAGE_LIMIT_AGENT = fixtureUsageLimitAgent({
+  ...agentOn(AGENT.ROUNDING, TASK.ROUNDING, "", AGENT_STATUS.COMPLETED, USAGE_LIMIT_AGENT_AGO),
+  model: CODEX_MODEL,
+  runtime: AGENT_RUNTIME.CODEX,
+});
 
 /** When the release Manager was started, which its chat counts from. */
 const MANAGER_STARTED = LANDED - 2 * HOUR;
@@ -2225,6 +2241,13 @@ const DIGEST_TRANSCRIPT = fixtureDigestTranscript(DIGEST_STARTED, ADA, "Send the
 /** The notices agent's run, one of each quiet notice in it. */
 const NOTICES_TRANSCRIPT = fixtureNoticesTranscript(LANDED - NOTICES_AGENT_AGO, ADA);
 
+/** The usage-limit agent's run, its pause resuming two hours after the fixture landed. */
+const USAGE_LIMIT_TRANSCRIPT = fixtureUsageLimitTranscript(
+  LANDED - USAGE_LIMIT_AGENT_AGO,
+  LANDED,
+  ADA,
+);
+
 /** The release Manager's run, whose turns' work its chat keeps a press away. */
 const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
 
@@ -2409,6 +2432,10 @@ function stagedTranscripts(
     [FIXTURE_NOTICES_AGENT_ID]: {
       ...held[FIXTURE_NOTICES_AGENT_ID],
       [OWN_TRANSCRIPT]: { rows: NOTICES_TRANSCRIPT },
+    },
+    [FIXTURE_USAGE_LIMIT_AGENT_ID]: {
+      ...held[FIXTURE_USAGE_LIMIT_AGENT_ID],
+      [OWN_TRANSCRIPT]: { rows: USAGE_LIMIT_TRANSCRIPT },
     },
   };
 
@@ -3368,7 +3395,9 @@ function stagedItem(itemId: string): InboxItem | undefined {
 
 /** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values(), MANAGER, NOTICES_AGENT].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER, NOTICES_AGENT, USAGE_LIMIT_AGENT].find(
+    (each) => each.id === agentId,
+  );
 }
 
 /* ----- The automations ----- */
