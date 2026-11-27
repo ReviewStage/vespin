@@ -1984,6 +1984,7 @@ export function accountOlderItemsPageEnd(
 
   return Effect.map(read, (rows) => {
     const last = rows.length > INBOX_OLDER_PAGE_SIZE ? rows[INBOX_OLDER_PAGE_SIZE - 1] : undefined;
+
     return last === undefined ? undefined : { updatedAt: last.updatedAt, id: last.id };
   });
 }
@@ -2012,6 +2013,7 @@ export function accountOlderItemsPageStatements(
 function accountItemsOf(reader: AccountItemsReader, narrowed: SQL, changed: SQL) {
   const { userId } = reader;
   const carried = and(accountItemsCarried(reader), narrowed);
+
   return stampsAndItemsOf(userId, carried, and(carried, changed));
 }
 

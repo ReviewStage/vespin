@@ -85,9 +85,10 @@ export const inboxOlderRead = bindLiveRead(INBOX_OLDER_READ, {
       hostedStoreOrUnavailable(
         accountOlderItemsPageEnd(readerOf(params), Option.getOrUndefined(pastOf(params.before))),
       ),
-      (end) => ({
-        ...(end === undefined ? {} : { next: encodePast(end) }),
-        settledSince: instantParam(params.settledSince).getTime(),
-      }),
+      (end) => {
+        const settledSince = instantParam(params.settledSince).getTime();
+
+        return end === undefined ? { settledSince } : { next: encodePast(end), settledSince };
+      },
     ),
 });
