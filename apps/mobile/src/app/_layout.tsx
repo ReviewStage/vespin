@@ -2,6 +2,7 @@
 
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
+import "../diag-nav.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import {
   type BrandColors,

@@ -12,8 +12,8 @@ import {
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useIsFocused } from "expo-router";
-import type { ReactElement, ReactNode } from "react";
+import { Stack, useIsFocused, usePathname } from "expo-router";
+import { type ReactElement, type ReactNode, useEffect } from "react";
 import { useComposerDraftsSignOut } from "../../agents/composer-drafts.js";
 import { MachineAsks } from "../../agents/machine-asks.js";
 import { useHeldSendsSignOut } from "../../agents/use-agent-composer.js";
@@ -169,6 +169,13 @@ export default function GuardedScreens() {
   useHostConnectLink(signedIn && !updateNeeded);
   const app = signedIn && !updateNeeded;
   const gate = useSetupGate(app);
+  useEffect(() => {
+    console.warn(`VESPIN-DIAG guard signedIn=${signedIn} updateNeeded=${updateNeeded} gate=${String(gate)}`);
+  }, [signedIn, updateNeeded, gate]);
+  const diagPath = usePathname();
+  useEffect(() => {
+    console.warn(`VESPIN-DIAG path ${diagPath}`);
+  }, [diagPath]);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
