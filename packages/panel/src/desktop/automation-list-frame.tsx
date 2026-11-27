@@ -2,7 +2,11 @@ import {
   GROUP_HEADING,
   type GroupFold,
   GroupHeader,
+  LIST_HEADS_ACTS,
+  LIST_HEADS_LEAD,
   List,
+  ListHead,
+  ListHeads,
   ListRow,
   SETTINGS_SKELETON_CONTROL,
   SettingsControlSkeleton,
@@ -29,6 +33,14 @@ const AUTOMATION_GROUP = "automation-group [.automation-group+&]:mt-page-section
 
 /** What a group's count counts, said after its figure to a reader. */
 const AUTOMATIONS_NOUN = "automations";
+
+/** What each column of the list is headed, over the rows' words and each column of their metadata. */
+const COLUMN_HEADS = {
+  NAME: "Name",
+  MANAGER: "Manager",
+  MAKER: "Created by",
+  NEXT: "Next run",
+} as const;
 
 /** An automation's or a run's metadata at its row's end, in a line of its own. */
 export const AUTOMATION_ROW_META =
@@ -149,6 +161,42 @@ export function AutomationRowMeta({
   );
 }
 
+/**
+ * The heads over a wide list's columns: Name over the rows' words, then
+ * Manager where the list names one, Created by, and Next run, each over its
+ * column, room kept for the rows' tile, switch, and ⋯ (`more`) as they draw
+ * them. A narrow room's rows have no columns, so it draws none.
+ */
+export function AutomationListHeads({
+  managers,
+  more,
+}: {
+  /** Whether the list names the Manager its rows' runs land on, in a column of its own. */
+  managers: boolean;
+  more: boolean;
+}): React.JSX.Element {
+  // Note that the heads stand in a box of their own, as each owner's list does, so they keep its insets rather than a page's bleed for a list standing in it bare.
+  return (
+    <div className="automation-list-heads">
+      <ListHeads
+        title={COLUMN_HEADS.NAME}
+        lead={LIST_HEADS_LEAD.AVATAR}
+        acts={LIST_HEADS_ACTS.SWITCH}
+        more={more}
+        meta={
+          <AutomationRowMeta
+            manager={managers ? <ListHead>{COLUMN_HEADS.MANAGER}</ListHead> : undefined}
+            owner={
+              <AutomationOwnerFrame mark={null} name={<ListHead>{COLUMN_HEADS.MAKER}</ListHead>} />
+            }
+            next={<ListHead>{COLUMN_HEADS.NEXT}</ListHead>}
+          />
+        }
+      />
+    </div>
+  );
+}
+
 /** Who owns an automation, in its column: their mark and their name. */
 export function AutomationOwnerFrame({
   owner,
@@ -175,7 +223,9 @@ export function AutomationOwnerFrame({
  * clock tile, its name over what fires it, its Manager, its owner, and its
  * next run in their columns, and its switch, a narrow room's rows naming neither and ending in
  * a chevron, as a phone's rows do, so the list lands where the blocks stood.
- * The rows open nothing.
+ * Note that it stands no heads over its columns, as it stands no owner's
+ * heading, so it says nothing but that the list is being read. The rows
+ * open nothing.
  */
 export function AutomationListSkeleton({ narrow }: { narrow: boolean }): React.JSX.Element {
   return (

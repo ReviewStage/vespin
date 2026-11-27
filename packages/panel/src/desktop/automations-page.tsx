@@ -146,6 +146,7 @@ import {
 } from "./automation-editor.js";
 import {
   AutomationGroupList,
+  AutomationListHeads,
   AutomationListSkeleton,
   AutomationOwnerFrame,
   AutomationRowMeta,
@@ -705,7 +706,7 @@ function AutomationGroupRows({
 }
 
 /**
- * The list, each owner's automations in a list, under its own heading where
+ * The list, under the heads of its columns in a wide room, each owner's automations in a list, under its own heading where
  * more than one list stands, or in a narrow room, whose rows name no owner,
  * each heading counting its rows there, and last the finished one-time automations, folded under Finished until
  * opened, since nothing more of them is due. Note that a lone owner's list
@@ -721,11 +722,16 @@ function AutomationList({
   finished: readonly AutomationSummary[];
 }): React.JSX.Element {
   const headed = groups.length + (finished.length === 0 ? 0 : 1) > 1 || shown.narrow;
+  const coarse = useCoarsePointer();
   // Note that a phone's headings count their rows, as the iOS app's sections do.
   const counted = (rows: readonly AutomationSummary[]) => (shown.narrow ? rows.length : undefined);
 
   return (
     <>
+      {/* Note that a list with no rows stands no heads, since they would head nothing under the line saying there are none yet. */}
+      {shown.narrow || (groups.length === 0 && finished.length === 0) ? null : (
+        <AutomationListHeads managers={shown.managers !== undefined} more={!coarse} />
+      )}
       {groups.map((group) => {
         const name = automationOwnerName(
           group.owner,
