@@ -15,6 +15,8 @@ export interface NativePill {
   readonly emoji?: string | undefined;
   readonly emojiFill?: string | undefined;
   readonly emojiFillDark?: string | undefined;
+  /** The hairline the disc stands inside in the light alone. */
+  readonly emojiEdge?: string | undefined;
 }
 
 /** A run of the words as the view takes it: plain words, or one pill. */

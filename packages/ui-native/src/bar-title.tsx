@@ -4,7 +4,7 @@ import { Host, Spacer } from "@expo/ui/swift-ui";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { StyleSheet } from "react-native";
 import { BAR_KIND, barSubtitle } from "./interactions.js";
-import { managerFaceAsset, managerFaceFill } from "./manager-face-look.js";
+import { managerFaceAsset, managerFaceEdge, managerFaceFill } from "./manager-face-look.js";
 
 /** What stands under a page's name in its bar: its words, and what a press on them opens with what VoiceOver says it does, where they open anything. */
 export type BarSubtitle = {
@@ -53,6 +53,7 @@ export function StackSubtitle({
                   emoji: face.face.emoji,
                   fill: managerFaceFill(face.face, false),
                   fillDark: managerFaceFill(face.face, true),
+                  edge: managerFaceEdge(false) ?? "",
                 },
         };
 
