@@ -12,6 +12,7 @@ import {
 } from "@repo/features/inbox-digest";
 import {
   ANSWER_TONE,
+  EVERYONES,
   holderName,
   holderRepository,
   holderTask,
@@ -24,12 +25,14 @@ import {
   INBOX_SHOW,
   INBOX_SHOW_EMPTY,
   INBOX_SHOW_LABEL,
+  INBOX_VIEW_WORDS,
   INBOX_WHOSE,
   type InboxAnyHolder,
   type InboxCounts,
   type InboxListed,
   type InboxPinnedRun,
   type InboxShow,
+  type InboxWhose,
   inboxLineKind,
   inboxMemberName,
   inboxPreview,
@@ -40,6 +43,8 @@ import {
   isDone,
   isUnread,
   MARK_ALL_READ,
+  MINE,
+  narrowedByWhose,
   READING_INBOX,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
@@ -132,12 +137,19 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
-import { useInboxRunFolds } from "../inbox/inbox-runs.js";
+import {
+  type InboxPinnedFirst,
+  type InboxScope,
+  type InboxWhoseChoice,
+  useInboxPinnedFirst,
+  useInboxRunFolds,
+  useInboxScope,
+  useInboxWhose,
+} from "../inbox/inbox-view-choices.js";
 import {
   type InboxThreadHeld,
   useInboxActs,
   useInboxListing,
-  useInboxScope,
   useInboxThread,
   useReadOnOpen,
   useStandFrontSteps,
@@ -557,8 +569,11 @@ function InboxEmpty({
   counts,
   onRetry,
   onShow,
+  whose,
 }: {
   readonly show: InboxShow;
+  /** Whom the items listed are addressed to, in whose words the list says it holds none. */
+  readonly whose: InboxWhose;
   readonly search: string;
   readonly feed: InboxFeed;
   readonly read: boolean;
@@ -594,7 +609,7 @@ function InboxEmpty({
 
   return (
     <EmptyState
-      title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]}
+      title={INBOX_SHOW_EMPTY[whose.kind][show]}
       symbol={GLYPH.INBOX}
       action={
         instead === undefined
@@ -633,15 +648,17 @@ function scopeChoices(scopes: readonly Scope[]): BarMenu["choices"] {
   }));
 }
 
-/** The Inbox's ⋯ menu: its scopes, the one shown checked, then Select, which turns the list to Select mode as Mail's menu does, and Mark all as read. */
+/** The Inbox's ⋯ menu: its scopes, the one shown checked, then Select, which turns the list to Select mode as Mail's menu does, and Mark all as read; then Addressed to and Pinned tasks first, as the panel's View options offers them (`viewEntries`). */
 function moreMenu(
   scopes: readonly Scope[],
+  view: Pick<BarMenu, "submenus" | "groups">,
   listed: readonly InboxListed<InboxAnyHolder>[],
   markAll: (items: readonly ListedRow[]) => void,
   select: { readonly listed: boolean; readonly onSelect: () => void },
 ): BarMenu {
   return {
     ...MORE,
+    ...view,
     choices: scopeChoices(scopes),
     actions: [
       {
@@ -655,6 +672,63 @@ function moreMenu(
         symbol: GLYPH.MARK_ALL_READ,
         disabled: !listed.some(({ item }) => isUnread(item)),
         onPress: () => markAll(listed.map(({ item }) => item)),
+      },
+    ],
+  };
+}
+
+/**
+ * The ⋯ menu's view choices after its scopes, the account's as the panel's
+ * View options offers them: Addressed to, where it narrows the scope shown
+ * (`narrowedByWhose`), Anyone or Me, and the teammate the account names
+ * where one is, its choice checked; then Pinned tasks first, a switch. Note
+ * that the phone offers no other teammate, having no people menu to list
+ * them by; one chosen on the Mac stands here, and Me or Anyone lets it go.
+ */
+function viewEntries(
+  show: InboxShow,
+  { whose, onWhose }: InboxWhoseChoice,
+  { pinnedFirst, onPinnedFirst }: InboxPinnedFirst,
+): Pick<BarMenu, "submenus" | "groups"> {
+  const named = whose.kind === INBOX_WHOSE.PERSON ? [whose] : [];
+
+  const addressed: BarMenu = {
+    label: INBOX_VIEW_WORDS.WHOSE,
+    symbol: GLYPH.PEOPLE,
+    choices: [
+      {
+        label: INBOX_VIEW_WORDS.ANYONE,
+        on: whose.kind === INBOX_WHOSE.EVERYONE,
+        onPress: () => onWhose(EVERYONES),
+      },
+      {
+        label: INBOX_VIEW_WORDS.ME,
+        on: whose.kind === INBOX_WHOSE.MINE,
+        onPress: () => onWhose(MINE),
+      },
+      ...named.map((person) => ({
+        id: person.userId,
+        label: person.name,
+        on: true,
+        onPress: () => onWhose(person),
+      })),
+    ],
+    actions: [],
+  };
+
+  return {
+    submenus: narrowedByWhose(show) ? [addressed] : [],
+    groups: [
+      {
+        choices: [
+          {
+            label: INBOX_VIEW_WORDS.PINNED_FIRST,
+            symbol: GLYPH.PIN,
+            on: pinnedFirst,
+            onPress: () => onPinnedFirst(!pinnedFirst),
+          },
+        ],
+        items: [],
       },
     ],
   };
@@ -1302,7 +1376,7 @@ type InboxHeld = {
   readonly search: string;
   readonly setSearch: (search: string) => void;
   readonly remind: ReturnType<typeof useRemind>;
-  readonly scope: ReturnType<typeof useInboxScope>;
+  readonly scope: InboxScope;
 };
 
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
@@ -1311,17 +1385,26 @@ function useInboxScreen(
   chosen?: string | undefined,
 ) {
   const { show, choose } = scope;
-  const listing = useInboxListing({ show, search, chosen, pinnedFirst: true });
+  const addressed = useInboxWhose();
+  const pinned = useInboxPinnedFirst();
+  const { whose } = addressed;
+  const listing = useInboxListing({ show, search, chosen, pinnedFirst: pinned.pinnedFirst, whose });
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
   const selecting = useInboxChoosing();
 
-  const menu = moreMenu(scopes, listing.listed, acts.markAll, {
-    listed: listing.listed.length > 0,
-    onSelect: selecting.start,
-  });
+  const menu = moreMenu(
+    scopes,
+    viewEntries(show, addressed, pinned),
+    listing.listed,
+    acts.markAll,
+    {
+      listed: listing.listed.length > 0,
+      onSelect: selecting.start,
+    },
+  );
 
   // Note that only the threads still listed stand chosen, so a thread a scope, a search, or the service took away is never acted on unseen.
   const picked = selecting.choosing.on ? selecting.choosing.chosen : [];
@@ -1357,6 +1440,7 @@ function useInboxScreen(
   return {
     show,
     choose,
+    whose,
     search,
     setSearch,
     listing,
@@ -1378,8 +1462,19 @@ function InboxStackList(held: InboxHeld) {
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
 
-  const { show, choose, search, setSearch, listing, acts, menu, remind, choosing, chooseStart } =
-    useInboxScreen(held);
+  const {
+    show,
+    choose,
+    whose,
+    search,
+    setSearch,
+    listing,
+    acts,
+    menu,
+    remind,
+    choosing,
+    chooseStart,
+  } = useInboxScreen(held);
 
   const field = useRefilledSearchField(search);
   const placement = useHeldSearchPlacement(search);
@@ -1493,6 +1588,7 @@ function InboxStackList(held: InboxHeld) {
             listing.listed.length === 0 ? (
               <InboxEmpty
                 show={show}
+                whose={whose}
                 search={search}
                 feed={listing.feed}
                 read={listing.read}
@@ -1518,8 +1614,19 @@ function inboxListColumn(
   selected: string | undefined,
   select: (id: string) => void,
 ) {
-  const { show, choose, search, setSearch, listing, acts, menu, remind, choosing, chooseStart } =
-    screen;
+  const {
+    show,
+    choose,
+    whose,
+    search,
+    setSearch,
+    listing,
+    acts,
+    menu,
+    remind,
+    choosing,
+    chooseStart,
+  } = screen;
 
   const rows = (
     <InboxRows
@@ -1539,6 +1646,7 @@ function inboxListColumn(
         listing.listed.length === 0 ? (
           <InboxEmpty
             show={show}
+            whose={whose}
             search={search}
             feed={listing.feed}
             read={listing.read}
@@ -1635,8 +1743,10 @@ function InboxSplitScreen({
  */
 function useThreadSteps(id: string): ThreadSteps {
   const { show } = useInboxScope();
+  const { whose } = useInboxWhose();
+  const { pinnedFirst } = useInboxPinnedFirst();
   // Note that the steps read the app's one read of the Inbox, never one of their own for the thread opened, so opening a thread reads nothing more; a thread the list's scope never shows has no steps but those it was handed.
-  const listing = useInboxListing({ show, search: "", pinnedFirst: true });
+  const listing = useInboxListing({ show, search: "", pinnedFirst, whose });
   const [handed] = useState(() => handedOrders.get(id));
 
   // Note that the hand-off is taken once, so a later open of this thread with none handed, such as from a notification, never finds a stale one.
