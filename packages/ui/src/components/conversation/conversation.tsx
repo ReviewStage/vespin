@@ -18,12 +18,7 @@ import { ArrowDownIcon } from "../../icons/icons.js";
 import { BUTTON_CORNERS, BUTTON_VARIANT, IconButton } from "../button/button.js";
 import { useEndAnchor } from "../end-anchor/end-anchor.js";
 import { Fill } from "../layout/layout.js";
-import {
-  SCROLL_FADE,
-  ScrollArea,
-  type ScrollFade,
-  type ScrollFadeInset,
-} from "../scroll-area/scroll-area.js";
+import { ScrollArea } from "../scroll-area/scroll-area.js";
 import { Tooltip } from "../tooltip/hint.js";
 import {
   VIRTUAL_ROWS_ANCHOR,
@@ -60,8 +55,8 @@ import {
  * guide's example does on a send, and lets go of it as it is scrolled for
  * the reader to one of its lines (its handle's `bringIn` and `scrollBy`).
  *
- * The log scrolls in `@repo/ui`'s `ScrollArea`, which fades its edges as
- * the caller asks, and holds its lines in one block of its own inside it
+ * The log scrolls in `@repo/ui`'s `ScrollArea`, and holds its lines in one
+ * block of its own inside it
  * (`.conversation-log`), which carries the log's padding. That block is
  * not a flex column. A flex item of a container with a definite height has
  * a definite height of its own once flexed, so a percentage height anywhere
@@ -245,10 +240,6 @@ export function Conversation({
 export interface ConversationContentProps {
   /** The pane's own class on the block the lines stand in, which holds the log's padding. */
   className?: string | undefined;
-  /** Which of the log's edges fade where lines run past them; both where none is named. */
-  fade?: ScrollFade | undefined;
-  /** Where its start fade begins: beneath a band stuck at its top, as a call's checkpoint is. */
-  fadeInset?: ScrollFadeInset | undefined;
   /**
    * Whether its lines are written as they stream in, as an agent's reply is,
    * so the log is no live region: a reader would hear each chunk as it
@@ -261,8 +252,6 @@ export interface ConversationContentProps {
 /** The scroll box, a log of what follows, its lines in one block inside it. */
 export function ConversationContent({
   className,
-  fade = SCROLL_FADE.BOTH,
-  fadeInset,
   streams = false,
   children,
 }: ConversationContentProps): ReactNode {
@@ -278,14 +267,7 @@ export function ConversationContent({
   }, [className, log, sayLogEnd]);
 
   return (
-    <ScrollArea
-      ref={list}
-      role="log"
-      aria-live={streams ? "off" : undefined}
-      fade={fade}
-      fadeInset={fadeInset}
-      onScroll={onScroll}
-    >
+    <ScrollArea ref={list} role="log" aria-live={streams ? "off" : undefined} onScroll={onScroll}>
       <div ref={log} className={cn("conversation-log px-content-inset pt-section-gap", className)}>
         {children}
       </div>

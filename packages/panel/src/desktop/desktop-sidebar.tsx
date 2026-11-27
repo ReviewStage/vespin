@@ -93,7 +93,6 @@ import {
   type ResizeEdgeHandle,
   reachedKey,
   rovingItemIn,
-  SCROLL_FADE,
   ScrollArea,
   SearchIcon,
   SelectionRegion,
@@ -3160,7 +3159,7 @@ function SidebarColumn({
           for the scroll bar stands in the column's inset rather than over the rows' ends. */}
       <ReplayUnmask>
         <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
-          <ScrollArea ref={scroller} fade={SCROLL_FADE.BOTH}>
+          <ScrollArea ref={scroller}>
             <ChosenTasksContext value={selection.chosenOf}>
               <SelectionRegion
                 id={selection.regionId}
