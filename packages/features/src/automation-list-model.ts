@@ -271,15 +271,6 @@ export type AutomationNext =
   | { readonly kind: typeof AUTOMATION_NEXT.RAN }
   | { readonly kind: typeof AUTOMATION_NEXT.AT; readonly at: number };
 
-/** The groups the list stands its rows in, each folding as the sidebar's groups do: each owner's, then Finished. */
-export const AUTOMATION_LIST_GROUP = {
-  ...AUTOMATION_SCOPE,
-  FINISHED: "finished",
-} as const;
-
-export type AutomationListGroup =
-  (typeof AUTOMATION_LIST_GROUP)[keyof typeof AUTOMATION_LIST_GROUP];
-
 /** One owner's automations, in the order the list was asked for. */
 export interface AutomationGroup {
   readonly owner: AutomationScope;

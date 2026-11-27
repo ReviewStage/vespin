@@ -1,13 +1,11 @@
 import type { ListedAgent } from "@repo/features/agent-wire";
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
 import {
-  AUTOMATION_LIST_GROUP,
   AUTOMATION_NEXT,
   AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
   AUTOMATIONS_ORDER_WORDS,
   type AutomationGroup,
-  type AutomationListGroup,
   type AutomationsOrder,
   automationGroups,
   automationManager,
@@ -28,7 +26,9 @@ import {
 } from "@repo/features/automation-presets";
 import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import {
+  AUTOMATION_LIST_GROUP,
   AUTOMATION_SCOPE,
+  type AutomationListGroup,
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
@@ -52,6 +52,7 @@ import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TRIGGER_PROVIDER, type TriggerProvider } from "@repo/features/trigger-catalog";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -134,7 +135,9 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWorkspaceManagers } from "../tasks/workspace-managers.js";
 import { useToast } from "../toast.js";
+import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { keptKey, useKept } from "../use-kept.js";
+import { type KeptEarlier, useAccountChoice } from "../view-choices.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
 import { useWorkspacesRead } from "../workspaces-read.js";
 import { type MenuAction, type MenuEntry, rowMenu } from "./action-menu.js";
@@ -219,11 +222,11 @@ const UNREAD_LINE = "The automations could not be read.";
 /** Which of the list's groups stand folded until the reader folds or opens one: Finished alone. */
 const FOLDED_AT_FIRST: readonly AutomationListGroup[] = [AUTOMATION_LIST_GROUP.FINISHED];
 
-/** Which of the list's groups stand folded, kept on this Mac, as the sidebar keeps its folds. */
-const KEPT_FOLDED = keptKey(
-  "app.automationsFolded",
-  Schema.fromJsonString(Schema.Array(Schema.Literals(Object.values(AUTOMATION_LIST_GROUP)))),
-);
+/** Nothing kept in this window before the account kept the folds, since the folds were kept on the account from the first. */
+const NOTHING_KEPT_EARLIER: KeptEarlier<readonly AutomationListGroup[]> = [
+  undefined,
+  () => undefined,
+];
 
 /** What the Runs tab says where its runs could not be read, and while they are first read. */
 const RUNS_UNREAD_LINE = "The runs could not be read.";
@@ -745,8 +748,10 @@ function AutomationGroupRows({
  * sidebar's groups wear, led by its owner's picture, the workspace's tile or
  * the reader's own, and Finished by its glyph, and folds on a press, counting
  * its rows while folded, and at rest on a phone, as the sidebar's and the iOS
- * app's do. Which groups stand folded is kept on this Mac, Finished folded
- * until opened, since nothing more of it is due.
+ * app's do. Which groups stand folded is one of the account's view choices
+ * (`VIEW_CHOICE_KEY.AUTOMATIONS_FOLDED`), so it follows the reader to every
+ * device, Finished folded until opened, since nothing more of it is due; a
+ * fixture run folds and keeps nothing.
  */
 function AutomationList({
   groups,
@@ -757,13 +762,22 @@ function AutomationList({
   finished: readonly AutomationSummary[];
 }): React.JSX.Element {
   const coarse = useCoarsePointer();
-  const [folded, setFolded] = useKept(KEPT_FOLDED, FOLDED_AT_FIRST);
+  const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
 
+  const folds = useAccountChoice(
+    VIEW_CHOICE_KEY.AUTOMATIONS_FOLDED,
+    null,
+    FOLDED_AT_FIRST,
+    staged,
+    NOTHING_KEPT_EARLIER,
+  );
+
+  // Note that a press folds or opens the group as the folds stand as it is pressed, so a fold another device made since is kept.
   const fold = (group: AutomationListGroup) => ({
-    folded: folded.includes(group),
+    folded: folds.value.includes(group),
     onToggle: () =>
-      setFolded(
-        folded.includes(group) ? folded.filter((each) => each !== group) : [...folded, group],
+      folds.change((standing) =>
+        standing.includes(group) ? standing.filter((each) => each !== group) : [...standing, group],
       ),
   });
 

@@ -4,11 +4,9 @@ import type { ListedAgent } from "@repo/features/agent-wire";
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
 import { firingMark } from "@repo/features/automation-firing-mark";
 import {
-  AUTOMATION_LIST_GROUP,
   AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
   AUTOMATIONS_ORDER_WORDS,
-  type AutomationListGroup,
   type AutomationsOrder,
   automationGroups,
   automationManager,
@@ -19,7 +17,9 @@ import {
 } from "@repo/features/automation-list-model";
 import { automationPreset } from "@repo/features/automation-presets";
 import {
+  AUTOMATION_LIST_GROUP,
   AUTOMATION_SCOPE,
+  type AutomationListGroup,
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";

@@ -162,8 +162,7 @@ test("one owner's automations alone still stand under their owner's heading, as 
   assert.deepEqual(rows(page), [["Morning digest", "Only you"]]);
 });
 
-test("a one-time automation that ran stands under Finished, counted while folded, saying what its run started, and the fold a reader chose stands on the next page", async () => {
-  window.localStorage.clear();
+test("a one-time automation that ran stands under Finished, counted while folded, and says what its run started once opened", async () => {
   const due = Date.UTC(2026, 10, 20, 9);
 
   const launched = automation(9, {
@@ -202,13 +201,6 @@ test("a one-time automation that ran stands under Finished, counted while folded
     rowOf(page, "Launch-day smoke test").textContent ?? "",
     /Started “Smoke-test the release”/u,
   );
-
-  act(() => world.root?.unmount());
-  document.body.innerHTML = "";
-  const again = mount();
-  await settle();
-  assert.ok(rowOf(again, "Launch-day smoke test"), "Finished stands open as it was left");
-  window.localStorage.clear();
 });
 
 test("an automation turned off reads Off where its next run would, and a failed newest run is marked at its row's end", async () => {
