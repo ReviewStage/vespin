@@ -1,4 +1,4 @@
-# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed in the face picker from its row's Change face…, its page's ⋯, and its Settings, a character and an emoji each in a color, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
+# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed in the face picker from its row's Change face…, its page's ⋯, and its Settings, a character and an emoji each in a color from the row of colors under the preview, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -23,8 +23,9 @@ env:
 - waitForAnimationToEnd
 - takeScreenshot: managers-list
 # Its row's long press offers Change face… beside Rename, as the panel's
-# Manager menu offers Change face: the face picker over the list, a face's
-# colors in the system's menu, and a color chosen changing the face at once.
+# Manager menu offers Change face: the face picker over the list, its face
+# large over the row of colors; a face and a color picked show in the
+# preview, and Done changes the face.
 - longPressOn: "Release manager"
 - tapOn: "Change face…"
 - extendedWaitUntil:
@@ -34,10 +35,11 @@ env:
     timeout: 5000
 - takeScreenshot: managers-change-face
 - tapOn: "Cat"
-- extendedWaitUntil:
-    visible: "Pink"
-    timeout: 10000
 - tapOn: "Pink"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: managers-change-face-preview
+- tapOn: "Done"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: managers-list-face
@@ -67,7 +69,7 @@ env:
 - waitForAnimationToEnd
 - takeScreenshot: managers-chat
 # Its ⋯ offers Change face… beside Settings…, opening the same picker over
-# the page; Done puts it away.
+# the page; Cancel puts it away, keeping the face.
 - tapOn: "More"
 - tapOn: "Change face…"
 - extendedWaitUntil:
@@ -76,7 +78,7 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: managers-page-face
-- tapOn: "Done"
+- tapOn: "Cancel"
 - waitForAnimationToEnd:
     timeout: 5000
 # Its ⋯ offers Settings… in Rename's place: its name and model to change,
@@ -90,9 +92,9 @@ env:
     timeout: 5000
 - takeScreenshot: managers-settings
 # Its Face row opens the app's one icon picker on Characters, as the
-# desktop's card opens it: the face standing in its color, the rest gray.
-# A face's press opens the system's menu of its colors, gray first, and a
-# color chosen changes the face at once and puts the picker away.
+# desktop's card opens it: the face standing large over the row of colors,
+# gray first, and every character in its color. A face's press and a color
+# chosen show in the preview, and Done changes the face.
 - tapOn:
     id: "manager-face"
 - extendedWaitUntil:
@@ -102,16 +104,16 @@ env:
     timeout: 5000
 - takeScreenshot: managers-face-picker
 - tapOn: "Cat"
-- extendedWaitUntil:
-    visible: "Teal"
-    timeout: 10000
-- takeScreenshot: managers-face-colors
 - tapOn: "Teal"
 - waitForAnimationToEnd:
     timeout: 5000
+- takeScreenshot: managers-face-colors
+- tapOn: "Done"
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: managers-settings-face
-# Emoji offers every emoji by category, and the search finds one by its
-# name; its menu leads each color with the emoji on that color's disc.
+# Emoji offers Recent, then every emoji by category, and the search finds
+# one by its name; the preview shows it on its color's disc.
 - tapOn:
     id: "manager-face"
 - tapOn: "Emoji"
@@ -128,11 +130,11 @@ env:
     timeout: 10000
 - takeScreenshot: managers-face-search
 - tapOn: "🦊"
-- extendedWaitUntil:
-    visible: "Orange"
-    timeout: 10000
-- takeScreenshot: managers-face-emoji-colors
 - tapOn: "Orange"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: managers-face-emoji-colors
+- tapOn: "Done"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: managers-settings-emoji

@@ -32,8 +32,8 @@ export function managerFaceAsset(face: ManagerFace, working: boolean): string {
 /** How much of an emoji face's disc its emoji fills, wherever one is drawn. */
 export const MANAGER_FACE_EMOJI_SCALE = 0.62;
 
-/** The disc an emoji face stands on: the fill of its color in the theme's shade, the one a character's body is filled with (`MANAGER_FACE_FILL`). */
-export function managerFaceFill(face: ManagerFace, dark: boolean): string {
+/** The disc an emoji face stands on, and its color in a row of colors: the fill of its color in the theme's shade, the one a character's body is filled with (`MANAGER_FACE_FILL`). */
+export function managerFaceFill(face: Pick<ManagerFace, "color">, dark: boolean): string {
   const fill = MANAGER_FACE_FILL[face.color];
 
   return dark ? fill.DARK : fill.LIGHT;

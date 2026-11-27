@@ -1,17 +1,25 @@
-// manager-face-picker.tsx -- where a Manager's face is picked on iOS: the app's one icon picker (`IconPickerSheet`) over Characters and Emoji, as the panel picks a face, each face's press opening the system's menu of its colors.
+// manager-face-picker.tsx -- where a Manager's face is picked on iOS: the app's one icon picker (`IconPickerSheet`) over Characters and Emoji, as the panel picks a face, the face picked shown large over the row of its colors until Done keeps it.
 
 import { type EmojiGroup, emojiGroups } from "@repo/features/emoji-model";
-import { type ManagerFace, managerFaceName } from "@repo/features/manager-face";
+import {
+  MANAGER_FACE_COLOR_NAME,
+  type ManagerFace,
+  type ManagerFaceColor,
+  managerFaceName,
+  sameManagerFace,
+} from "@repo/features/manager-face";
 import { useEffect, useMemo, useState } from "react";
 import { useColorScheme } from "react-native";
 import { ICON_PICKER_LOOK, IconPickerSheet } from "./icon-picker.js";
 import { managerFaceAsset, managerFaceFill } from "./manager-face-look.js";
 import {
+  FACE_COLORS,
   FACE_PICKER_WORDS,
   FACE_TAB,
   type FaceCell,
   type FaceTab,
   faceGroups,
+  OPENING_COLOR,
   openingTab,
 } from "./manager-face-picker-model.js";
 import { MANAGER_FACE_SEAT, ManagerFace as ManagerFaceMark } from "./marks.js";
@@ -22,6 +30,7 @@ const WORDS = {
   TITLE: "Manager face",
   SEARCH: "Search faces",
   TABS: "Faces",
+  COLORS: "Color",
   NONE: "No faces match.",
   LOADING: "Loading emoji…",
 } as const;
@@ -74,37 +83,49 @@ function useEmoji(wanted: boolean): readonly EmojiGroup[] | undefined {
   return emoji;
 }
 
-/** A face's cell as the icon picker draws it, heard by its whole name where it is the face standing and by its character or its emoji otherwise: its character's picture, or its emoji, on its disc in the theme's shade where it stands on one; and its colors, each led by the face in it. */
-function faceChoice(cell: FaceCell, dark: boolean) {
-  const face = cell.face;
+/** A face as the icon picker draws it: its character's picture, or its emoji, on its disc in the theme's shade where `disc`. */
+function faceLook(face: ManagerFace, disc: boolean, dark: boolean) {
+  return face.emoji === undefined
+    ? { kind: ICON_PICKER_LOOK.PICTURE, asset: managerFaceAsset(face, false) }
+    : {
+        kind: ICON_PICKER_LOOK.EMOJI,
+        emoji: face.emoji,
+        disc: disc ? managerFaceFill(face, dark) : undefined,
+      };
+}
 
+/** A face's cell as the icon picker draws it, heard by its whole name where it is the face picked and by its character or its emoji otherwise. */
+function faceChoice(cell: FaceCell, dark: boolean) {
   return {
     key: cell.key,
-    label: cell.picked ? managerFaceName(face) : cell.label,
-    look:
-      face.emoji === undefined
-        ? { kind: ICON_PICKER_LOOK.PICTURE, asset: managerFaceAsset(face, false) }
-        : {
-            kind: ICON_PICKER_LOOK.EMOJI,
-            emoji: face.emoji,
-            disc: cell.disc ? managerFaceFill(face, dark) : undefined,
-          },
+    label: cell.picked ? managerFaceName(cell.face) : cell.label,
+    look: faceLook(cell.face, cell.disc, dark),
     picked: cell.picked,
-    options: cell.colors,
   };
 }
 
+/** The color row's colors, gray first, each by its name in its fill in the theme's shade. */
+function colorRow(dark: boolean) {
+  return FACE_COLORS.map((color) => ({
+    key: color,
+    label: MANAGER_FACE_COLOR_NAME[color],
+    fill: managerFaceFill({ color }, dark),
+  }));
+}
+
 /**
- * A Manager's face as the panel picks it, in the app's one icon picker:
+ * A Manager's face as the panel picks it, in the app's one icon picker, as
+ * Messages picks a contact's photo: the face picked large at the top, the
+ * nine colors under it as the system's palette, gray first, then
  * Characters and Emoji as the system's segmented control, and a search that
- * finds both, each under its kind (`manager-face-picker-model.ts`).
- * Characters offers Recent, the faces this phone picked last in the colors
- * they were picked in, then the six characters, the one standing in its
- * color and the rest gray; Emoji offers every emoji by category, read the
- * first time it is shown. A face's press opens the system's menu of its
- * colors, gray first, each led by the face in it and the face standing
- * checked; a color chosen hands the face on and puts the sheet away, as the
- * panel's pick puts its picker away. The caller keeps Recent (`recent`).
+ * finds both, each under its kind (`manager-face-picker-model.ts`). Each
+ * tab opens on Recent, the faces this phone picked last in the colors they
+ * were picked in; Characters then offers the six characters and Emoji every
+ * emoji by category, read the first time it is shown, each in the row's
+ * color. A face's press shows it in the preview, a recent one bringing its
+ * color to the row, and a color chosen recolors it; Done hands the face on
+ * where it changed and Cancel, or a swipe down, drops it. The caller keeps
+ * Recent (`recent`).
  */
 export function ManagerFaceSheet({
   face,
@@ -124,21 +145,27 @@ export function ManagerFaceSheet({
   const dark = useColorScheme() === "dark";
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<FaceTab>(() => openingTab(face));
+  const [draft, setDraft] = useState(face);
+  const [color, setColor] = useState<ManagerFaceColor>(face?.color ?? OPENING_COLOR);
   const [shown, setShown] = useState(presented);
 
-  // Note that a sheet a screen keeps for its rows opens over one Manager after another, so each opening starts on the tab its face wears, as React keeps what an earlier render saw.
+  // Note that a sheet a screen keeps for its rows opens over one Manager after another, so each opening starts on the face it wears and its tab, as React keeps what an earlier render saw.
   if (presented !== shown) {
     setShown(presented);
 
-    if (presented) setTab(openingTab(face));
+    if (presented) {
+      setTab(openingTab(face));
+      setDraft(face);
+      setColor(face?.color ?? OPENING_COLOR);
+    }
   }
 
   const searching = query.trim() !== "";
   const emoji = useEmoji(presented && (searching || tab === FACE_TAB.EMOJI));
 
   const groups = useMemo(
-    () => faceGroups({ tab, query, recent, standing: face, emoji }),
-    [tab, query, recent, face, emoji],
+    () => faceGroups({ tab, query, recent, standing: draft, color, emoji }),
+    [tab, query, recent, draft, color, emoji],
   );
 
   const choices = useMemo(
@@ -150,6 +177,8 @@ export function ManagerFaceSheet({
       })),
     [groups, dark],
   );
+
+  const colors = useMemo(() => colorRow(dark), [dark]);
 
   const tabs = [
     { tab: FACE_TAB.CHARACTERS, label: FACE_PICKER_WORDS.CHARACTERS },
@@ -164,13 +193,31 @@ export function ManagerFaceSheet({
     onDismiss();
   };
 
+  const choose = (key: string) => {
+    const chosen = FACE_COLORS.find((each) => each === key);
+
+    if (chosen === undefined) return;
+    setColor(chosen);
+    setDraft((before) => (before === undefined ? undefined : { ...before, color: chosen }));
+  };
+
   return (
     <IconPickerSheet
       title={WORDS.TITLE}
       searchPrompt={WORDS.SEARCH}
       empty={waiting && groups.length === 0 ? WORDS.LOADING : WORDS.NONE}
       presented={presented}
-      onDismiss={dismiss}
+      preview={
+        draft === undefined
+          ? undefined
+          : { look: faceLook(draft, true, dark), heard: managerFaceName(draft) }
+      }
+      colors={{ label: WORDS.COLORS, options: colors, chosen: color, onChoose: choose }}
+      onCancel={dismiss}
+      onDone={() => {
+        if (draft !== undefined && !sameManagerFace(draft, face)) onPick(draft);
+        dismiss();
+      }}
       onQuery={setQuery}
       scopes={
         searching
@@ -185,13 +232,14 @@ export function ManagerFaceSheet({
             }
       }
       groups={choices}
-      onPick={(key, option) => {
-        const cell = groups.flatMap((group) => group.cells).find((each) => each.key === key);
-        const picked = option === undefined ? undefined : cell?.colors[option]?.face;
+      onPick={(group, key) => {
+        const picked = groups
+          .find((each) => each.key === group)
+          ?.cells.find((each) => each.key === key)?.face;
 
         if (picked === undefined) return;
-        onPick(picked);
-        dismiss();
+        setDraft(picked);
+        setColor(picked.color);
       }}
     />
   );
