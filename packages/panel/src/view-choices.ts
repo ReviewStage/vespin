@@ -9,7 +9,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createStore, type Store, useSelector } from "@tanstack/react-store";
 import { Option } from "effect";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { actMutation, pressMutation } from "./act-mutations.js";
 import { viewChoicesQuery } from "./live-reads.js";
 import { selectAccount, useAppStateSlice } from "./use-app-state.js";
@@ -139,11 +139,16 @@ export function useKeptMovedUp<Key extends ViewChoiceKey>(
 /** What this window kept of a choice in its own storage, waiting to move up to the account, read as the account reads it; and the door that lets it go here (`use-kept.ts`'s `useKeptLeaving`, for one kept whole under a name of its own). */
 export type KeptEarlier<Value> = readonly [Value | undefined, () => void];
 
+/** A choice made over the one standing as it is pressed, such as a fold toggled. */
+type ChoiceChange<Key extends ViewChoiceKey> = (
+  standing: ViewChoiceValue<Key>,
+) => ViewChoiceValue<Key>;
+
 /** One view choice as a surface draws it: its value; the press that makes another; and the press that makes one over the choice standing as it is pressed. */
 export interface AccountChoice<Key extends ViewChoiceKey> {
   readonly value: ViewChoiceValue<Key>;
   readonly choose: (next: ViewChoiceValue<Key>) => void;
-  readonly change: (changed: (standing: ViewChoiceValue<Key>) => ViewChoiceValue<Key>) => void;
+  readonly change: (changed: ChoiceChange<Key>) => void;
 }
 
 /** The choices a window holds for itself, by key and then place, none of them kept. */
@@ -205,7 +210,10 @@ function heldIn<Key extends ViewChoiceKey>(
  * holds it alone, drawn in every surface reading it until the window goes,
  * and keeps nothing. Note that `change` reads the choice standing as it is
  * pressed, rather than the one last drawn, so a press a surface held from
- * an earlier draw (a menu standing open) never undoes one made since.
+ * an earlier draw (a menu standing open) never undoes one made since; and
+ * that a change made before the account's read answered waits for it,
+ * drawn meanwhile, and is then laid over the account's choice, so a list
+ * kept whole is never written over with one built on the default.
  */
 export function useAccountChoice<Key extends ViewChoiceKey>(
   key: Key,
@@ -225,14 +233,18 @@ export function useAccountChoice<Key extends ViewChoiceKey>(
   const pendingNow = useSelector(pending, (all) => heldIn(all, key, where));
   const [left, forgetLeft] = earlier;
 
+  const [waiting, setWaiting] = useState<readonly ChoiceChange<Key>[]>([]);
+
   useKeptMovedUp(key, onAccount, choice, left, forgetLeft);
 
   const own = staged ? undefined : left;
 
-  const value =
+  const drawn =
     onAccount === undefined
       ? (heldNow ?? own ?? fallback)
       : (pendingNow ?? Option.getOrElse(choice.value, () => own ?? fallback));
+
+  const value = waiting.reduce((was, changed) => changed(was), drawn);
 
   // Note that a choice made on the account is drawn at once, in the frame it is pressed, and stands until its write settles, by when the account's read carries it, or has taken it back where it was refused.
   const choose = (next: ViewChoiceValue<Key>) => {
@@ -265,5 +277,27 @@ export function useAccountChoice<Key extends ViewChoiceKey>(
     );
   };
 
-  return { value, choose, change: (changed) => choose(changed(standing())) };
+  const { answered } = choice;
+  const unread = onAccount !== undefined && !answered;
+
+  // Note that the changes made before the account's read answered are laid over the account's choice once it does, and written once, since one written over the default then would stand over the choice another device kept.
+  useEffect(() => {
+    if (unread || waiting.length === 0) return;
+    setWaiting([]);
+    choose(waiting.reduce((was, changed) => changed(was), standing()));
+  });
+
+  const change = (changed: ChoiceChange<Key>) => {
+    if (place === undefined) return;
+
+    if (unread) {
+      setWaiting((was) => [...was, changed]);
+
+      return;
+    }
+
+    choose(changed(standing()));
+  };
+
+  return { value, choose, change };
 }
