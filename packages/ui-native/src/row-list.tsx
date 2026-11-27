@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Group,
   HStack,
   Image,
   List,
@@ -35,6 +36,8 @@ import {
   listSectionSpacing,
   listStyle,
   monospacedDigit,
+  onAppear,
+  onDisappear,
   onGeometryChange,
   padding,
   refreshable,
@@ -396,6 +399,8 @@ type RowForEachProps<Item> = {
   readonly keyOf: (item: Item) => string;
   /** Draws one item's row. */
   readonly children: (item: Item) => ReactElement;
+  /** Called with whether the run's last row stands on the screen, as `@repo/ui`'s `VirtualRows` tells its end: as it comes and goes, and again each draw while it stands, so a caller reading older rows in at the end hears that a page drew nothing new; none where nothing listens. */
+  readonly onAtEnd?: ((atEnd: boolean) => void) | undefined;
 };
 
 /**
@@ -408,8 +413,10 @@ type RowForEachProps<Item> = {
  * made. A recycled row keeps a `useState` of the item it drew before, so a
  * row drawn here holds no state of its own; its caller holds it by id.
  */
-export function RowForEach<Item>({ data, keyOf, children }: RowForEachProps<Item>) {
+export function RowForEach<Item>({ data, keyOf, children, onAtEnd }: RowForEachProps<Item>) {
   const reduceMotion = useReduceMotion();
+  const last = data.at(-1);
+  const lastKey = last === undefined ? undefined : keyOf(last);
 
   // Note that a row that comes, goes, or moves slides the rows around it into place, as Mail's list does when a message is archived, rather than the list redrawing in its new order at once; with Reduce Motion on the rows stand in their new places at once, as the system's own lists do.
   return (
@@ -418,9 +425,52 @@ export function RowForEach<Item>({ data, keyOf, children }: RowForEachProps<Item
       keyExtractor={keyOf}
       modifiers={reduceMotion ? [] : [animation(Animation.default, orderOf(data, keyOf))]}
     >
-      {({ item }) => children(item)}
+      {({ item }) =>
+        onAtEnd !== undefined && keyOf(item) === lastKey ? (
+          <RunEnd key={lastKey} onAtEnd={onAtEnd}>
+            {children(item)}
+          </RunEnd>
+        ) : (
+          children(item)
+        )
+      }
     </List.ForEach>
   );
+}
+
+/**
+ * A run's last row, which tells its run's caller whether it stands on the
+ * screen: as the system shows it and lets it go, and again each draw while
+ * it stands. Note that it wraps only the last row, keyed by it, so a row
+ * that stops being last, or is recycled for another, is let go (`RowForEach`)
+ * and tells that the end went, and the new last tells only once the system
+ * shows it; and that it tells again on each draw while it stands, because
+ * the system shows a row once, and a page of older rows that drew none where the reader stands
+ * moves nothing that would show it again.
+ */
+function RunEnd({
+  onAtEnd,
+  children,
+}: {
+  readonly onAtEnd: (atEnd: boolean) => void;
+  readonly children: ReactElement;
+}) {
+  const [shown, show] = useState(false);
+
+  // Note that the end told shown is told gone as the system lets the row go, or as it stops being the run's last and is let go itself.
+  useEffect(() => {
+    if (!shown) return undefined;
+
+    return () => onAtEnd(false);
+  }, [shown, onAtEnd]);
+
+  useEffect(() => {
+    if (shown) onAtEnd(true);
+  });
+
+  const modifiers = useMemo(() => [onAppear(() => show(true)), onDisappear(() => show(false))], []);
+
+  return <Group modifiers={modifiers}>{children}</Group>;
 }
 
 /** Whose a section's rows are, as its header's picture: a workspace, by its tile, or a person, by their photo or their letter. */

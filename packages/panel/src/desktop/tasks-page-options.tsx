@@ -1,5 +1,6 @@
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
+import type { SettledPages } from "@repo/features/settled-paging";
 import { NO_REPOSITORY, repositoryLabel, repositoryParts } from "@repo/features/task-list-model";
 import {
   NO_ASSIGNEE_WORDS,
@@ -90,7 +91,6 @@ import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { actionSearchPanel } from "./action-search-menu.js";
 import { type MenuAsk, useAskedMenu } from "./phone-head.js";
 import type { ChosenTasksStore } from "./tasks-selection.js";
-import type { SettledPages } from "./use-settled-pages.js";
 import { resetViewAction, ViewOptions } from "./view-options.js";
 
 /**
