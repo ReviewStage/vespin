@@ -198,9 +198,6 @@ const TRY_AGAIN = "Try again";
 /** What a pushed thread's screen says where the feed, once read, holds no such thread, such as one a link names that was deleted. */
 const THREAD_NOT_FOUND = "This thread isn't in your inbox";
 
-/** What the scopes' control is heard as by VoiceOver, before the scope chosen. */
-const SCOPE_LABEL = "Filter";
-
 /** The scopes whose pill carries its count, the two that say how much waits. */
 const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INBOX_SHOW.OPEN]);
 
@@ -717,12 +714,12 @@ function chosenActs(
 /**
  * A menu's acts as the stack bar's own menu items, each with what it says
  * under its words, such as when a reminder's time comes due, dimmed or red
- * as the act asks. Note that it's
- * a function of elements rather than a component, because the bar's menu
+ * as the act asks, for Select mode's bar at the foot. Note that it's a
+ * function of elements rather than a component, because the bar's menu
  * takes only its own items as children.
  */
 function toolbarMenuActions(menu: BarMenu) {
-  const actions = menu.actions.map((action) => (
+  return menu.actions.map((action) => (
     <Stack.Toolbar.MenuAction
       key={action.label}
       {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
@@ -734,24 +731,6 @@ function toolbarMenuActions(menu: BarMenu) {
       {action.label}
     </Stack.Toolbar.MenuAction>
   ));
-
-  if (menu.choices.length === 0) return actions;
-
-  // Note that the choices stand as one inline section over the acts, each checked as the system checks a menu's picked item, as Mail's filter menu stands its choices over its other acts.
-  return [
-    <Stack.Toolbar.Menu key={SCOPE_LABEL} inline>
-      {menu.choices.map((choice) => (
-        <Stack.Toolbar.MenuAction
-          key={choice.id ?? choice.label}
-          isOn={choice.on}
-          onPress={choice.onPress}
-        >
-          {choice.label}
-        </Stack.Toolbar.MenuAction>
-      ))}
-    </Stack.Toolbar.Menu>,
-    ...actions,
-  ];
 }
 
 /** The name an agent is called by, as the panel names it, the harness its model runs in, whose mark its tile wears, and a Manager's face, as the task list's collections hold them; the unlisted name and no harness or face before the agent is listed. */
@@ -1445,10 +1424,10 @@ function InboxStackList(held: InboxHeld) {
             {choosing.done.label}
           </Stack.Toolbar.Button>
         ) : (
-          <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-            <Stack.Toolbar.Label>{menu.label}</Stack.Toolbar.Label>
-            {toolbarMenuActions(menu)}
-          </Stack.Toolbar.Menu>
+          // Note that ⋯ is SwiftUI's own menu, as every other bar's ⋯ and View options stand (`StackBarMenu`), so its glyph and its menu draw as the task and agent pages' do.
+          <Stack.Toolbar.View>
+            <StackBarMenu menu={menu} />
+          </Stack.Toolbar.View>
         )}
         {/* Note that New task's compose ends the bar, as Messages' and Mail's stand. */}
         {choosing !== undefined ? null : (
