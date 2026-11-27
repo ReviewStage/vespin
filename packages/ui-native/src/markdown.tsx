@@ -7,6 +7,7 @@ import type { LinkStanding } from "@repo/features/link-standing-model";
 import { MEDIA_READ_WORDS } from "@repo/features/media-read-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
+import { Predicate } from "effect";
 import { SymbolView } from "expo-symbols";
 import {
   type ComponentRef,
@@ -216,7 +217,7 @@ interface Drawing {
   readonly lineWidth: number;
   readonly openLink: (address: string) => void;
   /** The address a picture is drawn from, by the address its words name it by; none while it is on its way. */
-  readonly pictureSource: (written: string) => string | null | undefined;
+  readonly pictureSource: (written: string) => PictureRef | null | undefined;
   /** Reads a picture that could not be read again, by the address its words name it by; none offers nothing. */
   readonly onRetryPicture: ((written: string) => void) | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
@@ -1404,7 +1405,10 @@ function PictureBlock({
   const label = alt.trim() === "" ? video.label : alt;
 
   if (video.audio === true) {
-    return <AudioClip source={video.source} label={label} onRetry={video.onRetry} />;
+    // Note that a clip plays from a file alone.
+    const played = video.source == null || Predicate.isString(video.source) ? video.source : null;
+
+    return <AudioClip source={played} label={label} onRetry={video.onRetry} />;
   }
 
   return (
@@ -1543,7 +1547,7 @@ type MarkdownProps = {
   /** Whether raw HTML in the words stays unseen, as GitHub's page hides a pull request body's comments and tags; it is drawn as written where none is given. */
   readonly hidesHtml?: boolean | undefined;
   /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
-  readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
+  readonly pictureSource?: ((written: string) => PictureRef | null | undefined) | undefined;
   /** Reads a picture that could not be read again, by the address its words name it by; a picture that could not be read offers nothing where none is given. */
   readonly onRetryPicture?: ((written: string) => void) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
@@ -1578,7 +1582,8 @@ export interface MarkdownWordPicture {
 
 /** A video or a sound clip the words name as a picture, played in its place: the file it plays from, none while it is on its way and `null` where it could not be read, its name, whether it is a sound clip, where a video opens where the player cannot read it, and what reads it again. */
 export interface MarkdownVideo {
-  readonly source: string | null | undefined;
+  /** A clip's file, or a recording's file or one kept by its id that it reads where it is drawn. */
+  readonly source: PictureRef | null | undefined;
   readonly label: string;
   /** Whether it is a sound clip, played in its strip (`AudioClip`) rather than a film's player. */
   readonly audio?: boolean | undefined;

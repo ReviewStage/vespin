@@ -3655,6 +3655,7 @@ function fixturePictureRead(picture: PictureSourceParams) {
       return ANSWERS[ACT_KIND.AGENTS_INBOX_ATTACHMENT]?.({
         itemId: picture.itemId,
         attachmentId: picture.attachmentId,
+        playable: MP4_TYPE,
       });
     case PICTURE_OWNER.TASK:
       return ANSWERS[ACT_KIND.TASKS_PICTURE_READ]?.({

@@ -46,6 +46,7 @@ import {
   ComposerFoot,
   GLYPH,
   MentionSuggestions,
+  type PictureRef,
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
@@ -103,8 +104,8 @@ function typedValue(
 
 /** What an open ask's option media is opened and drawn by: each file's bytes as read, a page in the app or Safari, an address in Safari, and a recording the player cannot read on the web. */
 export interface OptionMediaDoors {
-  /** A file's bytes as read: none while on their way, and `null` where they could not be read. */
-  readonly source: (attachmentId: string) => string | null | undefined;
+  /** What a file is drawn from: a picture or a recording kept by its id, or a clip's file once read; none while on its way, and `null` where it could not be read. */
+  readonly source: (attachmentId: string) => PictureRef | null | undefined;
   /** Reads a file whose bytes could not be read again. */
   readonly retry: (attachmentId: string) => void;
   readonly openPage: (page: InboxOptionPage) => void;

@@ -1,6 +1,6 @@
 // inbox-screens.tsx -- the Inbox's list and its thread: the Stack's two screens in a compact window, one split view in a regular one.
 
-import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { PRODUCT_PICTURE_KIND, PRODUCT_SURFACE } from "@repo/features/analytics";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
@@ -55,6 +55,7 @@ import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link
 import type { ManagerFace } from "@repo/features/manager-face";
 import { agentName as agentNameOf, providerOf } from "@repo/features/model-label";
 import type { ModelProvider } from "@repo/features/models-wire";
+import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import type { TaskSummary } from "@repo/features/task-wire";
@@ -92,6 +93,7 @@ import {
   menuWithout,
   NoSelection,
   PATH_PART,
+  type PictureRef,
   previewMessages,
   ROW_ACTION_TONE,
   type RowChoosing,
@@ -115,6 +117,7 @@ import {
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { Stack, useIsFocused, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppReadyCount } from "../app-ready.js";
@@ -153,6 +156,7 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
+import { PicturesProvider } from "../use-pictures.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
   useComposeAction,
@@ -889,7 +893,7 @@ function ThreadDetail({
     [item.thread],
   );
 
-  const { sources, sizes, pictureSizes, retry } = useThreadMedia(item.id, media, pending);
+  const { sizes, pictureSizes, sourceOf, retry } = useThreadMedia(item.id, media, pending);
   useReplyDrawnCount(item.thread);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
@@ -1023,8 +1027,9 @@ function ThreadDetail({
         ? undefined
         : { words: message.stamp.words, ahead: message.stamp.tone === ANSWER_TONE.AHEAD },
     media: message.media.map((each): ThreadMedia => {
-      const source = sources.get(each.attachmentId);
       const key = each.attachmentId;
+      const source = sourceOf(key);
+      const played = source == null || Predicate.isString(source) ? source : null;
       const onRetry = () => retry(key);
 
       if (each.kind === INBOX_MEDIA.VIDEO) {
@@ -1038,8 +1043,9 @@ function ThreadDetail({
         };
       }
 
+      // Note that a clip and a file are read through the host as files, so their source is a file's address alone.
       if (each.kind === INBOX_MEDIA.AUDIO) {
-        return { kind: THREAD_MEDIA.AUDIO, key, source, label: each.name, onRetry };
+        return { kind: THREAD_MEDIA.AUDIO, key, source: played, label: each.name, onRetry };
       }
 
       if (each.kind === INBOX_MEDIA.FILE) {
@@ -1048,7 +1054,7 @@ function ThreadDetail({
         return {
           kind: THREAD_MEDIA.FILE,
           key,
-          source,
+          source: played,
           name: each.name,
           mediaType: each.mediaType,
           size,
@@ -1068,12 +1074,10 @@ function ThreadDetail({
   }));
 
   // Note that a picture the words name by one of the thread's own files is drawn from its bytes as read, and any other from the address it names.
-  const pictureSource = (written: string): string | null | undefined => {
+  const pictureSource = (written: string): PictureRef | null | undefined => {
     const named = inboxAttachmentOf(inboxPictureDestination(written));
 
-    return named === undefined || named.itemId !== item.id
-      ? written
-      : sources.get(named.attachmentId);
+    return named === undefined || named.itemId !== item.id ? written : sourceOf(named.attachmentId);
   };
 
   // A picture the words name by one of the thread's own files is read again by its file; any other is drawn from its address and never fails a read of ours.
@@ -1091,7 +1095,7 @@ function ThreadDetail({
     if (named === undefined || kind === undefined) return undefined;
 
     return {
-      source: sources.get(named.attachmentId),
+      source: sourceOf(named.attachmentId),
       label: PLAYED_LABEL[kind],
       audio: kind === INBOX_MEDIA.AUDIO,
       onOpenElsewhere: openOnWeb,
@@ -1106,64 +1110,71 @@ function ThreadDetail({
     workspaces.find((each) => each.id === workspaceId),
   );
 
+  // Note that each picture and recording of the thread reads its own source where it is drawn, so one landing draws that file alone.
   const page = (
-    <ThreadPage
-      path={path}
-      status={task?.status}
-      manager={"agent" in holder ? holder.agent.face : undefined}
-      pathActions={pathActions}
-      title={cardTitle(item.title)}
-      messages={drawn}
-      opening={events.get(-1)}
-      repository={holderRepository(holder)}
-      onOpenLink={openLink}
-      pictureSource={pictureSource}
-      onRetryPicture={retryPicture}
-      videoAt={videoAt}
-      linkStanding={linkStanding}
-      standing={
-        item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(inboxRowOf(item))
-      }
-      ask={
-        <OpenAskCard
-          item={item}
-          answer={answer}
-          doors={{
-            source: (attachmentId) => sources.get(attachmentId),
-            retry,
-            openPage: (page) =>
-              openLink(
-                linkOf(
-                  {
-                    kind: LINK_DESTINATION.PAGE,
-                    taskId: page.place.taskId,
-                    pageId: page.pageId,
-                  },
-                  workspaceStep,
+    <PicturesProvider
+      owner={PICTURE_OWNER.INBOX}
+      ownerId={item.id}
+      kind={PRODUCT_PICTURE_KIND.INBOX}
+    >
+      <ThreadPage
+        path={path}
+        status={task?.status}
+        manager={"agent" in holder ? holder.agent.face : undefined}
+        pathActions={pathActions}
+        title={cardTitle(item.title)}
+        messages={drawn}
+        opening={events.get(-1)}
+        repository={holderRepository(holder)}
+        onOpenLink={openLink}
+        pictureSource={pictureSource}
+        onRetryPicture={retryPicture}
+        videoAt={videoAt}
+        linkStanding={linkStanding}
+        standing={
+          item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(inboxRowOf(item))
+        }
+        ask={
+          <OpenAskCard
+            item={item}
+            answer={answer}
+            doors={{
+              source: sourceOf,
+              retry,
+              openPage: (page) =>
+                openLink(
+                  linkOf(
+                    {
+                      kind: LINK_DESTINATION.PAGE,
+                      taskId: page.place.taskId,
+                      pageId: page.pageId,
+                    },
+                    workspaceStep,
+                  ),
                 ),
+              openLink,
+              openVideoElsewhere: openOnWeb,
+            }}
+          />
+        }
+        {...(inStack
+          ? {}
+          : {
+              pathInHead: true,
+              acts,
+              menu: menuWithout(menu, acts),
+              foot: (
+                <ThreadComposer
+                  item={item}
+                  answer={answer}
+                  agentName={agentName}
+                  place={{ workspaceId, taskId: task?.id }}
+                  inColumn
+                />
               ),
-            openLink,
-            openVideoElsewhere: openOnWeb,
-          }}
-        />
-      }
-      {...(inStack
-        ? {}
-        : {
-            pathInHead: true,
-            acts,
-            menu: menuWithout(menu, acts),
-            foot: (
-              <ThreadComposer
-                item={item}
-                answer={answer}
-                agentName={agentName}
-                place={{ workspaceId, taskId: task?.id }}
-                inColumn
-              />
-            ),
-          })}
-    />
+            })}
+      />
+    </PicturesProvider>
   );
 
   if (!inStack) return page;

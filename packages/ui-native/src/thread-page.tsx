@@ -201,7 +201,7 @@ type ThreadPageProps = {
   /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
   readonly onOpenLink: (address: string) => void;
   /** The address a picture its words draw is drawn from, by the address they name it by; none while it is on its way, and `null` where it could not be read. */
-  readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
+  readonly pictureSource?: ((written: string) => PictureRef | null | undefined) | undefined;
   /** Reads a picture its words draw again, by the address they name it by, where it could not be read. */
   readonly onRetryPicture?: ((written: string) => void) | undefined;
   /** The video a picture its words draw names, played in its place; every address names a picture where none is given. */
