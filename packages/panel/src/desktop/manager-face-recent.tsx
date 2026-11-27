@@ -16,6 +16,7 @@ import {
   ManagerFaceMenuPanel,
   type ManagerFaceRecent,
   ManagerFaceWell,
+  recentFaces,
 } from "@repo/ui/manager-face-picker";
 import { Schema } from "effect";
 import type { ComponentProps } from "react";
@@ -36,7 +37,7 @@ const NO_RECENT: readonly ManagerFace[] = [];
 function useRecentManagerFaces(): ManagerFaceRecent {
   const [left, forgetLeft] = useKeptLeaving(KEPT_RECENT);
 
-  const { value, choose } = useAccountChoice(
+  const { value, change } = useAccountChoice(
     VIEW_CHOICE_KEY.RECENT_MANAGER_FACES,
     null,
     NO_RECENT,
@@ -44,9 +45,15 @@ function useRecentManagerFaces(): ManagerFaceRecent {
     [left?.slice(0, VIEW_CHOICE_LIST_BOUNDS.RECENT), forgetLeft],
   );
 
+  // Note that a pick is laid over the faces the account keeps as it is written, so one made before the account's read answered waits for it rather than writing over what another device picked.
   return {
     read: () => value,
-    write: (faces) => choose(faces.slice(0, VIEW_CHOICE_LIST_BOUNDS.RECENT)),
+    write: (faces) => {
+      const [picked] = faces;
+
+      if (picked === undefined) return;
+      change((held) => recentFaces(held, picked).slice(0, VIEW_CHOICE_LIST_BOUNDS.RECENT));
+    },
   };
 }
 

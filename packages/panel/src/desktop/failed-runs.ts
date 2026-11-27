@@ -63,9 +63,14 @@ export function useFailedRunsMark(
   const saw = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    if (openedRun === undefined || seen[openedRun.automationId] === openedRun.id) return;
+    // Note that the guard goes as the automation closes, so opening it again keeps a failure whose keeping did not go.
+    if (openedRun === undefined) {
+      saw.current = undefined;
 
-    if (saw.current === openedRun.id) return;
+      return;
+    }
+
+    if (seen[openedRun.automationId] === openedRun.id || saw.current === openedRun.id) return;
     saw.current = openedRun.id;
 
     // Note that only the automations still failing are kept, in every workspace, because one whose failures aged out of the read has nothing left to mark; and that it is made over the failures seen as it is kept, so one seen on another device since stands.

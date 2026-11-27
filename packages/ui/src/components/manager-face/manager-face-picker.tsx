@@ -130,7 +130,7 @@ function sameChoice(one: ManagerFaceValue, other: ManagerFaceValue): boolean {
 }
 
 /** The faces picked last once `picked` is: it first, in the color it was picked in, then the rest as they stood, at most `RECENT_MOST`. */
-function recentFaces(
+export function recentFaces(
   recent: readonly ManagerFaceValue[],
   picked: ManagerFaceValue,
 ): ManagerFaceValue[] {

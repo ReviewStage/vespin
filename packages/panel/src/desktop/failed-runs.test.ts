@@ -3,9 +3,11 @@
 import assert from "node:assert/strict";
 import type { AccountFailedRun } from "@repo/features/account-inbox-wire";
 import { AUTOMATION_RUN_REASON } from "@repo/features/automation-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, test } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
+import { drawnViewChoice, fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { keepViewChoices } from "../testing/view-choices.js";
 import { useFailedRunsMark } from "./failed-runs.js";
@@ -127,4 +129,31 @@ test("an automation of another workspace left open does not see its own failure 
 
   act(() => root.render(withQueryClient(createElement(Other))));
   assert.equal(marked.at(-1), true, "its own workspace still marks it");
+});
+
+test("a failure seen whose keeping was refused is seen again once its automation is opened again", async () => {
+  const written: string[] = [];
+  let refusing = true;
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.VIEW_CHOICE_WRITE]: (write) => {
+      written.push(write.key);
+
+      if (!refusing) return drawnViewChoice(write);
+      refusing = false;
+
+      return Promise.reject(new Error("The write did not go."));
+    },
+  });
+  const runs = [failedRun(SWEEP, 1_000)];
+  const draw = mount(runs);
+  draw(runs, SWEEP);
+  await vi.waitFor(() => assert.equal(written.length, 1, "the first keeping is refused"));
+  draw(runs, undefined);
+  await vi.waitFor(() => assert.equal(marked.at(-1), true, "the failure still marks"));
+
+  draw(runs, SWEEP);
+  draw(runs, undefined);
+  await vi.waitFor(() => assert.equal(marked.at(-1), false, "seen again, it is kept"));
+  assert.equal(written.length, 2);
 });
