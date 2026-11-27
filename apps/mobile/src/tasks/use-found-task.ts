@@ -7,11 +7,11 @@
  * the list doesn't hold opens from its own description read, which
  * `useTaskOverview` follows by its id, so the screen says it's still being
  * sought until that read answers, and Task not found only after. Note that
- * the host answers a number it couldn't find and one it never reached the
- * service for alike, so a find that didn't answer a task is asked again a
- * few times, and again when the screen opens anew, rather than kept as Task
- * not found, since a phone off the network would otherwise keep a task it
- * holds out of reach until the app restarts.
+ * the service's word that no task answers to the number is taken at once,
+ * while a find the service never answered is asked again a few times, and
+ * again when the screen opens anew, rather than kept as Task not found, since
+ * a phone off the network would otherwise keep a task it holds out of reach
+ * until the app restarts.
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
@@ -32,6 +32,9 @@ import { useWindow } from "../host/use-window.js";
 
 /** The key a number's find is held under, by the account, the workspace and the number. */
 const TASK_BY_NUMBER_QUERY = "task-by-number";
+
+/** How many more times a find the service never answered is asked before the screen gives it up. */
+const FIND_RETRIES = 2;
 
 /** Why a find answered nothing: the service was never reached, which says nothing of whether the task stands. */
 const FIND_UNANSWERED = "The task's number was not answered.";
@@ -155,7 +158,8 @@ export function useFoundTask(named: string | undefined, workspace: string | unde
         },
       ),
     enabled: finds,
-    retry: false,
+    // Note that only a find never answered throws, so it alone is asked again; the service's word that none was found answers null, which is never retried.
+    retry: FIND_RETRIES,
   });
 
   const taskId = listed?.id ?? (finds ? (found.data ?? undefined) : named);
