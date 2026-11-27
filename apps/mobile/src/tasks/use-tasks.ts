@@ -101,6 +101,7 @@ import {
   type RowQuestion,
   useFailureNotices,
   useHeldValue,
+  useMinute,
 } from "@repo/ui-native";
 import { caseWhen, coalesce, eq, gt, inArray, isUndefined, or } from "@tanstack/react-db";
 import { useQuery } from "@tanstack/react-query";
@@ -147,9 +148,10 @@ export function useWaiting(workspaceId: string | undefined): {
   const groups = useInboxRowGroupsIn(workspaceId);
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+  // Note that the minute's tick lets a reminder that came due count the thread as waiting again, as the Inbox's own count does.
+  const now = useMinute();
 
   return useMemo(() => {
-    const now = Date.now();
     const byTask = new Map<string, number>();
     const byAgent = new Map<string, number>();
 
@@ -165,7 +167,7 @@ export function useWaiting(workspaceId: string | undefined): {
     }
 
     return { byTask, byAgent };
-  }, [groups, readerId]);
+  }, [groups, readerId, now]);
 }
 
 /** Sets a task's status, stopping its working agents with it where the reader confirmed that. */

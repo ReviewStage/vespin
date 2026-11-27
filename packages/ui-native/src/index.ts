@@ -380,6 +380,7 @@ export { RowPickContext } from "./row-open.js";
 export {
   agentPreview,
   latestStep,
+  managerPreview,
   type PreviewAgent,
   type PreviewMessage,
   previewMessages,

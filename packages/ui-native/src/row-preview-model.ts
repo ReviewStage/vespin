@@ -1,16 +1,17 @@
-// row-preview-model.ts -- what a row's long press preview says, a thread's newest messages, a task's Overview at a glance, or an agent's latest step, and the plain tree of words and marks the app's native module draws it from when the menu opens.
+// row-preview-model.ts -- what a row's long press preview says, a thread's newest messages, a task's Overview at a glance, an agent's latest step, or a Manager's card, and the plain tree of words and marks the app's native module draws it from when the menu opens.
 
 import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
-import type { AgentStatus, PullRequestState } from "@repo/features/agent-wire";
+import { AGENT_STATUS, type AgentStatus, type PullRequestState } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import { type InboxThreadMessage, needsYouWords } from "@repo/features/inbox-list-model";
 import type { ManagerFace } from "@repo/features/manager-face";
+import { MANAGER_CARD_WORDS, type ManagerCardCount } from "@repo/features/manager-overview-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { plainWords } from "@repo/features/plain-words";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { sinceText } from "@repo/features/time-format";
+import { agoText, sinceText, workingTime } from "@repo/features/time-format";
 import { CALL_KIND, madeCallLine } from "@repo/features/turn-rows";
 import { identityLetter } from "@repo/features/workspace-tile";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -157,6 +158,14 @@ const ROW_PREVIEW = {
   THREAD: "thread",
   TASK: "task",
   AGENT: "agent",
+  MANAGER: "manager",
+} as const;
+
+/** What a Manager's preview says of where it stands and who started it, as the panel's card says them. */
+const MANAGER_WORDS = {
+  ARCHIVED: "Archived",
+  STARTED_BY: (by: string) => `Started by ${by}`,
+  YOU: "you",
 } as const;
 
 /** A task as a preview's path names it: its name, after its status's ring where it has one. */
@@ -214,11 +223,35 @@ type AgentPreviewFacts = {
     | undefined;
 };
 
-/** What a row's long press lifts over its menu, a glance at what the row opens, as the system's own apps lift one: a thread's, a task's, or an agent's. */
+/**
+ * What a Manager's preview draws, the panel's Manager card's facts: its
+ * face and name, where it stands and since when with its model, who started
+ * it, and the counts a Manager is for (`managerCardCounts`).
+ */
+type ManagerPreviewFacts = {
+  readonly name: string;
+  readonly face: ManagerFace;
+  readonly status: AgentStatus;
+  readonly archived: boolean;
+  /** When the run it works on began, which its working time counts from; none where it rests, or where it is not known. */
+  readonly runStartedAt?: number | undefined;
+  /** When it last moved, which its standing at rest counts from. */
+  readonly movedAt: number;
+  /** The model it runs on, as the panel's chip names it. */
+  readonly model?: string | undefined;
+  /** The member who started it, "you" for the reader, and when; none where the card says no starter, as the panel's says none for the reader's own in a workspace of one. */
+  readonly startedBy?:
+    | { readonly name: string; readonly you: boolean; readonly at: number }
+    | undefined;
+  readonly counts: readonly ManagerCardCount[];
+};
+
+/** What a row's long press lifts over its menu, a glance at what the row opens, as the system's own apps lift one: a thread's, a task's, an agent's, or a Manager's. */
 export type RowPreview =
   | ({ readonly kind: typeof ROW_PREVIEW.THREAD } & ThreadPreviewFacts)
   | ({ readonly kind: typeof ROW_PREVIEW.TASK } & TaskPreviewFacts)
-  | ({ readonly kind: typeof ROW_PREVIEW.AGENT } & AgentPreviewFacts);
+  | ({ readonly kind: typeof ROW_PREVIEW.AGENT } & AgentPreviewFacts)
+  | ({ readonly kind: typeof ROW_PREVIEW.MANAGER } & ManagerPreviewFacts);
 
 /** A thread's preview: its task's ring and name, its title, and its newest messages, each under its writer and time, cut to a few lines, as Mail's preview shows the message a long press lifts. */
 export function threadPreview(facts: ThreadPreviewFacts): RowPreview {
@@ -233,6 +266,11 @@ export function taskPreview(facts: TaskPreviewFacts): RowPreview {
 /** An agent's preview: its task's ring and name, its tile and name as its page heads it, where it stands, its latest step where the app holds its transcript, its pull request, and how many of its threads need the reader. */
 export function agentPreview(facts: AgentPreviewFacts): RowPreview {
   return { kind: ROW_PREVIEW.AGENT, ...facts };
+}
+
+/** A Manager's preview, its hover card on the panel at a glance: its face and name, where it stands and since when with its model, who started it, and under a rule how many of its threads wait on the reader, of its agents are at work, and of their pull requests are open. */
+export function managerPreview(facts: ManagerPreviewFacts): RowPreview {
+  return { kind: ROW_PREVIEW.MANAGER, ...facts };
 }
 
 /** What a node of a preview's tree is: a column or a row of nodes, words, a glyph, the working mark, an agent's tile, a person's face, or a hairline. */
@@ -657,18 +695,102 @@ function agentNodes(
 }
 
 /**
+ * Where a Manager stands as its preview's line says it, as the panel's card's
+ * corner does: archived; at work for how long its run has gone; failed or
+ * stopped, then how long ago it last moved; and else idle, waiting on its
+ * chat, since how long ago.
+ */
+function managerStanding(facts: ManagerPreviewFacts, now: number): string {
+  if (facts.archived) return MANAGER_WORDS.ARCHIVED;
+
+  const state = agentGlyphState(facts.status);
+
+  if (state === GLYPH_STATE.WORKING)
+    return lineOf([
+      agentStateWords(facts.status),
+      facts.runStartedAt === undefined ? undefined : workingTime(now - facts.runStartedAt),
+    ]);
+
+  const ended =
+    state === GLYPH_STATE.FAILED || facts.status === AGENT_STATUS.CANCELED
+      ? agentStateWords(facts.status)
+      : MANAGER_CARD_WORDS.IDLE;
+
+  return lineOf([ended, sinceText(facts.movedAt, now)]);
+}
+
+/** One count of a Manager's preview: its figure, then its label, in copper where it waits on the reader, as a count of what needs you is. */
+function countNode(count: ManagerCardCount, look: PreviewLook): PreviewNode {
+  const ink =
+    count.label === MANAGER_CARD_WORDS.WAITING ? look.colors.ACCENT_TEXT : look.colors.TEXT_BODY;
+
+  return row(SPACE.TIGHT + 2, [
+    {
+      kind: PREVIEW_NODE.TEXT,
+      words: String(count.count),
+      style: TYPE_ROLE.ROW_TITLE,
+      weight: "semibold",
+      ink,
+      digits: true,
+      fixed: true,
+    },
+    { kind: PREVIEW_NODE.TEXT, words: count.label, style: TYPE_ROLE.ROW_TITLE, ink, lines: 1 },
+  ]);
+}
+
+/** A Manager's preview's nodes, an agent's head and state line over who started it and its counts. */
+function managerNodes(
+  facts: ManagerPreviewFacts,
+  look: PreviewLook,
+): readonly (PreviewNode | undefined)[] {
+  const { startedBy } = facts;
+
+  return [
+    row(SPACE.ROW, [
+      agentTile(undefined, MARK_SIZE.AVATAR, look, facts.face),
+      heading(facts.name, look),
+    ]),
+    row(SPACE.TIGHT + 2, [
+      facts.archived ? undefined : agentStateMark(facts.status, look),
+      line(lineOf([managerStanding(facts, look.now), facts.model]), look),
+    ]),
+    startedBy === undefined
+      ? undefined
+      : line(
+          lineOf([
+            MANAGER_WORDS.STARTED_BY(startedBy.you ? MANAGER_WORDS.YOU : startedBy.name),
+            agoText(startedBy.at, look.now),
+          ]),
+          look,
+        ),
+    ...(facts.counts.length === 0
+      ? []
+      : [rule(look), ...facts.counts.map((each) => countNode(each, look))]),
+  ];
+}
+
+/** A preview's nodes, by the kind of row it glances at. */
+function nodesOf(preview: RowPreview, look: PreviewLook): readonly (PreviewNode | undefined)[] {
+  switch (preview.kind) {
+    case ROW_PREVIEW.THREAD:
+      return threadNodes(preview, look);
+    case ROW_PREVIEW.TASK:
+      return taskNodes(preview, look);
+    case ROW_PREVIEW.AGENT:
+      return agentNodes(preview, look);
+    case ROW_PREVIEW.MANAGER:
+      return managerNodes(preview, look);
+  }
+}
+
+/**
  * A preview as the native module draws it when the menu opens, as the React
  * Native previews drew it: on the brand's ground, padded to the screen's
  * edge, at a phone's width, its nodes in a column, each with its inks
  * resolved and its marks' sizes scaled by the reader's text size.
  */
 export function previewTree(preview: RowPreview, look: PreviewLook): PreviewTree {
-  const nodes =
-    preview.kind === ROW_PREVIEW.THREAD
-      ? threadNodes(preview, look)
-      : preview.kind === ROW_PREVIEW.TASK
-        ? taskNodes(preview, look)
-        : agentNodes(preview, look);
+  const nodes = nodesOf(preview, look);
 
   return {
     width: PREVIEW_WIDTH,

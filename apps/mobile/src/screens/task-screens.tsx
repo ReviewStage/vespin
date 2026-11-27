@@ -34,6 +34,7 @@ import {
   taskLinkStep,
   taskNumberOf,
 } from "@repo/features/link-grammar";
+import { managerCardCounts } from "@repo/features/manager-overview-model";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import {
@@ -151,6 +152,7 @@ import {
   type MenuChoice,
   type MenuPhotoFile,
   managerFaceMenu,
+  managerPreview,
   menuWithout,
   NoSelection,
   PATH_PART,
@@ -209,7 +211,12 @@ import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { useManagersListed, useWorkspaceManagers } from "../agents/use-managers.js";
 import { appStateQuery } from "../host/app-state-query.js";
-import { useWholeListRead } from "../host/host-provider.js";
+import {
+  useListedAgents,
+  useTaskListCollections,
+  useTaskListRows,
+  useWholeListRead,
+} from "../host/host-provider.js";
 import { useInboxShown } from "../inbox/inbox-shown.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useKeeping } from "../keeping.js";
@@ -273,6 +280,7 @@ import {
   useTasksReadStatus,
   useTasksWorkspace,
   useTaskWrites,
+  useWaiting,
 } from "../tasks/use-tasks.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import {
@@ -2503,6 +2511,56 @@ function useAgentRowParts(agent: ListedAgent, name: string, asking: AgentAsking 
 }
 
 /**
+ * What a Manager's long press preview says (`managerPreview`), but its face, the panel's Manager card's facts: its
+ * face, name, where it stands and since when with its model, who started it
+ * where the card says so (a teammate, or the reader in a workspace they
+ * share), and how many of its threads wait on the reader, of the agents it
+ * started are at work, and of their pull requests are open, counted from
+ * what the phone already holds as the panel's card counts them
+ * (`managerCardCounts`), so the press reads nothing.
+ */
+function useManagerPreviewFacts(agent: ListedAgent, name: string) {
+  const listedAgents = useListedAgents();
+  const pullRequests = useTaskListRows(useTaskListCollections().agentPullRequests);
+  const waiting = useWaiting(agent.workspaceId).byAgent.get(agent.id) ?? 0;
+  const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const shared = (workspaces.find((each) => each.id === agent.workspaceId)?.memberCount ?? 1) > 1;
+
+  const counts = useMemo(
+    () =>
+      managerCardCounts({
+        managerId: agent.id,
+        agents: listedAgents ?? [],
+        pullRequests: (pullRequests ?? []).map((each) => ({
+          agentId: each.agentId,
+          state: each.pullRequest.state,
+        })),
+        waiting,
+      }),
+    [agent.id, listedAgents, pullRequests, waiting],
+  );
+
+  const by = agent.startedBy;
+  const you = by !== undefined && by.userId === readerId;
+
+  return {
+    name,
+    status: agent.status,
+    archived: agent.archivedAt !== undefined,
+    runStartedAt: agent.runStartedAt,
+    movedAt: agentLastMovedAt(agent),
+    model: modelLabel(agent.model),
+    // Note that the reader's own Manager names its starter only where others share its workspace, as the panel's card does.
+    startedBy:
+      by === undefined || (you && !shared)
+        ? undefined
+        : { name: by.name, you, at: agent.createdAt },
+    counts,
+  };
+}
+
+/**
  * A Manager on the Tasks list, drawn by the task row the tasks under it
  * stand in (`TaskRow`), as the desktop's sidebar draws its Managers in a
  * task row's anatomy: its face in the status ring's place, livelier while it
@@ -2523,6 +2581,7 @@ export function ManagerTaskRow({
   const name = agentName(agent);
   const state = agentGlyphState(agent.status);
   const { link, acts } = useAgentRowParts(agent, name, asking);
+  const preview = useManagerPreviewFacts(agent, name);
   const { face } = agent;
 
   if (face === undefined)
@@ -2538,15 +2597,7 @@ export function ManagerTaskRow({
       at={agentLastMovedAt(agent)}
       link={link}
       {...acts}
-      preview={agentPreview({
-        name,
-        harness: providerOf(agent.model),
-        face,
-        status: agent.status,
-        model: modelLabel(agent.model),
-        runsOn: agentRunsOnWords(agent),
-        waiting: 0,
-      })}
+      preview={managerPreview({ ...preview, face })}
     />
   );
 }

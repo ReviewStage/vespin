@@ -1,14 +1,18 @@
-import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { AGENT_STATUS, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { ANSWER_TONE } from "@repo/features/inbox-list-model";
+import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
 import { CALL_KIND } from "@repo/features/turn-rows";
 import { describe, expect, it } from "vitest";
-import { latestStep, previewMessages } from "./row-preview-model.js";
+import { latestStep, managerPreview, previewMessages, previewTree } from "./row-preview-model.js";
 import {
   CALL_STANDING,
   TRANSCRIPT_ITEM,
   TRANSCRIPT_PIECE,
   type TranscriptItem,
 } from "./transcript-model.js";
+
+/** A Manager's face, as the service picks one. */
+const FACE = { character: MANAGER_FACE_CHARACTER.CAT, color: MANAGER_FACE_COLOR.TEAL };
 
 const PLACE = { message: "turn", row: "row", member: undefined, piece: TRANSCRIPT_PIECE.LINE };
 
@@ -119,5 +123,66 @@ describe("latestStep", () => {
     },
   ])("says a call that stands as its card alone as its row would ($step)", ({ card, step }) => {
     expect(latestStep([WORDS_FIRST, card])).toBe(step);
+  });
+});
+
+/** A node of a preview's tree as far as its words go. */
+type Drawn = {
+  readonly kind: string;
+  readonly words?: string | undefined;
+  readonly nodes?: readonly Drawn[] | undefined;
+};
+
+/** Every word a preview's tree draws, in the order it draws them. */
+function wordsOf(node: Drawn): string[] {
+  if (node.words !== undefined) return [node.words];
+
+  return (node.nodes ?? []).flatMap(wordsOf);
+}
+
+describe("managerPreview", () => {
+  it("says a resting Manager idle since it last moved, who started it, and only its counts above none", () => {
+    const HOUR = 60 * 60 * 1000;
+    const now = 100 * HOUR;
+
+    const look = {
+      colors: {
+        GROUND: "g",
+        TEXT: "t",
+        TEXT_BODY: "b",
+        TEXT_MUTED: "m",
+        ACCENT_TEXT: "a",
+        CHIP_EDGE: "e",
+        WELL: "w",
+        DANGER: "d",
+      },
+      tone: () => "tone",
+      scale: 1,
+      dark: false,
+      pixelRatio: 2,
+      now,
+    };
+
+    const tree = previewTree(
+      managerPreview({
+        name: "Frontend Manager",
+        face: FACE,
+        status: AGENT_STATUS.COMPLETED,
+        archived: false,
+        movedAt: now - 2 * HOUR,
+        model: "Opus 5.5",
+        startedBy: { name: "Ada Lovelace", you: true, at: now - 48 * HOUR },
+        counts: [{ label: "Agents at work", count: 3 }],
+      }),
+      look,
+    );
+
+    expect(wordsOf(tree.root)).toEqual([
+      "Frontend Manager",
+      "Idle · 2h · Opus 5.5",
+      "Started by you · 2d ago",
+      "3",
+      "Agents at work",
+    ]);
   });
 });

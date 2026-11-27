@@ -6,7 +6,7 @@ import {
   type ListedAgent,
   PULL_REQUEST_STATE,
 } from "./agent-wire.js";
-import { managerOverview } from "./manager-overview-model.js";
+import { managerCardCounts, managerOverview } from "./manager-overview-model.js";
 import { DESCRIPTION_ACTOR, TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 
 /**
@@ -141,4 +141,24 @@ test("a Manager's overview lists its own agents, pull requests, and tasks", () =
     working: 1,
     openPullRequests: 2,
   });
+});
+
+test("a Manager's card counts its own unarchived agents at work and their open pull requests, and leaves out a count of none", () => {
+  // Note that Digest's agent is at work and its draft is open, while the archived agent's open pull request and the other Manager's agent are not its own.
+  const counts = managerCardCounts({
+    managerId: MANAGER,
+    agents: [INVITING, DIGESTING, ARCHIVED, BILLER],
+    pullRequests: [
+      { agentId: DIGESTING.id, state: PULL_REQUEST_STATE.DRAFT },
+      { agentId: INVITING.id, state: PULL_REQUEST_STATE.MERGED },
+      { agentId: ARCHIVED.id, state: PULL_REQUEST_STATE.OPEN },
+      { agentId: BILLER.id, state: PULL_REQUEST_STATE.OPEN },
+    ],
+    waiting: 0,
+  });
+
+  expect(counts).toEqual([
+    { label: "Agents at work", count: 1 },
+    { label: "Open pull requests", count: 1 },
+  ]);
 });
