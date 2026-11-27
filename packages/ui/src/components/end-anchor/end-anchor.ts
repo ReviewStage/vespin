@@ -20,10 +20,13 @@
  * - The reader is heard by their input, never guessed from a scroll's
  *   direction: a wheel turned up, a finger dragging the lines down, a key
  *   that scrolls, or a press held on the scroller (its scroll bar, or a
- *   selection dragged past its edge) while the log moves up. So a scroll the
- *   reader did not make (a virtualizer correcting its rows, the browser
- *   clamping a scroll, a router restoring a place it kept) never lets go of
- *   the end, and a log stuck to it is taken back there.
+ *   selection dragged past its edge) while the log moves up; and, since a
+ *   screen reader or a find moves the log with no input of the page's, a
+ *   scroll that brings into view a line just focused or selected in the log.
+ *   So a scroll the reader did not make (a
+ *   virtualizer correcting its rows, the browser clamping a scroll, a router
+ *   restoring a place it kept) never lets go of the end, and a log stuck to
+ *   it is taken back there.
  * - The size heard is the scroller's as well as what it holds, so a box
  *   that shrinks under a phone's keyboard or a growing composer keeps its
  *   newest line.
@@ -55,6 +58,14 @@ const SCROLL_KEYS = new Set([
 /** How far, in pixels, a box stands above its end. */
 function gapOf(box: HTMLElement): number {
   return box.scrollHeight - box.clientHeight - box.scrollTop;
+}
+
+/** Whether `shown`, an element or a range, stands within what `box` shows. */
+function inView(box: HTMLElement, shown: Element | Range): boolean {
+  const view = box.getBoundingClientRect();
+  const at = shown.getBoundingClientRect();
+
+  return at.bottom > view.top && at.top < view.bottom;
 }
 
 /** Takes a box to its end itself, where the caller scrolls it no way of its own. */
@@ -140,6 +151,9 @@ export function useEndAnchor({
     let touchY: number | undefined;
     let pressed = false;
     let keyed = false;
+    // Whether focus or the selection moved inside the log since the last scroll was heard, as a screen reader or a find moves them.
+    let focusMoved = false;
+    let selectionMoved = false;
 
     const away = () => {
       if (held.current) hold(false);
@@ -181,16 +195,43 @@ export function useEndAnchor({
       keyed = false;
     };
 
+    const onFocusIn = (event: FocusEvent) => {
+      if (event.target !== box) focusMoved = true;
+    };
+
+    const onSelectionChange = () => {
+      const at = document.getSelection()?.focusNode;
+
+      if (at !== null && at !== undefined && box.contains(at)) selectionMoved = true;
+    };
+
+    // Note that a scroll that brings into view what was just focused or selected in the log, as a screen reader or a find does, is the reader's.
+    const broughtIn = (): boolean => {
+      const focused = document.activeElement;
+      const range = document.getSelection();
+
+      if (focusMoved && focused !== null && focused !== box && box.contains(focused)) {
+        return inView(box, focused);
+      }
+
+      return (
+        selectionMoved && range !== null && range.rangeCount > 0 && inView(box, range.getRangeAt(0))
+      );
+    };
+
     // Note that a scroll made while the reader's finger, press, or key drives it is theirs; any other that leaves the end of a log stuck to it is undone.
     const onScroll = () => {
       const top = box.scrollTop;
       const up = top < last;
       last = top;
       const reading = pressed || keyed || touchY !== undefined;
+      const atEnd = gapOf(box) <= END_PX;
 
-      if (reading && up) away();
+      if ((reading && up) || (!atEnd && !reading && broughtIn())) away();
+      focusMoved = false;
+      selectionMoved = false;
 
-      if (gapOf(box) <= END_PX) {
+      if (atEnd) {
         if (!held.current) hold(true);
       } else if (held.current && !reading) {
         pin();
@@ -204,7 +245,9 @@ export function useEndAnchor({
     box.addEventListener("pointerdown", onPointerDown);
     box.addEventListener("keydown", onKeyDown);
     box.addEventListener("keyup", onKeyUp);
+    box.addEventListener("focusin", onFocusIn);
     box.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("selectionchange", onSelectionChange);
     globalThis.addEventListener("pointerup", onPointerUp);
     globalThis.addEventListener("pointercancel", onPointerUp);
 
@@ -216,7 +259,9 @@ export function useEndAnchor({
       box.removeEventListener("pointerdown", onPointerDown);
       box.removeEventListener("keydown", onKeyDown);
       box.removeEventListener("keyup", onKeyUp);
+      box.removeEventListener("focusin", onFocusIn);
       box.removeEventListener("scroll", onScroll);
+      document.removeEventListener("selectionchange", onSelectionChange);
       globalThis.removeEventListener("pointerup", onPointerUp);
       globalThis.removeEventListener("pointercancel", onPointerUp);
     };
