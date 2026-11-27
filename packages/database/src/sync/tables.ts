@@ -285,6 +285,7 @@ export const memberSync = defineSyncTable(member, {
   topics: [
     { kind: TOPIC.WORKSPACE, column: member.organizationId },
     { kind: TOPIC.WORKSPACE_PEOPLE, column: member.organizationId },
+    { kind: TOPIC.WORKSPACE_AUTOMATIONS, column: member.organizationId },
     { kind: TOPIC.ACCOUNT, column: member.userId },
     { kind: TOPIC.ACCOUNT_INBOX, column: member.userId },
   ],
@@ -736,6 +737,7 @@ export const attachmentSync = defineSyncTable(attachment, {
 export const automationSync = defineSyncTable(automation, {
   topics: [
     { kind: TOPIC.WORKSPACE, column: automation.organizationId },
+    { kind: TOPIC.WORKSPACE_AUTOMATIONS, column: automation.organizationId },
     { kind: TOPIC.ACCOUNT, column: automation.userId },
     { kind: TOPIC.ACCOUNT_INBOX, column: automation.userId },
   ],
@@ -758,7 +760,10 @@ export const automationRunSync = defineSyncTable(automationRun, {
       through: automation,
       key: automation.id,
       by: automationRun.automationId,
-      topics: [{ kind: TOPIC.WORKSPACE, column: automation.organizationId }],
+      topics: [
+        { kind: TOPIC.WORKSPACE, column: automation.organizationId },
+        { kind: TOPIC.WORKSPACE_AUTOMATIONS, column: automation.organizationId },
+      ],
     },
   ],
   log: LOG.ROWS,

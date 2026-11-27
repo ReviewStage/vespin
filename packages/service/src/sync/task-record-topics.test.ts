@@ -243,6 +243,7 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
             ...teammateTopics,
             [TOPIC.WORKSPACE, task.workspaceId],
             [TOPIC.WORKSPACE_PEOPLE, task.workspaceId],
+            [TOPIC.WORKSPACE_AUTOMATIONS, task.workspaceId],
           ],
           reads,
         );

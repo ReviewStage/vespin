@@ -189,6 +189,7 @@ it.layer(getTestDB())("what moves an account's sidebar notifies", (it) => {
             ...teammateTopics,
             [TOPIC.WORKSPACE, workspaceId],
             [TOPIC.WORKSPACE_PEOPLE, workspaceId],
+            [TOPIC.WORKSPACE_AUTOMATIONS, workspaceId],
           ],
           teammate,
         );

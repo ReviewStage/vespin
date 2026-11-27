@@ -115,6 +115,7 @@ it.effect(
           [
             workspace,
             [TOPIC.WORKSPACE_PEOPLE, workspaceId],
+            [TOPIC.WORKSPACE_AUTOMATIONS, workspaceId],
             [TOPIC.ACCOUNT, teammate],
             [TOPIC.ACCOUNT_INBOX, teammate],
           ],
