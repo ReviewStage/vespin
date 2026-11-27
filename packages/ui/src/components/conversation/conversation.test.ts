@@ -17,7 +17,8 @@ import {
  * back to it once the reader scrolls away, keeps to its newest line as
  * something floating over its end takes more room or its box shrinks, as a
  * phone's keyboard shrinks it, and asks for older lines
- * as the reader nears its top. jsdom lays nothing out, so the log's heights
+ * as the reader nears its top, and stands the room at its end its class
+ * says. jsdom lays nothing out, so the log's heights
  * are stood in for.
  */
 
@@ -176,4 +177,41 @@ test("a log asks for its older lines as the reader scrolls up near its top", () 
   assert.deepEqual(asked, [], "a scroll up far from the top asks for nothing");
   scroll(box, 400);
   assert.deepEqual(asked, ["older"], "a scroll up within a screen of the top asks for older lines");
+});
+
+test("a log's room at its end is the one its block's class says, and follows the class as it changes", () => {
+  const theme = document.head.appendChild(document.createElement("style"));
+  theme.textContent = ".roomy { --conversation-log-end: 40px; }";
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  const draw = (className?: string) =>
+    root.render(
+      createElement(
+        Conversation,
+        null,
+        createElement(
+          ConversationContent,
+          { className },
+          createElement(ConversationRows, {
+            keys: ["line-0"],
+            estimate: 100,
+            gap: 0,
+            children: () => createElement("p", null, "line-0"),
+          }),
+        ),
+      ),
+    );
+  // One line of 100px, and the room past it the class says.
+  const rowsHeight = () =>
+    container.querySelector<HTMLElement>(".ui-virtual-rows")?.style.height ??
+    assert.fail("the rows");
+
+  act(() => draw());
+  assert.equal(rowsHeight(), "100px", "a block whose class says no room stands none");
+  act(() => draw("roomy"));
+  assert.equal(rowsHeight(), "140px", "a class that says room stands it past the lines");
+  act(() => draw());
+  assert.equal(rowsHeight(), "100px", "and lets it go as the class does");
+  theme.remove();
 });
