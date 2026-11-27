@@ -3058,19 +3058,27 @@ function SidebarColumn({
   const inTab = (place: LinkDestination) =>
     listedStep === undefined ? undefined : openInTabOf(linkOf(place, listedStep));
 
+  // Going to a place lets the chosen rows go, as a plain press on a row does; the rail's places stand apart from the list's region, which would say so for them.
+  const leaving =
+    (open: () => void): (() => void) =>
+    () => {
+      if (selection.selected.size > 0) selection.onChange(new Set());
+      open();
+    };
+
   // The places' doors and the foot's, steady across the column's draws, so their rows hold while what they show does.
   const placeDoors = useSteadyDoors({
-    onSearch: chosen(() => runAppCommand(APP_COMMAND.COMMAND_PALETTE)),
-    onHome: chosen(goHome),
+    onSearch: leaving(chosen(() => runAppCommand(APP_COMMAND.COMMAND_PALETTE))),
+    onHome: leaving(chosen(goHome)),
     onHomeInTab: inTab({ kind: LINK_DESTINATION.HOME }),
-    onInbox: chosen(openInbox),
+    onInbox: leaving(chosen(openInbox)),
     onInboxInTab: inTab({ kind: LINK_DESTINATION.INBOX }),
-    onBoard: chosen(openBoard),
+    onBoard: leaving(chosen(openBoard)),
     onBoardInTab: inTab({ kind: LINK_DESTINATION.BOARD }),
     onBoardPreload: preloadBoard,
-    onAutomations: chosen(openAutomations),
+    onAutomations: leaving(chosen(openAutomations)),
     onAutomationsInTab: inTab({ kind: LINK_DESTINATION.AUTOMATIONS }),
-    onMergeQueue: chosen(openMergeQueue),
+    onMergeQueue: leaving(chosen(openMergeQueue)),
     onSettings: chosen(() => onTabChange(PANEL_TAB.SETTINGS)),
     onSignOut,
   });
