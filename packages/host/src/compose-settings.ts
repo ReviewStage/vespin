@@ -367,7 +367,14 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
           accountPreferencesToWrite(preferences, baseline),
         );
 
-        if (!written || (yield* readAccountPreferenceAccountKey()) !== accountKey) return true;
+        if ((yield* readAccountPreferenceAccountKey()) !== accountKey) return true;
+
+        // Note that a write that failed leaves the account's own choices as what was last synced, because this device now holds them where it took them, so an edit made before the next write is told from what the account holds rather than from an older baseline that would read it as unchanged.
+        if (!written) {
+          yield* store.setAccountPreferencesSyncBaseline(accountKey, remote.preferences);
+
+          return true;
+        }
       }
 
       yield* store.setAccountPreferencesSyncBaseline(accountKey, preferences);

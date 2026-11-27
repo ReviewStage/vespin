@@ -6,6 +6,7 @@ import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { test } from "vitest";
 import { AGENT_ENTER } from "./agent-enter.js";
 import { COMMIT_AUTHOR } from "./commit-author.js";
+import { DIFF_FONT, DIFF_INDICATORS, DIFF_LAYOUT, INLINE_DIFF } from "./diff-view.js";
 import { PULL_REQUEST_OPEN } from "./pull-request-open.js";
 import {
   type AccountPreferences,
@@ -116,6 +117,17 @@ test("the snapshot's preferences part carries only the keys v0.18.0 reads, whate
     githubWakesOff: '["comment"]',
     newAgentServersOff: '["posthog"]',
     inbox: false,
+    lineNumbers: false,
+    wordWrap: false,
+    diffLayout: DIFF_LAYOUT.SPLIT,
+    diffIndicators: DIFF_INDICATORS.CLASSIC,
+    inlineDiff: INLINE_DIFF.CHAR,
+    diffBackgrounds: false,
+    diffDarkTheme: "github-dark",
+    diffLightTheme: "github-light",
+    diffFont: DIFF_FONT.MENLO,
+    diffLigatures: true,
+    diffMinimizeComments: true,
   } satisfies Required<AccountPreferences>;
 
   const shared = Object.keys(accountPreferencesParts(everything).preferences);
