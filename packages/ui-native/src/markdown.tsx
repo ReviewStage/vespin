@@ -181,6 +181,7 @@ const styles = StyleSheet.create({
   wellTitle: { paddingHorizontal: SPACE.ROW, paddingBottom: SPACE.TIGHT },
   rows: { alignSelf: "flex-start", minWidth: "100%" },
   codeRow: { paddingHorizontal: SPACE.ROW },
+  excerptRow: { borderLeftWidth: 3 },
   table: {
     alignSelf: "stretch",
     borderWidth: StyleSheet.hairlineWidth,
@@ -1252,6 +1253,59 @@ function CodeView({
           </View>
         </SidewaysScroll>
       )}
+    </View>
+  );
+}
+
+/** The mark a diff's row is written with, as a unified diff writes it. */
+const ROW_MARK = {
+  [CODE_ROW.ADDED]: "+",
+  [CODE_ROW.REMOVED]: "-",
+  [CODE_ROW.CONTEXT]: " ",
+} as const satisfies Record<CodeRow, string>;
+
+/** One line of a diff excerpt: what it does, its words without its mark, and whether it is one of the lines the excerpt is about, which stand lit. */
+export interface ExcerptRow {
+  readonly kind: CodeRow;
+  readonly text: string;
+  readonly lit: boolean;
+}
+
+/**
+ * The lines a review thread is on, as the panel's thread card draws its
+ * hunk: each line in the monospaced face with its mark, on the added and
+ * removed lines' tints, the thread's own lines lit by a rule in the accent
+ * at their leading edge, on a well that scrolls sideways rather than
+ * wrapping them.
+ */
+export function DiffExcerpt({ rows }: { readonly rows: readonly ExcerptRow[] }) {
+  const colors = useColors();
+  const face = { fontFamily: MONOSPACE_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT };
+
+  return (
+    <View style={[styles.well, { backgroundColor: colors.WELL }]}>
+      <SidewaysScroll ground={colors.WELL}>
+        <View style={styles.rows}>
+          {rows.map((row, at) => (
+            // Note that two rows may hold the same words, so each is keyed by its place.
+            <Text
+              key={`${at}`}
+              selectable
+              style={[
+                face,
+                styles.codeRow,
+                styles.excerptRow,
+                {
+                  backgroundColor: rowTint(row.kind, colors),
+                  borderLeftColor: row.lit ? colors.ACCENT : "transparent",
+                },
+              ]}
+            >
+              {`${ROW_MARK[row.kind]}${row.text}`}
+            </Text>
+          ))}
+        </View>
+      </SidewaysScroll>
     </View>
   );
 }

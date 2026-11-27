@@ -17,6 +17,7 @@ import {
   patchHunks,
 } from "@repo/features/diff-hunks";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
+import { HUNK_HEADER, threadLines } from "@repo/features/review-thread-lines";
 import { repositoryParts } from "@repo/features/task-list-model";
 import { isSecretFile } from "@repo/features/task-wire";
 import {
@@ -115,65 +116,6 @@ const STATUS_MARK = {
 /** Where git's diff names a side the file does not stand on: before it was added, or after it was deleted. */
 const NO_SIDE = "/dev/null";
 
-/** How many rows a review thread's preview shows above the first line it is on. */
-const THREAD_CONTEXT_ROWS = 3;
-
-/** A hunk's header: where it starts on each side, what it counts, and the scope git writes after. */
-const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$/u;
-
-/**
- * A hunk GitHub froze for a review thread, its header counting the lines it
- * holds; none where it does not start with a header. Note that the header
- * is counted again, because GitHub keeps the whole hunk's counts while
- * cutting its lines at the thread's line, and jsdiff refuses a hunk whose
- * lines fall short of its header.
- */
-function frozenHunk(diffHunk: string): string | undefined {
-  const [header = "", ...written] = diffHunk.split("\n");
-  const match = HUNK_HEADER.exec(header);
-
-  if (match === null) return undefined;
-  const lines = written.at(-1) === "" ? written.slice(0, -1) : written;
-  const old = lines.filter((line) => !line.startsWith("+") && !line.startsWith("\\")).length;
-  const now = lines.filter((line) => !line.startsWith("-") && !line.startsWith("\\")).length;
-  const [, oldStart = "", newStart = "", scope = ""] = match;
-
-  return [`@@ -${oldStart},${old} +${newStart},${now} @@${scope}`, ...lines].join("\n");
-}
-
-/** A row's number on the side given, none where it does not stand on that side. */
-function lineOn(row: DiffRow, side: DiffSide): number | undefined {
-  return side === DIFF_SIDE.LEFT ? row.oldLine : row.newLine;
-}
-
-/** The rows a review thread previews, and those of them its own range holds. */
-interface PreviewRows {
-  readonly kept: readonly DiffRow[];
-  readonly own: readonly DiffRow[];
-}
-
-/** The rows a review thread previews, the end of the hunk from a few rows above its range to its line, and those of its range. */
-function previewRows(
-  rows: readonly DiffRow[],
-  thread: Pick<ReviewThread, "originalLine" | "originalStartLine" | "side" | "startSide">,
-): PreviewRows {
-  const { originalLine: line, originalStartLine: startLine, side } = thread;
-  const found = rows.findLastIndex((row) => line !== null && lineOn(row, side) === line);
-  const end = found === -1 ? rows.length - 1 : found;
-  const startSide = thread.startSide ?? side;
-
-  const first = rows.findIndex(
-    (row, at) => at <= end && startLine !== null && lineOn(row, startSide) === startLine,
-  );
-
-  const start = first === -1 ? end : first;
-
-  return {
-    kept: rows.slice(Math.max(0, start - THREAD_CONTEXT_ROWS), end + 1),
-    own: rows.slice(start, end + 1),
-  };
-}
-
 /** Where a row stands in a unified diff's selection: a removed line on the old side, any other on the new. */
 function selectionPoint(row: DiffRow): { line: number; side: DiffSelection["side"] } | undefined {
   if (row.kind === DIFF_ROW.REMOVED) {
@@ -222,20 +164,16 @@ export function threadPreview(
     "path" | "diffHunk" | "originalLine" | "originalStartLine" | "side" | "startSide"
   >,
 ): ThreadPreview | undefined {
-  const hunk = frozenHunk(thread.diffHunk);
+  const lines = threadLines(thread);
+  const first = lines?.kept[0];
 
-  if (hunk === undefined) return undefined;
-  const parsed = patchHunks(hunk)?.at(-1);
-  const rows = parsed?.rows ?? [];
-  const { kept, own } = previewRows(rows, thread);
-  const first = kept[0];
-
-  if (parsed === undefined || first === undefined) return undefined;
+  if (lines === undefined || first === undefined) return undefined;
+  const { rows, kept, own } = lines;
   const before = rows.slice(0, rows.indexOf(first));
   // A side the kept rows hold no line of is written at the last line before them, as git writes an empty side.
   const oldBefore = before.findLast((row) => row.oldLine !== undefined)?.oldLine ?? 0;
   const newBefore = before.findLast((row) => row.newLine !== undefined)?.newLine ?? 0;
-  const scope = HUNK_HEADER.exec(parsed.header)?.[3] ?? "";
+  const scope = HUNK_HEADER.exec(lines.header)?.[3] ?? "";
 
   const oldRange = sideRange(
     kept.map((row) => row.oldLine),

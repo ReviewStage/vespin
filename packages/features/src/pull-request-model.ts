@@ -490,6 +490,11 @@ export const REACTION_FACES = {
   { readonly emoji: string; readonly name: string; readonly item: string }
 >;
 
+/** What a review thread says of the replies a read left on GitHub, which open there: "2 more replies on GitHub". */
+export function moreRepliesWords(count: number): string {
+  return `${count} more ${count === 1 ? "reply" : "replies"} on GitHub`;
+}
+
 /** The menu's name for giving a reaction, as GitHub's own smiley names it. */
 export const ADD_REACTION_WORDS = "Add reaction";
 

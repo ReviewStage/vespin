@@ -39,6 +39,7 @@ import {
   checksCountOf,
   checksSummaryOf,
   conversationCount,
+  moreRepliesWords,
   PULL_REQUEST_READ_WORDS,
   reviewersOf,
   THREAD_STATE_WORDS,
@@ -390,7 +391,7 @@ const PULL_REQUEST_WORDS = {
   /** What the conversation says of the earlier entries a read left on GitHub, by how many. */
   earlier: PULL_REQUEST_READ_WORDS.earlierCount,
   /** What a review thread says of the replies a read left on GitHub, by how many. */
-  moreReplies: (count: number) => `${count} more ${count === 1 ? "reply" : "replies"} on GitHub`,
+  moreReplies: moreRepliesWords,
   /** What a thread drawn on its line says of how many comments it holds. */
   commentCount: PULL_REQUEST_READ_WORDS.commentCount,
   RESOLVED: THREAD_STATE_WORDS.RESOLVED,

@@ -85,6 +85,7 @@ const WORDS_INSET = SPACE.EDGE + MARK_SIZE.WRITER + WRITER_GAP;
 
 const styles = StyleSheet.create({
   words: { paddingLeft: WORDS_INSET, paddingRight: SPACE.EDGE, gap: SPACE.ROW },
+  excerpt: { paddingHorizontal: SPACE.EDGE },
 });
 
 /** What a message's file is drawn as after its words: a picture, a video in the system's player, a sound clip in its strip, or any other file, such as a PDF, as its chip. */
@@ -214,6 +215,10 @@ type ThreadPageProps = {
   readonly standing?: string | undefined;
   /** The open ask's card, such as its options, steps, or fields, under the messages. */
   readonly ask?: ReactNode | undefined;
+  /** What the thread is on, drawn under its heading in React Native views, such as a review thread's lines (`DiffExcerpt`); none for a thread on nothing more than its title says. */
+  readonly excerpt?: ReactNode | undefined;
+  /** The replies the thread holds that were not read, which open where they are kept, said under its messages as the panel's card says them ("2 more replies on GitHub"); none where every one was read. */
+  readonly more?: { readonly words: string; readonly onPress: () => void } | undefined;
   /** The thread's main acts as glyphs before its ⋯ in a split view's detail bar, such as Resolve; none in a compact window, whose ⋯ holds them. */
   readonly acts?: readonly BarFootItem[] | undefined;
   /** The thread's ⋯ menu, such as Copy link, in a split view's detail bar; a compact window's stack holds it in its own bar. */
@@ -478,6 +483,8 @@ function MessageView({
   | "title"
   | "messages"
   | "ask"
+  | "excerpt"
+  | "more"
   | "menu"
   | "foot"
 > & {
@@ -658,12 +665,16 @@ export function ThreadPage(props: ThreadPageProps) {
     messages,
     opening,
     ask,
+    excerpt,
+    more,
     acts = [],
     menu,
     foot,
     standing,
     ...drawing
   } = props;
+
+  const colors = useColors();
 
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
@@ -717,6 +728,11 @@ export function ThreadPage(props: ThreadPageProps) {
                 standing={standing}
                 path={pathInHead ? pathTitle : undefined}
               />
+              {excerpt === undefined ? null : (
+                <RNHostView matchContents={{ vertical: true }}>
+                  <View style={styles.excerpt}>{excerpt}</View>
+                </RNHostView>
+              )}
               {(opening ?? []).map((event) => (
                 <EventLine key={event.key} event={event} now={drawing.now} />
               ))}
@@ -733,6 +749,24 @@ export function ThreadPage(props: ThreadPageProps) {
                   ))}
                 </VStack>
               ))}
+              {more === undefined ? null : (
+                <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
+                  <Button
+                    onPress={more.onPress}
+                    modifiers={[buttonStyle("plain"), accessibilityAddTraits(["isLink"])]}
+                  >
+                    <Text
+                      modifiers={[
+                        font({ textStyle: TYPE_ROLE.TIME }),
+                        foregroundStyle(colors.TEXT_MUTED),
+                      ]}
+                    >
+                      {more.words}
+                    </Text>
+                  </Button>
+                  <Spacer />
+                </HStack>
+              )}
               {/* Note that the ask stands where the messages' words do, past the writers' faces, so a notice's Got it and a card line up under what they answer. */}
               {ask === undefined ? null : (
                 <VStack
