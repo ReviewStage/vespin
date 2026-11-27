@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 
 import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
-import { DEFAULT_MANAGER_SORT, MANAGER_SORT } from "@repo/features/workspace-managers-model";
+import {
+  DEFAULT_MANAGER_SORT,
+  MANAGER_SORT,
+  type ManagerSort,
+} from "@repo/features/workspace-managers-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -123,4 +127,35 @@ test("a change made before the account's choices are read writes nothing until t
   await settleQueries();
   expect(written.map(({ value }) => value)).toEqual([MANAGER_SORT.NAME]);
   expect(sort().value).toBe(MANAGER_SORT.NAME);
+});
+
+test("a surface moved to another workspace moves that workspace's kept choice up too", async () => {
+  const written = keepViewChoices();
+
+  const kept = new Map<string, ManagerSort>([
+    ["a", MANAGER_SORT.NAME],
+    ["b", MANAGER_SORT.CREATED],
+  ]);
+
+  function Surface({ workspaceId }: { readonly workspaceId: string }): null {
+    useAccountChoice(VIEW_CHOICE_KEY.MANAGER_SORT, workspaceId, DEFAULT_MANAGER_SORT, false, [
+      kept.get(workspaceId),
+      () => {
+        kept.delete(workspaceId);
+      },
+    ]);
+
+    return null;
+  }
+
+  root = createRoot(document.body.appendChild(document.createElement("div")));
+  act(() => root?.render(withQueryClient(createElement(Surface, { workspaceId: "a" }))));
+  await settleQueries();
+  act(() => root?.render(withQueryClient(createElement(Surface, { workspaceId: "b" }))));
+  await settleQueries();
+
+  expect(written.map(({ workspaceId, value }) => ({ workspaceId, value }))).toEqual([
+    { workspaceId: "a", value: MANAGER_SORT.NAME },
+    { workspaceId: "b", value: MANAGER_SORT.CREATED },
+  ]);
 });

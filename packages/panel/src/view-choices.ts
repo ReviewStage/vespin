@@ -88,12 +88,28 @@ export function useViewChoice<Key extends ViewChoiceKey>(
   };
 }
 
+/** Places a choice is kept in (a workspace, or none for the account's own), by the account they were met under. */
+type Places = Map<string, Set<string | null>>;
+
+/** Whether `places` holds `workspaceId` under `accountId`. */
+function holdsPlace(places: Places, accountId: string, workspaceId: string | null): boolean {
+  return places.get(accountId)?.has(workspaceId) === true;
+}
+
+/** Adds `workspaceId` to `places` under `accountId`. */
+function addPlace(places: Places, accountId: string, workspaceId: string | null): void {
+  const held = places.get(accountId) ?? new Set<string | null>();
+  held.add(workspaceId);
+  places.set(accountId, held);
+}
+
 /**
  * Moves a choice this window kept itself up to the account, once the
  * account's read has answered: kept there where the account keeps none in
  * its place, and let go here through `forget` once the account kept it, or
  * at once where the account already keeps one, since another device made it
- * since. Note that it is tried once a mount, and that a write refused or
+ * since. Note that it is tried once a mount for each account and place, so a
+ * surface that moves to another workspace moves that workspace's choice too, and that a write refused or
  * unanswered leaves the window's copy where it was, since the host takes the
  * write back and nothing else would keep the choice; the next launch tries
  * again.
@@ -110,30 +126,33 @@ export function useKeptMovedUp<Key extends ViewChoiceKey>(
   const { mutateAsync: moveUp } = useMutation(actMutation(ACT_KIND.VIEW_CHOICE_WRITE));
   const { answered, value } = choice;
   const unkept = Option.isNone(value);
-  // Whether this mount sent the move up, and whether it is still on its way.
-  const tried = useRef(false);
-  const moving = useRef(false);
+  // The places this mount sent a move up for, and those whose move is still on its way, each by the account it was sent under.
+  const tried = useRef<Places>(new Map());
+  const moving = useRef<Places>(new Map());
 
   useEffect(() => {
     if (!answered || kept === undefined || workspaceId === undefined || rows === undefined) return;
 
+    if (accountId === undefined) return;
+
     // Note that the account's choice drawn while the move up is on its way is the move's own, so the window's copy waits for its answer.
     if (!unkept) {
-      if (!moving.current) forget();
+      if (!holdsPlace(moving.current, accountId, workspaceId)) forget();
 
       return;
     }
 
-    if (tried.current) return;
-    tried.current = true;
-    moving.current = true;
+    // Note that each place moves up once a mount, so a refused move waits for the next launch rather than being sent again as the read takes it back.
+    if (holdsPlace(tried.current, accountId, workspaceId)) return;
+    addPlace(tried.current, accountId, workspaceId);
+    addPlace(moving.current, accountId, workspaceId);
 
     void moveUp(viewChoiceWrite(rows, key, workspaceId, kept, crypto.randomUUID()))
       .then(forget, () => undefined)
       .finally(() => {
-        moving.current = false;
+        moving.current.get(accountId)?.delete(workspaceId);
       });
-  }, [answered, kept, unkept, key, workspaceId, rows, forget, moveUp]);
+  }, [answered, kept, unkept, key, workspaceId, rows, forget, moveUp, accountId]);
 }
 
 /** What this window kept of a choice in its own storage, waiting to move up to the account, read as the account reads it; and the door that lets it go here (`use-kept.ts`'s `useKeptLeaving`, for one kept whole under a name of its own). */
