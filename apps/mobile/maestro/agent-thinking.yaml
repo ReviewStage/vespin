@@ -43,3 +43,17 @@ env:
     timeout: 5000
 - takeScreenshot: agent-thinking-open
 - takeScreenshot: agent-thinking-cut-open
+# An agent the fixture holds no messages for: its transcript, once read,
+# says it holds none, rather than standing on Reading forever; where the
+# read never lands it still says it is reading.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 00000000-0000-4000-8000-000000000000
+- extendedWaitUntil:
+    visible: "Reading the transcript|No messages yet|The transcript could not be read\\."
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-thinking-empty
