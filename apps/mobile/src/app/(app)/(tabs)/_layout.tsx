@@ -4,6 +4,7 @@ import {
   IOS_TAB,
   iosRouteAgent,
   iosRouteHidesTabs,
+  iosRouteOnTab,
   iosTabOfGroup,
 } from "@repo/features/ios-app-links";
 import {
@@ -135,6 +136,9 @@ function useTabsKept(): readonly string[] {
   return segments;
 }
 
+/** Tasks' list on its own place's stack, `/(tasks)/tasks`. */
+const TASKS_PLACE_ROUTE = iosRouteOnTab(SPLIT_TAB.TASKS, IOS_TAB.TASKS);
+
 /**
  * An iPad's places, with no tab bar: the place its sidebar picked stands
  * alone in the last column of the system's split view at the root
@@ -149,9 +153,9 @@ function PlacesSlot() {
   const router = useRouter();
   const onInbox = iosTabOfGroup(tabGroupOf(segments)) === IOS_TAB.INBOX;
 
-  // Note that the Inbox turned off while it stands gives way to Tasks, as the iPhone's tab bar moves off a tab it hides, since the sidebar no longer offers it; it is heard once a sheet over it, such as Settings, has gone, as the route under the sheet comes back to stand.
+  // Note that the Inbox turned off while it stands gives way to Tasks, as the iPhone's tab bar moves off a tab it hides, since the sidebar no longer offers it. It is heard only while a place's own route is focused, so never under a sheet such as Settings, which a navigation there took away with it (vjinboxoff10743); and Tasks is named by its own group, since every place's group holds a `tasks` route and a bare `/tasks` stood the Inbox's.
   useEffect(() => {
-    if (!inboxShown && onInbox) router.replace(SPLIT_TAB.TASKS);
+    if (!inboxShown && onInbox) router.navigate(TASKS_PLACE_ROUTE);
   }, [inboxShown, onInbox, router]);
 
   return <Slot />;
