@@ -274,12 +274,13 @@ env:
       # Pages row under it on an iPad, which it opened. The swipe must only
       # reveal Stop, a working agent's one act, which a full swipe would
       # run, so Stop is read standing before a tap on the page's plain line,
-      # inside the same list, closes it.
+      # inside the same list, closes it. It keeps Maestro's own duration, as
+      # the resting agent's swipe below does, since a 900 ms swipe on an
+      # agent's row held long enough on the iPhone to lift its preview.
       - swipe:
           from:
             text: "Build teammate invitations"
           direction: LEFT
-          duration: 900
       - waitForAnimationToEnd
       - assertVisible: "Stop"
       - takeScreenshot: task-agent-swipe
