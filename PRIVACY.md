@@ -562,14 +562,17 @@ another device, and deleted when you sign out. Earlier versions of the app
 kept them encrypted in its own files under a key in the Keychain; once the
 tokens moved into the Keychain itself, the app deletes that key.
 
-The Vespin web app (vespin.dev/app) keeps the same copy of your workspaces'
-lists and your Inbox's newest threads in your browser's storage for
-vespin.dev (IndexedDB), one copy for each account you sign in with, so that a
-page load can draw them at once and ask us only for what changed. Your
-browser keeps it as it keeps any site's data, and it is not encrypted under a
-key of Vespin's own. The web app deletes it when you sign out. Changes you
-made offline and messages to agents that were not delivered are held only in
-the open tab, and are lost when it closes.
+While you are signed in, the Vespin web app (vespin.dev/app) keeps a copy of
+your workspaces' lists and **your Inbox's open threads and those settled in
+the last 30 days**: each thread's title, who it waits on, and its messages'
+words and the names of their files (never a file itself), as the Inbox last
+showed them, so a page load can draw them at once and ask us only for what
+changed. It is in your browser's storage for vespin.dev (IndexedDB), kept for
+each account you sign in with. Your browser keeps it as it keeps any site's
+data, and it is not encrypted under a key of Vespin's own. The web app
+deletes it when you sign out. Changes you made offline and messages to agents
+that were not delivered are held only in the open tab, and are lost when it
+closes.
 
 When you close New task in the Vespin iOS app and choose Save draft, the
 app keeps that draft's words on your iPhone or iPad, one draft for each
