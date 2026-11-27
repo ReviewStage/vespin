@@ -1,0 +1,15 @@
+pinned to df4203c3bd
+== bundle PJjr10919 base df4203c3bd
+  built df4203c3bd base app V10919.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+iphone-light-person: fails STALL (watchdog; steps 29, shots 2) 
+iphone-light-keep: fails STALL (watchdog; steps 0, shots 0) 
+iphone-dark-person: fails 1 shots 1 Assert that "Recorded the invite flow" is visible... FAILED
+iphone-dark-keep: fails STALL (watchdog; steps 0, shots 0) 
+ipad27-light-person: fails 1 shots 5 Assert that ".*walked the invite flow.*" is visible... FAILED
+ipad27-light-keep: fails 1 shots 4 Assert that "Save Image" is visible... FAILED
+ipad27-dark-person: fails 1 shots 5 Assert that ".*walked the invite flow.*" is visible... FAILED
+ipad27-dark-keep: fails 1 shots 4 Assert that "Save Image" is visible... FAILED
