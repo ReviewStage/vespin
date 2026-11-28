@@ -1,4 +1,4 @@
-# automations.yaml -- the Automations tab on the Inbox fixture: the workspace's automations, the workspace's first and Ada's own after, each with what fires it and how its newest run went; View options' Order by; a row's long press with Run now, its switch, Copy link and Delete; an automation's page with its switch, Run now, what fires it and its next runs, its prompt, where it runs, who it is for, its runs, and its ⋯; a run opening the agent it started on the tab, Back returning to the page; and the workspace's runs, narrowed to the ones that failed.
+# automations.yaml -- the Automations tab on the Inbox fixture: the workspace's automations, the workspace's first and Ada's own after, each with what fires it and how its newest run went; View options' Order by; a row's long press with Run now, its switch, Copy link and Delete; Finished folded at first and opened; an automation's page with its switch, Run now, what fires it and its next runs, its prompt, where it runs, who it is for, its runs, and its ⋯; a run opening the agent it started on the tab, Back returning to the page; and the workspace's runs, narrowed to the ones that failed.
 #
 # Launched on the host's Inbox fixture, whose workspace holds three
 # automations and their runs (`@repo/host/fixture-inbox`'s
@@ -60,6 +60,23 @@ env:
     env:
       QUESTION: "Delete Fix failing checks?"
 - assertVisible: "Fix failing checks"
+# Finished stands folded at first, and a press on its header opens it, its
+# row showing and its chevron turning down, as an opened group's points.
+# Note that the header's title is pressed, as a child of the header, as
+# `tasks.yaml` presses a group's, and that the step stands after the row's
+# menu, since the longer list scrolled that row under the pinned header
+# before its long press. Note too that the shot waits for the row and only
+# then for the list to settle, because the chevron's crossfade runs on after
+# the row shows, and a shot after Maestro's animation wait alone caught it
+# still pointing folded, or halfway (#11285's stills, vjzchev11285).
+- tapOn:
+    text: "Finished"
+    childOf: "Finished, [0-9]+"
+- extendedWaitUntil:
+    visible: "Fix ledger rounding before the close"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: automations-finished-open
 # An automation's page: its switch and Run now, what fires it and when next, its prompt, where it runs, who it is for, and its runs.
 - tapOn: "Weekly digest"
 - waitForAnimationToEnd
