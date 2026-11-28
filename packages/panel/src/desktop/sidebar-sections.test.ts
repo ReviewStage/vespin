@@ -913,12 +913,11 @@ test("a section's Mark all as read stands while a task in it is unread, and asks
   assert.deepEqual(marks, [`read:${INVITES.id}`]);
 });
 
-test("a section without an icon draws its title behind the fold's chevron alone, and one with an icon behind its icon", async () => {
+test("a section without an icon draws the section's glyph, and one with an icon draws its icon", async () => {
   const sidebar = await mountSidebar([], ICONLESS);
 
   const toggle = sectionHeader(sidebar, "Someday").querySelector("button[aria-expanded]");
-  assert.ok(toggle?.querySelector(".ui-group-header-icon") === null, "no glyph is drawn");
-  assert.ok(toggle?.querySelector(".ui-group-header-chevron"), "the chevron stands at rest");
+  assert.ok(toggle?.querySelector(".ui-group-header-icon svg"), "the section's glyph is drawn");
   const launch = sectionHeader(sidebar, "Launch").querySelector(".ui-group-header-icon");
   assert.equal(launch?.textContent, "🚀");
 });

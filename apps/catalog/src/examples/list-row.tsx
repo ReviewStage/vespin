@@ -404,6 +404,28 @@ function ListRows(): React.JSX.Element {
         </div>
       </CatalogSection>
       <CatalogSection
+        id="list-row-current-fill"
+        title="A sidebar's dense rows, the open one filled solid in the selected fill"
+      >
+        <div className="catalog-narrow">
+          <List label="Tasks" density={LIST_DENSITY.DENSE}>
+            {["Weekly digest email", "Billing export", "Usage alerts"].map((title, index) => (
+              <ListRow
+                key={title}
+                leading={<GLYPH.PULL_REQUEST_CHAPTERS />}
+                title={title}
+                meta="5h"
+                density={LIST_DENSITY.DENSE}
+                ink={LIST_ROW_INK.SIDEBAR}
+                current={index === 1 ? LIST_ROW_CURRENT.PAGE : undefined}
+                currentLook={LIST_ROW_CURRENT_LOOK.FILL}
+                onPress={() => undefined}
+              />
+            ))}
+          </List>
+        </div>
+      </CatalogSection>
+      <CatalogSection
         id="list-row-meta-last"
         title="A rail's rows: titles on up to two lines, their counts on the last line, the open row tinted"
       >

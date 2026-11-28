@@ -138,10 +138,12 @@ export type { ListSelection } from "../selection/list-selection.js";
  *
  * The open row is current in one of two ways (`LIST_ROW_CURRENT`): the page
  * shown beside the list, as an Inbox's item is, or the one item chosen in
- * its set. It is lifted as a sheet on the ground, as a sidebar's is, or, in a
- * list that stands beside the page it opens (`LIST_ROW_CURRENT_LOOK.TINT`),
- * filled with the accent's tint, which reads in either theme and stands apart
- * from the neutral fill of a row under the pointer. An unread row's title stands in the heavier weight, and its
+ * its set. It is lifted as a sheet on the ground; or, in a list that stands
+ * beside the page it opens (`LIST_ROW_CURRENT_LOOK.TINT`), filled with the
+ * accent's tint, which reads in either theme and stands apart from the
+ * neutral fill of a row under the pointer; or, in the sidebar
+ * (`LIST_ROW_CURRENT_LOOK.FILL`), filled solid in the selected fill on its
+ * own box, as the rail's tiles are. An unread row's title stands in the heavier weight, and its
  * description in the body's ink, until it is read, as a mail app's unread
  * thread does. A row whose thing is done with stands back (`muted`), as a
  * done to-do grays: its words in the palette's quieter inks, still legible,
@@ -235,10 +237,12 @@ export const LIST_ROW_CURRENT = {
 
 export type ListRowCurrent = (typeof LIST_ROW_CURRENT)[keyof typeof LIST_ROW_CURRENT];
 
-/** How the open row is lifted from the rest: a sheet over the ground, as a sidebar's is, or the accent's tint, as a list beside its page reads it. */
+/** How the open row is lifted from the rest: a sheet over the ground, the accent's tint, as a list beside its page reads it, or the selected fill, as the sidebar's rows read it. */
 export const LIST_ROW_CURRENT_LOOK = {
   SHEET: "sheet",
   TINT: "tint",
+  /** Filled solid in the selected fill on the row's own box, as a sidebar's chunky rows and its rail's tiles are. */
+  FILL: "fill",
 } as const;
 
 export type ListRowCurrentLook = (typeof LIST_ROW_CURRENT_LOOK)[keyof typeof LIST_ROW_CURRENT_LOOK];

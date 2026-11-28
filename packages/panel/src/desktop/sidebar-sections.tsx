@@ -1022,7 +1022,8 @@ function SidebarSection({
     },
   });
 
-  const glyph = sectionGlyph(section.icon);
+  // A section with no icon of its own wears the section's glyph, so every head in the column stands on the same glyph's column.
+  const glyph = sectionGlyph(section.icon) ?? <GLYPH.SECTION />;
   const { edits } = context;
   const root = useRef<HTMLDivElement | null>(null);
   // Note that a head named in place by a key takes the focus back once it is drawn again.
