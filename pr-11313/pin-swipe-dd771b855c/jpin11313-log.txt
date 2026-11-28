@@ -1,0 +1,20 @@
+pinned to dd771b855c
+== bundle PJjpin11313 base dd771b855c
+  built dd771b855c base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+after/managers: fails 2 shots 6   Assert that "No Managers yet." is visible... FAILED
+  after/managers shots: managers-list.png managers-pinned-order.png managers-placed.png managers-swipe-pin.png 
+after: fails 2 shots 6   Tap on "Unpin"... FAILED
+  after shots: after.mp4 pin-1-tasks.png pin-2-swipe.png pin-3-pinned.png pin-4-swipe-unpin.png 
+== bundle PJpin11313b base 428b2d80d4
+  built 428b2d80d4 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== before bundle 428b2d80d4 over Vmain-current.app
+before: fails 0 shots 2 
+  before shots: before.mp4 pin-1-tasks.png pin-2-swipe.png 
