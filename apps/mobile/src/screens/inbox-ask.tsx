@@ -11,7 +11,7 @@ import {
   withStep,
   withValue,
 } from "@repo/features/inbox-draft";
-import { INBOX_READ_MARK, isUnread, knownAsk, RECOMMENDED } from "@repo/features/inbox-list-model";
+import { INBOX_READ_MARK, isUnread, knownAsk } from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_FIELD,
@@ -316,7 +316,6 @@ function AskControls({
   return (
     <AnswerFields
       fields={fields}
-      recommendedWord={RECOMMENDED.toLowerCase()}
       onChange={(label, typed) => {
         const kind = fields.find((field) => field.label === label)?.kind ?? ANSWER_FIELD.TEXT;
         onDraft(withValue(draft, label, typedValue(kind, typed)));
