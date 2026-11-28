@@ -21,14 +21,19 @@ export interface ShareDraftOpened {
   readonly pictures: readonly string[] | undefined;
   /** The repository New task starts in, as the sheet picked it. */
   readonly repository: string | undefined;
+  /** The key each place's write went under in the share sheet, by its id, which a send here reuses, so a write that landed unanswered is never made twice. */
+  readonly keys: ReadonlyMap<string, string>;
+  /** The id New task's task was minted under in the share sheet, where it sent New task. */
+  readonly taskId: string | undefined;
 }
 
 /**
  * The share page on a kept draft: the places it ticked ticked again, its
- * words and pictures in the field. Each place is sent under a key minted
- * once for the page, and New task's task id too, so Send pressed again after
- * a write that did not go sends the rest and never a second of one that
- * did. Every write gone, the sheet closes, where it still stands in front;
+ * words and pictures in the field. Each place is sent under the key the
+ * share sheet sent it under, or one minted once for the page where the sheet
+ * sent it none, and New task's task id too, so Send pressed again, here or
+ * after the sheet's own send got no answer, sends the rest and never a second
+ * of one that did. Every write gone, the sheet closes, where it still stands in front;
  * otherwise the page says how many did not go and keeps the words.
  */
 export function ShareDraftScreen({ draft }: { readonly draft: ShareDraftOpened }) {
@@ -41,8 +46,8 @@ export function ShareDraftScreen({ draft }: { readonly draft: ShareDraftOpened }
   const [sending, setSending] = useState(false);
   const pictures = useAttachedPictures(setNote, draft.pictures);
   const field = usePillField(words, setWords, pictures);
-  const keys = useRef(new Map<string, string>());
-  const [taskId] = useState(randomUUID);
+  const keys = useRef(new Map(draft.keys));
+  const [taskId] = useState(() => draft.taskId ?? randomUUID());
 
   const keyOf = (to: string) => {
     const kept = keys.current.get(to) ?? randomUUID();

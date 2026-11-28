@@ -1,5 +1,6 @@
 // app.config.ts -- the iOS app's whole native configuration: Expo generates `ios/` from it on every build, and none is committed.
 
+import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -377,6 +378,7 @@ const SHARE_EXTENSION: AppExtension = {
     { FROM: "share-extension", NAME: "AppGroupFiles.swift" },
     { FROM: "share-extension", NAME: "ShareNotice.swift" },
     { FROM: "share-extension", NAME: "ShareGate.swift" },
+    { FROM: "share-extension", NAME: "ShareDependencyProvider.m" },
     { FROM: "modules/share-token/ios", NAME: "ShareToken.swift" },
   ],
   EXTENSION_POINT: "com.apple.share-services",
@@ -676,7 +678,12 @@ const writeSymbolSet = (catalog: string, name: string, svg: string) => {
 // principal class and attributes, the app's version and build, which App
 // Store Connect refuses an extension to differ from, the App Group where it
 // shares it, and its own keys over the rest.
-const extensionPlist = (extension: AppExtension, version: string, build: string) =>
+const extensionPlist = (
+  extension: AppExtension,
+  version: string,
+  build: string,
+  fabricComponents: Readonly<Record<string, string>> | undefined,
+) =>
   plist.build({
     CFBundleDevelopmentRegion: "$(DEVELOPMENT_LANGUAGE)",
     CFBundleDisplayName: extension.TARGET,
@@ -699,8 +706,78 @@ const extensionPlist = (extension: AppExtension, version: string, build: string)
     ...(extension.ENTITLEMENTS?.[APP_GROUPS_ENTITLEMENT] === undefined
       ? undefined
       : { [APP_GROUP_PLIST_KEY]: APP_GROUP }),
+    ...(fabricComponents === undefined
+      ? undefined
+      : { [FABRIC_COMPONENTS_PLIST_KEY]: fabricComponents }),
     ...extension.INFO,
   });
+
+// The Info.plist key the share extension reads the Fabric components it
+// links from (`share-extension/ShareDependencyProvider.m`).
+const FABRIC_COMPONENTS_PLIST_KEY = "VespinFabricComponents";
+
+/** What React Native's autolinking says of a community module: its folder, whose package.json holds its codegen config. */
+type LinkedModule = { readonly root: string };
+
+/** A community module's codegen config, as far as its components go. */
+type CodegenConfig = {
+  readonly type?: string;
+  readonly ios?: { readonly componentProvider?: Readonly<Record<string, string>> };
+};
+
+// The Fabric components the community modules an extension links draw, by
+// component name with its view's class, as each module's own codegen config
+// names them (`codegenConfig.ios.componentProvider`), found where React
+// Native's autolinking finds the module for the Podfile. Note that a module
+// that draws components but names none there would leave its views
+// unregistered in the extension, so the prebuild refuses it.
+const linkedFabricComponents = (
+  projectRoot: string,
+  modules: readonly string[],
+): Readonly<Record<string, string>> => {
+  const config = execFileSync(
+    "node",
+    [
+      "--no-warnings",
+      "--eval",
+      "require('expo/bin/autolinking')",
+      "expo-modules-autolinking",
+      "react-native-config",
+      "--json",
+      "--platform",
+      "ios",
+    ],
+    { cwd: projectRoot, encoding: "utf8" },
+  );
+
+  // SAFETY: React Native's autolinking writes its config as JSON whose dependencies are keyed by package name.
+  const linked = (JSON.parse(config) as { dependencies: Record<string, LinkedModule | undefined> })
+    .dependencies;
+
+  return Object.assign(
+    {},
+    ...modules.map((name) => {
+      const root = linked[name]?.root;
+
+      if (root === undefined) throw new Error(`${name} is not linked for the extension.`);
+
+      // SAFETY: a package.json is JSON, and only its codegen config is read.
+      const codegen = (
+        JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+          codegenConfig?: CodegenConfig;
+        }
+      ).codegenConfig;
+
+      const components = codegen?.ios?.componentProvider;
+      const draws = codegen?.type === "all" || codegen?.type === "components";
+
+      if (draws && components === undefined)
+        throw new Error(`${name} draws components but names none for the extension.`);
+
+      return components ?? {};
+    }),
+  );
+};
 
 // The build phase that bundles an extension's JavaScript into it, named as
 // the app's own is.
@@ -856,7 +933,14 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         copyFileSync(join(projectRoot, file.FROM, file.NAME), join(folder, copiedName(file)));
       writeFileSync(
         join(folder, extensionPlistName(extension)),
-        extensionPlist(extension, modConfig.version ?? "1.0", modConfig.ios?.buildNumber ?? "1"),
+        extensionPlist(
+          extension,
+          modConfig.version ?? "1.0",
+          modConfig.ios?.buildNumber ?? "1",
+          extension.REACT_NATIVE === undefined
+            ? undefined
+            : linkedFabricComponents(projectRoot, extension.REACT_NATIVE.COMMUNITY_MODULES),
+        ),
       );
 
       if (extension.ENTITLEMENTS !== undefined)
@@ -960,10 +1044,10 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: '"$(inherited) APP_EXTENSION"',
         SWIFT_VERSION: EXTENSION_SWIFT_VERSION,
         TARGETED_DEVICE_FAMILY: '"1,2"',
-        // Note that the bundle phase reads the app's JavaScript and node_modules, which a sandboxed script may not.
+        // Note that the bundle phase reads the app's JavaScript and node_modules, which a sandboxed script may not, and the dependency provider's Objective-C is written for ARC.
         ...(extension.REACT_NATIVE === undefined
           ? undefined
-          : { ENABLE_USER_SCRIPT_SANDBOXING: "NO" }),
+          : { ENABLE_USER_SCRIPT_SANDBOXING: "NO", CLANG_ENABLE_OBJC_ARC: "YES" }),
         ...(entitlements.length === 0
           ? undefined
           : { CODE_SIGN_ENTITLEMENTS: `${extension.TARGET}/${entitlements[0]}` }),

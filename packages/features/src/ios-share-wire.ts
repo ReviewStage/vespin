@@ -163,6 +163,14 @@ const shareDraftSchema = EffectSchema.Struct({
       EffectSchema.isMaxLength(SHARE_DRAFT_MAX_DESTINATIONS),
     ),
   ),
+  /** The key each place's write went under in the share sheet, by the place's id, so the app sends a write that may have landed again under the same key, never as a second; none for a draft kept before the sheet sent. */
+  keys: EffectSchema.optionalKey(
+    EffectSchema.Record(EffectSchema.String, EffectSchema.String).check(
+      EffectSchema.makeFilter((keys) => Object.keys(keys).length <= SHARE_DRAFT_MAX_DESTINATIONS),
+    ),
+  ),
+  /** The id New task's task was minted under in the share sheet, so a task it may have made is never made twice. */
+  taskId: EffectSchema.optionalKey(EffectSchema.String),
   keptAt: EffectSchema.Number,
 });
 

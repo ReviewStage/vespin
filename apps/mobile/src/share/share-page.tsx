@@ -173,7 +173,7 @@ export interface SharePageProps {
   readonly holdsPictures: boolean;
   /** The places ticked as the page opens, such as a kept draft's, by their ids; none ticked where none is given. */
   readonly initialTicked?: readonly string[] | undefined;
-  /** Whether Send is held whatever is ticked, as while a send is out, or once the share sheet kept the share for the app. */
+  /** Whether Send is held and the field read-only whatever is ticked, as while a send is out, so nothing typed meanwhile is lost to it, or once the share sheet kept the share for the app. */
   readonly held?: boolean | undefined;
   /** What a send that did not go said, standing over the field; none while nothing did. */
   readonly note?: string | undefined;
@@ -223,6 +223,7 @@ export function SharePage(props: SharePageProps) {
             head={note === undefined ? undefined : <AskNote words={note} />}
             sendable={!held && holdsPictures}
             sendHeld={held}
+            editable={props.held !== true}
             onSend={(sent) => onSend(chosen, sent)}
             tools={
               <ToChip

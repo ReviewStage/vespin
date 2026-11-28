@@ -7,6 +7,7 @@ import { AGENT_STATUS } from "./agent-wire.js";
 import { CLIENT_PLATFORM } from "./client-identity.js";
 import { inboxPushOfRequest, inboxPushResponseOf } from "./inbox-push-wire.js";
 import {
+  keptShare,
   type ShareStartedNotice,
   sendShare,
   sharedField,
@@ -100,6 +101,22 @@ test("what was shared lands in the field: its words, the link as a pill unless t
       pictures: [],
     }).words,
   ).toBe("See https://example.com ");
+});
+
+test("a share kept after a picture was taken off names the rest as the app will reopen them, each marker still on its picture", () => {
+  const pictures = [
+    { name: "Picture 1", file: "file:///tmp/a.jpg" },
+    { name: "Picture 2", file: "file:///tmp/b.jpg" },
+    { name: "Picture 3", file: "file:///tmp/c.jpg" },
+  ];
+
+  expect(keptShare("Compare [Picture 2] with [Picture 3] ", pictures)).toEqual({
+    words: "Compare [Picture 1] with [Picture 2] ",
+    pictures: [
+      { name: "Picture 1", file: "file:///tmp/b.jpg" },
+      { name: "Picture 2", file: "file:///tmp/c.jpg" },
+    ],
+  });
 });
 
 it.effect(

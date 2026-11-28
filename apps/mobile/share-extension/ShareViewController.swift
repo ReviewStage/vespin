@@ -75,7 +75,9 @@ final class ShareViewController: UIViewController, ShareExtensionHost, UISearchR
   /// React Native's page in a navigation controller of its own, under the system's bar with its search field and close button.
   private func standPage() {
     let delegate = ShareReactDelegate()
-    delegate.dependencyProvider = RCTAppDependencyProvider()
+    // Note that the extension's own provider stands in for the app's generated one, whose components name libraries the extension never links (`ShareDependencyProvider.m`).
+    let provider = (NSClassFromString("ShareDependencyProvider") as? NSObject.Type)?.init()
+    delegate.dependencyProvider = (provider as? RCTAppDependencyProvider) ?? RCTAppDependencyProvider()
     let factory = ExpoReactNativeFactory(delegate: delegate)
     factoryDelegate = delegate
     self.factory = factory

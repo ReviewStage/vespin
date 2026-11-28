@@ -18,15 +18,16 @@
 
 import { AGENT_ATTACHMENT_TYPE, type AgentAttachment } from "@repo/features/agent-wire";
 import { CLIENT_PLATFORM } from "@repo/features/client-identity";
-import { writtenMarkers } from "@repo/features/file-marker";
 import {
+  keptShare,
   SHARE_EXTENSION_WORDS,
   type SharedField,
   type SharedPicture,
   sharedField,
+  sharedPicturesIn,
   shareStartedNotice,
 } from "@repo/features/ios-share-extension";
-import { SHARE_PAGE_WORDS } from "@repo/features/ios-share-page-model";
+import { SHARE_NEW_TASK_ID, SHARE_PAGE_WORDS } from "@repo/features/ios-share-page-model";
 import { shareSendsOf } from "@repo/features/ios-share-send";
 import {
   SHARE_DRAFT_PICTURE_FILES,
@@ -65,13 +66,6 @@ function ExtensionBar({ onSearch }: SharePageBarProps) {
   }, [onSearch]);
 
   return null;
-}
-
-/** The pictures whose markers the words still hold, in order, as a pill taken out of the words takes its picture off. */
-function picturesIn(words: string, pictures: readonly SharedPicture[]): readonly SharedPicture[] {
-  const named = new Set(writtenMarkers(words).map((marker) => marker.name));
-
-  return pictures.filter(({ name }) => named.has(name));
 }
 
 /** `pictures` read as the attachments they send, or none where one could not be read. */
@@ -172,7 +166,7 @@ export function ShareExtensionPage() {
   // Note that the field keeps its words while the writes are out, so a send that did not go leaves them as they were.
   const send = async (to: readonly string[], sent: string) => {
     if (snapshot === undefined) return;
-    const pictures = picturesIn(sent, shared.pictures);
+    const pictures = sharedPicturesIn(sent, shared.pictures);
     const attachments = await attachmentsOf(pictures);
 
     if (attachments === undefined) {
@@ -212,21 +206,26 @@ export function ShareExtensionPage() {
       return;
     }
 
+    // Note that the draft carries each place's key, and New task's id, so the app's send of a write that landed unanswered here is the same write, never a second.
+    const share = keptShare(sent, shared.pictures);
+
     const draft = shareDraftJson({
       accountId: snapshot.accountId,
-      prompt: sent,
-      ...(pictures.length === 0
+      prompt: share.words,
+      ...(share.pictures.length === 0
         ? undefined
-        : { pictures: SHARE_DRAFT_PICTURE_FILES.slice(0, pictures.length) }),
+        : { pictures: SHARE_DRAFT_PICTURE_FILES.slice(0, share.pictures.length) }),
       ...(place.workspaceId === "" ? undefined : { workspaceId: place.workspaceId }),
       ...(place.repository === undefined ? undefined : { repository: place.repository }),
       destinations: failed,
+      keys: Object.fromEntries(failed.map((each) => [each, keyOf(each)])),
+      ...(failed.includes(SHARE_NEW_TASK_ID) ? { taskId } : undefined),
       keptAt: Date.now(),
     });
 
     const kept = await shareExtensionModule.keepDraft(
       draft,
-      pictures.map(({ file }) => file),
+      share.pictures.map(({ file }) => file),
     );
 
     setNote(kept ? SHARE_EXTENSION_WORDS.kept(failed.length) : SHARE_EXTENSION_WORDS.NOT_KEPT);

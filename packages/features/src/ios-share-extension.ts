@@ -28,7 +28,7 @@ import * as HttpClient from "effect/http/HttpClient";
 import { fixedBearer } from "./account-call.js";
 import { HostedAgentClient } from "./agent-client.js";
 import { type ClientIdentity, clientNamedOnService } from "./client-identity.js";
-import { fileMarker, pictureName } from "./file-marker.js";
+import { fileMarker, fileMarkers, pictureName } from "./file-marker.js";
 import { PUSH_KIND } from "./inbox-push-wire.js";
 import { SHARE_SEND_KIND, type ShareSend, type ShareSendTo } from "./ios-share-send.js";
 import { mentionMarkdownLink } from "./link-grammar.js";
@@ -89,6 +89,43 @@ export function sharedField(shared: SharedRead): SharedField {
   ].join("\n\n");
 
   return { words: words === "" ? "" : `${words} `, pictures };
+}
+
+/** The pictures whose markers `words` still hold, in order, as taking a pill out of the words takes its picture off. */
+export function sharedPicturesIn(
+  words: string,
+  pictures: readonly SharedPicture[],
+): readonly SharedPicture[] {
+  const named = new Set(fileMarkers(words).map((marker) => marker.name));
+
+  return pictures.filter(({ name }) => named.has(name));
+}
+
+/**
+ * A share as it is kept for the app: its words, and the pictures they still
+ * name, in order. Note that the app names a draft's pictures "Picture 1" and
+ * on in the order they were kept, so a picture taken off before the share
+ * was kept leaves the rest renamed to match, their markers in the words
+ * rewritten with them, and each marker still names the picture it named.
+ */
+export function keptShare(words: string, pictures: readonly SharedPicture[]): SharedField {
+  const kept = sharedPicturesIn(words, pictures);
+  const renamed = new Map(kept.map(({ name }, index) => [name, pictureName(index + 1)]));
+  let prompt = "";
+  let at = 0;
+
+  for (const marker of fileMarkers(words)) {
+    const name = renamed.get(marker.name);
+
+    if (name === undefined) continue;
+    prompt += `${words.slice(at, marker.start)}${fileMarker(name)}`;
+    at = marker.end;
+  }
+
+  return {
+    words: `${prompt}${words.slice(at)}`,
+    pictures: kept.map(({ name, file }) => ({ name: renamed.get(name) ?? name, file })),
+  };
 }
 
 /** Where the extension's calls go and who they say they come from. */
