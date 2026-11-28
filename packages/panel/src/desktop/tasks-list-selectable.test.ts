@@ -126,6 +126,7 @@ async function mount() {
     return createElement(TasksPage, {
       tasks: { ...control, onSelect: (taskId: string) => opened.push(taskId) },
       room: SHELL_ROOM.WIDE,
+      staged: false,
     });
   }
 

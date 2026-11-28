@@ -14,22 +14,22 @@
  * asked on (`packages/panel/AGENTS.md`).
  */
 
+import type { TasksPageView } from "@repo/features/tasks-page-model";
 import type { VirtualRowMeasurements } from "@repo/ui/virtual-rows";
 import { Store } from "@tanstack/react-store";
 import { type FindStore, NO_FIND } from "../find-in-tab.js";
-import type { TasksView } from "./tasks-page.js";
 import type { ChosenTasksStore } from "./tasks-selection.js";
 
 /** What one workspace's Tasks page holds across its visits. */
 export class TasksPageHeld {
-  readonly #chosen = new Map<TasksView, ChosenTasksStore>();
-  readonly #measured = new Map<TasksView, Map<string, VirtualRowMeasurements>>();
+  readonly #chosen = new Map<TasksPageView, ChosenTasksStore>();
+  readonly #measured = new Map<TasksPageView, Map<string, VirtualRowMeasurements>>();
   /** The column a narrow room's Columns view showed; none before one is chosen. */
   readonly column = new Store<string | undefined>(undefined);
   readonly find: FindStore = new Store(NO_FIND);
 
   /** What each run of `view`'s rows measured, by the run's own key, a group's or a column's, which it is drawn again by. */
-  measuredIn(view: TasksView): Map<string, VirtualRowMeasurements> {
+  measuredIn(view: TasksPageView): Map<string, VirtualRowMeasurements> {
     const measured = this.#measured.get(view) ?? new Map<string, VirtualRowMeasurements>();
     this.#measured.set(view, measured);
 
@@ -37,7 +37,7 @@ export class TasksPageHeld {
   }
 
   /** The tasks chosen in `view`, which keeps a choice of its own. */
-  chosenIn(view: TasksView): ChosenTasksStore {
+  chosenIn(view: TasksPageView): ChosenTasksStore {
     const chosen = this.#chosen.get(view) ?? new Store<ReadonlySet<string>>(new Set<string>());
     this.#chosen.set(view, chosen);
 
