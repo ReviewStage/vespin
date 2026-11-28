@@ -22,7 +22,11 @@
  * neither a frame, an address, nor a title is kept past the view, traced, or
  * counted (root `AGENTS.md`'s cloud browser line). Input is sent only while
  * the member drives the tab; a step from the tab's bar is sent whoever
- * drives it, for the relay to take a free tab over first or refuse.
+ * drives it, for the relay to take a free tab over first or refuse. While
+ * the member picks elements to note, the pointer's moves and a press are
+ * sent whoever drives it, and the element under the pointer and the one
+ * picked are handed to the pane as they come, kept here no more than a
+ * frame is.
  */
 
 import type { BrowserLiveTarget } from "@repo/features/browser-live-acts";
@@ -32,9 +36,11 @@ import {
   BROWSER_LIVE_CLOSE_REASON,
   BROWSER_LIVE_REFUSAL,
   BROWSER_LIVE_SERVER,
+  type BrowserLiveBox,
   type BrowserLiveClientMessage,
   type BrowserLiveCloseReason,
   type BrowserLiveHistory,
+  type BrowserLivePickedElement,
   type BrowserLiveServerMessage,
   browserLiveServerMessageSchema,
 } from "@repo/features/browser-live-wire";
@@ -155,6 +161,22 @@ export interface CloudBrowserLive {
   step(step: BrowserLiveHistory): void;
   /** Sends a mouse, wheel, key, or text message, only while the member drives the tab. */
   input(message: InputMessage): void;
+  /** Asks which element stands at a point in the pane's pixels, as the pointer moves while picking; `onInspected` hears the answer. */
+  inspect(point: CloudBrowserPoint): void;
+  /** Picks the element at a point in the pane's pixels for a note; `onPicked` hears it. */
+  pick(point: CloudBrowserPoint): void;
+}
+
+/** A point in the pane's own pixels. */
+export interface CloudBrowserPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** The element under the pointer while picking: its box in the pane's pixels, and a label naming it. */
+export interface CloudBrowserInspected {
+  readonly box: BrowserLiveBox;
+  readonly label: string;
 }
 
 /** The messages that drive the page, which only the member driving the tab sends. */
@@ -211,15 +233,20 @@ function serverMessage(text: string): BrowserLiveServerMessage | undefined {
 
 /**
  * One tab's live view over the shell's door. `viewport` is the size the pane
- * draws the page at now, none before it is laid out; `onFrame` draws a frame.
+ * draws the page at now, none before it is laid out; `onFrame` draws a frame;
+ * `onInspected` hears the element under the pointer while picking, none where
+ * none stands there, and `onPicked` the element picked, none where it could
+ * not be read.
  */
 export function cloudBrowserLive(input: {
   readonly open: OpenBrowserLive;
   readonly target: BrowserLiveTarget;
   readonly viewport: () => CloudBrowserViewport | undefined;
   readonly onFrame: (frame: CloudBrowserFrame) => void;
+  readonly onInspected: (inspected: CloudBrowserInspected | undefined) => void;
+  readonly onPicked: (element: BrowserLivePickedElement | undefined) => void;
 }): CloudBrowserLive {
-  const { open, target, viewport, onFrame } = input;
+  const { open, target, viewport, onFrame, onInspected, onPicked } = input;
   const socket = MutableRef.make<BrowserLiveSocket | undefined>(undefined);
   const latest = MutableRef.make<CloudBrowserView>(OPENING_VIEW);
 
@@ -283,9 +310,15 @@ export function cloudBrowserLive(input: {
             return message.reason === BROWSER_LIVE_REFUSAL.HELD
               ? set((view) => ({ ...view, stepRefused: true }))
               : Effect.void;
-          case BROWSER_LIVE_SERVER.CLOSED:
           case BROWSER_LIVE_SERVER.INSPECTED:
+            return Effect.sync(() =>
+              onInspected(
+                message.box === null ? undefined : { box: message.box, label: message.label },
+              ),
+            );
           case BROWSER_LIVE_SERVER.PICKED:
+            return Effect.sync(() => onPicked(message.element ?? undefined));
+          case BROWSER_LIVE_SERVER.CLOSED:
             return Effect.void;
         }
       };
@@ -412,5 +445,7 @@ export function cloudBrowserLive(input: {
     input: (message) => {
       if (MutableRef.get(latest).driver?.yours === true) send(message);
     },
+    inspect: (point) => send({ type: BROWSER_LIVE_CLIENT.INSPECT, x: point.x, y: point.y }),
+    pick: (point) => send({ type: BROWSER_LIVE_CLIENT.PICK, x: point.x, y: point.y }),
   };
 }

@@ -261,13 +261,14 @@ const browserLiveInspectedSchema = EffectSchema.Struct({
 
 /**
  * An element picked: its box in the panel's pixels and in the page's own
- * CSS pixels, the ref the agent's browser tool names it by, a selector
+ * CSS pixels, the tab and the ref the agent's browser tool names it by, a selector
  * that finds it alone in the page, its accessible role and name, its
  * opening tag, its words, and a base64 JPEG of it cropped from the page.
  */
 const browserLivePickedElementSchema = EffectSchema.Struct({
   box: browserLiveBoxSchema,
   pageBox: browserLiveBoxSchema,
+  tab: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_LABEL_CHARS),
   ref: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_LABEL_CHARS),
   selector: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_SELECTOR_CHARS),
   role: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_ROLE_CHARS),

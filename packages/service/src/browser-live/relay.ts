@@ -936,7 +936,12 @@ function answerPicks(view: LiveView, target: PickTarget): Effect.Effect<void> {
       element:
         found === undefined || known === undefined
           ? null
-          : { ...found, pageBox: found.box, box: onPanel(found.box, known.viewport, known.page) },
+          : {
+              ...found,
+              pageBox: found.box,
+              box: onPanel(found.box, known.viewport, known.page),
+              tab: target.frameId,
+            },
     });
   });
 
