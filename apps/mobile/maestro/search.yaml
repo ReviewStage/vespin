@@ -1,4 +1,4 @@
-# search.yaml -- the Search tab: what it says before anything is typed, a place a query finds as a "Go to …" command, the tasks, Inbox items, agents, people, and automations a query finds, each in its own section, a task opened from them, what it says where nothing matches, and the task opened standing under Recent once nothing is typed.
+# search.yaml -- the Search tab: what it says before anything is typed, a place a query finds as a "Go to …" command, the tasks, Inbox items, agents, people, and automations a query finds, each in its own section, an Inbox thread older than the phone holds that the service's search finds, a task opened from them, what it says where nothing matches, and the task opened standing under Recent once nothing is typed.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -71,6 +71,15 @@ env:
 - inputText: "deploy"
 - assertVisible: "Check each deploy"
 - takeScreenshot: search-automations
+# An Inbox thread settled three months back, past every item the phone
+# holds, is found by the service's search of the words once typing pauses
+# (`AGENTS_INBOX_SEARCH`, which the fixture answers), as ⌘K finds it.
+- eraseText
+- inputText: "quarter close"
+- extendedWaitUntil:
+    visible: "Quarter close: why the ledger rounds to even"
+    timeout: 10000
+- takeScreenshot: search-older-found
 - eraseText
 - inputText: "rounding"
 - assertVisible: "Ledger rounding"

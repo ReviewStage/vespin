@@ -49,7 +49,9 @@ import {
   READING_INBOX,
   READING_OLDER_INBOX,
   SEARCH_INBOX,
+  SEARCHING_OLDER_INBOX,
 } from "@repo/features/inbox-list-model";
+import { INBOX_SEARCH_PLACE } from "@repo/features/inbox-service-search";
 import {
   inboxAnsweredAsks,
   inboxAnsweredMarks,
@@ -603,6 +605,7 @@ const InboxRow = memo(InboxRowView);
 function InboxEmpty({
   show,
   search,
+  searching,
   feed,
   read,
   counts,
@@ -614,6 +617,8 @@ function InboxEmpty({
   /** Whom the items listed are addressed to, in whose words the list says it holds none. */
   readonly whose: InboxWhose;
   readonly search: string;
+  /** Whether the service is still asked for the items the search finds past what the phone holds. */
+  readonly searching: boolean;
   readonly feed: InboxFeed;
   readonly read: boolean;
   readonly counts: InboxCounts;
@@ -635,6 +640,10 @@ function InboxEmpty({
   }
 
   if (search.trim() !== "") {
+    // Note that a search that found nothing here says so only once the service's search of its words has answered too, since an older item comes only with it.
+    if (searching)
+      return <EmptyState title={SEARCHING_OLDER_INBOX} symbol={GLYPH.SEARCH} loading />;
+
     return (
       <EmptyState
         title={noResultsForWords(search)}
@@ -1488,6 +1497,8 @@ function useInboxScreen(
     agent,
     // Note that only the Inbox tab's own All reads the account's older items, never an agent's Inbox, whose threads are one agent's.
     readsOlder: agent === undefined,
+    // Note that an agent's Inbox searches only the threads it holds, its one agent's, so only the Inbox tab's own field asks the service for more.
+    searchPlace: agent === undefined ? INBOX_SEARCH_PLACE.INBOX : undefined,
   });
 
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
@@ -1715,6 +1726,7 @@ function InboxStackList({ heading, ...held }: InboxHeld & { readonly heading?: I
                 show={show}
                 whose={whose}
                 search={search}
+                searching={listing.searching}
                 feed={listing.feed}
                 read={listing.read}
                 counts={listing.counts}
@@ -1774,6 +1786,7 @@ function inboxListColumn(
             show={show}
             whose={whose}
             search={search}
+            searching={listing.searching}
             feed={listing.feed}
             read={listing.read}
             counts={listing.counts}

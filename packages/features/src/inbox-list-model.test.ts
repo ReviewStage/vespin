@@ -6,6 +6,7 @@ import {
   agentInboxGroups,
   agentThreadsLine,
   INBOX_MEDIA,
+  inboxKeptSearchWordsOf,
   inboxThreadEventsShown,
   inboxThreadMessages,
   inboxWaitingAt,
@@ -371,5 +372,41 @@ describe("inboxWaitingAt", () => {
 
     expect(due.waiting.get("acme")?.total).toBe(1);
     expect(due.nextReminderDue).toBeUndefined();
+  });
+});
+
+describe("inboxKeptSearchWordsOf", () => {
+  it("reads an item past the feed by its whole thread's words, and a kept row by its title and its kept messages' words", () => {
+    const found: InboxItem = {
+      id: "found",
+      agentId: "agent-1",
+      key: "found",
+      revision: 1,
+      version: INBOX_WIRE_VERSION,
+      title: "Quarter close",
+      needsReply: false,
+      status: INBOX_STATUS.CLOSED,
+      thread: [
+        {
+          id: "message-1",
+          author: INBOX_MESSAGE_AUTHOR.AGENT,
+          text: "The ledger rounds to even.",
+          createdAt: 1_000,
+        },
+      ],
+      postedAt: 1_000,
+      updatedAt: 1_000,
+    };
+
+    const wordsOf = inboxKeptSearchWordsOf(new Map([["kept", ["the invoice rounds up"]]]), (id) =>
+      id === found.id ? found : undefined,
+    );
+
+    // A search only the found thread's message answers still finds it, though the phone keeps none of its messages.
+    expect(wordsOf(inboxRowOf(found))).toEqual(["Quarter close", "The ledger rounds to even."]);
+    expect(wordsOf(posted("kept", "agent-1", INBOX_STATUS.CLOSED, 1, 1))).toEqual([
+      "kept",
+      "the invoice rounds up",
+    ]);
   });
 });

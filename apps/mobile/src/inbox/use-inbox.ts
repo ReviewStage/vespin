@@ -35,6 +35,7 @@ import {
   inboxAtNow,
   inboxCounts,
   inboxGroup,
+  inboxKeptSearchWordsOf,
   inboxList,
   inboxPinnedRuns,
   inboxSearchWordsOf,
@@ -44,6 +45,7 @@ import {
   settledOnRead,
   taskHolder,
 } from "@repo/features/inbox-list-model";
+import { INBOX_SEARCH_PLACE, type InboxSearchPlace } from "@repo/features/inbox-service-search";
 import {
   INBOX_REPLY,
   INBOX_STATUS,
@@ -66,14 +68,16 @@ import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import type { AppInboxItems, AppStateSnapshot } from "@repo/host/app-state";
 import {
   answerKeeper,
   INBOX_FEED,
   type InboxFeed,
   inboxFeedHolds,
   inboxOlderItem,
+  selectInboxBeyondFeed,
   selectInboxFeed,
+  selectInboxHeldBeyondFeed,
   selectInboxHoldings,
   selectInboxOlder,
   selectInboxReader,
@@ -113,6 +117,7 @@ import { useSearchedWords, useThreadMessages } from "./inbox-rows.js";
 import { useInboxShown } from "./inbox-shown.js";
 import { useInboxRunFolds } from "./inbox-view-choices.js";
 import { type InboxOlderPages, useInboxOlderPages } from "./use-inbox-older-pages.js";
+import { useInboxServiceSearch } from "./use-inbox-service-search.js";
 import {
   refusedWords,
   SETTLE,
@@ -142,7 +147,7 @@ const CLOSE_WENT = {
 type UseChosenInboxResult = {
   /** Every holder's items as the list reads them, each as its row, the reader's sends drawn on them. */
   readonly groups: readonly InboxGroup<InboxAnyHolder>[];
-  /** The holders as the reach lists them, the older items All read past the feed beside the feed's, the reader's sends drawn on them; the very `groups` where none stands. Nothing counts them. */
+  /** The holders as the reach lists them, the older items All read past the feed and those `place`'s search found beside the feed's, the reader's sends drawn on them; the very `groups` where none stands. Nothing counts them. */
   readonly listed: readonly InboxGroup<InboxAnyHolder>[];
   /** The same holders' whole items, the reader's sends drawn on them, which a search reads every word of, where the document holds them; none where the phone keeps them on disk. */
   readonly whole: readonly InboxGroup<InboxAnyHolder, InboxItem>[];
@@ -157,9 +162,13 @@ type UseChosenInboxResult = {
  * panel's Inbox lists the chosen workspace's alone, heard anew as another is
  * chosen; every workspace's before the account's workspaces are read. With
  * them, the workspace chosen and how many the account has, which the Inbox
- * widget names (`inbox-widget/`).
+ * widget names (`inbox-widget/`). Where `place` names a search asking the
+ * service, All lists the items it found too.
  */
-export function useChosenInbox(reach: InboxReach = INBOX_ATTENTION): UseChosenInboxResult {
+export function useChosenInbox(
+  reach: InboxReach = INBOX_ATTENTION,
+  place?: InboxSearchPlace | undefined,
+): UseChosenInboxResult {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
 
@@ -167,7 +176,7 @@ export function useChosenInbox(reach: InboxReach = INBOX_ATTENTION): UseChosenIn
     groups: read,
     listed: readListed,
     read: answered,
-  } = useInboxGroupsRead(chosen?.id, reach);
+  } = useInboxGroupsRead(chosen?.id, reach, place);
 
   // Note that the reader's sends are drawn once, over every row listed, the older ones among them, and the rows counted are the same drawn rows but the older ones.
   const listed = useSendsDrawnOnRows(readListed);
@@ -217,6 +226,13 @@ export interface InboxListing {
   readonly wordsOf: (row: InboxRow) => readonly string[];
   /** The paging of the account's older items past the feed, which All's last row tells as it comes and goes; none under any other scope. */
   readonly olderPages: InboxOlderPages | undefined;
+  /** Whether the service is still asked for the items the search finds past what the phone holds, which may add to what it found, so a screen never says it found nothing before the service looked. */
+  readonly searching: boolean;
+}
+
+/** Every item the host holds past the feed, All's older items and each place's found ones, which a thread opened by its id is read from; the older items alone where none stands. */
+function selectInboxHeldPastFeed(state: AppStateSnapshot): AppInboxItems {
+  return selectInboxHeldBeyondFeed(state) ?? selectInboxOlder(state);
 }
 
 /** No run folded, for a listing whose pinned tasks' threads do not stand first. */
@@ -230,9 +246,15 @@ const NO_FOLDS: ReadonlySet<InboxRun> = new Set();
  * shows. Where `pinnedFirst` asks it, as the Inbox tab's list and its steps
  * do, the pinned tasks' threads stand first under Pinned and the rest under
  * Everything else, as the panel's Inbox stands them, and a run the reader
- * folded (`useInboxRunFolds`) draws none of its rows. Note that a reminder is
- * weighed on the clock as the list is drawn, so an item comes back the next
- * time the document moves after it comes due.
+ * folded (`useInboxRunFolds`) draws none of its rows. Where `searchPlace`
+ * names where the search is typed, as the Inbox tab's field and the Search
+ * tab do, its words are asked of the service too once typing pauses
+ * (`use-inbox-service-search.ts`), under All alone, since an item past what
+ * the phone holds is settled long ago and no other scope lists one; the
+ * items it finds are listed beside the rest, never counted, and found by the
+ * listing's own search as every other is. Note that a reminder is weighed
+ * on the clock as the list is drawn, so an item comes back the next time
+ * the document moves after it comes due.
  */
 export function useInboxListing(view: {
   readonly show: InboxShow;
@@ -245,6 +267,8 @@ export function useInboxListing(view: {
   readonly agent?: string | undefined;
   /** Whether the listing reads the account's older items a page at a time under All, as the Inbox tab's own list does; a listing that draws no list of its own, such as an open thread's steps, lists those read already and reads none. */
   readonly readsOlder?: boolean | undefined;
+  /** Where the search is typed, which asks the service for what it finds past what the phone holds; none for a listing whose search is the screen's alone, such as an open thread's steps. Read once, as the listing is first drawn. */
+  readonly searchPlace?: InboxSearchPlace | undefined;
 }): InboxListing {
   // Note that only All lists a settled thread the reader read, so only All reads every item kept; another scope reads the chosen thread beside what asks for attention, since the list keeps it once it is settled and read. An agent's Inbox reads every thread that agent posted, which the scope then narrows as it narrows the whole Inbox.
   const reach = useMemo(
@@ -259,7 +283,17 @@ export function useInboxListing(view: {
     [view.agent, view.show, view.chosen],
   );
 
-  const { groups: reached, listed: reachedListed, whole, read } = useChosenInbox(reach);
+  // Note that the search is asked of the service only under All, which alone lists an item past the feed, and only where it is typed into a place; the items found are listed with the feed's from then on (`inbox-groups.tsx`).
+  const service = useInboxServiceSearch(
+    view.searchPlace ?? INBOX_SEARCH_PLACE.INBOX,
+    view.search,
+    view.searchPlace !== undefined && view.show === INBOX_SHOW.ALL,
+  );
+
+  const place = service.asks ? view.searchPlace : undefined;
+
+  const { groups: reached, listed: reachedListed, whole, read } = useChosenInbox(reach, place);
+
   const { agent } = view;
 
   // Note that an agent's Inbox narrows what the read answered to the threads that agent posted, by the rule its line and the panel's tab count them by, since a read is not bound to hold its reach alone.
@@ -296,23 +330,26 @@ export function useInboxListing(view: {
   const stored = told?.stored === true;
   const searched = useSearchedWords(stored ? tokens : NO_TOKENS);
 
-  const { data: older } = useQuery({ ...appStateQuery, select: selectInboxOlder });
+  // What lies past the feed that the list may list: the older items All read, and the items the search found beside them while it asks.
+  const beyondShown = useCallback(
+    (state: AppStateSnapshot) =>
+      place === undefined
+        ? selectInboxOlder(state)
+        : (selectInboxBeyondFeed(state, { older: true, place }) ?? selectInboxOlder(state)),
+    [place],
+  );
 
-  // Note that the search reads every word of each thread: where the phone keeps them on disk, its title and the words typed its kept messages say, or an older item's whole words, which no kept message holds; and otherwise its whole item's, by the row's id, as the panel's Inbox searches it, the older items All lists among them.
+  const { data: beyond } = useQuery({ ...appStateQuery, select: beyondShown });
+
+  // Note that the search reads every word of each thread: where the phone keeps them on disk, its title and the words typed its kept messages say, or the whole words of an item past the feed, which no kept message holds (`inboxKeptSearchWordsOf`); and otherwise its whole item's, by the row's id, as the panel's Inbox searches it, the items past the feed among them.
   const wordsOf = useMemo(() => {
-    if (stored) {
-      const olderWords = inboxSearchWordsOf((itemId) => inboxOlderItem(older, itemId));
+    const beyondItem = (itemId: string) => inboxOlderItem(beyond, itemId);
 
-      return (row: InboxRow) =>
-        inboxOlderItem(older, row.id) === undefined
-          ? [row.title, ...(searched.get(row.id) ?? NO_WORDS)]
-          : olderWords(row);
-    }
-
+    if (stored) return inboxKeptSearchWordsOf(searched, beyondItem);
     const byId = new Map(whole.flatMap(({ items }) => items.map((item) => [item.id, item])));
 
-    return inboxSearchWordsOf((itemId) => byId.get(itemId));
-  }, [stored, searched, whole, older]);
+    return inboxSearchWordsOf((itemId) => byId.get(itemId) ?? beyondItem(itemId));
+  }, [stored, searched, whole, beyond]);
 
   const folds = useInboxRunFolds();
   const folded = pinnedFirst ? folds.folded : NO_FOLDS;
@@ -322,7 +359,7 @@ export function useInboxListing(view: {
   const listing = useMemo(() => {
     const now = Date.now();
     const standing = inboxAtNow(groups, now);
-    // What the list lists: what stands, and under All the older items beside it, which nothing counts.
+    // What the list lists: what stands, and under All the older items and those the search found beside it, which nothing counts.
     const listedStanding = listedGroups === groups ? standing : inboxAtNow(listedGroups, now);
 
     const list = inboxList(listedStanding, {
@@ -345,6 +382,7 @@ export function useInboxListing(view: {
       readerId,
       wordsOf,
       olderPages,
+      searching: service.searching,
     });
   }, [
     keep,
@@ -361,6 +399,7 @@ export function useInboxListing(view: {
     whose,
     folded,
     olderPages,
+    service.searching,
   ]);
 
   // Note that All drawing no row, as a filter leaving out every item read so far, reads the next older page, since an empty run has no last row to come on screen; a search drawing none reads none, as the service's search finds what the pages do not.
@@ -501,12 +540,12 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   );
 
   const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
-  const { data: older } = useQuery({ ...appStateQuery, select: selectInboxOlder });
+  const { data: older } = useQuery({ ...appStateQuery, select: selectInboxHeldPastFeed });
   const read = useInboxGroupsRead(undefined, reach);
   const wholeRead = useInboxWholeGroupsIn(undefined, reach);
   const messages = useThreadMessages(id);
   const stored = told?.stored === true;
-  // The thread's whole older copy, where All read it past the feed and the feed holds none of it, which no kept message holds.
+  // The thread's whole copy past the feed, where All read it or a search found it and the feed holds none of it, which no kept message holds.
   const olderWhole = id === undefined ? undefined : inboxOlderItem(older, id);
 
   // Note that where the Inbox is kept on disk the thread is made whole from its row and the messages kept for it, read as it opens, and stands with none until they load, so it is never looked for outside the feed, or for an older thread from its whole older copy (`listed` holds its row); a fixture run's is the document's whole item.
@@ -597,9 +636,6 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
 
 /** No word typed. */
 const NO_TOKENS: readonly string[] = [];
-
-/** No word typed that a thread's kept messages say. */
-const NO_WORDS: readonly string[] = [];
 
 /** No message read yet of a thread kept on disk. */
 const NO_MESSAGES: readonly InboxMessage[] = [];

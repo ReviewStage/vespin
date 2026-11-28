@@ -9,6 +9,7 @@ import {
   type InboxAnyHolder,
   type InboxListed,
   READING_INBOX,
+  SEARCHING_OLDER_INBOX,
 } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { IOS_TAB, iosAgentRoute, iosAppRouteOf, iosTabOfGroup } from "@repo/features/ios-app-links";
@@ -313,10 +314,10 @@ function StartTaskSection({ query }: { readonly query: string }) {
 /**
  * What a scope's rows are still being read from, as the words its wait
  * says, so it never says it found nothing before the lists it searches have
- * answered: Inbox waits on the Inbox's first read, Tasks on the task list,
- * which holds the agents too, People on the members, Automations on the
- * automations, and All on the Inbox or the task list; none once they
- * answered.
+ * answered: Inbox waits on the Inbox's first read and on the service's
+ * search of older items, Tasks on the task list, which holds the agents
+ * too, People on the members, Automations on the automations, and All on
+ * the Inbox or the task list; none once they answered.
  */
 function scopeReading(found: SearchFound, scope: SearchScope): string | undefined {
   switch (scope) {
@@ -325,11 +326,21 @@ function scopeReading(found: SearchFound, scope: SearchScope): string | undefine
     case SEARCH_SCOPE.AUTOMATIONS:
       return found.automationsReading ? READING_AUTOMATIONS : undefined;
     case SEARCH_SCOPE.INBOX:
-      return found.inboxReading ? READING_INBOX : undefined;
+      return found.inboxReading
+        ? READING_INBOX
+        : found.inboxSearching
+          ? SEARCHING_OLDER_INBOX
+          : undefined;
     case SEARCH_SCOPE.TASKS:
       return found.tasksReading ? READING_TASKS : undefined;
     case SEARCH_SCOPE.ALL:
-      return found.inboxReading ? READING_INBOX : found.tasksReading ? READING_TASKS : undefined;
+      return found.inboxReading
+        ? READING_INBOX
+        : found.tasksReading
+          ? READING_TASKS
+          : found.inboxSearching
+            ? SEARCHING_OLDER_INBOX
+            : undefined;
   }
 }
 

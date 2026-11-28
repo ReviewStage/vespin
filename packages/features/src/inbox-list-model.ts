@@ -843,6 +843,32 @@ export function inboxSearchWordsOf(
   };
 }
 
+/** No word a client kept for a row. */
+const NO_KEPT_WORDS: readonly string[] = [];
+
+/**
+ * Every line of words a row says, as a search reads it on a client that
+ * keeps its items on disk as rows, their messages apart: an item past the
+ * feed, which the client never keeps (All's older items, a search's found
+ * ones), read from its whole copy (`beyondItemOf`, `inboxItemWords`), and
+ * every other row its title beside the words `keptWords` found its kept
+ * messages say. Note that an item past the feed is read whole however few
+ * rows it lists, because none of its messages is kept, so its title alone
+ * would let a thread the service found by its words drop out of the list.
+ */
+export function inboxKeptSearchWordsOf(
+  keptWords: ReadonlyMap<string, readonly string[]>,
+  beyondItemOf: (itemId: string) => InboxItem | undefined,
+): (row: InboxRow) => readonly string[] {
+  return (row) => {
+    const beyond = beyondItemOf(row.id);
+
+    return beyond === undefined
+      ? [row.title, ...(keptWords.get(row.id) ?? NO_KEPT_WORDS)]
+      : inboxItemWords(beyond);
+  };
+}
+
 /** Whether an item answers a list's search: every word of it somewhere in the row's words (`InboxSearch`'s `wordsOf`) or its task's name; any item answers none. */
 function searchedItem(
   holder: InboxAnyHolder,

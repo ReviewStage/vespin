@@ -755,12 +755,13 @@ function olderRead(
   return answer;
 }
 
-/** Stages the document again once the run answered a page of the account's older Inbox items, which the staged Inbox then holds past its feed (`inboxAppState`), as the panel's run stages its own again (`tasks-fixture-loader.ts`); nothing for any other act. */
-function keepOlderInboxPage(
+/** Stages the document again once the run answered a page of the account's older Inbox items, or a place's search of them, which the staged Inbox then holds past its feed (`inboxAppState`), as the panel's run stages its own again (`tasks-fixture-loader.ts`); nothing for any other act. */
+function keepInboxPastFeed(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   kind: PortActKind,
 ): void {
-  if (kind === ACT_KIND.AGENTS_INBOX_OLDER_PAGE) stageFixture(state);
+  if (kind === ACT_KIND.AGENTS_INBOX_OLDER_PAGE || kind === ACT_KIND.AGENTS_INBOX_SEARCH)
+    stageFixture(state);
 }
 
 /** What a read of the workspace's settled page answers, its tasks laid into the list at once; none for any other act or workspace. */
@@ -972,7 +973,7 @@ export function fixtureActs(
         keepMachineAnswer(state, act);
         keepSentReply(state, act, staged.answer);
         keepCommentThread(state, act.kind, staged.answer);
-        keepOlderInboxPage(state, act.kind);
+        keepInboxPastFeed(state, act.kind);
         // Note that a message the run took stands in its agent's transcript on its way, as a sent line does until its row lands, since nothing the run stages moves.
         keepSend(state, act, false);
         // Note that a message the run took for a Manager's chat lands as its row at once, a reply in its thread's, as the chat's next read carries it.

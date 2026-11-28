@@ -16,6 +16,7 @@
 
 import type { AutomationSummary } from "@repo/features/automation-wire";
 import { INBOX_SHOW, type InboxAnyHolder, type InboxListed } from "@repo/features/inbox-list-model";
+import { INBOX_SEARCH_PLACE } from "@repo/features/inbox-service-search";
 import {
   agentSearchSubject,
   automationSearchSubject,
@@ -81,6 +82,8 @@ export interface SearchFound {
   readonly answered: string;
   /** Whether the Inbox's first read is still out, so an Inbox item it would find may not be held yet. */
   readonly inboxReading: boolean;
+  /** Whether the service is still asked for the Inbox items the words find past what the phone holds, so the Inbox never says it found nothing before the service looked. */
+  readonly inboxSearching: boolean;
   /** Whether the task list, which holds the tasks and the agents on them, is not yet read, here or by the host, or the service is still searched for the tasks past it, so a task or an agent it would find may not be held yet. */
   readonly tasksReading: boolean;
   /** Every task the list holds, by its id, which an agent found is named by. */
@@ -105,7 +108,13 @@ export interface SearchFound {
 export function useSearchFound(typed: string): SearchFound {
   const query = useDeferredValue(typed);
   const listing = useTasksListing(query);
-  const inbox = useInboxListing({ show: INBOX_SHOW.ALL, search: query });
+
+  const inbox = useInboxListing({
+    show: INBOX_SHOW.ALL,
+    search: query,
+    searchPlace: INBOX_SEARCH_PLACE.EVERYTHING,
+  });
+
   const inboxShown = useInboxShown();
   const collections = useTaskListCollections();
   const reading = useWholeListRead();
@@ -165,6 +174,8 @@ export function useSearchFound(typed: string): SearchFound {
   ]);
 
   const inboxReading = inboxShown && inbox.feed === INBOX_FEED.READING;
+  // Note that the Inbox found nothing says so only once the service's search of the words has answered too, as ⌘K waits on it, since an older item comes only with it.
+  const inboxSearching = inboxShown && inbox.searching;
   const peopleReading = members.members === undefined && !members.failed;
   const automationsReading = automations.rows === undefined && !automations.failed;
   // Note that a read that failed is said as such, never as nothing found, since nothing was read.
@@ -183,6 +194,7 @@ export function useSearchFound(typed: string): SearchFound {
       listing,
       readerId: inbox.readerId,
       inboxReading,
+      inboxSearching,
       tasksReading,
       peopleReading,
       automationsReading,
@@ -196,6 +208,7 @@ export function useSearchFound(typed: string): SearchFound {
       listing,
       inbox.readerId,
       inboxReading,
+      inboxSearching,
       tasksReading,
       peopleReading,
       automationsReading,
