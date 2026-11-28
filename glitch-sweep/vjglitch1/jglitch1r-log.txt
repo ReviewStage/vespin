@@ -11,3 +11,5 @@ glitch j02-thread-answer: j02-thread-answer: maestro exit 0  cfr60 ok raw 363717
 glitch j03-manager-chat: j03-manager-chat: maestro exit 0  cfr60 ok raw 44958262 bytes
 glitch j04-tasks-task: j04-tasks-task: maestro exit 0  cfr60 ok raw 39957619 bytes
 glitch j07-new-task: j07-new-task: maestro exit 0  cfr60 ok raw 23160077 bytes
+pushed 9a73a06859 to glitch-sweep/vjglitch1
+glitch-sweep rc 0, raw.mp4 kept under /Users/deanstratakos/vespin-ipad-agent/out/vjglitch1r-raw/<journey>/raw.mp4
