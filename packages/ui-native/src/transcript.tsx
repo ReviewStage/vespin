@@ -10,6 +10,7 @@ import {
   chatWorkWords,
 } from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
+import type { SentWords } from "@repo/features/tool-call-model";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { Predicate } from "effect";
@@ -63,7 +64,7 @@ import {
 } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { ROW_ACTION_TONE } from "./list-row.js";
-import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
+import { Markdown, type MarkdownWordPicture, Picture, QUOTE_INSET, Quote } from "./markdown.js";
 import { IntegrationMark, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
@@ -138,6 +139,8 @@ const COLLAPSED_HEARD = "Collapsed";
 
 /** What a press on a call's line, or a fold's, is heard to do. */
 const CALL_HINT = "Shows or hides the call's input and output";
+const SENT_HINT = "Shows or hides what it sent";
+const OPENS_AGENT_HINT = "Opens the agent";
 const FOLD_HINT = "Shows or hides the steps it holds";
 
 /** What the spinner over the oldest row is heard as while an older page is read. */
@@ -166,6 +169,9 @@ const OLDER_WORDS = {
   FAILED: "Earlier messages could not be read.",
   RETRY: "Try again",
 } as const;
+
+/** How far an open call's body stands in from its row, past the row's glyph and the gap after it, so it stands under the line's words. */
+const BODY_STEP = MARK_SIZE.GLYPH + SPACE.ROW - 2;
 
 const styles = StyleSheet.create({
   list: { flex: 1 },
@@ -220,7 +226,7 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   body: {
-    marginLeft: MARK_SIZE.GLYPH + SPACE.ROW - 2,
+    marginLeft: BODY_STEP,
     gap: SPACE.TIGHT + 2,
     paddingTop: SPACE.TIGHT,
   },
@@ -558,8 +564,57 @@ function CallGlyph({
   );
 }
 
-/** The VoiceOver action a call's row offers to open the thread its chip names, since the chip stands inside the row's one element. */
+/** The VoiceOver actions a call's row offers to open the thread or the agent its chip names, since the chip stands inside the row's one element. */
 const OPEN_THREAD_ACTION = { name: "openThread", label: "Open thread" } as const;
+const OPEN_AGENT_ACTION = { name: "openAgent", label: "Open agent" } as const;
+
+/** The heading over a start's note, as the panel's quote of it is headed. */
+const SENT_NOTE = "Note";
+
+/**
+ * What a call sent another agent, open under its row, as the panel's row
+ * folds it open (`SentCall`): its words quoted, then a start's note quoted
+ * under its heading.
+ */
+function SentQuotes({
+  sent,
+  drawing,
+  depth,
+}: {
+  readonly sent: SentWords;
+  readonly drawing: RowDrawing;
+  readonly depth: number;
+}) {
+  const colors = useColors();
+  // Note that the quote's chips are held to the width inside the body's step, its rule, and its padding.
+  const width = rowWidth(drawing.column, depth) - BODY_STEP - QUOTE_INSET;
+
+  return (
+    <>
+      {sent.words === undefined ? null : (
+        <Quote>
+          <Markdown
+            words={sent.words}
+            repository={drawing.repository}
+            onOpenLink={drawing.onOpenLink}
+            width={width}
+          />
+        </Quote>
+      )}
+      {sent.note === undefined ? null : (
+        <Quote>
+          <Text style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>{SENT_NOTE}</Text>
+          <Markdown
+            words={sent.note}
+            repository={drawing.repository}
+            onOpenLink={drawing.onOpenLink}
+            width={width}
+          />
+        </Quote>
+      )}
+    </>
+  );
+}
 
 /**
  * A call's row: its kind's glyph, or its app's icon for a call on an app
@@ -567,7 +622,11 @@ const OPEN_THREAD_ACTION = { name: "openThread", label: "Open thread" } as const
  * muted one, where it ran, and where it stands; pressed, it opens on its
  * body. A call about one Inbox thread, such as a post, names
  * it by its chip, whose press alone opens the thread, as the panel's chip
- * does, and VoiceOver offers the same as one of the row's actions.
+ * does, and VoiceOver offers the same as one of the row's actions. A call
+ * about one coding agent names it by its chip the same way, which opens the
+ * agent's page; one that sent the agent words opens on them, quoted, and
+ * one that sent none, such as a read or a stop, opens the agent from the
+ * whole row, as the panel's row opens the agent's tab.
  */
 function CallRow({
   item,
@@ -586,10 +645,16 @@ function CallRow({
   readonly onOpenThread: ((threadId: string) => void) | undefined;
   readonly placeCall: ((callId: string, row: HostInstance | null) => void) | undefined;
 }) {
-  const { callId, thread } = item;
+  const { callId, thread, agent } = item;
 
   const openThread =
     thread === undefined || onOpenThread === undefined ? undefined : () => onOpenThread(thread);
+
+  const openAgent = agent === undefined ? undefined : () => drawing.onOpenLink(agent);
+  const openChip = openThread ?? openAgent;
+  const chipAction = openThread !== undefined ? OPEN_THREAD_ACTION : OPEN_AGENT_ACTION;
+  // Note that a row that opens its agent whole offers no action of its own, since its press already does.
+  const opensWhole = item.opensAgent ? openAgent : undefined;
 
   // Note that the row hands the transcript its press, so a reader sent to this call lands on it once the list has scrolled it into view.
   const press = useCallback(
@@ -611,17 +676,26 @@ function CallRow({
     <View style={[styles.row, inset(item.depth)]}>
       <Press
         ref={press}
-        onPress={() => onToggle(item)}
+        onPress={opensWhole ?? (() => onToggle(item))}
         accessibilityRole="button"
-        accessibilityState={{ expanded: item.open }}
+        accessibilityState={opensWhole === undefined ? { expanded: item.open } : undefined}
         accessibilityLabel={[line.verb, chip, subject, mark, item.runOn].filter(Boolean).join(" ")}
         accessibilityValue={{
-          text: item.open ? standing : `${standing}, ${COLLAPSED_HEARD}`,
+          text:
+            item.open || opensWhole !== undefined ? standing : `${standing}, ${COLLAPSED_HEARD}`,
         }}
-        accessibilityHint={CALL_HINT}
-        accessibilityActions={openThread === undefined ? undefined : [OPEN_THREAD_ACTION]}
+        accessibilityHint={
+          opensWhole !== undefined
+            ? OPENS_AGENT_HINT
+            : item.sent === undefined
+              ? CALL_HINT
+              : SENT_HINT
+        }
+        accessibilityActions={
+          openChip === undefined || opensWhole !== undefined ? undefined : [chipAction]
+        }
         onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === OPEN_THREAD_ACTION.name) openThread?.();
+          if (event.nativeEvent.actionName === chipAction.name) openChip?.();
         }}
         hitSlop={LINE_REACH}
         style={styles.callLine}
@@ -649,8 +723,8 @@ function CallRow({
           </Text>
           {chip === undefined ? null : (
             <Press
-              disabled={openThread === undefined}
-              onPress={openThread}
+              disabled={openChip === undefined || opensWhole !== undefined}
+              onPress={openChip}
               style={[
                 styles.chip,
                 { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE },
@@ -700,8 +774,11 @@ function CallRow({
           </InlineHost>
         </View>
       )}
-      {item.open ? (
+      {item.open && opensWhole === undefined ? (
         <View style={styles.body}>
+          {item.sent === undefined ? null : (
+            <SentQuotes sent={item.sent} drawing={drawing} depth={item.depth} />
+          )}
           {item.body.map((block) => (
             <BodyBlock key={block.title} title={block.title} text={block.text} colors={colors} />
           ))}

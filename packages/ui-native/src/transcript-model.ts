@@ -105,6 +105,10 @@ import {
   type ToolState,
 } from "@repo/features/tool-call-block";
 import {
+  calledAgent,
+  callRefused,
+  type SentWords,
+  sentWords,
   shownPageVersion,
   TOOL_TARGET,
   type ToolCallView,
@@ -121,6 +125,7 @@ import {
   suggestionStartOf,
 } from "@repo/features/transcript-lines";
 import {
+  agentCallLine,
   CALL_KIND,
   CALL_MARK,
   type CallKind,
@@ -128,6 +133,7 @@ import {
   calledFile,
   callLine,
   callPlace,
+  isAgentCallKind,
   isMadeCallKind,
   madeCallLine,
   moreFiles,
@@ -353,6 +359,12 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly chip: string | undefined;
       /** The id of the Inbox thread the call posted, withdrew, or read, which its chip opens, as the panel's thread chip does; none for a call about no one thread. */
       readonly thread: string | undefined;
+      /** For a call about one coding agent, that agent's page, which its chip opens, as the panel's agent chip opens its tab; none for any other call, or where the workspace can't be named. */
+      readonly agent: string | undefined;
+      /** What the call sent another agent, a message's words or a start's prompt and its note, which its open body quotes in the place of its input and answer, as the panel's row folds them open (`SentCall`); none for any other call, or one that failed, whose body is where its error is read. */
+      readonly sent: SentWords | undefined;
+      /** Whether a press on the row opens the agent it names rather than folding its body open, as the panel's row about an agent opens its tab (`TranscriptOpeningCall`): a read, a stop, an unarchive, or a change answered, or a start that sent no words of its own. */
+      readonly opensAgent: boolean;
       /** Where it ran, beside its line, where it ran somewhere the transcript does not say. */
       readonly runOn: string | undefined;
       readonly standing: CallStanding;
@@ -946,6 +958,62 @@ function callNaming(
   return { line: { ...callLine(view.kind, moreFiles(view.files), undefined), code: false }, chip };
 }
 
+/** What the chip of a call that sent another agent words names it where neither the call nor its answer names it yet, as a start before it answers, as the panel's chip names it (`UNNAMED_AGENT`). */
+const UNNAMED_AGENT = "Agent";
+
+/**
+ * How a call about one coding agent names it, as the panel's row does: its
+ * verb, the agent's chip, which opens the agent's page, and the words it
+ * sent as the line's preview; for a message or a start, the words it sent,
+ * which its open body quotes; and whether the row's own press opens the
+ * agent, as the panel's row about an agent does where it sent no words.
+ * None for any other call, or one about an agent neither it nor its answer
+ * names, whose line says its own words. Note that an agent on another task
+ * opens here too, where the panel's row folds it open, because the app
+ * opens any agent of the workspace on its own page, while the panel's
+ * column draws only its task's own; and that an archive opens nothing, as
+ * the panel's does, since its agent left the lists it would open in.
+ */
+function agentNaming(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+  view: ToolCallView,
+  standing: CallStanding,
+  reading: ItemsReading,
+):
+  | Pick<
+      Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.CALL }>,
+      "line" | "chip" | "agent" | "sent" | "opensAgent"
+    >
+  | undefined {
+  if (!isAgentCallKind(view.kind)) return undefined;
+  const called = calledAgent(part);
+  // Note that a call that failed or was refused quotes nothing it sent, because its body is where its error or refusal is read, as the panel's row folds its input and answer open.
+  const failed = standing === CALL_STANDING.FAILED || callRefused(part.output);
+  const sent = failed ? undefined : sentWords(part.tool, part.input);
+  const name = called?.title ?? (sent === undefined ? undefined : UNNAMED_AGENT);
+
+  if (name === undefined) return undefined;
+
+  const agent =
+    called?.id === undefined
+      ? undefined
+      : reading.placeAddress?.({ kind: LINK_DESTINATION.AGENT, agentId: called.id });
+
+  return {
+    // Note that the line previews what it sent by its first line alone, as the panel's line cuts it, so VoiceOver hears the words whole once, from the open body.
+    line: agentCallLine(view.kind, view.subject.trim().split("\n")[0]),
+    chip: name,
+    agent,
+    sent,
+    opensAgent:
+      agent !== undefined &&
+      sent === undefined &&
+      standing === CALL_STANDING.DONE &&
+      !failed &&
+      view.kind !== CALL_KIND.ARCHIVE_AGENT,
+  };
+}
+
 /**
  * The pull request a call opened, as its card stands: as the task list holds
  * it now where it holds it, and otherwise as the call opened it, a draft or
@@ -1099,6 +1167,9 @@ function callItems(
     output: part.output,
   });
 
+  const standing = standingOf(part.state, view.refused === true);
+  const named = agentNaming(drawn, view, standing, reading);
+
   const call: TranscriptItem = {
     ...base,
     kind: TRANSCRIPT_ITEM.CALL,
@@ -1107,15 +1178,17 @@ function callItems(
     provider: view.provider,
     // Note that a computer call that kept no icon wears the one an earlier call on its app kept, as the panel's row does (`useComputerIcon`).
     appIcon: view.appIcon ?? reading.computerApps.byCall.get(part.callId)?.icon,
-    ...callNaming(view),
+    ...(named ?? { ...callNaming(view), agent: undefined, sent: undefined, opensAgent: false }),
     thread: calledThread(part),
     // Note that the row leads with the integration's mark, so it names only what the mark does not: the account among several, or a server of no integration's.
     runOn: callPlace(view, CALL_MARK.LEADS),
-    standing: standingOf(part.state, view.refused === true),
+    standing,
     open,
-    body: open
-      ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
-      : [],
+    // Note that a call that sent another agent words opens on them alone, quoted, as the panel's row folds them open in the place of its input and answer.
+    body:
+      open && named?.sent === undefined
+        ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
+        : [],
     cut: read?.reading === true ? part.cut : undefined,
     answered: open && inBody ? called : [],
   };

@@ -223,6 +223,11 @@ import {
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
 import {
+  FIXTURE_ORCHESTRATOR_AGENT_ID,
+  fixtureOrchestratorAgent,
+  fixtureOrchestratorTranscript,
+} from "./fixture-orchestrator-agent.js";
+import {
   FIXTURE_PULL_REQUEST,
   fixtureChanges,
   fixtureGeneratedChapters,
@@ -1162,6 +1167,13 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
     agentOn(AGENT.ROUNDING, TASK.ROUNDING, "Fix ledger rounding", AGENT_STATUS.COMPLETED, 5 * DAY),
   ],
 ]);
+
+/** How long before the fixture landed the orchestrating agent ran, whose page draws its calls to the fixture's other agents: staged for its page and its transcript alone, in no task's list (`fixture-orchestrator-agent.ts`). */
+const ORCHESTRATOR_AGO = 5 * HOUR;
+
+const ORCHESTRATOR = fixtureOrchestratorAgent(
+  agentOn(AGENT.DIGEST, TASK.DIGEST, "", AGENT_STATUS.COMPLETED, ORCHESTRATOR_AGO),
+);
 
 /** When the release Manager was started, which its chat counts from. */
 const MANAGER_STARTED = LANDED - 2 * HOUR;
@@ -2346,6 +2358,9 @@ const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix le
 /** The digest agent's run, which the weekly digest automation's newest run opens. */
 const DIGEST_TRANSCRIPT = fixtureDigestTranscript(DIGEST_STARTED, ADA, "Send the weekly digest");
 
+/** The orchestrating agent's finished run, its calls to the invitations and digest agents. */
+const ORCHESTRATOR_TRANSCRIPT = fixtureOrchestratorTranscript(LANDED - ORCHESTRATOR_AGO, ADA);
+
 /** The release Manager's run, whose turns' work its chat keeps a press away. */
 const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
 
@@ -2527,6 +2542,10 @@ function stagedTranscripts(
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
     [AGENT.DIGEST]: { ...held[AGENT.DIGEST], [OWN_TRANSCRIPT]: { rows: DIGEST_TRANSCRIPT } },
     [AGENT.MANAGER]: { ...held[AGENT.MANAGER], [OWN_TRANSCRIPT]: { rows: MANAGER_TRANSCRIPT } },
+    [FIXTURE_ORCHESTRATOR_AGENT_ID]: {
+      ...held[FIXTURE_ORCHESTRATOR_AGENT_ID],
+      [OWN_TRANSCRIPT]: { rows: ORCHESTRATOR_TRANSCRIPT },
+    },
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);
@@ -3474,7 +3493,7 @@ function stagedItem(itemId: string): InboxItem | undefined {
 
 /** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER, ORCHESTRATOR].find((each) => each.id === agentId);
 }
 
 /* ----- The automations ----- */

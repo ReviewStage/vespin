@@ -2075,7 +2075,7 @@ function shownPage(call: TargetedCall): ToolTarget | undefined {
 export function shownPageVersion(
   call: TargetedCall,
 ): { readonly page: string; readonly version: number } | undefined {
-  if (call.tool !== AGENT_TOOL.SHOW_PAGE || call.output === undefined || refused(call.output)) {
+  if (call.tool !== AGENT_TOOL.SHOW_PAGE || call.output === undefined || callRefused(call.output)) {
     return undefined;
   }
 
@@ -2161,7 +2161,7 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
  * of its own the renderer cannot reach, and no answer that did what was
  * asked carries one.
  */
-function refused(output: WireValue | undefined): boolean {
+export function callRefused(output: WireValue | undefined): boolean {
   return stringAt(output, "reason") !== undefined;
 }
 
@@ -2172,7 +2172,7 @@ function refused(output: WireValue | undefined): boolean {
  * does one its tool refused, whose body is where the refusal is read.
  */
 export function toolTarget(call: TargetedCall): ToolTarget | undefined {
-  if (call.output === undefined || refused(call.output)) return undefined;
+  if (call.output === undefined || callRefused(call.output)) return undefined;
 
   return TOOL_TARGETS.get(call.tool)?.(call);
 }
