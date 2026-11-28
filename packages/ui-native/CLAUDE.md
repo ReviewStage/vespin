@@ -43,7 +43,9 @@ builds a control of its own.
   the agent page's own `Composer`, docked on the keyboard, with the + and
   the `MenuChip` capsule menus in a row under its field inside the same
   glass, so the keyboard never covers them, each capsule led by the
-  panel's glyph or a model's harness mark),
+  panel's glyph or a model's harness mark, and over the glass, on the
+  page, what the desktop stands over its box, such as New task's
+  repository capsule (`over`)),
   `ToggleRow` for a setting or an agent's option, `askForName` (the system's alert a name is
   typed in, its act preferred, for a task and an agent alike), `ScriptRow` (a script read whole in the monospaced
   face),

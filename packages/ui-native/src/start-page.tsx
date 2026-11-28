@@ -64,8 +64,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
  * Where a capsule menu stands: in a composer's row under its field, where
  * a start says where and how it runs, as the system's small capsule with no
  * glass of its own, since the composer's glass is the one layer there; or
- * on the page, such as the task a new one is related to, as the system's
- * small bordered capsule.
+ * on the page, such as the task a new one is related to, or the
+ * repository a new task works in over the composer, as the desktop stands
+ * its repository chip over its box, as the system's small bordered capsule.
  */
 export const MENU_CHIP_LOOK = {
   COMPOSER: "composer",
@@ -112,7 +113,8 @@ type MenuChipProps = ChipLead & {
       }
     | {
         readonly look?: typeof MENU_CHIP_LOOK.PAGE | undefined;
-        readonly menu: ChipMenu;
+        /** What the capsule opens; none where what it says can't be changed here, held still as in a composer's row. */
+        readonly menu?: ChipMenu | undefined;
         readonly onOpen?: undefined;
       }
   );
@@ -292,6 +294,8 @@ type StartPageProps = {
   readonly title?: string | undefined;
   /** What stands at the page's head, such as the task the new one is related to, as capsules. */
   readonly head?: ReactNode;
+  /** What stands just over the composer's glass, on the page, such as the repository a new task works in, as the desktop stands its repository chip over its box; none where nothing stands there. */
+  readonly over?: ReactNode;
   readonly words: StartWords;
   /** The skills a `/` being typed offers; none while no `/` word ends the words. */
   readonly skills?:
@@ -317,7 +321,7 @@ type StartPageProps = {
   /** What a start, the picker, or a read said, each its own line over the field. */
   readonly notes: readonly string[];
   readonly add: StartAdd;
-  /** The capsules after the + under the field, saying where the start runs, such as Repository and Machine. */
+  /** The capsules after the + under the field, saying where the start runs, such as the Machine. */
   readonly chips: ReactNode;
   /** What stands at the end of the row under the field before Send, such as Model · Effort, as the desktop composer stands its model picker. */
   readonly trailing?: ReactNode;
@@ -431,6 +435,7 @@ export function StartPage(props: StartPageProps) {
           onAdd={add.onAdd}
           call={onTalk === undefined ? undefined : { kind: COMPOSER_CALL.TALK, onTalk }}
           head={head}
+          above={props.over}
           tools={chips}
           trailing={trailing}
           dictation={props.dictation}

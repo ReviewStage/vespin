@@ -1,4 +1,4 @@
-# new-task.yaml -- New task from the Inbox bar's compose: Home's composer as a page of its own, the task described, its repository picked from its capsule under the composer's field, and the task started with its agent, the agent's page opened; then a task related to another picked from the composer's +; then a draft whose swipe down and ✕ ask Discard draft or Save draft, saved for the next New task and then discarded; then the composer's + Photos opening the system's photo picker, closed unpicked.
+# new-task.yaml -- New task from the Inbox bar's compose: Home's composer as a page of its own, the task described, its repository picked from its capsule over the composer, and the task started with its agent, the agent's page opened; then a task related to another picked from the composer's +; then a draft whose swipe down and ✕ ask Discard draft or Save draft, saved for the next New task and then discarded; then the composer's + Photos opening the system's photo picker, closed unpicked.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
