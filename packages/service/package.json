@@ -231,7 +231,7 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.110",
+    "@ai-sdk/anthropic": "4.0.111",
     "@ai-sdk/openai": "4.0.125",
     "@better-auth/cimd": "1.7.7",
     "@better-auth/drizzle-adapter": "1.7.7",
