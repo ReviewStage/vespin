@@ -492,6 +492,16 @@ env:
 - extendedWaitUntil:
     visible: "Keep the old link working until the new one is sent."
     timeout: 30000
+# Note that the page is let settle, at its newest turn's waiting line, before
+# the line is held, because Maestro aims a press where the screen read
+# before its wait put the line, and the line first shows at the window's
+# foot, where the dock's chips stand once the page settles, so a press there
+# opened the queue rather than the line's menu.
+- extendedWaitUntil:
+    visible: "Waiting on you · 1 approval"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
 - longPressOn: "Keep the old link working until the new one is sent."
 - assertVisible: "Copy message"
 - assertVisible: "Edit"
