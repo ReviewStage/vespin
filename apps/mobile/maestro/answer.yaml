@@ -305,7 +305,8 @@ appId: dev.vespin.ios
 # stands under its label rather than beside it. Note that the Inbox is known
 # by its first row, the do ask under Pinned, because the pinned tasks' threads
 # stand first and at this size push the decide's row below the window's foot,
-# so its row is scrolled to the window's middle before it is opened.
+# so its row is reached through `open-row.yaml`, which draws an iPad's list
+# column rather than the page beside it and clears the row of the tab bar.
 - launchApp:
     clearState: true
     arguments:
@@ -315,10 +316,9 @@ appId: dev.vespin.ios
     visible: "Verify the digest's sender domain"
     timeout: 30000
 - runFlow:
-    file: subflows/scroll-to.yaml
+    file: subflows/open-row.yaml
     env:
-      ELEMENT: "Who can withdraw an invite\\?"
-- tapOn: "Who can withdraw an invite\\?"
+      ROW: "Who can withdraw an invite\\?"
 # Note that at this size the options run past the box's head, which scrolls in place, so the head is dragged from the first option until the recommended one, the last, shows; a swipe at the window's middle would scroll the thread instead.
 - extendedWaitUntil:
     visible: "The member who sent it.*"
