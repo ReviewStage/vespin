@@ -90,7 +90,9 @@ import {
   DEVICE_CAPABILITY,
   type DeviceAgentAnswer,
   type DeviceAgentLaunchPayload,
+  type DeviceAgentLineKind,
   type DeviceAgentObject,
+  type DeviceAgentRequestKind,
   type DeviceCapability,
   deviceAgentFilesPayloadSchema,
   deviceAgentLaunchPayloadSchema,
@@ -364,7 +366,7 @@ function deviceMachineOver(
     pin: DeviceAgentPin,
     line: {
       readonly id?: string;
-      readonly kind: (typeof DEVICE_AGENT_LINE_KIND)[keyof typeof DEVICE_AGENT_LINE_KIND];
+      readonly kind: DeviceAgentLineKind;
       readonly payload: DeviceAgentObject;
       readonly sealedSecrets?: string;
     },
@@ -416,7 +418,7 @@ function deviceMachineOver(
    */
   const asked = (
     session: string,
-    kind: (typeof DEVICE_AGENT_REQUEST_KIND)[keyof typeof DEVICE_AGENT_REQUEST_KIND],
+    kind: DeviceAgentRequestKind,
     args: DeviceAgentObject,
     wait: Duration.Duration = MAC_MACHINE.ANSWER_WAIT,
   ) =>

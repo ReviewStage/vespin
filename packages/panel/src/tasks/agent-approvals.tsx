@@ -14,6 +14,7 @@ import {
   type AgentPermissionMode,
   APPROVAL_ANSWER,
   APPROVAL_BOUNDS,
+  type ApprovalAnswer,
   type ApprovalAnswerRequest,
 } from "@repo/features/agent-approval-wire";
 import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
@@ -165,7 +166,7 @@ const WIRE_ANSWER = {
   [APPROVAL_ACTION.ALLOW]: APPROVAL_ANSWER.ALLOW,
   [APPROVAL_ACTION.ALLOW_FOR_AGENT]: APPROVAL_ANSWER.ALLOW_FOR_AGENT,
   [APPROVAL_ACTION.DENY]: APPROVAL_ANSWER.DENY,
-} as const satisfies Record<ApprovalAction, (typeof APPROVAL_ANSWER)[keyof typeof APPROVAL_ANSWER]>;
+} as const satisfies Record<ApprovalAction, ApprovalAnswer>;
 
 /** The mode an agent runs on: full access where its row names none. */
 function modeOf(agent: Pick<AgentSummary, "permissionMode">): AgentPermissionMode {

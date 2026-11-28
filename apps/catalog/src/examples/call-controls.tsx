@@ -13,6 +13,7 @@ import {
   CALL_DEVICE,
   CallBar,
   CallCard,
+  type CallCardSurface,
   type CallDevice,
   type CallLevels,
   CallMute,
@@ -99,7 +100,7 @@ function OwnedCard({
 }: {
   status: CallStatus;
   width: number;
-  surface: (typeof CALL_CARD_SURFACE)[keyof typeof CALL_CARD_SURFACE];
+  surface: CallCardSurface;
   muted?: boolean;
 }): React.JSX.Element {
   const mutes = useMutes(muted);

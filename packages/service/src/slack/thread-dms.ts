@@ -33,6 +33,7 @@ import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
   INBOX_REPLY,
+  type InboxAskStatus,
   type InboxReadAsk,
   inboxReadAskSchema,
   knownAsk,
@@ -552,9 +553,7 @@ export function rewriteThreadDm(
 }
 
 /** Where the ask a press named stands, as its DM says it: settled as the line says, or no longer the thread's open ask. */
-export function settledLine(
-  status: (typeof INBOX_ASK_STATUS)[keyof typeof INBOX_ASK_STATUS] | undefined,
-): string {
+export function settledLine(status: InboxAskStatus | undefined): string {
   return status === undefined || status === INBOX_ASK_STATUS.OPEN
     ? `No longer open in ${PRODUCT_NAME}`
     : SETTLED_LINE[status];

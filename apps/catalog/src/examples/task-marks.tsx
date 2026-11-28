@@ -1,4 +1,8 @@
-import { CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import {
+  CHECK_SUMMARY,
+  PULL_REQUEST_STATE,
+  type PullRequestState,
+} from "@repo/features/agent-wire";
 import {
   TASK_PRIORITY,
   TASK_STATUS,
@@ -35,7 +39,7 @@ type AgentsResult = {
 /** A task's agents at rest, counted with `counts`, and a pull request standing in `state` where one is given, in the merge queue where `queued`. */
 function agents(
   counts: Partial<Pick<TaskAgentsSummary, "working" | "failed">>,
-  state?: (typeof PULL_REQUEST_STATE)[keyof typeof PULL_REQUEST_STATE],
+  state?: PullRequestState,
   queued?: true,
 ): AgentsResult {
   const pullRequests =

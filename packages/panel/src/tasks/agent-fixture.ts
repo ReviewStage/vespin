@@ -44,6 +44,7 @@ import {
   CHANGED_FILE_STATUS,
   CHECK_STATE,
   CHECK_SUMMARY,
+  type CheckState,
   CONVERSATION_ENTRY,
   DEPLOYMENT_STATE,
   DIFF_SIDE,
@@ -665,7 +666,7 @@ const TRANSCRIPT: AppTranscript = {
 const LONG_TRANSCRIPT: AppTranscript = { ...TRANSCRIPT, messages: LONG_MESSAGES };
 
 /** A check on the pull request's head, run by GitHub Actions. */
-function check(name: string, state: (typeof CHECK_STATE)[keyof typeof CHECK_STATE], took: number) {
+function check(name: string, state: CheckState, took: number) {
   const startedAt = STARTED_AT + 7 * MINUTE;
 
   return {
