@@ -33,7 +33,7 @@ import { LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
 import type { LongPressGroup } from "./row-menu-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE } from "./tokens/space.js";
-import { PROSE_SIZE, TEXT_FONT } from "./tokens/type.js";
+import { LINE_HEIGHT_SCALE, PROSE_SIZE, TEXT_FONT } from "./tokens/type.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
 const COPY_MESSAGE = "Copy message";
@@ -48,6 +48,7 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     fontFamily: TEXT_FONT,
     fontSize: PROSE_SIZE,
+    lineHeight: PROSE_SIZE * LINE_HEIGHT_SCALE,
   },
 });
 

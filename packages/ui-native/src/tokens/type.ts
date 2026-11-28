@@ -33,6 +33,14 @@ export const TYPE_ROLE = {
 /** The face code is drawn in where React Native draws it, Geist Mono, which the app embeds (`apps/mobile/app.config.ts`). */
 export const MONOSPACE_FONT = "Geist Mono";
 
+/**
+ * How tall a line of React Native's words stands, as a share of its size: the
+ * system's own face's natural leading (SF Pro's 20.3 pt at 17 pt), pinned so
+ * Geist, whose natural leading is 1.3, reads as densely as the transcript did
+ * (the developer, Nov 28, 2026).
+ */
+export const LINE_HEIGHT_SCALE = 1.193;
+
 /** The face words are drawn in where React Native draws them, Geist, the face SwiftUI sets them in (`font.ts`). */
 export const TEXT_FONT = "Geist";
 

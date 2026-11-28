@@ -3,7 +3,7 @@
 import { type ComponentProps, createContext, useContext } from "react";
 import { Text as ReactNativeText, StyleSheet, type TextStyle } from "react-native";
 import { useBoldText } from "./accessibility.js";
-import { TEXT_FONT } from "./tokens/type.js";
+import { LINE_HEIGHT_SCALE, TEXT_FONT } from "./tokens/type.js";
 
 type Weight = NonNullable<TextStyle["fontWeight"]>;
 
@@ -40,8 +40,23 @@ function bolder(weight: Weight): Weight {
 /** The face and weight a Text's words are drawn in, which a Text inside it takes where it names none of its own. */
 type Drawn = { readonly family: string; readonly weight: Weight };
 
+/** React Native's own size for words whose style names none. */
+const DEFAULT_SIZE = 14;
+
 /** What the Text around this one draws in, or nothing for a Text that leads its words. */
 const AROUND = createContext<Drawn | undefined>(undefined);
+
+/**
+ * How tall a Text's lines stand: as tall as the system's face would stand
+ * them at its size (`LINE_HEIGHT_SCALE`), for a Text that leads its words
+ * or names a size of its own, unless it names a height; one inside it takes
+ * its lines.
+ */
+function leading(flat: TextStyle, led: boolean): TextStyle {
+  if (flat.lineHeight !== undefined || (!led && flat.fontSize === undefined)) return {};
+
+  return { lineHeight: (flat.fontSize ?? DEFAULT_SIZE) * LINE_HEIGHT_SCALE };
+}
 
 /**
  * React Native's Text in the app's face. A Text that leads its words stands
@@ -50,10 +65,12 @@ const AROUND = createContext<Drawn | undefined>(undefined);
  * unless it names its own. Each Text sets both on itself rather than leave
  * them to React Native's inheritance, because a View inside a line of words,
  * such as a mention's chip, starts React Native's anew, and the chip's label
- * would stand in the system's face. Under Bold Text, a weight a Text names,
- * or a leading Text's regular, is set a step heavier (`BOLDER`), so a strong
- * run in stepped words still stands out of them. Note that an embedded face
- * does not thicken under Bold Text on its own, as the system's does.
+ * would stand in the system's face. Its lines stand as densely as the
+ * system's face stood them (`leading`), since Geist's own leading is taller.
+ * Under Bold Text, a weight a Text names, or a leading Text's regular, is set
+ * a step heavier (`BOLDER`), so a strong run in stepped words still stands
+ * out of them. Note that an embedded face does not thicken under Bold Text
+ * on its own, as the system's does.
  */
 export function NativeText({ style, ...props }: ComponentProps<typeof ReactNativeText>) {
   const around = useContext(AROUND);
@@ -70,7 +87,14 @@ export function NativeText({ style, ...props }: ComponentProps<typeof ReactNativ
     <AROUND.Provider value={drawn}>
       <ReactNativeText
         {...props}
-        style={[style, { fontFamily: drawn.family, fontWeight: drawn.weight }]}
+        style={[
+          style,
+          {
+            fontFamily: drawn.family,
+            fontWeight: drawn.weight,
+            ...leading(flat, around === undefined),
+          },
+        ]}
       />
     </AROUND.Provider>
   );
