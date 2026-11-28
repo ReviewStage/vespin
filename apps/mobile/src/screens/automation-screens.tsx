@@ -42,7 +42,7 @@ import {
   automationPhoneLine,
   READING_AUTOMATIONS,
 } from "@repo/features/automation-words";
-import { iosAgentRoute } from "@repo/features/ios-app-links";
+import { IOS_TAB, iosAgentRoute } from "@repo/features/ios-app-links";
 import { agentName } from "@repo/features/model-label";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { TASKS_VIEW_WORDS } from "@repo/features/tasks-page-model";
@@ -111,7 +111,7 @@ import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.
 import { SettingsBarButton } from "../settings-button.js";
 import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { TabColumns } from "../split-columns.js";
-import { useOnOwnTab } from "../tab-route.js";
+import { OwnTabContext, useOnOwnTab } from "../tab-route.js";
 import { useViewChoice } from "../view-choices.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { useComposeAction, useDetailColumnBar, useSplitBuild } from "./app-sidebar.js";
@@ -303,19 +303,24 @@ export function AutomationsListColumn() {
     setTab,
   );
 
+  // Note that the column names Automations its own tab, as a tab's stack names its screens, because it stands outside every stack: a run's agent then opens on the Automations stack over the column, and Back finds Runs and its narrowing as they stood, rather than the agent's own Tasks tab taking the column away.
   return (
     <ListColumn
       view={
-        chosen === undefined ? null : tab === AUTOMATIONS_TAB.RUNS ? (
-          <WorkspaceRunsList key={chosen.id} read={runs} tabs={tabs} search={search} />
-        ) : (
-          <AutomationsList
-            key={chosen.id}
-            workspace={chosen}
-            order={order}
-            search={search}
-            tabs={tabs}
-          />
+        chosen === undefined ? null : (
+          <OwnTabContext value={IOS_TAB.AUTOMATIONS}>
+            {tab === AUTOMATIONS_TAB.RUNS ? (
+              <WorkspaceRunsList key={chosen.id} read={runs} tabs={tabs} search={search} />
+            ) : (
+              <AutomationsList
+                key={chosen.id}
+                workspace={chosen}
+                order={order}
+                search={search}
+                tabs={tabs}
+              />
+            )}
+          </OwnTabContext>
         )
       }
       bar={{
