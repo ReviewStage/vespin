@@ -27,7 +27,9 @@ builds a control of its own.
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
-  answer's fields, and `AskNote` for what a send that did not go said),
+  answer's fields, `ResolvableAsk` standing an open card's × Resolve at its
+  top end, as the panel's question stands it, and `AskNote` for what a send
+  that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
   merge under its heading), `ConfirmAsk` (the question
