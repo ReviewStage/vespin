@@ -1,16 +1,26 @@
-// page-screens.tsx -- a page an agent showed on its task, opened whole in the app's one web view, from the agent's transcript or the task's Overview.
+// page-screens.tsx -- a page an agent showed on its task, opened whole in the app's one web view, from the agent's transcript or the task's Overview, its threads' words tinted in it and Comment offered on words selected in it.
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { PagePicked } from "@repo/features/page-pick";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { VERB } from "@repo/features/words";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
-import { BUTTON_LOOK, EmptyState, GLYPH, Screen, SealedPage, StackBarMenu } from "@repo/ui-native";
+import {
+  BUTTON_LOOK,
+  EmptyState,
+  GLYPH,
+  glyphSymbol,
+  Screen,
+  SealedPage,
+  StackBarMenu,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
+import { useMemo } from "react";
 import { PAGE_NEWEST, usePageHtml } from "../agents/use-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
@@ -18,15 +28,73 @@ import { useLiveFollow } from "../host/live-follow.js";
 import { openInSafari } from "../open-link.js";
 import { usePageShownCount } from "../page-shown.js";
 import { useSurfaceOpen } from "../surface-open.js";
+import { threadOpen, useTaskComments } from "../tasks/use-comments.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
+import { pageMarks, threadsOn } from "../tasks/use-page-comments.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
+import { useOpenCommentThread } from "./comment-screens.js";
+import {
+  type CommentedPage,
+  useOpenNewPageComment,
+  useOpenPageThreads,
+} from "./page-comment-screens.js";
 
 /** What stands in a page's place where it could not be read. */
 const PAGE_WORDS = {
   FAILED: "The page could not be read.",
   MORE: "More",
   TRY_AGAIN: "Try again",
+  COMMENTS: "Comments",
+  COMMENT_ON_PAGE: "Comment on page",
 } as const;
+
+/**
+ * The comments on a page as its screen offers them: its threads, followed
+ * while it stands; the elements they are on, marked in the page; Comment,
+ * which opens a new thread on the words selected; a press on an element
+ * marked, which opens its thread, or the page's list where several stand
+ * on it; and the page's list itself. None of it starts a thread until the
+ * version read is known, since a thread names the version it was left on.
+ */
+function usePageCommenting(
+  page: Omit<CommentedPage, "taskId" | "version"> & {
+    readonly taskId: string | undefined;
+    readonly version: number | undefined;
+  },
+) {
+  const { taskId, pageId, version, title } = page;
+  const threads = useTaskComments(taskId, pageId);
+  const openThread = useOpenCommentThread();
+  const openNew = useOpenNewPageComment();
+  const openList = useOpenPageThreads();
+  const marks = useMemo(() => pageMarks(threads), [threads]);
+
+  const commented =
+    taskId === undefined || version === undefined ? undefined : { taskId, pageId, version, title };
+
+  const onOpenMark = (path: string) => {
+    const onIt = threadsOn(threads, path);
+    const [only] = onIt;
+
+    if (taskId === undefined || only === undefined) return;
+
+    if (onIt.length === 1) openThread(taskId, only.id, pageId);
+    else openList(taskId, pageId);
+  };
+
+  return {
+    threads,
+    open: threads.filter(threadOpen).length,
+    marks,
+    onOpenMark,
+    onComment:
+      commented === undefined
+        ? undefined
+        : ({ path, quote, section }: PagePicked) => openNew(commented, { path, quote, section }),
+    onCommentPage: commented === undefined ? undefined : () => openNew(commented, undefined),
+    onList: taskId === undefined ? undefined : () => openList(taskId, pageId),
+  };
+}
 
 /** The page's address on vespin.dev, under its workspace and its task; none until both are read. */
 function usePageAddress(
@@ -92,8 +160,11 @@ function useVersionOf(taskId: string | undefined, pageId: string, named: number 
 /**
  * One version of a page, opened whole in the app's one web view, sealed
  * from the network and from navigation, under the system's header naming
- * it, with a ⋯ that opens it in the browser. It reads until its task is
- * known.
+ * it, with a ⋯ that comments on the page whole and opens it in the
+ * browser, and, where the page has threads, a comments glyph counting the
+ * open ones, which lists them. The words its threads quote stand tinted in
+ * the page, a press in one opening its thread, and Comment stands in the
+ * menu over words selected in it. It reads until its task is known.
  */
 export function PageScreen({
   workspaceId,
@@ -115,6 +186,28 @@ export function PageScreen({
   const address = usePageAddress(workspaceId, taskId, pageId);
   const named = "title" in read && read.title !== "" ? read.title : title;
   const shown = usePageShownCount(asked !== undefined, "html" in read);
+  const comments = usePageCommenting({ taskId, pageId, version, title: named });
+
+  const actions = [
+    ...(comments.onCommentPage === undefined
+      ? []
+      : [
+          {
+            label: PAGE_WORDS.COMMENT_ON_PAGE,
+            symbol: GLYPH.COMMENT,
+            onPress: comments.onCommentPage,
+          },
+        ]),
+    ...(address === undefined
+      ? []
+      : [
+          {
+            label: VERB.OPEN_IN_BROWSER,
+            symbol: GLYPH.OPEN_EXTERNALLY,
+            onPress: () => openInSafari(address),
+          },
+        ]),
+  ];
 
   const failed = (
     <EmptyState
@@ -127,22 +220,23 @@ export function PageScreen({
   return (
     <>
       <Stack.Screen options={{ title: named }} />
-      {address === undefined ? null : (
+      {actions.length === 0 ? null : (
         <Stack.Toolbar placement="right">
+          {comments.threads.length === 0 || comments.onList === undefined ? null : (
+            <Stack.Toolbar.Button
+              icon={glyphSymbol(GLYPH.COMMENT)}
+              accessibilityLabel={PAGE_WORDS.COMMENTS}
+              onPress={comments.onList}
+            >
+              {PAGE_WORDS.COMMENTS}
+              {comments.open === 0 ? null : (
+                <Stack.Toolbar.Badge>{`${comments.open}`}</Stack.Toolbar.Badge>
+              )}
+            </Stack.Toolbar.Button>
+          )}
           <Stack.Toolbar.View>
             <StackBarMenu
-              menu={{
-                label: PAGE_WORDS.MORE,
-                symbol: GLYPH.MORE,
-                choices: [],
-                actions: [
-                  {
-                    label: VERB.OPEN_IN_BROWSER,
-                    symbol: GLYPH.OPEN_EXTERNALLY,
-                    onPress: () => openInSafari(address),
-                  },
-                ],
-              }}
+              menu={{ label: PAGE_WORDS.MORE, symbol: GLYPH.MORE, choices: [], actions }}
             />
           </Stack.Toolbar.View>
         </Stack.Toolbar>
@@ -152,7 +246,14 @@ export function PageScreen({
       {"failed" in read ? (
         <Screen>{failed}</Screen>
       ) : (
-        <SealedPage html={"html" in read ? read.html : undefined} title={named} onLoaded={shown} />
+        <SealedPage
+          html={"html" in read ? read.html : undefined}
+          title={named}
+          onLoaded={shown}
+          marks={comments.marks}
+          onComment={comments.onComment}
+          onOpenMark={comments.onOpenMark}
+        />
       )}
     </>
   );

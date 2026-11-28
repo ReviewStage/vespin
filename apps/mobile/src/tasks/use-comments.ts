@@ -39,6 +39,7 @@ import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { COMMENT_SUBJECT, TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
+import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
   BUZZ,
   buzz,
@@ -168,34 +169,53 @@ function keepStartDraft(
   else startDrafts.set(taskId, spans);
 }
 
+/** The comments a task's subject holds as the host tells them: its description's own, or one of its pages' where `pageId` names one; none until a read of them first answers. */
+function heldComments(
+  state: AppStateSnapshot,
+  taskId: string | undefined,
+  pageId: string | undefined,
+) {
+  if (taskId === undefined) return undefined;
+  const held = state[LIVE_READ.DESCRIPTION_COMMENTS];
+
+  return pageId === undefined
+    ? held[COMMENT_SUBJECT.DESCRIPTION][taskId]
+    : held[COMMENT_SUBJECT.PAGE][pageId];
+}
+
 /**
- * A task's description threads, followed while `taskId` is named, the
- * oldest started first, resolved ones among them; none before the read
- * answers.
+ * A task's description threads, or one of its pages' where `pageId` names
+ * one, followed while `taskId` is named, the oldest started first,
+ * resolved ones among them; none before the read answers.
  */
-export function useTaskComments(taskId: string | undefined): readonly DescriptionCommentThread[] {
+export function useTaskComments(
+  taskId: string | undefined,
+  pageId?: string | undefined,
+): readonly DescriptionCommentThread[] {
   const acts = useHostActs();
-  useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_COMMENTS_FOLLOW]({ taskId: id }));
+  useLiveFollow(taskId === undefined ? undefined : (pageId ?? taskId), () =>
+    acts[ACT_KIND.TASKS_COMMENTS_FOLLOW]({
+      taskId: taskId ?? "",
+      ...(pageId === undefined ? undefined : { pageId }),
+    }),
+  );
 
   const { data: threads = NO_THREADS } = useQuery({
     ...appStateQuery,
-    select: (state) =>
-      taskId === undefined
-        ? undefined
-        : state[LIVE_READ.DESCRIPTION_COMMENTS][COMMENT_SUBJECT.DESCRIPTION][taskId]?.rows,
+    select: (state) => heldComments(state, taskId, pageId)?.rows,
   });
 
   return threads;
 }
 
-/** Whether a task's description threads have been read once, so a thread it does not hold is one that is not there rather than one still on its way. */
-export function useTaskCommentsHeld(taskId: string | undefined): boolean {
+/** Whether a task's description threads, or a page's where `pageId` names one, have been read once, so a thread it does not hold is one that is not there rather than one still on its way. */
+export function useTaskCommentsHeld(
+  taskId: string | undefined,
+  pageId?: string | undefined,
+): boolean {
   const { data: held = false } = useQuery({
     ...appStateQuery,
-    select: (state) =>
-      taskId !== undefined &&
-      state[LIVE_READ.DESCRIPTION_COMMENTS][COMMENT_SUBJECT.DESCRIPTION][taskId]?.rows !==
-        undefined,
+    select: (state) => heldComments(state, taskId, pageId)?.rows !== undefined,
   });
 
   return held;
@@ -207,20 +227,21 @@ function commentsRetryLost(cause: unknown): void {
 }
 
 /**
- * Reads a task's description threads again, as the panel's Try again does
- * (`TASKS_COMMENTS_RETRY`), where their read failed and none are held; none
- * otherwise, or while `taskId` names no task.
+ * Reads a task's description threads again, or a page's where `pageId`
+ * names one, as the panel's Try again does (`TASKS_COMMENTS_RETRY`), where
+ * their read failed and none are held; none otherwise, or while `taskId`
+ * names no task.
  */
-export function useTaskCommentsRetry(taskId: string | undefined): (() => void) | undefined {
+export function useTaskCommentsRetry(
+  taskId: string | undefined,
+  pageId?: string | undefined,
+): (() => void) | undefined {
   const acts = useHostActs();
 
   const { data: failed = false } = useQuery({
     ...appStateQuery,
     select: (state) => {
-      const held =
-        taskId === undefined
-          ? undefined
-          : state[LIVE_READ.DESCRIPTION_COMMENTS][COMMENT_SUBJECT.DESCRIPTION][taskId];
+      const held = heldComments(state, taskId, pageId);
 
       return held?.failed === true && held.rows === undefined;
     },
@@ -231,9 +252,12 @@ export function useTaskCommentsRetry(taskId: string | undefined): (() => void) |
       !failed || taskId === undefined
         ? undefined
         : () => {
-            acts[ACT_KIND.TASKS_COMMENTS_RETRY]({ taskId }).catch(commentsRetryLost);
+            acts[ACT_KIND.TASKS_COMMENTS_RETRY]({
+              taskId,
+              ...(pageId === undefined ? undefined : { pageId }),
+            }).catch(commentsRetryLost);
           },
-    [failed, taskId, acts],
+    [failed, taskId, pageId, acts],
   );
 }
 
@@ -446,7 +470,7 @@ export interface CommentReply {
 }
 
 /** A reply sent and not yet answered as posted: its words, the pictures it carried, and the key it went under. */
-interface SentReply {
+export interface SentReply {
   readonly words: string;
   readonly files: readonly AgentAttachment[];
   readonly key: string;
@@ -458,7 +482,11 @@ interface SentReply {
  * (`sameFiles`), since the service answers a key it took as posted whatever
  * the send carries, so a picture changed since would be dropped unseen.
  */
-function sameSend(sent: SentReply | undefined, words: string, files: readonly AgentAttachment[]) {
+export function sameSend(
+  sent: SentReply | undefined,
+  words: string,
+  files: readonly AgentAttachment[],
+) {
   return (
     sent !== undefined &&
     sent.words === words &&

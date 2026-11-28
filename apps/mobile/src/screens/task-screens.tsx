@@ -3353,7 +3353,7 @@ function repliesWords(count: number): string | undefined {
  * glyph and mutes its words. A swipe from the trailing edge resolves it, or
  * reopens it once resolved, which a full swipe runs; a press opens it.
  */
-function CommentRow({
+export function CommentRow({
   thread,
   now,
   onSettle,

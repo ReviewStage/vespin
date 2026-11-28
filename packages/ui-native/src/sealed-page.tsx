@@ -1,5 +1,13 @@
-// sealed-page.tsx -- a page an agent showed, drawn whole in the app's one web view: its HTML handed in, sealed from every network and every navigation, in the brand's theme.
+// sealed-page.tsx -- a page an agent showed, drawn whole in the app's one web view: its HTML handed in, sealed from every network and every navigation, in the brand's theme, its threads' words tinted and Comment offered on words selected in it.
 
+import {
+  PAGE_PICK_ACT,
+  PAGE_PICK_TYPE,
+  type PageMark,
+  type PagePickAsk,
+  type PagePicked,
+  pagePickAnswerSchema,
+} from "@repo/features/page-pick";
 import {
   PAGE_THEME_SCHEME,
   PAGE_THEME_VARIABLE,
@@ -7,7 +15,17 @@ import {
   type PageThemeVariable,
 } from "@repo/features/page-theme";
 import { sealedPageDocument } from "@repo/features/sealed-page";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { Option, Schema } from "effect";
+import {
+  type ComponentType,
+  type RefAttributes,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -17,7 +35,13 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { WebView, type WebViewNavigation } from "react-native-webview";
+import {
+  WebView,
+  type WebViewMessageEvent,
+  type WebViewNavigation,
+  type WebViewProps,
+} from "react-native-webview";
+import { useKeeping } from "./held-menu.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { TEXT_SIZE } from "./tokens/type.js";
 
@@ -45,6 +69,43 @@ const REVEAL_MS = 200;
 /** The empty page WebKit starts on while the page's HTML is still read, named by `title` so its load is told from the page's own. */
 function startingDocument(title: string): string {
   return `<title>${title}</title>`;
+}
+
+/** The acts of the menu over words selected in a page its reader comments on, by the key the web view hands back. */
+const PAGE_MENU = {
+  COPY: "copy",
+  COMMENT: "comment",
+} as const;
+
+/**
+ * The menu over words selected in a page its reader comments on: Copy, as
+ * WebKit's own menu leads with it, and Comment. Note that react-native-webview
+ * stands its items in place of WebKit's own, so Copy is offered again here.
+ */
+const PAGE_MENU_ITEMS = [
+  { label: "Copy", key: PAGE_MENU.COPY },
+  { label: "Comment", key: PAGE_MENU.COMMENT },
+];
+
+/** What the page's pick posts, read from the string its bridge hands over (`@repo/features/sealed-page`). */
+const decodePick = Schema.decodeUnknownOption(Schema.fromJsonString(pagePickAnswerSchema));
+
+/** The web view as its ref holds it: what runs a script in its page. */
+interface PageView {
+  readonly injectJavaScript: (script: string) => void;
+}
+
+/**
+ * The web view, taking its ref. Note that react-native-webview's types
+ * declare the view a plain function component, while each platform's view
+ * forwards its ref to the instance whose `injectJavaScript` its own
+ * documentation calls through.
+ */
+const PageWebView: ComponentType<WebViewProps & RefAttributes<PageView>> = WebView;
+
+/** The script that posts an ask to the page's pick, as a frame's parent posts one; it answers `true`, as an injected script must. */
+function askScript(ask: PagePickAsk): string {
+  return `window.postMessage(${JSON.stringify(ask)}, "*"); true;`;
 }
 
 /** What the loading ground is heard as while it stands, as Safari's own page is heard while it loads. */
@@ -139,6 +200,12 @@ type SealedPageProps = {
   readonly title: string;
   /** Told once the page has first loaded, as its loading ground starts to fade, so its opener can count how long it took. */
   readonly onLoaded?: (() => void) | undefined;
+  /** The elements the page's threads are on, the words a thread quotes tinted in each; none for a page no one comments on. */
+  readonly marks?: readonly PageMark[] | undefined;
+  /** Offers Comment in the menu over words selected in the page, handing on the words as its pick read them, with the element holding them. */
+  readonly onComment?: ((picked: PagePicked) => void) | undefined;
+  /** Told the path of the element marked that a press landed in, so its threads open. */
+  readonly onOpenMark?: ((path: string) => void) | undefined;
 };
 
 /**
@@ -181,16 +248,85 @@ function PageLoading({
   );
 }
 
+/**
+ * The page's comments, where it has any: the words selected in it, as its
+ * pick last posted them, which Comment starts a thread on and lets go of;
+ * Copy for those words; the marks posted to the pick on each load of the
+ * page and each change of them; and a press on an element marked handed on.
+ * Note that the page's own scripts share the web view with the pick, so
+ * what it posts is read only in the pick's shape, and a page can at most
+ * open one of its own threads or quote other words on a comment about
+ * itself.
+ */
+function usePageComments(
+  { marks, onComment, onOpenMark }: Pick<SealedPageProps, "marks" | "onComment" | "onOpenMark">,
+  loads: number,
+) {
+  const view = useRef<PageView>(null);
+  const selected = useRef<PagePicked | undefined>(undefined);
+  const keeping = useKeeping();
+
+  const ask = useCallback(
+    (message: PagePickAsk) => view.current?.injectJavaScript(askScript(message)),
+    [],
+  );
+
+  useEffect(() => {
+    if (loads === 0 || marks === undefined) return;
+    ask({ type: PAGE_PICK_TYPE, act: PAGE_PICK_ACT.MARK, marks });
+  }, [ask, loads, marks]);
+
+  const heard = (event: WebViewMessageEvent) => {
+    const said = Option.getOrUndefined(decodePick(event.nativeEvent.data));
+
+    if (said === undefined) return;
+
+    if ("selected" in said) selected.current = said.selected ?? undefined;
+    else if ("opened" in said) onOpenMark?.(said.opened);
+  };
+
+  const menuPressed = (event: {
+    readonly nativeEvent: { readonly key: string; readonly selectedText: string };
+  }) => {
+    const { key, selectedText } = event.nativeEvent;
+
+    if (key === PAGE_MENU.COPY) keeping?.copyWords(selectedText);
+
+    if (key !== PAGE_MENU.COMMENT || selected.current === undefined) return;
+    onComment?.(selected.current);
+    // Note that the words commented on are let go of, as the panel lets them go once a comment quotes them, so the tint stands clear under no selection once the thread starts.
+    ask({ type: PAGE_PICK_TYPE, act: PAGE_PICK_ACT.UNSELECT });
+  };
+
+  const picks = marks !== undefined || onComment !== undefined || onOpenMark !== undefined;
+
+  // Note that a web view handed no `onMessage` stands no bridge to the native side, so a page no one comments on posts nothing.
+  return {
+    picks,
+    view,
+    webView: {
+      ...(picks ? { onMessage: heard } : undefined),
+      ...(onComment === undefined
+        ? undefined
+        : { menuItems: PAGE_MENU_ITEMS, onCustomMenuSelection: menuPressed }),
+    } satisfies WebViewProps,
+  };
+}
+
 /** The page at one text size, with its loading ground until it first loads. */
 function SealedPageAt({
   html,
   title,
   onLoaded,
   fontScale,
+  ...comments
 }: SealedPageProps & { readonly fontScale: number }) {
   const colors = useColors();
   const dark = useColorScheme() === "dark";
-  const [loaded, setLoaded] = useState(false);
+  // How many times the page itself has loaded, a later version's and a new theme's included, each of which the marks are posted to anew.
+  const [loads, setLoads] = useState(0);
+  const loaded = loads > 0;
+  const { picks, view, webView } = usePageComments(comments, loads);
   const [revealed, setRevealed] = useState(false);
   const reveal = useCallback(() => setRevealed(true), []);
   const starting = `vespin-starting-${useId()}`;
@@ -200,28 +336,31 @@ function SealedPageAt({
   if (html !== undefined && html !== drawn) setDrawn(html);
 
   const document = useMemo(
-    () => sealedPageDocument(drawn ?? startingDocument(starting), themeOf(colors, dark)),
-    [drawn, starting, colors, dark],
+    () => sealedPageDocument(drawn ?? startingDocument(starting), themeOf(colors, dark), { picks }),
+    [drawn, starting, colors, dark, picks],
   );
 
   // Note that the empty page WebKit starts on ends its load too, maybe only once the page's HTML has landed, so it is told apart by its title and only the page itself ends the ground.
   const loadEnded = (event: { readonly nativeEvent: { readonly title: string } }) => {
     if (drawn === undefined || event.nativeEvent.title === starting) return;
-    setLoaded(true);
-    onLoaded?.();
+    setLoads((was) => was + 1);
+
+    if (!loaded) onLoaded?.();
   };
 
   // Note that the web view is hidden from accessibility until the ground has gone, because WebKit hands its words to accessibility before they are drawn.
   // Note that a failed load ends the ground too, since react-native-webview calls `onLoadEnd` on an error, and so does WebKit's page process ending before it loaded, which calls neither, so the ground never stands for good.
   return (
     <View style={styles.page}>
-      <WebView
+      <PageWebView
+        ref={view}
+        {...webView}
         source={{ html: document }}
         injectedJavaScriptBeforeContentLoaded={textScaleScript(fontScale)}
         originWhitelist={EVERY_ADDRESS}
         onShouldStartLoadWithRequest={staysSealed}
         onLoadEnd={loadEnded}
-        onContentProcessDidTerminate={() => setLoaded(true)}
+        onContentProcessDidTerminate={() => setLoads((was) => Math.max(was, 1))}
         javaScriptEnabled
         domStorageEnabled={false}
         cacheEnabled={false}
@@ -254,7 +393,7 @@ function SealedPageAt({
  * still read rather than after it, and the page draws the sooner once it
  * lands.
  */
-export function SealedPage({ html, title, onLoaded }: SealedPageProps) {
+export function SealedPage({ html, title, onLoaded, ...comments }: SealedPageProps) {
   const { fontScale } = useWindowDimensions();
 
   // Note that the page is drawn anew at a new text size, since its script runs once, before the page, and so waits on its load again.
@@ -265,6 +404,7 @@ export function SealedPage({ html, title, onLoaded }: SealedPageProps) {
       title={title}
       onLoaded={onLoaded}
       fontScale={fontScale}
+      {...comments}
     />
   );
 }

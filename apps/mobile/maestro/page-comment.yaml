@@ -1,0 +1,105 @@
+# page-comment.yaml -- a page an agent showed, its thread's words tinted in it and its bar counting its open threads; words held in it offering Comment in the menu over them, which opens a new thread on those words in the comment sheet with the words quoted and the comment field taking the keyboard; Send opening the thread at once in the sheet, Close letting the sheet go with the words now tinted, and a tap on them opening their thread in the sheet again; then the bar's comments glyph listing the page's threads, and ⋯ › Comment on page opening a thread on the page whole.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that an iPad stands in landscape, where the agent's page stands in the
+# detail column beside the list, and that the window is turned back upright
+# however the flow ends, because a run left in landscape fails every flow
+# after it.
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, opened on the invitations agent's page
+# by `-agent <id>`, as `agent.yaml` is, whose second turn shows the funnel
+# page as a card. The fixture holds one thread on the page, Grace's on its
+# Expired step, and answers a comment start on it with the new thread.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+    timeout: 90000
+- extendedWaitUntil:
+    visible: "Build teammate invitations"
+    timeout: 30000
+# Note that the card is scrolled to in short steps until it stands clear
+# under the agent's name in the bar (`scroll-to.yaml`'s `BELOW`), as
+# `agent.yaml` reaches it.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Invite funnel, Page"
+      BELOW: "Build teammate invitations"
+      BESIDE: ${FLOATING_TABS}
+- tapOn: "Invite funnel, Page"
+# Note that the wait is long, because the first web view a freshly booted
+# simulator opens launches WebKit's processes (`agent.yaml`).
+- extendedWaitUntil:
+    visible: "Invites sent in the staging workspace.*"
+    timeout: 90000
+- extendedWaitUntil:
+    notVisible: "Loading"
+    timeout: 5000
+# The page opens with Grace's thread's words tinted, and the bar's comments
+# glyph counting the one open thread.
+- assertVisible: "Comments"
+- waitForAnimationToEnd
+- takeScreenshot: page-comment-tinted
+# A long press on the page's words selects one, and the menu over it offers
+# Copy and Comment.
+- longPressOn: "Invites sent in the staging workspace.*"
+- extendedWaitUntil:
+    visible: "Comment"
+    timeout: 5000
+- takeScreenshot: page-comment-menu
+- tapOn: "Comment"
+- assertVisible: "Add a comment"
+- inputText: "Is seven days the right window?"
+- waitForAnimationToEnd
+- takeScreenshot: page-comment-new
+# Send opens the thread in the field's place as it goes, the words its first
+# comment.
+- tapOn: "Send"
+- assertVisible: "Is seven days the right window?"
+- assertNotVisible: "Add a comment"
+- waitForAnimationToEnd
+- takeScreenshot: page-comment-sent
+- tapOn: "Close"
+- waitForAnimationToEnd
+# The words commented on now stand tinted in the page, and a tap on them
+# opens their thread in the sheet again.
+- takeScreenshot: page-comment-marked
+- tapOn: "Invites sent in the staging workspace.*"
+- assertVisible: "Is seven days the right window?"
+- assertVisible: "Resolve"
+- waitForAnimationToEnd
+- takeScreenshot: page-comment-opened
+- tapOn: "Close"
+- waitForAnimationToEnd
+# The bar's comments glyph lists the page's threads, the new one beside
+# Grace's, each opening its thread.
+- tapOn: "Comments"
+- assertVisible: "Do expired invites count once each, or again after a resend?"
+- assertVisible: "Is seven days the right window?"
+- waitForAnimationToEnd
+- takeScreenshot: page-comment-list
+- tapOn: "Do expired invites count once each, or again after a resend?"
+- assertVisible: "“Expired”"
+- waitForAnimationToEnd
+- takeScreenshot: page-comment-list-thread
+# Close steps back to the list, which the sheet opened on, and the list's own
+# Close lets the sheet go.
+- tapOn: "Close"
+- waitForAnimationToEnd
+- tapOn: "Close"
+- waitForAnimationToEnd
+# ⋯ › Comment on page opens a new thread on the page whole, headed by the
+# page's title.
+- tapOn: "More"
+- tapOn: "Comment on page"
+- assertVisible: "Add a comment"
+- waitForAnimationToEnd
+- takeScreenshot: page-comment-whole-page

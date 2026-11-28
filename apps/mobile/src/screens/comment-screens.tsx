@@ -3,6 +3,10 @@
 import { PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
+import {
+  DESCRIPTION_COMMENT_SCOPE,
+  type DescriptionCommentThread,
+} from "@repo/features/description-comment-wire";
 import { agentName, providerOf } from "@repo/features/model-label";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { readFailedWords, readingWords } from "@repo/features/words";
@@ -56,20 +60,32 @@ const WORDS = {
   RESOLVE: "Resolve",
   REOPEN: "Reopen",
   CLOSE: "Close",
+  ON_PAGE: "The whole page",
 } as const;
 
 /** The comment sheet's routes: a thread, by its id and its task, and a new thread on words of the task's description. */
-const COMMENT_ROUTE = {
+export const COMMENT_ROUTE = {
   THREAD: "/task-comment",
   NEW: "/task-comment/new",
 } as const;
 
-/** Opens a thread of a task's description in the comment sheet over the screen in front. */
-export function useOpenCommentThread(): (taskId: string, threadId: string) => void {
+/** Opens a thread of a task's description, or of one of its pages where `pageId` names one, in the comment sheet over the screen in front. */
+export function useOpenCommentThread(): (
+  taskId: string,
+  threadId: string,
+  pageId?: string,
+) => void {
   const router = useRouter();
 
-  return (taskId, threadId) =>
-    router.push({ pathname: COMMENT_ROUTE.THREAD, params: { id: threadId, task: taskId } });
+  return (taskId, threadId, pageId) =>
+    router.push({
+      pathname: COMMENT_ROUTE.THREAD,
+      params: {
+        id: threadId,
+        task: taskId,
+        ...(pageId === undefined ? undefined : { page: pageId }),
+      },
+    });
 }
 
 /** Opens a new thread on a span of a task's description, its Markdown offsets and the words it quotes, in the comment sheet over the screen in front. */
@@ -92,7 +108,7 @@ export function useOpenNewComment(): (
  * Note that at half height the sheet stands on its own glass, so its page
  * paints no ground there (`useSheetAtHalf`).
  */
-function CommentSheetBar({
+export function CommentSheetBar({
   path,
   half,
 }: {
@@ -128,7 +144,7 @@ function CommentSheetBar({
 }
 
 /** A comment field's head: the pictures it carries, each taken off on a press, and what its last send or a picture's bound said; none while it holds neither. */
-function fieldHead(pictures: CommentReply["pictures"], note: string | undefined) {
+export function fieldHead(pictures: CommentReply["pictures"], note: string | undefined) {
   if (pictures.attached.length === 0 && note === undefined) return undefined;
 
   return (
@@ -228,13 +244,15 @@ function BlockState({ overview }: { readonly overview: TaskOverview | undefined 
  */
 function ThreadMissing({
   taskId,
+  pageId,
   overview,
 }: {
   readonly taskId: string;
+  readonly pageId: string | undefined;
   readonly overview: TaskOverview | undefined;
 }) {
-  const held = useTaskCommentsHeld(overview?.task.id);
-  const retry = useTaskCommentsRetry(overview?.task.id);
+  const held = useTaskCommentsHeld(overview?.task.id, pageId);
+  const retry = useTaskCommentsRetry(overview?.task.id, pageId);
 
   if (overview === undefined) return <TaskMissing taskId={taskId} notFound={WORDS.NOT_FOUND} />;
 
@@ -254,7 +272,7 @@ function ThreadMissing({
 }
 
 /** A comment screen's path, as the bar names it: the task's name and its key. */
-function commentPath(overview: TaskOverview | undefined): readonly string[] {
+export function commentPath(overview: TaskOverview | undefined): readonly string[] {
   const task = overview?.task;
 
   const key =
@@ -266,8 +284,15 @@ function commentPath(overview: TaskOverview | undefined): readonly string[] {
 }
 
 /** The words a thread stands on, as its heading quotes them, or that they are gone where every one was deleted. */
-function quoteOf(quote: string, anchored: boolean): string {
+export function quoteOf(quote: string, anchored: boolean): string {
   return anchored && quote.trim() !== "" ? `“${quote.trim()}”` : WORDS.GONE;
+}
+
+/** What a thread's heading says: the words it stands on, a thread on a page's element its element's words, and one on a page whole the page's title, or that it is on the page before the service names it. */
+function threadHeading(thread: DescriptionCommentThread): string {
+  if (thread.scope === DESCRIPTION_COMMENT_SCOPE.PAGE) return thread.quote.trim() || WORDS.ON_PAGE;
+
+  return quoteOf(thread.quote, thread.anchor !== undefined || thread.page !== undefined);
 }
 
 /**
@@ -284,24 +309,30 @@ function quoteOf(quote: string, anchored: boolean): string {
  * pushes it.
  */
 export function CommentThreadScreen() {
-  const { id = "", task: taskId = "" } = useLocalSearchParams<{ id: string; task: string }>();
+  const {
+    id = "",
+    task: taskId = "",
+    page,
+  } = useLocalSearchParams<{ id: string; task: string; page?: string }>();
 
-  return <CommentThread threadId={id} taskId={taskId} />;
+  return <CommentThread threadId={id} taskId={taskId} pageId={page} />;
 }
 
-/** One thread of a task's description, as `CommentThreadScreen` describes it. */
+/** One thread of a task's description, or of the page `pageId` names, as `CommentThreadScreen` describes it. */
 function CommentThread({
   threadId: id,
   taskId,
+  pageId,
 }: {
   readonly threadId: string;
   readonly taskId: string;
+  readonly pageId: string | undefined;
 }) {
   const half = useSheetAtHalf();
   const overview = useTaskOverview(taskId);
   // Note that a link opens on the tabs under the sheet, closing it, since a push from inside the sheet would stand the tabs again inside it.
   const openLink = useOpenLink(overview?.task.workspaceId, LINK_OPENS.OUT_OF_SHEET);
-  const threads = useTaskComments(overview?.task.id);
+  const threads = useTaskComments(overview?.task.id, pageId);
   const thread = threads.find((each) => each.id === id);
   const reply = useCommentReply(taskId, id);
   const media = useCommentMedia(overview?.task.id, thread);
@@ -367,7 +398,7 @@ function CommentThread({
           quoted
           path={path}
           status={task.status}
-          title={quoteOf(thread.quote, thread.anchor !== undefined)}
+          title={threadHeading(thread)}
           messages={threadMessages(thread, agents, pictureOf, media)}
           repository={task.repository}
           onOpenLink={openLink}
@@ -392,7 +423,7 @@ function CommentThread({
       )}
       {thread === undefined ? (
         <Screen clear={half}>
-          <ThreadMissing taskId={taskId} overview={overview} />
+          <ThreadMissing taskId={taskId} pageId={pageId} overview={overview} />
         </Screen>
       ) : (
         <GlassDock bar={<Composer {...composer} />}>

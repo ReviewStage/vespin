@@ -21,7 +21,9 @@ import { DESCRIPTION_COMMENT_BOUNDS } from "./description-comment-wire.js";
  * page, with where they stand and the element holding them, as a press or
  * a key lets them go, or a finger's rests, and that none are once they go;
  * and it says a press landed in the page that selected nothing, which
- * dismisses a card standing over it, as a press anywhere else does; and
+ * dismisses a card standing over it, as a press anywhere else does; that
+ * a press let go in an element marked, by its path, so a client with no
+ * pins opens the threads on it, as the iPhone does; and
  * which element marked the pointer is over, so the panel tells its
  * comments as it does over the element's pin.
  * The outline is a stylesheet the document adopts over an attribute set on
@@ -119,9 +121,10 @@ export type PagePicked = typeof pickedSchema.Type;
  * was let go, by Escape in the page; where each element marked stands, or
  * none where the page holds it no more; the words selected, in the shape
  * of an element picked whose quote they are, or none once they go; that
- * a press landed in the page, selecting nothing; or the element marked that
- * the pointer is over, the innermost where several hold it, or none as it
- * leaves them.
+ * a press landed in the page, selecting nothing; the element marked a
+ * press selecting nothing let go in, the innermost where several hold it,
+ * outside a link; or the element marked that the pointer is over, the
+ * innermost where several hold it, or none as it leaves them.
  */
 export const pagePickAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ type: EffectSchema.Literal(PAGE_PICK_TYPE), picked: pickedSchema }),
@@ -142,6 +145,10 @@ export const pagePickAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
     type: EffectSchema.Literal(PAGE_PICK_TYPE),
     pressed: EffectSchema.Literal(true),
+  }),
+  EffectSchema.Struct({
+    type: EffectSchema.Literal(PAGE_PICK_TYPE),
+    opened: elementPathSchema,
   }),
   EffectSchema.Struct({
     type: EffectSchema.Literal(PAGE_PICK_TYPE),
@@ -380,14 +387,19 @@ export const PAGE_PICK_SCRIPT = `(() => {
     else told.settle = setTimeout(tellSelected, 300);
   });
 
-  // The element marked that the pointer is over, the innermost, said as it changes; none while picking, which outlines what it is over instead.
-  const tellOver = (element) => {
-    let over = null;
+  // The element marked that holds an element, the innermost, by its path; none where none does, or while picking.
+  const markedAround = (element) => {
+    let around = null;
     for (const { path } of pick.on || element === null ? [] : told.marks) {
       const marked = find(path);
-      if (marked !== null && marked.contains(element) && (over === null || over.element.contains(marked))) over = { path, element: marked };
+      if (marked !== null && marked.contains(element) && (around === null || around.element.contains(marked))) around = { path, element: marked };
     }
-    const path = over === null ? null : over.path;
+    return around === null ? null : around.path;
+  };
+
+  // The element marked that the pointer is over, the innermost, said as it changes; none while picking, which outlines what it is over instead.
+  const tellOver = (element) => {
+    const path = markedAround(element);
     if (path === told.over) return;
     told.over = path;
     post({ over: path });
@@ -420,6 +432,14 @@ export const PAGE_PICK_SCRIPT = `(() => {
   // Note that a press the pick took for itself stops before this, and one that selected words is a selection's.
   addEventListener("click", () => {
     if (getSelection()?.isCollapsed !== false) post({ pressed: true });
+  }, true);
+
+  // Note that the element marked is told as a press lets go rather than on its click, because WebKit on a phone clicks no element that listens for none itself, and a finger that scrolls or selects lets go of nothing, its press canceled; one on a link is the link's.
+  addEventListener("pointerup", (event) => {
+    const element = target(event);
+    if (element === null || element.closest("a[href]") !== null || getSelection()?.isCollapsed === false) return;
+    const opened = markedAround(element);
+    if (opened !== null) post({ opened });
   }, true);
 
   addEventListener("keydown", (event) => {

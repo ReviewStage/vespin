@@ -2195,6 +2195,39 @@ const INVITES_THREADS: readonly DescriptionCommentThread[] = [
   },
 ];
 
+/** The path the funnel page's Expired step stands at, as the page's pick writes an element's path. */
+const EXPIRED_STEP =
+  "body > table:nth-of-type(1) > tbody:nth-of-type(1) > tr:nth-of-type(5) > td:nth-of-type(1)";
+
+/** The threads on the funnel page the agent showed: Grace's question on the words of its Expired step, so the page opens with one tinted and its comments counted. */
+const PAGE_THREADS: readonly DescriptionCommentThread[] = [
+  {
+    id: fixtureId(310),
+    scope: DESCRIPTION_COMMENT_SCOPE.WORDS,
+    quote: "Expired",
+    page: { id: FIXTURE_PAGE.id, version: FIXTURE_PAGE.version, element: EXPIRED_STEP },
+    section: "Invite funnel",
+    status: DESCRIPTION_COMMENT_STATUS.OPEN,
+    entries: [
+      {
+        id: fixtureId(311),
+        kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+        writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: GRACE },
+        words: "Do expired invites count once each, or again after a resend?",
+        at: LANDED - HOUR,
+      },
+    ],
+    createdAt: LANDED - HOUR,
+    updatedAt: LANDED - HOUR,
+    revision: 1,
+  },
+];
+
+/** Whether a thread is the funnel page's, rather than the description's. */
+function onFixturePage(thread: DescriptionCommentThread): boolean {
+  return thread.page?.id === FIXTURE_PAGE.id;
+}
+
 /**
  * The threads a fixture run wrote on the invites task's description, by id,
  * each as the run last left it: one it started, or a staged one it replied
@@ -2240,23 +2273,38 @@ function stagedComments(
 
   if (staged?.writes === runThreadWrites) return staged.laid;
 
-  // Note that each staged thread stands as the run last left it, then each thread the run started, in the order it started them, then any other the host drew.
-  const standing = INVITES_THREADS.map((thread) => RUN_THREADS.get(thread.id) ?? thread);
-
-  const started = [...RUN_THREADS.values()].filter(
-    (thread) => !INVITES_THREADS.some((each) => each.id === thread.id),
-  );
-
-  const drawn = (held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows ?? []).filter(
-    (thread) =>
-      !RUN_THREADS.has(thread.id) && !INVITES_THREADS.some((each) => each.id === thread.id),
-  );
+  // Note that each staged thread stands as the run last left it, then each thread the run started, in the order it started them, then any other the host drew, the description's and the funnel page's apart.
+  const laidOver = (
+    staged: readonly DescriptionCommentThread[],
+    page: boolean,
+    drawn: readonly DescriptionCommentThread[] | undefined,
+  ) => [
+    ...staged.map((thread) => RUN_THREADS.get(thread.id) ?? thread),
+    ...[...RUN_THREADS.values()].filter(
+      (thread) => onFixturePage(thread) === page && !staged.some((each) => each.id === thread.id),
+    ),
+    ...(drawn ?? []).filter(
+      (thread) => !RUN_THREADS.has(thread.id) && !staged.some((each) => each.id === thread.id),
+    ),
+  ];
 
   const laid = {
     ...held,
     [COMMENT_SUBJECT.DESCRIPTION]: {
       ...held[COMMENT_SUBJECT.DESCRIPTION],
-      [TASK.INVITES]: { rows: [...standing, ...started, ...drawn] },
+      [TASK.INVITES]: {
+        rows: laidOver(
+          INVITES_THREADS,
+          false,
+          held[COMMENT_SUBJECT.DESCRIPTION][TASK.INVITES]?.rows,
+        ),
+      },
+    },
+    [COMMENT_SUBJECT.PAGE]: {
+      ...held[COMMENT_SUBJECT.PAGE],
+      [FIXTURE_PAGE.id]: {
+        rows: laidOver(PAGE_THREADS, true, held[COMMENT_SUBJECT.PAGE][FIXTURE_PAGE.id]?.rows),
+      },
     },
   };
 
@@ -4267,13 +4315,49 @@ const ANSWERS: StagedAnswers = {
   // Note that a description's edit is taken as the service takes one, though nothing here moves, so the page draws the description it held.
   [ACT_KIND.TASKS_EDIT]: () => ({ saved: true }),
   [ACT_KIND.TASKS_DELETE]: () => true,
-  // Note that a new comment on the invites task's description is taken as the service takes one, answered with its thread under the id the window chose and kept on the comments slice, so a flow sees the thread open with the words as its first comment.
+  // Note that a new comment on the invites task's description, or on its funnel page, is taken as the service takes one, answered with its thread under the id the window chose and kept on the comments slice, so a flow sees the thread open with the words as its first comment.
   [ACT_KIND.TASKS_COMMENT_START]: ({ taskId, start }) => {
-    if (taskId !== TASK.INVITES || !("scope" in start)) {
-      return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
-    }
+    if (taskId !== TASK.INVITES) return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
 
     const at = Date.now();
+
+    const first = {
+      id: fixtureId(308),
+      kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
+      writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
+      words: start.words,
+      at,
+    };
+
+    // Note that a thread on the page takes its element's words, or the page's title where it is on the page whole, as the service quotes one.
+    if ("page" in start) {
+      if (start.page.id !== FIXTURE_PAGE.id) {
+        return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
+      }
+
+      const { element } = start;
+      const page = { id: start.page.id, version: start.page.version };
+
+      return {
+        thread: keepRunThread({
+          id: start.id ?? fixtureId(312),
+          scope:
+            element === undefined
+              ? DESCRIPTION_COMMENT_SCOPE.PAGE
+              : element.words === true
+                ? DESCRIPTION_COMMENT_SCOPE.WORDS
+                : DESCRIPTION_COMMENT_SCOPE.ELEMENT,
+          quote: element?.quote ?? FIXTURE_PAGE.title,
+          page: element === undefined ? page : { ...page, element: element.path },
+          section: element?.section ?? "",
+          status: DESCRIPTION_COMMENT_STATUS.OPEN,
+          entries: [first],
+          createdAt: at,
+          updatedAt: at,
+          revision: 1,
+        }),
+      };
+    }
 
     const thread: DescriptionCommentThread = {
       id: start.id ?? fixtureId(307),
@@ -4282,15 +4366,7 @@ const ANSWERS: StagedAnswers = {
       anchor: start.anchor,
       section: "Goal",
       status: DESCRIPTION_COMMENT_STATUS.OPEN,
-      entries: [
-        {
-          id: fixtureId(308),
-          kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
-          writer: { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, by: ADA },
-          words: start.words,
-          at,
-        },
-      ],
+      entries: [first],
       createdAt: at,
       updatedAt: at,
       revision: 1,
@@ -4301,7 +4377,8 @@ const ANSWERS: StagedAnswers = {
   // Note that a reply, a resolve, or a reopen is taken as the service takes one, on a staged thread or one the run started, answered with its thread as it then stands and kept on the comments slice, so the thread's page and its task's Comments draw it moved.
   [ACT_KIND.TASKS_COMMENT_ACT]: ({ taskId, threadId, action }) => {
     const thread =
-      RUN_THREADS.get(threadId) ?? INVITES_THREADS.find((each) => each.id === threadId);
+      RUN_THREADS.get(threadId) ??
+      [...INVITES_THREADS, ...PAGE_THREADS].find((each) => each.id === threadId);
 
     if (taskId !== TASK.INVITES || thread === undefined) {
       return { failure: DESCRIPTION_COMMENT_CALL_FAILURE.NOT_FOUND };
