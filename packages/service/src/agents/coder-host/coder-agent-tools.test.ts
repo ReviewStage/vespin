@@ -2498,6 +2498,7 @@ test("list_models says the default is no longer offered where the catalog droppe
         ? Effect.succeed([sol])
         : Effect.fail(new ModelCatalogUnavailable({ cause: "offline" }));
     }),
+    held: Effect.succeed([sol]),
   });
 
   const once = await peerCaller(hostOf(), agents.caller, agentSessions.services, flaky);
@@ -2521,6 +2522,7 @@ test("list_models says the default is no longer offered where the catalog droppe
 
   const unreadable = Layer.succeed(ModelCatalog, {
     read: Effect.fail(new ModelCatalogUnavailable({ cause: "offline" })),
+    held: Effect.succeed([]),
   });
 
   const blind = await peerCaller(hostOf(), agents.caller, agentSessions.services, unreadable);

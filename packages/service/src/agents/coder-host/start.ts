@@ -56,6 +56,7 @@ import type { ManagerFace } from "@repo/features/manager-face";
 import { automationRun } from "@repo/features/model-label";
 import {
   agentFallbackChoice,
+  MODEL_PROVIDER,
   type ModelChoice,
   type ModelProvider,
 } from "@repo/features/models-wire";
@@ -103,6 +104,7 @@ import {
   ModelChoiceRefused,
   type OfferedModel,
   offeredToAccount,
+  providerModelOf,
   validateModelChoice,
 } from "../../providers/model-catalog.js";
 import { mentionedServers } from "../mentioned-context.js";
@@ -353,9 +355,12 @@ export const accountModelPayers = /* @__PURE__ */ Effect.fnUntraced(function* (
  */
 const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
+  cursorWanted: (stored: ModelChoice | undefined) => boolean = () => true,
 ): Effect.fn.Return<
   {
     readonly choices: AccountModelChoices;
+    /** Whether the models offered are all the account is offered; not where Cursor's are left out because the choice asked about runs on no Cursor model, whose list a Start then never waits on. */
+    readonly complete: boolean;
     readonly keys: AccountKeyRows;
     /** The account's Default permissions; none where it never chose. */
     readonly permissionMode: AgentPermissionMode | undefined;
@@ -391,10 +396,11 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
     apiVersion: HOSTED_API_VERSION,
   };
 
-  // Cursor's own list is read with the account's key only where it is offered at all.
-  const cursorModels = offersCursor(cursor)
-    ? yield* (yield* CursorModelCatalog).forAccount(userId)
-    : [];
+  // Cursor's own list is read with the account's key only where it is offered at all and the caller wants it.
+  const offersCursorModels = offersCursor(cursor);
+  const cursorRead = offersCursorModels && cursorWanted(preferences?.agent);
+
+  const cursorModels = cursorRead ? yield* (yield* CursorModelCatalog).forAccount(userId) : [];
 
   const offered = yield* hostedStoreOrUnavailable(
     markedUnconnected(
@@ -408,6 +414,7 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   return {
     choices: { offered, defaultChoice: stored ?? agentFallbackChoice(offered) },
+    complete: cursorRead || !offersCursorModels,
     keys,
     permissionMode: preferences?.preferences.agentPermissionMode,
     newAgentServersOff: newAgentServersOffFrom(preferences?.preferences.newAgentServersOff),
@@ -438,14 +445,25 @@ const acceptedChoiceRead = /* @__PURE__ */ Effect.fnUntraced(function* (
   HostedRefusal | ModelChoiceRefused,
   DatabaseServices | ModelCatalog
 > {
-  const { choices, keys, permissionMode, newAgentServersOff } = yield* modelChoicesRead(userId);
+  // Note that a choice that runs on no Cursor model is checked without Cursor's list, which an account with Cursor agents on would wait on Cursor for (and decrypt its key for) to check a model of Anthropic's or OpenAI's.
+  const runsOnCursor = (choice: ModelChoice | undefined) =>
+    choice !== undefined && providerModelOf(choice.model)?.provider === MODEL_PROVIDER.CURSOR;
+
+  const read = yield* modelChoicesRead(userId, (stored) => runsOnCursor(named ?? stored));
+  const { choices, keys, permissionMode, newAgentServersOff } = read;
   const { offered, defaultChoice } = choices;
+  const validated = validateModelChoice(offered, named ?? defaultChoice);
 
-  const choice = yield* Effect.fromResult(
-    validateModelChoice(offered, named ?? defaultChoice),
-  ).pipe(Effect.mapError((reason) => new ModelChoiceRefused({ reason, offered })));
+  if (Result.isSuccess(validated)) {
+    return { choice: validated.success, keys, permissionMode, newAgentServersOff };
+  }
 
-  return { choice, keys, permissionMode, newAgentServersOff };
+  // A refusal lists every model the account is offered, Cursor's among them.
+  const listed = read.complete ? read : yield* modelChoicesRead(userId);
+
+  return yield* Effect.fail(
+    new ModelChoiceRefused({ reason: validated.failure, offered: listed.choices.offered }),
+  );
 });
 
 /** Where a Start lands, read as the account: the workspace whose installation reads the repository, the repository, none for a blank Start on a task with none, the task, none for a Start on no task, the account that may move it where that is the account asking, and the store's place for the agent with what it is handed. */
