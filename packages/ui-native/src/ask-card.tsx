@@ -55,6 +55,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 /** What a flow finds an ask's note by. */
 const ASK_NOTE_ID = "ask-note";
 
+/** What a flow finds an open ask's × by. */
+const RESOLVE_ASK_ID = "resolve-ask";
+
 /** How far a row's words stand in from its sides: none in the composer's head, which already stands its rows in as far as the field's words, so the two line up; a card's margin in a thread's card. */
 const ROW_SIDE = { BARE: 0, CARDED: SPACE.EDGE - 2 } as const;
 
@@ -303,10 +306,20 @@ export function ResolvableAsk({
 
   return (
     <HStack alignment="top" spacing={0}>
-      {children}
+      {/* Note that the controls take the row's width, so the × stands at its top end even beside a yes or no's two presses, which are narrower than the row. */}
+      <VStack
+        alignment="leading"
+        modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}
+      >
+        {children}
+      </VStack>
       <SwiftUIButton
         onPress={resolve.onPress}
-        modifiers={[buttonStyle("plain"), accessibilityLabel(resolve.label)]}
+        modifiers={[
+          buttonStyle("plain"),
+          accessibilityLabel(resolve.label),
+          accessibilityIdentifier(RESOLVE_ASK_ID),
+        ]}
       >
         <Image
           {...glyphImage(GLYPH.CLOSE)}

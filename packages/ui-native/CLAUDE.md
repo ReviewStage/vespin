@@ -462,7 +462,9 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
 - **An ask's rows** stand in the composer's head over its field, on its
   glass with no card of their own, as the panel's box holds them, each
   pick or press attaching its answer to the reply and taking it off pressed
-  again, the box's Send sending it, as the panel's controls clear (`ChoiceList`, a
+  again, the box's Send sending it, as the panel's controls clear, and an
+  × at their top end, muted, which resolves the thread without an answer,
+  as the panel's question wears it (`ResolvableAsk`) (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
   checks one, a "Recommended" tag before the check, and a detail line, its
   label and detail drawn as Markdown so a link of ours stands as its chip,
@@ -486,9 +488,7 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   rows a SwiftUI `Form` holds, drawn as rows because a `Form` scrolls on its
   own inside the head's scroll; the rows' words line up with the field's,
   and their hairlines start where the words do, as iOS insets a list's
-  separator; and `ResolvableAsk`'s × at their top end, muted, which
-  resolves the thread without an answer, as the panel's question stands
-  it); an answered or held ask's rows, which take no press, stand in a
+  separator); an answered or held ask's rows, which take no press, stand in a
   thread's message in the bordered card on `CARD` instead (`AskRows`'
   `carded`), as the panel's answered card and held ask stand there (the
   developer, Nov 27, 2026). **Cards** are kept for those and the pull request
