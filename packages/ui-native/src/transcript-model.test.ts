@@ -959,7 +959,7 @@ describe("managerChatItems", () => {
 
   const run = (opens: boolean, closes: boolean) => ({ opens, closes });
 
-  it("draws the chat's rows as a channel's, each headed by who sent it: its greeting first, the reader's own and a teammate's with the picture it kept and the file it carried, the Manager's in the runs placed, a set it showed as its pictures, a message on its way opening a run of its own after a pause past ten minutes, and its working line the Manager's", () => {
+  it("draws the chat's rows as a channel's, each headed by who sent it: its greeting first, the reader's own and a teammate's with the picture it kept and the file it carried, the Manager's in the runs placed, a set it showed as its pictures, a message on its way opening a run of its own after a pause past ten minutes, and while the Manager works no row of its own but the quiet line naming it at the chat's end", () => {
     // Note that the chat's rows stand newest first, as the slice holds them.
     const rows = [
       row("a2", 5, {
@@ -1012,7 +1012,7 @@ describe("managerChatItems", () => {
           ? [item.words, item.channel?.name, item.received, item.joinsAbove]
           : item.kind === TRANSCRIPT_ITEM.MEDIA
             ? [item.kind, item.media.map((media) => [media.id, media.label])]
-            : [item.kind, item.kind === TRANSCRIPT_ITEM.WORKING && item.sender?.name],
+            : [item.kind, item.kind === TRANSCRIPT_ITEM.WORKING && item.words],
       ),
     ).toEqual([
       ["Hi, I'm Pat.", "Pat", true, false],
@@ -1023,7 +1023,7 @@ describe("managerChatItems", () => {
       ["And the signup.", "Grace", true, false],
       ["Thanks!", "Pat", false, false],
       ["One more thing.", "Ada", false, false],
-      [TRANSCRIPT_ITEM.WORKING, "Pat"],
+      [TRANSCRIPT_ITEM.WORKING, "Pat is working…"],
     ]);
     expect(items[5]).toMatchObject({
       pictures: [{ name: "signup.png", pictureId: "kept-shot", url: undefined }],

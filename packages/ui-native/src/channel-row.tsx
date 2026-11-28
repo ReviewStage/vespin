@@ -57,21 +57,19 @@ export interface ChannelFaces {
   readonly picture?: ((userId: string | undefined) => string | undefined) | undefined;
 }
 
-/** A sender's face at `size`: the Manager's, livelier while it works, or a person's picture or letters, in a SwiftUI host of its own. */
+/** A sender's face at `size`: the Manager's, or a person's picture or letters, in a SwiftUI host of its own. */
 function SenderFace({
   sender,
   faces,
   size,
-  working,
 }: {
   readonly sender: ChatSender;
   readonly faces: ChannelFaces;
   readonly size: number;
-  readonly working: boolean;
 }) {
   const face =
     sender.manager && faces.manager !== undefined ? (
-      <ManagerFace face={faces.manager} size={size} working={working} />
+      <ManagerFace face={faces.manager} size={size} />
     ) : (
       <Avatar
         name={sender.name}
@@ -152,7 +150,6 @@ export function ChannelMessage({
   faces,
   opens,
   stamp,
-  working = false,
   onOpenLink,
   children,
 }: {
@@ -163,8 +160,6 @@ export function ChannelMessage({
   readonly onOpenLink?: ((address: string) => void) | undefined;
   /** When it was sent, as its head says it; none where it is not known. */
   readonly stamp?: string | undefined;
-  /** Whether the Manager works on, which its face says. */
-  readonly working?: boolean | undefined;
   readonly children: ReactNode;
 }) {
   const colors = useColors();
@@ -179,7 +174,7 @@ export function ChannelMessage({
             onOpenLink={onOpenLink}
             heard={false}
           >
-            <SenderFace sender={sender} faces={faces} size={CHANNEL_FACE.SIZE} working={working} />
+            <SenderFace sender={sender} faces={faces} size={CHANNEL_FACE.SIZE} />
           </SenderPress>
         ) : null}
       </View>
@@ -239,7 +234,6 @@ export function ThreadReplies({
             sender={sender}
             faces={faces}
             size={faceSize}
-            working={false}
           />
         ))}
       </View>
