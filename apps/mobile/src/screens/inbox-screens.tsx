@@ -1097,10 +1097,7 @@ function ThreadDetail({
     symbol: menu.symbol,
     choices: [],
     actions: [],
-    groups: [
-      { title: path.join(PATH_PART), items: pathActions },
-      { choices: menu.choices, items: [...menu.actions, ...(menu.submenus ?? [])] },
-    ],
+    groups: [{ title: path.join(PATH_PART), items: pathActions }, ...(menu.groups ?? [])],
   };
 
   // Note that a press on a message's writer opens their page, the agent's or a member's, as the panel's writer opens theirs; a member no account names opens nothing.
