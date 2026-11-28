@@ -8,7 +8,6 @@ import { readRunsOnPick } from "@repo/database/models/runs-on-pick";
 import { createTask } from "@repo/database/models/task-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
-  connectWorkspaceMachine,
   DEVICE_LAYOUT,
   fakeWorkspaceSeams,
   getTestDB,
@@ -21,7 +20,6 @@ import type { TaskRunsOnRequest } from "@repo/features/task-wire";
 import type { WireRecord } from "@repo/wire";
 import { Clock, type Context, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
-import { TestClock } from "effect/testing";
 import { sessionSandboxesLayer } from "../agents/session-sandboxes.js";
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
@@ -101,7 +99,7 @@ const deviceOf = (userId: string, name: string) =>
 
 it.layer(getTestDB())("where a task runs its agents", (it) => {
   it.effect(
-    "a released desktop's change naming any place is taken and changes nothing, the task answering where its newest agent off a workspace's machine runs, and a task outside their workspace is not found",
+    "a released desktop's change naming any place is taken and changes nothing, the task answering where its newest agent runs, and a task outside their workspace is not found",
     () =>
       Effect.gen(function* () {
         const owner = yield* openTokenMember();
@@ -121,20 +119,6 @@ it.layer(getTestDB())("where a task runs its agents", (it) => {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           machine: AGENT_MACHINE.DEVICE,
           deviceId: studio,
-        });
-        // A newer agent on a machine the workspace owns, which no released desktop reads.
-        yield* TestClock.adjust("1 minute");
-        yield* createAgent(owner, {
-          taskId: task.id,
-          idempotencyKey: randomUUID(),
-          model: "anthropic/claude-opus-5.5",
-          effort: "high",
-          descriptionSnapshot: "# Relay\n",
-          prompt: null,
-          repository: null,
-          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-          machine: AGENT_MACHINE.WORKSPACE,
-          deviceId: yield* connectWorkspaceMachine(workspace, owner),
         });
         const empty = yield* createTask(owner, { organizationId: workspace, name: "Kept" });
 

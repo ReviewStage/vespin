@@ -23,7 +23,7 @@ import {
   recordAutomationRun,
 } from "@repo/database/models/automation-store";
 import { listRevisions } from "@repo/database/models/description-revisions";
-import { deviceAgentLinesWaiting, ownDeviceHost } from "@repo/database/models/device-agent-store";
+import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
 import { childConversationId } from "@repo/database/models/ids";
 import { linkIntegrationInstallation } from "@repo/database/models/integration-installation-store";
@@ -62,7 +62,6 @@ import {
   MESSAGE_SENDER,
 } from "@repo/database/storage-vocabulary";
 import {
-  connectWorkspaceMachine,
   DEVICE_LAYOUT,
   joinWorkspace,
   leaveWorkspace,
@@ -98,6 +97,7 @@ import {
 import { DEVICE_AGENT_LINE_KIND, DEVICE_CAPABILITY } from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { INBOX_ASK, INBOX_STATUS } from "@repo/features/inbox-wire";
+import { MANAGER_FACE_CHARACTER, MANAGER_FACE_COLOR } from "@repo/features/manager-face";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import {
@@ -237,6 +237,7 @@ import {
   READ_CHAT_THREAD_TOOL,
   SEARCH_CHAT_TOOL,
 } from "./manager-chat-tools.js";
+import { CREATE_MANAGER_TOOL } from "./manager-create.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import type { SummaryModelOf } from "./replay-summary.js";
 import { NativeAgentSessions } from "./runtime-sessions.js";
@@ -1474,6 +1475,30 @@ test("start_agent from a Manager starts the agent as the member whose line opene
   });
 });
 
+test("create_manager makes the Manager in its caller's workspace as the member whose line opened its turn", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const owner = agents.caller.userId;
+  const asker = agents.teammates.userId;
+  await turnExperiment(workspaceId, owner, EXPERIMENT.MANAGERS, true);
+  const manager = await managerOn(owner, workspaceId);
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const call = await peerCaller(hostOf(), manager, agentSessions.services);
+  await database.run(openRunningTurn(manager, [{ member: asker }]));
+
+  const made = await storedStart(
+    asker,
+    await call(
+      AGENT_TOOL.CREATE_MANAGER,
+      { name: "Billing", repositories: [RELAY_FULL_NAME], model: OPUS, effort: "low" },
+      "call-manager",
+    ),
+  );
+
+  assert.equal(made.userId, asker);
+  assert.equal(made.organizationId, workspaceId);
+  assert.equal(made.kind, AGENT_KIND.MANAGER);
+});
+
 test("start_agent leaves an unassigned backlog task's assignee and status as they stood", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
@@ -1731,7 +1756,7 @@ test("start_agent naming a device by its name runs on the caller's member's own 
   assert.deepEqual([stored.machine, stored.deviceId], [AGENT_MACHINE.DEVICE, studio]);
 });
 
-test("list_machines lists the cloud and the starter's own devices to start on, and only machines the agent's Mac tools may reach, a teammate's and the workspace's in neither; a start naming a workspace's machine is refused as unreadable", async () => {
+test("list_machines lists the cloud and the starter's own devices to start on, and only machines the agent's Mac tools may reach, a teammate's in neither", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -1745,7 +1770,6 @@ test("list_machines lists the cloud and the starter's own devices to start on, a
         name: "Garage",
         ...DEVICE_LAYOUT,
       });
-      yield* connectWorkspaceMachine(workspaceId, agents.teammates.userId);
     }),
   );
 
@@ -1767,24 +1791,6 @@ test("list_machines lists the cloud and the starter's own devices to start on, a
     listed.macTools.map((machine) => (isRecord(machine) ? machine.id : undefined)),
     [studio],
   );
-
-  const onBox = await call(
-    AGENT_TOOL.START_AGENT,
-    {
-      ...CHOSEN,
-      taskId: agents.caller.taskId,
-      branch: DEFAULT_BRANCH,
-      prompt: "Bill by seat.",
-      runsOn: { machine: AGENT_MACHINE.WORKSPACE, name: "build-box" },
-    },
-    "call-on-box",
-  );
-
-  assert.deepEqual(onBox, {
-    status: ACTION_RESULT_STATUS.REJECTED,
-    reason: START_AGENT_REFUSAL.UNREADABLE,
-  });
-  assert.equal(agentSessions.sent.length, 0, "nothing was started");
 });
 
 test("start_agent hands over a prompt and a note each as long as a start allows, whole in the agent's first message, and refuses either past it, starting nothing", async () => {
@@ -1983,6 +1989,14 @@ test("a Manager's chat reads show the model the recorded inputs", async () => {
 
 test("chat_react shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "react-chat-input", REACT_CHAT_TOOL.inputSchema);
+});
+
+test("create_manager shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "create-manager-input",
+    CREATE_MANAGER_TOOL.inputSchema,
+  );
 });
 
 test("send_slack_message shows the model the recorded input", async () => {
@@ -3599,10 +3613,7 @@ test("archive_agent's archive of a teammate's agent on its starter's device queu
 
   await call(AGENT_TOOL.ARCHIVE_AGENT, { agentId: teammates.id, reason: "Merged." });
 
-  const waiting = await database.run(
-    deviceAgentLinesWaiting(ownDeviceHost(teammates.userId, deviceId)),
-  );
-
+  const waiting = await database.run(deviceAgentLinesWaiting(teammates.userId, deviceId));
   assert.deepEqual(
     waiting.map((line) => [line.agentId, line.kind]),
     [[teammates.id, DEVICE_AGENT_LINE_KIND.DISCARD]],
@@ -4642,7 +4653,7 @@ test("create_section, update_task's sectionId, and delete_section keep the calle
   });
 });
 
-test("update_agent renames a teammate's agent on the retired runtime, moves it to a model the catalog offers as the catalog reads the choice, and switches its servers, pins an agent on a task, refuses a model the catalog refuses with nothing written, and changes no agent of another workspace", async () => {
+test("update_agent renames a teammate's agent on the retired runtime, moves it to a model the catalog offers as the catalog reads the choice, and switches its servers, pins an agent on a task, refuses a model the catalog refuses with nothing written, changes no agent of another workspace, and changes a Manager's face but refuses a coder one", async () => {
   const { workspaceId, plans: tasks, agents } = await openWorkspaces();
   const { caller, otherWorkspaces } = agents;
   // Note that only an agent on the retired runtime moves to another provider's model and takes a window, so the teammate's is one.
@@ -4743,6 +4754,36 @@ test("update_agent renames a teammate's agent on the retired runtime, moves it t
   );
 
   assert.equal(theirs.title, null);
+
+  // A Manager's face is changed as its Settings change it, and a coder asked for one is refused with nothing written.
+  const manager = await managerOn(teammates.userId, workspaceId);
+
+  const face = {
+    character: MANAGER_FACE_CHARACTER.CAT,
+    color: MANAGER_FACE_COLOR.TEAL,
+    emoji: "🚀",
+  };
+
+  const [managerRow] = await database.run(
+    Database.use((db) =>
+      db
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(eq(agentTable.conversationId, manager.conversationId)),
+    ),
+  );
+
+  assert.ok(managerRow !== undefined);
+  const faced = await call(AGENT_TOOL.UPDATE_AGENT, { agentId: managerRow.id, face });
+  assert.equal(faced.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(faced));
+  const managerAfter = await database.run(readAgent(teammates.userId, managerRow.id));
+  assert.deepEqual(Option.getOrThrow(managerAfter).face, face);
+
+  assert.deepEqual(
+    await call(AGENT_TOOL.UPDATE_AGENT, { agentId: teammates.id, title: "Not this", face }),
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: UPDATE_AGENT_REFUSAL.NOT_A_MANAGER },
+  );
+  assert.equal((await stored()).title, null);
 });
 
 /**
@@ -5768,6 +5809,20 @@ test("list_automations, create_automation, update_automation, and delete_automat
       { kind: "same-agent", agentId: agents.teammates.id },
       "Agent audit",
     ],
+  );
+
+  // An agentId lists only the automations whose runs land on that agent.
+  const landingOn = async (agentId: string) => {
+    const answer = await call(AGENT_TOOL.LIST_AUTOMATIONS, { agentId });
+
+    return Array.isArray(answer.automations)
+      ? answer.automations.map((each) => (isRecord(each) ? each.id : undefined))
+      : answer;
+  };
+
+  assert.deepEqual(
+    [await landingOn(agents.teammates.id), await landingOn(agents.caller.id)],
+    [[id], []],
   );
   assert.deepEqual(await update({}), rejected(AUTOMATION_TOOL_REFUSAL.UNREADABLE_UPDATE));
 

@@ -22,6 +22,7 @@ import { githubPageAsked } from "@repo/features/link-standing-model";
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
 import {
+  isBareLink,
   LINK_CHIP,
   linkChipOf,
   MENTION_KIND,
@@ -132,8 +133,10 @@ export interface MarkdownChip {
   readonly target: LinkTarget;
   /** The GitHub pull request's or issue's page it names, by which its standing is read; none for any other chip. */
   readonly github?: string | undefined;
-  /** The entity it names, by its ids, by which the app finds its mark (`ChipMarkOf`); none for a date. */
+  /** The entity it names, by its ids, by which the app finds its mark (`ChipMarkOf`) and its name (`ChipNamesProvider`); none for a date. */
   readonly of?: Entity | undefined;
+  /** Whether its link was written bare, its address spelled out, so the name the app holds for it wins over the kind it is called by until then (`heldChipName`). */
+  readonly bare?: true | undefined;
 }
 
 /**
@@ -324,11 +327,13 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
 
   if (chip === undefined) return undefined;
 
+  const bare = isBareLink(label, href) ? ({ bare: true } as const) : {};
+
   if (chip.kind === LINK_CHIP.PLACE) {
     const look = placeChipLook(chip.link.place, chip.name, NO_NAMES);
     const entity = entityOfDestination(chip.link.place);
 
-    return chipOf(entity.kind, look.name, linkTarget(href), entity);
+    return { ...chipOf(entity.kind, look.name, linkTarget(href), entity), ...bare };
   }
 
   if (chip.mention.kind === MENTION_KIND.DATE) {
@@ -342,7 +347,7 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
   const drawn = chipOf(entity.kind, shown, linkTarget(href), entity);
   const github = githubAddressOf(chip.mention);
 
-  return github === undefined ? drawn : { ...drawn, github };
+  return github === undefined ? { ...drawn, ...bare } : { ...drawn, ...bare, github };
 }
 
 /** The GitHub pull request's or issue's page a mention names, as the panel's chip asks GitHub of it; none for any other. */

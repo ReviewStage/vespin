@@ -20,10 +20,10 @@ env:
     timeout: 30000
 # The pull request opens by its link. The system asks before a custom scheme
 # opens the app.
-- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128"
-- tapOn:
-    text: "Open"
-    optional: true
+- runFlow:
+    file: subflows/open-link.yaml
+    env:
+      LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128"
 - extendedWaitUntil:
     visible: "Ready to merge"
     timeout: 30000

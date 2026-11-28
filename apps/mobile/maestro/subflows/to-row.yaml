@@ -29,6 +29,10 @@ env:
                 start: "15%, 75%"
                 end: "15%, 45%"
                 duration: 1200
-      - assertVisible: "${ROW}"
+            # Note that the list settles after each swipe before the row is looked for, because a row seen as the list still glided stopped the loop and was carried back out before the assert (vjsplit4's answer lane).
+            - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: "${ROW}"
+          timeout: 5000
 - runFlow:
     file: clear-of-tabs.yaml

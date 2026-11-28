@@ -54,14 +54,14 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, actorName, personActor } from "@repo/ui/actor-model";
 import { CheckIcon, GLYPH, PenLineIcon, SquareCheckIcon } from "@repo/ui/icons";
-import { useQuery } from "@tanstack/react-query";
+
 import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { useInboxItemDrafted } from "../composer-drafts.js";
 import { HolderGlyph } from "../entities/holder-glyph.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { StateGlyph } from "../state-glyph.js";
-import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
 import { providerOf } from "./agent-model.js";
 import { AgentMarkRef, type AgentSubject, lineSubject } from "./agent-ref.js";
 import { TaskChipCard } from "./chip-cards.js";
@@ -271,7 +271,7 @@ export function InboxItemCard({
  * because the chip already leads with the task's.
  */
 function HolderDetail({ holder }: { holder: InboxHolder }): React.JSX.Element {
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const workspaces = useAppStateSlice(selectWorkspaces);
   const workspaceName = workspaces?.find((each) => each.id === holder.task.workspaceId)?.name;
 
   return (

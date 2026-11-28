@@ -7,7 +7,12 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { fakeAppBridge } from "../testing/app-bridge.js";
-import { handHostReads, holdRepositoryLists, type RepositoriesRead } from "../testing/app-state.js";
+import {
+  handHostReads,
+  heldPreferences,
+  holdRepositoryLists,
+  type RepositoriesRead,
+} from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout, pressInComposer } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -47,7 +52,10 @@ beforeEach(() => {
   installScrollIntoView();
   installEditorLayout();
   fakeAppBridge({});
-  holdRepositoryLists(handHostReads({}).deliverRepositoryLists, listOf);
+  holdRepositoryLists(
+    handHostReads({ preferences: heldPreferences() }).deliverRepositoryLists,
+    listOf,
+  );
 });
 
 afterEach(() => {

@@ -51,6 +51,8 @@ export const QUERY_ROOT = {
   MEMBER_MACHINES: "member-machines",
   /** The apps the account's own machines always allow, as an agent's `@` lists them off the agent's Mac. */
   MACHINE_ALLOWED_APPS: "machine-allowed-apps",
+  /** The place New task's Runs on picked in this window over the account's last pick, until the account's moves (`tasks/runs-on.tsx`). */
+  RUNS_ON_PICK: "runs-on-pick",
   INSTALLED_SKILL: "installed-skill",
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",
   TASK_NEWEST_REVISION: "task-newest-revision",

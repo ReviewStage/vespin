@@ -48,6 +48,7 @@ import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import type { ManagerChatSending, SendingMessage } from "@repo/features/agent-view";
 import {
   AGENT_SENDER,
+  type AgentAttachment,
   type AgentOrigin,
   type AgentPullRequest,
   type AgentSender,
@@ -82,6 +83,7 @@ import {
 } from "@repo/features/manager-chat-view";
 import { type MessageFileChip, messageFileChips } from "@repo/features/message-files";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SUGGESTION_LEAD, suggestionWords } from "@repo/features/reply-button-wire";
 import {
@@ -287,6 +289,12 @@ export interface ChatThreadMark {
   readonly words: string;
 }
 
+/** The card a line stands folded in: its title, and whether the reader opened it. */
+export interface SaidCard {
+  readonly title: string;
+  readonly open: boolean;
+}
+
 export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: number } & (
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.SAID;
@@ -317,6 +325,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
       readonly body?: string | undefined;
+      /** The card an automation's prompt stands folded in, as the panel's Prompt card stands: titled by its first line, its words drawn only while open; none for every other line. */
+      readonly card?: SaidCard | undefined;
       /** The account that sent it, where the reader did not, which a run of lines is told apart by. */
       readonly by: string | undefined;
       /** When it was sent; none where the row kept no time. */
@@ -808,11 +818,12 @@ function saidItem(
   };
 }
 
-/** An automation's prompt as its agent's first line, in place of the line's own words and sender, with the pictures and files the line carried. */
+/** An automation's prompt as its agent's first line, in place of the line's own words and sender, with the pictures and files the line carried, folded in its card until the reader opens it. */
 function originItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
   origin: TranscriptOrigin,
+  toggles: TranscriptToggles,
 ): TranscriptItem {
   const words = origin.prompt ?? messageWords(line);
 
@@ -832,6 +843,8 @@ function originItem(
     joinsBelow: false,
     from: origin.from,
     body: origin.body,
+    // Note that the prompt stands closed under its first line, as the panel's Prompt card does, since it is there to be read rather than in the way of the agent's own words, and a prompt runs long.
+    card: { title: cardTitle(words), open: foldTurned(toggles, base.place) },
   };
 }
 
@@ -1272,10 +1285,17 @@ function inRuns(
  * place, as the host draws them (`AppTranscript.sending`); a message the
  * service refused stands there too, where it went, which the page marks Not
  * delivered (`AgentTranscript`'s `undelivered`), as the panel keeps it.
+ * Note that each line carries the files this phone still holds of it
+ * (`held`, by the line's id) as its row will carry them, so a picture its
+ * words name stands as its chip from the moment it goes, as the panel's
+ * sent line draws it (`sentLineMessage`), rather than as its marker's words
+ * until the row lands; a file the phone holds no bytes of, such as one sent
+ * from another device, is left off, as the panel leaves it.
  */
 export function withSending(
   messages: readonly AgentTranscriptMessage[],
   sending: readonly SendingMessage[],
+  held: (lineId: string) => readonly AgentAttachment[],
 ): readonly AgentTranscriptMessage[] {
   if (sending.length === 0) return messages;
 
@@ -1285,7 +1305,15 @@ export function withSending(
       (message): AgentTranscriptMessage => ({
         id: message.id,
         role: MESSAGE_ROLE.USER,
-        parts: [{ type: AGENT_PART.TEXT, text: message.text }],
+        parts: [
+          { type: AGENT_PART.TEXT, text: message.text },
+          ...held(message.id).map((file) => ({
+            type: "file",
+            mediaType: file.mediaType,
+            filename: file.name,
+            url: `data:${file.mediaType};base64,${file.data}`,
+          })),
+        ],
         sentAt: message.sentAt,
       }),
     ),
@@ -1370,7 +1398,7 @@ export function transcriptItems(
 
       return [
         origin !== undefined && message.id === head
-          ? originItem(message, base, origin)
+          ? originItem(message, base, origin, reading.toggles)
           : saidItem(message, base, reading),
       ];
     }

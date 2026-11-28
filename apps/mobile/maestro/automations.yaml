@@ -80,8 +80,12 @@ env:
 - takeScreenshot: automation-page-more
 - runFlow:
     file: subflows/dismiss.yaml
-- scrollUntilVisible:
-    element: "Send the weekly digest"
+# Note that an iPad's automation page stands in the page column, so it is scrolled there (`BESIDE`) rather than at the window's middle, the list column.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Send the weekly digest"
+      BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd
 - takeScreenshot: automation-page-runs
 # A run opens the agent it started on the tab, and Back returns to the automation's page.
@@ -112,7 +116,24 @@ env:
 - waitForAnimationToEnd
 - assertVisible: "Check each deploy"
 - takeScreenshot: automations-runs
-- tapOn: "Failed.*"
+# Note that the filter is found by its count, "Failed 1", since an iPad's
+# list column, standing beside the runs, holds a failed run's mark heard as
+# "Failed" too, which came first in the tree and opened its automation; and
+# there the automation the filter leaves out stands once, in the list beside
+# the runs, which always holds it, so a second one is what would be a run.
+- tapOn: "Failed,? [0-9]+"
 - waitForAnimationToEnd
-- assertNotVisible: "Fix failing checks"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - assertNotVisible: "Fix failing checks"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - assertVisible: "Check each deploy"
+      - assertNotVisible:
+          text: "Fix failing checks"
+          index: 1
 - takeScreenshot: automations-runs-failed

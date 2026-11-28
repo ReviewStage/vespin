@@ -93,9 +93,13 @@ for s in 16 32 48; do rsvg-convert -w $s -h $s icon/favicon.svg -o /tmp/favicon-
 
 ## In the app
 
-`icon/icon-{light,dark}-512.png` are copied into `dist/icon/` and handed to
-`app.dock.setIcon`. The Dock tile is swapped between the two mode icons as the
-theme changes; the packaged `.icns` is cut from the dark set.
+The packaged macOS app's icon is `ios/Vespin.icon`, the iOS app's Icon
+Composer bundle, which electron-builder compiles with Xcode's `actool` into the
+`Assets.car` macOS 26 and later draw in each icon appearance (Default, Dark,
+Clear, Tinted), and into the `.icns` an earlier macOS reads. Before macOS 26,
+and in a development run, `icon/icon-{light,dark}-512.png` are copied into
+`dist/icon/` and handed to `app.dock.setIcon`, the Dock tile swapped between
+the two mode icons as the theme changes.
 
 The window draws the mark itself, with `@repo/ui`'s `ProductMark`, rather than
 loading these SVGs, so it takes its holder's ink through `currentColor`. Its
@@ -117,7 +121,7 @@ The mark is static: it carries no motion.
 | `logo/logo-color-{light,dark}.svg` + `-{512,4096}.png` | The lockup in color: the mark in the mode's copper beside the name in the mode's ink |
 | `logo/logo-stacked-{light,dark,black,white,color-light,color-dark}.svg` + `-{512,2048}.png` | The stacked lockup, the disc twice the cap height centered over the name, on a transparent ground, for a square-ish space, in the same inks as the lockup |
 | `icon/icon-{light,dark}.svg` + PNGs | The app icon on Apple's macOS grid: an 824-unit tile with a 185.4-unit corner on a 1024 canvas, the disc 78% of the tile (`ICON_MARK`, the one share every app icon takes). Dark: the night tile under the mark in copper. Light: the copper tile under a white mark. Flat, both |
-| `ios/Vespin.icon/` | The iOS app's icon, an Icon Composer bundle (`icon.json` and `Assets/mark.svg`): the white mark at 78% of the canvas over the tile fill, copper under white in light and the night tile under copper in dark, which iOS 26 and later draw in Liquid Glass, deriving the clear and tinted looks themselves. `apps/mobile`'s `ios.icon` names it |
+| `ios/Vespin.icon/` | The iOS and macOS apps' icon, an Icon Composer bundle (`icon.json` and `Assets/mark.svg`): the white mark at 78% of the canvas over the tile fill, copper under white in light and the night tile under copper in dark, which iOS 26 and macOS 26 and later draw in Liquid Glass, deriving the clear and tinted looks themselves. `apps/mobile`'s `ios.icon` and the desktop's `mac.icon` name it |
 | `icon/icon-ios.svg` + `-1024.png` | The iOS app's marketing icon: the Icon Composer bundle's light look flattened, the copper tile full bleed under the white mark at 78% of the canvas, cut to an opaque 1024 PNG with no alpha channel. `apps/mobile` puts it in the asset catalog beside the bundle, under the bundle's name, for App Store Connect and TestFlight, which read no `.icon` |
 | `mark/mark-{light,dark,white}.svg` + `-{256,1024}.png` | The mark alone, in each mode's ink or pure white on transparency, with a twelfth of the square's width as air on each side |
 | `mark/mark-monochrome.svg` + `-{256,1024}.png` | The mark in pure black on transparency: the one-ink glyph a partner surface tints for its own theme, such as an integration's small icon on Sentry, which takes no color but black |

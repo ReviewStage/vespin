@@ -3,7 +3,10 @@
 /** The slot expo-router stands its root navigator under, the one route of the state `useRootNavigationState` answers (expo-router's `INTERNAL_SLOT_NAME`). */
 const ROOT_SLOT = "__root";
 
-/** The root stack's route the tabs stand under (`app/_layout.tsx`); any other route in front is a sheet or a signed-out screen. */
+/** The app's own group under the root (`app/(app)`), whose stack the tabs and the sheets stand in, beside an iPad's split view. */
+const APP_ROUTE = "(app)";
+
+/** The app stack's route the tabs stand under (`app/(app)/_layout.tsx`); any other route in front is a sheet or a signed-out screen. */
 const TABS_ROUTE = "(tabs)";
 
 /** A navigator's state, as far as Back reads it: the route in front, and each route's own navigator. */
@@ -22,12 +25,13 @@ function focusedRoute(state: NavigatorState | undefined): NavigatorRoute | undef
 /**
  * The tabs' route, while the tabs stand in front of the app's root stack
  * rather than a sheet or a signed-out screen; none otherwise. Note that the
- * root state's one route is expo-router's own slot, with the app's root stack
- * under it, so the stack is read one level in.
+ * root state's one route is expo-router's own slot, with the app's own group
+ * under it and the app's stack under that, so the stack is read two levels in.
  */
 export function tabsInFront(root: NavigatorState | undefined): NavigatorRoute | undefined {
   const slot = focusedRoute(root);
-  const front = slot?.name === ROOT_SLOT ? focusedRoute(slot.state) : slot;
+  const top = slot?.name === ROOT_SLOT ? focusedRoute(slot.state) : slot;
+  const front = top?.name === APP_ROUTE ? focusedRoute(top.state) : top;
 
   return front?.name === TABS_ROUTE ? front : undefined;
 }

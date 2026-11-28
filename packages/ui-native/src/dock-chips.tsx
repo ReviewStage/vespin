@@ -17,7 +17,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
-import { BAR_GLASS } from "./glass-bar.js";
+import { BAR_GLASS, BAR_MARGIN } from "./glass-bar.js";
 import { type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { Text } from "./text.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
@@ -158,18 +158,24 @@ export function DockChips({
 }) {
   if (chips.length === 0 && opened === undefined) return null;
 
+  // Note that the row scrolls across the bar's whole column and insets its capsules inside the scroll as far as the bar stands in, so the first capsule's edge stands over the composer's, the last one's end stands over the composer's end once scrolled to it, and the scroll's clip at the column's edge never cuts a capsule's rounded border, as it did standing flush with the scroll's own edge.
   return (
     <VStack spacing={ROW_GAP}>
       {chips.length === 0 ? null : (
         <ScrollView axes="horizontal" showsIndicators={false}>
-          <HStack spacing={ROW_GAP} modifiers={[padding({ vertical: SHADOW_ROOM })]}>
+          <HStack
+            spacing={ROW_GAP}
+            modifiers={[padding({ vertical: SHADOW_ROOM, horizontal: BAR_MARGIN })]}
+          >
             {chips.map((chip) => (
               <Capsule key={chip.id} chip={chip} />
             ))}
           </HStack>
         </ScrollView>
       )}
-      {opened}
+      {opened === undefined ? null : (
+        <VStack modifiers={[padding({ horizontal: BAR_MARGIN })]}>{opened}</VStack>
+      )}
     </VStack>
   );
 }

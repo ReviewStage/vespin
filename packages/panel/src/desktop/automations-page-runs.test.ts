@@ -28,6 +28,7 @@ import {
   CI_DIGEST,
   DIGEST,
   FAILING,
+  groupHeadings,
   layStanding,
   MADE_SECRET,
   menuItem,
@@ -1090,10 +1091,7 @@ test("on a narrow stage each row says when it runs next before what fires it, or
   await settle();
 
   // The heading names its owner, then counts its three rows, said with their noun.
-  assert.deepEqual(
-    [...page.querySelectorAll(".automation-group h2")].map((heading) => heading.textContent),
-    ["Acme3 automations"],
-  );
+  assert.deepEqual(groupHeadings(page), ["Acme3 automations"]);
   assert.equal(page.querySelector(".automation-owner") === null, true, "no row names its owner");
 
   const line = (name: string) =>

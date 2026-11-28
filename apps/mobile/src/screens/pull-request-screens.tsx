@@ -11,6 +11,7 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { filesWords } from "@repo/features/changed-files";
 import {
   iosAgentPullRequestOf,
+  iosPullRequestChaptersRoute,
   iosPullRequestChecksRoute,
   iosPullRequestCommentRoute,
   iosPullRequestFilesRoute,
@@ -20,6 +21,12 @@ import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
 import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
 import { formatCount } from "@repo/features/number-format";
+import {
+  CHAPTERS_SHOWN,
+  CHAPTERS_WORDS,
+  type ChaptersShown,
+  chaptersShown,
+} from "@repo/features/pull-request-chapters-shown";
 import {
   CHECK_SUMMARY_WORDS,
   CLOSE_WORDS,
@@ -117,6 +124,7 @@ import {
   usePullRequestRetry,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { usePullRequestChapters } from "../pull-requests/use-pull-request-chapters.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -142,6 +150,7 @@ const CONVERSATION_WORDS = "Conversation";
 /** The ids of the rows that push a screen of their own: the checks, and the files changed. */
 const PAGE_ROW = {
   CHECKS: "checks",
+  CHAPTERS: "chapters",
   FILES: "files",
   COMMENT: "comment",
 } as const;
@@ -149,6 +158,7 @@ const PAGE_ROW = {
 /** What those rows say, as the screens they push are titled. */
 const PAGE_ROW_WORDS = {
   CHECKS: "Checks",
+  CHAPTERS: CHAPTERS_WORDS.CHAPTERS,
   FILES_CHANGED: "Files changed",
   COMMENT: "Comment",
 } as const;
@@ -355,6 +365,54 @@ function checksRowCount(
   };
 }
 
+/** What the Chapters row says of where they stand beside its glyph, to a reader who cannot see it, as the panel's tab says it. */
+const CHAPTERS_ROW_HEARD = {
+  GENERATING: "generating",
+  FAILED: "failed",
+  STALE: "out of date",
+} as const;
+
+/**
+ * What the Chapters row counts, as the panel's Chapters tab does
+ * (`chaptersTabCount`): the wait's mark while they are made, a cross in
+ * the danger tone where the generation failed, and once ready their count,
+ * in the attention tone under a warning where new commits came since, as
+ * `headKnown` lets it say; nothing while there are none.
+ */
+function chaptersRowCount(shown: ChaptersShown, headKnown: boolean): RowCount | undefined {
+  switch (shown.kind) {
+    case CHAPTERS_SHOWN.GENERATING:
+      return {
+        words: "",
+        tone: STATUS_TONE.NEUTRAL,
+        glyph: GLYPH.CHECK_RUNNING,
+        heard: CHAPTERS_ROW_HEARD.GENERATING,
+      };
+    case CHAPTERS_SHOWN.GENERATION_FAILED:
+      return {
+        words: "",
+        tone: STATUS_TONE.DANGER,
+        glyph: GLYPH.REMOVE,
+        heard: CHAPTERS_ROW_HEARD.FAILED,
+      };
+    case CHAPTERS_SHOWN.READY: {
+      const words = formatCount(shown.chapters.length);
+
+      return shown.stale && headKnown
+        ? {
+            words,
+            tone: STATUS_TONE.ATTENTION,
+            glyph: GLYPH.FAILED,
+            heard: `${words}, ${CHAPTERS_ROW_HEARD.STALE}`,
+          }
+        : { words, tone: STATUS_TONE.NEUTRAL, heard: words };
+    }
+
+    default:
+      return undefined;
+  }
+}
+
 /** The glyph each change to where the pull request stands leads its item with, the panel's own. */
 const STATE_ACTION_GLYPHS = {
   [PULL_REQUEST_ACTION.READY_FOR_REVIEW]: GLYPH.PULL_REQUEST,
@@ -416,7 +474,9 @@ function PullRequestToolbar({ url }: { readonly url: string | undefined }) {
  * checks and a row for the files it changes, each counting them as the
  * panel's tabs do, the checks by how they went and how many, and the files
  * by how many where its agent's listing counts them, their lines standing
- * after its branches, each row pushing its own screen, as GitHub's app pushes its Checks and
+ * after its branches, and a row for its chapters between them, counting
+ * them as the panel's Chapters tab does and held live with the page, each
+ * row pushing its own screen, as GitHub's app pushes its Checks and
  * Files changed; its reviewers' faces in its heading, each wearing where
  * they stand, as the panel's people line draws them; and its conversation
  * inline, as GitHub's app runs its timeline under the page: each comment
@@ -518,6 +578,7 @@ function PullRequestPage({
   const parts = usePullRequestParts(key);
   const retry = usePullRequestRetry(key);
   const writes = usePullRequestWrites(key);
+  const chapters = usePullRequestChapters(key);
   const [chosen, setChosen] = useState<MergeMethod | undefined>(undefined);
   const [unfolded, setUnfolded] = useState(false);
   // The conversation's entries and threads opened whole, by their row's id.
@@ -756,6 +817,7 @@ function PullRequestPage({
   // Each row a press pushes a screen of its own for, by its id: the checks, the files changed, and a new comment.
   const pushes = new Map<string, string>([
     [PAGE_ROW.CHECKS, iosPullRequestChecksRoute(key)],
+    [PAGE_ROW.CHAPTERS, iosPullRequestChaptersRoute(key)],
     [PAGE_ROW.FILES, iosPullRequestFilesRoute(key)],
     [PAGE_ROW.COMMENT, iosPullRequestCommentRoute(key)],
   ]);
@@ -909,6 +971,19 @@ function PullRequestPage({
           mark={{ symbol: GLYPH.CHECKS, tone: STATUS_TONE.NEUTRAL }}
           title={PAGE_ROW_WORDS.CHECKS}
           count={checksRowCount(summary, checks)}
+          pushes
+        />
+        <MarkRow
+          id={PAGE_ROW.CHAPTERS}
+          mark={{ symbol: GLYPH.CHAPTERS, tone: STATUS_TONE.NEUTRAL }}
+          title={PAGE_ROW_WORDS.CHAPTERS}
+          count={chaptersRowCount(
+            chaptersShown(chapters.answer, chapters.generating, {
+              pullRequest: pullRequest?.merging?.headSha,
+              files: pullRequest?.merging?.headSha,
+            }),
+            pullRequest?.merging?.headSha !== undefined,
+          )}
           pushes
         />
         <MarkRow

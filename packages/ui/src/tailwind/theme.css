@@ -322,7 +322,7 @@
   --spacing-new-task-title: calc(100% - 2 * var(--ui-control-height) - var(--ui-item-gap));
   --spacing-card-line: calc(100% + 2 * var(--ui-row-inset));
   --spacing-tasks-board-column: 320px; /* off-scale: a card's width, as Linear's board stands it */
-  --spacing-tasks-list-row: calc(var(--ui-control-height) + var(--ui-space-6));
+  --spacing-tasks-list-row: calc(var(--ui-control-height) + var(--ui-task-row-block));
   /* A quick add's draft, raised as a card, takes its hairline out of the
      row's inset, so its cells stand on the rows' lines. */
   --spacing-task-row-draft: calc(var(--ui-row-inset) - 1px);
@@ -389,6 +389,7 @@
   --grid-template-columns-place-split: min(var(--sidebar-width), 35%) minmax(0, 1fr);
   --grid-template-rows-single: minmax(0, 1fr);
   --spacing-automation-owner: 112px; /* off-scale: an owner's picture and name, in a column */
+  --spacing-automation-manager: 136px; /* off-scale: a Manager's face and name, in a column */
   --spacing-automation-next: 144px; /* off-scale: "Next Nov 17, 10:30 PM" and a failure's mark */
   --spacing-automation-field: 200px; /* off-scale: a Settings picker's width on the desktop, held on the web too */
   --spacing-automation-time: calc(
@@ -689,13 +690,13 @@
   --color-badge-fill: light-dark(var(--ui-badge-fill-light), var(--ui-badge-fill-dark));
   --color-badge-fill-edge: light-dark(var(--ui-badge-edge-light), var(--ui-badge-edge-dark));
   --color-badge-fill-words: light-dark(var(--ui-badge-words-light), var(--ui-badge-words-dark));
-  --spacing-chip-inset: var(--ui-space-8);
+  --spacing-chip-inset: var(--ui-chip-inset);
   /* A chip's leading mark from its box's edge, its hairline and its inset, which a line of chips under words is pulled back by so the mark stands on the words' edge. */
-  --spacing-chip-lead: calc(var(--ui-space-8) + 1px);
+  --spacing-chip-lead: calc(var(--ui-chip-inset) + 1px);
   --spacing-chip-inset-wide: var(--ui-space-12);
   --spacing-chip-tight: var(--ui-space-4);
   --spacing-chip-compact: var(--ui-space-20);
-  --spacing-chip-compact-inset: calc(var(--ui-space-8) - 1px);
+  --spacing-chip-compact-inset: calc(var(--ui-chip-inset) - 1px);
   --spacing-title-floor: var(--ui-title-floor);
   --spacing-chip-chevron: var(--ui-space-12);
   --spacing-chip-remove: calc(var(--ui-control-height) - var(--ui-space-12));
@@ -704,7 +705,7 @@
   --spacing-chip-field-half: calc(var(--ui-select-field-width) / 2);
   --spacing-chip-min-field: min(var(--ui-select-field-width), 100%);
   --spacing-badge-block: var(--ui-space-2);
-  --spacing-badge-inline: var(--ui-space-8);
+  --spacing-badge-inline: var(--ui-badge-inline);
   --spacing-badge-glyph: var(--ui-space-12);
   --spacing-badge-swatch: var(--ui-space-8);
   --spacing-status-dot: 7px; /* off-scale: a status dot */
@@ -715,8 +716,8 @@
   --spacing-avatar-inline: var(--ui-space-16); /* a disc in a line of words */
   --spacing-avatar-glyph: var(--ui-control-icon);
   --spacing-avatar-stack: 18px; /* off-scale: a facepile's disc */
-  --spacing-avatar-row: var(--ui-space-20); /* a list row's disc */
-  --spacing-avatar-account: 26px; /* off-scale: the account's disc */
+  --spacing-avatar-row: var(--ui-avatar-row); /* a list row's disc */
+  --spacing-avatar-account: var(--ui-avatar-account); /* the account's disc */
   --spacing-avatar-card: var(--ui-space-32); /* a card head's disc */
   /* A chat's sender's picture beside its bubbles (`ChatBubble`'s `avatar`),
      a card head's disc wide, and how far in from it the line under a run
@@ -1160,7 +1161,6 @@
      utilities): the gaps a byline's phrases, a line's parts, a pane's groups,
      and a page's sections stand apart by, and the weights words are set in
      where no type role names them; then each surface's own. */
-  --spacing-log-over-composer: calc(var(--ui-scroll-fade) + var(--ui-space-4));
   --spacing-todos-dock: calc(var(--ui-stage-height) * 0.3);
   --spacing-dictation-clock: 34px; /* off-scale: a clock's widest reading */
   --text-section-inline: var(--ui-type-section-size);

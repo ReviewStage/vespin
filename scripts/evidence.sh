@@ -41,8 +41,12 @@ if [[ ! -f "$PACKAGED_ICON" ]]; then
     printf 'error: packaged app is missing its declared icon: %s\n' "$PACKAGED_ICON" >&2
     exit 1
 fi
-if ! cmp -s "$PACKAGED_ICON" "$APP_DESKTOP_APP_ROOT/.build/Vespin.icns"; then
-    printf 'error: packaged app icon does not match the generated Vespin icon\n' >&2
+# macOS 26 and later draw the icon from the asset catalog actool compiled out
+# of the brand's Icon Composer bundle, named by CFBundleIconName; the `.icns`
+# above is what an earlier macOS reads.
+BUNDLE_ICON_NAME=$(plutil -extract CFBundleIconName raw -o - "$PACKAGED_APP/Contents/Info.plist")
+if [[ "$BUNDLE_ICON_NAME" != "Icon" || ! -f "$PACKAGED_APP/Contents/Resources/Assets.car" ]]; then
+    printf 'error: packaged app is missing the asset catalog its icon appearances draw from\n' >&2
     exit 1
 fi
 

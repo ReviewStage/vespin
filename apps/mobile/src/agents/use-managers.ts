@@ -4,8 +4,9 @@
  * A Manager is an agent on no task that its workspace shares, which the
  * task list's live read carries beside the tasks' agents, so the list is
  * the host's listed agents narrowed to the workspace's unarchived Managers,
- * newest started first (`@repo/features/workspace-managers-model`), as the
- * desktop's sidebar lists them. It stands only where the workspace has the
+ * in the account's sort for the workspace, newest started first until one is
+ * chosen (`@repo/features/workspace-managers-model`, `manager-sort.ts`), as
+ * the desktop's sidebar lists them. It stands only where the workspace has the
  * Managers experiment on, as the sidebar's does, and moves as the live read
  * hears a Manager made, renamed, archived, or at work. New Manager makes one
  * (`useCreateManager`), as the desktop's card does. Its chat heads each
@@ -19,7 +20,7 @@ import type { ManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { READ_MARK, type ReadMark, unreadThroughOf } from "@repo/features/read-mark";
-import { workspaceManagersOf } from "@repo/features/workspace-managers-model";
+import { sortedManagers, workspaceManagersOf } from "@repo/features/workspace-managers-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { type FollowedAgent, selectWorkspaceExperiment } from "@repo/host/app-state-reads";
 import { windowRows } from "@repo/host/read-window";
@@ -35,6 +36,7 @@ import { useWindow } from "../host/use-window.js";
 import { useMemberFaces } from "../member-pictures.js";
 import { runsOnOf, startRefusalWords } from "../tasks/use-start.js";
 import { useWrite } from "../use-write.js";
+import { useManagerSort } from "./manager-sort.js";
 
 /** No Manager, the same array every render. */
 const NO_MANAGERS: readonly ListedAgent[] = [];
@@ -55,7 +57,8 @@ export function useManagersListed(workspaceId: string | undefined): boolean {
 }
 
 /**
- * The unarchived Managers of `workspaceId`, newest started first; none while
+ * The unarchived Managers of `workspaceId`, in the account's sort for it
+ * (`manager-sort.ts`), newest started first until one is chosen; none while
  * it has the Managers experiment off. Note that the live query holds the
  * workspace's unarchived Managers alone, as the panel's sidebar reads them,
  * so a step of any other agent's turn tells it nothing, and nothing is read
@@ -82,9 +85,14 @@ export function useWorkspaceManagers(workspaceId: string | undefined): readonly 
     ),
   );
 
+  const { sort } = useManagerSort(listed ? workspaceId : undefined);
+
   return useMemo(
-    () => (workspaceId === undefined ? NO_MANAGERS : workspaceManagersOf(held, workspaceId)),
-    [held, workspaceId],
+    () =>
+      workspaceId === undefined
+        ? NO_MANAGERS
+        : sortedManagers(workspaceManagersOf(held, workspaceId), sort),
+    [held, workspaceId, sort],
   );
 }
 

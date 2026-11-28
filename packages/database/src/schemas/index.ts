@@ -6,6 +6,8 @@ export * from "./account-provider-key.js";
 
 export * from "./account-sound.js";
 
+export * from "./account-view-choice.js";
+
 export * from "./agent.js";
 
 export * from "./agent-approval.js";

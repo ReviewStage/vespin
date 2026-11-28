@@ -44,6 +44,7 @@ import {
   AUTOMATION_RUN_STANDING,
   type AutomationRunStanding,
 } from "@repo/features/automation-list-model";
+import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReactElement, ReactNode } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
@@ -53,7 +54,15 @@ import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, GlyphImage, LookIcon } from "./glyph-label.js";
 import type { IntegrationMarkAsset } from "./integration-marks.js";
 import { actionButton, LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
-import { Avatar, FailedMark, HarnessMark, RepositoryPicture, WorkingMark } from "./marks.js";
+import {
+  Avatar,
+  FailedMark,
+  HarnessMark,
+  MANAGER_FACE_SEAT,
+  ManagerFace,
+  RepositoryPicture,
+  WorkingMark,
+} from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { CHOICE_MARK, type ChoiceMark, markLook } from "./row-menu-model.js";
 import { Text } from "./text.js";
@@ -1681,6 +1690,10 @@ type AutomationRowProps = {
   readonly standing: AutomationRunStanding;
   /** A last line, such as how its newest run went ("Last run: Finished"); none for a run's own row, whose line already says it. */
   readonly standingWords?: string | undefined;
+  /** The Manager its runs land on, its face and its name leading the last line; none for one that starts a new agent each run. */
+  readonly manager?:
+    | { readonly name: string; readonly face: ManagerFaceValue | undefined }
+    | undefined;
   /** The glyph its lead stands at rest. */
   readonly symbol: Glyph;
   /** A provider's mark its lead stands at rest in the glyph's place, such as GitHub's for what fires it (`firingLook`); none for the glyph. */
@@ -1706,7 +1719,8 @@ type AutomationRowProps = {
  * Automations rows draw them on a phone: its lead the mark of what fires it,
  * or the working mark while its newest run works, its name, the line of
  * what fires it and when it runs next under it, and how its newest run
- * went; then the failed mark where that run failed, as the panel's
+ * went, led by the face and name of the Manager its runs land on where they
+ * land on one; then the failed mark where that run failed, as the panel's
  * `stateEndMark` ends its row, when that run fired, and the chevron where a
  * press opens it. Its acts, such as Run now, stand behind
  * a swipe from the leading edge, as Mail's Read stands there, and in the
@@ -1719,6 +1733,7 @@ export function AutomationRow({
   line,
   standing,
   standingWords,
+  manager,
   symbol,
   mark,
   when,
@@ -1732,7 +1747,14 @@ export function AutomationRow({
   const colors = useColors();
   const fills = useSystemColors();
   const leadSize = useScaledSize(LEAD_GLYPH_SIZE);
+  const faceSize = useScaledSize(MARK_SIZE.FACE);
   const ink = faded ? colors.TEXT_MUTED : colors.TEXT;
+
+  // Note that the Manager leads the last line, before how the newest run went, so the row grows no taller for it.
+  const lastLine =
+    manager === undefined
+      ? standingWords
+      : [manager.name, standingWords].filter((words) => words !== undefined).join(" · ");
 
   const failed = standing === AUTOMATION_RUN_STANDING.FAILED;
 
@@ -1764,16 +1786,21 @@ export function AutomationRow({
             >
               {line}
             </Text>
-            {standingWords === undefined ? null : (
-              <Text
-                modifiers={[
-                  font({ textStyle: TYPE_ROLE.ROW_LINE }),
-                  foregroundStyle(colors.TEXT_MUTED),
-                  lineLimit(2),
-                ]}
-              >
-                {standingWords}
-              </Text>
+            {lastLine === undefined ? null : (
+              <HStack spacing={SPACE.TIGHT}>
+                {manager?.face === undefined ? null : (
+                  <ManagerFace face={manager.face} size={faceSize} seat={MANAGER_FACE_SEAT.WORDS} />
+                )}
+                <Text
+                  modifiers={[
+                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                    foregroundStyle(colors.TEXT_MUTED),
+                    lineLimit(2),
+                  ]}
+                >
+                  {lastLine}
+                </Text>
+              </HStack>
             )}
           </VStack>
         }
@@ -1798,7 +1825,7 @@ export function AutomationRow({
     listRowBackground(look === AUTOMATION_ROW_LOOK.LIST ? "clear" : colors.RAISED),
     accessibilityElement("combine"),
     accessibilityLabel(title),
-    ...spokenValue(line, standingWords, when),
+    ...spokenValue(line, lastLine, when),
     ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
   ];
 

@@ -1,16 +1,16 @@
+import { type EmojiGroup, emojiGroups, findEmoji } from "@repo/features/emoji-model";
 import { emojiSchema } from "@repo/features/emoji-wire";
 import { noMatchWords, readingWords } from "@repo/features/words";
 import { queryOptions, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Schema } from "effect";
 import { memo, type ReactNode } from "react";
-import { type EmojiGroup, emojiGroups, findEmoji } from "../../section-icon-model.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
 import { IconPickerChoice, IconPickerGroup } from "./icon-picker.js";
 
 /**
  * icon-picker-emoji.tsx -- the icon picker's emoji: every emoji by category, loaded the first time they are shown, and the emoji a search finds, an emoji typed or pasted into it first.
  *
- * The emoji are `unicode-emoji-json`'s, a chunk of their own loaded once
+ * The emoji are `@repo/features/emoji-data`'s, a chunk of their own loaded once
  * per window the first time a picker reads them (`useEmojiGroups`, which
  * the picker's owner calls where it shows them or a search looks in them),
  * so no window parses them before. With nothing
@@ -19,8 +19,9 @@ import { IconPickerChoice, IconPickerGroup } from "./icon-picker.js";
  * an emoji typed or picked into it (⌃⌘Space) first, so one newer than the
  * grid's still can be chosen, then whatever the owner's own set found
  * beside the emoji (`beside`, as a section's glyphs), then the emoji whose
- * name it matches; the first drawn is the tab stop. Where nothing is
- * found, the grid says why: the owner's set still loading or failed, the
+ * name, keywords, or shortcodes it matches, best first
+ * (`@repo/features/emoji-model`); the first drawn is the tab stop. Where
+ * nothing is found, the grid says why: the owner's set still loading or failed, the
  * emoji's, or that nothing matched. An owner whose emoji is picked in a
  * color, as a Manager's face is, hands `colors`, and a press then floats the
  * emoji's colors from it (`IconPickerChoice`'s flyout) rather than choosing it.
@@ -51,8 +52,8 @@ const isOneEmoji = Schema.is(emojiSchema);
 const emojiQuery = queryOptions({
   queryKey: EMOJI_KEY,
   queryFn: (): Promise<EmojiGroup[]> =>
-    import("unicode-emoji-json/data-by-group.json").then(
-      (module) => emojiGroups(module.default),
+    import("@repo/features/emoji-data").then(
+      (module) => emojiGroups(module.EMOJI_DATA),
       () => Promise.reject(new Error(EMOJI_FAILED)),
     ),
   staleTime: Number.POSITIVE_INFINITY,
@@ -110,7 +111,7 @@ export function IconPickerEmojiChoice({
   onPress,
 }: {
   emoji: string;
-  /** What a reader hears it as: its Unicode name, or the emoji itself where none is known. */
+  /** What a reader hears it as: its CLDR name, or the emoji itself where none is known. */
   label: string;
   pressed: boolean;
   stop: boolean;
@@ -242,7 +243,7 @@ function EmojiGroups({
 
 /**
  * What a search found: an emoji typed into it first, then what the owner's
- * set found (`beside`), then the emoji whose name it matches. The first
+ * set found (`beside`), then the emoji it matches, best first. The first
  * found is the grid's tab stop.
  */
 function FoundEmoji({
@@ -260,8 +261,8 @@ function FoundEmoji({
 }): React.JSX.Element {
   const typed = query.trim();
   const typedOne: readonly EmojiOne[] = isOneEmoji(typed) ? [{ emoji: typed, name: typed }] : [];
-  const groups = loaded.groups === undefined ? [] : findEmoji(loaded.groups, query);
-  const named = groups.flatMap((group) => group.emojis).filter((one) => one.emoji !== typed);
+  const found = loaded.groups === undefined ? [] : findEmoji(loaded.groups, query);
+  const named = found.filter((one) => one.emoji !== typed);
   const besideFound = beside?.found;
 
   if (besideFound === undefined && typedOne.length === 0 && named.length === 0) {

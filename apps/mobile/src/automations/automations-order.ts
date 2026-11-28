@@ -1,50 +1,45 @@
 /**
- * automations-order.ts -- how the Automations tab orders each owner's automations, as its View options chose it, kept on this device across launches, as the panel keeps the list's order on each Mac (`app.automationsOrder`).
+ * automations-order.ts -- how the Automations tab orders each owner's automations, as its View options chose it, the account's own choice, so the phone orders them as every other device does.
  *
- * The order is held in memory and kept in the app's `NSUserDefaults`
- * through React Native's `Settings` for the next launch, as the Tasks tab's
- * view is (`tree-view.ts`), and every screen reading it hears a choice as it
- * is made.
+ * The order is one of the account's view choices
+ * (`VIEW_CHOICE_KEY.AUTOMATIONS_ORDER`, read through `../view-choices.ts`),
+ * kept once for the account, as the panel's Automations page reads it. A
+ * choice made here is drawn at once over the host's read, and an account
+ * with none kept orders them as `DEFAULT_AUTOMATIONS_ORDER` does. The order
+ * an earlier build kept in this device's `NSUserDefaults` moves up to the
+ * account once (`useDeviceKeptMovedUp`).
  */
 
 import {
-  AUTOMATIONS_ORDER,
   type AutomationsOrder,
   DEFAULT_AUTOMATIONS_ORDER,
 } from "@repo/features/automation-list-model";
-import { heldValue, useHeldValue } from "@repo/ui-native";
-import { useCallback } from "react";
-import { Settings } from "react-native";
+import { VIEW_CHOICE, VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
+import { Option } from "effect";
+import { deviceKept, useDeviceKeptMovedUp, useViewChoice } from "../view-choices.js";
 
-/** The defaults key the order is kept under. */
-const ORDER_KEY = "automationsOrder";
+/** What an order that did not keep says in the failure notice. */
+const ORDER_REFUSED = "Couldn't change how automations are ordered.";
 
-/** The order kept at launch, the default where none was kept or what was kept is no order this build knows. */
-function launchOrder(): AutomationsOrder {
-  const kept: unknown = Settings.get(ORDER_KEY);
+/** The order an earlier build kept on this device, read once a launch: none where none was kept or what was kept is no order this build knows. */
+const KEPT_ORDER = deviceKept(
+  "automationsOrder",
+  VIEW_CHOICE[VIEW_CHOICE_KEY.AUTOMATIONS_ORDER].schema,
+);
 
-  return (
-    Object.values(AUTOMATIONS_ORDER).find((order) => order === kept) ?? DEFAULT_AUTOMATIONS_ORDER
-  );
-}
-
-/** The order as the device holds it now, held here rather than read back from `Settings`, whose copy lands on the native side only later (`tree-view.ts`). */
-const order = heldValue<AutomationsOrder>(launchOrder());
-
-/** The list's order and the choice of another, which is kept and heard by every screen reading it. */
+/** The list's order and the choice of another, which is kept on the account and heard by every screen reading it. */
 export interface AutomationsOrderControl {
   readonly order: AutomationsOrder;
   readonly setOrder: (next: AutomationsOrder) => void;
 }
 
-/** The list's order as the device keeps it, and the door that orders it another way. */
+/** The list's order as the account keeps it, and the door that orders it another way. */
 export function useAutomationsOrder(): AutomationsOrderControl {
-  const kept = useHeldValue(order);
+  const choice = useViewChoice(VIEW_CHOICE_KEY.AUTOMATIONS_ORDER, null, ORDER_REFUSED);
+  useDeviceKeptMovedUp(choice, KEPT_ORDER);
 
-  const setOrder = useCallback((next: AutomationsOrder) => {
-    Settings.set({ [ORDER_KEY]: next });
-    order.set(next);
-  }, []);
-
-  return { order: kept, setOrder };
+  return {
+    order: Option.getOrElse(choice.value, () => DEFAULT_AUTOMATIONS_ORDER),
+    setOrder: choice.choose,
+  };
 }

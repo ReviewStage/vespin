@@ -5,6 +5,7 @@ import { archiveThroughAgentChangeRule } from "./rules/archive-through-agent-cha
 import { askBesideScreenRule } from "./rules/ask-beside-screen.ts";
 import { asyncPressNeedsBusyRule } from "./rules/async-press-needs-busy.ts";
 import { barItemTitledRule } from "./rules/bar-item-titled.ts";
+import { endAnchoredRunInConversationRule } from "./rules/end-anchored-run-in-conversation.ts";
 import { enforceDeleteWithWhereRule } from "./rules/enforce-delete-with-where.ts";
 import { enforceUpdateWithWhereRule } from "./rules/enforce-update-with-where.ts";
 import { entityChoiceThroughHelperRule } from "./rules/entity-choice-through-helper.ts";
@@ -55,6 +56,7 @@ const antiSlopPlugin = eslintCompatPlugin({
     "ask-beside-screen": askBesideScreenRule,
     "async-press-needs-busy": asyncPressNeedsBusyRule,
     "bar-item-titled": barItemTitledRule,
+    "end-anchored-run-in-conversation": endAnchoredRunInConversationRule,
     "enforce-delete-with-where": enforceDeleteWithWhereRule,
     "entity-choice-through-helper": entityChoiceThroughHelperRule,
     "enforce-update-with-where": enforceUpdateWithWhereRule,

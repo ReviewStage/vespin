@@ -21,7 +21,6 @@ import {
   updateAgentPermissionModeCommitted,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
-import { ownDeviceHost } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
 import {
   type KeyRing,
@@ -454,7 +453,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
             assert.ok(row !== undefined);
 
             const claimed = Option.getOrThrow(
-              yield* claimedDeviceAgentLine(ownDeviceHost(userId, deviceId), row.id).pipe(
+              yield* claimedDeviceAgentLine(userId, deviceId, row.id).pipe(
                 Effect.provide(Layer.succeed(HostedEnvironment, NO_KEYS)),
               ),
             );

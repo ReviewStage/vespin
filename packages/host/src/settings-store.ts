@@ -35,6 +35,7 @@ import {
   type AppSettingField,
   type AppSettingValue,
   accountPreferencesFromStored,
+  DIFF_DISPLAY_FIELDS,
   type ExperimentChoices,
   experimentChoicesFrom,
   NO_EXPERIMENTS,
@@ -308,6 +309,25 @@ function accountPreferencesFromPersisted(persisted: PersistedSettings): AccountP
 interface PersistedAccountPreferencesSync {
   accountEmail: string;
   preferences: AccountPreferences;
+  /**
+   * The account preferences the build that kept the baseline synced, so a
+   * preference a later build carries to the account is told from one this
+   * device let go of; absent from a baseline kept before baselines named
+   * theirs (`FIELDS_BEFORE_COVERAGE`).
+   */
+  fields?: readonly AccountPreferenceField[];
+}
+
+/** What a baseline that names no fields covers: every account preference but the diff display's, which the account carried only after. */
+const FIELDS_BEFORE_COVERAGE: readonly AccountPreferenceField[] = ACCOUNT_PREFERENCE_FIELDS.filter(
+  (field) => !DIFF_DISPLAY_FIELDS.some((diff) => diff === field),
+);
+
+/** The account preferences a stored baseline names as covered, each one this build knows. */
+function coveredFields(value: UnparsedWireValue): readonly AccountPreferenceField[] {
+  if (!Array.isArray(value)) return FIELDS_BEFORE_COVERAGE;
+
+  return ACCOUNT_PREFERENCE_FIELDS.filter((field) => value.includes(field));
 }
 
 function storedAccountPreferencesSync(
@@ -323,7 +343,35 @@ function storedAccountPreferencesSync(
 
   if (preferences === undefined) return undefined;
 
-  return { accountEmail: held.accountEmail, preferences };
+  return { accountEmail: held.accountEmail, preferences, fields: coveredFields(held.fields) };
+}
+
+/**
+ * A stored baseline as the merge reads it: what this device last synced of
+ * each preference the baseline covers, and this device's own value of each
+ * it does not, since this device never synced that one at all. Note that a
+ * preference this build carries to the account for the first time so reads
+ * as unchanged here, because a choice made before the account carried it is
+ * no edit since a sync: the account's choice, where another device already
+ * wrote one, is taken over it, and where none stands this device's own is
+ * written up as the first.
+ */
+function baselineOver(
+  sync: PersistedAccountPreferencesSync,
+  local: AccountPreferences,
+): AccountPreferences {
+  const covered = sync.fields ?? FIELDS_BEFORE_COVERAGE;
+  const uncovered = ACCOUNT_PREFERENCE_FIELDS.filter((field) => !covered.includes(field));
+  const synced = { ...sync.preferences };
+
+  for (const field of uncovered) delete synced[field];
+
+  // SAFETY: each entry is this device's own value of an account preference, read by its guard.
+  const own = Object.fromEntries(
+    uncovered.flatMap((field) => (local[field] === undefined ? [] : [[field, local[field]]])),
+  ) as AccountPreferences;
+
+  return { ...synced, ...own };
 }
 
 /**
@@ -784,9 +832,13 @@ export class SettingsStore {
   accountPreferencesSyncBaseline(
     accountEmail: string,
   ): Effect.Effect<AccountPreferences | undefined, PlatformError> {
-    return Effect.map(this.#load(), ({ accountPreferencesSync: sync }) =>
-      sync?.accountEmail === accountEmail ? sync.preferences : undefined,
-    );
+    return Effect.map(this.#load(), (persisted) => {
+      const sync = persisted.accountPreferencesSync;
+
+      return sync?.accountEmail === accountEmail
+        ? baselineOver(sync, accountPreferencesFromPersisted(persisted))
+        : undefined;
+    });
   }
 
   setAccountPreferencesSyncBaseline(
@@ -800,15 +852,18 @@ export class SettingsStore {
         if (signedIn(persisted) !== accountEmail) return undefined;
         saved = true;
 
+        const fields = ACCOUNT_PREFERENCE_FIELDS;
+        const kept = persisted.accountPreferencesSync;
+
         if (
-          persisted.accountPreferencesSync?.accountEmail === accountEmail &&
-          JSON.stringify(persisted.accountPreferencesSync.preferences) ===
-            JSON.stringify(preferences)
+          kept?.accountEmail === accountEmail &&
+          JSON.stringify(kept.preferences) === JSON.stringify(preferences) &&
+          JSON.stringify(kept.fields) === JSON.stringify(fields)
         ) {
           return undefined;
         }
 
-        return { ...persisted, accountPreferencesSync: { accountEmail, preferences } };
+        return { ...persisted, accountPreferencesSync: { accountEmail, preferences, fields } };
       });
 
       return saved;

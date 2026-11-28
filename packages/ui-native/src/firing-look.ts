@@ -12,7 +12,7 @@ export interface FiringLook {
 
 /** Each glyph mark's glyph, the panel's own: a schedule's clock, a webhook's hook, and Run now's play. */
 const FIRING_GLYPH = {
-  [FIRING_MARK.SCHEDULE]: GLYPH.TIME,
+  [FIRING_MARK.SCHEDULE]: GLYPH.SCHEDULE_TRIGGER,
   [FIRING_MARK.WEBHOOK]: GLYPH.WEBHOOK,
   [FIRING_MARK.MANUAL]: GLYPH.RUN,
 } as const;

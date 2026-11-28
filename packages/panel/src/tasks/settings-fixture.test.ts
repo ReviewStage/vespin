@@ -29,7 +29,7 @@ import { fixtureActAnswer, fixtureAppState } from "./tasks-fixture.js";
  * Automations profiles sign the window in as a synthetic account and answer
  * the reads their pages ask through the act door, in place of main: every
  * answer one the act port's contract would carry, connected and expired
- * integrations among them, and three automations, one whose newest run
+ * integrations among them, and five automations, two one-time ones that ran, one whose newest run
  * failed. A profile that stages no account leaves main's document as it is.
  */
 
@@ -112,7 +112,7 @@ test("the integrations profile draws some accounts connected and some with their
   assert.ok(standing.has(INTEGRATION_STATUS.EXPIRED));
 });
 
-test("an Automations profile holds three automations in the listed workspace, one whose newest run failed, and that one's runs", () => {
+test("an Automations profile holds five automations in the listed workspace, two of them one-time ones that ran, one whose newest run failed, and that one's runs", () => {
   const { run } = stateWith({}, {});
   /** The document an Automations profile draws. */
   const staged = (profile: string) => fixtureAppState(stateWith({}, { run: { ...run, profile } }));
@@ -124,7 +124,8 @@ test("an Automations profile holds three automations in the listed workspace, on
     (automation) => automation.lastRun?.status === AUTOMATION_RUN_STATUS.FAILED,
   );
 
-  assert.equal(automations.length, 3);
+  assert.equal(automations.length, 5);
+  assert.equal(automations.filter((automation) => "at" in automation.trigger).length, 2);
   assert.ok(automations.every((automation) => automation.workspaceId === "workspace-personal"));
   assert.equal(failed.length, 1);
 

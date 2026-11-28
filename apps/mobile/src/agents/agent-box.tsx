@@ -46,8 +46,11 @@ const MODEL_CHIP_ID = "agent-model-chip";
 /** The name a flow finds the composer's Machine chip by. */
 const MACHINE_CHIP_ID = "agent-machine-chip";
 
-/** What the Machine chip's menu heads where commands go, as the panel's place chip names its Default machine row. */
-const COMMANDS_WORDS = { LABEL: "Commands run on" } as const;
+/** What the Machine chip's menu heads its two groups with, as the panel's place popover ("Where this agent works") heads its Agent runs in row and its machines (`agent-place.tsx`, `agent-machines.tsx`). */
+const PLACE_WORDS = {
+  RUNS_IN: "Agent runs in",
+  COMMANDS: "It can also run commands on",
+} as const;
 
 /** No servers to offer, held as one value so a menu with none reads the same each time. */
 const NO_SUBMENUS: readonly BarMenu[] = [];
@@ -80,11 +83,14 @@ function AgentModelChip({
 
 /**
  * Where the agent works, as the desktop's Machine chip stands after the +:
- * Cloud or its device's name, led by the panel's runs-on mark; its menu,
- * where the agent is offered `run_on_mac`, says where its terminal commands
- * and computer use go, each machine the agent may send them to, the one
- * they go to now checked, a pick setting it (`useAgentCommandsPlace`). A
- * chip with no machine to choose says where the agent works alone.
+ * Cloud or its device's name, led by the panel's runs-on mark. Its menu is
+ * the panel's place popover as the system's menu: first Agent runs in, the
+ * agent's own place checked, since an agent never moves from a phone; then,
+ * where the agent is offered `run_on_mac`, It can also run commands on, each
+ * machine its terminal commands and computer use may go to, the default
+ * checked, a pick making another the default (`useAgentCommandsPlace`).
+ * Note that the place leads the menu, since a menu of Macs alone under a
+ * chip saying Cloud read as where the agent runs.
  */
 function AgentMachineChip({
   agent,
@@ -94,31 +100,36 @@ function AgentMachineChip({
   readonly commands: AgentCommandsPlace | undefined;
 }) {
   const platform = useDevicePlatform(agent.mac?.deviceId);
-  const symbol = runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE, platform });
+  const cloud = agent.machine !== AGENT_MACHINE.DEVICE;
+  const symbol = runsOnGlyph({ cloud, platform });
+  const place = agentRunsOnWords(agent) || RUNS_ON_WORDS.LABEL;
 
-  const menu =
+  const runsIn = {
+    title: PLACE_WORDS.RUNS_IN,
+    choices: [{ label: place, symbol, on: true, onPress: () => undefined }],
+  };
+
+  const machines =
     commands === undefined || commands.machines.length === 0
-      ? undefined
-      : {
-          groups: [
-            {
-              title: COMMANDS_WORDS.LABEL,
-              choices: commands.machines.map((machine) => ({
-                label: machine.name,
-                symbol: runsOnGlyph({ cloud: false }),
-                on: machine.id === commands.machine?.id,
-                onPress: () => commands.choose(machine.id),
-              })),
-            },
-          ],
-        };
+      ? []
+      : [
+          {
+            title: PLACE_WORDS.COMMANDS,
+            choices: commands.machines.map((machine) => ({
+              label: machine.name,
+              symbol: runsOnGlyph({ cloud: false, platform: machine.platform }),
+              on: machine.id === commands.machine?.id,
+              onPress: () => commands.choose(machine.id),
+            })),
+          },
+        ];
 
   return (
     <MenuChip
       look={MENU_CHIP_LOOK.COMPOSER}
-      label={agentRunsOnWords(agent) || RUNS_ON_WORDS.LABEL}
+      label={place}
       symbol={symbol}
-      {...(menu === undefined ? {} : { menu })}
+      menu={{ groups: [runsIn, ...machines] }}
       testId={MACHINE_CHIP_ID}
     />
   );
