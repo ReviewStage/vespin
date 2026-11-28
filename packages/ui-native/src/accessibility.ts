@@ -1,4 +1,4 @@
-// accessibility.ts -- the system's accessibility settings a component draws by (Reduce Motion, Reduce Transparency, Increase Contrast, VoiceOver running), the reader's text size past which a layout stacks rather than crowds, and what VoiceOver is told as it happens.
+// accessibility.ts -- the system's accessibility settings a component draws by (Reduce Motion, Reduce Transparency, Increase Contrast, Bold Text, VoiceOver running), the reader's text size past which a layout stacks rather than crowds, and what VoiceOver is told as it happens.
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { AccessibilityInfo, useWindowDimensions } from "react-native";
@@ -10,6 +10,7 @@ const SETTING = {
   REDUCE_TRANSPARENCY: "reduceTransparencyChanged",
   INCREASE_CONTRAST: "darkerSystemColorsChanged",
   VOICE_OVER: "screenReaderChanged",
+  BOLD_TEXT: "boldTextChanged",
 } as const;
 
 type Setting = (typeof SETTING)[keyof typeof SETTING];
@@ -20,6 +21,7 @@ const FIRST_READ = {
   [SETTING.REDUCE_TRANSPARENCY]: () => AccessibilityInfo.isReduceTransparencyEnabled(),
   [SETTING.INCREASE_CONTRAST]: () => AccessibilityInfo.isDarkerSystemColorsEnabled(),
   [SETTING.VOICE_OVER]: () => AccessibilityInfo.isScreenReaderEnabled(),
+  [SETTING.BOLD_TEXT]: () => AccessibilityInfo.isBoldTextEnabled(),
 } as const satisfies Record<Setting, () => Promise<boolean>>;
 
 /**
@@ -57,6 +59,12 @@ function settingStore(setting: Setting) {
       };
     },
     read: () => on,
+    /** The setting as it stands, for a reader outside React's render, which starts the store if nothing subscribed yet. */
+    peek() {
+      if (!started) start();
+
+      return on;
+    },
   };
 }
 
@@ -65,6 +73,7 @@ const STORES = {
   [SETTING.REDUCE_TRANSPARENCY]: settingStore(SETTING.REDUCE_TRANSPARENCY),
   [SETTING.INCREASE_CONTRAST]: settingStore(SETTING.INCREASE_CONTRAST),
   [SETTING.VOICE_OVER]: settingStore(SETTING.VOICE_OVER),
+  [SETTING.BOLD_TEXT]: settingStore(SETTING.BOLD_TEXT),
 } as const satisfies Record<Setting, ReturnType<typeof settingStore>>;
 
 function useSetting(setting: Setting): boolean {
@@ -86,6 +95,16 @@ export function useReduceTransparency(): boolean {
 /** Whether the reader asked for more contrast (Increase Contrast, iOS's darker system colors): `useColors` strengthens the quiet inks and the hairlines where it is on. */
 export function useIncreaseContrast(): boolean {
   return useSetting(SETTING.INCREASE_CONTRAST);
+}
+
+/** Whether the reader asked for Bold Text: `font` sets the app's own faces a weight heavier where it is on, as the system's faces thicken on their own. */
+export function useBoldText(): boolean {
+  return useSetting(SETTING.BOLD_TEXT);
+}
+
+/** Bold Text as it stands, for `font`, a modifier built outside a hook; a screen redraws on its change through `useBoldText`. */
+export function boldTextOn(): boolean {
+  return STORES[SETTING.BOLD_TEXT].peek();
 }
 
 /** Whether VoiceOver is running: a row then offers its acts as its Actions alone, rather than also behind swipes it cannot make. */

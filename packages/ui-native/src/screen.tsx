@@ -3,6 +3,7 @@
 import { Host, Spacer } from "@expo/ui/swift-ui";
 import { tint } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
+import { useBoldText } from "./accessibility.js";
 import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { useColors } from "./tokens/colors.js";
 
@@ -40,6 +41,11 @@ export function Screen({
   readonly ground?: ScreenGround;
 }) {
   const colors = useColors();
+
+  // Note that the screen reads Bold Text, though it draws nothing by it,
+  // because `font` reads it outside a hook: its change redraws the screen,
+  // and with it the words `font` sets a step heavier or back.
+  useBoldText();
 
   return (
     <Host
