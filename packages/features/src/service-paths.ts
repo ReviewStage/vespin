@@ -406,7 +406,7 @@ export const HOSTED_SERVICE_PATH = {
    * GitHub holds it now (GET), named by the workspace and the repository
    * (`GITHUB_REPOSITORIES_QUERY`), for a place with no plan to name it by,
    * such as an agent an automation started; the answer is a plan's tree's
-   * (`description-wire.ts`).
+   * (`task-wire.ts`).
    */
   GITHUB_REPOSITORY_TREE: "/api/github/repositories/tree",
   /**
@@ -419,7 +419,7 @@ export const HOSTED_SERVICE_PATH = {
   /**
    * The skills a developer may choose of a repository a workspace's
    * installation reaches (GET), named as `GITHUB_REPOSITORY_TREE` names it;
-   * the answer is a plan's skills' (`description-wire.ts`).
+   * the answer is a plan's skills' (`task-wire.ts`).
    */
   GITHUB_REPOSITORY_SKILLS: "/api/github/repositories/skills",
   /**

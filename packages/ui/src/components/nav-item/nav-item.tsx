@@ -80,8 +80,8 @@ import { ListSelectionContext } from "../selection/list-selection.js";
  * glyph, name, and end a glyph's gap apart, its words in the body's size on
  * a label's line, pressed as a Mac's list is on the desktop, without the
  * web's pointing hand. Note that its inks, at rest, hovered, open, and
- * unread, stay in `nav-item.css`, which a strip's chosen tab is held to
- * (`tabs-frame.test.ts`), and so does what stands at its end, whose count
+ * unread, stay in `nav-item.css`, which a strip's chosen tab is held to,
+ * and so does what stands at its end, whose count
  * and chord trade places under the pointer and the keyboard.
  */
 const ROW =

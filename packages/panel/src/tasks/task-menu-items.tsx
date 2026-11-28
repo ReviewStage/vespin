@@ -20,7 +20,7 @@ import type { ShortcutSubject } from "../shortcut-target.js";
  * task in the app as a mention's chip does; in a browser, Open in new tab
  * stands under Copy link and opens it in a tab of its own.
  * Mark as unread turns to Mark as read on a task already unread, as Mail,
- * Slack, and Linear offer it (`use-description-looks.ts`).
+ * Slack, and Linear offer it (`use-task-looks.ts`).
  */
 
 /** Where a task's links are written: its workspace by slug, or by id until the workspaces are read, and its repository. */

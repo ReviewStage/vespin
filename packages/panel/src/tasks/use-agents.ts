@@ -1022,7 +1022,7 @@ export interface AgentsControl {
  * where it is a fork, the MCP servers switched off for it, where it runs
  * where the developer picked it, the permission mode its Permissions row
  * picked, and the agent and message it forks, where it is a fork
- * (`fork-model.ts`).
+ * (`@repo/features/agent-fork-model`).
  */
 export interface AgentDraft {
   readonly id: string;

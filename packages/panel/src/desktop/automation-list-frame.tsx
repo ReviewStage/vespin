@@ -59,7 +59,7 @@ const SKELETON_ROWS = [
 /** How wide the placeholder Manager's and owner's names and next run stand, inside the columns the list keeps for them. */
 const SKELETON_META = { MANAGER: "80px", OWNER: "64px", NEXT: "96px" } as const;
 
-/** A row's clock tile, at an actor mark's row size (`ACTOR_SIZE.ROW`, `avatar.css`). */
+/** A row's clock tile, at an actor mark's row size (`ACTOR_SIZE.ROW`, `actor-ref.tsx`). */
 const SKELETON_ROW_MARK = "20px";
 
 /** The owner's and the Manager's marks at their inline size (`OWNER_MARK_SIZE.INLINE`, `ACTOR_SIZE.INLINE`: a 16px tile, picture, or face). */

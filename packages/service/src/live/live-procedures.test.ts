@@ -196,7 +196,7 @@ import { repositoryPullRequestMovedRead } from "./reads/pull-request-moved.js";
  * the digest the reader saw held until the rows move; and a plan's inbox,
  * or an agent's, for an account that reaches it and not found for one that
  * does not. Whose rows each statement reads is held by its builder's own
- * tests (`task-list-live.test.ts`, `task-record-live.test.ts`, and the rest).
+ * tests (`reads/tasks.test.ts`, `reads/task-record.test.ts`, and the rest).
  *
  * Synthetic accounts and bearers throughout, over the test's own database.
  */

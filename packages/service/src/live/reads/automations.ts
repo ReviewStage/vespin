@@ -2,8 +2,8 @@
  * automations.ts -- a workspace's automations and runs, and one automation's runs, bound: their one statement each, the tables they read, the topic that wakes them, and who they admit.
  *
  * Each is the same rows and rule of who may read them as its held read
- * (`automations-app.ts`'s list and runs, through `listAutomations` and
- * `listAutomationRuns`): every automation of the workspace the account may
+ * (`automations-procedures.ts`'s list and runs, through `listAutomations`
+ * and `listAutomationRuns`): every automation of the workspace the account may
  * read, each with its newest run, the newest runs of those automations,
  * and an automation's newest runs, each run with the agent it started and
  * what that agent's status is read from (`agent-standing.ts`), in one
