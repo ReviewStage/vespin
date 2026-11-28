@@ -23,7 +23,6 @@ import {
   background,
   buttonStyle,
   fixedSize,
-  font,
   foregroundStyle,
   frame,
   keyboardType,
@@ -41,6 +40,7 @@ import { Fragment, type ReactNode, useRef } from "react";
 import { Pressable } from "react-native";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
+import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { ProblemLine } from "./problem-line.js";

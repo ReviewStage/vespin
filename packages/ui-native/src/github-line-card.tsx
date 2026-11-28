@@ -15,7 +15,7 @@ import { Press } from "./press.js";
 import { CHECK_LOOK, githubLineLook } from "./pull-request-look.js";
 import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, ROLE_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
 
 /** What VoiceOver hears of a card's fold and its press. */
 const HEARD = {
@@ -122,7 +122,13 @@ function FoldBody({
               {comment.path}
             </Text>
             {comment.line === undefined ? null : (
-              <Text style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>
+              <Text
+                style={{
+                  fontFamily: TEXT_FONT,
+                  fontSize: ROLE_SIZE.TIME,
+                  color: colors.TEXT_MUTED,
+                }}
+              >
                 L{comment.line}
               </Text>
             )}
@@ -149,11 +155,22 @@ function FoldBody({
           <LookGlyph look={CHECK_LOOK[githubCheckState(check.conclusion)]} size={glyph} />
           <Text
             numberOfLines={1}
-            style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT }}
+            style={{
+              flex: 1,
+              fontFamily: TEXT_FONT,
+              fontSize: ROLE_SIZE.ROW_LINE,
+              color: colors.TEXT,
+            }}
           >
             {check.name}
           </Text>
-          <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+          <Text
+            style={{
+              fontFamily: TEXT_FONT,
+              fontSize: ROLE_SIZE.ROW_LINE,
+              color: colors.TEXT_MUTED,
+            }}
+          >
             {CONCLUSION_WORDS[check.conclusion]}
           </Text>
         </Press>
@@ -234,6 +251,7 @@ export function GitHubLineCard({
                 style={{
                   flexShrink: 0,
                   maxWidth: "45%",
+                  fontFamily: TEXT_FONT,
                   fontSize: ROLE_SIZE.ROW_LINE,
                   fontWeight: "600",
                   color: colors.TEXT,
@@ -244,7 +262,12 @@ export function GitHubLineCard({
             )}
             <Text
               numberOfLines={lines}
-              style={{ flexShrink: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+              style={{
+                flexShrink: 1,
+                fontFamily: TEXT_FONT,
+                fontSize: ROLE_SIZE.ROW_LINE,
+                color: colors.TEXT_MUTED,
+              }}
             >
               {fold.does}
             </Text>
@@ -257,7 +280,12 @@ export function GitHubLineCard({
             >
               <Text
                 numberOfLines={1}
-                style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_BODY, fontWeight: "500" }}
+                style={{
+                  fontFamily: TEXT_FONT,
+                  fontSize: ROLE_SIZE.TIME,
+                  color: colors.TEXT_BODY,
+                  fontWeight: "500",
+                }}
               >
                 {fold.target}
               </Text>
@@ -267,7 +295,12 @@ export function GitHubLineCard({
           {fold.count === undefined ? null : (
             <Text
               numberOfLines={lines}
-              style={{ flexShrink: 1000, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+              style={{
+                flexShrink: 1000,
+                fontFamily: TEXT_FONT,
+                fontSize: ROLE_SIZE.ROW_LINE,
+                color: colors.TEXT_MUTED,
+              }}
             >
               {fold.count}
             </Text>

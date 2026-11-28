@@ -7,7 +7,6 @@ import {
   accessibilityHint,
   accessibilityLabel,
   buttonStyle,
-  font,
   foregroundStyle,
   frame,
   lineLimit,
@@ -15,6 +14,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { CHIP_MARK, type ChipMark } from "./chip-mark-model.js";
+import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar, AvatarPhoto, HarnessMark, MANAGER_FACE_SEAT, ManagerFace } from "./marks.js";
 import { Text } from "./text.js";

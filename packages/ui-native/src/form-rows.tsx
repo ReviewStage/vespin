@@ -18,7 +18,6 @@ import {
   autocorrectionDisabled,
   buttonStyle,
   datePickerStyle,
-  font,
   frame,
   lineLimit,
   listRowBackground,
@@ -30,6 +29,7 @@ import { longPasteIn } from "@repo/features/long-paste";
 import { useEffect, useRef } from "react";
 import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
 import { forgetField, noteFieldFocus } from "./field-focus.js";
+import { font } from "./font.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { PickOption as PickedOption } from "./glyph-label.js";
 import { dropPictures } from "./interactions.js";

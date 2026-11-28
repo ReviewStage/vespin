@@ -660,6 +660,12 @@ importers:
       '@config-plugins/react-native-webrtc':
         specifier: 15.0.2
         version: 15.0.2(expo@58.0.23)
+      '@expo-google-fonts/geist':
+        specifier: 0.4.2
+        version: 0.4.2
+      '@expo-google-fonts/geist-mono':
+        specifier: 0.4.3
+        version: 0.4.3
       '@expo/plist':
         specifier: 0.10.1
         version: 0.10.1
@@ -747,6 +753,9 @@ importers:
       expo-file-system:
         specifier: 58.0.13
         version: 58.0.13(expo@58.0.23)(react-native@0.88.1)
+      expo-font:
+        specifier: 58.0.11
+        version: 58.0.11(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       expo-haptics:
         specifier: 'catalog:'
         version: 58.0.7(expo@58.0.23)
@@ -3363,6 +3372,12 @@ packages:
     peerDependenciesMeta:
       '@noble/hashes':
         optional: true
+
+  '@expo-google-fonts/geist-mono@0.4.3':
+    resolution: {integrity: sha512-gjnwv1QOG4meZpMhrLjTIPC/+lhyNu8EcXa2eJPVbPrYvguVjCfBq+Ezq6cWKWW8ung6fqb2TjvuTalE6lqlnw==}
+
+  '@expo-google-fonts/geist@0.4.2':
+    resolution: {integrity: sha512-cTsqJRQrvK5EniTVwH7UDK18RFf9Bc6yxciAuM936aViQ+eR6j3mLEI2rQkJXz5JP9kwtn8tHJviDyZ0ulH6oA==}
 
   '@expo-google-fonts/material-symbols@0.4.53':
     resolution: {integrity: sha512-SgCSm8rUYvwy+5ABvwlV/h7xbJkWAsenChSKlUwMLVyEw/QoUon055QixCOtGCjrSRWqFGDvR0ghVa5nA2OkIg==}
@@ -12431,6 +12446,10 @@ snapshots:
   '@exodus/bytes@1.15.1(@noble/hashes@2.4.0)':
     optionalDependencies:
       '@noble/hashes': 2.4.0
+
+  '@expo-google-fonts/geist-mono@0.4.3': {}
+
+  '@expo-google-fonts/geist@0.4.2': {}
 
   '@expo-google-fonts/material-symbols@0.4.53': {}
 

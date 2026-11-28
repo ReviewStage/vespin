@@ -10,7 +10,7 @@ import { KEPT_KIND, type Kept } from "./keep-model.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { ROLE_SIZE } from "./tokens/type.js";
+import { ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
 
 /** The type a PDF is read as, which its chip names as a PDF. */
 const PDF_TYPE = "application/pdf";
@@ -122,7 +122,7 @@ export function FileChip({
     ? `${name} ${MEDIA_READ_WORDS.COULD_NOT_READ}`
     : [name, kind, size].filter((part) => part !== undefined).join(", ");
 
-  const fact = { fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED };
+  const fact = { fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED };
 
   const kept: Kept | undefined =
     opened === undefined ? undefined : { kind: KEPT_KIND.FILE, source: opened, name, mediaType };
@@ -168,7 +168,12 @@ export function FileChip({
           <Text
             numberOfLines={large ? undefined : 1}
             ellipsizeMode="middle"
-            style={{ fontSize: ROLE_SIZE.ROW_TITLE, fontWeight: "500", color: colors.TEXT }}
+            style={{
+              fontFamily: TEXT_FONT,
+              fontSize: ROLE_SIZE.ROW_TITLE,
+              fontWeight: "500",
+              color: colors.TEXT,
+            }}
           >
             {name}
           </Text>

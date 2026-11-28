@@ -4,11 +4,11 @@ import { HStack } from "@expo/ui/swift-ui";
 import {
   accessibilityElement,
   accessibilityLabel,
-  font,
   foregroundStyle,
   lineLimit,
   monospacedDigit,
 } from "@expo/ui/swift-ui/modifiers";
+import { font } from "./font.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -66,7 +66,10 @@ export function LineCounts({
       spacing={SPACE.TIGHT}
       modifiers={
         heard
-          ? [accessibilityElement("ignore"), accessibilityLabel(lineCountsHeard(additions, deletions))]
+          ? [
+              accessibilityElement("ignore"),
+              accessibilityLabel(lineCountsHeard(additions, deletions)),
+            ]
           : []
       }
     >

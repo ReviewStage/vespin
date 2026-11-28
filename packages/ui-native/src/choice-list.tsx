@@ -7,7 +7,6 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
-  font,
   foregroundStyle,
   frame,
   padding,
@@ -20,6 +19,7 @@ import { Pressable } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { CARD_WORDS_INSET, CardDivider, RecommendedTag } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
+import { font } from "./font.js";
 import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { PickedCheck } from "./settings-form.js";
 import { useSteppedBack } from "./stepped-back.js";

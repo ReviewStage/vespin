@@ -2,7 +2,6 @@
 
 import { HStack, VStack } from "@expo/ui/swift-ui";
 import {
-  font,
   foregroundStyle,
   frame,
   listRowBackground,
@@ -10,6 +9,7 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
+import { font } from "./font.js";
 import type { Glyph } from "./glyph.js";
 import { GlyphImage } from "./glyph-label.js";
 import { Text } from "./text.js";

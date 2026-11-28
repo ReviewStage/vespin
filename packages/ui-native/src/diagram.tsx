@@ -29,7 +29,7 @@ import type { MediaSize } from "./media-frame.js";
 import { Press } from "./press.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
-import { ROLE_SIZE } from "./tokens/type.js";
+import { ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
 
 /** The address the page is handed in at, the one place it may stand. */
 const HANDED_IN = "about:blank";
@@ -316,14 +316,21 @@ export function DiagramBlock({
     <View style={styles.card}>
       <View style={styles.head}>
         <Text
-          style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+          style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
           accessibilityRole="header"
         >
           {DIAGRAM_WORDS.HEAD}
         </Text>
         {drawing === undefined ? null : (
           <Press onPress={() => setShowingCode(!showingCode)} accessibilityRole="button">
-            <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT, fontWeight: "500" }}>
+            <Text
+              style={{
+                fontFamily: TEXT_FONT,
+                fontSize: ROLE_SIZE.ROW_LINE,
+                color: colors.TEXT,
+                fontWeight: "500",
+              }}
+            >
               {showingCode ? DIAGRAM_WORDS.SHOW_DIAGRAM : DIAGRAM_WORDS.SHOW_CODE}
             </Text>
           </Press>

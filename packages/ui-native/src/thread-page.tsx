@@ -22,7 +22,6 @@ import {
   animation,
   buttonStyle,
   defaultScrollAnchorForRole,
-  font,
   foregroundStyle,
   frame,
   lineLimit,
@@ -41,6 +40,7 @@ import { useAccessibilitySize, useReduceMotion } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
 import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
+import { font } from "./font.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { CopyWordsSwiftMenu, PictureOriginProvider, PictureSetProvider } from "./held-menu.js";

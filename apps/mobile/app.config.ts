@@ -38,6 +38,26 @@ import {
   withXcodeProject,
 } from "expo/config-plugins";
 
+/** The weights a role draws in, each a static face iOS finds by its family and weight. */
+const EMBEDDED_WEIGHTS = ["400Regular", "500Medium", "600SemiBold", "700Bold"] as const;
+
+/**
+ * Geist's italic at each of those weights, which Markdown's and a draft's
+ * emphasis asks for: React Native's iOS resolver draws no italic of its own
+ * for a custom family, so a face missing here draws upright.
+ */
+const EMBEDDED_ITALICS = EMBEDDED_WEIGHTS.map((weight) => `${weight}_Italic` as const);
+
+/** Each family's face at each of those weights, embedded at build time. */
+const EMBEDDED_FONTS = [
+  ...[...EMBEDDED_WEIGHTS, ...EMBEDDED_ITALICS].map(
+    (face) => `./node_modules/@expo-google-fonts/geist/${face}/Geist_${face}.ttf`,
+  ),
+  ...EMBEDDED_WEIGHTS.map(
+    (weight) => `./node_modules/@expo-google-fonts/geist-mono/${weight}/GeistMono_${weight}.ttf`,
+  ),
+];
+
 /**
  * The bundle identifier the App ID, the associated domain, and TestFlight are
  * registered under; the deep-link scheme is what expo-router and Maestro open
@@ -1063,6 +1083,10 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
     },
     plugins: [
       "expo-router",
+      // The app's faces, the desktop's and the web's: Geist for words and
+      // Geist Mono for code, embedded at build time so they draw offline, at
+      // each weight a role reads (`packages/ui-native/src/tokens/type.ts`).
+      ["expo-font", { fonts: EMBEDDED_FONTS }],
       // The TestFlight build takes its pushes from production APNs
       // (`aps-environment`), which the distribution profile release-ios.yml
       // exports it with allows; a simulator build is unsigned and carries no

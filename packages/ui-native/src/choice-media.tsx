@@ -9,7 +9,7 @@ import { Picture } from "./markdown.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { ROLE_SIZE } from "./tokens/type.js";
+import { ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
 import { Video } from "./video.js";
 
 /** What a piece of an option's media is drawn as: a picture, a recording in the system's player, a sound clip in its strip, a page the agent showed, or a live address. */
@@ -124,7 +124,7 @@ function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
       )}
       <Text
         numberOfLines={large ? undefined : 1}
-        style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+        style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
         accessibilityElementsHidden
       >
         {piece.title}

@@ -16,7 +16,6 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
   background,
-  font,
   foregroundStyle,
   frame,
   lineLimit,
@@ -31,6 +30,7 @@ import { MACHINE_ASK_DECISION, type MachineAskDecision } from "@repo/features/ma
 import { timeLeftText } from "@repo/features/time-format";
 import { type ReactNode, useEffect, useState } from "react";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
+import { font } from "./font.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";

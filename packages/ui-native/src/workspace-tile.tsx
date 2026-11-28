@@ -5,7 +5,6 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
   aspectRatio,
-  font,
   foregroundStyle,
   frame,
   resizable,
@@ -14,6 +13,7 @@ import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-pictu
 import { identityLetter } from "@repo/features/workspace-tile";
 import { useState } from "react";
 import { PixelRatio, useColorScheme } from "react-native";
+import { font } from "./font.js";
 import { TILE_ROUNDING } from "./mark-look.js";
 import { AvatarPhoto } from "./marks.js";
 import type { MenuPhotoFile } from "./row-menu-model.js";

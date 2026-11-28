@@ -23,7 +23,6 @@ import {
   background,
   buttonStyle,
   disabled,
-  font,
   foregroundStyle,
   frame,
   ignoreSafeArea,
@@ -45,6 +44,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, memo, type ReactElement, type ReactNode, useEffect } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { BarContent } from "./bar-content.js";
+import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";

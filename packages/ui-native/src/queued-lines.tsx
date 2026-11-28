@@ -6,13 +6,13 @@ import {
   accessibilityHidden,
   accessibilityLabel,
   buttonStyle,
-  font,
   foregroundStyle,
   frame,
   lineLimit,
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { font } from "./font.js";
 import { BAR_GLASS } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { type HeldAct, HeldSwiftMenu } from "./held-menu.js";

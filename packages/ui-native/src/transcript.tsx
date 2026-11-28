@@ -73,7 +73,7 @@ import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
@@ -490,7 +490,12 @@ function BodyBlock({
 }) {
   return (
     <View style={[styles.block, { backgroundColor: colors.WELL, borderColor: colors.CHIP_EDGE }]}>
-      <Text style={[styles.blockTitle, { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }]}>
+      <Text
+        style={[
+          styles.blockTitle,
+          { fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED },
+        ]}
+      >
         {title}
       </Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -641,6 +646,7 @@ function CallRow({
             style={{
               flexShrink: 0,
               maxWidth: "70%",
+              fontFamily: TEXT_FONT,
               fontSize: ROLE_SIZE.ROW_LINE,
               color: colors.TEXT_MUTED,
             }}
@@ -658,7 +664,12 @@ function CallRow({
             >
               <Text
                 numberOfLines={lines}
-                style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_BODY, fontWeight: "500" }}
+                style={{
+                  fontFamily: TEXT_FONT,
+                  fontSize: ROLE_SIZE.TIME,
+                  color: colors.TEXT_BODY,
+                  fontWeight: "500",
+                }}
               >
                 {chip}
               </Text>
@@ -670,7 +681,7 @@ function CallRow({
               style={{
                 flexShrink: 1,
                 fontSize: line.code ? ROLE_SIZE.TIME : ROLE_SIZE.ROW_LINE,
-                fontFamily: line.code ? MONOSPACE_FONT : undefined,
+                fontFamily: line.code ? MONOSPACE_FONT : TEXT_FONT,
                 color: line.code ? colors.TEXT_BODY : colors.TEXT_MUTED,
               }}
             >
@@ -681,7 +692,11 @@ function CallRow({
         {item.runOn === undefined ? null : (
           <Text
             numberOfLines={lines}
-            style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+            style={{
+              fontFamily: TEXT_FONT,
+              fontSize: ROLE_SIZE.ROW_LINE,
+              color: colors.TEXT_MUTED,
+            }}
           >
             {item.runOn}
           </Text>
@@ -773,7 +788,10 @@ function OriginFrom({
         };
 
   return (
-    <Text {...actions} style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+    <Text
+      {...actions}
+      style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+    >
       {parts.map(({ lead, words, after, address }, at) => (
         <Fragment key={at}>
           {at === 0 ? null : " · "}
@@ -816,7 +834,12 @@ function SenderName({
     <SenderPress name={name} address={address} onOpenLink={onOpenLink}>
       <Text
         accessibilityRole="header"
-        style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "600", color: colors.TEXT }}
+        style={{
+          fontFamily: TEXT_FONT,
+          fontSize: ROLE_SIZE.ROW_LINE,
+          fontWeight: "600",
+          color: colors.TEXT,
+        }}
       >
         {name}
       </Text>
@@ -848,7 +871,14 @@ function OriginBody({ body }: { readonly body: string }) {
           style={{ width: column, height: column }}
           accessibilityElementsHidden
         />
-        <Text style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+        <Text
+          style={{
+            flex: 1,
+            fontFamily: TEXT_FONT,
+            fontSize: ROLE_SIZE.ROW_LINE,
+            color: colors.TEXT_MUTED,
+          }}
+        >
           {WEBHOOK_BODY.LABEL}
         </Text>
       </Press>
@@ -915,7 +945,12 @@ function PromptCard({
           />
           <Text
             numberOfLines={large ? undefined : 1}
-            style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+            style={{
+              flex: 1,
+              fontFamily: TEXT_FONT,
+              fontSize: ROLE_SIZE.ROW_LINE,
+              color: colors.TEXT_MUTED,
+            }}
           >
             {PROMPT_CARD.LABEL}
             {open || card.title === "" ? null : (
@@ -987,7 +1022,12 @@ function FoldRow({
         />
         <Text
           numberOfLines={large ? undefined : 1}
-          style={{ flex: 1, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+          style={{
+            flex: 1,
+            fontFamily: TEXT_FONT,
+            fontSize: ROLE_SIZE.ROW_LINE,
+            color: colors.TEXT_MUTED,
+          }}
         >
           {item.summary}
         </Text>
@@ -1205,7 +1245,12 @@ function TranscriptRow({
           ]}
         >
           {item.stamp === undefined ? null : (
-            <Text style={[styles.stamp, { fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }]}>
+            <Text
+              style={[
+                styles.stamp,
+                { fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED },
+              ]}
+            >
               {item.stamp}
             </Text>
           )}
@@ -1292,7 +1337,10 @@ function TranscriptRow({
       // Note that a finished turn ends on how long it worked, then the acts on its words, standing rather than on a hover, as ChatGPT's row stands under its reply.
       return (
         <View style={[styles.row, { paddingBottom: SPACE.ROW }]}>
-          <Text selectable style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>
+          <Text
+            selectable
+            style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}
+          >
             {item.words}
           </Text>
           <View style={styles.turnActs}>
@@ -1315,6 +1363,7 @@ function TranscriptRow({
                 <View>
                   <Text
                     style={{
+                      fontFamily: TEXT_FONT,
                       fontSize: PROSE_SIZE,
                       color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
                     }}
@@ -1333,6 +1382,7 @@ function TranscriptRow({
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>
           <Text
             style={{
+              fontFamily: TEXT_FONT,
               fontSize: ROLE_SIZE.ROW_LINE,
               color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
             }}
@@ -1441,7 +1491,13 @@ function TranscriptRow({
                 onRetry={retryOf(drawing, shown.id)}
               />
               {shown.caption === "" ? null : (
-                <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+                <Text
+                  style={{
+                    fontFamily: TEXT_FONT,
+                    fontSize: ROLE_SIZE.ROW_LINE,
+                    color: colors.TEXT_MUTED,
+                  }}
+                >
                   {shown.caption}
                 </Text>
               )}
@@ -1473,11 +1529,22 @@ function TranscriptRow({
             <View style={{ flex: 1, gap: 2 }}>
               <Text
                 numberOfLines={large ? undefined : 2}
-                style={{ fontSize: ROLE_SIZE.ROW_TITLE, fontWeight: "500", color: colors.TEXT }}
+                style={{
+                  fontFamily: TEXT_FONT,
+                  fontSize: ROLE_SIZE.ROW_TITLE,
+                  fontWeight: "500",
+                  color: colors.TEXT,
+                }}
               >
                 {item.title}
               </Text>
-              <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+              <Text
+                style={{
+                  fontFamily: TEXT_FONT,
+                  fontSize: ROLE_SIZE.ROW_LINE,
+                  color: colors.TEXT_MUTED,
+                }}
+              >
                 {PAGE_WORD}
               </Text>
             </View>
@@ -1635,7 +1702,9 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
 
   return (
     <View style={styles.older}>
-      <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}>
+      <Text
+        style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+      >
         {OLDER_WORDS.FAILED}
       </Text>
       <InlineHost matchContents>

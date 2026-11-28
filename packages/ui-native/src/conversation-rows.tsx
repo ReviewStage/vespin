@@ -1,18 +1,13 @@
 // conversation-rows.tsx -- a pull request's conversation as rows of its page: each comment or review by who wrote it, where a review left them, and when, its words a short plain preview until opened whole in Markdown; and each review thread by its file and lines, opened to its comments.
 
 import { HStack, RNHostView, VStack } from "@expo/ui/swift-ui";
-import {
-  font,
-  foregroundStyle,
-  lineLimit,
-  monospacedDigit,
-  padding,
-} from "@expo/ui/swift-ui/modifiers";
+import { foregroundStyle, lineLimit, monospacedDigit, padding } from "@expo/ui/swift-ui/modifiers";
 import { BOT_TAG_WORDS } from "@repo/features/github-login";
 import { markdownPlainText } from "@repo/features/markdown-plain-text";
 import { agoText } from "@repo/features/time-format";
 import { type ReactElement, useMemo } from "react";
 import { useScaledSize } from "./accessibility.js";
+import { font } from "./font.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
 import { useRowInset } from "./layout-margin.js";
 import { RowFrame, RowHead } from "./list-row.js";

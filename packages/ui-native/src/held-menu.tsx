@@ -33,7 +33,7 @@ import { LongPressMenu, ROW_ACTION_TONE, type RowAction } from "./list-row.js";
 import type { LongPressGroup } from "./row-menu-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE } from "./tokens/space.js";
-import { PROSE_SIZE } from "./tokens/type.js";
+import { PROSE_SIZE, TEXT_FONT } from "./tokens/type.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
 const COPY_MESSAGE = "Copy message";
@@ -42,7 +42,13 @@ const styles = StyleSheet.create({
   // Note that the menu and its host span the width they stand in, since a host sized by its SwiftUI alone would stand no wider than nothing.
   host: { alignSelf: "stretch" },
   // Note that the words being selected stand as the words drawn do, with no inset of the text view's own, so they don't move as the selection starts.
-  selecting: { padding: 0, paddingTop: 0, paddingBottom: 0, fontSize: PROSE_SIZE },
+  selecting: {
+    padding: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    fontFamily: TEXT_FONT,
+    fontSize: PROSE_SIZE,
+  },
 });
 
 /** One act of a held thing's menu: its words, its glyph, and what a press does. */

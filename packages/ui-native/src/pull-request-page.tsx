@@ -22,7 +22,6 @@ import {
   controlSize,
   disabled,
   fixedSize,
-  font,
   foregroundStyle,
   frame,
   lineLimit,
@@ -49,6 +48,7 @@ import { agoText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { FieldChip, type FieldMenu, LabelChip } from "./button.js";
+import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { menuActContent } from "./glyph-label.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";

@@ -6,7 +6,6 @@ import {
   accessibilityHint,
   accessibilityLabel,
   buttonStyle,
-  font,
   foregroundStyle,
   frame,
   lineLimit,
@@ -17,6 +16,7 @@ import type { ModelProvider } from "@repo/features/models-wire";
 import { CALL_CONTROL_LABEL } from "@repo/features/voice-call-words";
 import { StyleSheet } from "react-native";
 import { useScaledSize } from "./accessibility.js";
+import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { AgentTile } from "./marks.js";
 import { Text } from "./text.js";

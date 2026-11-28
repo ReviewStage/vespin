@@ -6,7 +6,6 @@ import {
   accessibilityIdentifier,
   background,
   buttonStyle,
-  font,
   foregroundStyle,
   lineLimit,
   padding,
@@ -14,6 +13,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestMarkState } from "@repo/features/pull-request-model";
 import { Button as Act, BUTTON_LOOK, BUTTON_SIZE } from "./button.js";
+import { font } from "./font.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { LineCounts } from "./line-counts.js";
 import { type LongPressGroup, LongPressMenu } from "./list-row.js";

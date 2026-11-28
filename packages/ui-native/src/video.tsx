@@ -25,7 +25,7 @@ import { Press } from "./press.js";
 import { BRAND_COLOR } from "./tokens/brand-colors.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
-import { ROLE_SIZE } from "./tokens/type.js";
+import { ROLE_SIZE, TEXT_FONT } from "./tokens/type.js";
 
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
 const CANNOT_PLAY = "This video can't play here.";
@@ -191,7 +191,11 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
             {failed ? null : <ActivityIndicator color={colors.TEXT_MUTED} />}
             {failed ? (
               <Text
-                style={{ fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }}
+                style={{
+                  fontFamily: TEXT_FONT,
+                  fontSize: ROLE_SIZE.ROW_LINE,
+                  color: colors.TEXT_MUTED,
+                }}
                 accessibilityLabel={`${label}. ${CANNOT_PLAY}`}
               >
                 {CANNOT_PLAY}
@@ -206,6 +210,7 @@ export function Video({ source: ref, label, onOpenElsewhere, tileAspect, onRetry
               >
                 <Text
                   style={{
+                    fontFamily: TEXT_FONT,
                     fontSize: ROLE_SIZE.ROW_LINE,
                     fontWeight: "600",
                     color: colors.TEXT_BODY,

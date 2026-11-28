@@ -86,17 +86,17 @@ import {
 } from "./suggestion-look.js";
 import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { RADIUS, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE, TEXT_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, ROLE_SIZE, TEXT_FONT, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
 /** Each heading level's size and weight, a step above the body's words, never past a page's own heading. */
 const HEADING_LOOK: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, TextStyle>> = {
-  1: { fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600" },
-  2: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
-  3: { fontSize: PROSE_SIZE, fontWeight: "600" },
-  4: { fontSize: PROSE_SIZE, fontWeight: "600" },
-  5: { fontSize: PROSE_SIZE, fontWeight: "600" },
-  6: { fontSize: PROSE_SIZE, fontWeight: "600" },
+  1: { fontFamily: TEXT_FONT, fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600" },
+  2: { fontFamily: TEXT_FONT, fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
+  3: { fontFamily: TEXT_FONT, fontSize: PROSE_SIZE, fontWeight: "600" },
+  4: { fontFamily: TEXT_FONT, fontSize: PROSE_SIZE, fontWeight: "600" },
+  5: { fontFamily: TEXT_FONT, fontSize: PROSE_SIZE, fontWeight: "600" },
+  6: { fontFamily: TEXT_FONT, fontSize: PROSE_SIZE, fontWeight: "600" },
 };
 
 const TEXT_ALIGN: Readonly<Record<ColumnAlign, TextStyle["textAlign"]>> = {
@@ -431,7 +431,13 @@ function MentionChip({
           )}
           <Text
             numberOfLines={1}
-            style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
+            style={{
+              flexShrink: 1,
+              fontFamily: TEXT_FONT,
+              fontSize: size,
+              color: colors.TEXT,
+              fontWeight: "500",
+            }}
           >
             {name}
           </Text>
@@ -508,6 +514,7 @@ function PictureChip({ name, drawing }: { readonly name: string; readonly drawin
           numberOfLines={1}
           style={{
             flexShrink: 1,
+            fontFamily: TEXT_FONT,
             fontSize: ROLE_SIZE.ROW_LINE,
             color: colors.TEXT,
             fontWeight: "500",
@@ -561,7 +568,13 @@ function SuggestionChip({
         />
         <Text
           numberOfLines={1}
-          style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
+          style={{
+            flexShrink: 1,
+            fontFamily: TEXT_FONT,
+            fontSize: size,
+            color: colors.TEXT,
+            fontWeight: "500",
+          }}
         >
           {offered ? look.label : look.name}
         </Text>
@@ -572,7 +585,10 @@ function SuggestionChip({
               size={size * fontScale}
               color={colors.TEXT_MUTED}
             />
-            <Text numberOfLines={1} style={{ fontSize: size, color: colors.TEXT_MUTED }}>
+            <Text
+              numberOfLines={1}
+              style={{ fontFamily: TEXT_FONT, fontSize: size, color: colors.TEXT_MUTED }}
+            >
               {SUGGESTION_SENT_WORDS[look.suggests]}
             </Text>
           </>
@@ -848,7 +864,13 @@ function Line({
     >
       <Runs runs={runs} drawing={drawing} />
       {after === undefined ? null : (
-        <Text style={{ fontSize: ROLE_SIZE.TIME, color: drawing.colors.TEXT_MUTED }}>
+        <Text
+          style={{
+            fontFamily: TEXT_FONT,
+            fontSize: ROLE_SIZE.TIME,
+            color: drawing.colors.TEXT_MUTED,
+          }}
+        >
           {` ${after}`}
         </Text>
       )}
@@ -995,6 +1017,7 @@ function ItemNumber({
         onTextLayout={firstLineOf((line) => setOwn(line.baseline))}
         style={{
           width,
+          fontFamily: TEXT_FONT,
           fontSize: PROSE_SIZE,
           color: drawing.colors.TEXT_MUTED,
           textAlign: "right",
@@ -1225,6 +1248,7 @@ function TableView({
                     runs={cell}
                     drawing={drawing}
                     style={{
+                      fontFamily: TEXT_FONT,
                       fontSize: ROLE_SIZE.ROW_LINE,
                       textAlign: TEXT_ALIGN[block.align[columnAt] ?? COLUMN_ALIGN.START],
                       ...(rowAt === 0 && { fontWeight: "600", color: colors.TEXT }),
@@ -1572,11 +1596,11 @@ export type MarkdownLook = (typeof MARKDOWN_LOOK)[keyof typeof MARKDOWN_LOOK];
 function proseOf(look: MarkdownLook, colors: BrandColors): TextStyle {
   switch (look) {
     case MARKDOWN_LOOK.LINE:
-      return { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED };
+      return { fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED };
     case MARKDOWN_LOOK.STEPPED_BACK:
-      return { fontSize: PROSE_SIZE, color: colors.TEXT_MUTED };
+      return { fontFamily: TEXT_FONT, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED };
     case MARKDOWN_LOOK.MESSAGE:
-      return { fontSize: PROSE_SIZE, color: colors.TEXT_BODY };
+      return { fontFamily: TEXT_FONT, fontSize: PROSE_SIZE, color: colors.TEXT_BODY };
   }
 }
 
@@ -1796,7 +1820,11 @@ export function Markdown({
           <Blocks blocks={blocks} drawing={drawing} after={runsOn ? after : undefined} />
         )}
         {after === undefined || runsOn ? null : (
-          <Text style={{ fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}>{after}</Text>
+          <Text
+            style={{ fontFamily: TEXT_FONT, fontSize: ROLE_SIZE.TIME, color: colors.TEXT_MUTED }}
+          >
+            {after}
+          </Text>
         )}
       </View>
     </PictureSetProvider>

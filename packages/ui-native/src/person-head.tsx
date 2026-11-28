@@ -6,13 +6,13 @@ import {
   accessibilityElement,
   accessibilityLabel,
   accessibilityValue,
-  font,
   foregroundStyle,
   frame,
   listRowBackground,
   listRowSeparator,
   padding,
 } from "@expo/ui/swift-ui/modifiers";
+import { font } from "./font.js";
 import { Avatar } from "./marks.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";

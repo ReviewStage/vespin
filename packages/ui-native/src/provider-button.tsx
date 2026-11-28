@@ -7,12 +7,12 @@ import {
   buttonStyle,
   controlSize,
   disabled as disabledModifier,
-  font,
   foregroundStyle,
   frame,
   resizable,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { font } from "./font.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";

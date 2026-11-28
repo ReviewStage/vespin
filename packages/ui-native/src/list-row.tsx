@@ -26,7 +26,6 @@ import {
   buttonStyle,
   disabled,
   fixedSize,
-  font,
   foregroundStyle,
   frame,
   hidden,
@@ -60,6 +59,7 @@ import { createContext, type ReactElement, type ReactNode, useContext, useState 
 import { PixelRatio, useColorScheme } from "react-native";
 import { useAccessibilitySize, useScaledSize, useVoiceOver } from "./accessibility.js";
 import { RowAsking, type RowQuestion } from "./asks.js";
+import { font } from "./font.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { LookIcon, menuActContent } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";

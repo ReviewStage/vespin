@@ -4,10 +4,10 @@ import { HStack, Image, Menu, Section, Button as SwiftUIButton } from "@expo/ui/
 import {
   accessibilityHidden,
   accessibilityLabel,
-  font,
   foregroundStyle,
 } from "@expo/ui/swift-ui/modifiers";
 import { UNDELIVERED_WORDS } from "@repo/features/inbox-undelivered";
+import { font } from "./font.js";
 import { GLYPH, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { Text } from "./text.js";

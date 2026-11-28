@@ -9,7 +9,6 @@ import {
   animation,
   buttonStyle,
   fixedSize,
-  font,
   foregroundStyle,
   frame,
   layoutPriority,
@@ -49,6 +48,7 @@ import {
   noticeOnline,
   type ShownNotice,
 } from "./failure-notice-model.js";
+import { font } from "./font.js";
 import { BAR_GLASS } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";

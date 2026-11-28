@@ -20,7 +20,6 @@ import {
   buttonStyle,
   controlSize,
   disabled as disabledModifier,
-  font,
   foregroundStyle,
   frame,
   labelsHidden,
@@ -40,6 +39,7 @@ import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { useColorScheme } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { font } from "./font.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
