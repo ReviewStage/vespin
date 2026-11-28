@@ -234,12 +234,42 @@
     }
   }
 
-  /* The place a tile in the sidebar's rail stands for, while it is shown,
-     is filled in the primary ink rather than lifted as a card, so it reads
-     at a glance down the rail. */
+  /* A tile in the sidebar's rail is one square whatever it holds: no
+     ground at rest, the column's hover fill under the pointer, and, for the
+     place shown, the selected fill on that same square, a muted step in the
+     dark as in the light, its glyph in the primary ink. */
   .ui-nav-item[data-variant="tile"]:is([aria-current="page"], [aria-current="location"]) {
-    background: var(--ui-color-text);
+    background: var(--ui-color-fill-selected);
     box-shadow: none;
-    color: var(--ui-color-ink-inverse);
+    color: var(--ui-color-text);
+  }
+
+  /* A tile's count is a pill on its glyph's top end corner, centered on
+     that corner inside a ring of the rail's ground, as a mail app's count
+     stands on its icon (`corner-count.css`), so it reads as the glyph's
+     whether the tile is filled or not; what waits on the reader is in the
+     needs-you fill, a tally in the quiet one. */
+  .ui-nav-item[data-variant="tile"] > .ui-nav-item-rest {
+    position: absolute;
+    top: calc(50% - var(--ui-rail-icon) / 2 - var(--ui-space-8));
+    inset-inline-start: calc(50% + var(--ui-rail-icon) / 2 - var(--ui-space-8));
+    pointer-events: none;
+  }
+
+  .ui-nav-item[data-variant="tile"] .ui-nav-item-count {
+    min-width: var(--ui-space-16);
+    padding: 0 var(--ui-space-4);
+    border-radius: var(--ui-radius-full);
+    background: var(--ui-color-fill-strong);
+    box-shadow: 0 0 0 2px var(--ui-color-sidebar);
+    color: var(--ui-color-text);
+    font-weight: var(--ui-type-emphasis-weight);
+    line-height: var(--ui-space-16);
+    text-align: center;
+  }
+
+  .ui-nav-item[data-variant="tile"] .ui-nav-item-count[data-tone]:not([data-tone="neutral"]) {
+    background: var(--ui-tone-ink);
+    color: var(--ui-color-on-attention);
   }
 }

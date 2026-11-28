@@ -276,8 +276,7 @@ import { useTaskListView } from "./task-list-view.js";
 import { ChosenTasksContext, useTasksSelection } from "./tasks-selection.js";
 import { useWorkspaceRuns } from "./use-automation-runs.js";
 import { useRunRowDrag } from "./use-row-drag.js";
-import { WorkspaceSwitcher } from "./workspace-switcher.js";
-import { TILE_SIZE, WorkspaceTile } from "./workspace-tile.js";
+import { RailWorkspace, railHeadsWorkspace, WorkspaceSwitcher } from "./workspace-switcher.js";
 
 /**
  * What the sidebar leaves the work column beside it, in CSS pixels: the
@@ -3090,10 +3089,13 @@ function SidebarColumn({
     <SidebarRail
       label="Sidebar places"
       head={
-        tasks.signedIn && tasks.workspace !== undefined ? (
-          <ReplayMask>
-            <WorkspaceTile workspace={tasks.workspace} size={TILE_SIZE.RAIL} />
-          </ReplayMask>
+        tasks.signedIn && railHeadsWorkspace(tasks.workspace) ? (
+          <RailWorkspace
+            tasks={tasks}
+            listed={tasks.workspace}
+            inSight={overlay.inSight}
+            admin={{ onOpen: chosen(openAdmin), onPreload: preloadAdmin }}
+          />
         ) : undefined
       }
       foot={

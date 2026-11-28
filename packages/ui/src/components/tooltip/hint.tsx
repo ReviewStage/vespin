@@ -596,6 +596,7 @@ function Hint({
   chord,
   card,
   cardBeside,
+  pillBeside,
   cardAt,
   leaving,
   hold,
@@ -608,6 +609,7 @@ function Hint({
   chord: ShortcutChord | undefined;
   card: ReactNode;
   cardBeside: boolean;
+  pillBeside: boolean;
   cardAt: (() => CardBox | undefined) | undefined;
   leaving: boolean;
   hold: (element: HTMLElement | null) => void;
@@ -642,6 +644,7 @@ function Hint({
     <TooltipPill
       {...placed}
       label={drawn.label}
+      beside={pillBeside}
       shortcut={
         chord === undefined ? undefined : <Shortcut chord={chord} className={TOOLTIP_CHORD} />
       }
@@ -678,6 +681,7 @@ export function Tooltip({
   chord: ownChord,
   card,
   cardBeside = false,
+  pillBeside = false,
   cardRegion,
   cardAt,
   children,
@@ -687,6 +691,8 @@ export function Tooltip({
   chord?: ShortcutChord | undefined;
   card?: ReactNode;
   cardBeside?: boolean | undefined;
+  /** Whether the pill hangs beside its control, past its end, rather than under it, as a rail's tile, whose neighbors stand under it, is named. */
+  pillBeside?: boolean | undefined;
   cardRegion?: RefObject<HTMLElement | null> | undefined;
   /** Where its card hangs from in the window, in the control's place, as a pin's card hangs under what the pin is on; the control where this answers none. */
   cardAt?: (() => CardBox | undefined) | undefined;
@@ -1166,6 +1172,7 @@ export function Tooltip({
           chord={chord}
           card={card}
           cardBeside={cardBeside}
+          pillBeside={pillBeside}
           cardAt={cardAt}
           leaving={pill.leaving}
           hold={drawPill}

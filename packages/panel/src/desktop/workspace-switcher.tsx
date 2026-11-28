@@ -2,7 +2,15 @@ import { WORKSPACE_SWITCHER_WORDS, workspaceSharedWords } from "@repo/features/w
 import type { Workspace } from "@repo/features/workspace-wire";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
-import { ChevronDownIcon, dropBelowStart, GearIcon, NavItem, PlusIcon, useMenu } from "@repo/ui";
+import {
+  ChevronDownIcon,
+  dropBelowStart,
+  GearIcon,
+  NAV_ITEM_VARIANT,
+  NavItem,
+  PlusIcon,
+  useMenu,
+} from "@repo/ui";
 import { ShieldUserIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useQuery } from "@tanstack/react-query";
@@ -14,7 +22,7 @@ import { useOpenNewWorkspace } from "./new-workspace.js";
 import type { SidebarTasksControl } from "./sidebar-open.js";
 import { useWorkspaceChords } from "./workspace-keys.js";
 import { WORKSPACE_REF_SIZE, WorkspaceCard, WorkspaceRef } from "./workspace-ref.js";
-import { WorkspaceTile } from "./workspace-tile.js";
+import { TILE_SIZE, WorkspaceTile } from "./workspace-tile.js";
 
 /**
  * workspace-switcher.tsx -- the sidebar's head: the workspace listed, by its tile and name and who shares it, the menu that lists another, and New task at the row's end.
@@ -189,5 +197,64 @@ export function WorkspaceSwitcher({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Whether the rail heads itself with the workspace listed: only a team's,
+ * since a personal workspace's tile is the account's own face, which the
+ * rail's foot already draws.
+ */
+export function railHeadsWorkspace(listed: Workspace | undefined): listed is Workspace {
+  return listed !== undefined && listed.personal !== true;
+}
+
+/**
+ * The rail's head while the workspace listed is a team's
+ * (`railHeadsWorkspace`): its tile, a tile of the rail's own, which drops the
+ * same menu of every workspace the head's name does.
+ */
+export function RailWorkspace({
+  tasks,
+  listed,
+  inSight,
+  admin,
+}: {
+  tasks: SidebarTasksControl;
+  listed: Workspace;
+  /** Whether the sidebar is in sight, so the menu closes with it folding away. */
+  inSight: boolean;
+  admin: AdminMenuDoor;
+}): React.JSX.Element {
+  const menu = useMenu(tasks.shown && inSight);
+  const doors = useWorkspaceMenuDoors(admin);
+
+  return (
+    <>
+      <NavItem
+        variant={NAV_ITEM_VARIANT.TILE}
+        icon={
+          <ReplayMask>
+            <WorkspaceTile workspace={listed} size={TILE_SIZE.RAIL} />
+          </ReplayMask>
+        }
+        aria-label={[`Workspace: ${listed.name}`, workspaceSharedWords(listed.memberCount, false)]
+          .filter((part) => part !== undefined)
+          .join(", ")}
+        hint={listed.name}
+        menu={menu.trigger(dropBelowStart)}
+      >
+        <ReplayMask>{listed.name}</ReplayMask>
+      </NavItem>
+      {menu.drawn === undefined ? null : (
+        <ActionMenu
+          label={WORKSPACE_SWITCHER_WORDS.MENU}
+          replayUnmasked
+          menu={menu.drawn}
+          groups={workspaceMenuGroups(listed, tasks, doors)}
+          onClose={menu.close}
+        />
+      )}
+    </>
   );
 }

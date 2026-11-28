@@ -59,11 +59,13 @@
   --spacing-half-container: 50cqi;
   --spacing-control-icon: var(--ui-control-icon);
   /* The sidebar's rail of places (`SidebarRail`): its width, a tile's square
-     and its glyph, and a tile's corner. */
+     and its glyph, a tile's corner, the gap between tiles, and its end's room. */
   --spacing-rail: var(--ui-rail-width);
   --spacing-rail-tile: var(--ui-rail-tile);
   --spacing-rail-icon: var(--ui-rail-icon);
   --radius-rail-tile: var(--ui-rail-tile-radius);
+  --spacing-rail-gap: var(--ui-rail-gap);
+  --spacing-rail-inset: var(--ui-rail-inset);
   /* A large glyph-alone button (`components/button/`), a player's Play: a
      control's height and a step more, so it stands apart from the row. */
   --spacing-control-large: calc(var(--ui-control-height) + var(--ui-space-8));

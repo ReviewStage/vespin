@@ -250,11 +250,7 @@ function AtRest({
   if (!said(mark) && !counted) return null;
 
   return (
-    <span
-      className={
-        tile ? "ui-nav-item-rest absolute top-ui-2 end-ui-4 m-0" : "ui-nav-item-rest ml-auto"
-      }
-    >
+    <span className={tile ? "ui-nav-item-rest" : "ui-nav-item-rest ml-auto"}>
       {said(mark) ? <span className={MARK}>{mark}</span> : null}
       {counted ? (
         <span
@@ -408,8 +404,13 @@ export function NavItem({
     </button>
   );
 
-  // A tile names its place in its hint, since its words are not drawn.
-  if (tile) return <Tooltip label={props.hint}>{press}</Tooltip>;
+  // A tile names its place in its hint, beside it, since its words are not drawn and its neighbors stand under it.
+  if (tile)
+    return (
+      <Tooltip label={props.hint} pillBeside>
+        {press}
+      </Tooltip>
+    );
 
   if (!framed) return press;
 

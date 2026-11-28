@@ -77,17 +77,21 @@ function hintMarks(base: TooltipBase) {
 export function TooltipPill({
   label,
   shortcut,
+  beside = false,
   ...base
 }: TooltipBase & {
   label: string;
   /** The control's chord, drawn after its name in the pill's muted ink. */
   shortcut?: ReactNode;
+  /** Whether it hangs beside its control, past its end, as a rail's tile names itself, rather than under it. */
+  beside?: boolean;
 }): React.JSX.Element {
   return (
     <Tooltip open>
       <TooltipContent
         anchor={base.anchor}
-        collisionAvoidance={HINT_COLLISION}
+        side={beside ? "inline-end" : "bottom"}
+        collisionAvoidance={beside ? BESIDE_COLLISION : HINT_COLLISION}
         role="tooltip"
         {...hintMarks(base)}
       >
