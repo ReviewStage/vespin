@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar on an iPhone: labeled glass tabs for Inbox with its count, Tasks, Automations, and search, and over them the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, and hidden in a compact window over a conversation or while the Inbox stands in Select mode. An iPad stands the place its sidebar picked, with no tabs.
+// _layout.tsx -- the system tab bar on an iPhone: labeled glass tabs for Activity, the Inbox's tab, with its count, Tasks, Automations, and search, and over them the way back to a voice call standing; no Inbox while the member turned it off; a sidebar the system draws in a regular window, and hidden in a compact window over a conversation or while the Inbox stands in Select mode. An iPad stands the place its sidebar picked, with no tabs.
 
 import {
   IOS_TAB,
@@ -70,7 +70,9 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // Note that nothing here draws the bar: the system draws it in Liquid Glass
 // and minimizes it as a list scrolls down. Every tab keeps its label in any window, as Apple's own
 // apps do, since a bar of icons alone read as empty. The selected tab is tinted in the brand's copper,
-// and the Inbox carries the panel's count of what waits on you, hidden at
+// and Activity, the Inbox's tab under a bell, its route still `(inbox)` so
+// links, Handoff, the widget and a push open it as before, carries the
+// panel's count of what waits on you, hidden at
 // none, its fill the attention fill, the light copper in either theme, since
 // the system's white figures read at under 3:1 on the dark theme's accent,
 // counted on the same threads the Inbox lists. Search is the system's search
@@ -96,7 +98,7 @@ function useInboxListStands(segments: readonly string[]): boolean {
 // Pinned, Following, and the member's sections as groups atop its list.
 // Tabs stay mounted across a fold, a rotation, or a resize, so each keeps
 // the open thread or task.
-// Each tab carries an id of its own (`inbox-tab`, `tasks-tab`, `automations-tab`, `search-tab`),
+// Each tab carries an id of its own (`activity-tab`, `tasks-tab`, `automations-tab`, `search-tab`),
 // since a list's title, a back button, and a split view's search field
 // share their names, and a flow taps a tab by it.
 //
@@ -191,11 +193,11 @@ function AppTabs() {
       <NativeTabs.Trigger
         name="(inbox)"
         hidden={!inboxShown}
-        accessibilityLabel="Inbox"
-        testID="inbox-tab"
+        accessibilityLabel="Activity"
+        testID="activity-tab"
       >
-        <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
-        <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon xcasset={GLYPH.ACTIVITY} />
+        <NativeTabs.Trigger.Label>Activity</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
         {waiting === 0 ? null : (
           <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>

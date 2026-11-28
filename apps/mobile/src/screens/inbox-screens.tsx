@@ -203,8 +203,8 @@ import {
 } from "./inbox-ask.js";
 import { useRemind } from "./inbox-remind.js";
 
-/** The Inbox's name, at its head and on its back button. */
-const INBOX_TITLE = "Inbox";
+/** The Inbox's name, Activity, at its head and on its back button, as its tab and its sidebar place name it. */
+const INBOX_TITLE = "Activity";
 
 /** The act under a read that failed, as the app's other failures say it, rather than the panel's Retry. */
 const TRY_AGAIN = "Try again";
@@ -586,7 +586,7 @@ function InboxEmpty({
 }) {
   // Note that a feed that failed stays failed, but one that answered still reads until the screen's own rows answered, since the kept rows load after the document says the feed stands.
   if (feed !== INBOX_FEED.FAILED && (feed === INBOX_FEED.READING || !read))
-    return <EmptyState title={READING_INBOX} symbol={GLYPH.INBOX} loading />;
+    return <EmptyState title={READING_INBOX} symbol={GLYPH.ACTIVITY} loading />;
 
   if (feed === INBOX_FEED.FAILED) {
     return (
@@ -613,7 +613,7 @@ function InboxEmpty({
   return (
     <EmptyState
       title={INBOX_SHOW_EMPTY[whose.kind][show]}
-      symbol={GLYPH.INBOX}
+      symbol={GLYPH.ACTIVITY}
       action={
         instead === undefined
           ? undefined

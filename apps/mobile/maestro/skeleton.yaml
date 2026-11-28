@@ -16,7 +16,7 @@ env:
     arguments:
       fixture: inbox
 - extendedWaitUntil:
-    visible: "Inbox"
+    visible: "Activity"
     timeout: 30000
 - takeScreenshot: inbox
 # New task opens as a sheet over the tabs, from the Inbox bar's compose in
@@ -39,7 +39,7 @@ env:
 - tapOn: "Who can withdraw an invite?"
 - assertVisible: ".*withdrawing one deletes it.*"
 - takeScreenshot: inbox-ask
-# Note that pressing "Inbox" goes back to the list on a compact window, by its
+# Note that pressing "Activity" goes back to the list on a compact window, by its
 # back button or, where that is a bare chevron as on the folded Duo, its tab,
 # and is a no-op beside the split view on a regular one. A plain thread, a
 # notice, opens on its words; it may stand below the fold of a short window,
@@ -48,7 +48,7 @@ env:
 - runFlow:
     file: subflows/tab.yaml
     env:
-      TAB: Inbox
+      TAB: Activity
 - runFlow:
     file: subflows/open-row.yaml
     env:

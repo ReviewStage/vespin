@@ -467,14 +467,14 @@ env:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
 - extendedWaitUntil:
-    visible: "Inbox, \\d+ waiting"
+    visible: "Activity, \\d+ waiting"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-threads-line
-- tapOn: "Inbox, \\d+ waiting"
+- tapOn: "Activity, \\d+ waiting"
 - extendedWaitUntil:
-    notVisible: "Inbox, \\d+ waiting"
+    notVisible: "Activity, \\d+ waiting"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000

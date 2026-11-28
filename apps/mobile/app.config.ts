@@ -1113,7 +1113,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
               icon: "symbol:magnifyingglass",
               params: { href: "/search" },
             },
-            { id: "inbox", title: "Inbox", icon: "symbol:tray", params: { href: "/inbox" } },
+            { id: "inbox", title: "Activity", icon: "symbol:bell", params: { href: "/inbox" } },
           ],
         },
       ],

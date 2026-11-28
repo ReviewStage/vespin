@@ -20,7 +20,7 @@ onFlowComplete:
     arguments:
       fixture: inbox
 - extendedWaitUntil:
-    visible: "Inbox"
+    visible: "Activity"
     timeout: 30000
 - runFlow:
     file: subflows/tab.yaml

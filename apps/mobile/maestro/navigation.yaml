@@ -65,7 +65,7 @@ onFlowComplete:
       - runFlow:
           file: subflows/tab.yaml
           env:
-            TAB: Inbox
+            TAB: Activity
       - runFlow:
           file: subflows/switcher.yaml
       - assertVisible: "Settings"

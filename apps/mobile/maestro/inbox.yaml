@@ -154,7 +154,7 @@ env:
 - runFlow:
     file: subflows/tab.yaml
     env:
-      TAB: Inbox
+      TAB: Activity
 # A swipe from the leading edge reveals Mark as read or unread, which a full
 # swipe would press at once, so the flow swipes partway across "Recorded the
 # invite flow", the second row, which a compact window stands at about a

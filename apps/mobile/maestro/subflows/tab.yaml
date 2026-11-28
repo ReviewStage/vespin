@@ -1,4 +1,4 @@
-# tab.yaml -- opens the place `TAB` names (Inbox, Tasks, Automations, or Search): by its tab's id, which the iPhone's tab bar carries, or on an iPad by its row in the sidebar, as a reader picks it, the sidebar shown first where it is hidden.
+# tab.yaml -- opens the place `TAB` names (Activity, Tasks, Automations, or Search): by its tab's id, which the iPhone's tab bar carries, or on an iPad by its row in the sidebar, as a reader picks it, the sidebar shown first where it is hidden.
 #
 # Note that a tab is never tapped by its name alone where an id stands,
 # because a list's title and a back button share the name and come first in

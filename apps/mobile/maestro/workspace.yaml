@@ -77,5 +77,5 @@ appId: dev.vespin.ios
 - runFlow:
     file: subflows/tab.yaml
     env:
-      TAB: Inbox
+      TAB: Activity
 - assertVisible: "Recorded the invite flow"

@@ -23,5 +23,5 @@ appId: dev.vespin.ios
     visible: "Know when an agent needs you"
     timeout: 30000
 - tapOn: "Not Now"
-- assertVisible: "Inbox"
+- assertVisible: "Activity"
 - stopApp

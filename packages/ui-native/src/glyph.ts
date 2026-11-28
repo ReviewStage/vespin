@@ -105,6 +105,8 @@ const system = (name: SfSymbol): Glyph => name as Glyph;
  */
 export const GLYPH = {
   // Places.
+  /** The Activity tab and place, which the Inbox's threads stand in, under a bell as Slack's Activity stands. */
+  ACTIVITY: lucide(LUCIDE_SYMBOL.BELL),
   INBOX: lucide(LUCIDE_SYMBOL.INBOX),
   TASK: lucide(LUCIDE_SYMBOL.LIST_TODO),
   SEARCH: system("magnifyingglass"),

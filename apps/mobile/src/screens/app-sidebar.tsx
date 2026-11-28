@@ -52,7 +52,7 @@ type SidebarPlace = (typeof SIDEBAR_PLACE)[keyof typeof SIDEBAR_PLACE];
 const PLACE_WORDS = {
   [SIDEBAR_PLACE.CALL]: "Call",
   [SIDEBAR_PLACE.SEARCH]: "Search",
-  [SIDEBAR_PLACE.INBOX]: "Inbox",
+  [SIDEBAR_PLACE.INBOX]: "Activity",
   [SIDEBAR_PLACE.TASKS]: "Tasks",
   [SIDEBAR_PLACE.AUTOMATIONS]: "Automations",
   [SIDEBAR_PLACE.MERGE_QUEUE]: MERGE_QUEUE_PAGE_WORDS.TITLE,
@@ -198,7 +198,7 @@ export function AppSidebarPane() {
             {inboxShown ? (
               <PlaceRow
                 id={SIDEBAR_PLACE.INBOX}
-                symbol={GLYPH.INBOX}
+                symbol={GLYPH.ACTIVITY}
                 label={PLACE_WORDS[SIDEBAR_PLACE.INBOX]}
                 count={waiting}
               />

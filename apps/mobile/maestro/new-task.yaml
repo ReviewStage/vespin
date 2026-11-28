@@ -14,7 +14,7 @@ env:
     arguments:
       fixture: inbox
 - extendedWaitUntil:
-    visible: "Inbox"
+    visible: "Activity"
     timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
@@ -47,7 +47,7 @@ env:
     arguments:
       fixture: inbox
 - extendedWaitUntil:
-    visible: "Inbox"
+    visible: "Activity"
     timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
@@ -74,7 +74,7 @@ env:
     arguments:
       fixture: inbox
 - extendedWaitUntil:
-    visible: "Inbox"
+    visible: "Activity"
     timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"
@@ -139,7 +139,7 @@ env:
 # Inbox after the assert's short wait, and the failure's own frame, taken a
 # moment later, then shows it.
 - extendedWaitUntil:
-    visible: "Inbox"
+    visible: "Activity"
     timeout: 30000
 - tapOn: "New task"
 - assertVisible: "Describe the task"

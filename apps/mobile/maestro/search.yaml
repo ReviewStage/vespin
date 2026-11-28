@@ -14,7 +14,7 @@ env:
     arguments:
       fixture: inbox
 - extendedWaitUntil:
-    visible: "Inbox"
+    visible: "Activity"
     timeout: 30000
 # Note that the tab is tapped by its id, since a list's round search button
 # in a compact window's bar, and a split view's search field in a regular

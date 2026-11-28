@@ -54,7 +54,7 @@ appId: dev.vespin.ios
 - takeScreenshot: inbox-notification-refused
 - tapOn: "Not Now"
 - assertNotVisible: "Notifications are off"
-- assertVisible: "Inbox"
+- assertVisible: "Activity"
 # The next launch reads the tokens back from the settings file and opens on
 # the Inbox, never the sign-in screen.
 - stopApp
@@ -62,7 +62,7 @@ appId: dev.vespin.ios
     arguments:
       authServer: stub
 - extendedWaitUntil:
-    visible: "Inbox"
+    visible: "Activity"
     timeout: 30000
 - assertNotVisible: "Sign in to Vespin"
 # The workspace switcher leads the Inbox's bar, and its menu's account,

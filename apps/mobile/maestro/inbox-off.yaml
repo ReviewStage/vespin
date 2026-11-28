@@ -30,12 +30,12 @@ env:
       - assertVisible:
           id: "tasks-tab"
       - assertNotVisible:
-          id: "inbox-tab"
+          id: "activity-tab"
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
-      - assertNotVisible: "Inbox"
+      - assertNotVisible: "Activity"
 - assertNotVisible: "Recorded the invite flow"
 - takeScreenshot: inbox-off-tasks
 # A thread a link names still opens, on Tasks' stack, since no Inbox tab
