@@ -275,6 +275,7 @@ import {
   useCommentSettle,
   useTaskComments,
   useTaskCommentsRetry,
+  wordsMarkedOnBlocks,
 } from "../tasks/use-comments.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { useDescriptionRead } from "../tasks/use-description-read.js";
@@ -3233,6 +3234,8 @@ function OverviewDescription({
   const shown = whole ? body : descriptionHead(body);
 
   const onBlocks = threadsOnBlocks(threads, blocks);
+  // Note that each block's marked words are kept while the threads and blocks stand, so its words are read again only as a thread opens or closes on them.
+  const marked = useMemo(() => wordsMarkedOnBlocks(threads, blocks), [threads, blocks]);
   const { pictureSource, videoAt, fileAt } = useDescriptionPictures(shown);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
 
@@ -3281,6 +3284,8 @@ function OverviewDescription({
               fileAt={fileAt}
               linkStanding={linkStanding}
               last={block.from === blocks.at(-1)?.from}
+              marked={marked.get(block.from)}
+              onOpenMarked={openThread}
               onPressAt={
                 onPressBlock === undefined ? undefined : (x, y) => onPressBlock(block.from, x, y)
               }

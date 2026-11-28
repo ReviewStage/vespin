@@ -42,6 +42,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   BUZZ,
   buzz,
+  type MarkedWords,
   type PictureById,
   THREAD_MEDIA,
   type ThreadMedia,
@@ -636,6 +637,33 @@ export function threadsOnBlocks(
 export type StartSpan = Pick<DescriptionBlock, "from" | "to" | "quote"> & {
   readonly scope?: typeof DESCRIPTION_COMMENT_SCOPE.WORDS;
 };
+
+/**
+ * The words open threads stand on in each block of a description, by the
+ * block's start, each span counted from the block's own start, as its words
+ * are drawn alone: the threads on words selected, not those on a whole
+ * block, which its count stands for, the oldest started first.
+ */
+export function wordsMarkedOnBlocks(
+  threads: readonly DescriptionCommentThread[],
+  blocks: readonly DescriptionBlock[],
+): ReadonlyMap<number, readonly MarkedWords[]> {
+  const on = new Map<number, MarkedWords[]>();
+
+  for (const thread of threads.filter(threadOpen)) {
+    const { anchor } = thread;
+
+    if (anchor === undefined || thread.scope !== DESCRIPTION_COMMENT_SCOPE.WORDS) continue;
+
+    for (const block of blocks) {
+      if (anchor.from >= block.to || anchor.to <= block.from) continue;
+      const span = { from: anchor.from - block.from, to: anchor.to - block.from, id: thread.id };
+      on.set(block.from, [...(on.get(block.from) ?? []), span]);
+    }
+  }
+
+  return on;
+}
 
 /** A new thread's field on a block: its words, whether they may go, what a send that was refused said, and the send, which answers the thread's id at once, before the service has. */
 export interface CommentStart {

@@ -26,6 +26,24 @@ const words = (text: string) => ({
 });
 
 describe("markdownBlocks", () => {
+  // A thread on words selected must underline those words alone, across a bold run, or a press beside them opens the thread and the words it is on look unmarked.
+  it("marks the words a thread stands on, cut where they start and end, across a bold run", () => {
+    const text = "Invite by **email** or link.";
+    const from = text.indexOf("by");
+    const to = text.indexOf("email") + "email".length;
+    const [paragraph] = markdownBlocks(text, { ...READING, marked: [{ from, to, id: "t1" }] });
+
+    expect(paragraph).toEqual({
+      kind: MARKDOWN_BLOCK.PARAGRAPH,
+      runs: [
+        { ...words("Invite "), marked: undefined },
+        { ...words("by "), marked: "t1" },
+        { ...words("email"), strong: true, marked: "t1" },
+        words(" or link."),
+      ],
+    });
+  });
+
   // A pull request's chip named by its whole title moved to a line of its own and cut it there, where the panel's stands in the line by its key.
   it("draws a mention as its chip, a pull request by its key alone, a date by its day, and any other link as a link", () => {
     const [paragraph] = markdownBlocks(
