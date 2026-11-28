@@ -55,12 +55,12 @@
 }
 
 /* In full screen macOS hides the traffic lights, so the title bar's buttons
-   stand at the window's edge, as far in from it as the side panel's toggle
-   stands from the other, every row that clears them starts that much
+   stand where they do with no window chrome beside them, on the rail's center
+   line (`shell.css`'s `--title-bar-edge`), every row that clears them starts that much
    sooner, and a card the window's size takes its own margin at its top
    (`window-full-screen.ts`). */
 :root[data-full-screen="true"] {
-  --title-bar-left: var(--column-inset);
+  --title-bar-left: var(--title-bar-edge);
   --ui-dialog-window-top: initial;
 }
 
