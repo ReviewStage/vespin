@@ -1244,3 +1244,8 @@ body {
 .catalog-transcript-fold .ui-disclosure-summary:hover {
   color: var(--ui-color-text);
 }
+
+/* A note's pin over the pick notes example's surface, at the corner of the box it is on. */
+.catalog-pick-pin {
+  position: absolute;
+}

@@ -8,3 +8,8 @@
 .ui-remote-surface[data-driving] {
   box-shadow: 0 0 0 1px var(--ui-color-border);
 }
+
+/* While its owner picks elements on the page, the pointer aims. */
+.ui-remote-surface[data-picking] {
+  cursor: crosshair;
+}

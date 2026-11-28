@@ -7,6 +7,8 @@ import {
   REMOTE_KEY_ACTION,
   REMOTE_POINTER_ACTION,
   type RemoteKey,
+  type RemotePicking,
+  type RemotePoint,
   type RemotePointer,
   RemoteSurface,
   type RemoteWheel,
@@ -35,7 +37,11 @@ afterEach(() => {
 });
 
 /** A 200 by 100 surface at the page's corner, everything it hands on recorded. */
-function mount(driving: boolean, takes: (key: RemoteKey) => boolean = () => true) {
+function mount(
+  driving: boolean,
+  takes: (key: RemoteKey) => boolean = () => true,
+  picking?: RemotePicking,
+) {
   const pointers: RemotePointer[] = [];
   const wheels: RemoteWheel[] = [];
   const keys: RemoteKey[] = [];
@@ -58,6 +64,7 @@ function mount(driving: boolean, takes: (key: RemoteKey) => boolean = () => true
           return takes(input);
         },
         onPaste: (text) => pastes.push(text),
+        picking,
       }),
     ),
   );
@@ -177,4 +184,39 @@ test("a watched surface hands nothing on and leaves the system's own", () => {
   expect(menu.defaultPrevented).toBe(false);
   expect(wheel.defaultPrevented).toBe(false);
   expect(canvas.tabIndex).toBe(-1);
+});
+
+test("a surface picking tells its owner where the pointer goes and what it presses, hands the page none of it, and ends on Escape", () => {
+  const inspected: (RemotePoint | undefined)[] = [];
+  const picked: RemotePoint[] = [];
+  let ended = 0;
+
+  const { canvas, pointers, keys } = mount(true, () => true, {
+    onInspect: (point) => inspected.push(point),
+    onPick: (point) => picked.push(point),
+    onEnd: () => {
+      ended += 1;
+    },
+  });
+
+  const escapePress = new KeyboardEvent("keydown", {
+    bubbles: true,
+    cancelable: true,
+    key: "Escape",
+  });
+
+  act(() => {
+    canvas.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 30, clientY: 20 }));
+    canvas.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, clientX: 40, clientY: 25 }));
+    canvas.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, clientX: 40, clientY: 25 }));
+    canvas.dispatchEvent(
+      new MouseEvent("mousedown", { bubbles: true, clientX: 40, clientY: 25, button: 2 }),
+    );
+    canvas.dispatchEvent(escapePress);
+  });
+  expect(inspected).toEqual([{ x: 30, y: 20 }]);
+  expect(picked).toEqual([{ x: 40, y: 25 }]);
+  expect(ended).toBe(1);
+  expect(escapePress.defaultPrevented).toBe(true);
+  expect([pointers, keys]).toEqual([[], []]);
 });
