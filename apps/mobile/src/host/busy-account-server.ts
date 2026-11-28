@@ -13,8 +13,9 @@
  * seed answered nothing for is not found, as the stub answers every other.
  *
  * A launch from an empty store (`busy-account.sh --empty`) reads the task
- * list whole as well. To a build that reads pages, the Inbox and the task
- * list whole come a page at a time (`PAGED`); a page, and the task list
+ * list whole as well. To a reader that names a page, the first as the empty
+ * one (`LIVE_FIRST_PAGE`), as the service pages only it, the Inbox and the
+ * task list whole come a page at a time; a page, and the task list
  * whole in one answer, wait a round trip and the time their bytes take at
  * the rate the Inbox whole was seen to arrive at (`BUSY_RATE`), so the two
  * ways are timed on one network.
@@ -30,10 +31,9 @@
  */
 
 import { HOSTED_SERVICE_PATH } from "@repo/features";
-import { HOSTED_API_VERSION } from "@repo/features/client-identity";
 import { INBOX_ITEMS_READ, inboxOfLiveRows } from "@repo/features/inbox-live";
 import { INBOX_STATUS, inboxItemSchema } from "@repo/features/inbox-wire";
-import { LIVE_POLL, LIVE_POLL_URL } from "@repo/features/live-wire";
+import { LIVE_FIRST_PAGE, LIVE_POLL, LIVE_POLL_URL } from "@repo/features/live-wire";
 import { HTTP_METHOD, type WireRecord, type WireValue } from "@repo/wire";
 import { Schema } from "effect";
 import { File, Paths } from "expo-file-system";
@@ -52,9 +52,6 @@ const BUSY_WAIT = {
   WAITS_FIRST: 400,
   WAITS_AGAIN: 30_000,
 } as const;
-
-/** The first hosted API version whose builds read a whole answer in pages, as the service's (`packages/service/src/live/live-pages.ts`). */
-const PAGED = { API_VERSION: 10 } as const;
 
 /** The network an answer the service was not seen to answer crosses: a round trip, and the bytes a millisecond the Inbox whole arrived at (4.8 MB in 3 s). */
 const BUSY_RATE = { ROUND_TRIP: 250, BYTES_A_MS: 1600 } as const;
@@ -137,9 +134,6 @@ async function answeredAtRate(name: string, askedAt: number): Promise<Response> 
 
   return new Response(text, { status: 200, headers: { "content-type": "application/json" } });
 }
-
-/** Whether this build reads a whole answer in pages: it reads them from the version it is built at. */
-const READS_PAGES = HOSTED_API_VERSION >= PAGED.API_VERSION;
 
 /** The page `page` of the whole answer the seed wrote under `folder`, or its first where none is named; not found for one of no number. */
 function pageAnswer(folder: string, page: string | null, askedAt: number): Promise<Response> {
@@ -357,15 +351,16 @@ async function tasksAnswer(url: URL, askedAt: number): Promise<Response> {
   const past = Number(url.searchParams.get(LIVE_POLL.SYNC));
   const page = url.searchParams.get(LIVE_POLL.PAGE);
 
-  if (page !== null && READS_PAGES) return pageAnswer("tasks-pages", page, askedAt);
+  // Note that a reader that follows pages names one, the first as the empty page, so the stub pages only it, as the service does.
+  if (page !== null && page !== LIVE_FIRST_PAGE) return pageAnswer("tasks-pages", page, askedAt);
 
   if (past === BUSY_SYNC.TASKS_KEPT)
     return answered("tasks-delta.json", askedAt, BUSY_WAIT.TASKS_DELTA);
 
   if (!Number.isInteger(past) || past < BUSY_SYNC.TASKS_KEPT) {
-    return READS_PAGES
-      ? pageAnswer("tasks-pages", null, askedAt)
-      : answeredAtRate("tasks-whole.json", askedAt);
+    return page === null
+      ? answeredAtRate("tasks-whole.json", askedAt)
+      : pageAnswer("tasks-pages", null, askedAt);
   }
 
   await wait(BUSY_WAIT.AGENT_EVERY);
@@ -396,10 +391,11 @@ async function tasksAnswer(url: URL, askedAt: number): Promise<Response> {
 async function inboxAnswer(url: URL, askedAt: number): Promise<Response> {
   const past = Number(url.searchParams.get(LIVE_POLL.SYNC));
   const page = url.searchParams.get(LIVE_POLL.PAGE);
-  const whole = page !== null || !Number.isInteger(past) || past < BUSY_SYNC.INBOX;
+  const named = page !== null && page !== LIVE_FIRST_PAGE;
+  const whole = named || !Number.isInteger(past) || past < BUSY_SYNC.INBOX;
 
-  // Note that a build reads pages from the version it is built at, so the stub of a build that reads none answers it in one.
-  if (whole && READS_PAGES) return pageAnswer("inbox-pages", page, askedAt);
+  // Note that a reader that follows pages names one, the first as the empty page, so the stub of a build that names none answers it in one, as the service does.
+  if (whole && page !== null) return pageAnswer("inbox-pages", named ? page : null, askedAt);
 
   if (whole) return wholeAnswer(askedAt, BUSY_WAIT.INBOX_WHOLE);
 
