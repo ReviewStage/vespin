@@ -8,11 +8,11 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import type { Agent } from "@repo/database/models/agent-store";
+import { type Agent, hasRepository, readVisibleAgent } from "@repo/database/models/agent-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import type { SandboxError } from "@repo/sandbox";
-import { Effect, Result } from "effect";
+import { Effect, Option, Result } from "effect";
 import {
   HOSTED_REFUSAL,
   type HostedRefusal,
@@ -55,6 +55,28 @@ export const reachedAgentSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     agent,
   };
 });
+
+/**
+ * The agent a relay's connection reaches, the Terminal tab's and the
+ * tunnel's: visible to the account, still standing, and given to the account
+ * by `controlsAgent`, with a repository, since an agent with none opens no
+ * sandbox to reach; and the session its sandbox is tagged with, none before
+ * it ran. None where any of that is not so, as a relay closes on no agent.
+ */
+export function relayReachedAgent(userId: string, agentId: string) {
+  return Effect.gen(function* () {
+    const found = yield* readVisibleAgent(userId, agentId);
+
+    if (Option.isNone(found) || found.value.archivedAt !== null) return Option.none();
+    const agent = found.value;
+
+    // Note that a sandbox of an agent on its starter's own GitHub token is its starter's alone.
+    if (!controlsAgent(userId, agent) || !hasRepository(agent)) return Option.none();
+    const [session] = yield* standingSessionsOf(agent.userId, [agent.conversationId]);
+
+    return Option.some({ agent, sessionId: session?.sessionId });
+  });
+}
 
 /**
  * A sandbox that could not be asked about, as the upstream's refusal a
