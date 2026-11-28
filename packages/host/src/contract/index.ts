@@ -282,6 +282,11 @@ export type PortActPayload<Kind extends PortActKind> = InferContractRouterInputs
   typeof actContract
 >[Kind];
 
+/** One act as the port takes it: its kind beside that kind's payload, so a check of the kind narrows the payload. */
+export type PortActCall = {
+  readonly [Kind in PortActKind]: { readonly kind: Kind; readonly payload: PortActPayload<Kind> };
+}[PortActKind];
+
 /** What one port kind answers, as it crosses the port. */
 export type PortActResult<Kind extends PortActKind> = InferContractRouterOutputs<
   typeof actContract
