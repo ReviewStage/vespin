@@ -266,20 +266,28 @@ env:
       POINT: 50%, 30%
 - runFlow:
     when:
-      notVisible: "No task selected"
+      true: ${FLOATING_TABS != 'true'}
     commands:
-      # Note that the swipe runs partway across the agent's row, where the
-      # Overview opened at its top stands it, as the leading swipe above
-      # does, because a swipe from the row's name either holds long enough
-      # to lift its preview or runs far enough to press Open; a tap on the
-      # page's plain line, inside the same list, then closes it. It starts
-      # a fifth of the window in from the edge, clear of a wide window's
-      # rail of tabs.
+      # Note that the agent's row is swiped from the row itself, found by its
+      # name, as the resting agent's row is below, because a point a share
+      # of the window down stood on the agent's row on an iPhone but on the
+      # Pages row under it on an iPad, which it opened. An iPad is left out,
+      # as the list's swipes above leave a regular window out, because under
+      # Maestro's driver a swipe in its split view never reveals the row's
+      # acts (vj11188), so the iPad's trailing swipe goes unchecked here;
+      # "No task selected" could not tell it apart, since the Overview
+      # always stands a task picked. The swipe must only
+      # reveal Stop, a working agent's one act, which a full swipe would
+      # run, so Stop is read standing before a tap on the page's plain line,
+      # inside the same list, closes it. It keeps Maestro's own duration, as
+      # the resting agent's swipe below does, since a 900 ms swipe on an
+      # agent's row held long enough on the iPhone to lift its preview.
       - swipe:
-          start: "80%, 66%"
-          end: "45%, 66%"
-          duration: 900
+          from:
+            text: "Build teammate invitations"
+          direction: LEFT
       - waitForAnimationToEnd
+      - assertVisible: "Stop"
       - takeScreenshot: task-agent-swipe
       - tapOn: "Created by .*"
       - waitForAnimationToEnd
