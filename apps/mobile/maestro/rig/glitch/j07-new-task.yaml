@@ -21,8 +21,19 @@ appId: dev.vespin.ios
 - tapOn: { text: "ada/ledger", optional: true }
 - runFlow: { file: _pause.yaml, env: { MS: "1200" } }
 - runFlow: { file: ../../subflows/close-sheet.yaml }
+# Note that main asks before letting a sheet with words go (Discard / Save / Cancel; desktop keeps the draft with no question, #10936), so the first close keeps it, to see whether it stands on reopen.
+- runFlow:
+    when:
+      visible: "Save draft"
+    commands:
+      - tapOn: "Save draft"
 - runFlow: { file: _pause.yaml, env: { MS: "1500" } }
 - tapOn: "New task"
 - runFlow: { file: _pause.yaml, env: { MS: "2500" } }
 - runFlow: { file: ../../subflows/close-sheet.yaml }
+- runFlow:
+    when:
+      visible: "Discard draft"
+    commands:
+      - tapOn: "Discard draft"
 - runFlow: { file: _pause.yaml, env: { MS: "1500" } }
