@@ -533,7 +533,7 @@ export function taskTree(input: TaskTreeInput): TaskTree {
   };
 }
 
-/** Whether the view shows settled tasks in full, as the Tasks page's does (`showsSettledInFull`): its completed window at All, or its statuses naming Done or Canceled, so the list reads those finished before its live window from the service. */
+/** Whether the view shows settled tasks in full, as the Tasks page's does (`showsSettledInFull`): its statuses naming Done or Canceled, or, naming none, its completed window at All, so the list reads those finished before its live window from the service. */
 export function treeShowsSettledInFull(treeView: TaskTreeView): boolean {
   return showsSettledInFull(viewFilter(treeView), viewDisplay(treeView));
 }
