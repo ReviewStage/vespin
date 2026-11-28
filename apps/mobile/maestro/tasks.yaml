@@ -41,10 +41,18 @@ env:
     text: "Launch"
     childOf: "Launch, [0-9]+"
 - assertNotVisible: "Launch checklist"
+# Each fold is shot once it has settled, its fold chevron turned a quarter
+# to point at the title, and again once the rows stand back under it.
+- waitForAnimationToEnd
+- takeScreenshot: tasks-list-folded
 - tapOn:
     text: "Launch"
     childOf: "Launch, [0-9]+"
-- assertVisible: "Launch checklist"
+- extendedWaitUntil:
+    visible: "Launch checklist"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: tasks-list-unfolded
 # A long press offers Done under the row menu's Status, as the panel's row
 # menu does, and a swipe from the trailing edge reveals Mark done; either way
 # the row leaves the list once it is pressed.

@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Divider,
   HStack,
   Image,
   List,
@@ -9,6 +10,7 @@ import {
   Overlay,
   Section,
   Spacer,
+  VStack,
   ZStack,
 } from "@expo/ui/swift-ui";
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
@@ -36,8 +38,10 @@ import {
   listStyle,
   monospacedDigit,
   onGeometryChange,
+  overlay,
   padding,
   refreshable,
+  rotationEffect,
   scrollContentBackground,
   scrollDismissesKeyboard,
   tint,
@@ -78,7 +82,7 @@ import {
 import { sectionInk } from "./section-ink.js";
 import { Text } from "./text.js";
 import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
@@ -91,14 +95,34 @@ const FNV = { OFFSET: 0x811c9dc5, PRIME: 0x01000193, SEPARATOR: 0x1f } as const;
 /** What a press on a foldable section's header is heard to do. */
 const FOLD_HINT = "Shows or hides the rows it holds";
 
-/** The fold chevron's size, a little under the header's words. */
-const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
+/** How far the fold chevron stands turned, in degrees: down while the section stands open, and a quarter turn back to point at its title while folded, as Mail's mailboxes and Files' sidebar turn theirs. */
+const FOLD_TURN = { OPEN: 0, FOLDED: -90 } as const;
 
 /** The least a section's + answers a press across, in points: Apple's least target, wider than it draws so a finger finds it beside the header's small words. */
 const ADD_TARGET = { WIDTH: PRESS_SIZE, HEIGHT: PRESS_SIZE } as const;
 
-/** A plain list's header's own space above and below its words, as the system's header stood them (10 pt, measured against main on the iPhone and the iPad), since the header sets its cell's insets itself. */
-const HEADER_VERTICAL = SPACE.ROW;
+/**
+ * How a section's header stands. A caption, small and muted with its count,
+ * as Linear's and Cursor's groups stand, heads a form's, a page's, or a
+ * list's section of rows laid out otherwise. A group, as Home's sections
+ * stand, heads rows on a row's lead column (`TaskRow`'s, `MARK_SIZE.LEAD`
+ * wide past `inset.lead`): its glyph in that column, its title in the body
+ * style in bold where the rows' titles start, its fold chevron at its end,
+ * under a full-width hairline with a section's gap above it, its count
+ * heard rather than drawn.
+ */
+export const SECTION_LOOK = {
+  CAPTION: "caption",
+  GROUP: "group",
+} as const;
+
+export type SectionLook = (typeof SECTION_LOOK)[keyof typeof SECTION_LOOK];
+
+/** A plain list's header's own space above and below its words, as the system's header stood them (10 pt, measured against main on the iPhone and the iPad), since the header sets its cell's insets itself; a group's head stands as tall as a row of one line, 44 pt, as its rows do. */
+const HEADER_VERTICAL = {
+  [SECTION_LOOK.CAPTION]: SPACE.ROW,
+  [SECTION_LOOK.GROUP]: ROW_INSET.VERTICAL,
+} as const satisfies Record<SectionLook, number>;
 
 /**
  * How a list stands: plain rows on a screen of its own, as the panel's lists
@@ -450,9 +474,9 @@ type ListSectionProps = {
   readonly repository?: string | undefined;
   /** Whose the group's rows are, their picture in the glyph's place: a workspace's tile, or a person's photo or letter, as the panel's Automations groups lead with their owner. */
   readonly owner?: SectionOwner | undefined;
-  /** Whether its rows stand on a row's lead column (`TaskRow`'s, `MARK_SIZE.LEAD` wide past `inset.lead`), so its header's glyph stands centered in the same column and its title where theirs start; a section of rows laid out otherwise, such as a form's or an automation's, keeps its glyph beside its title. */
-  readonly leadColumn?: boolean | undefined;
-  /** Whether a press on its header folds it in place, a chevron leading the header. */
+  /** How its header stands: a small muted caption, or a group's head over rows on a row's lead column (`SECTION_LOOK`); a caption where none is given. */
+  readonly look?: SectionLook | undefined;
+  /** Whether a press on its header folds it in place, a chevron at the header's end. */
   readonly foldable?: boolean | undefined;
   /** Whether a foldable section stands folded, where its screen holds that across a change of layout; it holds its own where none is given. */
   readonly folded?: boolean | undefined;
@@ -520,7 +544,7 @@ function progressKey({ done, total }: SectionProgress): number {
   return ((done + total) * (done + total + 1)) / 2 + total;
 }
 
-/** A section's header: its title in the group header's style, medium, and its count, then at its trailing end its fold chevron where it folds, all muted. */
+/** A section's header: its title, and in a caption its count, then at its trailing end its fold chevron where it folds, as its look (`SECTION_LOOK`) stands them. */
 function GroupHeader({
   title,
   count,
@@ -531,7 +555,7 @@ function GroupHeader({
   emoji,
   repository,
   owner,
-  leadColumn,
+  look,
   folded,
 }: {
   readonly title: string;
@@ -543,15 +567,18 @@ function GroupHeader({
   readonly emoji: string | undefined;
   readonly repository: string | undefined;
   readonly owner: SectionOwner | undefined;
-  readonly leadColumn: boolean;
+  readonly look: SectionLook;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
   const dark = useColorScheme() === "dark";
-  const chevron = useScaledSize(CHEVRON_SIZE);
-  const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
+  const reduceMotion = useReduceMotion();
+  const group = look === SECTION_LOOK.GROUP;
+  const chevron = useScaledSize(MARK_SIZE.FOLD);
+  const glyphSize = useScaledSize(group ? MARK_SIZE.SECTION_GLYPH : MARK_SIZE.GLYPH - 2);
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
   const rolling = useRollingCount(progress === undefined ? (count ?? 0) : progressKey(progress));
+  const textStyle = group ? TYPE_ROLE.SECTION_HEAD : TYPE_ROLE.GROUP_HEADER;
 
   const lead =
     owner !== undefined ? (
@@ -566,9 +593,7 @@ function GroupHeader({
     ) : repository !== undefined ? (
       <RepositoryPicture repository={repository} size={glyphSize} />
     ) : emoji !== undefined ? (
-      <Text modifiers={[font({ textStyle: TYPE_ROLE.GROUP_HEADER }), accessibilityHidden()]}>
-        {emoji}
-      </Text>
+      <Text modifiers={[font({ textStyle }), accessibilityHidden()]}>{emoji}</Text>
     ) : glyph === undefined ? null : (
       <Image
         {...glyphImage(glyph)}
@@ -577,6 +602,9 @@ function GroupHeader({
         modifiers={[accessibilityHidden()]}
       />
     );
+
+  // Note that a group's count is heard with its title (`ListSection`'s label) rather than drawn, so its head reads as its name alone, as Home's sections stand.
+  const counted = group ? undefined : count;
 
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
@@ -589,29 +617,29 @@ function GroupHeader({
         accessibilityAddTraits(["isHeader"]),
       ]}
     >
-      {/* Note that over rows on a row's lead column, what leads the title stands centered in that column and the title past it where a row's title starts, so a header's icon and words line up with its rows' marks and titles at every text size. */}
-      <HStack spacing={leadColumn ? SPACE.ROW : SPACE.TIGHT + 2}>
-        {lead === null || !leadColumn ? (
+      {/* Note that a group's lead stands centered in its rows' lead column and its title past it where a row's title starts, so a head's icon and words line up with its rows' marks and titles at every text size. */}
+      <HStack spacing={group ? SPACE.ROW : SPACE.TIGHT + 2}>
+        {lead === null || !group ? (
           lead
         ) : (
           <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
         )}
         <Text
           modifiers={[
-            font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "medium" }),
-            foregroundStyle(colors.TEXT_MUTED),
+            font({ textStyle, weight: group ? "bold" : "medium" }),
+            foregroundStyle(group ? colors.TEXT : colors.TEXT_MUTED),
           ]}
         >
           {title}
         </Text>
       </HStack>
       {mark === undefined ? null : (
-        <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.GROUP_HEADER} hidden />
+        <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={textStyle} hidden />
       )}
       {progress !== undefined ? (
         <Text
           modifiers={[
-            font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
+            font({ textStyle }),
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
             accessibilityLabel(progress.heard),
@@ -620,26 +648,29 @@ function GroupHeader({
         >
           {`${progress.done}/${progress.total}`}
         </Text>
-      ) : count === undefined ? null : (
+      ) : counted === undefined ? null : (
         <Text
           modifiers={[
-            font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
+            font({ textStyle }),
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
             ...rolling,
           ]}
         >
-          {String(count)}
+          {String(counted)}
         </Text>
       )}
       <Spacer />
-      {/* Note that the fold chevron stands at the header's trailing end, as Mail's mailboxes, Files' sidebar and Reminders' groups fold, and as a parent row's disclosure stands its own. */}
+      {/* Note that the fold chevron stands at the header's trailing end, as Mail's mailboxes, Files' sidebar and Reminders' groups fold, and as a parent row's disclosure stands its own. It is one glyph turned as the section folds, as Mail turns its own, so the turn reads as motion and no frame of it stands between two glyphs, where swapping the open glyph for the folded one crossfaded them. */}
       {folded === undefined ? null : (
         <Image
-          {...glyphImage(folded ? GLYPH.FOLDED : GLYPH.UNFOLDED)}
+          {...glyphImage(GLYPH.UNFOLDED)}
           size={chevron}
           color={colors.TEXT_MUTED}
-          modifiers={[frame({ width: chevron + 2 })]}
+          modifiers={[
+            rotationEffect(folded ? FOLD_TURN.FOLDED : FOLD_TURN.OPEN),
+            ...(reduceMotion ? [] : [animation(Animation.default, folded)]),
+          ]}
         />
       )}
     </HStack>
@@ -770,7 +801,9 @@ function SectionWordsButton({ more }: { readonly more: SectionWordsAct }) {
 /**
  * A section of a list or a form under a small muted header with its count,
  * as Linear's and Cursor's groups stand rather than the system's uppercase
- * caption. A foldable section folds in place on a press of its header, its
+ * caption, or, over rows on a row's lead column, under a group's head: its
+ * glyph, its bold title, and its fold chevron, under a hairline
+ * (`SECTION_LOOK`). A foldable section folds in place on a press of its header, its
  * chevron at its trailing end turning to say so; it opens unfolded. A header given `onDropLink`
  * takes a row dragged onto it, on an iPad, and hands on the row's link. A
  * header given `add` ends in a + that adds to the section, so an empty
@@ -795,7 +828,7 @@ export function ListSection({
   emoji,
   repository,
   owner,
-  leadColumn = false,
+  look: sectionLook = SECTION_LOOK.CAPTION,
   foldable = false,
   folded: held,
   onFold,
@@ -837,7 +870,7 @@ export function ListSection({
         emoji={emoji}
         repository={repository}
         owner={owner}
-        leadColumn={leadColumn}
+        look={sectionLook}
         folded={foldable ? folded : undefined}
       />
     );
@@ -926,19 +959,28 @@ export function ListSection({
   ];
 
   // Note that a plain list's header pins under the bar as the system's do, its insets its own so its words line up with the rows', and paints no ground: the list's automatic top edge effect covers it and the rows scrolling under it, attached to the bar, where a ground of ours stood as a flat band over half-hidden rows. A page's grouped list never pins its headers.
+  const edges = listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 });
+
+  const padded = [
+    padding({
+      leading: inset.lead,
+      trailing: inset.margin,
+      vertical: HEADER_VERTICAL[sectionLook],
+    }),
+    frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" as const }),
+  ];
+
+  // Note that a group's head parts it from the group before with a gap and a hairline across the list's whole width, the system's own divider in the rows' hairline ink, as Slack's Home parts its sections; a caption is parted by the system's section spacing alone.
   const grounded =
     header === undefined || look === LIST_LOOK.DETAIL ? (
       header
+    ) : sectionLook === SECTION_LOOK.GROUP ? (
+      <VStack spacing={0} modifiers={[edges, padding({ top: SPACE.SECTION })]}>
+        <Divider modifiers={[overlay({ color: colors.CHIP_EDGE })]} />
+        <HStack modifiers={padded}>{header}</HStack>
+      </VStack>
     ) : (
-      <HStack
-        modifiers={[
-          listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
-          padding({ leading: inset.lead, trailing: inset.margin, vertical: HEADER_VERTICAL }),
-          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-        ]}
-      >
-        {header}
-      </HStack>
+      <HStack modifiers={[edges, ...padded]}>{header}</HStack>
     );
 
   return (

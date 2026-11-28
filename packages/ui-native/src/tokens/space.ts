@@ -10,6 +10,8 @@ export const SPACE = {
   EDGE: 16,
   /** Around a block of words on a page. */
   PAGE: 20,
+  /** Above a group's head (`SECTION_LOOK.GROUP`), between the rows of the group before and its hairline, as Slack's Home parts its sections. */
+  SECTION: 22,
 } as const;
 
 /**
@@ -30,6 +32,10 @@ export const MARK_SIZE = {
   GLYPH: 16,
   /** The column a row's leading mark stands centered in. */
   LEAD: 20,
+  /** A group's head glyph (`SECTION_LOOK.GROUP`), centered in the lead column, as large as the column. */
+  SECTION_GLYPH: 20,
+  /** A section's fold chevron at its head's end, a little under the head's words. */
+  FOLD: 12,
   /** A writer's face or tile beside a message's name. */
   WRITER: 20,
   /** An avatar on its own, such as a person's on their page. */

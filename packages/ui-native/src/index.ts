@@ -355,6 +355,8 @@ export {
   type RowChoosing,
   RowForEach,
   RowList,
+  SECTION_LOOK,
+  type SectionLook,
 } from "./row-list.js";
 
 export {

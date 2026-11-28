@@ -199,6 +199,7 @@ import {
   repositoryChoice,
   runsOnGlyph,
   Screen,
+  SECTION_LOOK,
   STATUS_MARK_SYMBOL,
   StackBarMenu,
   type StandingMenus,
@@ -1558,7 +1559,7 @@ function GroupSection({
       }
       emoji={group.kind === TASK_TREE_GROUP.SECTION ? sectionEmoji(group.icon) : undefined}
       repository={headPicture(group)}
-      leadColumn
+      look={SECTION_LOOK.GROUP}
       count={group.rows.length}
       foldable={group.rows.length > 0}
       folded={hold.folded(group)}
@@ -1797,6 +1798,7 @@ function ManagersSection({
       foldable={managers.length > 0}
       folded={hold.managersFolded}
       onFold={hold.setManagersFolded}
+      look={SECTION_LOOK.GROUP}
       footer={managers.length === 0 ? MANAGERS_WORDS.NONE : undefined}
       menu={[[sortBy]]}
       add={{

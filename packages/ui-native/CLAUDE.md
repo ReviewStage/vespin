@@ -362,12 +362,18 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   count in the title's place with Done, and stands the acts in the bar at the
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
-  finished of all as `2/5` (`progress`), and in a plain list pin under the
+  finished of all as `2/5` (`progress`); over rows on a row's lead column,
+  as the Tasks list's groups and Managers (and an iPad's sidebar, which
+  draws them), a group's head instead (`SECTION_LOOK.GROUP`, round 4 of the
+  redesign, Nov 28, 2026): its glyph centered in the rows' lead column, its
+  title in the body style in bold where their titles start, its count heard
+  rather than drawn, under a full-width hairline with `SPACE.SECTION` above
+  it, as tall as a row. In a plain list they pin under the
   bar as the system's do, standing in the list's automatic top scroll edge
   effect (the opaque edge iOS draws under a pinned header, attached to the
   bar) on no ground of ours; a `foldable` one folds in place on
   a press, its chevron at the header's trailing end (before its +) as Mail's mailboxes and
-  Reminders' groups fold, its rows easing away and back; one given a `glyph` leads its title
+  Reminders' groups fold, one glyph turned a quarter as it folds rather than two swapped, its rows easing away and back; one given a `glyph` leads its title
   with what the group is, as the panel's sidebar leads a section with its icon and a repository with its
   owner's picture (`RepositoryPicture`, its glyph standing in until it draws); and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an

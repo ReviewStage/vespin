@@ -22,6 +22,8 @@ export const TYPE_ROLE = {
   TIME: "footnote",
   /** A list's group header: the footnote style, 13 pt. */
   GROUP_HEADER: "footnote",
+  /** A group's head over rows on the lead column (`SECTION_LOOK.GROUP`), as Home's sections: the body style, 17 pt, set in bold. */
+  SECTION_HEAD: "body",
   /** A screen's own title, inline in its bar. */
   SCREEN_TITLE: "headline",
   /** A page's heading under its bar: a thread's or a task's title. */
