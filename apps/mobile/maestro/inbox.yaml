@@ -58,8 +58,17 @@ env:
 # Mail's message stands; then each message: the agent's tile, name and time
 # over its words, its picture drawn where the words name it, and its recording
 # after the message that sent it, played in place from its MP4 copy.
+# Note that a thread opens at its end, its newest message in view, as a
+# transcript does (#11181), so the first message, the one with the picture,
+# is scrolled back up to; on an iPad, inside the page beside the list
+# (`scroll-in.yaml`'s `BESIDE`).
 - tapOn: "Recorded the invite flow"
-- assertVisible: ".*walked the invite flow.*"
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: ".*walked the invite flow.*"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
 - waitForAnimationToEnd
 - takeScreenshot: inbox-thread
 # The picture opens full screen in the app's viewer, grown out of its
