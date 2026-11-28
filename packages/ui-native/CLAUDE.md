@@ -488,7 +488,10 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   and their hairlines start where the words do, as iOS insets a list's
   separator; and `ResolvableAsk`'s × at their top end, muted, which
   resolves the thread without an answer, as the panel's question stands
-  it). **Cards** are kept for the pull request
+  it); an answered or held ask's rows, which take no press, stand in a
+  thread's message in the bordered card on `CARD` instead (`AskRows`'
+  `carded`), as the panel's answered card and held ask stand there (the
+  developer, Nov 27, 2026). **Cards** are kept for those and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
   red, and its acts as pills; a press on it opens its own page). A file's
   chip stands on `CARD`, the soft gray in light, so it reads off the page's
