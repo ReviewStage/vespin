@@ -284,6 +284,8 @@ export function cloudBrowserLive(input: {
               ? set((view) => ({ ...view, stepRefused: true }))
               : Effect.void;
           case BROWSER_LIVE_SERVER.CLOSED:
+          case BROWSER_LIVE_SERVER.INSPECTED:
+          case BROWSER_LIVE_SERVER.PICKED:
             return Effect.void;
         }
       };
