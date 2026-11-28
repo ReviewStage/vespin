@@ -1223,6 +1223,7 @@ function ThreadDetail({
               ),
             openLink,
             openVideoElsewhere: openOnWeb,
+            repository: holderRepository(holder),
           }}
         />
       }

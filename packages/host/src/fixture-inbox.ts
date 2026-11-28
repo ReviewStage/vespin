@@ -120,7 +120,7 @@ import {
   INTEGRATION_PROVIDER_LIST,
   INTEGRATION_STATUS,
 } from "@repo/features/integration-wire";
-import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import type { MachineLine } from "@repo/features/machine-live";
@@ -736,7 +736,8 @@ const DIGEST_ITEMS: readonly InboxItem[] = [
       {
         type: INBOX_ASK.DO,
         steps: [
-          "Open the mail provider's **Domains** page and add `relay.example.com`.",
+          // Note that the first step names a task by its bare address and its number, as an agent writes one, so each client's step draws it as its chip.
+          `Open the task ${linkOf({ kind: LINK_DESTINATION.TASK, taskId: "42" }, FIXTURE_WORKSPACE_SLUG)} for the provider's login, then add \`relay.example.com\` on its **Domains** page.`,
           "Add the three DNS records it shows at your registrar.",
           "Press **Verify** once they've spread, which can take an hour.",
         ],
