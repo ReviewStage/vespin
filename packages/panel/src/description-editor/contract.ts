@@ -502,7 +502,6 @@ export interface EditorSpan {
   readonly text: string;
 }
 
-/** An editor as mounted. */
 export interface DescriptionEditorHandle extends EditorFormatting {
   /**
    * A save's merged answer taken in: the app's part of `merged`, against what was
