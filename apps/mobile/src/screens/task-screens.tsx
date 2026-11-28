@@ -180,6 +180,7 @@ import {
   menuWithout,
   NoSelection,
   PATH_PART,
+  PartedSections,
   PRIORITY_MARK_SYMBOL,
   ProblemLine,
   personChoice,
@@ -1714,14 +1715,17 @@ function TreeSections({
 }) {
   const { tree } = listing;
 
+  // Note that Managers is handed in only while it is listed, so the first group drawn is the one its groups leave unparted.
   return (
-    <>
-      <ManagersSection
-        workspaceId={listing.workspace?.id}
-        listed={managersListed}
-        managers={managers}
-        hold={hold}
-      />
+    <PartedSections>
+      {managersListed ? (
+        <ManagersSection
+          workspaceId={listing.workspace?.id}
+          listed={managersListed}
+          managers={managers}
+          hold={hold}
+        />
+      ) : null}
       {tree.pinned === undefined ? null : (
         <GroupSection group={tree.pinned} listing={listing} hold={hold} />
       )}
@@ -1734,7 +1738,7 @@ function TreeSections({
       {tree.tasks.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
       ))}
-    </>
+    </PartedSections>
   );
 }
 

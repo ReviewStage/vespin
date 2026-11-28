@@ -50,7 +50,9 @@ import { searchTokens } from "@repo/features/search-tokens";
 import type { TaskSectionIconColor } from "@repo/features/task-section-wire";
 import { Predicate } from "effect";
 import {
+  Children,
   createContext,
+  isValidElement,
   type ReactElement,
   type ReactNode,
   useContext,
@@ -107,9 +109,9 @@ const ADD_TARGET = { WIDTH: PRESS_SIZE, HEIGHT: PRESS_SIZE } as const;
  * list's section of rows laid out otherwise. A group, as Home's sections
  * stand, heads rows on a row's lead column (`TaskRow`'s, `MARK_SIZE.LEAD`
  * wide past `inset.lead`): its glyph in that column, its title in the body
- * style in bold where the rows' titles start, its fold chevron at its end,
- * under a full-width hairline with a section's gap above it, its count
- * heard rather than drawn.
+ * style in bold where the rows' titles start, its count muted after it, and
+ * its fold chevron at its end, parted from the group above it by a
+ * full-width hairline with a section's gap over it (`PartedSections`).
  */
 export const SECTION_LOOK = {
   CAPTION: "caption",
@@ -142,6 +144,9 @@ export type ListLook = (typeof LIST_LOOK)[keyof typeof LIST_LOOK];
 
 /** The look of the list a section stands in, so a page's section clears the grouped style's row fill; none outside a `RowList`, such as a form's. */
 const ListLookContext = createContext<ListLook | undefined>(undefined);
+
+/** Whether a group stands above this one in its `PartedSections`, so its head is parted from it by a hairline; none outside one, and the first, stand unparted. */
+const SectionPartedContext = createContext(false);
 
 /**
  * A list's Select mode, as Mail's: the rows chosen, by their ids, and what is
@@ -413,6 +418,26 @@ export function RowList({
   );
 }
 
+/**
+ * Groups one under another in a list, each after the first parted from the
+ * one before by a hairline across the list with a section's gap above it
+ * (`SECTION_LOOK.GROUP`'s heads), as Home's groups stand, so the list's
+ * first group stands under its title with no rule over it. Note that a
+ * child standing as nothing is left out of the count, so the first group
+ * drawn is the one left unparted; a section that may draw nothing is
+ * handed in only while it draws.
+ */
+export function PartedSections({ children }: { readonly children: ReactNode }) {
+  return Children.toArray(children).map((section, index) => (
+    <SectionPartedContext
+      key={isValidElement(section) && section.key !== null ? section.key : index}
+      value={index > 0}
+    >
+      {section}
+    </SectionPartedContext>
+  ));
+}
+
 type RowForEachProps<Item> = {
   /** The rows' items, in the order they stand: the same array until they change, since a new one resets every row the list holds. */
   readonly data: readonly Item[];
@@ -603,9 +628,6 @@ function GroupHeader({
       />
     );
 
-  // Note that a group's count is heard with its title (`ListSection`'s label) rather than drawn, so its head reads as its name alone, as Home's sections stand.
-  const counted = group ? undefined : count;
-
   // Note that the header's whole row takes a press, its blank run after the count among it, since a plain button otherwise answers only where it draws.
   // Note that the header is heard as one heading, its title and count together, so VoiceOver's Headings rotor moves from section to section.
   return (
@@ -648,7 +670,7 @@ function GroupHeader({
         >
           {`${progress.done}/${progress.total}`}
         </Text>
-      ) : counted === undefined ? null : (
+      ) : count === undefined ? null : (
         <Text
           modifiers={[
             font({ textStyle }),
@@ -657,7 +679,7 @@ function GroupHeader({
             ...rolling,
           ]}
         >
-          {String(counted)}
+          {String(count)}
         </Text>
       )}
       <Spacer />
@@ -802,8 +824,8 @@ function SectionWordsButton({ more }: { readonly more: SectionWordsAct }) {
  * A section of a list or a form under a small muted header with its count,
  * as Linear's and Cursor's groups stand rather than the system's uppercase
  * caption, or, over rows on a row's lead column, under a group's head: its
- * glyph, its bold title, and its fold chevron, under a hairline
- * (`SECTION_LOOK`). A foldable section folds in place on a press of its header, its
+ * glyph, its bold title, its count, and its fold chevron, parted from the
+ * group above it in `PartedSections` by a hairline (`SECTION_LOOK`). A foldable section folds in place on a press of its header, its
  * chevron at its trailing end turning to say so; it opens unfolded. A header given `onDropLink`
  * takes a row dragged onto it, on an iPad, and hands on the row's link. A
  * header given `add` ends in a + that adds to the section, so an empty
@@ -845,6 +867,7 @@ export function ListSection({
   const [own, setOwn] = useState(false);
   const folded = held ?? own;
   const look = useContext(ListLookContext);
+  const parted = useContext(SectionPartedContext);
   const reduceMotion = useReduceMotion();
   const inset = useRowInset();
   const colors = useColors();
@@ -970,11 +993,11 @@ export function ListSection({
     frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" as const }),
   ];
 
-  // Note that a group's head parts it from the group before with a gap and a hairline across the list's whole width, the system's own divider in the rows' hairline ink, as Slack's Home parts its sections; a caption is parted by the system's section spacing alone.
+  // Note that a group's head under another group of its `PartedSections` is parted from it by a gap and a hairline across the list's whole width, the system's own divider in the rows' hairline ink, as Slack's Home parts its sections; the first group, and a caption, stand unparted.
   const grounded =
     header === undefined || look === LIST_LOOK.DETAIL ? (
       header
-    ) : sectionLook === SECTION_LOOK.GROUP ? (
+    ) : sectionLook === SECTION_LOOK.GROUP && parted ? (
       <VStack spacing={0} modifiers={[edges, padding({ top: SPACE.SECTION })]}>
         <Divider modifiers={[overlay({ color: colors.CHIP_EDGE })]} />
         <HStack modifiers={padded}>{header}</HStack>

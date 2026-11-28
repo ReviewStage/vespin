@@ -352,6 +352,7 @@ export {
   LIST_LOOK,
   type ListLook,
   ListSection,
+  PartedSections,
   type RowChoosing,
   RowForEach,
   RowList,

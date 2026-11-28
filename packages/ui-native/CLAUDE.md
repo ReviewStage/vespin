@@ -366,9 +366,11 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   as the Tasks list's groups and Managers (and an iPad's sidebar, which
   draws them), a group's head instead (`SECTION_LOOK.GROUP`, round 4 of the
   redesign, Nov 28, 2026): its glyph centered in the rows' lead column, its
-  title in the body style in bold where their titles start, its count heard
-  rather than drawn, under a full-width hairline with `SPACE.SECTION` above
-  it, as tall as a row. In a plain list they pin under the
+  title in the body style in bold where their titles start, its count muted
+  after it, as tall as a row; the list stands its groups in
+  `PartedSections`, which parts each from the one above by a full-width
+  hairline with `SPACE.SECTION` over it, so the first stands under the
+  title with no rule. In a plain list they pin under the
   bar as the system's do, standing in the list's automatic top scroll edge
   effect (the opaque edge iOS draws under a pinned header, attached to the
   bar) on no ground of ours; a `foldable` one folds in place on
