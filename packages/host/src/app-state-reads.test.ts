@@ -13,6 +13,7 @@ import type { AppStateSnapshot } from "./app-state.js";
 import {
   answerKeeper,
   INBOX_FEED,
+  type InboxHoldings,
   inboxFeedHolds,
   inboxGroupsIn,
   inboxHoldingsWithOlder,
@@ -23,6 +24,7 @@ import {
   shareAppState,
 } from "./app-state-reads.js";
 import { AppStateStore, initialAppState } from "./client/app-state-store.js";
+import { INBOX_ATTENTION, INBOX_REACH, INBOX_WHOLE, inboxHoldingsAt } from "./inbox-rows.js";
 import { runModeFor } from "./run-mode.js";
 import { agentListRow, planListRow } from "./testing/task-list-rows.js";
 
@@ -142,6 +144,9 @@ describe("selectInboxHoldings", () => {
     older: [thread("a", 100)],
     newer: [thread("b", 50), thread("c", 300)],
   };
+
+  /** An older item as whole holdings hold it. */
+  const asWhole = (item: InboxItem) => item;
 
   const taskIdsOf = (document: AppStateSnapshot) =>
     selectInboxHoldings(document).tasks.map(({ taskId }) => taskId);
@@ -324,5 +329,42 @@ describe("selectInboxHoldings", () => {
     };
 
     expect(selectInboxHeldBeyondFeed(document)?.agents?.["manager-1"]).toEqual([found]);
+  });
+
+  it("lists the older items All read only at every item's reach, and counts none of them at any reach", () => {
+    const live = selectInboxHoldings(documentWith(byTask, false, [{ taskId: "newer" }]));
+    // An older thread the reader never read, which a count or the badge taking it would ask for attention on.
+    const unread = { ...thread("x", 1), status: INBOX_STATUS.CLOSED, unread: true };
+    const older = { [INBOX_SCOPE_KIND.TASK]: { archived: [unread] } };
+
+    const idsOf = (holdings: InboxHoldings) =>
+      [...holdings.read.values()].flatMap((items) => items.map(({ id }) => id));
+
+    const all = inboxHoldingsAt(live, INBOX_WHOLE, older, asWhole);
+    const attention = inboxHoldingsAt(live, INBOX_ATTENTION, older, asWhole);
+
+    expect(idsOf(all.listed)).toContain("x");
+    expect(all.listed.tasks.map(({ taskId }) => taskId)).toContain("archived");
+    expect(idsOf(all.counted)).not.toContain("x");
+    expect(idsOf(attention.listed)).not.toContain("x");
+    expect(idsOf(attention.counted)).not.toContain("x");
+  });
+
+  it("draws an older thread on no task for a screen that opens it by its id, and counts it nowhere", () => {
+    const live = selectInboxHoldings(documentWith(byTask, false, [{ taskId: "newer" }]));
+    // A Manager's thread long settled, which no task's inbox holds, so its screen has nowhere else to read it from.
+    const manager = { ...thread("m", 1), status: INBOX_STATUS.CLOSED };
+    const other = { ...thread("n", 2), status: INBOX_STATUS.CLOSED };
+    const older = { [INBOX_SCOPE_KIND.TASK]: {}, agents: { "manager-1": [manager, other] } };
+
+    const opened = inboxHoldingsAt(
+      live,
+      { kind: INBOX_REACH.ATTENTION, thread: "m" },
+      older,
+      asWhole,
+    );
+
+    expect(opened.listed.agents).toEqual({ "manager-1": [manager] });
+    expect(opened.counted.agents).toEqual({});
   });
 });

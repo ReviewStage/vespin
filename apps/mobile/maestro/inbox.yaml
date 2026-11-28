@@ -272,6 +272,18 @@ env:
     direction: DOWN
 - waitForAnimationToEnd
 - takeScreenshot: inbox-all
+# All reads the account's settled threads older than its feed holds as its
+# end comes on screen, a page at a time: the staged account holds two pages
+# past the feed, the second short, so scrolling to the last older thread
+# reads both, and the list ends there. Note that the row is scrolled to
+# through `to-row.yaml`, since an iPad's list is a column beside the page it
+# opens, which a scroll at the window's middle never moves.
+- runFlow:
+    file: subflows/to-row.yaml
+    env:
+      ROW: "Older thread 9.*"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-all-older
 - tapOn: "More"
 - tapOn: "Open.*"
 # The search, a round glass button in the bar, narrows the list to

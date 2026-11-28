@@ -26,6 +26,7 @@
  * screen's own.
  */
 
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import {
   holderWorkspaceId,
   type InboxAnyHolder,
@@ -36,19 +37,31 @@ import {
   inboxWaitingKept,
   NO_INBOX_WAITING,
 } from "@repo/features/inbox-list-model";
+import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
+import type { AppInboxItems, AppStateSnapshot } from "@repo/host/app-state";
 import {
   answerKeeper,
   inboxGroupsIn,
+  selectInboxBeyondFeed,
+  selectInboxHeldBeyondFeed,
   selectInboxHoldings,
+  selectInboxOlder,
   selectInboxReader,
 } from "@repo/host/app-state-reads";
-import { INBOX_ATTENTION, type InboxReach, inboxHoldingsOfRows } from "@repo/host/inbox-rows";
+import {
+  INBOX_ATTENTION,
+  INBOX_REACH,
+  type InboxReach,
+  inboxHoldingsAt,
+  inboxHoldingsOfRows,
+} from "@repo/host/inbox-rows";
 import { heldValue, useHeldValue } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import {
   createContext,
   type ReactNode,
+  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -74,11 +87,16 @@ const NO_HOLDERS: readonly string[] = [];
 /** The holders the Inbox's items stand under, each item as its row, and whether they were read: the document landed and, where the phone keeps the items on disk, the query of them answered. */
 interface InboxGroupsRead {
   readonly groups: readonly InboxGroup<InboxAnyHolder>[];
+  /** The same holders with the items past the feed the reach draws beside their own (`inboxHoldingsAt`), the older items All read and those a search found, which nothing counts; the very `groups` where none stands. */
+  readonly listed: readonly InboxGroup<InboxAnyHolder>[];
   readonly read: boolean;
 }
 
 /** None grouped, and none read yet. */
-const NOT_READ: InboxGroupsRead = { groups: NO_GROUPS, read: false };
+const NOT_READ: InboxGroupsRead = { groups: NO_GROUPS, listed: NO_GROUPS, read: false };
+
+/** An older item as a fixture run's whole holdings hold it: as it is. */
+const asWhole = (item: InboxItem): InboxItem => item;
 
 /** The tasks and agents `holdings` names as holding items, each read by its id from the task list's collections, as the grouping looks them up. */
 function useHoldersListed(
@@ -106,31 +124,74 @@ function useHoldersListed(
 }
 
 /**
+ * What the host holds past the feed that a screen reading `reach` may list:
+ * under All the older items it read, beside the items `place`'s search
+ * found where a search asks; for a thread opened by its id, those and every
+ * place's found items, so a thread a search found opens as it was listed;
+ * and the older items alone at any other reach, which draws none of them
+ * (`inboxHoldingsAt`), since an item past the feed is settled long ago and
+ * no scope but All lists one. Never none, since the grouping waits on it.
+ */
+function beyondFeedAt(
+  state: AppStateSnapshot,
+  reach: InboxReach | undefined,
+  place: InboxSearchPlace | undefined,
+): AppInboxItems {
+  const older = selectInboxOlder(state);
+
+  if (reach?.kind === INBOX_REACH.WHOLE && place !== undefined)
+    return selectInboxBeyondFeed(state, { older: true, place }) ?? older;
+
+  if (reach?.kind === INBOX_REACH.ATTENTION && reach.thread !== undefined)
+    return selectInboxHeldBeyondFeed(state) ?? older;
+
+  return older;
+}
+
+/**
  * The holders of the Inbox's items in the workspace `workspaceId` names, as
  * the list model groups them (`inboxGroupsIn`), each item as its row, as far
  * as `reach` reads where they are kept on disk; every workspace's where none
- * is named; none, and nothing read, where `reach` is none. Grouped again only
- * as the feed, what holds items, or a task holding items moves.
+ * is named; none, and nothing read, where `reach` is none. Where `place`
+ * names a search asking the service, All lists the items it found too, never
+ * counting them (`beyondFeedAt`). Grouped again only as the feed, what holds
+ * items, or a task holding items moves.
  */
 function useGroupsOf(
   workspaceId: string | undefined,
   reach: InboxReach | undefined,
+  place?: InboxSearchPlace | undefined,
 ): InboxGroupsRead {
   const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
   const stored = told?.stored === true;
   const rows = useInboxRows(stored ? reach : undefined);
 
-  // Note that a kept phone's items are its rows, and a fixture run's the document's whole, each grouped the same way.
-  const kept = useMemo(
-    () =>
-      reach === undefined || told?.stored !== true || rows === undefined
-        ? undefined
-        : inboxHoldingsOfRows(rows, told),
-    [reach, told, rows],
+  const beyond = useCallback(
+    (state: AppStateSnapshot) => beyondFeedAt(state, reach, place),
+    [reach, place],
   );
 
-  const whole = reach === undefined || stored ? undefined : told;
-  const { listed, listedAgents } = useHoldersListed(kept ?? whole);
+  const { data: older } = useQuery({ ...appStateQuery, select: beyond });
+
+  // Note that a kept phone's items are its rows, the older ones laid in as rows too, and a fixture run's the document's whole, each grouped the same way, the older items listed alone and counted nowhere (`inboxHoldingsAt`).
+  const kept = useMemo(
+    () =>
+      reach === undefined || told?.stored !== true || rows === undefined || older === undefined
+        ? undefined
+        : inboxHoldingsAt(inboxHoldingsOfRows(rows, told), reach, older, inboxRowOf),
+    [reach, told, rows, older],
+  );
+
+  const whole = useMemo(
+    () =>
+      reach === undefined || told === undefined || stored || older === undefined
+        ? undefined
+        : inboxHoldingsAt(told, reach, older, asWhole),
+    [reach, told, stored, older],
+  );
+
+  // Note that the tasks and agents read are those the older items stand on too, which hold every one the feed's do.
+  const { listed, listedAgents } = useHoldersListed(kept?.listed ?? whole?.listed);
   const read = kept !== undefined || whole !== undefined;
 
   // Note that the launch notes when a screen first grouped the Inbox, so `app:ready` says how much of its wait came after.
@@ -139,13 +200,28 @@ function useGroupsOf(
   }, [read]);
 
   return useMemo(() => {
-    if (kept !== undefined)
-      return { groups: inboxGroupsIn(kept, listed, workspaceId, listedAgents), read: true };
+    if (kept !== undefined) {
+      const groups = inboxGroupsIn(kept.counted, listed, workspaceId, listedAgents);
+
+      return {
+        groups,
+        listed:
+          kept.listed === kept.counted
+            ? groups
+            : inboxGroupsIn(kept.listed, listed, workspaceId, listedAgents),
+        read: true,
+      };
+    }
 
     if (whole === undefined) return NOT_READ;
+    const groups = inboxRowGroups(inboxGroupsIn(whole.counted, listed, workspaceId, listedAgents));
 
     return {
-      groups: inboxRowGroups(inboxGroupsIn(whole, listed, workspaceId, listedAgents)),
+      groups,
+      listed:
+        whole.listed === whole.counted
+          ? groups
+          : inboxRowGroups(inboxGroupsIn(whole.listed, listed, workspaceId, listedAgents)),
       read: true,
     };
   }, [kept, whole, listed, workspaceId, listedAgents]);
@@ -184,7 +260,8 @@ function inWorkspaceOf(held: AttentionHeld, workspaceId: string | undefined): In
 
   const groups = held.all.groups.filter((group) => holderWorkspaceId(group.holder) === workspaceId);
 
-  const read = { groups, read: held.all.read };
+  // Note that what asks for attention lays no older item beside its own, so its listed holders are its groups.
+  const read = { groups, listed: groups, read: held.all.read };
   // Note that a workspace's share is made once, the first time a screen asks, and held beside the read it was made from.
   held.inWorkspace.set(workspaceId, read);
 
@@ -249,15 +326,17 @@ export function useInboxGroupsIn(
  * The same holders (`useInboxGroupsIn`), with whether they were read, so a
  * screen tells none read yet from none held, as a thread opened by its id
  * must before it says the thread is missing. What asks for attention is the
- * app's one read (`InboxAttentionProvider`); any other reach the screen's own.
+ * app's one read (`InboxAttentionProvider`); any other reach the screen's own,
+ * which under All lists the items `place`'s search found as well.
  */
 export function useInboxGroupsRead(
   workspaceId: string | undefined,
   reach: InboxReach = INBOX_ATTENTION,
+  place?: InboxSearchPlace | undefined,
 ): InboxGroupsRead {
   const store = useContext(InboxAttention);
   const shared = reach === INBOX_ATTENTION && store !== UNSHARED;
-  const own = useGroupsOf(workspaceId, shared ? undefined : reach);
+  const own = useGroupsOf(workspaceId, shared ? undefined : reach, place);
 
   const held = useHeldValue(store, (attention) =>
     shared ? inWorkspaceOf(attention, workspaceId) : undefined,
@@ -289,15 +368,26 @@ export function useInboxWaiting(workspaceId: string | undefined): InboxWaiting {
 
 /**
  * The same holders (`useInboxGroupsIn`) with their whole items, threads
- * and all, where the document holds them, as a fixture run's does; none
+ * and all, where the document holds them, as a fixture run's does, with the
+ * older items `reach` draws beside them, as the rows list them; none
  * where the phone keeps them on disk, whose threads are read from their
  * messages as one opens (`useThreadMessages`).
  */
 export function useInboxWholeGroupsIn(
   workspaceId: string | undefined,
+  reach: InboxReach = INBOX_ATTENTION,
 ): readonly InboxGroup<InboxAnyHolder, InboxItem>[] {
   const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
-  const holdings = told?.stored === true ? undefined : told;
+  const { data: older } = useQuery({ ...appStateQuery, select: selectInboxOlder });
+
+  const holdings = useMemo(
+    () =>
+      told === undefined || told.stored === true || older === undefined
+        ? undefined
+        : inboxHoldingsAt(told, reach, older, asWhole).listed,
+    [told, reach, older],
+  );
+
   const { listed, listedAgents } = useHoldersListed(holdings);
 
   return useMemo(

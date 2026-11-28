@@ -76,6 +76,8 @@ import {
   queuedAppState,
   type SavedMemoryWords,
   savedMemoriesAppState,
+  settledPageAnswer,
+  settledPageTasksView,
   type ThreadResolves,
   threadResolveOf,
 } from "@repo/host/fixture-inbox";
@@ -131,10 +133,12 @@ function stagedTasks(
   lists: TaskListParts,
   choices: AgentChoices,
   marks: KeptReadMarks,
+  settledRead: boolean,
 ): ListedApart {
   const view = { ...held.tasks, ...lists };
   const listed = stagedLists.has(lists) ? view : inboxTasksView(held.run.profile, view);
-  const apart = listedApart(markedTasksView(chosenTasksView(listed, choices), marks));
+  const paged = settledPageTasksView(held.run.profile, listed, settledRead);
+  const apart = listedApart(markedTasksView(chosenTasksView(paged, choices), marks));
   stagedLists.add(apart.lists);
 
   return apart;
@@ -145,6 +149,9 @@ const MOVES = new WeakMap<object, PullRequestMoves>();
 
 /** How many reads of the invitations agent's older page each run's screens asked, by the store the run stages. */
 const OLDER_ASKS = new WeakMap<object, number>();
+
+/** Each run whose screens read the workspace's settled page, whose tasks the list holds from then on. */
+const SETTLED_READ = new WeakSet<object>();
 
 /** No pull request moved yet. */
 const NO_MOVES: PullRequestMoves = new Map();
@@ -505,6 +512,7 @@ export function stageFixture(
     state.taskList(),
     CHOICES.get(state) ?? NO_CHOICES,
     READ_MARKS.get(state) ?? NO_READ_MARKS,
+    SETTLED_READ.has(state),
   );
 
   const staged = {
@@ -747,6 +755,34 @@ function olderRead(
   return answer;
 }
 
+/** Stages the document again once the run answered a page of the account's older Inbox items, or a place's search of them, which the staged Inbox then holds past its feed (`inboxAppState`), as the panel's run stages its own again (`tasks-fixture-loader.ts`); nothing for any other act. */
+function keepInboxPastFeed(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+): void {
+  if (kind === ACT_KIND.AGENTS_INBOX_OLDER_PAGE || kind === ACT_KIND.AGENTS_INBOX_SEARCH)
+    stageFixture(state);
+}
+
+/** What a read of the workspace's settled page answers, its tasks laid into the list at once; none for any other act or workspace. */
+function settledRead(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  profile: RunProfile,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): PortActResult<typeof ACT_KIND.TASKS_SETTLED_PAGE> | undefined {
+  if (kind !== ACT_KIND.TASKS_SETTLED_PAGE) return undefined;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const params = payload as PortActPayload<typeof ACT_KIND.TASKS_SETTLED_PAGE>;
+  const answer = settledPageAnswer(profile, params);
+
+  if (answer === undefined) return undefined;
+  SETTLED_READ.add(state);
+  stageFixture(state);
+
+  return answer;
+}
+
 /** What GitHub says of a pull request change the fixture refuses, as it words a merge it will not make. */
 const PULL_REQUEST_REFUSED_WORDS = "Pull Request is not mergeable";
 
@@ -853,7 +889,11 @@ function memberAt<Member>(
  * window's side, and every other act sent to the host. The invitations
  * agent's older page is read as the service would read it, though its first
  * read is not heard back, so a flow sees Try again, and the next lays the
- * page before the transcript's first message. Note that a thread's read
+ * page before the transcript's first message. A read of the workspace's
+ * settled page answers its one page and lays its tasks into the list, so
+ * the Tasks tab's All draws tasks finished before the list's window, and a
+ * page of the account's older Inbox items stages the document again, so the
+ * Inbox's All lists it past the feed. Note that a thread's read
  * mark and a task's each move their row's dot (`keepInboxReadMark`,
  * `keepReadMark`), and a change to one of the
  * fixture's pull requests moves it on the document of `state`, as GitHub
@@ -905,6 +945,10 @@ export function fixtureActs(
         const older = olderRead(state, profile, act);
 
         if (older !== undefined) return Promise.resolve(older);
+        // SAFETY: the port is keyed by act kind.
+        const settled = settledRead(state, profile, kind as PortActKind, payload);
+
+        if (settled !== undefined) return Promise.resolve(settled);
 
         if (keepReadMark(state, act)) return Promise.resolve(true);
 
@@ -929,6 +973,7 @@ export function fixtureActs(
         keepMachineAnswer(state, act);
         keepSentReply(state, act, staged.answer);
         keepCommentThread(state, act.kind, staged.answer);
+        keepInboxPastFeed(state, act.kind);
         // Note that a message the run took stands in its agent's transcript on its way, as a sent line does until its row lands, since nothing the run stages moves.
         keepSend(state, act, false);
         // Note that a message the run took for a Manager's chat lands as its row at once, a reply in its thread's, as the chat's next read carries it.
