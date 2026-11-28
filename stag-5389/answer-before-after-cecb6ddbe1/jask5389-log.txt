@@ -1,0 +1,46 @@
+-- jask5389: main pinned to 3ab3084252: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to cecb6ddbe1
+== bundle PJjask5389 base cecb6ddbe1
+  built cecb6ddbe1 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+before-main-cecb6ddbe1: fails 1 shots 16 Assert that "Who can withdraw an invite?" is visible... FAILED
+  before-main-cecb6ddbe1 shots: answer-decide-picked.png answer-decide-sent.png answer-decide.png answer-do-sent.png answer-do.png answer-fields-filled.png answer-fields.png answer-refused.png answer-undelivered-edited.png answer-undelivered-menu.png answer-words-sent.png answer-words.png reply-sent.png resolve-menu.png resolve-sent.png 
+before-main-cecb6ddbe1/thread-run-event: fails 0 shots 1 
+  before-main-cecb6ddbe1/thread-run-event shots: thread-run-event.png 
+== bundle PJja11244 base 044b1dad24
+  built 044b1dad24 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+after-11244-044b1dad24: fails 1 shots 9 Assert that "Submitted" is visible... FAILED
+  after-11244-044b1dad24 shots: answer-decide-picked.png answer-decide-sent.png answer-decide.png answer-fields-filled.png answer-fields.png answer-refused.png answer-undelivered-edited.png answer-undelivered-menu.png 
+== bundle PJja11242 base 2dafaa10e0
+  built 2dafaa10e0 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+after-11242-2dafaa10e0: fails 1 shots 16 Assert that "Who can withdraw an invite?" is visible... FAILED
+  after-11242-2dafaa10e0 shots: answer-decide-picked.png answer-decide-sent.png answer-decide.png answer-do-sent.png answer-do.png answer-fields-filled.png answer-fields.png answer-refused.png answer-undelivered-edited.png answer-undelivered-menu.png answer-words-sent.png answer-words.png reply-sent.png resolve-menu.png resolve-sent.png 
+== bundle PJja11243 base 0c32981682
+  built 0c32981682 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+after-11243-0c32981682: fails 1 shots 14 Assert that "Resolve" is visible... FAILED
+  after-11243-0c32981682 shots: answer-decide-picked.png answer-decide-sent.png answer-decide.png answer-do-sent.png answer-do.png answer-fields-filled.png answer-fields.png answer-refused.png answer-undelivered-edited.png answer-undelivered-menu.png answer-words-sent.png answer-words.png reply-sent.png 
+== bundle PJja11245 base 2cb05f95b4
+  built 2cb05f95b4 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+after-11245-2cb05f95b4/held-ask: fails 0 shots 2 
+  after-11245-2cb05f95b4/held-ask shots: held-replaced.png held-withdrawn.png 
+after-11245-2cb05f95b4/answer: fails 1 shots 9 Assert that "Submitted" is visible... FAILED
+  after-11245-2cb05f95b4/answer shots: answer-decide-picked.png answer-decide-sent.png answer-decide.png answer-fields-filled.png answer-fields.png answer-refused.png answer-undelivered-edited.png answer-undelivered-menu.png 
