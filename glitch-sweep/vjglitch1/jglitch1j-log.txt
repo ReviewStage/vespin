@@ -1,0 +1,18 @@
+pinned to 7c9d018e0f
+== bundle PJjglitch1j base 7c9d018e0f
+  built 7c9d018e0f base app Vmain19.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  native guard: Vmain19.app refused (head 7c9d018e0f changes native files since Vmain19.app (built from 11b558b398): apps/mobile/live-activity/AgentsLiveActivity.swift patches/@shopify__flash-list@2.3.2.patch ); built over kept base Vmain18.app (natsrc f495478520), whose natives HEAD matches exactly
+  export 0 (simulator-bundle.sh)
+  signed 0
+glitch j01-launch-inbox: j01-launch-inbox: maestro exit 1  cfr60 MISSING raw 9016712 bytes
+glitch j02-thread-answer: j02-thread-answer: maestro exit 1  cfr60 MISSING raw 7661724 bytes
+glitch j03-manager-chat: j03-manager-chat: maestro exit 1  cfr60 MISSING raw 7650836 bytes
+glitch j04-tasks-task: j04-tasks-task: maestro exit 1  cfr60 MISSING raw 7777226 bytes
+glitch j05-agent: j05-agent: maestro exit 1  cfr60 MISSING raw 7517048 bytes
+glitch j06-search: j06-search: maestro exit 1  cfr60 MISSING raw 7904770 bytes
+glitch j07-new-task: j07-new-task: maestro exit 1  cfr60 MISSING raw 6834226 bytes
+glitch j08-double-tap: j08-double-tap: maestro exit 1  cfr60 MISSING raw 7604555 bytes
+glitch j09-background: j09-background: maestro exit 1  cfr60 MISSING raw 7811425 bytes
+glitch j10-long-transcript: j10-long-transcript: maestro exit 0  cfr60 MISSING raw 6174798 bytes
