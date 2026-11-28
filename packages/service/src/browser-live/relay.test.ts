@@ -263,6 +263,53 @@ const frameEvent = (frameId: number) => ({
   sessionId: TARGET_SESSION,
 });
 
+/** A page holding one button, answering a pick of it from its own main frame. */
+const PICKED_PAGE = new Map<string, FakeCdpAnswer>([
+  ["DOM.getNodeForLocation", { result: { backendNodeId: 42, frameId: TARGET } }],
+  ["DOM.getBoxModel", { result: { model: { border: [100, 50, 200, 50, 200, 80, 100, 80] } } }],
+  [
+    "DOM.describeNode",
+    {
+      result: {
+        node: { localName: "button", attributes: ["class", "btn primary"] },
+      },
+    },
+  ],
+  ["Page.createIsolatedWorld", { result: { executionContextId: 7 } }],
+  ["DOM.resolveNode", { result: { object: { objectId: "button-object" } } }],
+  [
+    "Runtime.callFunctionOn",
+    {
+      result: {
+        result: {
+          value: {
+            selector: "form#checkout > button.btn",
+            tag: '<button class="btn primary">',
+            text: "Place order",
+            left: 100,
+            top: 50,
+            width: 100,
+            height: 30,
+            scrollX: 0,
+            scrollY: 400,
+            viewWidth: 1280,
+            viewHeight: 800,
+          },
+        },
+      },
+    },
+  ],
+  [
+    "Accessibility.getPartialAXTree",
+    {
+      result: {
+        nodes: [{ role: { value: "button" }, name: { value: "Place order" } }],
+      },
+    },
+  ],
+  ["Page.captureScreenshot", { result: { data: FRAME_DATA } }],
+]);
+
 const acks = (commands: readonly FakeCdpCommand[]) =>
   commands.flatMap((command) =>
     command.method === "Page.screencastFrameAck" ? [command.params.sessionId] : [],
@@ -633,59 +680,41 @@ it.effect(
     }),
 );
 
+it.effect("a pick of an element in another frame than the page's own answers none", () =>
+  Effect.gen(function* () {
+    const { peer, browser, commands } = yield* liveBrowser({
+      page: new Map([
+        ...PICKED_PAGE,
+        ["DOM.getNodeForLocation", { result: { backendNodeId: 42, frameId: "frame-inner" } }],
+      ]),
+    });
+
+    const panel = yield* scriptedViewer;
+
+    const { fiber } = yield* started(
+      peer,
+      commands,
+      Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), world(browser).deps)),
+    );
+
+    yield* peer.emit(frameEvent(1));
+    yield* panel.push(VIEWPORT);
+    yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.FRAME).length === 1);
+    yield* panel.push({ type: BROWSER_LIVE_CLIENT.PICK, x: 75, y: 40 });
+    yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.PICKED).length === 1);
+
+    assert.equal(panel.ofType(BROWSER_LIVE_SERVER.PICKED)[0]?.element, null);
+    yield* panel.leave;
+    yield* Fiber.join(fiber);
+  }),
+);
+
 it.effect(
   "a member picking an element is told what stands under the pointer, then what the agent needs to find the picked one, without taking the tab over",
   () =>
     Effect.gen(function* () {
       const { peer, browser, commands } = yield* liveBrowser({
-        page: new Map<string, FakeCdpAnswer>([
-          ["DOM.getNodeForLocation", { result: { backendNodeId: 42 } }],
-          [
-            "DOM.getBoxModel",
-            { result: { model: { border: [100, 50, 200, 50, 200, 80, 100, 80] } } },
-          ],
-          [
-            "DOM.describeNode",
-            {
-              result: {
-                node: { localName: "button", attributes: ["class", "btn primary"] },
-              },
-            },
-          ],
-          ["Page.createIsolatedWorld", { result: { executionContextId: 7 } }],
-          ["DOM.resolveNode", { result: { object: { objectId: "button-object" } } }],
-          [
-            "Runtime.callFunctionOn",
-            {
-              result: {
-                result: {
-                  value: {
-                    selector: "form#checkout > button.btn",
-                    tag: '<button class="btn primary">',
-                    text: "Place order",
-                    left: 100,
-                    top: 50,
-                    width: 100,
-                    height: 30,
-                    scrollX: 0,
-                    scrollY: 400,
-                    viewWidth: 1280,
-                    viewHeight: 800,
-                  },
-                },
-              },
-            },
-          ],
-          [
-            "Accessibility.getPartialAXTree",
-            {
-              result: {
-                nodes: [{ role: { value: "button" }, name: { value: "Place order" } }],
-              },
-            },
-          ],
-          ["Page.captureScreenshot", { result: { data: FRAME_DATA } }],
-        ]),
+        page: PICKED_PAGE,
       });
 
       const panel = yield* scriptedViewer;

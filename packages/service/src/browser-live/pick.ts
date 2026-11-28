@@ -10,7 +10,8 @@
  * read nor bend what it answers: a selector that finds the element alone
  * (a unique id, test id, or label where one stands, else a path of tags,
  * classes, and places from the nearest such ancestor, cut where it is
- * already unique), its opening tag, and its words. Its accessible role and
+ * already unique, in the tree it stands in, and after its shadow host's own
+ * past ">>>" where it stands in a shadow root), its opening tag, and its words. Its accessible role and
  * name are Chromium's own (`Accessibility.getPartialAXTree`), as the
  * agent's snapshot prints them, and its ref is the one the agent's browser
  * tool names it by. The crop is the element's box with a margin, held to
@@ -67,7 +68,9 @@ export interface Picked {
 const read = <S extends Schema.ConstraintDecoder<unknown>>(schema: S) =>
   readEither(schema, { excess: EXCESS_KEYS.DROP });
 
-const readHit = read(Schema.Struct({ backendNodeId: Schema.Number }));
+const readHit = read(
+  Schema.Struct({ backendNodeId: Schema.Number, frameId: Schema.optional(Schema.String) }),
+);
 
 const readBoxModel = read(
   Schema.Struct({ model: Schema.Struct({ border: Schema.Array(Schema.Number) }) }),
@@ -128,42 +131,50 @@ const DESCRIBE = `function () {
   const flat = (text) => String(text ?? "").replace(/\\s+/g, " ").trim();
   const cut = (text, most) => (text.length > most ? text.slice(0, most - 1) + "…" : text);
   const quoted = (value) => '"' + value.replace(/["\\\\]/g, "\\\\$&") + '"';
-  const unique = (selector) => {
-    try {
-      return document.querySelectorAll(selector).length === 1;
-    } catch {
-      return false;
+  // A selector is checked against the tree the element stands in, and one in a shadow root follows its host's, after ">>>".
+  const pathIn = (target) => {
+    const root = target.getRootNode();
+    const scope = root instanceof ShadowRoot ? root : document;
+    const unique = (selector) => {
+      try {
+        return scope.querySelectorAll(selector).length === 1;
+      } catch {
+        return false;
+      }
+    };
+    const named = (at) => {
+      if (at.id !== "" && unique("#" + CSS.escape(at.id))) return "#" + CSS.escape(at.id);
+      for (const name of ["data-testid", "data-test", "data-cy"]) {
+        const value = at.getAttribute(name);
+        if (value && unique("[" + name + "=" + quoted(value) + "]")) return "[" + name + "=" + quoted(value) + "]";
+      }
+      const label = at.getAttribute("aria-label");
+      const labeled = label ? at.localName + "[aria-label=" + quoted(label) + "]" : "";
+      return labeled !== "" && unique(labeled) ? labeled : null;
+    };
+    const step = (at) => {
+      const classes = [...at.classList].slice(0, 2).map((name) => "." + CSS.escape(name)).join("");
+      const same = at.parentNode === null ? [at] : [...at.parentNode.children].filter((each) => each.localName === at.localName);
+      return at.localName + classes + (same.length > 1 ? ":nth-of-type(" + (same.indexOf(at) + 1) + ")" : "");
+    };
+    const steps = [];
+    for (let at = target; at !== null; at = at.parentElement) {
+      const name = named(at);
+      steps.unshift(name ?? step(at));
+      if (name !== null || at === document.body || unique(steps.join(" > "))) break;
     }
+    const inner = steps.join(" > ");
+    return root instanceof ShadowRoot ? pathIn(root.host) + " >>> " + inner : inner;
   };
-  const named = (at) => {
-    if (at.id !== "" && unique("#" + CSS.escape(at.id))) return "#" + CSS.escape(at.id);
-    for (const name of ["data-testid", "data-test", "data-cy"]) {
-      const value = at.getAttribute(name);
-      if (value && unique("[" + name + "=" + quoted(value) + "]")) return "[" + name + "=" + quoted(value) + "]";
-    }
-    const label = at.getAttribute("aria-label");
-    const labeled = label ? at.localName + "[aria-label=" + quoted(label) + "]" : "";
-    return labeled !== "" && unique(labeled) ? labeled : null;
-  };
-  const step = (at) => {
-    const classes = [...at.classList].slice(0, 2).map((name) => "." + CSS.escape(name)).join("");
-    const same = at.parentElement === null ? [at] : [...at.parentElement.children].filter((each) => each.localName === at.localName);
-    return at.localName + classes + (same.length > 1 ? ":nth-of-type(" + (same.indexOf(at) + 1) + ")" : "");
-  };
-  const steps = [];
-  for (let at = element; at !== null; at = at.parentElement) {
-    const name = named(at);
-    steps.unshift(name ?? step(at));
-    if (name !== null || at === document.body || unique(steps.join(" > "))) break;
-  }
-  while (steps.length > 1 && steps.join(" > ").length > MAX_SELECTOR) steps.shift();
+  let selector = pathIn(element);
+  while (selector.length > MAX_SELECTOR && selector.includes(" > ")) selector = selector.slice(selector.indexOf(" > ") + 3);
   const attributes = [...element.attributes]
     .filter((attribute) => attribute.name !== "value")
     .map((attribute) => (attribute.value === "" ? attribute.name : attribute.name + "=" + quoted(cut(attribute.value, 80))))
     .join(" ");
   const rect = element.getBoundingClientRect();
   return {
-    selector: steps.join(" > ").slice(0, MAX_SELECTOR),
+    selector: selector.slice(-MAX_SELECTOR),
     tag: cut("<" + element.localName + (attributes === "" ? "" : " " + attributes) + ">", MAX_TAG),
     text: cut(flat(element.innerText ?? element.textContent), MAX_TEXT),
     left: rect.left,
@@ -192,14 +203,16 @@ function ask<A>(
   );
 }
 
-/** The element at a point, by its backend node id; none where the page holds none there. */
-function hitAt(target: PickTarget, point: PagePoint): Effect.Effect<number | undefined> {
+/** The element at a point, by its backend node id, and the frame it stands in where Chromium says; none where the page holds none there. */
+function hitAt(
+  target: PickTarget,
+  point: PagePoint,
+): Effect.Effect<
+  { readonly backendNodeId: number; readonly frameId?: string | undefined } | undefined
+> {
   const params = { x: Math.round(point.x), y: Math.round(point.y) };
 
-  return Effect.map(
-    ask(target, { method: "DOM.getNodeForLocation", params }, readHit),
-    (hit) => hit?.backendNodeId,
-  );
+  return ask(target, { method: "DOM.getNodeForLocation", params }, readHit);
 }
 
 /** The box a quad of eight numbers bounds. */
@@ -235,7 +248,7 @@ export function inspectAt(
   point: PagePoint,
 ): Effect.Effect<Inspected | undefined> {
   return Effect.gen(function* () {
-    const backendNodeId = yield* hitAt(target, point);
+    const backendNodeId = (yield* hitAt(target, point))?.backendNodeId;
 
     if (backendNodeId === undefined) return undefined;
     const params = { backendNodeId };
@@ -313,9 +326,12 @@ function roleOf(
 /** The element at a point, with what the agent needs to find it and a crop of it; none where it cannot be read or drawn. */
 export function pickAt(target: PickTarget, point: PagePoint): Effect.Effect<Picked | undefined> {
   return Effect.gen(function* () {
-    const backendNodeId = yield* hitAt(target, point);
+    const hit = yield* hitAt(target, point);
 
-    if (backendNodeId === undefined) return undefined;
+    // Note that an element in another frame is not read, because the page's world places it by its own frame's viewport.
+    if (hit === undefined || (hit.frameId !== undefined && hit.frameId !== target.frameId))
+      return undefined;
+    const { backendNodeId } = hit;
     const worldParams = { frameId: target.frameId, worldName: PICK_WORLD };
 
     const world = yield* ask(
