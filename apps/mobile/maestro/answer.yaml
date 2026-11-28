@@ -25,8 +25,9 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 # A decide: the options as rows in the box over its field, the recommended
 # tagged; a pick lights Send, which sends it with the note typed, and the
-# thread reads it answered at once: the options gone from the box, and the
-# answer's stamp under "You".
+# thread reads it answered at once: the options gone from the box and
+# standing at the head of the reply under "You", the pick checked and taking
+# no press, as the panel's answered card.
 - runFlow:
     file: subflows/open-row.yaml
     env:
@@ -39,9 +40,11 @@ appId: dev.vespin.ios
 - takeScreenshot: answer-decide-picked
 - tapOn: "Send"
 - extendedWaitUntil:
-    visible: "Chose Both"
+    visible: "Answered"
     timeout: 5000
-- assertNotVisible: "The member who sent it"
+- assertVisible: "Both, Recommended.*"
+- assertVisible: "The member who sent it"
+- assertNotVisible: "Add a note"
 - waitForAnimationToEnd
 - takeScreenshot: answer-decide-sent
 
@@ -178,10 +181,13 @@ appId: dev.vespin.ios
     text: "20"
 - takeScreenshot: answer-fields-filled
 - tapOn: "Send"
+# Note that the form stands at the head of the reply as it was filled, in the stamp's place, as the panel's answered card does, so the thread reads answered rather than "Submitted".
 - extendedWaitUntil:
-    visible: "Submitted"
+    visible: "Answered"
     timeout: 5000
 - assertNotVisible: "Every member, Recommended"
+- waitForAnimationToEnd
+- takeScreenshot: answer-fields-sent
 
 # A do: its steps as checkbox rows, one ticked by hand, then Mark done, which
 # ticks every step and lights Send without sending, as the panel's press
