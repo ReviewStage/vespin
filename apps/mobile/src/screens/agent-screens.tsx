@@ -41,7 +41,7 @@ import {
   managerChatView,
 } from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
-import { agentName, modelLabel } from "@repo/features/model-label";
+import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -1610,19 +1610,16 @@ const AgentConversation = memo(function AgentConversation({
       <Stack.Screen options={barOptions} />
       {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row, the model chosen from the composer's model chip. */}
       {/* Note that a regular window stands the name at the bar's leading edge, in the bar's own row, since on an iPad whose tab bar floats in the middle of that row UIKit dropped a centered name into a row of its own over the transcript. */}
-      {/* Note that a Manager's name stands after its face, as the panel's page heads it, livelier while it works. */}
+      {/* Note that the name stands after who it is, as a conversation heads with who it is with: a Manager's face, livelier while it works, as the panel's page heads it, or an agent's harness mark, as its tile wears it in a row. */}
       <StackSubtitle
         words={subtitle?.words ?? ""}
         leading={regular}
-        face={
-          shown?.face === undefined
-            ? undefined
-            : {
-                title,
-                face: shown.face,
-                working: status !== undefined && agentGlyphState(status) === GLYPH_STATE.WORKING,
-              }
-        }
+        face={{
+          title,
+          face: shown?.face,
+          harness: agent === undefined ? undefined : providerOf(agent.model),
+          working: status !== undefined && agentGlyphState(status) === GLYPH_STATE.WORKING,
+        }}
       />
       <Stack.Toolbar placement="right">
         {moreMenu === undefined ? null : (

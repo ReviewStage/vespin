@@ -269,13 +269,17 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   stack's title holds no menu, they lead its ⋯ menu, headed by the path. A
   compact window's thread names itself in the stack's bar in the ink, as
   Messages names a conversation, since it opens at its newest message with
-  its heading out of sight; a split view's detail keeps the path and title
-  heading the page, as Mail's message stands. An
+  its heading out of sight, its task (or, on no task, its agent) muted under
+  it as UIKit's own subtitle, and no face, being no one's conversation; a
+  split view's detail keeps the path and title heading the page, as Mail's
+  message stands. An
   agent's page names the agent in the bar in the ink instead, as Messages
-  names a conversation, since its transcript opens at its newest row, with
-  where it stands and its model muted under the name ("Working · Opus 5.5"):
-  the stack's own title over UIKit's own subtitle (`StackSubtitle`), a
-  press on it opening the model sheet. A page opened from a split view's detail, such as a
+  names a conversation, since its transcript opens at its newest row, led by
+  who it is (a Manager's face, or an agent's harness mark, as `AgentTile`
+  wears them) and with where it stands and its model muted under the name
+  ("Working · Opus 5.5"): the stack's own title over UIKit's own subtitle
+  (`StackSubtitle`), standing at the bar's leading edge in a regular window,
+  the model chosen from the composer's model chip. A page opened from a split view's detail, such as a
   task's agent, its pull request, or a thread's task, is pushed on the
   tab's own stack over the whole window, as a compact window pushes it,
   never inside the detail's column.

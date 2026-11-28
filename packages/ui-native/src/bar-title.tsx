@@ -1,10 +1,12 @@
-// bar-title.tsx -- the muted line under a page's name in its stack's bar, such as an agent's state and model: UIKit's own subtitle, with a Manager's face before its name.
+// bar-title.tsx -- the muted line under a page's name in its stack's bar, such as an agent's state and model or a thread's task: UIKit's own subtitle, with an agent's face before its name.
 
 import { Host, Spacer } from "@expo/ui/swift-ui";
 import type { ManagerFace } from "@repo/features/manager-face";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { StyleSheet } from "react-native";
 import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { managerFaceAsset } from "./manager-face-look.js";
+import { HARNESS_MARK_ASSET } from "./mark-look.js";
 
 /** What stands under a page's name in its bar: its words, and what a press on them opens with what VoiceOver says it does, where they open anything. */
 export type BarSubtitle = {
@@ -18,6 +20,26 @@ const styles = StyleSheet.create({
   // A host of no size, which draws nothing and takes no touch.
   probe: { position: "absolute", width: 0, height: 0 },
 });
+
+/**
+ * What leads a conversation's name in the bar, as `AgentTile` leads it in a
+ * row: a Manager's face, livelier while it works, or else the mark of the
+ * harness an agent runs in.
+ */
+type BarFace = {
+  readonly title: string;
+  readonly face: ManagerFace | undefined;
+  /** The provider whose harness the agent runs in (`providerOf` its model); none where it is not known yet. */
+  readonly harness?: ModelProvider | undefined;
+  readonly working: boolean;
+};
+
+/** The asset catalog's picture `face` names: the Manager's face, or the harness's mark; none where it names neither. */
+function faceAsset({ face, harness, working }: BarFace): string | undefined {
+  if (face !== undefined) return managerFaceAsset(face, working);
+
+  return harness === undefined ? undefined : HARNESS_MARK_ASSET[harness];
+}
 
 /**
  * The words under a compact page's title in the native stack's bar, as Mail
@@ -35,15 +57,11 @@ export function StackSubtitle({
   readonly words: string;
   /** Whether the title and its subtitle stand at the bar's leading edge beside the back button, in the bar's own row, as a regular window's page stands them where a tab bar floats in the middle of that row; a build without it centers them. */
   readonly leading?: boolean | undefined;
-  /** A Manager's face, livelier while it works, which leads the bar's title, and that title, as the panel's page heads a Manager with its face; none for any other page. */
-  readonly face?:
-    | { readonly title: string; readonly face: ManagerFace; readonly working: boolean }
-    | undefined;
+  /** What leads the bar's title, and that title, as a conversation heads with who it is with: an agent's or a Manager's page; none for any other page, such as a thread's. */
+  readonly face?: BarFace | undefined;
 }) {
-  const mark =
-    face === undefined
-      ? undefined
-      : { title: face.title, asset: managerFaceAsset(face.face, face.working) };
+  const asset = face === undefined ? undefined : faceAsset(face);
+  const mark = face === undefined || asset === undefined ? undefined : { title: face.title, asset };
 
   return (
     <Host style={styles.probe} modifiers={[barSubtitle(BAR_KIND.STACK, words, leading, mark)]}>
