@@ -131,9 +131,12 @@ export function useAgentApprovals(
   }>(() => ({ agentId, held: new Map() }));
 
   const fresh = state.agentId === agentId ? state : { agentId, held: new Map<string, Held>() };
-  const held = heldWith(fresh.held, pending, running);
+  const built = heldWith(fresh.held, pending, running);
+  const kept = fresh === state && sameHeld(built, state.held);
+  // Note that the asks held keep their identity while they stand the same, so the page's rows, which read a held call through them, are drawn again only as an ask moves, never on each move of the turn.
+  const held = kept ? state.held : built;
 
-  if (fresh !== state || !sameHeld(held, state.held)) setState({ agentId, held });
+  if (!kept) setState({ agentId, held });
   // What the agent's row says now, which a message's mark reads as it goes.
   const latest = useRef({ pending, running });
   useEffect(() => {

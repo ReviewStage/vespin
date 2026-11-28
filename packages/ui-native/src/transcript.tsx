@@ -14,7 +14,17 @@ import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { Predicate } from "effect";
 import { SymbolView } from "expo-symbols";
-import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  memo,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   type AccessibilityActionEvent,
   AccessibilityInfo,
@@ -1013,7 +1023,6 @@ function UndeliveredUnder({ line }: { readonly line: UndeliveredLine | undefined
 /** What drawing the list's rows needs beyond the rows. */
 interface RowDrawing {
   readonly repository: string | null | undefined;
-  readonly now: number;
   /** How wide the column the rows stand in is, inside the window's safe area and the reading width, known before any row is laid out. */
   readonly column: number;
   /** Opens a link or a chip a message names, by the address it was written as, where the app draws it or in Safari. */
@@ -1166,8 +1175,13 @@ function workActs(
   ];
 }
 
-/** One of the transcript's rows, as its kind draws it. */
-function TranscriptRow({
+/**
+ * One of the transcript's rows, as its kind draws it. Note that it is drawn
+ * again only as its item or the list's drawing moves, because a working
+ * agent's transcript moves several times a second, and every row on screen
+ * drawn again for each move held the JS thread behind the reader's keys.
+ */
+const TranscriptRow = memo(function TranscriptRow({
   item,
   drawing,
 }: {
@@ -1557,7 +1571,7 @@ function TranscriptRow({
       throw new Error(`A transcript item of no kind the list draws: ${JSON.stringify(unknown)}`);
     }
   }
-}
+});
 
 /**
  * The control that brings the newest row into view: the system's round glass
@@ -1645,15 +1659,13 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
   );
 }
 
-type AgentTranscriptProps = Omit<RowDrawing, "now" | "column"> & {
+type AgentTranscriptProps = Omit<RowDrawing, "column"> & {
   /** The rows, oldest first (`transcriptItems`). */
   readonly items: readonly TranscriptItem[];
   /** What stands over the oldest row, such as the agent's head. */
   readonly head: ReactNode;
   /** The empty state that stands in the rows' place while there are none, such as a read under way. */
   readonly empty?: EmptyStateProps | undefined;
-  /** What the times count from; now where none is given. */
-  readonly now?: number | undefined;
   /** The pages older than the oldest row, read as the reader scrolls up to it; none where nothing older stands. */
   readonly older?: OlderPages | undefined;
   /** A row to scroll into view, such as the call a held approval waits on or the message a link names, each ask a serial of its own so the same row is shown again. */
@@ -1661,6 +1673,114 @@ type AgentTranscriptProps = Omit<RowDrawing, "now" | "column"> & {
   /** Told the rows on screen each time they change, so a page reads only what it shows, such as a pull request card's state or a picture's bytes. */
   readonly onRowsShown?: ((items: readonly TranscriptItem[]) => void) | undefined;
 };
+
+/** What a list's caller hands its rows: the drawing less what the list measures and places itself. */
+type HandedDrawing = Omit<RowDrawing, "column" | "placeCall">;
+
+/**
+ * The drawing the list hands its rows, the same object for as long as what
+ * a row draws from stands: the caller's reads (a picture's source, a held
+ * call, a message's acts), the column's width, and which of the presses are
+ * offered, each read by its identity. Each press itself is read as it is
+ * pressed, from the drawing the caller handed last, so a caller's press
+ * made anew on each render never draws a row again. Note that a row the
+ * reader opens lets the end go (`anchored`), so the call or fold they
+ * opened stays where they pressed it rather than scrolling away under the
+ * body it opens.
+ */
+function useRowDrawing(
+  drawing: HandedDrawing,
+  column: number,
+  placeCall: NonNullable<RowDrawing["placeCall"]>,
+  anchored: { current: boolean },
+): RowDrawing {
+  const handed = useRef(drawing);
+  useLayoutEffect(() => {
+    handed.current = drawing;
+  });
+
+  const {
+    repository,
+    mediaSource,
+    fileSource,
+    messageLink,
+    messageMore,
+    pullRequestActs,
+    heldCall,
+    suggestion,
+    undelivered,
+    channel,
+  } = drawing;
+
+  const offers = {
+    retryMedia: drawing.onRetryMedia !== undefined,
+    retryFile: drawing.onRetryFile !== undefined,
+    openElsewhere: drawing.onOpenElsewhere !== undefined,
+    openThread: drawing.onOpenThread !== undefined,
+    openPullRequest: drawing.onOpenPullRequest !== undefined,
+    openChatThread: drawing.onOpenChatThread !== undefined,
+  };
+
+  const { retryMedia, retryFile, openElsewhere, openThread, openPullRequest, openChatThread } =
+    offers;
+
+  return useMemo<RowDrawing>(
+    () => ({
+      repository,
+      mediaSource,
+      fileSource,
+      messageLink,
+      messageMore,
+      pullRequestActs,
+      heldCall,
+      suggestion,
+      undelivered,
+      channel,
+      column,
+      placeCall,
+      onOpenLink: (address) => handed.current.onOpenLink(address),
+      onToggle: (item) => {
+        anchored.current = false;
+        handed.current.onToggle(item);
+      },
+      onOpenPage: (item) => handed.current.onOpenPage(item),
+      onOpenAddress: (address) => handed.current.onOpenAddress(address),
+      onRetryMedia: retryMedia ? (id) => handed.current.onRetryMedia?.(id) : undefined,
+      onRetryFile: retryFile
+        ? (message, key) => handed.current.onRetryFile?.(message, key)
+        : undefined,
+      onOpenElsewhere: openElsewhere ? () => handed.current.onOpenElsewhere?.() : undefined,
+      onOpenThread: openThread ? (threadId) => handed.current.onOpenThread?.(threadId) : undefined,
+      onOpenPullRequest: openPullRequest
+        ? (item) => handed.current.onOpenPullRequest?.(item)
+        : undefined,
+      onOpenChatThread: openChatThread
+        ? (root) => handed.current.onOpenChatThread?.(root)
+        : undefined,
+    }),
+    [
+      repository,
+      mediaSource,
+      fileSource,
+      messageLink,
+      messageMore,
+      pullRequestActs,
+      heldCall,
+      suggestion,
+      undelivered,
+      channel,
+      column,
+      placeCall,
+      anchored,
+      retryMedia,
+      retryFile,
+      openElsewhere,
+      openThread,
+      openPullRequest,
+      openChatThread,
+    ],
+  );
+}
 
 /** A row the transcript is asked to bring into view, the ask told apart by its serial: a call's, which then takes VoiceOver's focus, or a message's, by its row's id, which is lit once as it lands (`LandedWash`). */
 export type TranscriptReveal =
@@ -1762,7 +1882,6 @@ export function AgentTranscript({
   items,
   head,
   empty,
-  now,
   older,
   reveal,
   onRowsShown,
@@ -1826,17 +1945,7 @@ export function AgentTranscript({
     [focusSentTo],
   );
 
-  // Note that a row the reader opens lets the end go, so the call or fold they opened stays where they pressed it rather than scrolling away under the body it opens.
-  const rowDrawing: RowDrawing = {
-    ...drawing,
-    now: now ?? Date.now(),
-    column,
-    placeCall,
-    onToggle: (item) => {
-      anchored.current = false;
-      drawing.onToggle(item);
-    },
-  };
+  const rowDrawing = useRowDrawing(drawing, column, placeCall, anchored);
 
   // Note that the list waits for its own width, so no row is ever laid out unbounded, and its first render, which starts from its newest row, has the rows to start from.
   const measured = width > 0;
@@ -1850,6 +1959,7 @@ export function AgentTranscript({
   }
 
   const revealOpening = opensAtReveal ?? -1;
+
   const keyboard = useDockKeyboard();
   const dock = useDockRoom();
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript, and no more, since no tab bar stands under a conversation (`(tabs)/_layout.tsx`). While the keyboard stands, the list's own keyboard inset holds the room under the bar, since the keyboard covers the safe area and the bar stands right on it.
@@ -1904,6 +2014,21 @@ export function AgentTranscript({
 
   // The message a link brought into view, whose row is lit once.
   const [landed, setLanded] = useState<LandedRow | undefined>(undefined);
+
+  const renderItem = useCallback(
+    ({ item }: { readonly item: TranscriptItem }) => (
+      <PictureSetProvider key={itemKey(item)}>
+        {landed !== undefined && itemKey(item) === landed.key ? (
+          <LandedWash key={landed.serial}>
+            <TranscriptRow item={item} drawing={rowDrawing} />
+          </LandedWash>
+        ) : (
+          <TranscriptRow item={item} drawing={rowDrawing} />
+        )}
+      </PictureSetProvider>
+    ),
+    [rowDrawing, landed],
+  );
 
   // The rows as they stand now, which a reveal reads without being asked anew as each lands.
   const itemsNow = useRef(items);
@@ -1971,17 +2096,7 @@ export function AgentTranscript({
           keyExtractor={itemKey}
           // Note that each row is keyed by its item, so a cell FlashList recycles for another item mounts that item's row afresh rather than keeping the last one's state, such as a fold left open or a picture's measured size.
           // Note that each row's pictures are one set its viewer swipes through, a message's or a showing's own, since rows scrolled away are drawn no longer.
-          renderItem={({ item }) => (
-            <PictureSetProvider key={itemKey(item)}>
-              {landed !== undefined && itemKey(item) === landed.key ? (
-                <LandedWash key={landed.serial}>
-                  <TranscriptRow item={item} drawing={rowDrawing} />
-                </LandedWash>
-              ) : (
-                <TranscriptRow item={item} drawing={rowDrawing} />
-              )}
-            </PictureSetProvider>
-          )}
+          renderItem={renderItem}
           // Note that a row lit as it lands is drawn again, since FlashList draws a row again only as its data or this moves.
           extraData={landed}
           ListHeaderComponent={

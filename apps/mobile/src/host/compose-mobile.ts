@@ -192,6 +192,8 @@ export interface MobileHostOptions {
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** Where a fixture run's agent recording is served over HTTP on the rig (`-mediaOrigin`), so its player takes the remote path a device's does; never in a live run. */
   readonly fixtureMediaOrigin?: string | undefined;
+  /** How often a fixture run's release Manager moves its turn while its page follows it, in milliseconds, which `-streamTurn <ms>` asks; never in a live run. */
+  readonly fixtureStreamTurn?: number | undefined;
   /** This build's version, as the app's config names it. */
   readonly appVersion: string;
   /** Where the host keeps its files: the app's own folder, or a temporary one in a test. */
@@ -573,6 +575,7 @@ export function composeMobile(
                   mobile.state,
                   options.fixtureRefusesWrites === true,
                   options.fixtureMediaOrigin,
+                  options.fixtureStreamTurn,
                 ),
         }),
         effectServiceLayer(mobile.operator, report),

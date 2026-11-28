@@ -31,15 +31,18 @@ import {
   REWIND_WORDS,
   revertAsk,
   rewindPoints,
+  sameRewindPoints,
 } from "@repo/features/agent-rewind-model";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { INBOX_READ_MARK } from "@repo/features/inbox-list-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppTranscript } from "@repo/host/app-state";
 import type { FollowedAgent } from "@repo/host/app-state-reads";
-import { GLYPH, type HeldAct, type MessageItem, TRANSCRIPT_ITEM } from "@repo/ui-native";
+import { GLYPH, type HeldAct, type MessageItem, TRANSCRIPT_ITEM, useKept } from "@repo/ui-native";
+import { MESSAGE_ROLE } from "@repo/wire";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 import type { AgentComposer } from "./use-agent-composer.js";
@@ -60,6 +63,21 @@ export interface MessageActs {
     readonly onAct: () => void;
     readonly onDismiss: () => void;
   };
+}
+
+/** The rewinds' points as last read, where they land in the same places as the points read now. */
+function keptPoints<P extends Parameters<typeof sameRewindPoints>[0]>(held: P, built: P): P {
+  return sameRewindPoints(held, built) ? held : built;
+}
+
+/** The lines a person wrote as last read, where each stands as the same message. */
+function keptLines<M>(
+  held: ReadonlyMap<string, M>,
+  built: ReadonlyMap<string, M>,
+): ReadonlyMap<string, M> {
+  return held.size === built.size && [...built].every(([id, line]) => held.get(id) === line)
+    ? held
+    : built;
 }
 
 /**
@@ -90,7 +108,7 @@ export function useMessageActs(input: {
   const messages = transcript?.messages;
   const sending = transcript?.sending;
 
-  const points = useMemo(
+  const built = useMemo(
     () =>
       rewindPoints(
         messages ?? [],
@@ -101,21 +119,26 @@ export function useMessageActs(input: {
     [messages, sending, readerId],
   );
 
-  const byId = useMemo(
-    () => new Map((messages ?? []).map((message) => [message.id, message])),
-    [messages],
+  // Note that the points and the lines a person wrote are kept while they stand the same, as a turn moving with no line or reply landing leaves them, so the acts read through them, which every message's row draws, are made again only as they move.
+  const points = useKept(built, keptPoints);
+
+  const byId = useKept(
+    useMemo(
+      (): ReadonlyMap<string, AgentTranscriptMessage> =>
+        new Map(
+          (messages ?? []).flatMap((message) =>
+            message.role === MESSAGE_ROLE.USER ? [[message.id, message] as const] : [],
+          ),
+        ),
+      [messages],
+    ),
+    keptLines,
   );
 
   const standing = agent !== undefined && agent.archivedAt === undefined;
   const rewinds = standing && !calling;
   const taskId = agent?.taskId;
   const forks = standing && taskId !== undefined;
-
-  const fork = (messageId: string, words: string) =>
-    router.push({
-      pathname: "/start-agent",
-      params: { task: taskId, forkOf: agentId, at: messageId, opening: messageOpening(words) },
-    });
 
   const revert = (line: string) => {
     write(() => acts[ACT_KIND.AGENTS_REWIND]({ agentId, messageId: line }), {
@@ -124,78 +147,123 @@ export function useMessageActs(input: {
     });
   };
 
-  /** A message of a Manager's chat's Edit, on the reader's own with words while the Manager stands unarchived, which lays its words in the field to save in place. */
-  const chatActs = (item: SaidItem, held: ReadonlySet<string>): readonly HeldAct[] =>
-    standing && !item.received && held.has(item.place.row) && item.words.trim() !== ""
-      ? [
+  const more = useCallback(
+    (message: MessageItem): readonly HeldAct[] => {
+      const fork = (messageId: string, words: string) =>
+        router.push({
+          pathname: "/start-agent",
+          params: { task: taskId, forkOf: agentId, at: messageId, opening: messageOpening(words) },
+        });
+
+      /** A message of a Manager's chat's Edit, on the reader's own with words while the Manager stands unarchived, which lays its words in the field to save in place. */
+      const chatActs = (item: SaidItem, held: ReadonlySet<string>): readonly HeldAct[] =>
+        standing && !item.received && held.has(item.place.row) && item.words.trim() !== ""
+          ? [
+              {
+                label: REWIND_WORDS.EDIT,
+                symbol: GLYPH.EDIT_MESSAGE,
+                onPress: () =>
+                  composer.editMessage({
+                    messageId: item.place.row,
+                    words: item.words,
+                    cuts: false,
+                    takes: undefined,
+                  }),
+              },
+            ]
+          : [];
+
+      /** A line's Edit, where it opened a turn a person wrote, carried words alone, and the agent takes messages. */
+      const lineActs = (item: SaidItem): readonly HeldAct[] => {
+        if (chatMessages !== undefined) return chatActs(item, chatMessages);
+        const id = item.place.row;
+        const line = byId.get(id);
+        const { words } = item;
+
+        const offered =
+          rewinds &&
+          line !== undefined &&
+          points.editable.has(id) &&
+          editsInPlace(line, words.trim()) &&
+          (item.pictures ?? []).length +
+            (item.wordPictures?.size ?? 0) +
+            (item.files ?? []).length ===
+            0;
+
+        return offered
+          ? [
+              {
+                label: REWIND_WORDS.EDIT,
+                symbol: GLYPH.EDIT_MESSAGE,
+                onPress: () =>
+                  composer.editMessage({
+                    messageId: id,
+                    words,
+                    cuts: points.followed.has(id),
+                    takes: points.editTakes.get(id),
+                  }),
+              },
+            ]
+          : [];
+      };
+
+      /** A finished turn's Fork to new agent and Rewind conversation to here, in the panel's order, each where it is offered. */
+      const turnActs = (id: string, words: string): readonly HeldAct[] => {
+        // Note that a Manager's chat offers no rewind, as a channel takes nothing back; its messages are edited in place instead.
+        const line = rewinds && chatMessages === undefined ? points.revertsAt.get(id) : undefined;
+
+        return [
+          ...(forks
+            ? [{ label: FORK_WORDS.ACTION, symbol: GLYPH.FORK, onPress: () => fork(id, words) }]
+            : []),
+          // Note that a turn of no words offers no rewind, as the panel's foot draws only where it copies or forks.
+          ...(line === undefined || (words.trim() === "" && !forks)
+            ? []
+            : [
+                {
+                  label: REWIND_WORDS.REVERT,
+                  symbol: GLYPH.REWIND,
+                  destructive: true,
+                  onPress: () => setAsked({ reply: id, line }),
+                },
+              ]),
+        ];
+      };
+
+      /** Mark as unread on a message of a Manager's chat, anyone's, where the page offers it; never on the greeting or a line still on its way, which the chat holds no row of. */
+      const readActs = (item: SaidItem): readonly HeldAct[] => {
+        const sentAt = item.at;
+        const kept = chatMessages?.has(item.place.row) === true;
+
+        if (markUnread === undefined || !kept || sentAt === undefined) return [];
+
+        return [
           {
-            label: REWIND_WORDS.EDIT,
-            symbol: GLYPH.EDIT_MESSAGE,
-            onPress: () =>
-              composer.editMessage({
-                messageId: item.place.row,
-                words: item.words,
-                cuts: false,
-                takes: undefined,
-              }),
+            label: INBOX_READ_MARK.UNREAD,
+            symbol: GLYPH.MARK_UNREAD,
+            onPress: () => markUnread(item.place.row, sentAt),
           },
-        ]
-      : [];
+        ];
+      };
 
-  /** A line's Edit, where it opened a turn a person wrote, carried words alone, and the agent takes messages. */
-  const lineActs = (item: SaidItem): readonly HeldAct[] => {
-    if (chatMessages !== undefined) return chatActs(item, chatMessages);
-    const id = item.place.row;
-    const line = byId.get(id);
-    const { words } = item;
-
-    const offered =
-      rewinds &&
-      line !== undefined &&
-      points.editable.has(id) &&
-      editsInPlace(line, words.trim()) &&
-      (item.pictures ?? []).length + (item.wordPictures?.size ?? 0) + (item.files ?? []).length ===
-        0;
-
-    return offered
-      ? [
-          {
-            label: REWIND_WORDS.EDIT,
-            symbol: GLYPH.EDIT_MESSAGE,
-            onPress: () =>
-              composer.editMessage({
-                messageId: id,
-                words,
-                cuts: points.followed.has(id),
-                takes: points.editTakes.get(id),
-              }),
-          },
-        ]
-      : [];
-  };
-
-  /** A finished turn's Fork to new agent and Rewind conversation to here, in the panel's order, each where it is offered. */
-  const turnActs = (id: string, words: string): readonly HeldAct[] => {
-    // Note that a Manager's chat offers no rewind, as a channel takes nothing back; its messages are edited in place instead.
-    const line = rewinds && chatMessages === undefined ? points.revertsAt.get(id) : undefined;
-
-    return [
-      ...(forks
-        ? [{ label: FORK_WORDS.ACTION, symbol: GLYPH.FORK, onPress: () => fork(id, words) }]
-        : []),
-      // Note that a turn of no words offers no rewind, as the panel's foot draws only where it copies or forks.
-      ...(line === undefined || (words.trim() === "" && !forks)
-        ? []
-        : [
-            {
-              label: REWIND_WORDS.REVERT,
-              symbol: GLYPH.REWIND,
-              destructive: true,
-              onPress: () => setAsked({ reply: id, line }),
-            },
-          ]),
-    ];
-  };
+      return message.kind === TRANSCRIPT_ITEM.FOOT
+        ? turnActs(message.place.message, message.copy)
+        : [...lineActs(message), ...readActs(message)];
+    },
+    [
+      agentId,
+      byId,
+      chatMessages,
+      composer,
+      forks,
+      markUnread,
+      points,
+      rewinds,
+      router,
+      standing,
+      taskId,
+    ],
+  );
 
   const ask = revertAsk(
     asked === undefined ? undefined : points.revertTakes.get(asked.reply),
@@ -205,27 +273,8 @@ export function useMessageActs(input: {
   // Note that a question whose line is no longer where it was, dropped or rewound elsewhere, asks nothing.
   const stands = asked !== undefined && points.revertsAt.get(asked.reply) === asked.line;
 
-  /** Mark as unread on a message of a Manager's chat, anyone's, where the page offers it; never on the greeting or a line still on its way, which the chat holds no row of. */
-  const readActs = (item: SaidItem): readonly HeldAct[] => {
-    const sentAt = item.at;
-    const kept = chatMessages?.has(item.place.row) === true;
-
-    if (markUnread === undefined || !kept || sentAt === undefined) return [];
-
-    return [
-      {
-        label: INBOX_READ_MARK.UNREAD,
-        symbol: GLYPH.MARK_UNREAD,
-        onPress: () => markUnread(item.place.row, sentAt),
-      },
-    ];
-  };
-
   return {
-    more: (item) =>
-      item.kind === TRANSCRIPT_ITEM.FOOT
-        ? turnActs(item.place.message, item.copy)
-        : [...lineActs(item), ...readActs(item)],
+    more,
     reverting: {
       title: ask.title,
       message: ask.body,

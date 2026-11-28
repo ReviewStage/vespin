@@ -607,7 +607,7 @@ export function useSentFiles(files: readonly ShownFile[]): SentFileSources {
     // Note that `round` is read so a retry, which forgets the file's ask, writes it again.
   }, [files, round]);
 
-  const retry = (message: string, key: string) => {
+  const retry = useCallback((message: string, key: string) => {
     asked.current.get(message)?.delete(key);
     setWritten((held) => {
       const next = new Map(held);
@@ -618,9 +618,15 @@ export function useSentFiles(files: readonly ShownFile[]): SentFileSources {
       return next;
     });
     setRound((at) => at + 1);
-  };
+  }, []);
 
-  return { source: (message, key) => written.get(message)?.get(key), retry };
+  // Note that the sources are read through one function a writing, so the rows that draw a file's chip are drawn again only as a file lands.
+  const source = useCallback(
+    (message: string, key: string) => written.get(message)?.get(key),
+    [written],
+  );
+
+  return useMemo(() => ({ source, retry }), [source, retry]);
 }
 
 /** A cut part's whole read as held: the size it was asked at, and how it stands. */

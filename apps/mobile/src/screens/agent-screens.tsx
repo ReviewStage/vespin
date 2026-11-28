@@ -62,6 +62,7 @@ import {
   type FollowedAgent,
   selectInboxReader,
   selectWorkspaces,
+  shareAppState,
 } from "@repo/host/app-state-reads";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -119,6 +120,7 @@ import {
   type UndeliveredLine,
   useAnnounced,
   useColors,
+  useKept,
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
   withSending,
@@ -195,6 +197,7 @@ import {
   usePullRequestsRead,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { rigAgentDrawn, useRigAgentLoad } from "../rig-agent-load.js";
 import { rigBusyRender } from "../rig-busy-render.js";
 import { useNoteOpened } from "../search/recent-opened.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
@@ -576,6 +579,7 @@ function AgentComposerArea({
   /** The apps the agent uses on the reader's Mac this turn; none where its turn used none. */
   readonly apps: AppsDock | undefined;
 }) {
+  rigAgentDrawn("composer");
   const threadsLine = useAgentThreadsLine(id);
   const composer = useAgentComposer(id, agent, transcript, status, messageSent, suggested);
   rigBusyRender(composer.words !== "");
@@ -772,6 +776,8 @@ const AgentConversation = memo(function AgentConversation({
   /** The message a link names, which the page lands on once it holds it. */
   readonly message?: string | undefined;
 }) {
+  rigAgentDrawn("page");
+  useRigAgentLoad();
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const onTab = useOnTab();
@@ -984,7 +990,8 @@ const AgentConversation = memo(function AgentConversation({
     ],
   );
 
-  const items = chatItems ?? transcriptRows ?? NONE_SHOWN;
+  // Note that the rows are built afresh on each move of the document, a working agent's several times a second, so each is kept as the row it stood as where it is built the same, and every read of the rows, and every row the list draws, moves only where the turn moved.
+  const items = useKept(chatItems ?? transcriptRows ?? NONE_SHOWN, shareAppState);
 
   // A call opened on an answer its page carried cut reads it whole.
   const cuts = useMemo(() => openCuts(items), [items]);
@@ -1316,6 +1323,24 @@ const AgentConversation = memo(function AgentConversation({
   const continueAgent = () =>
     router.push({ pathname: "/start-agent", params: { task: taskId, continueOf: id } });
 
+  // Note that what a row reads is made once for as long as what it reads stands, so a move of the turn draws only the rows it moved (`AgentTranscript`).
+  const mediaSource = useCallback(
+    (mediaId: string) =>
+      addressed.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId),
+    [addressed, pictures.refOf, media.sources],
+  );
+
+  const pullRequestActs = useCallback(
+    (item: { readonly url: string }) => {
+      const key = keyOf(item.url);
+
+      return key === undefined || cardMergeOf(offers(key)) === undefined
+        ? []
+        : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
+    },
+    [keyOf, offers],
+  );
+
   const composerBar = archived ? (
     <ArchivedBar unarchiving={actions.unarchiving} note={note} onUnarchive={actions.unarchive} />
   ) : (
@@ -1378,9 +1403,7 @@ const AgentConversation = memo(function AgentConversation({
         onOpenLink={openLink}
         onToggle={(item) => setToggles((held) => toggledAt(held, item))}
         onOpenPage={openPage}
-        mediaSource={(mediaId) =>
-          addressed.has(mediaId) ? pictures.refOf(mediaId) : media.sources.get(mediaId)
-        }
+        mediaSource={mediaSource}
         fileSource={sentFiles.source}
         onRetryFile={sentFiles.retry}
         onRetryMedia={(mediaId) =>
@@ -1395,13 +1418,7 @@ const AgentConversation = memo(function AgentConversation({
         onOpenThread={openThread}
         undelivered={undelivered}
         onOpenPullRequest={(item) => openPullRequest(item.url)}
-        pullRequestActs={(item) => {
-          const key = keyOf(item.url);
-
-          return key === undefined || cardMergeOf(offers(key)) === undefined
-            ? []
-            : [{ label: MERGE_WORD, onPress: () => setMerging(key) }];
-        }}
+        pullRequestActs={pullRequestActs}
       />
     </PicturesProvider>
   );

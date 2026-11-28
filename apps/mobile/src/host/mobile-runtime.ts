@@ -33,6 +33,8 @@ export interface MobileHostStartOptions {
   readonly fixtureRefusesWrites?: boolean | undefined;
   /** Where a fixture run's agent recording is served over HTTP on the rig; never in a live run. */
   readonly fixtureMediaOrigin?: string | undefined;
+  /** How often a fixture run's release Manager moves its turn while its page follows it; never in a live run. */
+  readonly fixtureStreamTurn?: number | undefined;
   /** This build's version, as the app's config names it. */
   readonly appVersion: string;
   /** Where the host keeps its files. */
@@ -86,6 +88,7 @@ export async function startMobileHost(
         fixtureInboxOff: options.fixtureInboxOff,
         fixtureRefusesWrites: options.fixtureRefusesWrites,
         fixtureMediaOrigin: options.fixtureMediaOrigin,
+        fixtureStreamTurn: options.fixtureStreamTurn,
         appVersion: options.appVersion,
         stateRoot: options.stateRoot,
         device: options.device,

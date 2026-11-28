@@ -74,7 +74,10 @@ import {
   queueAfter,
   queuedAppState,
   type SavedMemoryWords,
+  STREAMED_AGENT_CHANGE,
+  STREAMED_AGENT_ID,
   savedMemoriesAppState,
+  streamedTurnAppState,
   type ThreadResolves,
   threadResolveOf,
 } from "@repo/host/fixture-inbox";
@@ -439,6 +442,39 @@ function keepSend(
   return true;
 }
 
+/** How many changes each run's streamed turn has made, by the store the run stages (`-streamTurn`). */
+const STREAMED_CHANGES = new WeakMap<object, number>();
+
+/**
+ * Starts the release Manager's turn streaming once its page first follows
+ * its transcript, where the launch asks it (`-streamTurn <ms>`, `every`): the
+ * Manager held at work and its turn moved one change every that many
+ * milliseconds, each laid over the document as the host lays a delta, for
+ * the rest of the run (`scripts/working-manager.sh`); nothing for any other
+ * act, or once it streams.
+ */
+function streamTurn(
+  state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+  every: number | undefined,
+): void {
+  if (every === undefined || kind !== ACT_KIND.AGENTS_TRANSCRIPT || STREAMED_CHANGES.has(state))
+    return;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const read = payload as PortActPayload<typeof ACT_KIND.AGENTS_TRANSCRIPT>;
+
+  if (!("agentId" in read) || read.agentId !== STREAMED_AGENT_ID) return;
+  STREAMED_CHANGES.set(state, 0);
+  const held = CHOICES.get(state) ?? NO_CHOICES;
+  CHOICES.set(state, new Map(held).set(STREAMED_AGENT_ID, STREAMED_AGENT_CHANGE));
+
+  setInterval(() => {
+    STREAMED_CHANGES.set(state, (STREAMED_CHANGES.get(state) ?? 0) + 1);
+    stageFixture(state);
+  }, every);
+}
+
 /**
  * Lays the fixture profile's data over the host's document; nothing in a
  * live run. Where `updateNeeded`, as `-updateNeeded true` asks, the network
@@ -494,7 +530,10 @@ export function stageFixture(
   );
 
   const sendsKept = chatSentAppState(
-    sendsAppState(saved, KEPT_SENDS.get(state) ?? NO_KEPT_SENDS),
+    sendsAppState(
+      streamedTurnAppState(saved, STREAMED_CHANGES.get(state) ?? 0),
+      KEPT_SENDS.get(state) ?? NO_KEPT_SENDS,
+    ),
     KEPT_CHAT.get(state) ?? NO_KEPT_CHAT,
   );
 
@@ -900,6 +939,8 @@ function memberAt<Member>(
  * comments there (`keepCommentThread`).
  * Where `refusesWrites`, the writes `REFUSED_WRITES` names are refused
  * before anything else answers them, so a flow sees the failure notice.
+ * Where `streamEvery` is given, the release Manager's turn streams a change
+ * every that many milliseconds once its page follows it (`streamTurn`).
  */
 export function fixtureActs(
   acts: ActPortClient,
@@ -907,6 +948,7 @@ export function fixtureActs(
   state: Pick<AppStateStore, "snapshot" | "taskList" | "update">,
   refusesWrites = false,
   mediaOrigin?: string,
+  streamEvery?: number | undefined,
 ): ActPortClient {
   return new Proxy(acts, {
     get(target, kind) {
@@ -937,6 +979,8 @@ export function fixtureActs(
           : undefined;
 
         if (startRefused !== undefined) return Promise.resolve(startRefused);
+        // SAFETY: the port is keyed by act kind.
+        streamTurn(state, kind as PortActKind, payload, streamEvery);
         // SAFETY: the port is keyed by act kind.
         const older = olderRead(state, profile, kind as PortActKind, payload);
 

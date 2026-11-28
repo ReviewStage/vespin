@@ -20,6 +20,7 @@ import {
   agentMessageReplyLine,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { MANAGER_CHAT_AUTHOR, type ManagerChatLiveMessage } from "@repo/features/manager-chat-live";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { MESSAGE_CHANNEL, MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import type { AppTranscript } from "./app-state.js";
@@ -632,6 +633,203 @@ export function fixtureManagerTranscript(
     cursor: "1:0",
     word: { status: AGENT_STATUS.COMPLETED, runStartedAt: startedAt, title, caughtUp: true },
     pages: 1,
+  };
+}
+
+/** How many exchanges a streamed Manager's chat holds before its turn, each the account's ask and the Manager's answer: a chat's whole first page, as a Manager that has worked a while opens on (`MANAGER_CHAT_PAGE`). */
+const STREAMED_EXCHANGES = 25;
+
+/** How many changes of the streamed turn each of its calls spans: its words grow a few at a time, then the call lands and the next words start. */
+const CHANGES_PER_CALL = 30;
+
+/** How many words each change of the streamed turn adds, as a model's text delta carries a few. */
+const WORDS_PER_CHANGE = 3;
+
+/** Every how many calls of the streamed turn one is a message to the account, which lands in its chat as a row. */
+const CALLS_PER_SEND = 3;
+
+/** Where the streamed chat's rows number from, past every row the fixture stages, so each stands newer. */
+const STREAMED_SEQ = 100;
+
+/** The words the streamed turn writes before each call, a few at a time. */
+const STREAMED_WORDS =
+  "Checking the invitations branch against main before the release goes out, then reading its checks, the task's open threads, and the audit log's line so nothing is left behind once it merges.".split(
+    " ",
+  );
+
+/** The id the streamed turn is kept under, which its messages to the account name. */
+const STREAMED_TURN = "fixture-manager-streamed-turn";
+
+/** A Manager's transcript and chat as a fixture run that streams its turn stands them. */
+export interface StreamedManager {
+  readonly transcript: AppTranscript;
+  /** The chat's rows the stream adds, newest first, as a chat's page holds them. */
+  readonly chat: readonly ManagerChatLiveMessage[];
+}
+
+/** One row of the streamed Manager's chat. */
+function streamedRow(
+  seq: number,
+  at: number,
+  text: string,
+  author: { readonly userId: string | null; readonly name: string },
+  turnId: string | null,
+): ManagerChatLiveMessage {
+  return {
+    id: `fixture-streamed-chat-${seq}`,
+    clientKey: `fixture-streamed-chat-${seq}`,
+    seq,
+    authorKind: author.userId === null ? MANAGER_CHAT_AUTHOR.AGENT : MANAGER_CHAT_AUTHOR.PERSON,
+    authorUserId: author.userId,
+    authorName: author.name,
+    text,
+    attachments: [],
+    threadRoot: null,
+    broadcast: false,
+    turnId,
+    lineId: null,
+    createdAt: at,
+    editedAt: null,
+  };
+}
+
+/**
+ * A Manager at work, its instants counted from `startedAt`, as a fixture run
+ * that streams its turn stands it after `changes` changes: `held`'s
+ * transcript, then a chat's first page of exchanges, each the account's ask
+ * and a turn that read a task and answered in the chat, then its newest
+ * turn still running, whose words grow a few at a time, a call landing every
+ * `CHANGES_PER_CALL` changes and every third call a message to the account,
+ * which lands in the chat, as the service's deltas move a turn. Note that
+ * each change is a new transcript, as each delta the host lays is.
+ */
+export function fixtureStreamedManager(
+  held: AppTranscript,
+  startedAt: number,
+  reader: { readonly userId: string; readonly name: string },
+  managerName: string,
+  changes: number,
+): StreamedManager {
+  const manager = { userId: null, name: managerName };
+
+  const exchanges = Array.from({ length: STREAMED_EXCHANGES }, (_, at) => {
+    const askedAt = startedAt + (10 + at * 2) * MINUTE;
+    const ask = `Where does item ${at + 1} of the release list stand?`;
+    const answer = `Item ${at + 1} is done: its pull request merged, its checks passed on main, and **nothing** waits on you for it.`;
+    const turnId = `fixture-streamed-turn-${at}`;
+
+    const turn: AgentTranscriptMessage = {
+      id: turnId,
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        { type: "step-start" },
+        { type: "text", text: `Reading item ${at + 1}'s task before I answer.` },
+        toolPart(
+          AGENT_TOOL.READ_TASK,
+          `${turnId}-read`,
+          { taskId: `Release item ${at + 1}` },
+          { status: "accepted" },
+        ),
+        toolPart(
+          AGENT_TOOL.SEND_TO_USER,
+          `${turnId}-said`,
+          { text: answer },
+          { status: "accepted" },
+        ),
+      ],
+      startedAt: askedAt + MINUTE / 2,
+      finishedAt: askedAt + MINUTE,
+    };
+
+    return {
+      messages: [asked(`fixture-streamed-ask-${at}`, askedAt, ask, reader), turn],
+      rows: [
+        streamedRow(STREAMED_SEQ + at * 2, askedAt, ask, reader, null),
+        streamedRow(STREAMED_SEQ + at * 2 + 1, askedAt + MINUTE, answer, manager, turnId),
+      ],
+    };
+  });
+
+  const turnAt = startedAt + (10 + STREAMED_EXCHANGES * 2) * MINUTE;
+  const calls = Math.floor(changes / CHANGES_PER_CALL);
+  const within = (changes % CHANGES_PER_CALL) + 1;
+
+  const landed = Array.from({ length: calls }, (_, call) => {
+    const sends = call % CALLS_PER_SEND === CALLS_PER_SEND - 1;
+    const said = `Step ${call + 1} of the release check is done.`;
+
+    return {
+      parts: [
+        { type: "text", text: STREAMED_WORDS.join(" ") },
+        sends
+          ? toolPart(
+              AGENT_TOOL.SEND_TO_USER,
+              `${STREAMED_TURN}-${call}`,
+              { text: said },
+              { status: "accepted" },
+            )
+          : toolPart(
+              AGENT_TOOL.READ_TASK,
+              `${STREAMED_TURN}-${call}`,
+              { taskId: `Release check ${call + 1}` },
+              { status: "accepted" },
+            ),
+      ],
+      row: sends
+        ? [
+            streamedRow(
+              STREAMED_SEQ + STREAMED_EXCHANGES * 2 + call,
+              turnAt + call * MINUTE,
+              said,
+              manager,
+              STREAMED_TURN,
+            ),
+          ]
+        : [],
+    };
+  });
+
+  const growing = STREAMED_WORDS.slice(
+    0,
+    Math.min(STREAMED_WORDS.length, within * WORDS_PER_CHANGE),
+  );
+
+  const streaming: AgentTranscriptMessage = {
+    id: STREAMED_TURN,
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [
+      { type: "step-start" },
+      ...landed.flatMap((call) => call.parts),
+      { type: "text", text: growing.join(" ") },
+    ],
+    startedAt: turnAt,
+  };
+
+  const messages = [
+    ...held.messages,
+    ...exchanges.flatMap((exchange) => exchange.messages),
+    asked(
+      "fixture-streamed-turn-ask",
+      turnAt - MINUTE,
+      "Run the release check end to end.",
+      reader,
+    ),
+    streaming,
+  ];
+
+  const { word } = held;
+
+  return {
+    transcript: {
+      ...held,
+      messages,
+      ...(word === undefined ? undefined : { word: { ...word, status: AGENT_STATUS.RUNNING } }),
+    },
+    // Note that the rows are laid oldest first and then turned newest first, so a message the turn sends lands at the chat's end, under the exchanges, as a live one does.
+    chat: [
+      ...exchanges.flatMap((exchange) => exchange.rows),
+      ...landed.flatMap((call) => call.row),
+    ].toReversed(),
   };
 }
 

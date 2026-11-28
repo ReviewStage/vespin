@@ -83,6 +83,13 @@ function eachButtonOnce(links: readonly ReplyButtonLink[]): readonly ReplyButton
   );
 }
 
+/** What each button's read answered, in the order its buttons were asked; none for one still read. */
+function answersOf(
+  reads: readonly { readonly data: ReplyButtonAnswerView | undefined }[],
+): readonly (ReplyButtonAnswerView | undefined)[] {
+  return reads.map((read) => read.data);
+}
+
 /** The button a read answered, or none where it was refused or is unread. */
 function viewOf(answer: ReplyButtonAnswerView | undefined): ReplyButtonView | undefined {
   return answer === undefined || "failure" in answer ? undefined : answer;
@@ -165,66 +172,70 @@ export function useSuggestionLooks(
     return eachButtonOnce(words.flatMap((each) => markdownReplyButtons(each, LINK_READING)));
   }, [items, on]);
 
-  const reads = useQueries({
+  const answers = useQueries({
     queries: links.map((link) => buttonQuery(acts, accountId, link)),
+    combine: answersOf,
   });
 
-  // Note that each read is kept by the agent and then its button, never by a key built from both.
-  const views = new Map<string, Map<string, ReplyButtonView>>();
+  // Note that the looks are read through one function for as long as the buttons and their reads stand, so the transcript's rows are drawn again only as a suggestion moves.
+  return useMemo(() => {
+    // Note that each read is kept by the agent and then its button, never by a key built from both.
+    const views = new Map<string, Map<string, ReplyButtonView>>();
 
-  links.forEach((link, at) => {
-    const view = viewOf(reads[at]?.data);
+    links.forEach((link, at) => {
+      const view = viewOf(answers[at]);
 
-    if (view === undefined) return;
-    const byButton = views.get(link.agentId) ?? new Map<string, ReplyButtonView>();
-    byButton.set(link.buttonId, view);
-    views.set(link.agentId, byButton);
-  });
+      if (view === undefined) return;
+      const byButton = views.get(link.agentId) ?? new Map<string, ReplyButtonView>();
+      byButton.set(link.buttonId, view);
+      views.set(link.agentId, byButton);
+    });
 
-  return (link, words) => {
-    const view = views.get(link.agentId)?.get(link.buttonId);
+    return (link: ReplyButtonLink, words: string): SuggestionLook | undefined => {
+      const view = views.get(link.agentId)?.get(link.buttonId);
 
-    if (view === undefined) return undefined;
-    const { action } = view;
-    const reached = view.pressed?.agent;
+      if (view === undefined) return undefined;
+      const { action } = view;
+      const reached = view.pressed?.agent;
 
-    if (reached !== undefined && reached !== null) {
-      return {
-        look: SUGGESTION_LOOK.REACHED,
-        suggests: action.kind,
-        name: reached.title,
-        onPress: () => router.push(onTab(iosAgentRoute(reached.id))),
+      if (reached !== undefined && reached !== null) {
+        return {
+          look: SUGGESTION_LOOK.REACHED,
+          suggests: action.kind,
+          name: reached.title,
+          onPress: () => router.push(onTab(iosAgentRoute(reached.id))),
+        };
+      }
+
+      // Note that a message's suggestion to an agent the reader can't see opens nowhere, so it stands as its plain link.
+      if (action.kind === REPLY_BUTTON_ACTION.SEND && view.sendTo === null) return undefined;
+
+      const params = { suggestedBy: link.agentId, button: link.buttonId };
+
+      const onPress = () => {
+        if (action.kind === REPLY_BUTTON_ACTION.START) {
+          if (taskId !== undefined)
+            router.push({ pathname: "/start-agent", params: { task: taskId, ...params } });
+
+          return;
+        }
+
+        if (view.sendTo !== null) {
+          router.push({
+            pathname: onTab("/tasks/agent/[id]"),
+            params: { id: view.sendTo.id, ...params },
+          });
+        }
       };
-    }
 
-    // Note that a message's suggestion to an agent the reader can't see opens nowhere, so it stands as its plain link.
-    if (action.kind === REPLY_BUTTON_ACTION.SEND && view.sendTo === null) return undefined;
-
-    const params = { suggestedBy: link.agentId, button: link.buttonId };
-
-    const onPress = () => {
-      if (action.kind === REPLY_BUTTON_ACTION.START) {
-        if (taskId !== undefined)
-          router.push({ pathname: "/start-agent", params: { task: taskId, ...params } });
-
-        return;
-      }
-
-      if (view.sendTo !== null) {
-        router.push({
-          pathname: onTab("/tasks/agent/[id]"),
-          params: { id: view.sendTo.id, ...params },
-        });
-      }
+      return {
+        look: SUGGESTION_LOOK.OFFERED,
+        suggests: action.kind,
+        label: view.label || words,
+        onPress,
+      };
     };
-
-    return {
-      look: SUGGESTION_LOOK.OFFERED,
-      suggests: action.kind,
-      label: view.label || words,
-      onPress,
-    };
-  };
+  }, [links, answers, router, onTab, taskId]);
 }
 
 /**
