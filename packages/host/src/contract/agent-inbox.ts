@@ -33,6 +33,8 @@ import {
   agentInboxItemHomeViewSchema,
   agentInboxMessagedViewSchema,
   agentInboxMessageParamsSchema,
+  agentInboxOlderPageAnswerSchema,
+  agentInboxOlderPageParamsSchema,
   agentInboxReadAllParamsSchema,
   agentInboxReadAllViewSchema,
   agentInboxReadStateParamsSchema,
@@ -46,6 +48,10 @@ import {
   agentPictureFileViewSchema,
   agentPictureParamsSchema,
 } from "@repo/features/agent-view";
+import {
+  agentInboxSearchAnswerSchema,
+  agentInboxSearchParamsSchema,
+} from "@repo/features/inbox-service-search";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { ACT } from "@repo/sync";
 import { Schema as EffectSchema } from "effect";
@@ -117,6 +123,22 @@ export const AGENT_INBOX_ACTS = declaredActs({
     input: agentInboxItemHomeParamsSchema,
     output: EffectSchema.toType(agentInboxItemHomeViewSchema),
     refusal: "Could not find the inbox item on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: UNANSWERED,
+  }),
+  AGENTS_INBOX_OLDER_PAGE: hostAct({
+    input: agentInboxOlderPageParamsSchema,
+    output: agentInboxOlderPageAnswerSchema,
+    refusal: "Could not read the older inbox items on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: UNANSWERED,
+  }),
+  AGENTS_INBOX_SEARCH: hostAct({
+    input: agentInboxSearchParamsSchema,
+    output: agentInboxSearchAnswerSchema,
+    refusal: "Could not search your inbox on this system.",
     panelOnly: true,
     door: ACT.READ,
     unanswered: UNANSWERED,

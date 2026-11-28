@@ -1,0 +1,46 @@
+# held-ask.yaml -- an ask that no longer waits keeps its card on its own message, stepped back in the muted ink with nothing picked, as the panel's held ask stands: one the agent withdrew, and one a newer message replaced.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `answer.yaml` is, so no server is
+# reached. The rounding task's "Where the invoice's tax rounds" holds a decide
+# its agent withdrew, and "How a refund's cents round" one a newer message
+# replaced (`@repo/host/fixture-inbox`).
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 30000
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Where the invoice's tax rounds"
+- extendedWaitUntil:
+    visible: ".*withdrew this.*"
+    timeout: 5000
+- assertVisible: "Per line"
+- assertVisible: "On the total"
+- waitForAnimationToEnd
+- takeScreenshot: held-withdrawn
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 30000
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "How a refund's cents round"
+- extendedWaitUntil:
+    visible: ".*replaced this with a newer message.*"
+    timeout: 5000
+- assertVisible: "Down"
+- assertVisible: "Nearest cent"
+- waitForAnimationToEnd
+- takeScreenshot: held-replaced

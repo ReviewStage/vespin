@@ -35,17 +35,17 @@ const DOCK_WORDS = {
   APPROVAL_SHOW_HINT: "Shows the call waiting",
   APPROVAL_OPEN_HINT: "Shows or hides the call waiting",
   DENIES: "Sending a message denies it",
-  INBOX_HINT: "Opens the thread in the Inbox",
+  INBOX_HINT: "Opens its threads in the Inbox",
   PULL_REQUEST_HINT: "Opens the pull request",
   QUEUE_HINT: "Shows or hides the queued messages",
   APP_HINT: "Opens its newest window",
   ON_MACHINE: " on ",
 } as const;
 
-/** The agent's threads line and its press, while it has posted threads. */
+/** The agent's threads line and its press, which opens the agent's own Inbox, while it has posted threads. */
 export interface AgentThreadsDock {
   readonly line: AgentThreadsLine;
-  readonly onOpen: (threadId: string) => void;
+  readonly onOpenInbox: () => void;
 }
 
 /** The apps the agent uses on the reader's Mac this turn, and what each one's icon and window are drawn from, by id, where they were read. */
@@ -157,7 +157,7 @@ function approvalChip(
   ];
 }
 
-/** The row's capsules for where the agent's work went: its Inbox threads, which open the thread the line names, and its pull request, wearing where it stands and how its checks went, which opens its page. */
+/** The row's capsules for where the agent's work went: its Inbox threads, which open the agent's own Inbox, listing every thread it posted however many there are, and its pull request, wearing where it stands and how its checks went, which opens its page. */
 function placeChips({ threads, pullRequest, onOpenPullRequest }: AgentDockReading): DockChip[] {
   const chips: DockChip[] = [];
 
@@ -170,7 +170,7 @@ function placeChips({ threads, pullRequest, onOpenPullRequest }: AgentDockReadin
       words: line.waiting > 0 ? DOCK_WORDS.INBOX : line.words,
       waiting: line.waiting,
       hint: DOCK_WORDS.INBOX_HINT,
-      onPress: () => threads.onOpen(line.opens.id),
+      onPress: threads.onOpenInbox,
     });
   }
 

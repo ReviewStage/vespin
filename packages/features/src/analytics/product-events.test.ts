@@ -23,6 +23,7 @@ import {
   productLoadCount,
   productLoadMilliseconds,
   productOpenMilliseconds,
+  productResumeCounted,
 } from "./product-events.js";
 
 const AT = Date.parse("2026-08-19T12:00:00.000Z");
@@ -320,6 +321,10 @@ test("a launch's load travels its held thread and its one-by-one reads as counts
     }),
     undefined,
   );
+
+  // A return counts as its own only where the app left after the launch's load window closed; one that left inside it is the launch's, which `launch:load` already counts.
+  assert.equal(productResumeCounted(20_000, 180_000), false);
+  assert.equal(productResumeCounted(240_000, 180_000), true);
 
   // A return from the background travels its first minute the same way, with how long it held at most, what was delivered, and how long the app was away.
   const resume = {

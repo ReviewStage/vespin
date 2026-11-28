@@ -266,6 +266,10 @@ export const LIVE_READ = {
   AGENT_ORIGINS: "agentOrigins",
   /** Every inbox item the account reaches. */
   INBOX_ITEMS: "inboxItems",
+  /** The account's settled inbox items older than `INBOX_ITEMS` carries: the service's `inboxOlder` read, a page at a time as an Inbox listing every item reaches its end, held for the signed-in session beside the feed. */
+  INBOX_OLDER: "inboxOlder",
+  /** The inbox items each place a search is asked from found on the service's `inboxSearch` read past what the host holds, by the place (`INBOX_SEARCH_PLACE`): its words and the items they found, held while the place's words stand. */
+  INBOX_FOUND: "inboxFound",
   /** One plan's inbox, or one agent's, by its holder: the service's `taskInbox` or `agentInbox` query, by the holder's kind, held for the windows that chose it and a few they chose lately. */
   HOLDER_INBOX: "holderInbox",
   /** The skills the account sees in one workspace, the workspace's and its own, by the workspace: the service's `installedSkills` query, held for the windows that draw Settings › Skills and a few they drew lately. */

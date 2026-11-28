@@ -184,6 +184,7 @@ import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useTitleLinkNames } from "../inbox/preview-link-names.js";
 import { useAgentThreadsLine } from "../inbox/use-agent-threads.js";
 import { useNewestNote } from "../newest-note.js";
 import { useOpenDrawnCount } from "../open-drawn.js";
@@ -528,7 +529,7 @@ function AgentComposerArea({
   ending,
   tools,
   trailing,
-  onOpenThread,
+  onOpenInbox,
   pullRequest,
   onOpenPullRequest,
   apps,
@@ -553,8 +554,8 @@ function AgentComposerArea({
   readonly tools: ReactNode;
   /** What stands at the end of the row under the field, before Send: the model chip. */
   readonly trailing: ReactNode;
-  /** Opens one of the agent's Inbox threads by its id. */
-  readonly onOpenThread: (threadId: string) => void;
+  /** Opens the agent's own Inbox, its threads alone, which the row's threads capsule opens. */
+  readonly onOpenInbox: () => void;
   /** The pull request the agent opened, which the row over the field opens; none before it opened one. */
   readonly pullRequest: AgentPullRequest | undefined;
   readonly onOpenPullRequest: (url: string) => void;
@@ -589,9 +590,7 @@ function AgentComposerArea({
         pullRequest={pullRequest}
         onOpenPullRequest={onOpenPullRequest}
         apps={apps}
-        threads={
-          threadsLine === undefined ? undefined : { line: threadsLine, onOpen: onOpenThread }
-        }
+        threads={threadsLine === undefined ? undefined : { line: threadsLine, onOpenInbox }}
       />
       <ConfirmAsk destructive {...composer.removing} />
       <ConfirmAsk destructive {...composer.sendingEdit} />
@@ -1082,9 +1081,10 @@ const AgentConversation = memo(function AgentConversation({
   const pictures = usePictures(PICTURE_OWNER.AGENT, id, pictureIds);
 
   // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
-  const title =
-    cardTitle(shown === undefined ? (transcript?.word?.title ?? brief ?? "") : agentName(shown)) ||
-    UNLISTED_AGENT;
+  const barWords =
+    shown === undefined ? (transcript?.word?.title ?? brief ?? "") : agentName(shown);
+
+  const title = cardTitle(barWords, useTitleLinkNames(barWords)) || UNLISTED_AGENT;
 
   useScreenActivity((workspaces) =>
     shown === undefined || shown.taskId === null
@@ -1321,7 +1321,9 @@ const AgentConversation = memo(function AgentConversation({
       undeliveredActs={undeliveredActs}
       approvals={approvals}
       onShowWaiting={showWaiting}
-      onOpenThread={openThread}
+      onOpenInbox={() =>
+        router.push({ pathname: onOwnTab("/tasks/agent/[id]/inbox"), params: { id } })
+      }
       submenus={box.submenus}
       note={note}
       call={talk.call}

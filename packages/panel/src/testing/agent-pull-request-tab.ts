@@ -75,6 +75,7 @@ import { markdownHtmlParserLanded } from "./markdown.js";
 import { peopleRead, withPeopleRead } from "./people-read.js";
 import { landedBundles, onSideBundles } from "./side-bundles.js";
 import { agentsControl } from "./tasks-control.js";
+import { keepViewChoices } from "./view-choices.js";
 
 const CHARLES: WorkspaceMember = {
   userId: "user-charles",
@@ -336,6 +337,8 @@ beforeEach(() => {
   });
   // Note that the workspace's people stand on the document from the first frame, as the host holds them for a tab drawn again.
   handHostReads({ members: HELD_PEOPLE });
+  // Note that the Conversation's filters and folds are the account's, read from the first frame.
+  keepViewChoices();
 });
 
 afterEach(() => {

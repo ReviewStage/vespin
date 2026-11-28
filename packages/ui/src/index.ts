@@ -300,6 +300,8 @@ export * from "./components/pdf-pages/pdf-pages-skeleton.js";
 
 export * from "./components/photo-pick/photo-pick.js";
 
+export * from "./components/pick-notes/pick-notes.js";
+
 export * from "./components/picture-set/picture-set.js";
 
 export * from "./components/picture-tile/picture-tile.js";

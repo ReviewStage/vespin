@@ -218,6 +218,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_TASK_RELATIONS: "/api/live/task-relations",
   /** The tasks a search finds by their name, number, or key under `?query=`, the latest changed first and few, with every agent of them, as the task list answers them, with `?poll=true` their rows inline. `task-list-live.ts` declares the answer. */
   LIVE_TASK_SEARCH: "/api/live/task-search",
+  /** The inbox items a search finds by their title, their threads' words, or their holder's name under `?query=`, of any age, the latest changed first and at most 50, as the account's inbox items carry them, with `?poll=true` their rows inline. `inbox-live.ts` declares the answer. */
+  LIVE_INBOX_SEARCH: "/api/live/inbox-search",
   /** One page of a workspace's settled tasks under `?workspaceId=`, the newest finished first, past `?beforeAt=&beforeId=` where named, each with every agent of it, as the task list answers them: none the account does not reach. `task-list-live.ts` declares the answer. */
   LIVE_TASK_PAGE: "/api/live/task-page",
   /** A person's tasks and agents in a workspace under `?workspaceId=&personId=`: how many of each the account may read, and a page of the newest, each with every agent of it, as the task list answers them. `task-list-live.ts` declares the answer. */

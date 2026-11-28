@@ -27,6 +27,13 @@
  * screen says it is watching once a minute, while it is shown alone, and a
  * socket nobody watches closes as idle.
  *
+ * While its member picks elements to note, the panel asks which element
+ * stands under the pointer as it moves, and picks one with a press; the
+ * service answers from the page's own document, read in a world apart from
+ * the page's scripts, and a pick with a crop of the element as well. A pick
+ * acts on nothing in the page, so it needs no takeover and leaves the agent
+ * driving; it is open to whoever may message the agent, as driving is.
+ *
  * Every message is a JSON text frame. A message the panel sends refuses a
  * key it did not name; one the service sends is read dropping any key a
  * newer service added. Neither a frame, an address, nor a title is ever
@@ -35,6 +42,7 @@
  */
 
 import { Schema as EffectSchema } from "effect";
+import { AGENT_BOUNDS } from "./agent-wire.js";
 import { BROWSER_SHOWN_MAX_CHARS, isBrowserAddress } from "./browser-acts.js";
 import { countedNumber } from "./service-wire.js";
 
@@ -88,6 +96,8 @@ export const BROWSER_LIVE_SERVER = {
   DRIVER: "driver",
   REFUSED: "refused",
   CLOSED: "closed",
+  INSPECTED: "inspected",
+  PICKED: "picked",
 } as const;
 
 /** The messages the panel sends, by type. */
@@ -102,6 +112,8 @@ export const BROWSER_LIVE_CLIENT = {
   NAVIGATE: "navigate",
   HISTORY: "history",
   WATCHING: "watching",
+  INSPECT: "inspect",
+  PICK: "pick",
 } as const;
 
 /** A step a tab's bar takes through its page's history. */
@@ -143,6 +155,22 @@ const BROWSER_LIVE_BOUNDS = {
   MAX_MODIFIERS: 15,
   /** Every mouse button bit set. */
   MAX_BUTTONS: 31,
+} as const;
+
+/**
+ * The most a pick says of an element: its label over the outline, its
+ * selector, its accessible role and name, its opening tag, and its words;
+ * and the most bytes its crop holds, a message's one image's
+ * (`AGENT_BOUNDS.MAX_IMAGE_BYTES`).
+ */
+export const BROWSER_PICK_BOUNDS = {
+  MAX_LABEL_CHARS: 120,
+  MAX_SELECTOR_CHARS: 1_000,
+  MAX_ROLE_CHARS: 64,
+  MAX_NAME_CHARS: 200,
+  MAX_TAG_CHARS: 300,
+  MAX_TEXT_CHARS: 200,
+  MAX_CROP_BYTES: AGENT_BOUNDS.MAX_IMAGE_BYTES,
 } as const;
 
 const shownSchema = EffectSchema.String.check(EffectSchema.isMaxLength(BROWSER_SHOWN_MAX_CHARS));
@@ -212,6 +240,52 @@ const browserLiveClosedSchema = EffectSchema.Struct({
   reason: EffectSchema.Literals(Object.values(BROWSER_LIVE_CLOSE_REASON)),
 });
 
+/** A box on the page: its left and top, its width and height. */
+const browserLiveBoxSchema = EffectSchema.Struct({
+  x: EffectSchema.Finite,
+  y: EffectSchema.Finite,
+  width: EffectSchema.Finite,
+  height: EffectSchema.Finite,
+});
+
+export type BrowserLiveBox = typeof browserLiveBoxSchema.Type;
+
+const pickWordsSchema = (most: number) => EffectSchema.String.check(EffectSchema.isMaxLength(most));
+
+/** The element under a point the panel asked about, its box in the panel's pixels and a short label naming it; none where no element stands there. */
+const browserLiveInspectedSchema = EffectSchema.Struct({
+  type: EffectSchema.Literal(BROWSER_LIVE_SERVER.INSPECTED),
+  box: EffectSchema.NullOr(browserLiveBoxSchema),
+  label: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_LABEL_CHARS),
+});
+
+/**
+ * An element picked: its box in the panel's pixels and in the page's own
+ * CSS pixels, the tab and the ref the agent's browser tool names it by, a selector
+ * that finds it alone in the page, its accessible role and name, its
+ * opening tag, its words, and a base64 JPEG of it cropped from the page.
+ */
+const browserLivePickedElementSchema = EffectSchema.Struct({
+  box: browserLiveBoxSchema,
+  pageBox: browserLiveBoxSchema,
+  tab: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_LABEL_CHARS),
+  ref: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_LABEL_CHARS),
+  selector: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_SELECTOR_CHARS),
+  role: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_ROLE_CHARS),
+  name: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_NAME_CHARS),
+  tag: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_TAG_CHARS),
+  text: pickWordsSchema(BROWSER_PICK_BOUNDS.MAX_TEXT_CHARS),
+  crop: EffectSchema.String,
+});
+
+export type BrowserLivePickedElement = typeof browserLivePickedElementSchema.Type;
+
+/** What a pick found: the element, or none where nothing could be picked there. */
+const browserLivePickedSchema = EffectSchema.Struct({
+  type: EffectSchema.Literal(BROWSER_LIVE_SERVER.PICKED),
+  element: EffectSchema.NullOr(browserLivePickedElementSchema),
+});
+
 /**
  * Every message the service sends.
  *
@@ -223,6 +297,8 @@ export const browserLiveServerMessageSchema = EffectSchema.Union([
   browserLiveDriverChangeSchema,
   browserLiveRefusedSchema,
   browserLiveClosedSchema,
+  browserLiveInspectedSchema,
+  browserLivePickedSchema,
 ]);
 
 export type BrowserLiveServerMessage = typeof browserLiveServerMessageSchema.Type;
@@ -304,6 +380,20 @@ const browserLiveWatchingSchema = EffectSchema.Struct({
   type: EffectSchema.Literal(BROWSER_LIVE_CLIENT.WATCHING),
 });
 
+/** Which element stands at a point, asked as the pointer moves while the member picks; the newest ask is answered, any older one still waiting passed over. */
+const browserLiveInspectSchema = EffectSchema.Struct({
+  type: EffectSchema.Literal(BROWSER_LIVE_CLIENT.INSPECT),
+  x: coordinateSchema,
+  y: coordinateSchema,
+});
+
+/** The element at a point picked, for a note on it. */
+const browserLivePickSchema = EffectSchema.Struct({
+  type: EffectSchema.Literal(BROWSER_LIVE_CLIENT.PICK),
+  x: coordinateSchema,
+  y: coordinateSchema,
+});
+
 /** Every message the panel sends. */
 export const browserLiveClientMessageSchema = EffectSchema.Union([
   browserLiveTakeOverSchema,
@@ -316,6 +406,8 @@ export const browserLiveClientMessageSchema = EffectSchema.Union([
   browserLiveNavigateSchema,
   browserLiveHistorySchema,
   browserLiveWatchingSchema,
+  browserLiveInspectSchema,
+  browserLivePickSchema,
 ]);
 
 export type BrowserLiveClientMessage = typeof browserLiveClientMessageSchema.Type;

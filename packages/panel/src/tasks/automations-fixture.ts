@@ -4,7 +4,9 @@
  * Under an Automations profile (`RUN_PROFILE.AUTOMATIONS*`) the account
  * signed in (`settings-fixture.ts`) holds three automations in the listed
  * workspace, one on a schedule, one on its pull requests, and one called by
- * a webhook, each with a history of runs, the webhook's newest run failed. The window opens on their list, on the first one's editor, or on
+ * a webhook, each with a history of runs, the webhook's newest run failed,
+ * and two one-time automations that ran, which stand under Finished, the
+ * workspace's smoke test and the account's own DNS check. The window opens on their list, on the first one's editor, or on
  * the failed one's with that run marked. The sweep and the reviews hand
  * every run to one of the workspace's two Managers, which the list carries
  * as the live task list would, Managers turned on for the workspace. Each read their pages hold is
@@ -61,7 +63,20 @@ const AUTOMATION_ID = {
   SWEEP: uuid("3f0e6f5c-7d1a-4f6e-9a55", 1),
   REVIEW: uuid("3f0e6f5c-7d1a-4f6e-9a55", 2),
   DEPLOY: uuid("3f0e6f5c-7d1a-4f6e-9a55", 3),
+  SMOKE: uuid("3f0e6f5c-7d1a-4f6e-9a55", 4),
+  CUTOVER: uuid("3f0e6f5c-7d1a-4f6e-9a55", 5),
 } as const;
+
+/** A one-time schedule `agoDays` before the fixture stands, on the hour, as it is spelled in UTC and as its run was due. */
+function onceAgo(agoDays: number) {
+  const dueAt = Math.floor((NOW - agoDays * DAY) / HOUR) * HOUR;
+
+  return { at: new Date(dueAt).toISOString().slice(0, 16), dueAt };
+}
+
+/** When the two one-time automations ran: the launch's smoke test four days back, the DNS cutover's check nine. */
+const SMOKE_ONCE = onceAgo(4);
+const CUTOVER_ONCE = onceAgo(9);
 
 /** The workspace's two Managers, whose ids the automations aimed at them name. */
 const MANAGER_ID = {
@@ -239,13 +254,46 @@ const DEPLOY_RUNS: readonly AutomationRunSummary[] = [
   ),
 ];
 
+/** The one-time automations' runs, each the one its schedule fired, which started an agent. */
+const SMOKE_RUNS: readonly AutomationRunSummary[] = [
+  run(
+    10,
+    (NOW - SMOKE_ONCE.dueAt) / HOUR,
+    { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: SMOKE_ONCE.dueAt },
+    {
+      agent: {
+        id: uuid("8c1a6a4f-3d2e-4d8b-8b66", 10),
+        title: "Smoke-test 2.14 on production",
+        status: AGENT_STATUS.COMPLETED,
+      },
+    },
+  ),
+];
+
+const CUTOVER_RUNS: readonly AutomationRunSummary[] = [
+  run(
+    11,
+    (NOW - CUTOVER_ONCE.dueAt) / HOUR,
+    { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: CUTOVER_ONCE.dueAt },
+    {
+      agent: {
+        id: uuid("8c1a6a4f-3d2e-4d8b-8b66", 11),
+        title: "Verify the relay.dev DNS cutover",
+        status: AGENT_STATUS.COMPLETED,
+      },
+    },
+  ),
+];
+
 const RUNS: ReadonlyMap<string, readonly AutomationRunSummary[]> = new Map([
+  [AUTOMATION_ID.SMOKE, SMOKE_RUNS],
+  [AUTOMATION_ID.CUTOVER, CUTOVER_RUNS],
   [AUTOMATION_ID.SWEEP, SWEEP_RUNS],
   [AUTOMATION_ID.REVIEW, REVIEW_RUNS],
   [AUTOMATION_ID.DEPLOY, DEPLOY_RUNS],
 ]);
 
-/** The three automations of a workspace, newest first, as its list reads them. */
+/** The automations of a workspace, newest first, as its list reads them: three that run, and two one-time ones that ran, under Finished. */
 function automations(workspaceId: string): readonly AutomationSummary[] {
   const common = {
     taskId: null,
@@ -322,6 +370,45 @@ function automations(workspaceId: string): readonly AutomationSummary[] {
       repositories: ["ada/relay"],
       mine: false,
       creatorId: "user-maya",
+    },
+    {
+      ...common,
+      id: AUTOMATION_ID.SMOKE,
+      name: "Launch-day smoke test",
+      enabled: false,
+      trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, at: SMOKE_ONCE.at, timezone: "UTC" },
+      action: {
+        kind: AUTOMATION_ACTION.AGENT,
+        prompt:
+          "Smoke-test the release on production: sign in, invite a teammate, and export an invoice.",
+      },
+      nextRunAt: null,
+      lastRun: SMOKE_RUNS[0] ?? null,
+      createdAt: NOW - 6 * DAY,
+      scope: AUTOMATION_SCOPE.WORKSPACE,
+      repositories: ["ada/relay"],
+      target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: MANAGER_ID.RELEASE },
+      mine: true,
+      creatorId: ACCOUNT_ID,
+    },
+    {
+      ...common,
+      id: AUTOMATION_ID.CUTOVER,
+      name: "Check the DNS cutover",
+      enabled: false,
+      trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, at: CUTOVER_ONCE.at, timezone: "UTC" },
+      action: {
+        kind: AUTOMATION_ACTION.AGENT,
+        prompt:
+          "Check that relay.dev resolves to the new load balancer everywhere, and roll back if not.",
+      },
+      nextRunAt: null,
+      lastRun: CUTOVER_RUNS[0] ?? null,
+      createdAt: NOW - 11 * DAY,
+      scope: AUTOMATION_SCOPE.PERSONAL,
+      repositories: ["ada/relay"],
+      mine: true,
+      creatorId: ACCOUNT_ID,
     },
   ];
 }

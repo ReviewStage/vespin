@@ -1,6 +1,7 @@
 // workspace-switcher.tsx -- the switcher a tab's root bar names the workspace with: its tile, opening the system's menu of every workspace by its photo or tile, then New workspace, the chosen workspace's Manage under its name, and the account by its photo opening Settings, each on one line.
 
 import {
+  Circle,
   Host,
   HStack,
   Image,
@@ -9,6 +10,7 @@ import {
   Spacer,
   Button as SwiftUIButton,
   Toggle,
+  ZStack,
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
@@ -26,6 +28,7 @@ import {
   listRowSeparator,
   menuIndicator,
   menuStyle,
+  offset,
 } from "@expo/ui/swift-ui/modifiers";
 import { identityLetter, WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
 import { memo } from "react";
@@ -58,6 +61,12 @@ export const SWITCHER_LOOK = {
 } as const;
 
 export type SwitcherLook = (typeof SWITCHER_LOOK)[keyof typeof SWITCHER_LOOK];
+
+/** How far the waiting mark's ring stands past its dot on each side, in the ground's ink, so it reads on any photo and on a bar's glass. */
+const WAITING_RING = 1.5;
+
+/** How far past the tile's top trailing corner the waiting mark stands, as an app icon's badge stands past its icon. */
+const WAITING_OUT = 3;
 
 /** What a flow finds the switcher by. */
 const SWITCHER_ID = "workspace-switcher";
@@ -102,15 +111,67 @@ type WorkspaceSwitcherProps = {
   readonly look?: SwitcherLook | undefined;
   /** How large the tile stands where the look is the tile alone; the bar's face where none is given. */
   readonly tileSize?: number | undefined;
+  /** Whether another workspace holds a thread waiting on the reader, which marks the button's tile, so it is seen without opening the list. */
+  readonly waitingElsewhere?: boolean | undefined;
 };
 
-/** What the switcher is heard as: the workspace and who shares it, as the panel's head says it. */
-function heardAs(chosen: SwitcherWorkspace): string {
-  return [`Workspace: ${chosen.name}`, chosen.line].filter((part) => part !== undefined).join(", ");
+/** What the switcher is heard as: the workspace and who shares it, as the panel's head says it, then that a thread waits in another where one does. */
+function heardAs(chosen: SwitcherWorkspace, waitingElsewhere: boolean): string {
+  return [
+    `Workspace: ${chosen.name}`,
+    chosen.line,
+    waitingElsewhere ? WORKSPACE_SWITCHER_WORDS.WAITING_ELSEWHERE : undefined,
+  ]
+    .filter((part) => part !== undefined)
+    .join(", ");
 }
 
 /**
- * A workspace as the menu holds it: its name over who shares it, led by its
+ * The tile with the attention ink's dot past its top trailing corner, as an
+ * app icon's badge stands past its icon, on a ring of the ground's ink so it
+ * reads on any photo and on a bar's glass: the switcher's tile while another
+ * workspace holds a thread that waits on the reader. Never heard, since the
+ * switcher says it in its own words.
+ */
+function MarkedTile({
+  workspace,
+  size,
+  marked,
+}: {
+  readonly workspace: SwitcherWorkspace;
+  readonly size: number;
+  readonly marked: boolean;
+}) {
+  const colors = useColors();
+  const dot = useScaledSize(MARK_SIZE.DOT);
+
+  if (!marked) return <WorkspaceTile workspace={workspace} size={size} />;
+
+  const disc = dot + WAITING_RING * 2;
+
+  return (
+    <ZStack
+      alignment="topTrailing"
+      modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}
+    >
+      <WorkspaceTile workspace={workspace} size={size} />
+      <ZStack
+        modifiers={[
+          frame({ width: disc, height: disc }),
+          offset({ x: WAITING_OUT, y: -WAITING_OUT }),
+        ]}
+      >
+        <Circle modifiers={[foregroundStyle(colors.GROUND)]} />
+        <Circle
+          modifiers={[frame({ width: dot, height: dot }), foregroundStyle(colors.ATTENTION)]}
+        />
+      </ZStack>
+    </ZStack>
+  );
+}
+
+/**
+ * A workspace as the menu holds it: its name over who shares it and what waits there, led by its
  * photo, or else its letter in the system's filled square in its tile's hue,
  * as Notion's switcher leads each workspace with its icon.
  */
@@ -127,22 +188,26 @@ function workspaceChoice(workspace: SwitcherWorkspace, dark: boolean) {
   );
 }
 
-/** The switcher's own face: the chosen workspace's tile, alone or with its name and ⌄. */
+/** The switcher's own face: the chosen workspace's tile, alone or with its name and ⌄, the tile marked while a thread waits in another workspace. */
 function SwitcherFace({
   chosen,
   look,
   tileSize,
+  marked,
 }: {
   readonly chosen: SwitcherWorkspace;
   readonly look: SwitcherLook;
   readonly tileSize: number;
+  readonly marked: boolean;
 }) {
   const colors = useColors();
   const tile = useScaledSize(BAR_TILE_SIZE);
   const chevron = useScaledSize(CHEVRON_SIZE);
   const nameWidth = useScaledSize(NAME_MAX_WIDTH);
 
-  if (look === SWITCHER_LOOK.TILE) return <WorkspaceTile workspace={chosen} size={tileSize} />;
+  if (look === SWITCHER_LOOK.TILE) {
+    return <MarkedTile workspace={chosen} size={tileSize} marked={marked} />;
+  }
 
   // Note that the named face heads the sidebar's list rather than a bar, so it grows with Dynamic Type as the rows under it do.
   return (
@@ -150,7 +215,7 @@ function SwitcherFace({
       spacing={SPACE.TIGHT + 2}
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
-      <WorkspaceTile workspace={chosen} size={tile} />
+      <MarkedTile workspace={chosen} size={tile} marked={marked} />
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE, weight: "semibold" }),
@@ -197,18 +262,21 @@ export const WorkspaceSwitcherItem = memo(function WorkspaceSwitcherItem(
     onWorkspaceSettings,
     look = SWITCHER_LOOK.NAMED,
     tileSize = MARK_SIZE.BAR_FACE,
+    waitingElsewhere = false,
   } = props;
 
   const dark = useColorScheme() === "dark";
 
   return (
     <Menu
-      label={<SwitcherFace chosen={chosen} look={look} tileSize={tileSize} />}
+      label={
+        <SwitcherFace chosen={chosen} look={look} tileSize={tileSize} marked={waitingElsewhere} />
+      }
       modifiers={[
         menuStyle("button"),
         buttonStyle("plain"),
         menuIndicator("hidden"),
-        accessibilityLabel(heardAs(chosen)),
+        accessibilityLabel(heardAs(chosen, waitingElsewhere)),
         accessibilityIdentifier(SWITCHER_ID),
       ]}
     >

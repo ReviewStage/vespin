@@ -1,8 +1,14 @@
 import {
+  GROUP_HEAD,
   GROUP_HEADING,
-  type GroupFold,
+  GROUP_LOOK,
+  GROUP_ROW_LEAD,
   GroupHeader,
+  LIST_HEADS_ACTS,
+  LIST_HEADS_LEAD,
   List,
+  ListHead,
+  ListHeads,
   ListRow,
   SETTINGS_SKELETON_CONTROL,
   SettingsControlSkeleton,
@@ -12,6 +18,7 @@ import {
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { ReactNode } from "react";
+import { sidebarHead } from "./sidebar-fold.js";
 
 /**
  * automation-list-frame.tsx -- the Automations list's boxes, which the list and its placeholders both draw.
@@ -29,6 +36,14 @@ const AUTOMATION_GROUP = "automation-group [.automation-group+&]:mt-page-section
 
 /** What a group's count counts, said after its figure to a reader. */
 const AUTOMATIONS_NOUN = "automations";
+
+/** What each column of the list is headed, over the rows' words and each column of their metadata. */
+const COLUMN_HEADS = {
+  NAME: "Name",
+  MANAGER: "Manager",
+  MAKER: "Created by",
+  NEXT: "Next run",
+} as const;
 
 /** An automation's or a run's metadata at its row's end, in a line of its own. */
 export const AUTOMATION_ROW_META =
@@ -72,31 +87,53 @@ export function AutomationsActsSkeleton(): React.JSX.Element {
   );
 }
 
+/** What a group's count is read as, one and many. */
+const AUTOMATIONS_COUNTED = { one: "automation", many: AUTOMATIONS_NOUN } as const;
+
+/** How a group folds, as the list keeps it: whether it stands folded, and what a press on its head asks. */
+export interface AutomationGroupFold {
+  readonly folded: boolean;
+  readonly onToggle: () => void;
+}
+
 /**
- * One owner's automations in a list, under its heading where `headed`.
+ * One group of automations in a list, an owner's or Finished, under its
+ * head where `headed`: a band on the well's tint, sticking to the top of the
+ * page while its rows scroll beneath it, as Linear heads a list's groups
+ * (`GROUP_LOOK.BAND`), led by the group's picture or glyph (`glyph`) in the
+ * rows' leading column, a phone's rows' glyph or a wide row's avatar, so its
+ * label stands where their titles do; folding its rows on a press as the
+ * list keeps it (`fold`), and counting them while folded, and at rest on a
+ * phone, as the sidebar counts its groups (`sidebarHead`).
  * Note that the list is a plain one, each row lit on its own as the Tasks
  * list's and the Inbox's are, so a row's hover, focus, and open menu draw
- * as theirs do. A lone owner's list is still a region named by its owner, as a
- * headed one is by its heading, so a reader moving by landmark hears whose
- * automations they are either way. A row made or deleted stands or goes
- * at once.
+ * as theirs do. A list with no head, the placeholder's, is still a region
+ * named by its owner, as a headed one is by its heading, so a reader moving
+ * by landmark hears whose automations they are either way. A row made or
+ * deleted stands or goes at once.
  */
 export function AutomationGroupList({
   name,
   nameMasked = true,
   headed,
+  glyph,
   fold,
   count,
+  phone = false,
   children,
 }: {
   name: string;
   /** Whether the name is a person's words, a workspace's name, kept masked in a screen recording. */
   nameMasked?: boolean;
   headed: boolean;
-  /** How a headed group folds under its heading; left out, its rows always stand. */
-  fold?: GroupFold | undefined;
-  /** How many rows a headed group holds, after its name, as a phone's list counts them; none where it counts nothing. */
+  /** What leads the head: the owner's picture, or Finished's glyph. */
+  glyph?: ReactNode;
+  /** How the group folds; left out, its rows always stand. */
+  fold?: AutomationGroupFold | undefined;
+  /** How many rows the group holds, which its head counts while folded, and at rest on a phone. */
   count?: number | undefined;
+  /** Whether the room is a phone's, whose heads count their rows at rest. */
+  phone?: boolean;
   children: ReactNode;
 }): React.JSX.Element {
   const rows = <List label={name}>{children}</List>;
@@ -104,10 +141,23 @@ export function AutomationGroupList({
   return headed ? (
     <div className={AUTOMATION_GROUP}>
       <GroupHeader
+        {...sidebarHead(
+          fold === undefined
+            ? undefined
+            : {
+                folded: fold.folded,
+                onToggle: fold.onToggle,
+                count: count ?? 0,
+                noun: AUTOMATIONS_COUNTED,
+              },
+          phone,
+        )}
         heading={GROUP_HEADING.H2}
+        look={GROUP_LOOK.BAND}
+        head={GROUP_HEAD.STICKS}
+        rowLead={phone ? GROUP_ROW_LEAD.GLYPH : GROUP_ROW_LEAD.AVATAR}
+        glyph={glyph}
         label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
-        fold={fold}
-        count={count === undefined ? undefined : { value: count, noun: AUTOMATIONS_NOUN }}
       >
         {rows}
       </GroupHeader>
@@ -149,6 +199,42 @@ export function AutomationRowMeta({
   );
 }
 
+/**
+ * The heads over a wide list's columns: Name over the rows' words, then
+ * Manager where the list names one, Created by, and Next run, each over its
+ * column, room kept for the rows' tile, switch, and ⋯ (`more`) as they draw
+ * them. A narrow room's rows have no columns, so it draws none.
+ */
+export function AutomationListHeads({
+  managers,
+  more,
+}: {
+  /** Whether the list names the Manager its rows' runs land on, in a column of its own. */
+  managers: boolean;
+  more: boolean;
+}): React.JSX.Element {
+  // Note that the heads stand in a box of their own, as each owner's list does, so they keep its insets rather than a page's bleed for a list standing in it bare.
+  return (
+    <div className="automation-list-heads">
+      <ListHeads
+        title={COLUMN_HEADS.NAME}
+        lead={LIST_HEADS_LEAD.AVATAR}
+        acts={LIST_HEADS_ACTS.SWITCH}
+        more={more}
+        meta={
+          <AutomationRowMeta
+            manager={managers ? <ListHead>{COLUMN_HEADS.MANAGER}</ListHead> : undefined}
+            owner={
+              <AutomationOwnerFrame mark={null} name={<ListHead>{COLUMN_HEADS.MAKER}</ListHead>} />
+            }
+            next={<ListHead>{COLUMN_HEADS.NEXT}</ListHead>}
+          />
+        }
+      />
+    </div>
+  );
+}
+
 /** Who owns an automation, in its column: their mark and their name. */
 export function AutomationOwnerFrame({
   owner,
@@ -175,7 +261,9 @@ export function AutomationOwnerFrame({
  * clock tile, its name over what fires it, its Manager, its owner, and its
  * next run in their columns, and its switch, a narrow room's rows naming neither and ending in
  * a chevron, as a phone's rows do, so the list lands where the blocks stood.
- * The rows open nothing.
+ * Note that it stands no heads over its columns, as it stands no owner's
+ * heading, so it says nothing but that the list is being read. The rows
+ * open nothing.
  */
 export function AutomationListSkeleton({ narrow }: { narrow: boolean }): React.JSX.Element {
   return (

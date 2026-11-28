@@ -6,24 +6,27 @@ import {
   type TaskGrouping,
   type TaskListView,
 } from "@repo/features/task-list-model";
-import { createStore, useSelector } from "@tanstack/react-store";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { Schema } from "effect";
+import { useCallback } from "react";
 import { keptKey, useKept } from "../use-kept.js";
+import { useAccountChoice } from "../view-choices.js";
 
 /**
- * task-list-view.ts -- how each workspace's task list is grouped, whose tasks it holds, and whether it shows finished sub-tasks, in the sidebar, kept per workspace on this Mac.
+ * task-list-view.ts -- how each workspace's task list is grouped, whose tasks it holds, and whether it shows finished sub-tasks, in the sidebar, kept per workspace on the account.
  *
- * The view is the developer's reading of a workspace's list, kept in the
- * renderer's own storage as the folds are, so a list grouped in one run on
- * one Mac stays grouped by repository on another, and one workspace's view
- * never changes another's. A workspace with no view kept draws today's, by
- * repository, the reader's own tasks. A fixture run draws that view and
- * keeps nothing, so its frames never wear a developer's choices.
+ * The view is the reader's reading of a workspace's list, one of the
+ * account's view choices (`VIEW_CHOICE_KEY.SIDEBAR_TASK_VIEW`,
+ * `view-choices.ts`), so a list grouped on one device stands grouped so on
+ * every other, and one workspace's view never changes another's. A
+ * workspace with no view kept draws today's, by repository, the reader's
+ * own tasks. A view this Mac kept itself before the account kept it moves
+ * up once (`useKeptMovedUp`). A fixture run draws that view and keeps
+ * nothing, so its frames never wear a developer's choices.
  *
- * Note that Assigned to is kept as Me where it is absent, so every reader
- * opens on their own tasks, and a later choice of Anyone is kept as one;
- * and that the finished sub-tasks are kept hidden where nothing is kept, so
- * a view kept before the choice existed reads as it did.
+ * Note that a view this Mac kept with no Assigned to moves up as Me, so
+ * every reader opens on their own tasks, and one kept before the finished
+ * sub-tasks were a choice moves up with them hidden, as it read.
  */
 
 /** A kept grouping. */
@@ -51,7 +54,7 @@ const storedViews = Schema.fromJsonString(
 
 type StoredViews = typeof storedViews.Type;
 
-/** Where the views are kept in the renderer's storage. */
+/** Where an earlier build kept the views in the renderer's storage, each moved up to the account as its workspace is listed. */
 const KEPT = { VIEWS: keptKey("app.sidebarTaskViews", storedViews) } as const;
 
 /** The listed workspace's view, and the presses that change it. */
@@ -64,13 +67,8 @@ export interface TaskListViewControl {
   readonly onFinishedSubTasks: (shown: boolean) => void;
 }
 
-/** A fixture run's views, which keep nothing. One for the window, so the sidebar and a person's page, which lists their tasks there, read and change the same view. */
-const stagedViewsStore = createStore<StoredViews>({});
-
-/** A view as kept, Me where no Assigned to is, and the finished sub-tasks hidden where nothing says. */
-function viewOf(kept: StoredViews[string] | undefined): TaskListView {
-  if (kept === undefined) return DEFAULT_TASK_LIST_VIEW;
-
+/** A view as an earlier build kept it on this Mac, Me where no Assigned to is, and the finished sub-tasks hidden where nothing says. */
+function viewOf(kept: StoredViews[string]): TaskListView {
   return {
     grouping: kept.grouping,
     assignedTo: kept.assignee ?? DEFAULT_TASK_LIST_VIEW.assignedTo,
@@ -78,42 +76,34 @@ function viewOf(kept: StoredViews[string] | undefined): TaskListView {
   };
 }
 
-/** The view of the workspace listed, kept as each choice is made, unless the run is `staged`. */
+/** The view of the workspace listed, kept on the account as each choice is made, unless the run is `staged`. */
 export function useTaskListView(
   workspaceId: string | undefined,
   staged: boolean,
 ): TaskListViewControl {
-  // Note that every surface holding the key draws a choice at once, so the sidebar and a person's page read and change the same view.
-  const [kept, keep] = useKept<StoredViews>(KEPT.VIEWS, {});
-  const stagedViews = useSelector(stagedViewsStore);
-  const views = staged ? stagedViews : kept;
-  const view = viewOf(workspaceId === undefined ? undefined : views[workspaceId]);
+  const [kept, , changeKept] = useKept<StoredViews>(KEPT.VIEWS, {});
+  const keptView = workspaceId === undefined ? undefined : kept[workspaceId];
 
-  const choose = (next: TaskListView) => {
+  const forget = useCallback(() => {
     if (workspaceId === undefined) return;
+    changeKept(({ [workspaceId]: _moved, ...rest }) => rest);
+  }, [workspaceId, changeKept]);
 
-    const all = {
-      ...views,
-      [workspaceId]: {
-        grouping: next.grouping,
-        assignee: next.assignedTo,
-        finished: next.finishedSubTasks,
-      },
-    };
+  // Note that every surface reading the choice draws it at once, so the sidebar and a person's page read and change the same view.
+  const { value: view, change } = useAccountChoice(
+    VIEW_CHOICE_KEY.SIDEBAR_TASK_VIEW,
+    workspaceId,
+    DEFAULT_TASK_LIST_VIEW,
+    staged,
+    [keptView === undefined ? undefined : viewOf(keptView), forget],
+  );
 
-    if (staged) {
-      stagedViewsStore.setState(() => all);
-
-      return;
-    }
-
-    keep(all);
-  };
-
+  // Note that each choice is made over the view standing as it is pressed, so a menu left open never undoes another choice made since.
   return {
     view,
-    onGrouping: (grouping) => choose({ ...view, grouping }),
-    onAssignedTo: (assignedTo) => choose({ ...view, assignedTo }),
-    onFinishedSubTasks: (finishedSubTasks) => choose({ ...view, finishedSubTasks }),
+    onGrouping: (grouping) => change((standing) => ({ ...standing, grouping })),
+    onAssignedTo: (assignedTo) => change((standing) => ({ ...standing, assignedTo })),
+    onFinishedSubTasks: (finishedSubTasks) =>
+      change((standing) => ({ ...standing, finishedSubTasks })),
   };
 }

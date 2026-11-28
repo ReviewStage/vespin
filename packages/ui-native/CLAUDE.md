@@ -27,7 +27,11 @@ builds a control of its own.
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
-  answer's fields, and `AskNote` for what a send that did not go said),
+  answer's fields, each with no press handed it standing as an answer left
+  it, its picks checked, at the head of the reply that answered it, as the
+  panel's answered card, `ResolvableAsk` standing an open card's × Resolve at
+  its top end, as the panel's question stands it, and `AskNote` for what a
+  send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
   merge under its heading), `ConfirmAsk` (the question
@@ -463,15 +467,20 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   photo's Delete stands under Change photo.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
-  checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
+  checks one, a "Recommended" tag before the check, and a detail line, its
+  label and detail drawn as Markdown so a link of ours stands as its chip,
+  whose press opens it and picks nothing; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it, at the system's regular size,
   Mark done filled as the card's one act and Couldn't do it its words
   alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
   card and prompting "Required" or "Optional" while empty, a number field's
-  pad standing one Done over it for the card, a select's menu picker
-  under its label, reading "None" until a pick, a
-  boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
+  pad standing one Done over it for the card, a select's options as rows
+  under its label, the recommended one tagged as a decide's is and none
+  picked until the reader picks, as the panel's pills stand, and a yes or
+  no's round check beside its name, as a step's, never the system's switch,
+  since the panel's form draws a checkbox (the developer, Nov 27, 2026), the
+  rows a SwiftUI `Form` holds, drawn in a card because
   a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
   start where its rows' words do, as iOS insets a list's separator) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and

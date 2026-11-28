@@ -51,7 +51,7 @@ import {
   tasksControl,
   withNewTaskShown,
 } from "../testing/tasks-control.js";
-import { hearViewChoices } from "../testing/view-choices.js";
+import { hearViewChoices, keepViewChoices } from "../testing/view-choices.js";
 
 /**
  * sidebar-managers.test.ts -- the sidebar's Managers: the workspace's
@@ -169,7 +169,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** The sidebar over the workspace, the experiment as given, the live list carrying both Managers among agents that are not, a Manager's page opened as `opened` hears it, and `openId`'s page standing open where one is named. */
+/** The sidebar over the workspace, the experiment as given, the live list carrying both Managers among agents that are not, a Manager's page opened as `opened` hears it, and `openId`'s page standing open where one is named; the account signed in where `choices` are given, holding them, or with them not yet read where they are null. */
 async function mountSidebar(
   on: boolean,
   opened: string[],
@@ -179,16 +179,17 @@ async function mountSidebar(
   chosen: { agentId: string; model: string }[] = [],
   faced: { agentId: string; face: ManagerFace }[] = [],
   work: ManagerWork = NO_WORK,
-  choices?: readonly ViewChoiceLiveRow[],
+  choices?: readonly ViewChoiceLiveRow[] | null,
 ): Promise<HTMLElement> {
+  const account = signedInAs({ id: ACCOUNT_ID, email: "ada@example.com", name: "Ada" }).account;
+
   handState(
     { [EXPERIMENT.MANAGERS]: on },
     choices === undefined
       ? {}
-      : {
-          account: signedInAs({ id: ACCOUNT_ID, email: "ada@example.com", name: "Ada" }).account,
-          [LIVE_READ.VIEW_CHOICES]: { [ACCOUNT_ID]: { rows: choices } },
-        },
+      : choices === null
+        ? { account }
+        : { account, [LIVE_READ.VIEW_CHOICES]: { [ACCOUNT_ID]: { rows: choices } } },
   );
   writeListedTasks({
     taskAgentPins: pinned.map((agentId) => ({ agentId, taskId: null, pinnedAt: 5 })),
@@ -465,6 +466,74 @@ test("Managers folded leaves the open Manager's row standing and folds the rest 
   assert.deepEqual(named(), ["Frontend Manager", "Billing Manager"]);
   act(() => fold.click());
   assert.deepEqual(named(), ["Frontend Manager"], "the open Manager stays");
+});
+
+test("a face picked before the account's choices are read is kept first among the faces the account picked last, though its picker was put away", async () => {
+  const faced: { agentId: string; face: ManagerFace }[] = [];
+  const sidebar = await mountSidebar(true, [], undefined, [], [], [], faced, NO_WORK, null);
+  const list = sidebar.querySelector('nav[aria-label="Managers"]');
+
+  const row =
+    [...(list?.querySelectorAll("button") ?? [])].find((button) =>
+      button.textContent?.includes("Frontend Manager"),
+    ) ?? assert.fail("the Manager's row is drawn");
+
+  act(() => {
+    row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
+  });
+
+  const change =
+    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.startsWith("Change face"),
+    ) ?? assert.fail("Change face stands");
+
+  await act(async () => change.click());
+  await act(async () =>
+    (
+      document.querySelector<HTMLButtonElement>('button[aria-label="Cat"]') ?? assert.fail("Cat")
+    ).click(),
+  );
+  await act(async () =>
+    (
+      document.querySelector<HTMLButtonElement>('.ui-icon-picker-flyout [aria-label="Purple"]') ??
+      assert.fail("Purple")
+    ).click(),
+  );
+  await vi.waitFor(() => assert.equal(faced.length, 1, "the face is changed"));
+
+  // The rename ends, putting the picker away before the account's choices land.
+  const name = list?.querySelector<HTMLInputElement>('input[aria-label="Agent name"]');
+
+  await act(async () =>
+    name?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    ),
+  );
+  assert.equal(document.querySelector('button[aria-label="Cat"]'), null, "the picker is put away");
+
+  // The account's choices land, holding the face it picked last on another device.
+  const written = keepViewChoices([
+    {
+      id: "0a1b2c3d-0000-4000-8000-0000000000f1",
+      key: VIEW_CHOICE_KEY.RECENT_MANAGER_FACES,
+      workspaceId: null,
+      value: [{ character: "mug", color: "green" }],
+    },
+  ]);
+
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      written
+        .filter((write) => write.key === VIEW_CHOICE_KEY.RECENT_MANAGER_FACES)
+        .map((write) => write.value),
+      [
+        [
+          { character: "cat", color: "purple" },
+          { character: "mug", color: "green" },
+        ],
+      ],
+    ),
+  );
 });
 
 test("a Manager's row's Change face opens its name's field with the face's picker open, a face picked there is changed and hands the focus back to the name, and Escape ends the edit", async () => {

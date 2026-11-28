@@ -4,11 +4,12 @@ import assert from "node:assert/strict";
 import { AGENT_ARCHIVER, AGENT_STATUS, type AgentArchivedBy } from "@repo/features/agent-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, test } from "vitest";
+import { afterEach, beforeEach, test } from "vitest";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { withQueryClient } from "../testing/copy-feedback.js";
+import { startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { agentsControl } from "../testing/tasks-control.js";
+import { keepViewChoices } from "../testing/view-choices.js";
 import { OverviewAgents } from "./overview-agents.js";
 
 /**
@@ -21,11 +22,14 @@ import { OverviewAgents } from "./overview-agents.js";
 
 const roots: Root[] = [];
 
+// Note that the fold is kept on the account, so each test starts with it folded.
+beforeEach(() => {
+  keepViewChoices();
+});
+
 afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
-  // Note that the fold is kept in the window's storage, so each test starts with it folded.
-  window.localStorage.clear();
 });
 
 /** A phone's Overview agents over `agents`, every archived one folded under Archived, `onOpen` hearing an archived row opened. */
@@ -163,8 +167,10 @@ test("a press on an archived agent's row opens it, whose tab is gone", () => {
 
 /** The notes the card hung over the archived agent's row says, with the reader and who archived it given. */
 function archivedCardNotes(me: string | undefined, archivedBy: AgentArchivedBy): string[] {
-  // Note that each draw unfolds Archived afresh, so the fold the last one kept is let go.
-  window.localStorage.clear();
+  // Note that each draw unfolds Archived afresh, in a world of its own, so the fold the last one kept is let go.
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  startQueriesAfresh();
+  keepViewChoices();
 
   const agents = {
     ...agentsControl({

@@ -389,6 +389,7 @@ import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
 import { type AgentTranscriptControl, useAgentTranscript } from "./use-agent-transcript.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useKnownNames, useTaskStatus } from "./use-known-names.js";
+import { usePlainLinkNames } from "./use-link-standing.js";
 import { CallEnds, CallStarts, VoiceLineRow } from "./voice-call-rows.js";
 import { type CutBody, useWholePart, useWholePartDoor, WholePartsProvider } from "./whole-parts.js";
 import { WorkedFor, WorkingLine } from "./working-time.js";
@@ -861,6 +862,7 @@ function DelegationRow({
   doors: DelegationDoors | undefined;
 }): ReactNode {
   const view = delegationView(part, doors?.own);
+  const links = usePlainLinkNames();
   const live = useLiveDoors(doors);
   const onOpen = doors?.onOpen;
   // The worker's own session says where it stands, since the call may settle the moment it is under way.
@@ -893,7 +895,7 @@ function DelegationRow({
     <>
       <TranscriptSubagent
         callId={part.callId}
-        job={view.title ?? (cardTitle(view.task) || CALL_WORDS[CALL_KIND.WORKER].verb)}
+        job={view.title ?? (cardTitle(view.task, links) || CALL_WORDS[CALL_KIND.WORKER].verb)}
         pair={choice === undefined ? undefined : { choice, models: doors?.models ?? [] }}
         state={standing === undefined ? part.state : workerToolState(standing.status)}
         startedAt={doors?.starts?.get(part.callId)}
@@ -1389,7 +1391,7 @@ function OriginBody({ body }: { body: string }): React.JSX.Element {
 function PlanCard({
   text,
   lead,
-  title = cardTitle(text),
+  title: given,
   sender,
   sentAt,
   body,
@@ -1414,6 +1416,8 @@ function PlanCard({
   /** The task the agent works on, whose description's pictures the card draws; none where it works on none. */
   taskId?: string | undefined;
 }): ReactNode {
+  const derived = cardTitle(text, usePlainLinkNames());
+  const title = given ?? derived;
   const named = sender != null;
   // The task's status as the list holds it, else as the window hands the open task live (`LiveDoors`), as its sender reads it.
   const listed = useTaskStatus(lead.description ? taskId : undefined);
@@ -1432,7 +1436,7 @@ function PlanCard({
             <PlanIcon>
               {status === undefined ? lead.icon : <TaskStatusMark status={status} />}
             </PlanIcon>
-            <PlanTitle label={lead.label} previews={title === cardTitle(text)}>
+            <PlanTitle label={lead.label} previews={title === derived}>
               {title}
             </PlanTitle>
           </PlanHeader>
@@ -4242,7 +4246,7 @@ export function AgentSubagentTab({
     onHeld(callId, { ...held, subagentTitles: new Map() });
   }, [onHeld, callId, messages, pageStatus, runStartedAt, pageTitle]);
   // A worker's reply streams into a log as quiet as its agent's, so it is said once whole, under the worker's name.
-  const name = cardTitle(task);
+  const name = cardTitle(task, usePlainLinkNames());
   const tab = useRef<HTMLElement>(null);
   useReplySaid({ messages, status: pageStatus, name, tab });
 

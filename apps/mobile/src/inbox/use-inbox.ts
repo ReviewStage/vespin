@@ -20,6 +20,7 @@ import { sizeLabel } from "@repo/features/attachment-model";
 import { base64PictureSize, type ImageDimensions } from "@repo/features/image-signature";
 import type { InboxFields, InboxRow } from "@repo/features/inbox-digest";
 import {
+  agentInboxGroups,
   INBOX_MEDIA,
   INBOX_SHOW,
   type InboxAnyHolder,
@@ -30,6 +31,7 @@ import {
   type InboxPinnedRun,
   type InboxRun,
   type InboxShow,
+  type InboxWhose,
   inboxAtNow,
   inboxCounts,
   inboxGroup,
@@ -83,7 +85,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Settings } from "react-native";
 import {
   cachedFile,
   cachedPicture,
@@ -101,8 +102,8 @@ import { dismissThreadNotifications } from "../notification-task.js";
 import { usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useInboxGroupsRead, useInboxWaiting } from "./inbox-groups.js";
-import { useInboxRunFolds } from "./inbox-runs.js";
 import { useInboxShown } from "./inbox-shown.js";
+import { useInboxRunFolds } from "./inbox-view-choices.js";
 import {
   refusedWords,
   SETTLE,
@@ -113,9 +114,6 @@ import {
 
 /** What a thread's videos and files are named under among the app's caches. */
 const INBOX_MEDIA_PREFIX = "inbox";
-
-/** The defaults key the Inbox's scope is kept under, as the panel keeps its window's. */
-const INBOX_SCOPE_KEY = "inboxScope";
 
 /** No file of a thread read yet. */
 const NOTHING_READ: ThreadMediaRead = {
@@ -160,30 +158,6 @@ export function useChosenInbox(reach: InboxReach = INBOX_ATTENTION): UseChosenIn
   return { groups, whole, read: answered, chosen, workspaces: workspaces.length };
 }
 
-/** The scope kept, or Open, the panel's own first scope, where none was ever chosen. */
-function keptScope(): InboxShow {
-  const kept: unknown = Settings.get(INBOX_SCOPE_KEY);
-
-  return Object.values(INBOX_SHOW).find((show) => show === kept) ?? INBOX_SHOW.OPEN;
-}
-
-type UseInboxScopeResult = {
-  readonly show: InboxShow;
-  readonly choose: (show: InboxShow) => void;
-};
-
-/** The Inbox's scope, kept in the app's defaults across launches, and the choice of another. */
-export function useInboxScope(): UseInboxScopeResult {
-  const [show, setShow] = useState(keptScope);
-
-  const choose = (next: InboxShow) => {
-    Settings.set({ [INBOX_SCOPE_KEY]: next });
-    setShow(next);
-  };
-
-  return { show, choose };
-}
-
 /** What the Inbox lists: its rows in the list's order, what each scope counts, whether any row is unread, the reader they were read for, and where the feed they come from stands. */
 export interface InboxListing {
   /** Every thread listed, in the list's order, a folded run's among them. */
@@ -205,8 +179,9 @@ export interface InboxListing {
 const NO_FOLDS: ReadonlySet<InboxRun> = new Set();
 
 /**
- * The Inbox under `show`, narrowed by `search`, the reader's own items alone
- * as the panel's Inbox lists them until told otherwise, the item `chosen`
+ * The Inbox under `show`, narrowed by `search`, the items addressed to
+ * `whose`, the reader's own where none is named, as the panel's Inbox lists
+ * them until told otherwise, the item `chosen`
  * kept among them whatever the scope, as the panel keeps the item its pane
  * shows. Where `pinnedFirst` asks it, as the Inbox tab's list and its steps
  * do, the pinned tasks' threads stand first under Pinned and the rest under
@@ -220,19 +195,33 @@ export function useInboxListing(view: {
   readonly search: string;
   readonly chosen?: string | undefined;
   readonly pinnedFirst?: boolean | undefined;
+  /** Whom the items listed are addressed to; the reader's own where none is named. */
+  readonly whose?: InboxWhose | undefined;
+  /** The agent whose threads alone are listed, as the panel's agent's Inbox tab lists them; every agent's where none is given. */
+  readonly agent?: string | undefined;
 }): InboxListing {
-  // Note that only All lists a settled thread the reader read, so only All reads every item kept; another scope reads the chosen thread beside what asks for attention, since the list keeps it once it is settled and read.
+  // Note that only All lists a settled thread the reader read, so only All reads every item kept; another scope reads the chosen thread beside what asks for attention, since the list keeps it once it is settled and read. An agent's Inbox reads every thread that agent posted, which the scope then narrows as it narrows the whole Inbox.
   const reach = useMemo(
     (): InboxReach =>
-      view.show === INBOX_SHOW.ALL
-        ? INBOX_WHOLE
-        : view.chosen === undefined
-          ? INBOX_ATTENTION
-          : { kind: INBOX_REACH.ATTENTION, thread: view.chosen },
-    [view.show, view.chosen],
+      view.agent !== undefined
+        ? { kind: INBOX_REACH.AGENT, agentId: view.agent }
+        : view.show === INBOX_SHOW.ALL
+          ? INBOX_WHOLE
+          : view.chosen === undefined
+            ? INBOX_ATTENTION
+            : { kind: INBOX_REACH.ATTENTION, thread: view.chosen },
+    [view.agent, view.show, view.chosen],
   );
 
-  const { groups, whole, read } = useChosenInbox(reach);
+  const { groups: reached, whole, read } = useChosenInbox(reach);
+  const { agent } = view;
+
+  // Note that an agent's Inbox narrows what the read answered to the threads that agent posted, by the rule its line and the panel's tab count them by, since a read is not bound to hold its reach alone.
+  const groups = useMemo(
+    () => (agent === undefined ? reached : agentInboxGroups(reached, agent)),
+    [reached, agent],
+  );
+
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
   const { data: feed = INBOX_FEED.READING } = useQuery({
@@ -247,7 +236,7 @@ export function useInboxListing(view: {
     return inboxSearchWordsOf((itemId) => byId.get(itemId));
   }, [whole]);
 
-  const { show, search, chosen, pinnedFirst = false } = view;
+  const { show, search, chosen, pinnedFirst = false, whose = MINE } = view;
   const folds = useInboxRunFolds();
   const folded = pinnedFirst ? folds.folded : NO_FOLDS;
   // Note that the last listing is kept where the new one lists the same rows, because a new array resets every row its list holds (`RowForEach`), as a pick in a split view's list would on each press.
@@ -260,7 +249,7 @@ export function useInboxListing(view: {
       show,
       chosen,
       readerId,
-      whose: MINE,
+      whose,
       search: { tokens: searchTokens(search), wordsOf },
       pinnedFirst,
       folded,
@@ -272,11 +261,24 @@ export function useInboxListing(view: {
       runs: inboxPinnedRuns(list),
       feed,
       read,
-      counts: inboxCounts(standing, readerId, MINE),
+      counts: inboxCounts(standing, readerId, whose),
       readerId,
       wordsOf,
     });
-  }, [keep, groups, wordsOf, readerId, feed, read, show, search, chosen, pinnedFirst, folded]);
+  }, [
+    keep,
+    groups,
+    wordsOf,
+    readerId,
+    feed,
+    read,
+    show,
+    search,
+    chosen,
+    pinnedFirst,
+    whose,
+    folded,
+  ]);
 }
 
 /** A thread as its screen draws it: its whole item, its sends drawn on it, with what holds it. */

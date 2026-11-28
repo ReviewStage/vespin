@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { type AgentInboxAnswerView, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { INBOX_SEARCH_PLACE } from "@repo/features/inbox-service-search";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -527,6 +528,91 @@ test("the sidebar's Inbox counts what the view the Inbox shows lists, Open and Q
   assert.equal(sidebarInboxCount(page), 2, "Questions' count");
   showScope(page, "All");
   assert.equal(sidebarInboxCount(page), toDoRows(page), "All's count, the teammate's among it");
+});
+
+test("All lists the account's older items past the feed, read from the newest page as All is shown and again as it is shown anew, and nothing counts them: the sidebar's Inbox counts the feed's alone, and Open lists none", async () => {
+  const OLD: InboxItem = {
+    ...noticeOf(item("a1b2c3d4-0000-4000-8000-000000000021", "Rotate last year's key", 500)),
+    status: INBOX_STATUS.CLOSED,
+    unread: true,
+  };
+
+  world.olderPages.set("", { items: { [BILLING.id]: [OLD] } });
+
+  const { page } = mount({ withSidebar: true });
+  await settle();
+
+  assert.deepEqual(world.olderAsked, [""], "the newest page is read as All is shown");
+  assert.equal(listed(page).includes("Rotate last year's key"), true);
+  assert.equal(sidebarInboxCount(page), listed(page).length - 1, "the feed's count alone");
+
+  showScope(page, "Open");
+  await settle();
+  assert.equal(listed(page).includes("Rotate last year's key"), false);
+
+  showScope(page, "All");
+  await settle();
+  assert.deepEqual(world.olderAsked, ["", ""], "shown anew, All reads from its newest page");
+  assert.equal(listed(page).includes("Rotate last year's key"), true);
+});
+
+test("All lists no older item of a task in another workspace than the one listed, as it lists none of its live ones", async () => {
+  world.listedWorkspace = ACME;
+
+  const ELSEWHERE = {
+    ...INVITES,
+    id: "b2c3d4e5-0000-4000-8000-000000000031",
+    workspaceId: "workspace-other",
+    name: "Ledger",
+  };
+
+  world.otherWorkspaceTasks = [ELSEWHERE];
+
+  const OURS: InboxItem = {
+    ...noticeOf(item("a1b2c3d4-0000-4000-8000-000000000022", "Rename the flag", 600)),
+    status: INBOX_STATUS.CLOSED,
+  };
+
+  const THEIRS: InboxItem = {
+    ...noticeOf(item("a1b2c3d4-0000-4000-8000-000000000023", "Close the old ledger", 550)),
+    status: INBOX_STATUS.CLOSED,
+  };
+
+  world.olderPages.set("", { items: { [BILLING.id]: [OURS], [ELSEWHERE.id]: [THEIRS] } });
+
+  const { page } = mount();
+  await settle();
+
+  assert.equal(listed(page).includes("Rename the flag"), true);
+  assert.equal(listed(page).includes("Close the old ledger"), false);
+});
+
+test("All drawing no row, as Addressed to leaves out every older item read so far, reads the next page until one draws a row", async () => {
+  window.localStorage.setItem(
+    WHOSE_KEY,
+    JSON.stringify({ kind: "person", userId: TEAMMATE.userId, name: TEAMMATE.name }),
+  );
+
+  const MINE: InboxItem = {
+    ...noticeOf(item("a1b2c3d4-0000-4000-8000-000000000024", "Prune the logs", 500)),
+    status: INBOX_STATUS.CLOSED,
+    waitsOn: READER,
+  };
+
+  const THEIRS: InboxItem = {
+    ...noticeOf(item("a1b2c3d4-0000-4000-8000-000000000025", "Rotate their key", 400)),
+    status: INBOX_STATUS.CLOSED,
+    waitsOn: TEAMMATE,
+  };
+
+  world.olderPages.set("", { items: { [BILLING.id]: [MINE] }, next: "page-2" });
+  world.olderPages.set("page-2", { items: { [INVITES.id]: [THEIRS] } });
+
+  const { page } = mount();
+  await settle();
+
+  assert.deepEqual(world.olderAsked, ["", "page-2"]);
+  assert.deepEqual(listed(page), ["Rotate their key"]);
 });
 
 test("a fresh profile opens the Inbox on Open addressed to Me, its head naming the Inbox alone, a settled item left out until All is chosen, the head naming the Inbox still", async () => {
@@ -1700,6 +1786,84 @@ function paneTitle(page: HTMLElement): string | null | undefined {
   return page.querySelector(".inbox-view-items .inbox-subject-title")?.textContent;
 }
 
+test("a search's words are asked of the service once typing pauses, and an item it finds past the feed joins the items the list found already, after them, under the scope shown; its words cleared list it no more", async () => {
+  const FOUND: InboxItem = {
+    ...noticeOf(item("a1b2c3d4-0000-4000-8000-000000000041", "Was on-call paged last night?", 300)),
+    status: INBOX_STATUS.CLOSED,
+  };
+
+  world.searchFinds.set("on-call", { [INBOX_SCOPE_KIND.TASK]: { [BILLING.id]: [FOUND] } });
+  const { page } = mount({});
+  await settle();
+
+  searchList(page, "on-call");
+  assert.deepEqual(listed(page), ["How is a failed email retried?"], "the Inbox's own hit at once");
+  assert.deepEqual(world.searchAsked, [], "nothing asked before typing pauses");
+
+  await vi.waitFor(() =>
+    assert.deepEqual(listed(page), [
+      "How is a failed email retried?",
+      "Was on-call paged last night?",
+    ]),
+  );
+
+  assert.deepEqual(world.searchAsked, [{ place: INBOX_SEARCH_PLACE.INBOX, query: "on-call" }]);
+
+  showScope(page, "Open");
+  await settle();
+  assert.equal(
+    listed(page).includes("Was on-call paged last night?"),
+    false,
+    "Open lists no settled item found",
+  );
+
+  showScope(page, "All");
+  searchList(page, "");
+  await settle();
+  assert.equal(listed(page).includes("Was on-call paged last night?"), false);
+});
+
+test("a thread on no task that ⌘K's search found past the feed opens in the Inbox by its id, and stays drawn once ⌘K closes", async () => {
+  const manager = {
+    ...AGENT,
+    id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8c",
+    taskId: null,
+    title: "Release manager",
+  };
+
+  const SETTLED: InboxItem = {
+    ...noticeOf(
+      item("a1b2c3d4-0000-4000-8000-000000000042", "Why does the ledger round to even?", 300),
+    ),
+    agentId: manager.id,
+    status: INBOX_STATUS.CLOSED,
+  };
+
+  world.listedAgents = [AGENT, manager];
+  world.searchFinds.set("ledger", {
+    [INBOX_SCOPE_KIND.TASK]: {},
+    agents: { [manager.id]: [SETTLED] },
+  });
+  const { page } = mount({});
+  await settle();
+
+  act(() => world.searchEverything("ledger"));
+  await vi.waitFor(() =>
+    assert.deepEqual(world.searchAsked, [
+      { place: INBOX_SEARCH_PLACE.EVERYTHING, query: "ledger" },
+    ]),
+  );
+  await settle();
+
+  act(() => world.chooseFromOutside({ itemId: SETTLED.id, opened: true }));
+  await settle();
+  assert.equal(paneTitle(page), "Why does the ledger round to even?", "opened while ⌘K stands");
+
+  act(() => world.searchEverything(undefined));
+  await settle();
+  assert.equal(paneTitle(page), "Why does the ledger round to even?", "and once it closes");
+});
+
 test("the Inbox's head is one row in the list, its search beside its buttons and the title bar's row over it empty; the search narrows the list to the items saying every word typed, the item open leaving the list but not the pane, gives its place to a selection and comes back with its words, and Escape empties it", async () => {
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
@@ -1736,9 +1900,13 @@ test("the Inbox's head is one row in the list, its search beside its buttons and
   assert.equal(input.closest("search[hidden]"), null, "the search is back");
   assert.equal(input.value, "on-call", "with its words");
 
+  // Note that an empty list says nothing matched only once the service answers that it found nothing either.
   searchList(page, "zzz");
   assert.deepEqual(listed(page), []);
-  assert.ok(page.querySelector(".inbox-tasks")?.textContent?.includes("No items match “zzz”."));
+  assert.ok(page.querySelector(".inbox-tasks")?.textContent?.includes("Searching older items…"));
+  await vi.waitFor(() =>
+    assert.ok(page.querySelector(".inbox-tasks")?.textContent?.includes("No items match “zzz”.")),
+  );
 
   act(() => input.focus());
   act(() => {

@@ -18,6 +18,7 @@ import {
 import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { FAILED_RUN_WINDOW_MILLIS } from "@repo/features/inbox-live";
+import { INBOX_SEARCH_PLACE } from "@repo/features/inbox-service-search";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -2362,7 +2363,7 @@ const OTHER_ITEM: InboxItem = {
 };
 
 /** Where an item on `taskId` stands as its stamp carries it, waiting on Dana with nothing on its thread, unless `moved` says otherwise. */
-function stampOf(item: InboxItem, taskId: string, moved: WireRecord = {}) {
+function stampOf(item: InboxItem, taskId: string | null, moved: WireRecord = {}) {
   return {
     id: item.id,
     taskId,
@@ -3579,5 +3580,269 @@ it.effect(
         [`start:${TASK_ID}:press-1:default`, `start:${TASK_ID}:press-1:default`],
       );
       assert.deepEqual(pool.queued(), []);
+    }),
+);
+
+/** A task of the account's settled long ago, whose items only a page of older items answers. */
+const OLDER_TASK_ID = "4d5e6f7a-8b9c-4d0e-9f1a-2b3c4d5e6f70";
+
+/** An item of that task closed forty days back and still unread, past the account's items' window. */
+const OLDER_ITEM: InboxItem = {
+  ...LIVE_ITEM,
+  id: "7b8c9d0e-1f2a-4b3c-8d4e-5f6a7b8c9d0e",
+  key: "rename-flag",
+  title: "Rename the flag?",
+  needsReply: false,
+  status: INBOX_STATUS.CLOSED,
+  unread: true,
+  updatedAt: ITEM.updatedAt - 40 * 86_400_000,
+};
+
+/** An item on no task, older still, which a second page answers under its agent. */
+const OLDEST_ITEM: InboxItem = {
+  ...OLDER_ITEM,
+  id: "8c9d0e1f-2a3b-4c4d-9e5f-6a7b8c9d0e1f",
+  key: "standup",
+  title: "Skip standup?",
+  updatedAt: OLDER_ITEM.updatedAt - 86_400_000,
+};
+
+/** The first page of older items: the item on the settled task, the task and its agent beside it, and a second page after it. */
+const FIRST_OLDER_PAGE = {
+  stamps: [stampOf(OLDER_ITEM, OLDER_TASK_ID)],
+  items: [{ ...ITEM_ROW, ...OLDER_ITEM }],
+  tasks: [planListRow(OLDER_TASK_ID, "Rename the flag")],
+  agents: [agentListRow(OLDER_TASK_ID, 1_000)],
+  next: "page-2",
+} as const;
+
+/** The ids of the older items the host last told, by the plan each is on and on no task by its agent. */
+function olderIdsOf(told: readonly WireValue[]) {
+  const last = told.at(-1);
+  const rows = isRecord(last) && isRecord(last.rows) ? last.rows : undefined;
+
+  const idsBy = (lists: WireValue | undefined) =>
+    Object.fromEntries(
+      Object.entries(isRecord(lists) ? lists : {}).map(([holder, items]) => [
+        holder,
+        (Array.isArray(items) ? items : []).map((item) => (isRecord(item) ? item.id : undefined)),
+      ]),
+    );
+
+  return rows === undefined
+    ? undefined
+    : { tasks: idsBy(rows[INBOX_SCOPE_KIND.TASK]), agents: idsBy(rows.agents) };
+}
+
+/** Whether the older item the host last told is drawn unread. */
+function olderUnread(told: readonly WireValue[], itemId: string): boolean | undefined {
+  const last = told.at(-1);
+  const rows = isRecord(last) && isRecord(last.rows) ? last.rows : undefined;
+  const tasks = rows === undefined ? undefined : rows[INBOX_SCOPE_KIND.TASK];
+
+  for (const items of Object.values(isRecord(tasks) ? tasks : {})) {
+    for (const item of Array.isArray(items) ? items : []) {
+      if (isRecord(item) && item.id === itemId) return item.unread === true;
+    }
+  }
+
+  return undefined;
+}
+
+it.effect(
+  "a page of older items is read into the session beside the account's items, the tasks and agents it stands on drawn into the task list, and answers only the page after it, the last none",
+  () =>
+    Effect.gen(function* () {
+      const { open, acts, answerOlder, olderItems, coldDrawn, asked } = yield* subject();
+      yield* open;
+      answerOlder(undefined, FIRST_OLDER_PAGE);
+
+      answerOlder("page-2", {
+        stamps: [stampOf(OLDEST_ITEM, null)],
+        items: [{ ...ITEM_ROW, ...OLDEST_ITEM }],
+        agents: [{ ...agentListRow(OLDER_TASK_ID, 900), taskId: null }],
+      });
+
+      assert.deepEqual(yield* acts.AGENTS_INBOX_OLDER_PAGE({}), { next: "page-2" });
+      assert.deepEqual(yield* acts.AGENTS_INBOX_OLDER_PAGE({ before: "page-2" }), {});
+
+      assert.deepEqual(
+        asked.filter((each) => each.startsWith("inbox-older:")),
+        ["inbox-older:", "inbox-older:page-2"],
+      );
+
+      assert.deepEqual(
+        coldDrawn.map((rows) => rows.tasks.map((task) => task.id)),
+        [[OLDER_TASK_ID], []],
+      );
+
+      assert.deepEqual(olderIdsOf(olderItems()), {
+        tasks: { [OLDER_TASK_ID]: [OLDER_ITEM.id] },
+        agents: { [AGENT_ID]: [OLDEST_ITEM.id] },
+      });
+    }),
+);
+
+it.effect(
+  "a page asked while the task list cannot draw its tasks, or that the service does not answer, answers unanswered and tells no older item",
+  () =>
+    Effect.gen(function* () {
+      let readable = false;
+
+      const { open, acts, answerOlder, olderItems, asked } = yield* subject({
+        readableOutside: () => readable,
+      });
+
+      yield* open;
+      answerOlder(undefined, FIRST_OLDER_PAGE);
+      const unanswered = { failure: AGENT_CALL_FAILURE.UNANSWERED };
+
+      assert.deepEqual(yield* acts.AGENTS_INBOX_OLDER_PAGE({}), unanswered);
+      assert.deepEqual(
+        asked.filter((each) => each.startsWith("inbox-older:")),
+        [],
+      );
+
+      readable = true;
+      assert.deepEqual(yield* acts.AGENTS_INBOX_OLDER_PAGE({ before: "unknown" }), unanswered);
+      assert.deepEqual(olderItems(), []);
+    }),
+);
+
+it.effect(
+  "an older item the account's items come to carry, as one a write moved back into their window, is theirs alone, and a sign-out lets every older item go",
+  () =>
+    Effect.gen(function* () {
+      const { open, reset, acts, answerOlder, olderItems, sealItems, live, accountItems } =
+        yield* subject();
+
+      sealItems(LIVE_ANSWERED);
+      yield* open;
+      yield* settled;
+      answerOlder(undefined, FIRST_OLDER_PAGE);
+      yield* acts.AGENTS_INBOX_OLDER_PAGE({});
+
+      const reopened = { ...OLDER_ITEM, status: INBOX_STATUS.OPEN, updatedAt: ITEM.updatedAt };
+      deliverItems(live, [stampOf(reopened, OLDER_TASK_ID)], [reopened]);
+      yield* toldTimes(accountItems, 1);
+      assert.deepEqual(olderIdsOf(olderItems()), { tasks: {}, agents: {} });
+
+      yield* acts.AGENTS_INBOX_OLDER_PAGE({});
+      yield* reset;
+      assert.deepEqual(olderItems().at(-1), {});
+    }),
+);
+
+it.effect(
+  "where the account's database keeps the Inbox kind, a mark on an older item draws over it at once and stands once the service takes it, and the kept Inbox never holds the older item",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-older-kept-");
+      const launch = yield* keptLaunch(root);
+      launch.sealItems(LIVE_ANSWERED);
+      yield* launch.open;
+      yield* settled;
+      deliverItems(launch.live, [stampOf(HELD_ITEM, TASK_ID)], [HELD_ITEM]);
+      yield* toldTimes(launch.accountItems, 1);
+      launch.answerOlder(undefined, FIRST_OLDER_PAGE);
+      yield* launch.acts.AGENTS_INBOX_OLDER_PAGE({});
+      assert.equal(olderUnread(launch.olderItems(), OLDER_ITEM.id), true);
+
+      launch.answerMarks(false);
+      yield* launch.acts.AGENTS_INBOX_READ_STATE({ itemId: OLDER_ITEM.id, unread: false });
+      yield* settled;
+      const drawn = olderUnread(launch.olderItems(), OLDER_ITEM.id);
+
+      launch.answerMarks(true);
+      yield* launch.pool.resend;
+      yield* settled;
+
+      assert.equal(drawn, false, "drawn read the moment it is asked");
+      assert.equal(olderUnread(launch.olderItems(), OLDER_ITEM.id), false);
+      assert.deepEqual(launch.pool.queued(), []);
+      assert.deepEqual(yield* keptItemIds(launch.pool), [HELD_ITEM.id]);
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+/** What the host last told each place's search found: the words, and the ids found by the plan each is on, by the place. */
+function foundIdsOf(told: readonly WireValue[]) {
+  const last = told.at(-1);
+
+  return Object.fromEntries(
+    Object.entries(isRecord(last) ? last : {}).map(([place, read]) => {
+      const rows = isRecord(read) && isRecord(read.rows) ? read.rows : {};
+      const items = isRecord(rows.items) ? rows.items[INBOX_SCOPE_KIND.TASK] : undefined;
+
+      return [
+        place,
+        {
+          query: rows.query,
+          ids: olderIdsOf([{ rows: { [INBOX_SCOPE_KIND.TASK]: items ?? {} } }])?.tasks,
+        },
+      ];
+    }),
+  );
+}
+
+it.effect(
+  "a place's newer words wait for its search out, and only the latest are asked once it answers, while another place asks beside it; the words they replaced answer replaced, and are drawn nowhere",
+  () =>
+    Effect.gen(function* () {
+      const { open, reset, acts, answerSearch, foundItems, coldDrawn, asked } = yield* subject();
+      yield* open;
+      const held = yield* Deferred.make<void>();
+      answerSearch("ce", FIRST_OLDER_PAGE, Deferred.await(held));
+
+      answerSearch("cents", {
+        stamps: [stampOf(OLDEST_ITEM, OLDER_TASK_ID)],
+        items: [{ ...ITEM_ROW, ...OLDEST_ITEM }],
+      });
+
+      answerSearch("flag", FIRST_OLDER_PAGE);
+
+      const inInbox = (query: string) =>
+        acts.AGENTS_INBOX_SEARCH({ place: INBOX_SEARCH_PLACE.INBOX, query });
+
+      const out = yield* Effect.forkChild(inInbox("ce"));
+      yield* settled;
+      const between = yield* Effect.forkChild(inInbox("cen"));
+      yield* settled;
+      const latest = yield* Effect.forkChild(inInbox("cents"));
+      yield* settled;
+
+      assert.deepEqual(yield* Fiber.join(between), { replaced: true });
+
+      assert.deepEqual(
+        yield* acts.AGENTS_INBOX_SEARCH({ place: INBOX_SEARCH_PLACE.EVERYTHING, query: "flag" }),
+        {},
+      );
+
+      const searched = () => asked.filter((each) => each.startsWith("inbox-search:"));
+      assert.deepEqual(searched(), ["inbox-search:ce", "inbox-search:flag"]);
+
+      yield* Deferred.succeed(held, undefined);
+      assert.deepEqual(yield* Fiber.join(out), { replaced: true });
+      assert.deepEqual(yield* Fiber.join(latest), {});
+      assert.deepEqual(searched(), ["inbox-search:ce", "inbox-search:flag", "inbox-search:cents"]);
+
+      assert.deepEqual(foundIdsOf(foundItems()), {
+        [INBOX_SEARCH_PLACE.INBOX]: { query: "cents", ids: { [OLDER_TASK_ID]: [OLDEST_ITEM.id] } },
+        [INBOX_SEARCH_PLACE.EVERYTHING]: {
+          query: "flag",
+          ids: { [OLDER_TASK_ID]: [OLDER_ITEM.id] },
+        },
+      });
+
+      // Note that the replaced words' answer drew neither its items nor its tasks.
+      assert.ok(
+        foundItems().every((told) => foundIdsOf([told])[INBOX_SEARCH_PLACE.INBOX]?.query !== "ce"),
+      );
+      assert.equal(coldDrawn.length, 2);
+
+      // The Inbox's words cleared let its found items go, and a sign-out every place's.
+      assert.deepEqual(yield* acts.AGENTS_INBOX_SEARCH({ place: INBOX_SEARCH_PLACE.INBOX }), {});
+      assert.deepEqual(Object.keys(foundIdsOf(foundItems())), [INBOX_SEARCH_PLACE.EVERYTHING]);
+      yield* reset;
+      assert.deepEqual(foundItems().at(-1), {});
     }),
 );

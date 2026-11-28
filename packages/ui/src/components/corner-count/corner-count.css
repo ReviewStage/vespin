@@ -25,4 +25,22 @@
     line-height: var(--ui-space-16);
     text-align: center;
   }
+
+  /* A dot cut into a filled mark's own top end corner
+     (`CORNER_DOT_PLACE.CUTOUT`): the mark is cut away a hair wider than the
+     dot, as a status glyph's is (`status-dot.css`), so the dot reads apart
+     on any ground, a lit row's fill and a dark sidebar alike, and stands in
+     the mark's own box, where an ancestor's clip never cuts it. */
+  .ui-corner-dot[data-place="cutout"] {
+    --corner-dot-radius: calc(var(--spacing-corner-dot-cutout) / 2);
+    --corner-dot-hole: calc(var(--corner-dot-radius) + 1.5px);
+  }
+
+  .ui-corner-dot[data-place="cutout"][data-dot="true"] > :not(.ui-corner-dot-mark) {
+    mask-image: radial-gradient(
+      circle at calc(100% - var(--corner-dot-radius)) var(--corner-dot-radius),
+      transparent var(--corner-dot-hole),
+      #000 calc(var(--corner-dot-hole) + 0.5px)
+    );
+  }
 }

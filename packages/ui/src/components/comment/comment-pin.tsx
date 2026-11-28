@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { PencilLineIcon } from "../../icons/icons.js";
 import { drawsSomething } from "../../said.js";
 import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
+import { PickNoteNumber } from "../pick-notes/pick-notes.js";
 import { Tooltip } from "../tooltip/hint.js";
 import type { CardBox } from "../tooltip/tooltip.js";
 import type { CommentAuthor } from "./comment.js";
@@ -29,7 +30,8 @@ import type { CommentAuthor } from "./comment.js";
  * draft, is drawn dashed in the muted edge and wears the muted pencil a
  * draft wears wherever it waits (the panel's `draft-mark.tsx`) in a face's
  * place, since only its writer sees it, and holds no count, since a draft
- * stands alone.
+ * stands alone. A note on an element picked on a page wears its number in
+ * the accent, as the notes waiting beside it are listed (`pick-notes.tsx`).
  */
 
 /**
@@ -49,6 +51,8 @@ export const COMMENT_PIN_LOOK = {
   POSTED: "posted",
   HELD: "held",
   DRAFT: "draft",
+  /** A note on an element picked on a page, waiting to be sent, which wears its number (`pick-notes.tsx`). */
+  NOTE: "note",
 } as const;
 
 export type CommentPinLook = (typeof COMMENT_PIN_LOOK)[keyof typeof COMMENT_PIN_LOOK];
@@ -58,6 +62,7 @@ const EDGE = {
   [COMMENT_PIN_LOOK.POSTED]: "border-border",
   [COMMENT_PIN_LOOK.HELD]: "border-dashed border-accent-fill",
   [COMMENT_PIN_LOOK.DRAFT]: "border-dashed border-border-strong",
+  [COMMENT_PIN_LOOK.NOTE]: "border-accent-fill",
 } as const satisfies Record<CommentPinLook, string>;
 
 /** The corner each stand makes its point. */
@@ -74,12 +79,17 @@ type PinFace =
       /** How many threads stand on what it is pinned to; drawn only past one. */
       count: number;
       /** Whether its comments are posted, or held in the reader's review; posted unless told. */
-      look?: Exclude<CommentPinLook, typeof COMMENT_PIN_LOOK.DRAFT> | undefined;
+      look?:
+        | Exclude<CommentPinLook, typeof COMMENT_PIN_LOOK.DRAFT | typeof COMMENT_PIN_LOOK.NOTE>
+        | undefined;
     }
-  | { look: typeof COMMENT_PIN_LOOK.DRAFT };
+  | { look: typeof COMMENT_PIN_LOOK.DRAFT }
+  | { look: typeof COMMENT_PIN_LOOK.NOTE; number: number };
 
 /** The face a pin wears: the pencil for a draft, else its first writer's, and its count past one. */
 function PinFaceOf({ face }: { face: PinFace }): React.JSX.Element {
+  if (face.look === COMMENT_PIN_LOOK.NOTE) return <PickNoteNumber number={face.number} />;
+
   if (face.look === COMMENT_PIN_LOOK.DRAFT) {
     return (
       <span className="inline-flex size-avatar-inline items-center justify-center text-muted-foreground [&>svg]:size-full">

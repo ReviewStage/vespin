@@ -1604,7 +1604,7 @@ export function containing(words: string): string {
  * id the catalog has not been read for, its provider dropped and its words
  * spaced, because the catalog's own names live with the client.
  */
-const AGENT_SHOWN_NAME = sql<string>`coalesce(
+export const AGENT_SHOWN_NAME = sql<string>`coalesce(
   ${agentTable.title},
   ${agentTable.automationOrigin} ->> 'name',
   replace(regexp_replace(${agentTable.model}, '^[^/]*/', ''), '-', ' ')

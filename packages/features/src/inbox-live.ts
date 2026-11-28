@@ -625,3 +625,49 @@ export type InboxOlderLiveAnswer = LiveReadAnswer<typeof INBOX_OLDER_READ>;
 
 /** Each part's rows of the account's inbox items, decoded. */
 export type AccountInboxItemsLiveRows = typeof INBOX_ITEMS_READ.rows.Type;
+
+/** The most items one Inbox search answers, the latest changed first, so a query of one letter reads no account whole. */
+export const INBOX_SEARCH_LIMIT = 50;
+
+/** The longest query an Inbox search reads, in UTF-16 units; a longer one is refused, so no query binds patterns without end. */
+export const INBOX_SEARCH_QUERY_MAX_CHARS = 200;
+
+/**
+ * The inbox items a search's `query` finds (`inboxSearch`), read once
+ * rather than followed, for a client searching past the items it holds:
+ * each item the account may read, of any age, every word of whose query
+ * (`searchTokens`) its title, a message of its thread, or its holder's name
+ * (its task's, or its agent's for an item on no task) holds, whatever its
+ * case, the latest changed first and at most `INBOX_SEARCH_LIMIT`. Each
+ * comes as the account's inbox items carry one, its stamp and its row whole
+ * with its thread and files (`INBOX_ITEMS_READ`), so a client draws a hit as
+ * an item it holds, and ranks the hits itself; beside them stand the tasks
+ * that hold them and the hits' own agents, as the task list answers them
+ * (`TASK_LIST_READ`), since a hit is often of a task or an agent long
+ * settled, which the list a client holds no longer carries. The rows are
+ * read on the rules of who may read an item, a task, and an agent that
+ * every read of them keeps, so one the account does not reach is never
+ * answered. Items on no task, and their agents, are carried only to a build
+ * that reads a null `taskId`, as `INBOX_ITEMS_READ` carries them. The service
+ * binds the items found itself (`found`), reading the query once. A query of
+ * no words finds nothing; one longer than `INBOX_SEARCH_QUERY_MAX_CHARS` is
+ * refused as an invalid request.
+ */
+export const INBOX_SEARCH_READ = liveRead({
+  name: "inboxSearch",
+  path: HOSTED_SERVICE_PATH.LIVE_INBOX_SEARCH,
+  params: {
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    query: LIVE_PARAM.TEXT,
+    taskless: LIVE_PARAM.SERVED,
+    found: LIVE_PARAM.SERVED,
+  },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    ...INBOX_ITEMS_READ.parts,
+    tasks: TASK_LIST_READ.parts.tasks,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
+export type InboxSearchLiveAnswer = LiveReadAnswer<typeof INBOX_SEARCH_READ>;
