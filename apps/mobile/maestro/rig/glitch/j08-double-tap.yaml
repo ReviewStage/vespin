@@ -7,10 +7,13 @@ env:
     clearState: true
     arguments:
       fixture: inbox-large
+# Note that the Inbox stands once its workspace button does: inbox-large pins its many rows above the staged threads, so no staged row stands on the first screen.
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible:
+      id: "workspace-switcher"
     timeout: 30000
 - runFlow: { file: _pause.yaml, env: { MS: "1500" } }
+- runFlow: { file: _to-row.yaml, env: { ROW: "Recorded the invite flow" } }
 - tapOn:
     text: "Recorded the invite flow"
     repeat: 2

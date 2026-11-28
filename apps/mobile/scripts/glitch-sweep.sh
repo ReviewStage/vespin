@@ -62,7 +62,7 @@ stop_recording() {
     sleep 1
     kill -INT "$recorder" 2>/dev/null
     wait "$recorder" 2>/dev/null
-    ffmpeg -loglevel error -y -i "$directory/raw.mp4" -vf "fps=60,scale=iw/2:-2" -c:v libx264 -crf 20 -pix_fmt yuv420p "$directory/cfr60.mp4" ||
+    ffmpeg -loglevel error -y -i "$directory/raw.mp4" -vf "fps=60,scale=trunc(iw/4)*2:trunc(ih/4)*2" -c:v libx264 -crf 20 -pix_fmt yuv420p "$directory/cfr60.mp4" ||
         echo "warning: $directory/cfr60.mp4 was not written" >&2
 }
 

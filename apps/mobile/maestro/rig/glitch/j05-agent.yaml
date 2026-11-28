@@ -5,10 +5,13 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox-large
+# Note that the Inbox stands once its workspace button does: inbox-large pins its many rows above the staged threads, so no staged row stands on the first screen.
 - extendedWaitUntil:
-    visible: "Recorded the invite flow"
+    visible:
+      id: "workspace-switcher"
     timeout: 30000
 - runFlow: { file: _pause.yaml, env: { MS: "1000" } }
+- runFlow: { file: _to-row.yaml, env: { ROW: "Recorded the invite flow" } }
 - tapOn: "Recorded the invite flow"
 - runFlow: { file: _pause.yaml, env: { MS: "1500" } }
 - tapOn: { text: "More", index: -1, optional: true }

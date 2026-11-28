@@ -1,0 +1,9 @@
+# _to-row.yaml -- scrolls the Inbox down to the row ROW names, past however many rows the fixture stands above it (inbox-large pins about 200), and lets it settle clear of the tab bar.
+appId: dev.vespin.ios
+---
+- scrollUntilVisible:
+    element: "${ROW}"
+    direction: DOWN
+    timeout: 120000
+    speed: 60
+- runFlow: { file: ../../subflows/clear-of-tabs.yaml }
