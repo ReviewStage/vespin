@@ -5,7 +5,7 @@ import { Catalog, readView } from "./catalog";
 // The site's faces, bundled from the workspace so the catalog loads nothing
 // from the network; the desktop's is the system's own. Then the page.
 import "@fontsource-variable/geist/wght.css";
-import "@fontsource-variable/jetbrains-mono/wght.css";
+import "@fontsource-variable/geist-mono/wght.css";
 import "@fontsource-variable/bricolage-grotesque/wght.css";
 import "./catalog.css";
 

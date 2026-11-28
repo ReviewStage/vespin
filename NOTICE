@@ -105,9 +105,9 @@ Version 2.0. Copyright Vercel, Inc.
 
 Variable fonts (@fontsource-variable)
 -------------------------------------
-Bricolage Grotesque, Geist, and JetBrains Mono, packaged by Fontsource
+Bricolage Grotesque, Geist, and Geist Mono, packaged by Fontsource
 (https://fontsource.org) as @fontsource-variable/bricolage-grotesque,
-@fontsource-variable/geist, and @fontsource-variable/jetbrains-mono. Licensed
+@fontsource-variable/geist, and @fontsource-variable/geist-mono. Licensed
 under the SIL Open Font License, Version 1.1
 (https://openfontlicense.org). Each font remains under the copyright of its
 authors; see the license file shipped in each package.

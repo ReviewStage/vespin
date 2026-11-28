@@ -27,7 +27,7 @@
     "@effect/sql-pg": "catalog:",
     "@fontsource-variable/bricolage-grotesque": "catalog:",
     "@fontsource-variable/geist": "catalog:",
-    "@fontsource-variable/jetbrains-mono": "catalog:",
+    "@fontsource-variable/geist-mono": "catalog:",
     "@repo/agent-runner": "workspace:*",
     "@repo/brand": "workspace:*",
     "@repo/credentials": "workspace:*",

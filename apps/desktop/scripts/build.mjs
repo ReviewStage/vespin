@@ -399,6 +399,10 @@ await Promise.all([
     bundle: true,
     target: "chrome140",
     plugins: [tailwindPlugin()],
+    // The window's faces, Geist and Geist Mono, ship beside the stylesheet as
+    // files the window reads off disk, so its text never waits on the network.
+    loader: { ".woff2": "file" },
+    assetNames: "fonts/[name]-[hash]",
     minify: true,
     sourcemap: "external",
     logLevel: "info",

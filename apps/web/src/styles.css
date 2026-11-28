@@ -23,7 +23,7 @@
 /* The three faces the page loads, declared beside the stack that names them
    rather than at each of the four HTML entry points. */
 @import "@fontsource-variable/geist/wght.css";
-@import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "@fontsource-variable/geist-mono/wght.css";
 @import "@fontsource-variable/bricolage-grotesque/wght.css";
 
 /* Only the tokens the page actually draws with, and a token nothing reads is
