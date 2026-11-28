@@ -75,7 +75,7 @@ test("a note's card adds its words only once there are some, and lets them go on
     empty.querySelector("textarea")?.dispatchEvent(enter());
   });
 
-  const written = render(card("Too grey"));
+  const written = render(card("Too gray"));
   act(() => {
     written.querySelector("textarea")?.dispatchEvent(enter());
     written
@@ -83,7 +83,7 @@ test("a note's card adds its words only once there are some, and lets them go on
       ?.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
   });
 
-  assert.deepEqual(told, ["add Too grey", "cancel"]);
+  assert.deepEqual(told, ["add Too gray", "cancel"]);
 });
 
 test("the tray lists the notes by number, removes the one pressed, and sends them all", () => {
