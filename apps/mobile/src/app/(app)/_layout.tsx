@@ -46,6 +46,7 @@ const SHEET_ROUTE = {
   MOVE_TASK: "move-task",
   EDIT_DESCRIPTION: "edit-description",
   TASK_FOLLOWING: "task-following",
+  TASK_COMMENT: "task-comment",
   ADD_FOLLOWER: "add-follower",
   NEW_WORKSPACE: "new-workspace",
   NEW_MANAGER: "new-manager",
@@ -239,6 +240,11 @@ export default function GuardedScreens() {
           <Stack.Screen
             name={SHEET_ROUTE.TASK_FOLLOWING}
             options={{ ...shortSheet, title: "Followers" }}
+          />
+          {/* Note that a comment's thread opens over the task as a short sheet, as a document's comment opens over its words, so the description stays in sight under it at half height. */}
+          <Stack.Screen
+            name={SHEET_ROUTE.TASK_COMMENT}
+            options={{ ...shortSheet, title: "Comment" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.ADD_FOLLOWER}

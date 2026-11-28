@@ -16,7 +16,7 @@ export {
   AskNote,
   type AskResolve,
   type AskStep,
-  OpenAsk,
+  ResolvableAsk,
   StepList,
 } from "./ask-card.js";
 

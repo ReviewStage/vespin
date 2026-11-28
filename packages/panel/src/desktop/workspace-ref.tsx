@@ -1,6 +1,15 @@
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
-import { cn, HoverCard, HoverCardHead, OneLine, Tooltip } from "@repo/ui";
+import {
+  CORNER_DOT_PLACE,
+  CORNER_DOT_TONE,
+  CornerDot,
+  cn,
+  HoverCard,
+  HoverCardHead,
+  OneLine,
+  Tooltip,
+} from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { ReactNode } from "react";
 import { TILE_SIZE, WorkspaceTile } from "./workspace-tile.js";
@@ -87,7 +96,9 @@ export function WorkspaceCard({
  * A workspace named: its tile and its name, and under the name its `line`
  * where a row hangs one. `name` stands in for the plain name where a place
  * draws it otherwise, a search marking what matched. With `card` the ref
- * hangs it while the pointer rests on it.
+ * hangs it while the pointer rests on it. `marked` cuts the attention dot into
+ * the tile's corner, the sidebar head's while a thread waits on the reader
+ * in another workspace, which the place drawing it says in words.
  */
 export function WorkspaceRef({
   workspace,
@@ -95,12 +106,15 @@ export function WorkspaceRef({
   name,
   line,
   card,
+  marked = false,
 }: {
   workspace: NamedWorkspace;
   size?: WorkspaceRefSize;
   name?: ReactNode;
   line?: ReactNode;
   card?: ReactNode;
+  /** Whether the tile wears the attention dot; none where not given. */
+  marked?: boolean;
 }): React.JSX.Element {
   const nameClass = cn("workspace-ref-name", NAME_OF_SIZE[size]);
 
@@ -128,7 +142,9 @@ export function WorkspaceRef({
       data-size={size}
     >
       <ReplayMask>
-        <WorkspaceTile workspace={workspace} size={TILE_OF_SIZE[size]} />
+        <CornerDot shown={marked} tone={CORNER_DOT_TONE.ATTENTION} place={CORNER_DOT_PLACE.CUTOUT}>
+          <WorkspaceTile workspace={workspace} size={TILE_OF_SIZE[size]} />
+        </CornerDot>
       </ReplayMask>
       {line === undefined ? (
         named

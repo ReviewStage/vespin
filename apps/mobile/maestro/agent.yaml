@@ -463,7 +463,7 @@ env:
 # Its threads line stands over the box, as the panel's threads dock does:
 # the Inbox's glyph, and how many of the threads it posted wait on the
 # reader (the fixture's invitations agent posted several, some open). A
-# press opens the oldest waiting on the agent's own tab, over its page.
+# press opens the agent's own Inbox, listing the threads it posted alone.
 - launchApp:
     clearState: true
     arguments:

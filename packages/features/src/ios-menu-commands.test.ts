@@ -28,8 +28,6 @@ describe("menuFocusOf", () => {
     ["/tasks/agent/agent-1/page", { page: "page-1" }, { kind: MENU_SUBJECT.AGENT, id: "agent-1" }],
     // A page pushed over a task acts on that task, never on the page's own word.
     ["/tasks/page/page-1", { task: "task-1" }, { kind: MENU_SUBJECT.TASK, id: "task-1" }],
-    ["/tasks/comments/thread-9", { task: "task-1" }, { kind: MENU_SUBJECT.TASK, id: "task-1" }],
-    ["/tasks/comments/new", { task: "task-1" }, { kind: MENU_SUBJECT.TASK, id: "task-1" }],
     ["/tasks/history/task-1", {}, { kind: MENU_SUBJECT.TASK, id: "task-1" }],
     ["/tasks/version/task-1", {}, { kind: MENU_SUBJECT.TASK, id: "task-1" }],
     [
@@ -64,7 +62,6 @@ describe("menuOwnPageOf", () => {
       { kind: MENU_OWN_PAGE.AGENT_PAGE, pageId: "page-1" },
     ],
     ["/tasks/agent/agent-1", {}, undefined],
-    ["/tasks/comments/thread-9", { task: "task-1" }, undefined],
   ])("reads %s with %o as the page it opens", (pathname, params, page) => {
     expect(menuOwnPageOf(pathname, params)).toEqual(page);
   });

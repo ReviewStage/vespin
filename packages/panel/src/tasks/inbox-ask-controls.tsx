@@ -65,10 +65,11 @@ import {
   TEXT_VARIANT,
   Text,
   TextField,
+  type WordsDrawer,
 } from "@repo/ui";
 import { isComposingKey } from "@repo/ui/composing-key";
 import { CheckIcon, Undo2Icon } from "@repo/ui/icons";
-import { Fragment } from "react";
+import { Fragment, useCallback } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { type FormTextDoors, type FormTextProps, InboxFormText } from "./inbox-form-text.js";
@@ -119,17 +120,36 @@ const CHOICE_LEGEND = "Options";
  */
 const NONE_VALUE = "\u0000none";
 
+/**
+ * Draws an option's words as a step's are drawn, its inline Markdown with
+ * each link of ours as its chip, whose press opens it and picks nothing
+ * (`ChoiceList`'s `words`).
+ */
+function useAskWords(): WordsDrawer {
+  const openLink = useOpenLink();
+  const link = useMentionLink();
+
+  return useCallback(
+    (written: string) => <MarkdownMessage words={written} inline link={link} openLink={openLink} />,
+    [link, openLink],
+  );
+}
+
 /** A choice's options as `@repo/ui`'s ChoiceList draws them, each the agent recommends wearing its badge, and each card its media. */
 function choiceOptions(
   options: readonly (InboxChoice["options"][number] & { recommended: boolean })[],
   cards: boolean,
+  words: WordsDrawer,
 ): ChoiceOption<string>[] {
   // Note that a card's detail would step it back as unavailable, so a card says its trade-off as its state.
   const drawn = options.map((option) => ({
     value: option.label,
     label: option.label,
     ...(cards
-      ? { state: option.detail, below: <OptionCardMedia option={option} /> }
+      ? {
+          state: option.detail === undefined ? undefined : words(option.detail),
+          below: <OptionCardMedia option={option} />,
+        }
       : { detail: option.detail }),
     badge: option.recommended ? RECOMMENDED : undefined,
   }));
@@ -194,6 +214,7 @@ function ChoiceOptions({
   onDraft: (draft: InboxDraft) => void;
 }): React.JSX.Element {
   const cards = optionsCarryMedia(choice);
+  const words = useAskWords();
 
   const options = choiceOptions(
     choice.options.map((option) => ({
@@ -201,6 +222,7 @@ function ChoiceOptions({
       recommended: recommendedLabels(choice).includes(option.label),
     })),
     cards,
+    words,
   );
 
   return (
@@ -208,6 +230,7 @@ function ChoiceOptions({
       <ChoiceList
         legend={CHOICE_LEGEND}
         options={options}
+        words={words}
         value={cards ? cardValues(draft) : draft.choices}
         select={choice.multiple === true ? CHOICE_SELECT.MANY : CHOICE_SELECT.ONE}
         look={cards ? CHOICE_LOOK.CARD : CHOICE_LOOK.MARKED}
@@ -542,9 +565,9 @@ export function focusMissing(box: HTMLElement | null, missing: InboxMissing): vo
   }
 }
 
-/** Whether a key goes to a link, a step's say, whose own Enter opens it. */
+/** Whether a key goes to a link or a chip, in a step's say or an option's words, whose own Enter opens it. */
 function opensLink(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && target.matches("a[href]");
+  return target instanceof HTMLElement && target.matches("a[href], [role='button']");
 }
 
 /**

@@ -730,6 +730,17 @@ export function productLoadCount(count: number): ProductLoadCount {
   return PRODUCT_LOAD_COUNT_LADDER.find((rung) => count >= rung) ?? PRODUCT_LOAD_COUNT.NONE;
 }
 
+/**
+ * Whether a return from the background counts as its own `resume:load`: only
+ * where the app left after the launch's own load window closed (`launch:load`).
+ * Note that a return whose leaving fell inside that window is the launch's,
+ * such as the brief trip away iOS can take while a cold launch settles, so
+ * counting it again would hold the launch's work as a resume's.
+ */
+export function productResumeCounted(leftAt: number, launchWindowEnd: number): boolean {
+  return leftAt >= launchWindowEnd;
+}
+
 /** The rungs a launch's held time travels on, in milliseconds summed over its first minutes (`launch:load`), each the least that reaches it: from a quarter second to two minutes, the range between a launch nobody felt and one that took no touch for minutes. */
 const PRODUCT_LOAD_MS = {
   UNDER_250: 0,

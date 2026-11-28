@@ -102,8 +102,9 @@ appId: dev.vespin.ios
     notVisible: "Not delivered.*"
     timeout: 5000
 
-# An answer's fields: a select's menu with its recommended option said so, a
-# toggle, and a number on the decimal pad; Send submits what was filled.
+# An answer's fields: a select's options as rows, its recommended one tagged
+# and none picked, a yes or no's checkbox, and a number on the decimal pad;
+# Send submits what was filled.
 - launchApp:
     clearState: true
     arguments:
@@ -115,24 +116,28 @@ appId: dev.vespin.ios
     file: subflows/open-row.yaml
     env:
       ROW: "Invite limits"
-- assertVisible: "None"
+- assertVisible: "Every member, Recommended"
 - waitForAnimationToEnd
 - takeScreenshot: answer-fields
-- tapOn: "None"
-- tapOn: "Every member \\(recommended\\)"
-# Note that the pick is waited on until the menu has closed and the picker
-# names it, so the next tap never lands while it still dismisses. The toggle
-# is pressed on its switch, by the id the switch alone carries, since the
-# system's switch flips from its knob, never from a tap on its words, and it
-# is asserted on, so a press that did not land fails here.
-- waitForAnimationToEnd
-- assertVisible: "Every member \\(recommended\\)"
-- assertNotVisible: "None"
-- tapOn:
-    id: "answer-field-Email the sender when an invite is accepted"
+- tapOn: "Every member, Recommended"
 - assertVisible:
-    id: "answer-field-Email the sender when an invite is accepted"
-    checked: true
+    text: "Every member, Recommended"
+    selected: true
+# Note that the select's options stand as rows in the box's head, which
+# scrolls in place once tall, so the head is dragged from an option until
+# the yes or no shows; a swipe at the window's middle would scroll the
+# thread instead.
+- repeat:
+    times: 3
+    while:
+      notVisible: "Email the sender when an invite is accepted, Optional"
+    commands:
+      - swipe:
+          from:
+            text: "Every member.*|Admins"
+          direction: UP
+- tapOn: "Email the sender when an invite is accepted, Optional"
+- assertVisible: "Email the sender when an invite is accepted, Optional, ticked"
 # The number comes last, since the decimal pad has no key that puts it away:
 # the composer rides above it, so Send is pressed with the pad still up.
 # Words that read as no number hold the answer back, rather than send it
@@ -176,7 +181,7 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Submitted"
     timeout: 5000
-- assertNotVisible: "None"
+- assertNotVisible: "Every member, Recommended"
 
 # A do: its steps as checkbox rows, one ticked by hand, then Mark done, which
 # ticks every step and lights Send without sending, as the panel's press

@@ -25,7 +25,6 @@ import {
   INBOX_READ_MARK,
   isUnread,
   knownAsk,
-  RECOMMENDED,
 } from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
@@ -64,7 +63,7 @@ import {
   ComposerFoot,
   GLYPH,
   MentionSuggestions,
-  OpenAsk,
+  ResolvableAsk,
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
@@ -222,19 +221,14 @@ function controlsStand(item: InboxItem): boolean {
 
 /**
  * The open ask's controls, standing inside the box over its field, as the
- * panel's box holds them as its body (`inbox-answer-box.tsx`,
- * `inbox-ask-controls.tsx`), each attaching its answer to the reply rather
- * than sending it, and each press or pick taking it off again pressed
- * again, the box's Send sending it with the note: a decide's options to
- * pick, the recommended tagged, or its two presses where it is a yes or no
- * in other words (`decideButtons`), the first going ahead and the second
- * holding back; a do's steps to tick, each with its code under it, then Mark
- * done, which ticks every one, and Couldn't do it; an answer's fields to
- * fill, a text field stopping at the panel's most. A notice asking nothing
- * has none: its Got it is the box's empty Send, as the panel's is. None
- * where nothing is asked.
+ * panel's box holds them as its body (`inbox-answer-box.tsx`), with the ×
+ * at their top end that resolves the thread without answering, as the
+ * panel's question's × does, at once with Undo (`answer.resolve`). A notice
+ * asking nothing has none: its Got it is the box's empty Send, as the
+ * panel's is. None where nothing is asked, and an ask of words alone, whose
+ * box is its answer, draws none and so no ×, as the panel's draws none.
  */
-function AskControls({
+function OpenAskControls({
   item,
   answer,
   doors,
@@ -243,10 +237,40 @@ function AskControls({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft } = answer;
   const ask = openAsk(item);
 
-  if (ask === undefined) return null;
+  if (ask === undefined || !controlsStand(item)) return null;
+
+  return (
+    <ResolvableAsk resolve={{ label: RESOLVE, onPress: answer.resolve }}>
+      <AskControls item={item} ask={ask} answer={answer} doors={doors} />
+    </ResolvableAsk>
+  );
+}
+
+/**
+ * The open ask's controls as `OpenAskControls` stands them, as the panel's
+ * box draws them (`inbox-ask-controls.tsx`), each attaching its answer to
+ * the reply rather than sending it, and each press or pick taking it off
+ * again pressed again, the box's Send sending it with the note: a decide's
+ * options to pick, the recommended tagged, or its two presses where it is a
+ * yes or no in other words (`decideButtons`), the first going ahead and the
+ * second holding back; a do's steps to tick, each with its code under it,
+ * then Mark done, which ticks every one, and Couldn't do it; or an answer's
+ * fields to fill, a text field stopping at the panel's most.
+ */
+function AskControls({
+  item,
+  ask,
+  answer,
+  doors,
+}: {
+  readonly item: InboxItem;
+  readonly ask: NonNullable<ReturnType<typeof openAsk>>;
+  readonly answer: ThreadAnswer;
+  readonly doors: OptionMediaDoors;
+}): ReactNode {
+  const { draft, onDraft } = answer;
 
   if (ask.type === INBOX_ASK.DECIDE && decideButtons(ask)) {
     const recommended = recommendedLabels(ask);
@@ -280,6 +304,8 @@ function AskControls({
         // Note that a pick of several says so over its options, in the panel's words, since its round marks read as a pick of one until something is picked.
         title={ask.multiple === true ? askHeadWords(ask, undefined) : undefined}
         onChange={(choices) => onDraft(withPicks(draft, choices))}
+        repository={doors.repository}
+        onOpenLink={doors.openLink}
         none={
           cards
             ? {
@@ -346,7 +372,6 @@ function AskControls({
   return (
     <AnswerFields
       fields={fields}
-      recommendedWord={RECOMMENDED.toLowerCase()}
       onChange={(label, typed) => {
         const kind = fields.find((field) => field.label === label)?.kind ?? ANSWER_FIELD.TEXT;
         onDraft(withValue(draft, label, typedValue(kind, typed)));
@@ -382,9 +407,8 @@ const GOT_IT_SEND = { label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK } as co
  * pill (`usePillField`), and holds the panel's "Send as a new thread to" the
  * thread's agent, which turns the next send into a new thread's first
  * message, its line asking to start one. Its head, inside the same glass
- * over the field, holds the open ask's controls (`AskControls`), as the
- * panel's box holds them as its body, with the panel's × at their top end,
- * which resolves the thread without an answer (`OpenAsk`), stepping aside while an `@` offers its
+ * over the field, holds the open ask's controls (`OpenAskControls`), as the
+ * panel's box holds them as its body, stepping aside while an `@` offers its
  * list so the list stands alone over the field, and under them what the
  * last send, the picker, or a bound said, right over the words it is about.
  * The head scrolls in place past a share of the window (`BarHead`), so a
@@ -463,12 +487,7 @@ export function ThreadComposer({
   const head =
     !asks && mentions === undefined && said === undefined ? undefined : (
       <>
-        {asks ? (
-          // Note that the open ask wears the panel's × at its top end, which resolves the thread without an answer, through the same close as the ⋯'s Resolve.
-          <OpenAsk resolve={{ label: RESOLVE, onPress: answer.resolve }}>
-            <AskControls item={item} answer={answer} doors={doors} />
-          </OpenAsk>
-        ) : null}
+        {asks ? <OpenAskControls item={item} answer={answer} doors={doors} /> : null}
         {mentions === undefined ? null : (
           <MentionSuggestions
             groups={mentions.groups}

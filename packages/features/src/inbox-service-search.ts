@@ -92,6 +92,13 @@ export interface InboxServiceSearch {
   readonly type: (typed: string) => void;
   /** Lets go of the place's search, as its screen goes; a `type` after it starts afresh. */
   readonly end: () => void;
+  /**
+   * Stops asking, as its screen goes, but leaves the items the place found
+   * standing in the host, where a thread opened from them is still read,
+   * until the place's next search replaces them or the host lets the place
+   * go at a sign-out; a `type` after it starts afresh.
+   */
+  readonly leave: () => void;
   /** Whether the service's answer to the words now held is still to come, while typing pauses or the search is out, so a client never says nothing was found before it lands. */
   readonly searching: () => boolean;
   /** Hears each flip of `searching`; answers the way to stop hearing it. */
@@ -178,6 +185,12 @@ export function inboxServiceSearch(options: InboxServiceSearchOptions): InboxSer
       stop();
       words = undefined;
       letGo();
+      flip(false);
+    },
+    leave: () => {
+      stop();
+      words = undefined;
+      asked = undefined;
       flip(false);
     },
     searching: () => searching,
