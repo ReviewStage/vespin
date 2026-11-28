@@ -243,7 +243,6 @@ function quoteDepth(markers: string): number {
   return markers.split(">").length - 1;
 }
 
-/** The trailing whitespace of a source. */
 function trailing(source: string): string {
   return /\s*$/u.exec(source)?.[0] ?? "";
 }

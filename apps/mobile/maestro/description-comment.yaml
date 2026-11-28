@@ -1,4 +1,4 @@
-# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block with its words quoted and the comment field taking the keyboard; Send opens the thread at once with the words as its first comment.
+# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block in the comment sheet with its words quoted and the comment field taking the keyboard; Send opens the thread at once in the sheet with the words as its first comment, and Close lets the sheet go.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -54,8 +54,7 @@ appId: dev.vespin.ios
 - assertNotVisible: "Add a comment"
 - waitForAnimationToEnd
 - takeScreenshot: description-comment-sent
-- tapOn:
-    id: "BackButton"
+- tapOn: "Close"
 - waitForAnimationToEnd
 # The Comments section lists the open thread, then a last row that swaps in
 # the resolved ones, as the panel's Resolved toggle does; a thread's bar
@@ -74,8 +73,7 @@ appId: dev.vespin.ios
 - assertVisible: "Reopen"
 - waitForAnimationToEnd
 - takeScreenshot: comment-resolved-thread
-- tapOn:
-    id: "BackButton"
+- tapOn: "Close"
 - tapOn: "Show open comments"
 - tapOn: "Should an owner be able to resend an expired invite from this page?"
 - assertVisible: "Resolve"
@@ -88,8 +86,7 @@ appId: dev.vespin.ios
 # or, run full, presses it, so neither leaves a state the flow can assert;
 # the swipe's own reveal is held by `inbox.yaml`, whose rows `RowFrame`
 # draws as it draws this one.
-- tapOn:
-    id: "BackButton"
+- tapOn: "Close"
 - waitForAnimationToEnd
 - longPressOn: "Should an owner be able to resend an expired invite from this page?"
 - tapOn: "Resolve"

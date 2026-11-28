@@ -108,6 +108,7 @@ import {
   type Scope,
   Screen,
   StackBarMenu,
+  StackSubtitle,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
@@ -176,6 +177,7 @@ import { APP_SIDEBAR } from "../sidebar-shown.js";
 import { TabColumns } from "../split-columns.js";
 import {
   SPLIT_TAB,
+  STAYS_PAGE,
   useHandToSplit,
   usePickInPlace,
   useSplitPicked,
@@ -684,14 +686,15 @@ function moreMenu(
  * The ⋯ menu's view choices after its scopes, the account's as the panel's
  * View options offers them: Addressed to, where it narrows the scope shown
  * (`narrowedByWhose`), Anyone or Me, and the teammate the account names
- * where one is, its choice checked; then Pinned tasks first, a switch. Note
+ * where one is, its choice checked; then Pinned tasks first, a switch,
+ * where the list splits its pinned tasks' threads (`pinned`). Note
  * that the phone offers no other teammate, having no people menu to list
  * them by; one chosen on the Mac stands here, and Me or Anyone lets it go.
  */
 function viewEntries(
   show: InboxShow,
   { whose, onWhose }: InboxWhoseChoice,
-  { pinnedFirst, onPinnedFirst }: InboxPinnedFirst,
+  pinned: InboxPinnedFirst | undefined,
 ): Pick<BarMenu, "submenus" | "groups"> {
   const named = whose.kind === INBOX_WHOSE.PERSON ? [whose] : [];
 
@@ -721,19 +724,22 @@ function viewEntries(
 
   return {
     submenus: narrowedByWhose(show) ? [addressed] : [],
-    groups: [
-      {
-        choices: [
-          {
-            label: INBOX_VIEW_WORDS.PINNED_FIRST,
-            symbol: GLYPH.PIN,
-            on: pinnedFirst,
-            onPress: () => onPinnedFirst(!pinnedFirst),
-          },
-        ],
-        items: [],
-      },
-    ],
+    groups:
+      pinned === undefined
+        ? []
+        : [
+            {
+              choices: [
+                {
+                  label: INBOX_VIEW_WORDS.PINNED_FIRST,
+                  symbol: GLYPH.PIN,
+                  on: pinned.pinnedFirst,
+                  onPress: () => pinned.onPinnedFirst(!pinned.pinnedFirst),
+                },
+              ],
+              items: [],
+            },
+          ],
   };
 }
 
@@ -992,12 +998,20 @@ function ThreadDetail({
   }, []);
 
   const navigation = useNavigation();
+  // Note that a thread opened from an agent's own Inbox keeps standing as a page over it through the threads that replace it, since one that dropped the mark would hand itself to the split view and pop the agent's list.
+  const { [STAYS_PAGE.PARAM]: stays } = useLocalSearchParams<{ [STAYS_PAGE.PARAM]?: string }>();
+
+  const threadRoute = (id: string) => {
+    const pathname = onOwnTab(`/inbox/${encodeURIComponent(id)}`);
+
+    return stays === undefined ? pathname : { pathname, params: { [STAYS_PAGE.PARAM]: stays } };
+  };
 
   // A thread the box started opens in this one's place only while this one is in front when the start answers, since the reader may have switched tabs or pushed a page over it meanwhile, and a covered screen stays mounted.
   const openStarted = (id: string) => {
     if (!shown.current || !navigation.isFocused()) return;
 
-    if (place.inStack) router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
+    if (place.inStack) router.replace(threadRoute(id));
     else place.onOpen(id);
   };
 
@@ -1005,7 +1019,7 @@ function ThreadDetail({
   const stepTo = (id: string | undefined) => {
     if (id === undefined || !place.inStack) return;
     handedOrders.set(id, place.steps.order);
-    router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
+    router.replace(threadRoute(id));
   };
 
   // Note that a pushed thread stands its arrows' steps for the iPad's K and J while it's the screen in front; a split view's list stands its own (`InboxSplitScreen`).
@@ -1377,6 +1391,8 @@ function ThreadColumn({
 
 /** What the tab's root screen holds above its two layouts, so a rotation or a fold keeps it: the list's search words and how to change them, and the Remind me picker sheet its rows' menus open. */
 type InboxHeld = {
+  /** The agent whose threads alone the list holds, for the Inbox pushed from its page; none for the tab's own Inbox. */
+  readonly agent?: string | undefined;
   readonly search: string;
   readonly setSearch: (search: string) => void;
   readonly remind: ReturnType<typeof useRemind>;
@@ -1385,30 +1401,35 @@ type InboxHeld = {
 
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
 function useInboxScreen(
-  { search, setSearch, remind, scope }: InboxHeld,
+  { agent, search, setSearch, remind, scope }: InboxHeld,
   chosen?: string | undefined,
 ) {
   const { show, choose } = scope;
   const addressed = useInboxWhose();
   const pinned = useInboxPinnedFirst();
   const { whose } = addressed;
-  const listing = useInboxListing({ show, search, chosen, pinnedFirst: pinned.pinnedFirst, whose });
+  // Note that an agent's Inbox lists its threads in one run, as the panel's agent's Inbox tab lists them, so it offers no Pinned tasks first.
+  const runs = agent === undefined ? pinned : undefined;
+
+  const listing = useInboxListing({
+    show,
+    search,
+    chosen,
+    pinnedFirst: runs?.pinnedFirst === true,
+    whose,
+    agent,
+  });
+
   // Note that the Inbox shows the feed's answer once it lists rows, the kept ones drawn at launch among them, or once the feed answered with none in this scope.
   useAppReadyCount(listing.listed.length > 0 || listing.feed === INBOX_FEED.ANSWERED);
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
   const selecting = useInboxChoosing();
 
-  const menu = moreMenu(
-    scopes,
-    viewEntries(show, addressed, pinned),
-    listing.listed,
-    acts.markAll,
-    {
-      listed: listing.listed.length > 0,
-      onSelect: selecting.start,
-    },
-  );
+  const menu = moreMenu(scopes, viewEntries(show, addressed, runs), listing.listed, acts.markAll, {
+    listed: listing.listed.length > 0,
+    onSelect: selecting.start,
+  });
 
   // Note that only the threads still listed stand chosen, so a thread a scope, a search, or the service took away is never acted on unseen.
   const picked = selecting.choosing.on ? selecting.choosing.chosen : [];
@@ -1460,8 +1481,15 @@ function useInboxScreen(
 // workspace switcher beside it at the bar's leading edge, and its search and
 // its ⋯ menu, which holds the scopes, as round glass buttons at its trailing
 // one, each row pushing its thread as the Stack's next screen.
-function InboxStackList(held: InboxHeld) {
+/** What an agent's own Inbox is headed by: the agent's name in the bar, "Inbox" under it, led by a Manager's face. */
+type InboxHeading = {
+  readonly title: string;
+  readonly face: ManagerFace | undefined;
+};
+
+function InboxStackList({ heading, ...held }: InboxHeld & { readonly heading?: InboxHeading }) {
   const router = useRouter();
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
   const compose = useComposeAction();
@@ -1489,8 +1517,9 @@ function InboxStackList(held: InboxHeld) {
     <>
       <Stack.Screen
         options={{
-          title: choosing?.title ?? INBOX_TITLE,
-          headerLargeTitleEnabled: choosing === undefined,
+          title: choosing?.title ?? heading?.title ?? INBOX_TITLE,
+          // Note that an agent's Inbox is a page pushed over the agent, so its title stands inline, as every pushed page's does.
+          headerLargeTitleEnabled: choosing === undefined && heading === undefined,
         }}
       >
         {choosing !== undefined ? null : (
@@ -1504,6 +1533,18 @@ function InboxStackList(held: InboxHeld) {
           />
         )}
       </Stack.Screen>
+      {/* Note that an agent's own Inbox names the agent in the bar, "Inbox" under it, as its page names it over its state, since no tab around it says whose threads it holds. */}
+      {heading === undefined || choosing !== undefined ? null : (
+        <StackSubtitle
+          words={INBOX_TITLE}
+          leading={regular}
+          face={
+            heading.face === undefined
+              ? undefined
+              : { title: heading.title, face: heading.face, working: false }
+          }
+        />
+      )}
       {choosing !== undefined ? (
         <Stack.Toolbar placement="left">
           <Stack.Toolbar.Button
@@ -1514,9 +1555,9 @@ function InboxStackList(held: InboxHeld) {
             {choosing.all.label}
           </Stack.Toolbar.Button>
         </Stack.Toolbar>
-      ) : (
+      ) : held.agent === undefined ? (
         <SettingsBarButton switcher={switcher} />
-      )}
+      ) : null}
       <Stack.Toolbar placement="right">
         {choosing !== undefined ? (
           <Stack.Toolbar.Button variant="plain" onPress={choosing.done.onPress}>
@@ -1528,8 +1569,8 @@ function InboxStackList(held: InboxHeld) {
             <StackBarMenu menu={menu} />
           </Stack.Toolbar.View>
         )}
-        {/* Note that New task's compose ends the bar, as Messages' and Mail's stand. */}
-        {choosing !== undefined ? null : (
+        {/* Note that New task's compose ends the bar, as Messages' and Mail's stand, on the tab's own Inbox alone. */}
+        {choosing !== undefined || held.agent !== undefined ? null : (
           <Stack.Toolbar.Button
             icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
             accessibilityLabel={compose.label}
@@ -1580,7 +1621,16 @@ function InboxStackList(held: InboxHeld) {
               id,
               listing.shown.map(({ item }) => item.id),
             );
-            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })));
+
+            const route = onOwnTab(
+              iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id }),
+            );
+
+            router.push(
+              held.agent === undefined
+                ? route
+                : { pathname: route, params: { [STAYS_PAGE.PARAM]: STAYS_PAGE.PAGE } },
+            );
           }}
           onRefresh={acts.refresh}
           onMark={acts.mark}
@@ -1802,13 +1852,32 @@ function InboxLayouts({ held }: { readonly held: InboxHeld }) {
   );
 }
 
-/** What the Inbox's root keeps across its layouts: its search, its scope, and Remind me's sheet. */
-function useInboxHeld(): InboxHeld {
+/** What the Inbox's root keeps across its layouts: its search, its scope, and Remind me's sheet, and the agent its list holds alone, for an agent's Inbox. */
+function useInboxHeld(agent?: string): InboxHeld {
   const [search, setSearch] = useState("");
   const remind = useRemind();
   const scope = useInboxScope();
 
-  return { search, setSearch, remind, scope };
+  return { agent, search, setSearch, remind, scope };
+}
+
+/**
+ * An agent's or a Manager's own Inbox, pushed over its page from the
+ * threads capsule over its composer: the Inbox's own list, under the same
+ * scope and search, holding only the threads that agent posted, as the
+ * panel's agent's Inbox tab lists them, each row opening its thread over it.
+ */
+export function AgentInboxScreen() {
+  const { id = "" } = useLocalSearchParams<{ id: string }>();
+  const held = useInboxHeld(id);
+  const { name, face } = useAgentLabel(id);
+
+  return (
+    <>
+      <InboxStackList {...held} heading={{ title: name, face }} />
+      {held.remind.sheet}
+    </>
+  );
 }
 
 /** The Inbox's search, scope and Remind me sheet, held above an iPad's split view for its list column and its page alike; none elsewhere, where the Inbox's root holds its own. */
@@ -1850,10 +1919,13 @@ export function InboxListColumn() {
 
 /** The Inbox's pushed screen: one thread, named by the route's `id`, its path small in the bar over its heading. */
 export function InboxThreadScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; [STAYS_PAGE.PARAM]?: string }>();
+  const { id } = params;
   const { listed, readerId, feed, retry } = useInboxThread(id);
   const steps = useThreadSteps(id);
-  const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
+  // Note that a thread opened from an agent's own Inbox stays a page over it, since the tab's root holds no list of that agent's threads to select it in.
+  const handing = params[STAYS_PAGE.PARAM] === STAYS_PAGE.PAGE ? undefined : id;
+  const handed = useHandToSplit(SPLIT_TAB.INBOX, handing) && handing !== undefined;
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
   useOpenDrawnCount(handed ? undefined : PRODUCT_SURFACE.THREAD, listed !== undefined);
 

@@ -415,8 +415,20 @@ const FOLD_KEY_OPENS: ReadonlyMap<string, boolean> = new Map([
 const MAIN_CLASS =
   "ui-list-row-main col-[leading-start/end-end] row-1 m-0 grid min-w-0 grid-cols-subgrid items-center border-0 bg-transparent text-start text-inherit [font:inherit]";
 
+/** The press of a row whose metadata stands beside it (`metaPresses`): the mark and the words, the end standing in its own track. */
+const MAIN_APART_CLASS =
+  "ui-list-row-main col-[leading-start/text-end] row-1 m-0 grid min-w-0 grid-cols-subgrid items-center border-0 bg-transparent text-start text-inherit [font:inherit]";
+
+/** The end of a row whose metadata stands beside its press, which the pointer presses as the row's own anywhere but on a control of its own. */
+const END_APART_CLASS = "row-1 cursor-press";
+
+/** What in a row's metadata answers a press of its own, which the row's press then leaves alone. */
+const METADATA_CONTROL = "a, button, [role='button'], [role='link']";
+
 /** A press that is a button, pressed as a Mac's list is on the desktop, without the web's pointing hand. */
 const MAIN_BUTTON_CLASS = `${MAIN_CLASS} cursor-press disabled:cursor-default`;
+
+const MAIN_APART_BUTTON_CLASS = `${MAIN_APART_CLASS} cursor-press disabled:cursor-default`;
 
 /**
  * The leading mark, muted, a glyph at a control's glyph size and an avatar
@@ -770,6 +782,7 @@ export function ListRow({
   attachmentsOpen = false,
   meta,
   metaAt = LIST_ROW_META.MIDDLE,
+  metaPresses = false,
   titleLines = LIST_ROW_TITLE_LINES.ONE,
   actions,
   actionsAt = LIST_ROW_ACTIONS.ALWAYS,
@@ -832,6 +845,14 @@ export function ListRow({
   meta?: ReactNode;
   /** Where the metadata stands: at the row's middle, or at the end of the title's line. */
   metaAt?: ListRowMeta;
+  /**
+   * Whether the metadata holds presses of its own, a ref that opens what it
+   * names, so it stands beside the row's press in its own track rather than
+   * inside it, a press never nesting in another; a press on it anywhere but
+   * on such a control still presses the row. Only metadata at the row's
+   * middle stands apart.
+   */
+  metaPresses?: boolean | undefined;
   /** How many lines its title may run to before it is cut short. */
   titleLines?: ListRowTitleLines;
   /** The row's own acts (an IconButton, a Button), each a control beside the row's press. */
@@ -1012,9 +1033,9 @@ export function ListRow({
 
   // Note that the metadata and the chevron stand together at the row's end,
   // the place a hover row's acts step into.
-  const end =
+  const endParts =
     said(meta) || chevron ? (
-      <span className={END_CLASS}>
+      <>
         {said(meta) ? (
           <span id={metaId} className="ui-list-row-meta">
             {meta}
@@ -1025,8 +1046,10 @@ export function ListRow({
             <ChevronRightIcon />
           </span>
         ) : null}
-      </span>
+      </>
     ) : null;
+
+  const end = endParts === null ? null : <span className={END_CLASS}>{endParts}</span>;
 
   const leadMark =
     lead === undefined ? null : (
@@ -1088,6 +1111,19 @@ export function ListRow({
       />
     );
 
+  // Note that metadata holding presses of its own stands beside the row's press, since a press never nests in another.
+  const apart = metaPresses && metaPlace === LIST_ROW_META.MIDDLE && endParts !== null;
+
+  const mainClass = apart ? MAIN_APART_CLASS : MAIN_CLASS;
+
+  // Note that a press on the metadata standing apart is the row's own, but on a control of its own, which answers for itself.
+  const pressFromEnd = (event: MouseEvent<HTMLElement>) => {
+    const control = event.target instanceof Element ? event.target.closest(METADATA_CONTROL) : null;
+
+    if (control !== null && event.currentTarget.contains(control)) return;
+    pressElement.current?.click();
+  };
+
   const face = (
     <>
       {said(mark) ? (
@@ -1134,7 +1170,7 @@ export function ListRow({
         ) : null}
         {metaPlace === LIST_ROW_META.LAST ? end : null}
       </span>
-      {metaPlace === LIST_ROW_META.MIDDLE ? end : null}
+      {metaPlace === LIST_ROW_META.MIDDLE && !apart ? end : null}
     </>
   );
 
@@ -1142,7 +1178,7 @@ export function ListRow({
     <button
       ref={pressRef}
       type="button"
-      className={MAIN_BUTTON_CLASS}
+      className={apart ? MAIN_APART_BUTTON_CLASS : MAIN_BUTTON_CLASS}
       {...(checked === undefined ? {} : { role: "checkbox", "aria-checked": checked })}
       aria-current={current}
       aria-labelledby={namedBy}
@@ -1197,14 +1233,14 @@ export function ListRow({
       )}
       {press === undefined ? (
         hint === undefined ? (
-          <div className={MAIN_CLASS} aria-current={current}>
+          <div className={mainClass} aria-current={current}>
             {face}
           </div>
         ) : (
           // Note that a row that opens nothing still hangs its hint, from its words, which take the focus so the keyboard reaches the hint too.
           <hint.Hint label={hint.label} row={rowElement}>
             {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the words take the focus so the keyboard reaches the hint, as the pointer does. */}
-            <div ref={wordsRef} className={MAIN_CLASS} aria-current={current} tabIndex={0}>
+            <div ref={wordsRef} className={mainClass} aria-current={current} tabIndex={0}>
               {face}
             </div>
           </hint.Hint>
@@ -1216,6 +1252,13 @@ export function ListRow({
           {press}
         </hint.Hint>
       )}
+      {apart ? (
+        // biome-ignore lint/a11y/noStaticElementInteractions: a pointer's press on the metadata beside the row's press is the row's own, which the keyboard reaches on the press itself.
+        // biome-ignore lint/a11y/useKeyWithClickEvents: the keyboard presses the row on its press, the metadata's own controls on themselves.
+        <span className={`${END_CLASS} ${END_APART_CLASS}`} onClick={pressFromEnd}>
+          {endParts}
+        </span>
+      ) : null}
       {press === undefined || describedAs === undefined ? null : (
         // Note that a description's words outrank `aria-description`, so a chosen row says so among them.
         <span id={describedId} hidden>
@@ -1292,6 +1335,7 @@ export function ListRow({
         data-fold={fold === undefined ? undefined : "true"}
         data-fold-held={foldHeld ? "true" : undefined}
         data-end={end === null ? undefined : "true"}
+        data-end-apart={apart ? "true" : undefined}
         data-attachments={said(attachments) ? "true" : undefined}
         onKeyDown={rowMenu.onKeyDown}
         {...withContextMenu(rowMenu.doors, {})}

@@ -208,7 +208,6 @@ const WRITING_ACTIONS = [...Object.values(WRITING_MARK), WRITING_BLOCK.QUOTE];
 /** The marks the box holds, by name. */
 const INLINE_MARKS: ReadonlySet<string> = new Set(Object.values(INLINE_MARK));
 
-/** Whether a mark's name is one the box holds. */
 function isInlineMark(name: string): name is InlineMarkName {
   return INLINE_MARKS.has(name);
 }
@@ -237,7 +236,6 @@ function inlineText(node: PmNode): string {
   return node.type.name === HARD_BREAK_NODE ? NEWLINE : "";
 }
 
-/** Whether a node is a quote block. */
 function isQuote(node: PmNode): boolean {
   return node.type.name === QUOTE_NODE;
 }
@@ -386,7 +384,6 @@ function placeOf(
   return { from: run.pos + range.start - run.offset, to: run.pos + range.end - run.offset };
 }
 
-/** The words between two places in the document. */
 function textBetween(doc: PmNode, from: number, to: number): string {
   return textOf(doc.cut(from, to));
 }

@@ -495,8 +495,8 @@ env:
 - takeScreenshot: task-comment-reply
 - tapOn: "Send"
 - waitForAnimationToEnd
-- tapOn:
-    id: "BackButton"
+# The thread stands in the comment sheet over the task, which Close lets go.
+- tapOn: "Close"
 - waitForAnimationToEnd
 # Back on the list, a landscape window stands it as a split view: on an iPad
 # the system's tab sidebar beside the list and the task.

@@ -114,7 +114,6 @@ function reported(
   mentions.onTrigger(next);
 }
 
-/** Whether a top-level block opens a section. */
 function opensSection(node: PmNode): boolean {
   return node.type.name === "heading" && SECTION_LEVELS.has(Number(node.attrs.level));
 }

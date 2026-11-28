@@ -28,7 +28,7 @@ import {
   inboxGroups,
 } from "@repo/features/inbox-list-model";
 import { inboxInOrder } from "@repo/features/inbox-live";
-import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
+import { INBOX_SEARCH_PLACE, type InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -755,6 +755,20 @@ export function selectInboxBeyondFeed(
   return inboxBeyondFeed(
     shown.older ? state[LIVE_READ.INBOX_OLDER].rows : undefined,
     selectInboxFound(state, shown.place),
+  );
+}
+
+/**
+ * Every item the host holds past the account's feed, as a `select` for a
+ * screen that opens one thread by its id: the older items All read, beside
+ * the items each place's search found (`inboxBeyondFeed`), so a thread found
+ * by a search opens as it is listed, wherever it was found; none where none
+ * stands. The same object while none of the slices moves.
+ */
+export function selectInboxHeldBeyondFeed(state: AppStateSnapshot): AppInboxItems | undefined {
+  return Object.values(INBOX_SEARCH_PLACE).reduce(
+    (held, place) => inboxBeyondFeed(held, selectInboxFound(state, place)),
+    state[LIVE_READ.INBOX_OLDER].rows,
   );
 }
 

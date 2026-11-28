@@ -122,7 +122,6 @@ describe("the tab bar on a route", () => {
     ["/tasks/pull/acme-ws/acme/relay/42", true],
     ["/tasks/agent/agent-1/page", false],
     ["/tasks/page/page-1", false],
-    ["/tasks/comments/thread-1", true],
     ["/tasks/person/user-1", false],
     ["/search", false],
   ])("on %s hidden is %s", (pathname, hidden) => {

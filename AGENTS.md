@@ -166,7 +166,15 @@ component, or add the component or variant there.
   trace, a counted event, or a fixture, and session replay
   masks the live view and the transcript's screenshots; the cookies a member
   types into it stay in that agent's sandbox, and its snapshots, for the
-  sandbox's life. An agent may record its browser as a video (`record` and
+  sandbox's life. A member who may message the agent may pick elements of a
+  tab's page to note (`packages/service/src/browser-live/pick.ts`): each
+  element's selector, ref, role, name, opening tag, words, and a crop of it go
+  to that member's panel alone and are held in its window until sent, and the
+  notes go to the agent as the member's own message, its crops attached, so
+  their words, the page's address and title among them, reach the agent's
+  transcript, the model, and its traces as a typed line does, and the crops
+  are kept as a message's pictures are; none of it goes into a counted event
+  or a fixture. An agent may record its browser as a video (`record` and
   `stop_recording`), whose frames the recorder in its sandbox writes to that
   sandbox's disk until the next recording clears them, and whose WebM the
   service keeps beside the transcript the call is written to as it keeps a

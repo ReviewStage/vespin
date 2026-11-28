@@ -1,28 +1,28 @@
-// choice-list.tsx -- a decide ask's options as rows inside the composer over its field: one row each, checked at its end in copper once picked, as iOS's Settings checks a choice, the recommended one tagged, a detail line under its label, and the media it carries under it.
+// choice-list.tsx -- a decide ask's options as rows inside the composer over its field: one row each, its words drawn as Markdown so a link of ours stands as its chip, checked at its end in copper once picked, as iOS's Settings checks a choice, the recommended one tagged, a detail line under its label, and the media it carries under it.
 
-import { Button, HStack, RNHostView, Spacer, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, RNHostView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityLabel,
   buttonStyle,
-  fixedSize,
   font,
   foregroundStyle,
   frame,
-  lineLimit,
   padding,
-  strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
+import { linkLabels } from "@repo/features/mention-link";
 import { Fragment } from "react";
-import { useAccessibilitySize } from "./accessibility.js";
-import { ASK_ROW_PADDING, CARD_WORDS_INSET, CardDivider } from "./ask-card.js";
+import { Pressable } from "react-native";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { ASK_ROW_PADDING, CARD_WORDS_INSET, CardDivider, RecommendedTag } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
+import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { PickedCheck } from "./settings-form.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
-import { RADIUS, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 export type Choice = {
@@ -55,34 +55,11 @@ type ChoiceListProps = {
   readonly title?: string | undefined;
   /** None of these, offered as a row after the options where their media asks a pick of them; none where it is not offered. */
   readonly none?: NoneChoice | undefined;
+  /** The thread's repository, `owner/name`, whose GitHub pages are its files' chips. */
+  readonly repository: string | null | undefined;
+  /** Opens a link or a chip pressed in an option's words, by the address it was written as, where the app draws it or in Safari. */
+  readonly onOpenLink: (address: string) => void;
 };
-
-/** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked; its one word on one line at every size, never broken inside the tag. */
-function RecommendedTag() {
-  const colors = useColors();
-
-  return (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
-        foregroundStyle(colors.TEXT_MUTED),
-        // Note that the tag keeps its own width, since at the largest sizes the row's column offered it less and SwiftUI broke its word as "Recommend-ed".
-        lineLimit(1),
-        fixedSize(),
-        padding({ horizontal: 5, vertical: 1 }),
-        strokeBorder({
-          content: colors.CHIP_EDGE,
-          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-          shape: "roundedRectangle",
-          cornerRadius: RADIUS.TAG,
-          style: { lineWidth: 1 },
-        }),
-      ]}
-    >
-      {RECOMMENDED}
-    </Text>
-  );
-}
 
 /** What pressing `label` leaves picked: it alone for one choice, or it toggled among several. */
 function nextPicked(
@@ -95,75 +72,93 @@ function nextPicked(
   return picked.includes(label) ? picked.filter((each) => each !== label) : [...picked, label];
 }
 
-/** One option's row: its label in the row title's style with the tag beside it, or under it at an accessibility size, its detail in the row line's style, muted, and the copper check at its end once picked. */
+/** What a row is heard as: its label, the recommended tag, and its detail, each link said by its label rather than its address, as a step is heard. */
+function heardAs(choice: Choice, recommended: boolean): string {
+  const detail = choice.detail === undefined ? undefined : linkLabels(choice.detail);
+
+  return [linkLabels(choice.label), recommended ? RECOMMENDED : undefined, detail]
+    .filter((part) => part !== undefined)
+    .join(", ");
+}
+
+/**
+ * One option's row: its label as the thread's Markdown draws it, over its
+ * detail in the row line's muted look, so a link of ours in either stands
+ * as its chip (`@repo/features/mention-link`'s `linkChipOf`), as the panel's
+ * option draws it; then the tag and the copper check at its end once
+ * picked, the tag standing under the words instead at an accessibility
+ * size, so they keep their lines. A press on the words or on the row's end
+ * picks the option, but a chip's press opens its link and picks nothing, as
+ * a step's chip ticks nothing (`StepRow`). Note that the words stand in a
+ * React Native host beside the row's end, never inside a SwiftUI button,
+ * which would take the chip's press for its own; and that the end is the
+ * row's one element VoiceOver picks, heard by its words, while the words'
+ * lines offer each chip they hold as their own actions.
+ */
 function ChoiceRow({
   choice,
   picked,
   recommended,
   onPress,
+  repository,
+  onOpenLink,
 }: {
   readonly choice: Choice;
   readonly picked: boolean;
   readonly recommended: boolean;
   readonly onPress: () => void;
+  readonly repository: string | null | undefined;
+  readonly onOpenLink: (address: string) => void;
 }) {
-  const colors = useColors();
-  // Note that at an accessibility size the tag stands under the label rather than beside it, so the label keeps its lines instead of wrapping around a tag.
   const stacked = useAccessibilitySize();
-
-  const label = (
-    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}>
-      {choice.label}
-    </Text>
-  );
+  const markSize = useScaledSize(MARK_SIZE.GLYPH);
+  const tag = recommended ? <RecommendedTag /> : null;
 
   return (
-    <Button
-      onPress={onPress}
+    <HStack
+      spacing={SPACE.ROW}
       modifiers={[
-        buttonStyle("plain"),
-        accessibilityLabel(
-          [choice.label, recommended ? RECOMMENDED : undefined, choice.detail]
-            .filter((part) => part !== undefined)
-            .join(", "),
-        ),
-        ...(picked ? [accessibilityAddTraits(["isSelected"])] : []),
+        padding(ASK_ROW_PADDING),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
       ]}
     >
-      <HStack
-        spacing={SPACE.ROW}
+      <VStack alignment="leading" spacing={SPACE.TIGHT}>
+        <RNHostView matchContents={{ vertical: true }}>
+          <Pressable accessible={false} onPress={onPress} style={{ gap: 2 }}>
+            <Markdown words={choice.label} repository={repository} onOpenLink={onOpenLink} />
+            {choice.detail === undefined ? null : (
+              <Markdown
+                words={choice.detail}
+                look={MARKDOWN_LOOK.LINE}
+                repository={repository}
+                onOpenLink={onOpenLink}
+              />
+            )}
+          </Pressable>
+        </RNHostView>
+        {stacked ? tag : null}
+      </VStack>
+      <Button
+        onPress={onPress}
         modifiers={[
-          padding(ASK_ROW_PADDING),
-          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          buttonStyle("plain"),
+          accessibilityLabel(heardAs(choice, recommended)),
+          ...(picked ? [accessibilityAddTraits(["isSelected"])] : []),
         ]}
       >
-        <VStack alignment="leading" spacing={2}>
-          {stacked ? (
-            <VStack alignment="leading" spacing={SPACE.TIGHT}>
-              {label}
-              {recommended ? <RecommendedTag /> : null}
-            </VStack>
-          ) : (
-            <HStack spacing={SPACE.TIGHT + 2}>
-              {label}
-              {recommended ? <RecommendedTag /> : null}
-            </HStack>
-          )}
-          {choice.detail === undefined ? null : (
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_LINE }),
-                foregroundStyle(colors.TEXT_MUTED),
-              ]}
-            >
-              {choice.detail}
-            </Text>
-          )}
-        </VStack>
-        <Spacer />
-        {picked ? <PickedCheck /> : null}
-      </HStack>
-    </Button>
+        {/* Note that the end keeps the check's room while nothing is picked, so it is still a press and an element VoiceOver finds. */}
+        <HStack
+          spacing={SPACE.ROW}
+          modifiers={[
+            frame({ minWidth: markSize, minHeight: markSize }),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          ]}
+        >
+          {stacked ? null : tag}
+          {picked ? <PickedCheck /> : null}
+        </HStack>
+      </Button>
+    </HStack>
   );
 }
 
@@ -185,7 +180,18 @@ function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] })
  * unpicked row, whether one or several may be picked.
  */
 export function ChoiceList(props: ChoiceListProps) {
-  const { choices, recommended = [], picked, multiple = false, onChange, title, none } = props;
+  const {
+    choices,
+    recommended = [],
+    picked,
+    multiple = false,
+    onChange,
+    title,
+    none,
+    repository,
+    onOpenLink,
+  } = props;
+
   const colors = useColors();
 
   return (
@@ -213,6 +219,8 @@ export function ChoiceList(props: ChoiceListProps) {
               picked={picked.includes(choice.label)}
               recommended={recommended.includes(choice.label)}
               onPress={() => onChange(nextPicked(picked, choice.label, multiple))}
+              repository={repository}
+              onOpenLink={onOpenLink}
             />
             {choice.media === undefined || choice.media.length === 0 ? null : (
               <ChoiceMediaBlock media={choice.media} />
@@ -227,6 +235,8 @@ export function ChoiceList(props: ChoiceListProps) {
               picked={none.picked}
               recommended={false}
               onPress={none.onPress}
+              repository={repository}
+              onOpenLink={onOpenLink}
             />
           </>
         )}

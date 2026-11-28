@@ -120,7 +120,6 @@ function writtenOf(mention: MentionNode): string {
   return mention.label ?? `${MENTION_SIGIL}${mention.name}`;
 }
 
-/** Runs of words as plain text. */
 function plainOf(words: readonly JSONContent[]): string {
   return words.map((word) => word.text ?? "").join("");
 }
@@ -197,7 +196,6 @@ export function mentionNode(drawMention: MentionDrawer | undefined) {
   });
 }
 
-/** A text node's link, where it carries one. */
 function linkOf(node: JSONContent): string | undefined {
   if (node.type !== "text") return undefined;
   const href: unknown = node.marks?.find((mark) => mark.type === LINK_MARK)?.attrs?.href;
@@ -293,7 +291,6 @@ function titled(word: JSONContent): boolean {
   return title !== undefined && title !== null && title !== "";
 }
 
-/** A run of a link's words without the link. */
 function withoutLink(word: JSONContent): JSONContent {
   const marks = (word.marks ?? []).filter((mark) => mark.type !== LINK_MARK);
 

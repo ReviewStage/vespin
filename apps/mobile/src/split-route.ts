@@ -15,6 +15,9 @@ export const SPLIT_TAB = {
 
 export type SplitTab = (typeof SPLIT_TAB)[keyof typeof SPLIT_TAB];
 
+/** The route param an item pushed from a list its tab's root does not hold carries, such as a thread opened from an agent's own Inbox, so it stays a page over that list rather than handing itself to the root's split view, which would pop the list and the pages under it. */
+export const STAYS_PAGE = { PARAM: "stays", PAGE: "page" } as const;
+
 /** An item's pushed route on its own tab's stack. */
 function itemRoute(tab: SplitTab, id: string): string {
   return iosRouteOnTab(`${tab}/${encodeURIComponent(id)}`, undefined);

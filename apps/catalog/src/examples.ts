@@ -106,6 +106,7 @@ import { PAGERS_EXAMPLE } from "./examples/pagers";
 import { PAGINATION_EXAMPLE } from "./examples/pagination";
 import { PANE_BARS_EXAMPLE } from "./examples/pane-bars";
 import { PANE_PINS_EXAMPLE } from "./examples/pane-pins";
+import { PICK_NOTES_EXAMPLE } from "./examples/pick-notes";
 import { PICTURE_SETS_EXAMPLE } from "./examples/picture-sets";
 import { PICTURE_TILES_EXAMPLE } from "./examples/picture-tiles";
 import { POPOVER_PANELS_EXAMPLE } from "./examples/popover-panels";
@@ -357,6 +358,7 @@ export const EXAMPLES: readonly Example[] = [
   KEEP_FOCUS_EXAMPLE,
   PORTAL_FENCE_EXAMPLE,
   REMOTE_SURFACE_EXAMPLE,
+  PICK_NOTES_EXAMPLE,
   MARKDOWN_EXAMPLE,
   EDITABLE_DOCUMENT_EXAMPLE,
 ];

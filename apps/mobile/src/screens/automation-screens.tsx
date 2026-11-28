@@ -36,6 +36,7 @@ import {
   automationPhoneLine,
   READING_AUTOMATIONS,
 } from "@repo/features/automation-words";
+import { iosAgentRoute } from "@repo/features/ios-app-links";
 import { agentName } from "@repo/features/model-label";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { TASKS_VIEW_WORDS } from "@repo/features/tasks-page-model";
@@ -120,6 +121,9 @@ const FOLDS_REFUSED = "Couldn't keep how the automations are folded.";
 
 /** Which of the list's groups stand folded until the reader folds or opens one: Finished alone, as the desktop's list folds it. */
 const FOLDED_AT_FIRST: readonly AutomationListGroup[] = [AUTOMATION_LIST_GROUP.FINISHED];
+
+/** What a row's long press says before its Manager's name, opening the Manager's page. */
+const OPEN_MANAGER = "Open";
 
 /** What the list says where a search keeps none. */
 const NO_MATCH = "No automations match.";
@@ -631,7 +635,8 @@ function automationKey(automation: AutomationSummary): string {
 /**
  * One automation's row: what fires it and when it runs next, the Manager its
  * runs land on and how its newest run went, and when, faded while it is off. Its swipe and long press hold
- * Run now and its switch; its long press then Copy link and, for an owner or
+ * Run now and its switch; its long press then opens its Manager, where its
+ * runs land on one, then Copy link and, for an owner or
  * an admin where its creator left, Take over; and Delete, red behind a
  * swipe from the trailing edge and last in the menu, asks first.
  */
@@ -655,6 +660,21 @@ function AutomationListRow({
 }) {
   const maker = useAutomationMaker(automation, workspace.id);
   const manager = automationManager(automation, managers);
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+
+  // Note that the Manager opens from the row's long press, as an agent's pull request does, since a row never nests a second press over its own.
+  const openManager =
+    manager === undefined
+      ? []
+      : [
+          {
+            label: `${OPEN_MANAGER} ${agentName(manager)}`,
+            symbol: GLYPH.OPEN,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => router.push(onOwnTab(iosAgentRoute(manager.id))),
+          },
+        ];
 
   const takeOver = takesOver(maker, workspace)
     ? [
@@ -681,6 +701,7 @@ function AutomationListRow({
       onPress={onOpen}
       acts={automationRowActs(automation, acts)}
       more={[
+        ...(openManager.length === 0 ? [] : [openManager]),
         [
           {
             label: AUTOMATION_PHONE_WORDS.COPY_LINK,

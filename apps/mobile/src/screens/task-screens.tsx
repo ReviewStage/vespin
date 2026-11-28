@@ -321,6 +321,7 @@ import {
   useListColumn,
   useSplitBuild,
 } from "./app-sidebar.js";
+import { useOpenCommentThread, useOpenNewComment } from "./comment-screens.js";
 import { DESCRIPTION_EDIT_WORDS, EDIT_DESCRIPTION_ROUTE } from "./description-edit-screens.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
@@ -3221,8 +3222,8 @@ function OverviewDescription({
   /** Edits the words in place, the caret where a press on a block landed, by where the block starts in the Markdown; none where they can't be edited here. */
   readonly onPressBlock?: ((at: number, x: number, y: number) => void) | undefined;
 }) {
-  const router = useRouter();
-  const onOwnTab = useOnOwnTab();
+  const openCommentThread = useOpenCommentThread();
+  const openNewComment = useOpenNewComment();
   const openLink = useOpenLink(overview.task.workspaceId);
   const { task } = overview;
   const threads = useTaskComments(task.id);
@@ -3243,11 +3244,7 @@ function OverviewDescription({
     whole,
   );
 
-  const openThread = (threadId: string) =>
-    router.push({
-      pathname: onOwnTab("/tasks/comments/[id]"),
-      params: { id: threadId, task: task.id },
-    });
+  const openThread = (threadId: string) => openCommentThread(task.id, threadId);
 
   if (blocks.length === 0) {
     return (
@@ -3295,15 +3292,12 @@ function OverviewDescription({
                         label: COMMENT_WORDS.COMMENT,
                         symbol: GLYPH.COMMENT,
                         tone: ROW_ACTION_TONE.NEUTRAL,
-                        onPress: () => {
-                          const quote = block.quote ?? "";
-                          const from = `${block.from}`;
-                          const to = `${block.to}`;
-                          router.push({
-                            pathname: onOwnTab("/tasks/comments/new"),
-                            params: { task: task.id, from, to, quote },
-                          });
-                        },
+                        onPress: () =>
+                          openNewComment(task.id, {
+                            from: block.from,
+                            to: block.to,
+                            quote: block.quote ?? "",
+                          }),
                       },
                     ]
               }
@@ -3652,6 +3646,7 @@ function OverviewPage({
 }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
+  const openCommentThread = useOpenCommentThread();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
   useNoteOpened({ kind: SEARCH_FOUND_KIND.TASKS, id: task.id, workspaceId: task.workspaceId });
@@ -3684,8 +3679,7 @@ function OverviewPage({
     if (related.has(id))
       router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: id })));
     else if (agents.has(id)) router.push(onOwnTab(iosAgentRoute(id)));
-    else if (commented.has(id))
-      router.push({ pathname: onOwnTab("/tasks/comments/[id]"), params: { id, task: task.id } });
+    else if (commented.has(id)) openCommentThread(task.id, id);
   };
 
   return (

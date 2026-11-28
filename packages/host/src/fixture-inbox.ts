@@ -515,7 +515,11 @@ const INVITES_ITEMS: readonly InboxItem[] = [
               label: "The member who sent it",
               detail: "Admins can't touch someone else's invite.",
             },
-            { label: "Any admin", detail: "Senders wait on an admin to take one back." },
+            // Note that a detail names a task by its bare address, as an agent writes one, so each client's option draws it as its chip.
+            {
+              label: "Any admin",
+              detail: `Senders wait on an admin to take one back, as ${linkOf({ kind: LINK_DESTINATION.TASK, taskId: "42" }, FIXTURE_WORKSPACE_SLUG)} has it.`,
+            },
             { label: "Both", detail: "The sender, or any admin of the workspace." },
           ],
           recommended: "Both",
