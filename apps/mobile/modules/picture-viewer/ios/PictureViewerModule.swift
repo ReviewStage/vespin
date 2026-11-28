@@ -11,8 +11,10 @@
 // than UIKit's `.zoom` transition, which never finished out of the app's
 // thumbnails on iOS 27, leaving the picture hidden behind it. The picture's full
 // size is read and decoded off the main thread and swapped in once it lands.
-// A pinch or a double tap zooms, a tap hides or shows the bars, the bar names
-// who showed it and when, and Share opens the system's sheet, which holds Copy
+// A pinch or a double tap zooms, a zoomed picture pans only across itself
+// and its edge hands a swipe on to the next, a tap fades the bars and the
+// status bar out or in, even over a screenshot's words, the bar names who
+// showed it and when, and Share opens the system's sheet, which holds Copy
 // and Save Image. A swipe sideways steps through the other pictures of the
 // same thread, message, or description, and the text in a picture, such as a
 // screenshot's, can be selected and copied with Live Text. Files other than
@@ -27,6 +29,9 @@ private let mostZoom: CGFloat = 4
 
 /// How far a double tap zooms in.
 private let doubleTapZoom: CGFloat = 2.5
+
+/// How long the bars fade out or in on a tap, in seconds.
+private let barFadeSeconds: TimeInterval = 0.25
 
 /// How far up the view tree a thumbnail's image view is looked for from the view a press lands on.
 private let ancestorReach = 6
@@ -118,12 +123,16 @@ struct PictureEntry {
 }
 
 /// One picture full screen: a scroll view zooming its image, read at full size and decoded off the main thread, with Live Text over it.
-final class PicturePage: UIViewController, UIScrollViewDelegate {
+final class PicturePage: UIViewController, UIScrollViewDelegate, UIGestureRecognizerDelegate {
   let entry: PictureEntry
   let index: Int
   private let scroll = UIScrollView()
   private let imageView = UIImageView()
   private let liveText = ImageAnalysisInteraction()
+  private let tap = UITapGestureRecognizer()
+  private let doubleTap = UITapGestureRecognizer()
+  /// Whether words stood selected as the tap's touch came down, before Live Text's own tap cleared them.
+  private var selectedAtTouch = false
   private let onTap: () -> Void
 
   init(entry: PictureEntry, index: Int, onTap: @escaping () -> Void) {
@@ -177,11 +186,13 @@ final class PicturePage: UIViewController, UIScrollViewDelegate {
     imageView.accessibilityLabel = entry.title
     scroll.addSubview(imageView)
 
-    let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
+    doubleTap.addTarget(self, action: #selector(doubleTapped(_:)))
     doubleTap.numberOfTapsRequired = 2
+    doubleTap.delegate = self
     scroll.addGestureRecognizer(doubleTap)
-    let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
+    tap.addTarget(self, action: #selector(tapped(_:)))
     tap.require(toFail: doubleTap)
+    tap.delegate = self
     scroll.addGestureRecognizer(tap)
 
     readFullSize()
@@ -189,11 +200,27 @@ final class PicturePage: UIViewController, UIScrollViewDelegate {
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    // Note that the image stands as large as the screen while it isn't zoomed, so a turn of the device fits it anew.
-    guard !zoomedIn else { return }
-    imageView.frame = scroll.bounds
-    scroll.contentSize = scroll.bounds.size
+    // Note that a turn of the device fits the picture anew while it isn't zoomed, and centers it anew at its zoom while it is, so none of it stands out of reach.
+    if zoomedIn { centerPicture() } else { fitPicture() }
   }
+
+  /// Sizes the image view to the picture fitted inside the screen, so a zoom pans across the picture alone and stops at its edges, where a swipe goes on to the next page.
+  private func fitPicture() {
+    scroll.zoomScale = scroll.minimumZoomScale
+    let size = imageView.image.map { fitted($0.size, in: scroll.bounds).size } ?? scroll.bounds.size
+    imageView.frame = CGRect(origin: .zero, size: size)
+    scroll.contentSize = size
+    centerPicture()
+  }
+
+  /// Centers the picture on any side where it stands narrower than the screen, as it does unzoomed or zoomed only a little.
+  private func centerPicture() {
+    let x = max(0, (scroll.bounds.width - scroll.contentSize.width) / 2)
+    let y = max(0, (scroll.bounds.height - scroll.contentSize.height) / 2)
+    imageView.center = CGPoint(x: scroll.contentSize.width / 2 + x, y: scroll.contentSize.height / 2 + y)
+  }
+
+  func scrollViewDidZoom(_ scrollView: UIScrollView) { centerPicture() }
 
   override func viewDidDisappear(_ animated: Bool) {
     super.viewDidDisappear(animated)
@@ -213,9 +240,11 @@ final class PicturePage: UIViewController, UIScrollViewDelegate {
     }
     Task { [weak self] in
       do {
-        guard let ready = try await read.value else { return }
-        self?.imageView.image = ready
-        await self?.readWords(of: ready)
+        guard let ready = try await read.value, let self else { return }
+        imageView.image = ready
+        // Note that a picture opened with no thumbnail to draw from is fitted only now that its size is known.
+        if !zoomedIn { fitPicture() }
+        await readWords(of: ready)
       } catch {
         NSLog("The picture viewer could not read its picture at full size.")
       }
@@ -238,7 +267,22 @@ final class PicturePage: UIViewController, UIScrollViewDelegate {
     }
   }
 
-  @objc private func tapped() { onTap() }
+  /// Note that the taps recognize beside Live Text's own, which stands over the whole picture once it found words, so a tap on a screenshot still shows or hides the bars and a double tap still zooms.
+  func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+    other.view === imageView
+  }
+
+  func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    if gesture === tap { selectedAtTouch = liveText.hasActiveTextSelection }
+    return true
+  }
+
+  /// Shows or hides the bars, unless the tap was Live Text's: one clearing selected words, or one opening a link, address, or date, which a tap opens only while the Live Text button highlights them.
+  @objc private func tapped(_ gesture: UITapGestureRecognizer) {
+    let opensDetector = liveText.selectableItemsHighlighted && liveText.hasDataDetector(at: gesture.location(in: imageView))
+    guard !selectedAtTouch, !opensDetector else { return }
+    onTap()
+  }
 
   @objc private func doubleTapped(_ gesture: UITapGestureRecognizer) {
     if zoomedIn {
@@ -345,14 +389,28 @@ final class PictureViewerController: UIPageViewController, UIPageViewControllerD
     if completed, let at = shown?.index { name(at) }
   }
 
+  /// Fades the bars and the status bar out or in together with the ground, as Photos does, rather than sliding them away; the bars are hidden once faded, so VoiceOver passes them by.
   private func toggleBars() {
     barsHidden.toggle()
-    navigationController?.setNavigationBarHidden(barsHidden, animated: true)
-    navigationController?.setToolbarHidden(barsHidden, animated: true)
-    UIView.animate(withDuration: 0.25) {
+    guard let stack = navigationController else { return }
+    let hiding = barsHidden
+    if !hiding {
+      stack.navigationBar.alpha = 0
+      stack.toolbar.alpha = 0
+      stack.setNavigationBarHidden(false, animated: false)
+      stack.setToolbarHidden(false, animated: false)
+    }
+    UIView.animate(withDuration: barFadeSeconds, animations: {
+      stack.navigationBar.alpha = hiding ? 0 : 1
+      stack.toolbar.alpha = hiding ? 0 : 1
       self.view.backgroundColor = self.ground
       self.setNeedsStatusBarAppearanceUpdate()
-    }
+    }, completion: { _ in
+      // Note that a tap again before the fade ended leaves the bars to that tap.
+      guard hiding, self.barsHidden else { return }
+      stack.setNavigationBarHidden(true, animated: false)
+      stack.setToolbarHidden(true, animated: false)
+    })
   }
 
   /// A drag down begins only on a picture that isn't zoomed in, and only downward, so a zoomed picture pans and a sideways swipe stays the pages'.
