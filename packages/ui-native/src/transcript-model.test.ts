@@ -1,6 +1,7 @@
 import { agentParts, WHOLE_PART } from "@repo/features/agent-parts";
 import {
   AGENT_ATTACHMENT_TYPE,
+  AGENT_BRIEF,
   AGENT_SENDER,
   CHECK_SUMMARY,
   PART_CUT_FIELD,
@@ -13,6 +14,7 @@ import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { describe, expect, it } from "vitest";
 import {
+  CARD_LEAD,
   drawnCallIds,
   managerChatItems,
   managerThreadItems,
@@ -302,6 +304,61 @@ describe("transcriptItems", () => {
 
     expect(opened[0]).toMatchObject({ card: { title: "Triage the new issues.", open: true } });
   });
+
+  it.each([
+    {
+      opens: "an agent's on the task's description",
+      given: { brief: AGENT_BRIEF.DESCRIPTION },
+      lead: CARD_LEAD.DESCRIPTION,
+    },
+    {
+      opens: "a worker's on the task it was handed",
+      given: { worker: true },
+      lead: CARD_LEAD.WORKER,
+    },
+  ])(
+    "opens $opens in its card, folded under its first line until opened, leaving later lines as sent",
+    ({ given, lead }) => {
+      const read = (toggles: TranscriptToggles) =>
+        transcriptItems(
+          [
+            {
+              id: "description",
+              role: MESSAGE_ROLE.USER,
+              parts: [
+                { type: "text", text: "# Fold long briefs\n\nEvery agent opens on its brief." },
+              ],
+            },
+            { id: "later", role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Thanks." }] },
+          ],
+          {
+            writing: false,
+            readerId: undefined,
+            toggles,
+            now: 2,
+            pullRequests: [],
+            ...given,
+          },
+        );
+
+      const items = read(NO_TOGGLES);
+
+      expect(items).toMatchObject([
+        {
+          kind: TRANSCRIPT_ITEM.SAID,
+          card: { lead, title: "Fold long briefs", open: false },
+        },
+        { kind: TRANSCRIPT_ITEM.SAID, words: "Thanks." },
+      ]);
+      expect(items[1]).not.toHaveProperty("card");
+
+      const first = items[0];
+
+      const opened = read(first === undefined ? NO_TOGGLES : toggledAt(NO_TOGGLES, first));
+
+      expect(opened[0]).toMatchObject({ card: { title: "Fold long briefs", open: true } });
+    },
+  );
 
   it("stands one sender's lines sent close together in a run, and the day and time only over talk that picks up again, never joining the reader to an app, and stands every line but the reader's own received", () => {
     const minute = 60 * 1000;

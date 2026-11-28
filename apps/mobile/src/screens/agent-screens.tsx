@@ -966,6 +966,8 @@ const AgentConversation = memo(function AgentConversation({
             pullRequests,
             wholePart: whole.read,
             origin,
+            // Note that the description's card stands on the transcript's first line, so it waits until no older page is left to read, as the run's card does.
+            brief: transcript?.before === undefined ? shown?.brief : undefined,
             placeAddress,
             waitingCalls,
           }),
@@ -980,6 +982,8 @@ const AgentConversation = memo(function AgentConversation({
       pullRequests,
       whole.read,
       origin,
+      transcript?.before,
+      shown?.brief,
       placeAddress,
     ],
   );

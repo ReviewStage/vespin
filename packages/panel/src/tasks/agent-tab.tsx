@@ -96,6 +96,7 @@ import {
   type WorkerJobs,
 } from "@repo/features/tool-call-model";
 import {
+  BRIEF_LABEL,
   DRAWN_WORDS,
   type DrawnWords,
   drawnMessageWords,
@@ -469,7 +470,7 @@ interface TranscriptLead {
 
 /** An agent's transcript: the description it was handed, and the agent starting. */
 export const AGENT_LEAD: TranscriptLead = {
-  label: "Description",
+  label: BRIEF_LABEL.DESCRIPTION,
   icon: <DocumentIcon />,
   description: true,
   startingLine: "The agent is starting.",
@@ -506,14 +507,14 @@ const NONE_DISABLED: readonly string[] = [];
 
 /** A worker's transcript: the subagent task it was handed, and the worker starting. */
 const WORKER_LEAD: TranscriptLead = {
-  label: "Subagent task",
+  label: BRIEF_LABEL.SUBAGENT_TASK,
   icon: <EntityGlyph kind={ENTITY_KIND.AGENT} />,
   startingLine: "The worker is starting.",
 };
 
 /** An automation's run: the prompt it handed the agent, and the agent starting. */
 const AUTOMATION_LEAD: TranscriptLead = {
-  label: "Prompt",
+  label: BRIEF_LABEL.PROMPT,
   icon: <ZapIcon />,
   startingLine: "The agent is starting.",
 };

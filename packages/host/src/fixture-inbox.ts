@@ -216,6 +216,11 @@ import {
   fixtureManagerTranscript,
 } from "./fixture-agent-transcript.js";
 import {
+  FIXTURE_DESCRIPTION_AGENT_ID,
+  fixtureDescriptionAgent,
+  fixtureDescriptionTranscript,
+} from "./fixture-description-agent.js";
+import {
   FIXTURE_PICTURE_PNG,
   FIXTURE_PLAN_PDF,
   FIXTURE_SCREENSHOT_PNG,
@@ -1162,6 +1167,13 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
     agentOn(AGENT.ROUNDING, TASK.ROUNDING, "Fix ledger rounding", AGENT_STATUS.COMPLETED, 5 * DAY),
   ],
 ]);
+
+/** The agent started on the rounding task's description, whose page opens on its Description card: staged for its page and its transcript alone, in no task's list (`fixture-description-agent.ts`). */
+const DESCRIPTION_AGENT_AGO = 6 * DAY;
+
+const DESCRIPTION_AGENT = fixtureDescriptionAgent(
+  agentOn(AGENT.ROUNDING, TASK.ROUNDING, "", AGENT_STATUS.COMPLETED, DESCRIPTION_AGENT_AGO),
+);
 
 /** When the release Manager was started, which its chat counts from. */
 const MANAGER_STARTED = LANDED - 2 * HOUR;
@@ -2345,6 +2357,7 @@ const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix le
 
 /** The digest agent's run, which the weekly digest automation's newest run opens. */
 const DIGEST_TRANSCRIPT = fixtureDigestTranscript(DIGEST_STARTED, ADA, "Send the weekly digest");
+const DESCRIPTION_TRANSCRIPT = fixtureDescriptionTranscript(LANDED - DESCRIPTION_AGENT_AGO, ADA);
 
 /** The release Manager's run, whose turns' work its chat keeps a press away. */
 const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
@@ -2508,7 +2521,7 @@ function withQueued(transcript: AppTranscript): AppTranscript {
   return { ...transcript, word: { ...word, queue: { messages: queued, revision: 1 } } };
 }
 
-/** The transcripts main holds with the invitations, rounding, and digest agents' and the Manager's laid over them, one object for each of main's. */
+/** The transcripts main holds with the invitations, rounding, digest, and description agents' and the Manager's laid over them, one object for each of main's. */
 const STAGED_TRANSCRIPTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
   AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
@@ -2527,6 +2540,10 @@ function stagedTranscripts(
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
     [AGENT.DIGEST]: { ...held[AGENT.DIGEST], [OWN_TRANSCRIPT]: { rows: DIGEST_TRANSCRIPT } },
     [AGENT.MANAGER]: { ...held[AGENT.MANAGER], [OWN_TRANSCRIPT]: { rows: MANAGER_TRANSCRIPT } },
+    [FIXTURE_DESCRIPTION_AGENT_ID]: {
+      ...held[FIXTURE_DESCRIPTION_AGENT_ID],
+      [OWN_TRANSCRIPT]: { rows: DESCRIPTION_TRANSCRIPT },
+    },
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);
@@ -3474,7 +3491,7 @@ function stagedItem(itemId: string): InboxItem | undefined {
 
 /** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER, DESCRIPTION_AGENT].find((each) => each.id === agentId);
 }
 
 /* ----- The automations ----- */

@@ -47,8 +47,10 @@ import {
 import { AGENT_TOOL, isShowMediaTool } from "@repo/features/agent-tools";
 import type { ManagerChatSending, SendingMessage } from "@repo/features/agent-view";
 import {
+  AGENT_BRIEF,
   AGENT_SENDER,
   type AgentAttachment,
+  type AgentBrief,
   type AgentOrigin,
   type AgentPullRequest,
   type AgentSender,
@@ -289,8 +291,18 @@ export interface ChatThreadMark {
   readonly words: string;
 }
 
-/** The card a line stands folded in: its title, and whether the reader opened it. */
+/** What a transcript's opening card holds, as the panel's leads name it: an automation's prompt, the task's description the agent was handed, or the task a worker was. */
+export const CARD_LEAD = {
+  PROMPT: "prompt",
+  DESCRIPTION: "description",
+  WORKER: "worker",
+} as const;
+
+export type CardLead = (typeof CARD_LEAD)[keyof typeof CARD_LEAD];
+
+/** The card a line stands folded in: what it holds, its title, and whether the reader opened it. */
 export interface SaidCard {
+  readonly lead: CardLead;
   readonly title: string;
   readonly open: boolean;
 }
@@ -325,7 +337,7 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
       readonly body?: string | undefined;
-      /** The card an automation's prompt stands folded in, as the panel's Prompt card stands: titled by its first line, its words drawn only while open; none for every other line. */
+      /** The card an automation's prompt or the description an agent was handed stands folded in, as the panel's Prompt and Description cards stand: titled by its first line, its words drawn only while open; none for every other line. */
       readonly card?: SaidCard | undefined;
       /** The account that sent it, where the reader did not, which a run of lines is told apart by. */
       readonly by: string | undefined;
@@ -459,6 +471,10 @@ interface TranscriptReading {
   readonly wholePart?: ((cut: AgentPartCut) => WholePartRead | undefined) | undefined;
   /** What the transcript opens on where an automation's run started the agent, drawn on its first line; none for any other agent, or while older pages are still unread. */
   readonly origin?: TranscriptOrigin | undefined;
+  /** What the agent was handed as its first line, which stands in its Description card where it is the task's description; none for an agent no list holds, or while older pages are still unread. */
+  readonly brief?: AgentBrief | undefined;
+  /** Whether the transcript is a worker's (`workerLines`), whose first line is the task it was handed, which stands as the panel's Subagent task card; none for an agent's own. */
+  readonly worker?: boolean | undefined;
   /** The address of a place of the agent's workspace, such as the agent a line was suggested by or a line's sender, which the line's head opens; none where the workspace can't be named, when the head names them alone. */
   readonly placeAddress?: ((place: LinkDestination) => string | undefined) | undefined;
   /** The calls the agent holds for the reader's answer, by id, whose fold stands open until the reader folds it, so their rows and their answers stay drawn rather than standing in a banner over the composer. */
@@ -466,7 +482,7 @@ interface TranscriptReading {
 }
 
 /** How a Manager's chat is read for its list: as a transcript is, and the greeting it opens on. */
-interface ChatReading extends Omit<TranscriptReading, "origin"> {
+interface ChatReading extends Omit<TranscriptReading, "origin" | "brief" | "worker"> {
   /** The greeting a Manager's chat opens on, drawn as its first bubble (`managerGreeting`); none while older pages are still unread. */
   readonly greeting?: string | undefined;
   /** The reader's messages on their way to the chat, oldest sent first, as the host draws them until their rows land (`AppManagerChat.sending`). */
@@ -844,7 +860,38 @@ function originItem(
     from: origin.from,
     body: origin.body,
     // Note that the prompt stands closed under its first line, as the panel's Prompt card does, since it is there to be read rather than in the way of the agent's own words, and a prompt runs long.
-    card: { title: cardTitle(words), open: foldTurned(toggles, base.place) },
+    card: {
+      lead: CARD_LEAD.PROMPT,
+      title: cardTitle(words),
+      open: foldTurned(toggles, base.place),
+    },
+  };
+}
+
+/**
+ * The description an agent was handed, or the task a worker was, as its
+ * first line, as the panel's Description and Subagent task cards stand it:
+ * the line as sent, under whoever sent it, folded in its card under its
+ * first line until the reader opens it. A line GitHub sent keeps its own
+ * card.
+ */
+function briefItem(
+  line: AgentTranscriptMessage,
+  base: ItemBase,
+  reading: TranscriptReading,
+  lead: CardLead,
+): TranscriptItem {
+  const item = saidItem(line, base, reading);
+
+  if (item.kind !== TRANSCRIPT_ITEM.SAID) return item;
+
+  return {
+    ...item,
+    card: {
+      lead,
+      title: cardTitle(item.words),
+      open: foldTurned(reading.toggles, base.place),
+    },
   };
 }
 
@@ -1379,9 +1426,16 @@ export function transcriptItems(
   const { origin } = reading;
   const read: ItemsReading = { ...reading, computerApps: computerAppsOf(messages) };
 
-  // Note that an automation's prompt is the first line anyone sent, which the run's card stands in place of.
+  // Note that an automation's prompt, the description an agent was handed, and the task a worker was are each the first line anyone sent, which its card stands in place of.
+  const briefLead =
+    reading.worker === true
+      ? CARD_LEAD.WORKER
+      : reading.brief === AGENT_BRIEF.DESCRIPTION
+        ? CARD_LEAD.DESCRIPTION
+        : undefined;
+
   const head =
-    origin === undefined
+    origin === undefined && briefLead === undefined
       ? undefined
       : placed.find(({ message }) => message.role === MESSAGE_ROLE.USER)?.message.id;
 
@@ -1396,10 +1450,14 @@ export function transcriptItems(
     if (message.role === MESSAGE_ROLE.USER) {
       const base = { place: linePlace(message.id, message.id), depth: 0 };
 
+      if (message.id !== head) return [saidItem(message, base, reading)];
+
       return [
-        origin !== undefined && message.id === head
+        origin !== undefined
           ? originItem(message, base, origin, reading.toggles)
-          : saidItem(message, base, reading),
+          : briefLead === undefined
+            ? saidItem(message, base, reading)
+            : briefItem(message, base, reading, briefLead),
       ];
     }
 
