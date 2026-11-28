@@ -39,12 +39,7 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { missingWords } from "@repo/features/inbox-ask-words";
-import {
-  type InboxFields,
-  type InboxRow,
-  inboxRowDrawn,
-  inboxRowOf,
-} from "@repo/features/inbox-digest";
+import { type InboxFields, type InboxRow, inboxRowOf } from "@repo/features/inbox-digest";
 import {
   EMPTY_INBOX_DRAFT,
   fieldValueOf,
@@ -96,6 +91,7 @@ import {
   type InboxHeldFile,
   type InboxReader,
   type InboxSending,
+  inboxRowSendingDrawn,
   inboxSendingDrawn,
   inboxSendingFile,
   inboxSendingFiles,
@@ -148,7 +144,12 @@ interface ThreadHeld {
   readonly startOut?: string | undefined;
   /** The reply Edit took back into the box, by what it sends, which a send of the same goes under again, so a reply that landed unheard is taken once. */
   readonly edited?: { readonly key: string; readonly words: string } | undefined;
+  /** The keys of the replies the service took, which a list row stops drawing once newer messages pass them (`inboxRowSendingDrawn`), while their bytes stay in `sending` for the thread's files. */
+  readonly taken?: ReadonlySet<string>;
 }
+
+/** No reply the service took yet. */
+const NONE_TAKEN: ReadonlySet<string> = new Set();
 
 /** A thread the app holds nothing of. */
 const NOTHING_HELD: ThreadHeld = { draft: EMPTY_INBOX_DRAFT, sending: new Map(), note: undefined };
@@ -327,7 +328,8 @@ function useReader(): InboxReader | undefined {
  * the row's digest carries (`inboxRowDrawn`), so a reply stands as the
  * thread's latest words and a close settles it, at once. A send is taken as
  * landed once a row's latest messages hold one under its key, since a
- * reply lands as the thread's latest message.
+ * reply lands as the thread's latest message, and a reply the service took
+ * is drawn no more once newer messages pass it (`inboxRowSendingDrawn`).
  */
 export function useSendsDrawnOnRows<Group extends { readonly items: readonly InboxRow[] }>(
   groups: readonly Group[],
@@ -349,13 +351,16 @@ export function useSendsDrawnOnRows<Group extends { readonly items: readonly Inb
       return {
         ...group,
         items: group.items.map((row) => {
-          const sending = store.get(row.id)?.sending;
+          const held = store.get(row.id);
 
-          return sending === undefined || sending.size === 0
+          return held === undefined || held.sending.size === 0
             ? row
-            : (inboxRowDrawn(row, (item) =>
-                inboxSendingDrawn(item, [...sending.values()], reader),
-              ) ?? row);
+            : inboxRowSendingDrawn(
+                row,
+                [...held.sending.values()],
+                held.taken ?? NONE_TAKEN,
+                reader,
+              );
         }),
       };
     });
@@ -662,7 +667,11 @@ export function useThreadAnswer(
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
         inPlace: (words) => undelivered(line, words, heard),
         went: BUZZ.SUCCESS,
-        done: () => dropUndelivered(key),
+        done: () => {
+          dropUndelivered(key);
+          // Note that the reply stays in `sending`, whose bytes the thread's files read, but its row stops drawing it once newer messages pass it.
+          hold(itemId, (was) => ({ ...was, taken: new Set(was.taken).add(key) }));
+        },
       },
     );
   };
