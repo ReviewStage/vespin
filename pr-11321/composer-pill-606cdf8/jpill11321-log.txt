@@ -1,0 +1,38 @@
+pinned to 606cdf8c9c
+== bundle PJjpill11321 base 606cdf8c9c
+  built 606cdf8c9c base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+after/iphone-light-manager: fails 0 shots 1 
+after/iphone-light-agent: fails 0 shots 1 
+after/iphone-light-thread: fails 0 shots 1 
+after/iphone-dark-manager: fails 0 shots 1 
+after/iphone-dark-agent: fails 0 shots 1 
+after/iphone-dark-thread: fails 0 shots 1 
+after/ipad-light-manager: fails 0 shots 1 
+after/ipad-light-agent: fails 0 shots 1 
+after/ipad-light-thread: fails 0 shots 1 
+after/ipad-dark-manager: fails 0 shots 1 
+after/ipad-dark-agent: fails 0 shots 1 
+after/ipad-dark-thread: fails 0 shots 1 
+== bundle PJpill11321b base 83fc2c9e9c
+  built 83fc2c9e9c base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== before bundle 83fc2c9e9c over Vmain-current.app
+before/iphone-light-manager: fails 0 shots 1 
+before/iphone-light-agent: fails 0 shots 1 
+before/iphone-light-thread: fails 0 shots 1 
+before/iphone-dark-manager: fails 0 shots 1 
+before/iphone-dark-agent: fails 0 shots 1 
+before/iphone-dark-thread: fails 0 shots 1 
+before/ipad-light-manager: fails 0 shots 1 
+before/ipad-light-agent: fails 0 shots 1 
+before/ipad-light-thread: fails 0 shots 1 
+before/ipad-dark-manager: fails 0 shots 1 
+before/ipad-dark-agent: fails 0 shots 1 
+before/ipad-dark-thread: fails 0 shots 1 
