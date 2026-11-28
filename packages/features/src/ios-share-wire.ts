@@ -163,12 +163,95 @@ const shareDraftSchema = EffectSchema.Struct({
       EffectSchema.isMaxLength(SHARE_DRAFT_MAX_DESTINATIONS),
     ),
   ),
+  /** The key each place's write went under in the share sheet, by the place's id, so the app sends a write that may have landed again under the same key, never as a second; none for a draft kept before the sheet sent. */
+  keys: EffectSchema.optionalKey(
+    EffectSchema.Record(EffectSchema.String, EffectSchema.String).check(
+      EffectSchema.makeFilter((keys) => Object.keys(keys).length <= SHARE_DRAFT_MAX_DESTINATIONS),
+    ),
+  ),
+  /** The id New task's task was minted under in the share sheet, so a task it may have made is never made twice. */
+  taskId: EffectSchema.optionalKey(EffectSchema.String),
   keptAt: EffectSchema.Number,
 });
 
-type ShareDraft = typeof shareDraftSchema.Type;
+export type ShareDraft = typeof shareDraftSchema.Type;
 
 const decodeDraft = EffectSchema.decodeUnknownOption(EffectSchema.fromJsonString(shareDraftSchema));
+
+/** The draft's file text, as the share extension keeps it for the app to read back (`shareDraftOf`). */
+export function shareDraftJson(draft: ShareDraft): string {
+  return JSON.stringify(EffectSchema.encodeSync(shareDraftSchema)(draft));
+}
+
+/** Where a share is sent, read only where it names the service over HTTPS, or a development server on this machine, so the token never travels in the clear. */
+const shareServiceSchema = EffectSchema.Struct({
+  origin: EffectSchema.String.check(
+    EffectSchema.makeFilter((origin) => {
+      if (!URL.canParse(origin)) return false;
+      const { protocol, hostname } = new URL(origin);
+
+      return protocol === "https:" || hostname === "localhost";
+    }),
+  ),
+  headers: EffectSchema.Record(EffectSchema.String, EffectSchema.String),
+});
+
+/** The snapshot as the share extension reads it, its destinations read on their own. */
+const shareSnapshotReadSchema = EffectSchema.Struct({
+  accountId: EffectSchema.String,
+  chosenWorkspaceId: EffectSchema.optionalKey(EffectSchema.String),
+  workspaces: EffectSchema.Array(
+    EffectSchema.Struct({
+      id: EffectSchema.String,
+      name: EffectSchema.String,
+      repositories: EffectSchema.Array(EffectSchema.String),
+    }),
+  ),
+  service: shareServiceSchema,
+  destinations: EffectSchema.optionalKey(EffectSchema.Unknown),
+});
+
+const shareDestinationsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.String,
+  rows: EffectSchema.Array(shareDestinationSchema),
+});
+
+const decodeSnapshotRead = EffectSchema.decodeUnknownOption(
+  EffectSchema.fromJsonString(shareSnapshotReadSchema),
+);
+
+const decodeDestinations = EffectSchema.decodeUnknownOption(shareDestinationsSchema);
+
+/** What the share extension's page reads of the snapshot. */
+export interface ShareSnapshotRead {
+  readonly accountId: string;
+  readonly chosenWorkspaceId: string | undefined;
+  readonly workspaces: readonly ShareWorkspace[];
+  readonly service: ShareService;
+  /** Where a share may go; none where the app wrote none, or wrote a list this build does not read, when New task stands alone. */
+  readonly destinations: ShareDestinations | undefined;
+}
+
+/**
+ * The snapshot the app wrote, as the share extension's page reads it, or
+ * none where it does not read or names no service the token may go to.
+ * Note that a list of destinations this build cannot read, such as one a
+ * newer app wrote with a kind it does not know, leaves the page New task
+ * alone rather than refusing the snapshot whole.
+ */
+export function shareSnapshotRead(json: string): ShareSnapshotRead | undefined {
+  const read = Option.getOrUndefined(decodeSnapshotRead(json));
+
+  if (read === undefined) return undefined;
+
+  return {
+    accountId: read.accountId,
+    chosenWorkspaceId: read.chosenWorkspaceId,
+    workspaces: read.workspaces,
+    service: read.service,
+    destinations: Option.getOrUndefined(decodeDestinations(read.destinations)),
+  };
+}
 
 /** The draft the share sheet kept, from its file's text, or none where it does not read or was kept under another account than `accountId`. */
 export function shareDraftOf(json: string, accountId: string): ShareDraft | undefined {

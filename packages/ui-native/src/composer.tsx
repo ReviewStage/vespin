@@ -253,6 +253,8 @@ type ComposerProps = {
   readonly saving?: ComposerSaving | undefined;
   /** Whether the field takes the keyboard as it stands, as a new comment's field does once opened for its words. */
   readonly autoFocus?: boolean | undefined;
+  /** Whether its words may be changed; they stand read-only where it is false, as while a share it holds is on its way. */
+  readonly editable?: boolean | undefined;
   /** Asks the field to take the keyboard, its caret after its words, each time the count moves, as Edit does once it lays a message's words in; none where nothing asks. */
   readonly focusAsk?: number | undefined;
   /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
@@ -820,6 +822,7 @@ function useComposerParts(props: ComposerProps): ComposerParts {
           onAtWord={pills?.onAtWord}
           onFocusChange={pills?.onFocusChange}
           autoFocus={props.autoFocus === true}
+          editable={props.editable !== false}
           testID={testIds?.field ?? "composer-field"}
         />
       </RNHostView>

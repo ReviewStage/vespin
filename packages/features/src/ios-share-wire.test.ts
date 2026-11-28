@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { CLIENT_PLATFORM } from "./client-identity.js";
-import { shareDraftOf, shareSnapshotOf } from "./ios-share-wire.js";
+import { shareDraftOf, shareSnapshotOf, shareSnapshotRead } from "./ios-share-wire.js";
 import { TASK_STATUS, type TaskSummary } from "./task-wire.js";
 import { WORKSPACE_ROLE, type Workspace } from "./workspace-wire.js";
 
@@ -64,4 +64,29 @@ test("a draft names its pictures only by the files the share sheet keeps them in
     "share-draft-picture-1.jpg",
   ]);
   expect(shareDraftOf(kept(["../Library/token.json"]), "user-ada")).toBeUndefined();
+});
+
+/** Places as an app might write them, a kind this build does not know among them. */
+interface WrittenDestinations {
+  readonly workspaceId: string;
+  readonly rows: readonly { readonly kind: string; readonly id: string; readonly at: number }[];
+}
+
+test("the extension reads a snapshot whose places it can't read as New task alone, and none that sends the token in the clear", () => {
+  const written = (origin: string, destinations: WrittenDestinations | undefined) =>
+    JSON.stringify({
+      accountId: "user-ada",
+      chosenWorkspaceId: ACME.id,
+      workspaces: [{ id: ACME.id, name: "Acme", repositories: ["acme/web"] }],
+      service: { origin, headers: { "x-vespin-client": "ios/0.1.0" } },
+      destinations,
+    });
+
+  // Note that the row's kind is one a newer app might write, which this build does not know.
+  const newer = { workspaceId: ACME.id, rows: [{ kind: "channel", id: "c-1", at: 1 }] };
+  const read = shareSnapshotRead(written("https://vespin.test", newer));
+
+  expect(read?.workspaces).toEqual([{ id: ACME.id, name: "Acme", repositories: ["acme/web"] }]);
+  expect(read?.destinations).toBeUndefined();
+  expect(shareSnapshotRead(written("http://vespin.test", undefined))).toBeUndefined();
 });

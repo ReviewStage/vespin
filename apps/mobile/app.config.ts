@@ -1,5 +1,6 @@
 // app.config.ts -- the iOS app's whole native configuration: Expo generates `ios/` from it on every build, and none is committed.
 
+import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -215,6 +216,19 @@ type AppExtension = {
    * class lives in a framework the code merely conforms to names it here.
    */
   readonly FRAMEWORKS?: readonly string[];
+  /**
+   * Where the extension draws with React Native: the JavaScript entry its
+   * own bundle is built from, beside the app's, into the extension
+   * (`withReactNativeBundle`), and what its Podfile target links
+   * (`withExtensionPods`): the Expo modules it leaves out, by package, and
+   * the React Native community modules it links, by package, of those the
+   * app links.
+   */
+  readonly REACT_NATIVE?: {
+    readonly ENTRY: string;
+    readonly EXCLUDED_EXPO_MODULES: readonly string[];
+    readonly COMMUNITY_MODULES: readonly string[];
+  };
 };
 
 const EXTENSION_SWIFT_VERSION = "5.0";
@@ -344,21 +358,27 @@ const LIVE_ACTIVITY: AppExtension = {
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
 };
 
-// The share extension: the system's share sheet offers the app for text and
-// a web link, and its sheet keeps what was shared as New task's draft
-// (`share-extension/`), named in the share sheet as the app is. A started
-// task wears Lucide's CircleCheck and a picture's remove its X, as the
-// panel draws them.
+// The share extension: the system's share sheet offers the app for text, a
+// web link and up to four pictures, and its sheet is the app's own share
+// page, drawn by React Native from the extension's own bundle (`share.ts`)
+// under the system's bar (`share-extension/`), named in the share sheet as
+// the app is. It links the Expo modules the page draws with and none of the
+// app's own that stand for the app alone, such as its notifications, its
+// background tasks, its database, its Live Activity, its calls and its
+// updates, and of the community's modules only the three the page's
+// components load: the safe area, the web view, which the design system's
+// Markdown names though the page never draws one, and the worklets
+// `@expo/ui` starts as it loads.
 const SHARE_EXTENSION: AppExtension = {
   TARGET: "ShareExtension",
   BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.ShareExtension`,
   SOURCES: [
     { FROM: "share-extension", NAME: "ShareViewController.swift" },
-    { FROM: "share-extension", NAME: "ShareSheet.swift" },
     { FROM: "share-extension", NAME: "SharedItems.swift" },
     { FROM: "share-extension", NAME: "AppGroupFiles.swift" },
-    { FROM: "share-extension", NAME: "ShareStart.swift" },
     { FROM: "share-extension", NAME: "ShareNotice.swift" },
+    { FROM: "share-extension", NAME: "ShareGate.swift" },
+    { FROM: "share-extension", NAME: "ShareDependencyProvider.m" },
     { FROM: "modules/share-token/ios", NAME: "ShareToken.swift" },
   ],
   EXTENSION_POINT: "com.apple.share-services",
@@ -371,21 +391,58 @@ const SHARE_EXTENSION: AppExtension = {
       NSExtensionActivationSupportsImageWithMaxCount: 4,
     },
   },
-  COLORS: {
-    AccentColor: "ACCENT",
-    Text: "TEXT",
-    DangerText: "DANGER_TEXT",
-    ChipHover: "CHIP_HOVER",
-    Sidebar: "SIDEBAR",
-    Raised: "OVERLAY",
-  },
-  SYMBOLS: ["CircleCheck", "X"],
   ENTITLEMENTS: {
     ...APP_GROUP_ENTITLEMENTS,
     [KEYCHAIN_GROUPS_ENTITLEMENT]: [SHARE_KEYCHAIN_GROUP],
   },
   INFO: { CFBundleDisplayName: "Vespin", [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP },
+  REACT_NATIVE: {
+    ENTRY: "share.ts",
+    EXCLUDED_EXPO_MODULES: [
+      "expo-dev-client",
+      "expo-dev-launcher",
+      "expo-dev-menu",
+      "expo-updates",
+      "expo-router",
+      "expo-notifications",
+      "expo-task-manager",
+      "unimodules-app-loader",
+      "expo-sqlite",
+      "expo-quick-actions",
+      "expo-splash-screen",
+      "expo-status-bar",
+      "expo-audio",
+      "expo-media-library",
+      "expo-image-picker",
+      "expo-image-manipulator",
+      "expo-file-system",
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-linking",
+      "expo-clipboard",
+      "expo-application",
+      "expo-glass-effect",
+      "@expo/dom-webview",
+      "crash-reports",
+      "live-activity",
+      "system-activity",
+      "voice-audio",
+      "menu-commands",
+      "picture-viewer",
+      "quick-look",
+      "rich-pasteboard",
+      "share-token",
+    ],
+    COMMUNITY_MODULES: [
+      "react-native-safe-area-context",
+      "react-native-webview",
+      "react-native-worklets",
+    ],
+  },
 };
+
+/** The app's own module that only the share extension links, as its page's door to the extension's Swift (`modules/share-extension/`). */
+const SHARE_EXTENSION_MODULE = "share-extension";
 
 // The build number TestFlight orders uploads by: release-ios.yml names its
 // run in it, and a local build, which never uploads, is build 1.
@@ -621,7 +678,12 @@ const writeSymbolSet = (catalog: string, name: string, svg: string) => {
 // principal class and attributes, the app's version and build, which App
 // Store Connect refuses an extension to differ from, the App Group where it
 // shares it, and its own keys over the rest.
-const extensionPlist = (extension: AppExtension, version: string, build: string) =>
+const extensionPlist = (
+  extension: AppExtension,
+  version: string,
+  build: string,
+  fabricComponents: Readonly<Record<string, string>> | undefined,
+) =>
   plist.build({
     CFBundleDevelopmentRegion: "$(DEVELOPMENT_LANGUAGE)",
     CFBundleDisplayName: extension.TARGET,
@@ -644,8 +706,195 @@ const extensionPlist = (extension: AppExtension, version: string, build: string)
     ...(extension.ENTITLEMENTS?.[APP_GROUPS_ENTITLEMENT] === undefined
       ? undefined
       : { [APP_GROUP_PLIST_KEY]: APP_GROUP }),
+    ...(fabricComponents === undefined
+      ? undefined
+      : { [FABRIC_COMPONENTS_PLIST_KEY]: fabricComponents }),
     ...extension.INFO,
   });
+
+// The Info.plist key the share extension reads the Fabric components it
+// links from (`share-extension/ShareDependencyProvider.m`).
+const FABRIC_COMPONENTS_PLIST_KEY = "VespinFabricComponents";
+
+/** What React Native's autolinking says of a community module: its folder, whose package.json holds its codegen config. */
+type LinkedModule = { readonly root: string };
+
+/** A community module's codegen config, as far as its components go. */
+type CodegenConfig = {
+  readonly type?: string;
+  readonly ios?: { readonly componentProvider?: Readonly<Record<string, string>> };
+};
+
+// The Fabric components the community modules an extension links draw, by
+// component name with its view's class, as each module's own codegen config
+// names them (`codegenConfig.ios.componentProvider`), found where React
+// Native's autolinking finds the module for the Podfile. Note that a module
+// that draws components but names none there would leave its views
+// unregistered in the extension, so the prebuild refuses it.
+const linkedFabricComponents = (
+  projectRoot: string,
+  modules: readonly string[],
+): Readonly<Record<string, string>> => {
+  const config = execFileSync(
+    "node",
+    [
+      "--no-warnings",
+      "--eval",
+      "require('expo/bin/autolinking')",
+      "expo-modules-autolinking",
+      "react-native-config",
+      "--json",
+      "--platform",
+      "ios",
+    ],
+    { cwd: projectRoot, encoding: "utf8" },
+  );
+
+  // SAFETY: React Native's autolinking writes its config as JSON whose dependencies are keyed by package name.
+  const linked = (JSON.parse(config) as { dependencies: Record<string, LinkedModule | undefined> })
+    .dependencies;
+
+  return Object.assign(
+    {},
+    ...modules.map((name) => {
+      const root = linked[name]?.root;
+
+      if (root === undefined) throw new Error(`${name} is not linked for the extension.`);
+
+      // SAFETY: a package.json is JSON, and only its codegen config is read.
+      const codegen = (
+        JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
+          codegenConfig?: CodegenConfig;
+        }
+      ).codegenConfig;
+
+      const components = codegen?.ios?.componentProvider;
+      const draws = codegen?.type === "all" || codegen?.type === "components";
+
+      if (draws && components === undefined)
+        throw new Error(`${name} draws components but names none for the extension.`);
+
+      return components ?? {};
+    }),
+  );
+};
+
+// The build phase that bundles an extension's JavaScript into it, named as
+// the app's own is.
+const REACT_NATIVE_BUNDLE_PHASE = "Bundle React Native code and images";
+
+// The name of an extension's bundle, `share.jsbundle`, which its Swift loads (`ShareViewController.swift`) and `scripts/simulator-bundle.sh` replaces.
+const REACT_NATIVE_BUNDLE_NAME = "share";
+
+// The bundle phase's script: React Native's own, as the app's phase runs it,
+// through Expo's CLI, on the extension's entry rather than the app's, into
+// the extension's own folder as `share.jsbundle` in Hermes bytecode. Note that
+// it bundles in a Debug build too, since a share sheet has no Metro to load
+// from, so the extension reads its bundle alone in every build.
+const reactNativeBundleScript = (entry: string) =>
+  [
+    "set -e",
+    'if [[ -f "$SRCROOT/.xcode.env" ]]; then source "$SRCROOT/.xcode.env"; fi',
+    'if [[ -f "$SRCROOT/.xcode.env.local" ]]; then source "$SRCROOT/.xcode.env.local"; fi',
+    'export PROJECT_ROOT="$PROJECT_DIR"/..',
+    `export ENTRY_FILE="$PROJECT_ROOT/${entry}"`,
+    // Note that the bundle is named apart from the app's, since both phases write theirs in the one build folder before copying it in.
+    `export BUNDLE_NAME=${REACT_NATIVE_BUNDLE_NAME}`,
+    "export FORCE_BUNDLING=1",
+    "unset SKIP_BUNDLING",
+    'export CLI_PATH="$("$NODE_BINARY" --print "require.resolve(\'@expo/cli\', { paths: [require.resolve(\'expo/package.json\')] })")"',
+    'export BUNDLE_COMMAND="export:embed"',
+    "\"$(\"$NODE_BINARY\" --print \"require('path').dirname(require.resolve('react-native/package.json')) + '/scripts/react-native-xcode.sh'\")\"",
+    "",
+    // Note that each line ends in the two characters Xcode itself writes a script's line ends as, since the xcode library writes the script as given.
+  ].join("\\n");
+
+// The Podfile's lines for an extension drawn with React Native, inside its
+// own target: Expo's modules but those it leaves out, and React Native with
+// the community modules it names alone. Note that the community modules are
+// listed as the app's target lists them (`list_native_modules!`), which
+// writes the same autolinking file the app's codegen reads, and only the
+// named ones are linked, so the extension's pods stand at the same paths as
+// the app's, which CocoaPods requires of a pod two targets share.
+const extensionPodfileTarget = (extension: AppExtension) => {
+  const native = extension.REACT_NATIVE;
+
+  if (native === undefined) return "";
+  const quoted = (names: readonly string[]) => names.map((name) => `'${name}'`).join(", ");
+
+  return `
+target '${extension.TARGET}' do
+  use_expo_modules!(exclude: [${quoted(native.EXCLUDED_EXPO_MODULES)}])
+
+  listed = list_native_modules!([
+    'node',
+    '--no-warnings',
+    '--eval',
+    'require(\\'expo/bin/autolinking\\')',
+    'expo-modules-autolinking',
+    'react-native-config',
+    '--json',
+    '--platform',
+    'ios'
+  ])
+  linked = [${quoted(native.COMMUNITY_MODULES)}]
+  listed[:ios_packages] = listed[:ios_packages].select { |package| linked.include?(package[:name]) }
+  config = link_native_modules!(listed)
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
+    :app_path => "#{Pod::Config.instance.installation_root}/..",
+    :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
+  )
+end
+`;
+};
+
+// What the Podfile adds once for an extension drawn with React Native, inside
+// the app's \`post_install\`: every pod built for app extension APIs and the
+// app's alike, since React Native's and Expo's pods reach APIs an extension
+// may not name though the extension never calls them, as Expo's share
+// extension library builds them. Sentry's own settings are left as they are.
+const EXTENSION_POST_INSTALL = `
+    installer.pods_project.targets.each do |target|
+      next if target.name == 'Sentry'
+      target.build_configurations.each do |configuration|
+        configuration.build_settings['APPLICATION_EXTENSION_API_ONLY'] = 'NO'
+      end
+    end
+`;
+
+// The Podfile written for an extension drawn with React Native: its target
+// after the app's, the pods built for both, and the app's own target leaving
+// out the module only the extension links. Note that each edit is found by
+// what Expo's Podfile writes, and a Podfile that lacks it fails the prebuild
+// rather than building an extension that fails at launch.
+const withExtensionPods = (config: ExpoConfig, extension: AppExtension): ExpoConfig =>
+  withDangerousMod(config, [
+    "ios",
+    (modConfig) => {
+      const podfile = join(modConfig.modRequest.platformProjectRoot, "Podfile");
+      const contents = readFileSync(podfile, "utf8");
+
+      if (extension.REACT_NATIVE === undefined || contents.includes(`target '${extension.TARGET}'`))
+        return modConfig;
+
+      const appModules = /^( *)use_expo_modules!\s*$/mu;
+      const postInstall = /react_native_post_install\([\s\S]*?\n\s*\)\n/u;
+
+      if (!appModules.test(contents) || !postInstall.test(contents))
+        throw new Error(`The Podfile has no place for ${extension.TARGET}'s pods.`);
+
+      const written = contents
+        .replace(appModules, `$1use_expo_modules!(exclude: ['${SHARE_EXTENSION_MODULE}'])`)
+        .replace(postInstall, (call) => `${call}${EXTENSION_POST_INSTALL}`);
+
+      writeFileSync(podfile, `${written.trimEnd()}\n${extensionPodfileTarget(extension)}`);
+
+      return modConfig;
+    },
+  ]);
 
 // Note that Expo has no setting for an app extension, so each extension's
 // folder is written beside the app's, its Swift copied from the app's
@@ -684,7 +933,14 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         copyFileSync(join(projectRoot, file.FROM, file.NAME), join(folder, copiedName(file)));
       writeFileSync(
         join(folder, extensionPlistName(extension)),
-        extensionPlist(extension, modConfig.version ?? "1.0", modConfig.ios?.buildNumber ?? "1"),
+        extensionPlist(
+          extension,
+          modConfig.version ?? "1.0",
+          modConfig.ios?.buildNumber ?? "1",
+          extension.REACT_NATIVE === undefined
+            ? undefined
+            : linkedFabricComponents(projectRoot, extension.REACT_NATIVE.COMMUNITY_MODULES),
+        ),
       );
 
       if (extension.ENTITLEMENTS !== undefined)
@@ -755,6 +1011,20 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         if (!project.hasFile(source)) project.addSourceFile(source, { target }, group);
     }
 
+    if (extension.REACT_NATIVE !== undefined) {
+      const target: string = project.findTargetKey(extension.TARGET);
+
+      const phases: readonly { readonly comment?: string }[] =
+        project.pbxNativeTargetSection()[target]?.buildPhases ?? [];
+
+      // Note that a target made before its bundle joined it gains the phase too, once.
+      if (!phases.some(({ comment }) => comment === REACT_NATIVE_BUNDLE_PHASE))
+        project.addBuildPhase([], "PBXShellScriptBuildPhase", REACT_NATIVE_BUNDLE_PHASE, target, {
+          shellPath: "/bin/sh",
+          shellScript: reactNativeBundleScript(extension.REACT_NATIVE.ENTRY),
+        });
+    }
+
     // SAFETY: the Xcode project's build configuration section is an object keyed by configuration id.
     for (const settings of Object.values(
       project.pbxXCBuildConfigurationSection() as Record<string, XcodeBuildConfiguration | string>,
@@ -774,6 +1044,10 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: '"$(inherited) APP_EXTENSION"',
         SWIFT_VERSION: EXTENSION_SWIFT_VERSION,
         TARGETED_DEVICE_FAMILY: '"1,2"',
+        // Note that the bundle phase reads the app's JavaScript and node_modules, which a sandboxed script may not, and the dependency provider's Objective-C is written for ARC.
+        ...(extension.REACT_NATIVE === undefined
+          ? undefined
+          : { ENABLE_USER_SCRIPT_SANDBOXING: "NO", CLANG_ENABLE_OBJC_ARC: "YES" }),
         ...(entitlements.length === 0
           ? undefined
           : { CODE_SIGN_ENTITLEMENTS: `${extension.TARGET}/${entitlements[0]}` }),
@@ -1156,7 +1430,7 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
 // the Stop intent the widget draws built into the app as well.
 const config = (context?: ConfigContext): ExpoConfig =>
   [NOTIFICATION_SERVICE, NOTIFICATION_CONTENT, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
-    withAppExtension,
+    (built, extension) => withExtensionPods(withAppExtension(built, extension), extension),
     withCrashReportsLaunch(
       withLiveActivityIntents(withMarketingIcon(withImageSets(baseConfig(context)))),
     ),

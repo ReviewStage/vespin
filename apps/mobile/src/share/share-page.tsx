@@ -1,7 +1,9 @@
 /**
  * share-page.tsx -- the share page: where a share goes, ticked in one list over the composer that holds what was shared, as Dean picked it (STAG-5328's C, Nov 27, 2026).
  *
- * One page, as a share to a few people goes in Messages: the list of where a
+ * One page, as a share to a few people goes in Messages, drawn in the app
+ * over a kept draft and in the share sheet itself, each standing it under a
+ * bar of its own (`Bar`): the list of where a
  * share may go stands over the docked composer, in `RowList`'s Select mode,
  * so a tap ticks a row and several may be ticked. New task stands first, then
  * Recent and each kind under its heading (`shareSections`), every row drawn
@@ -41,7 +43,6 @@ import {
   GLYPH,
   GlassDock,
   type Glyph,
-  glyphSymbol,
   LIST_LOOK,
   ListRow,
   ListSection,
@@ -51,10 +52,8 @@ import {
   RowList,
   Screen,
   TaskRow,
-  useColors,
 } from "@repo/ui-native";
-import { Stack } from "expo-router";
-import { useMemo, useState } from "react";
+import { type ComponentType, useMemo, useState } from "react";
 
 /** The names a flow finds the page's pieces by. */
 export const SHARE_PAGE_TEST_ID = {
@@ -76,53 +75,6 @@ interface Ticked {
   readonly id: string;
   readonly name: string;
   readonly glyph: Glyph;
-}
-
-/** The page's bar: its title, the system's search field under it, and the system's ✕. */
-function ShareBar({
-  onSearch,
-  onCancel,
-}: {
-  readonly onSearch: (words: string) => void;
-  readonly onCancel: () => void;
-}) {
-  const colors = useColors();
-
-  // Note that the options are made once, because the stack sets a screen's options again whenever a new object comes.
-  const options = useMemo(
-    () => ({
-      headerShown: true,
-      title: SHARE_PAGE_WORDS.TITLE,
-      headerTintColor: colors.TEXT,
-      headerShadowVisible: false,
-      contentStyle: { backgroundColor: colors.GROUND },
-    }),
-    [colors],
-  );
-
-  return (
-    <>
-      {/* Note that the field stands open under the title, rather than behind a button, since searching is how a place beyond Recent is found. */}
-      <Stack.Screen options={options}>
-        <Stack.SearchBar
-          placeholder={SHARE_PAGE_WORDS.SEARCH}
-          placement="stacked"
-          allowToolbarIntegration={false}
-          onChangeText={(event) => onSearch(event.nativeEvent.text)}
-          onCancelButtonPress={() => onSearch("")}
-        />
-      </Stack.Screen>
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button
-          icon={glyphSymbol(GLYPH.CLOSE)}
-          accessibilityLabel={SHARE_PAGE_WORDS.CANCEL}
-          onPress={onCancel}
-        >
-          {SHARE_PAGE_WORDS.CANCEL}
-        </Stack.Toolbar.Button>
-      </Stack.Toolbar>
-    </>
-  );
 }
 
 /** A place a share may go, by the app's own row for its kind, with no live state the snapshot cannot keep current. */
@@ -201,8 +153,16 @@ function ToChip({
   );
 }
 
-/** What the share page is handed: where a share may go, what was shared as the composer's words and pills, and what Send and ✕ do. */
+/** What the page hands its bar: the search's words as they change, and the ✕. */
+export interface SharePageBarProps {
+  readonly onSearch: (words: string) => void;
+  readonly onCancel: () => void;
+}
+
+/** What the share page is handed: its bar, where a share may go, what was shared as the composer's words and pills, and what Send and ✕ do. */
 export interface SharePageProps {
+  /** The bar it stands under, its title, search field and ✕: the app's stack's in the app (`StackShareBar`), and the extension's own system bar in the share sheet. */
+  readonly Bar: ComponentType<SharePageBarProps>;
   /** Where a share may go, as the snapshot holds it; none where the app wrote none, when New task stands alone. */
   readonly destinations: ShareDestinations | undefined;
   readonly words: string;
@@ -213,6 +173,8 @@ export interface SharePageProps {
   readonly holdsPictures: boolean;
   /** The places ticked as the page opens, such as a kept draft's, by their ids; none ticked where none is given. */
   readonly initialTicked?: readonly string[] | undefined;
+  /** Whether Send is held and the field read-only whatever is ticked, as while a send is out, so nothing typed meanwhile is lost to it, or once the share sheet kept the share for the app. */
+  readonly held?: boolean | undefined;
   /** What a send that did not go said, standing over the field; none while nothing did. */
   readonly note?: string | undefined;
   /** Sends the words to the places ticked, by their ids (`SHARE_NEW_TASK_ID` for New task); whether it took them. */
@@ -222,7 +184,7 @@ export interface SharePageProps {
 
 /** The share page: the places to tick over the composer that holds what was shared. */
 export function SharePage(props: SharePageProps) {
-  const { destinations, words, onWords, pills, holdsPictures, note, onSend, onCancel } = props;
+  const { Bar, destinations, words, onWords, pills, holdsPictures, note, onSend, onCancel } = props;
   const [search, setSearch] = useState("");
   const [chosen, setChosen] = useState<readonly string[]>(props.initialTicked ?? []);
   const rows = destinations?.rows ?? [];
@@ -243,13 +205,13 @@ export function SharePage(props: SharePageProps) {
   });
 
   // Note that Send is held, dimmed, until a place is ticked, as Messages holds it until a recipient is named, and lit with no words where a picture goes alone.
-  const held = ticked.length === 0;
+  const held = ticked.length === 0 || props.held === true;
 
   const nothingFound = searching && sections.kinds.length === 0;
 
   return (
     <>
-      <ShareBar onSearch={setSearch} onCancel={onCancel} />
+      <Bar onSearch={setSearch} onCancel={onCancel} />
       <GlassDock
         bar={
           <Composer
@@ -261,6 +223,7 @@ export function SharePage(props: SharePageProps) {
             head={note === undefined ? undefined : <AskNote words={note} />}
             sendable={!held && holdsPictures}
             sendHeld={held}
+            editable={props.held !== true}
             onSend={(sent) => onSend(chosen, sent)}
             tools={
               <ToChip

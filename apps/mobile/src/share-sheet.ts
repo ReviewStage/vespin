@@ -172,6 +172,8 @@ function useOpenDraft(accountId: string | undefined): void {
             destinations: JSON.stringify(draft.destinations),
             ...pictures,
             ...(draft.repository === undefined ? undefined : { repository: draft.repository }),
+            ...(draft.keys === undefined ? undefined : { keys: JSON.stringify(draft.keys) }),
+            ...(draft.taskId === undefined ? undefined : { taskId: draft.taskId }),
           },
         });
 
