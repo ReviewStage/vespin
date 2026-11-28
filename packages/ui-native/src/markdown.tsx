@@ -1559,19 +1559,25 @@ function Blocks({
   ));
 }
 
-/** How a run of words is set: as a message's, in the body's size and ink, or as a row's muted line under its title, an option's detail say. */
+/** How a run of words is set: as a message's, in the body's size and ink, as a row's muted line under its title, an option's detail say, or in the body's size in the muted ink, as an ask asked no longer stands stepped back (`SteppedBack`). */
 export const MARKDOWN_LOOK = {
   MESSAGE: "message",
   LINE: "line",
+  STEPPED_BACK: "stepped-back",
 } as const;
 
 export type MarkdownLook = (typeof MARKDOWN_LOOK)[keyof typeof MARKDOWN_LOOK];
 
 /** What a line's words are set in, by the look and the window's colors. */
 function proseOf(look: MarkdownLook, colors: BrandColors): TextStyle {
-  return look === MARKDOWN_LOOK.LINE
-    ? { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED }
-    : { fontSize: PROSE_SIZE, color: colors.TEXT_BODY };
+  switch (look) {
+    case MARKDOWN_LOOK.LINE:
+      return { fontSize: ROLE_SIZE.ROW_LINE, color: colors.TEXT_MUTED };
+    case MARKDOWN_LOOK.STEPPED_BACK:
+      return { fontSize: PROSE_SIZE, color: colors.TEXT_MUTED };
+    case MARKDOWN_LOOK.MESSAGE:
+      return { fontSize: PROSE_SIZE, color: colors.TEXT_BODY };
+  }
 }
 
 type MarkdownProps = {

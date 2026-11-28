@@ -22,6 +22,7 @@ import { CARD_WORDS_INSET, CardDivider, RecommendedTag } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { MARKDOWN_LOOK, Markdown } from "./markdown.js";
 import { PickedCheck } from "./settings-form.js";
+import { useSteppedBack } from "./stepped-back.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
@@ -118,6 +119,7 @@ function ChoiceRow({
   readonly onOpenLink: (address: string) => void;
 }) {
   const stacked = useAccessibilitySize();
+  const stepped = useSteppedBack();
   const markSize = useScaledSize(MARK_SIZE.GLYPH);
   const tag = recommended ? <RecommendedTag /> : null;
 
@@ -144,7 +146,12 @@ function ChoiceRow({
       <VStack alignment="leading" spacing={SPACE.TIGHT}>
         <RNHostView matchContents={{ vertical: true }}>
           <Pressable accessible={false} onPress={onPress} style={{ gap: 2 }}>
-            <Markdown words={choice.label} repository={repository} onOpenLink={onOpenLink} />
+            <Markdown
+              words={choice.label}
+              look={stepped ? MARKDOWN_LOOK.STEPPED_BACK : MARKDOWN_LOOK.MESSAGE}
+              repository={repository}
+              onOpenLink={onOpenLink}
+            />
             {choice.detail === undefined ? null : (
               <Markdown
                 words={choice.detail}

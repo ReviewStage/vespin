@@ -161,6 +161,8 @@ export type ThreadMessage = {
   readonly after?: readonly ThreadEvent[] | undefined;
   /** The ask the answer it carries answered, as the answer left it, such as its options with the picks checked, standing at the head of its words, as the panel's answered card stands in the reply; none where it answered none, or one of words alone. */
   readonly answered?: ReactNode | undefined;
+  /** The ask it carried, withdrawn or asked again since, stepped back with nothing picked after its words, as the panel's held ask stands; none otherwise. */
+  readonly held?: ReactNode | undefined;
   /** How the ask it carries stood once answered, "Answered", ending its words with the done check, where no reply's card says so; none otherwise. */
   readonly settled?: string | undefined;
   /** The form's values the answer filled, each field's name and what was put in it, which stand under the stamp, as the panel lists them. */
@@ -622,6 +624,11 @@ function MessageView({
             </View>
           </PictureOriginProvider>
         </RNHostView>
+        {message.held === undefined ? null : (
+          <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
+            {message.held}
+          </HStack>
+        )}
         {message.settled === undefined ? null : (
           <AnswerStamp stamp={{ words: message.settled, ahead: true }} />
         )}

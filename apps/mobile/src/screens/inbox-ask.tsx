@@ -1,8 +1,9 @@
-// inbox-ask.tsx -- a thread's open ask as its card, an answered ask's card as the answer left it, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
+// inbox-ask.tsx -- a thread's open ask as its card, an answered ask's card as the answer left it, a withdrawn or replaced ask's stepped back, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
+  EMPTY_INBOX_DRAFT,
   fieldValueOf,
   type InboxDraft,
   picksNone,
@@ -12,8 +13,12 @@ import {
   withStep,
   withValue,
 } from "@repo/features/inbox-draft";
-import { INBOX_READ_MARK, isUnread, knownAsk } from "@repo/features/inbox-list-model";
-import type { InboxAnsweredAsk } from "@repo/features/inbox-settled-asks";
+import {
+  INBOX_READ_MARK,
+  type InboxKnownAsk,
+  isUnread,
+  knownAsk,
+} from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_FIELD,
@@ -51,6 +56,7 @@ import {
   MentionSuggestions,
   ResolvableAsk,
   StepList,
+  SteppedBack,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
 import { type ReactNode, useMemo, useState } from "react";
@@ -332,27 +338,29 @@ function AskControls({
 }
 
 /**
- * The ask a member's reply answered, at the head of that reply, as the
- * panel's answered card stands it: the ask's card as the answer left it,
- * taking nothing, so what was asked and what was picked still read once the
- * thread is settled. A decide's options with the picks checked, the
- * recommended tagged; a do's steps ticked as they were, its press said by
- * the reply's stamp over it; an answer's fields as they were filled. Note
- * that an option's media stands with the agent's message rather than here,
- * since the thread draws a settled ask's files there.
+ * An ask that no longer waits, as the panel's settled thread stands it,
+ * taking nothing, so what was asked still reads once the thread is settled:
+ * an answered ask at the head of the reply that answered it, with `draft`
+ * the answer it left (a decide's picks checked, a do's steps ticked, its
+ * press said by the reply's stamp over it, an answer's fields as filled),
+ * or a withdrawn or replaced ask on its own message, stepped back with
+ * nothing picked (`HeldAskCard`). Note that an option's media stands with
+ * the agent's message rather than here, since the thread draws a settled
+ * ask's files there.
  */
-export function AnsweredAskCard({
-  answered,
+export function SettledAskCard({
+  ask,
+  draft,
   title,
   links,
 }: {
-  readonly answered: InboxAnsweredAsk;
+  readonly ask: InboxKnownAsk;
+  readonly draft: InboxDraft;
   /** The thread's title, which stands as the one step of a do that names none. */
   readonly title: string;
   /** What a link or a chip in an option's or a step's words opens with, as the open card's. */
   readonly links: Pick<OptionMediaDoors, "repository" | "openLink">;
 }): ReactNode {
-  const { ask, draft } = answered;
   const linked = { repository: links.repository, onOpenLink: links.openLink };
 
   if (ask.type === INBOX_ASK.DECIDE) {
@@ -384,6 +392,23 @@ export function AnsweredAskCard({
   if (ask.fields === undefined) return null;
 
   return <AnswerFields fields={cardFields(ask.fields, draft)} />;
+}
+
+/** A withdrawn or replaced ask on its own message, stepped back with nothing picked, as the panel's `HeldAsk`. */
+export function HeldAskCard({
+  ask,
+  title,
+  links,
+}: {
+  readonly ask: InboxKnownAsk;
+  readonly title: string;
+  readonly links: Pick<OptionMediaDoors, "repository" | "openLink">;
+}) {
+  return (
+    <SteppedBack>
+      <SettledAskCard ask={ask} draft={EMPTY_INBOX_DRAFT} title={title} links={links} />
+    </SteppedBack>
+  );
 }
 
 /** A notice's empty Send, as the panel's reads Got it. */

@@ -49,7 +49,11 @@ import {
   READING_INBOX,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
-import { inboxAnsweredAsks, inboxAnsweredMarks } from "@repo/features/inbox-settled-asks";
+import {
+  inboxAnsweredAsks,
+  inboxAnsweredMarks,
+  inboxHeldAsks,
+} from "@repo/features/inbox-settled-asks";
 import {
   filesLost,
   UNDELIVERED_FILES_LOST,
@@ -198,10 +202,11 @@ import {
   useSplitBuild,
 } from "./app-sidebar.js";
 import {
-  AnsweredAskCard,
+  HeldAskCard,
   NO_THREAD_ACTS,
   OpenAskCard,
   openAskFiles,
+  SettledAskCard,
   ThreadComposer,
   threadActs,
   threadMenu,
@@ -904,11 +909,15 @@ function ThreadDetail({
     [undelivered.item, agentName, readerId],
   );
 
-  // Note that an answered ask keeps its card at the head of the reply that answered it, and one with no such card ends its message with Answered, as the panel draws a settled thread, so what was asked and picked still reads.
+  // Note that an answered ask keeps its card at the head of the reply that answered it, one with no such card ends its message with Answered, and a withdrawn or replaced one keeps its card stepped back on its own message, as the panel draws a settled thread, so what was asked and picked still reads.
   const settledAsks = useMemo(() => {
     const thread = undelivered.item.thread ?? [];
 
-    return { answered: inboxAnsweredAsks(thread), marked: inboxAnsweredMarks(thread) };
+    return {
+      answered: inboxAnsweredAsks(thread),
+      marked: inboxAnsweredMarks(thread),
+      held: inboxHeldAsks(thread),
+    };
   }, [undelivered.item]);
 
   const hostActs = useHostActs();
@@ -1111,17 +1120,24 @@ function ThreadDetail({
 
   const drawn: readonly ThreadMessage[] = messages.map((message, index) => {
     const answered = settledAsks.answered.get(message.id);
+    const held = settledAsks.held.get(message.id);
+    const links = { repository: holderRepository(holder), openLink };
 
     return {
       ...message,
       after: events.get(index),
       answered:
         answered === undefined ? undefined : (
-          <AnsweredAskCard
-            answered={answered}
+          <SettledAskCard
+            ask={answered.ask}
+            draft={answered.draft}
             title={cardTitle(item.title)}
-            links={{ repository: holderRepository(holder), openLink }}
+            links={links}
           />
+        ),
+      held:
+        held === undefined ? undefined : (
+          <HeldAskCard ask={held} title={cardTitle(item.title)} links={links} />
         ),
       settled: settledAsks.marked.has(message.id) ? INBOX_SETTLED_STANDING.ANSWERED : undefined,
       // Note that the card says what its stamp and values would, but for a do's press, which its stamp still says.
