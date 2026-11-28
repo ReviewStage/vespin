@@ -1792,7 +1792,7 @@ test("a search's words are asked of the service once typing pauses, and an item 
     status: INBOX_STATUS.CLOSED,
   };
 
-  world.searchFinds.set("on-call", { [BILLING.id]: [FOUND] });
+  world.searchFinds.set("on-call", { [INBOX_SCOPE_KIND.TASK]: { [BILLING.id]: [FOUND] } });
   const { page } = mount({});
   await settle();
 
@@ -1820,6 +1820,47 @@ test("a search's words are asked of the service once typing pauses, and an item 
   searchList(page, "");
   await settle();
   assert.deepEqual(world.searchAsked.at(-1), { place: INBOX_SEARCH_PLACE.INBOX });
+});
+
+test("a thread on no task that ⌘K's search found past the feed opens in the Inbox by its id, and stays drawn once ⌘K closes", async () => {
+  const manager = {
+    ...AGENT,
+    id: "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8c",
+    taskId: null,
+    title: "Release manager",
+  };
+
+  const SETTLED: InboxItem = {
+    ...noticeOf(
+      item("a1b2c3d4-0000-4000-8000-000000000042", "Why does the ledger round to even?", 300),
+    ),
+    agentId: manager.id,
+    status: INBOX_STATUS.CLOSED,
+  };
+
+  world.listedAgents = [AGENT, manager];
+  world.searchFinds.set("ledger", {
+    [INBOX_SCOPE_KIND.TASK]: {},
+    agents: { [manager.id]: [SETTLED] },
+  });
+  const { page } = mount({});
+  await settle();
+
+  act(() => world.searchEverything("ledger"));
+  await vi.waitFor(() =>
+    assert.deepEqual(world.searchAsked, [
+      { place: INBOX_SEARCH_PLACE.EVERYTHING, query: "ledger" },
+    ]),
+  );
+  await settle();
+
+  act(() => world.chooseFromOutside({ itemId: SETTLED.id, opened: true }));
+  await settle();
+  assert.equal(paneTitle(page), "Why does the ledger round to even?", "opened while ⌘K stands");
+
+  act(() => world.searchEverything(undefined));
+  await settle();
+  assert.equal(paneTitle(page), "Why does the ledger round to even?", "and once it closes");
 });
 
 test("the Inbox's head is one row in the list, its search beside its buttons and the title bar's row over it empty; the search narrows the list to the items saying every word typed, the item open leaving the list but not the pane, gives its place to a selection and comes back with its words, and Escape empties it", async () => {
