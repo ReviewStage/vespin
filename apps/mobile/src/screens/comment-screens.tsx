@@ -1,4 +1,4 @@
-// comment-screens.tsx -- one thread of a task's description comments, pushed from the task's Overview: its comments as a thread's messages, the words it stands on as its heading, Resolve or Reopen in its bar, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
+// comment-screens.tsx -- one thread of a task's description comments, in the comment sheet over the task: its comments as a thread's messages, the words it stands on as its heading, Resolve or Reopen in its bar, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
 
 import { PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
@@ -17,6 +17,7 @@ import {
   GLYPH,
   GlassDock,
   glyphSymbol,
+  NO_GROUND,
   NOTICE_KIND,
   PATH_PART,
   Screen,
@@ -27,8 +28,8 @@ import {
 import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMemberPictures } from "../member-pictures.js";
-import { useOpenLink } from "../open-link.js";
-import { useOnOwnTab } from "../tab-route.js";
+import { LINK_OPENS, useOpenLink } from "../open-link.js";
+import { useSheetAtHalf } from "../sheet-stack.js";
 import {
   type CommentReply,
   threadMessages,
@@ -54,7 +55,77 @@ const WORDS = {
   NOT_FOUND: "Comment not found",
   RESOLVE: "Resolve",
   REOPEN: "Reopen",
+  CLOSE: "Close",
 } as const;
+
+/** The comment sheet's routes: a thread, by its id and its task, and a new thread on words of the task's description. */
+const COMMENT_ROUTE = {
+  THREAD: "/task-comment",
+  NEW: "/task-comment/new",
+} as const;
+
+/** Opens a thread of a task's description in the comment sheet over the screen in front. */
+export function useOpenCommentThread(): (taskId: string, threadId: string) => void {
+  const router = useRouter();
+
+  return (taskId, threadId) =>
+    router.push({ pathname: COMMENT_ROUTE.THREAD, params: { id: threadId, task: taskId } });
+}
+
+/** Opens a new thread on a span of a task's description, its Markdown offsets and the words it quotes, in the comment sheet over the screen in front. */
+export function useOpenNewComment(): (
+  taskId: string,
+  span: { readonly from: number; readonly to: number; readonly quote: string },
+) => void {
+  const router = useRouter();
+
+  return (taskId, { from, to, quote }) =>
+    router.push({
+      pathname: COMMENT_ROUTE.NEW,
+      params: { task: taskId, from: `${from}`, to: `${to}`, quote },
+    });
+}
+
+/**
+ * The comment sheet's bar: the task's path as its title, small and muted as
+ * a page of the task names it, and the sheet's close at its leading edge.
+ * Note that at half height the sheet stands on its own glass, so its page
+ * paints no ground there (`useSheetAtHalf`).
+ */
+function CommentSheetBar({
+  path,
+  half,
+}: {
+  readonly path: readonly string[];
+  readonly half: boolean;
+}) {
+  const colors = useColors();
+  const router = useRouter();
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: path.join(PATH_PART),
+          headerTintColor: colors.TEXT,
+          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: half ? NO_GROUND : colors.GROUND },
+        }}
+      />
+      <Stack.Toolbar placement="left">
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CLOSE}
+          onPress={() => router.back()}
+        >
+          {WORDS.CLOSE}
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
+    </>
+  );
+}
 
 /** A comment field's head: the pictures it carries, each taken off on a press, and what its last send or a picture's bound said; none while it holds neither. */
 function fieldHead(pictures: CommentReply["pictures"], note: string | undefined) {
@@ -226,9 +297,10 @@ function CommentThread({
   readonly threadId: string;
   readonly taskId: string;
 }) {
-  const colors = useColors();
+  const half = useSheetAtHalf();
   const overview = useTaskOverview(taskId);
-  const openLink = useOpenLink(overview?.task.workspaceId);
+  // Note that a link opens on the tabs under the sheet, closing it, since a push from inside the sheet would stand the tabs again inside it.
+  const openLink = useOpenLink(overview?.task.workspaceId, LINK_OPENS.OUT_OF_SHEET);
   const threads = useTaskComments(overview?.task.id);
   const thread = threads.find((each) => each.id === id);
   const reply = useCommentReply(taskId, id);
@@ -237,8 +309,7 @@ function CommentThread({
   const pictureOf = useMemberPictures();
 
   const router = useRouter();
-  const onOwnTab = useOnOwnTab();
-  // Note that a thread stands only while it is in front, since a page pushed over it on the tab's stack, or another tab, keeps it mounted.
+  // Note that a thread stands only while it is in front, since a page opened over the sheet keeps it mounted.
   const standing = useIsFocused();
 
   useEffect(() => {
@@ -246,7 +317,7 @@ function CommentThread({
 
     const reopen = (reopening: Reopening) => {
       const { taskId: task, ...span } = reopening;
-      router.replace({ pathname: onOwnTab("/tasks/comments/new"), params: { task, ...span } });
+      router.replace({ pathname: COMMENT_ROUTE.NEW, params: { task, ...span } });
     };
 
     standingThreads.set(id, reopen);
@@ -261,7 +332,7 @@ function CommentThread({
     return () => {
       standingThreads.delete(id);
     };
-  }, [standing, id, router, onOwnTab]);
+  }, [standing, id, router]);
 
   const agents = new Map(
     (overview?.agents ?? []).map(
@@ -307,12 +378,7 @@ function CommentThread({
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: path.join(PATH_PART),
-          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
-        }}
-      />
+      <CommentSheetBar path={path} half={half} />
       {thread === undefined ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button
@@ -325,12 +391,12 @@ function CommentThread({
         </Stack.Toolbar>
       )}
       {thread === undefined ? (
-        <Screen>
+        <Screen clear={half}>
           <ThreadMissing taskId={taskId} overview={overview} />
         </Screen>
       ) : (
         <GlassDock bar={<Composer {...composer} />}>
-          <Screen>{page}</Screen>
+          <Screen clear={half}>{page}</Screen>
         </GlassDock>
       )}
     </>
@@ -385,10 +451,10 @@ function NewComment({
   readonly again?: string | undefined;
 }) {
   const router = useRouter();
-  const onOwnTab = useOnOwnTab();
-  const colors = useColors();
+  const half = useSheetAtHalf();
   const overview = useTaskOverview(taskId);
-  const openLink = useOpenLink(overview?.task.workspaceId);
+  // Note that a link opens on the tabs under the sheet, closing it, since a push from inside the sheet would stand the tabs again inside it.
+  const openLink = useOpenLink(overview?.task.workspaceId, LINK_OPENS.OUT_OF_SHEET);
   const body = overview?.document?.description.body ?? "";
 
   // Note that the block must still quote the words it was opened on, so an edit that put other words at the same offsets before this read finds nothing rather than the wrong block.
@@ -445,7 +511,7 @@ function NewComment({
     // Note that the same words sent again go under the same thread's id, so a refusal parked for an earlier send of them is let go rather than reopening this one.
     earlyRefusals.delete(threadId);
     openingThreads.add(threadId);
-    router.replace({ pathname: onOwnTab("/tasks/comments/[id]"), params: { id: threadId, task } });
+    router.replace({ pathname: COMMENT_ROUTE.THREAD, params: { id: threadId, task } });
 
     return true;
   };
@@ -479,17 +545,12 @@ function NewComment({
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: path.join(PATH_PART),
-          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
-        }}
-      />
+      <CommentSheetBar path={path} half={half} />
       {block === undefined ? (
-        <Screen>{empty}</Screen>
+        <Screen clear={half}>{empty}</Screen>
       ) : (
         <GlassDock bar={<Composer {...composer} />}>
-          <Screen>{page}</Screen>
+          <Screen clear={half}>{page}</Screen>
         </GlassDock>
       )}
     </>
