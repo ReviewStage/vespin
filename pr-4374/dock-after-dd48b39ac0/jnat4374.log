@@ -1,0 +1,107 @@
+4374 pinned to dd48b39ac0 (wanted dd48b39ac0922a20774585dd6ec258625f15bbfe)
+built main af3ea39218 + #stag4374 dd48b39ac0 as 1b230eb6b7
+fix guard: main merged af3ea39218 (feat(host,mobile): keep the iPhone's Inbox as lean thread rows beside their mess); git log --oneline -3: 1b230eb6b7 Merge remote-tracking branch 'pr/stag4374' into HEAD|af3ea39218 feat(host,mobile): keep the iPhone's Inbox as lean thread rows beside their messages (#11079)|1271ca2dc3 refactor(service,features): cut the browser's words with the service's one text cut (#11356)|
+fix guard: keyboardLayoutGuide lines: 161:    let guide = window.keyboardLayoutGuide|
+fix guard: CADisplayLink lines in keyboard-dock (expect none): none
+description-edit.yaml is the branch's own (merged tree), with its nested steps
+install 0 (under .install.lock, 6832ca71 07:51 UTC Nov 21)
+fixture patch: True
+precompiled modules: unset (unset for every native build, as release-ios.yml; orchestrator 16:44 UTC Nov 18)
+curve 01:24:37 21872 MB
+curve 01:25:07 21831 MB
+curve 01:25:37 21633 MB
+curve 01:26:07 19742 MB
+curve 01:26:37 19371 MB
+curve 01:27:08 19359 MB
+curve 01:27:38 19264 MB
+curve 01:28:08 19244 MB
+curve 01:28:38 19162 MB
+curve 01:29:08 18739 MB
+curve 01:29:39 18837 MB
+curve 01:30:09 19228 MB
+curve 01:30:39 19176 MB
+curve 01:31:09 19150 MB
+curve 01:31:39 19129 MB
+curve 01:32:10 19070 MB
+curve 01:32:40 19011 MB
+curve 01:33:10 18889 MB
+curve 01:33:40 18833 MB
+curve 01:34:10 18801 MB
+curve 01:34:41 18783 MB
+curve 01:35:11 18740 MB
+curve 01:35:41 18715 MB
+curve 01:36:11 18712 MB
+curve 01:36:41 18701 MB
+curve 01:37:12 18668 MB
+curve 01:37:42 18652 MB
+curve 01:38:12 18646 MB
+curve 01:38:42 18636 MB
+curve 01:39:12 18628 MB
+curve 01:39:42 18612 MB
+curve 01:40:13 18595 MB
+curve 01:40:43 18587 MB
+curve 01:41:13 18550 MB
+curve 01:41:43 18531 MB
+curve 01:42:13 18501 MB
+curve 01:42:43 18462 MB
+curve 01:43:13 18346 MB
+curve 01:43:44 18334 MB
+curve 01:44:14 18307 MB
+curve 01:44:44 18289 MB
+curve 01:45:14 18263 MB
+curve 01:45:44 18246 MB
+curve 01:46:15 18222 MB
+curve 01:46:45 18193 MB
+curve 01:47:15 18180 MB
+curve 01:47:45 18160 MB
+curve 01:48:15 18114 MB
+curve 01:48:45 17976 MB
+curve 01:49:16 17928 MB
+curve 01:49:46 17507 MB
+curve 01:50:16 17258 MB
+curve 01:50:46 17156 MB
+curve 01:51:17 17108 MB
+curve 01:51:47 16986 MB
+curve 01:52:17 16826 MB
+curve 01:52:47 16774 MB
+curve 01:53:17 16736 MB
+curve 01:53:47 16621 MB
+curve 01:54:18 16537 MB
+curve 01:54:48 16499 MB
+curve 01:55:18 16436 MB
+curve 01:55:48 16406 MB
+curve 01:56:18 16534 MB
+curve 01:56:49 16491 MB
+curve 01:57:19 16488 MB
+curve 01:57:49 16455 MB
+curve 01:58:19 16472 MB
+curve 01:58:49 16456 MB
+curve 01:59:19 16426 MB
+curve 01:59:49 16400 MB
+curve 02:00:20 16283 MB
+curve 02:00:50 16285 MB
+curve 02:01:20 16284 MB
+curve 02:01:50 16282 MB
+curve 02:02:20 16247 MB
+curve 02:02:51 16190 MB
+BUILD EXIT 0 02:03:21
+sizes: Assets.car 25457688 bytes (main Vmain19.app 25470376), .app 128064 KB (main 127892 KB), zipped .app 48622772 bytes
+actool: 2 warnings or errors
+Podfile precompiled lines:  | XCFramework switches: 
+app Frameworks: ExpoFileSystem.framework ExpoFont.framework ExpoImage.framework ExpoImageManipulator.framework ExpoMediaLibrary.framework ExpoModulesCore.framework ExpoModulesJSI.framework ExpoModulesWorklets.framework ExpoVideo.framework React.framework ReactNativeDependencies.framework SDWebImage.framework SDWebImageAVIFCoder.framework SDWebImageSVGCoder.framework SDWebImageWebPCoder.framework WebRTC.framework hermesvm.framework libavif.framework 
+/Users/deanstratakos/vespin-ipad-agent/Vjnat4374.app: replacing existing signature
+p4374-iphone-light-manager-chat-dock: fails 1 shots 1 Assert that "space" is visible... FAILED
+p4374-iphone-light-answer: fails 1 shots 3 Assert that "Answered" is visible... FAILED
+p4374-iphone-light-new-task: fails 1 shots 1 Assert that "ada/relay" is visible... FAILED
+p4374-iphone-light-manager-thread: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+p4374-iphone-light-dock-bounds: fails 1 shots 1
+  bounds at manager-chat-from-thread: composer-field [26,26][384,48]
+p4374-ipad27-light-new-task: fails 1 shots 3 Assert that "ada/ledger" is visible... FAILED
+p4374-ipad27-light-description-edit: fails 0 shots 11 
+p4374 idle trace (after): open flow FAILED: 
+p4374-ipad27-light-manager-thread-landscape: fails KEYBOARD (no software keyboard before the first inputText; the lane's frames cannot judge typing) RIG: the software keyboard stands before the first inputText... FAILED
+  p4374 landscape Send tap: 
+p4374-iphone-light-kb-PORTRAIT: fails 1 shots 1 Assert that "space" is visible... FAILED
+  p4374-iphone-light-kb-PORTRAIT keyboard up, orientation PORTRAIT: screen [0,0][402,874]; composer-field [26,26][384,48]; Send missing; keyboard top 60; composer-field bottom 48 <= keyboard top 60
+p4374-iphone-light-kb-LANDSCAPE_LEFT: fails 1 shots 1 Assert that "space" is visible... FAILED
+  p4374-iphone-light-kb-LANDSCAPE_LEFT keyboard up, orientation LANDSCAPE_LEFT: screen [0,0][874,402]; composer-field [103,12][779,10]; Send missing; keyboard top 22; composer-field bottom 10 <= keyboard top 22
