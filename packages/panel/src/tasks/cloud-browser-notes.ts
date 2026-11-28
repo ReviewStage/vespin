@@ -10,6 +10,7 @@
  */
 
 import type { BrowserLivePickedElement } from "@repo/features/browser-live-wire";
+import type { BrowserNotePage } from "@repo/features/browser-notes";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { useCallback } from "react";
 
@@ -18,6 +19,8 @@ export interface HeldBrowserNote {
   readonly id: string;
   readonly words: string;
   readonly element: BrowserLivePickedElement;
+  /** The page the element stood on when picked, which the tab may have moved on from since. */
+  readonly page: BrowserNotePage;
   /** How many times the page had moved under the member when the note was picked, which its pin stands only while it still matches (`cloud-browser-pane.tsx`). */
   readonly moves: number;
 }
@@ -38,17 +41,21 @@ export function nextPageMove(): number {
   return lastMove;
 }
 
-/** The notes the account holds on a tab, and a setter that replaces them. */
+/** What the notes held become, from the list held when the change lands. */
+type NotesChange = (held: readonly HeldBrowserNote[]) => readonly HeldBrowserNote[];
+
+/** The notes the account holds on a tab, and a setter that changes them as they then stand. */
 export function useCloudBrowserNotes(
   account: string | undefined,
   tabId: string,
-): readonly [readonly HeldBrowserNote[], (notes: readonly HeldBrowserNote[]) => void] {
+): readonly [readonly HeldBrowserNote[], (change: NotesChange) => void] {
   const notes = useSelector(held, (all) => all.get(account)?.get(tabId) ?? NONE);
 
   const set = useCallback(
-    (next: readonly HeldBrowserNote[]) =>
+    (change: NotesChange) =>
       held.setState((all) => {
         const tabs = new Map(all.get(account));
+        const next = change(tabs.get(tabId) ?? NONE);
 
         if (next.length === 0) tabs.delete(tabId);
         else tabs.set(tabId, next);

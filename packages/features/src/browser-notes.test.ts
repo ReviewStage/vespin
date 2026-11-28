@@ -5,12 +5,12 @@ import { browserNotesMessage, notesFit } from "./browser-notes.js";
 
 /**
  * browser-notes.test.ts -- notes picked in a Browser tab make one message
- * naming the tab, then each note's words and how the agent finds its
- * element, with its crop attached by the name the words give it; and they
+ * of each note's words, the page it was picked on, and how the agent finds
+ * its element, with its crop attached by the name the words give it; and they
  * fit a message only while its files, words, and bytes do.
  */
 
-const TAB = { title: "Checkout · Acme", address: "https://localhost:3000/checkout" };
+const CHECKOUT = { title: "Checkout · Acme", address: "https://localhost:3000/checkout" };
 
 const BUTTON: BrowserLivePickedElement = {
   box: { x: 68, y: 65, width: 46, height: 15 },
@@ -38,18 +38,22 @@ const SUMMARY: BrowserLivePickedElement = {
 };
 
 describe("browserNotesMessage", () => {
-  it("names the tab, then each note's words and element, its crop attached in order", () => {
-    const message = browserNotesMessage(TAB, [
-      { words: "Make this the primary action ", element: BUTTON },
-      { words: 'Say "ships" once', element: SUMMARY },
+  it("lists each note's words, the page it was picked on, and its element, its crop attached in order", () => {
+    const message = browserNotesMessage([
+      { words: "Make this the primary action ", element: BUTTON, page: CHECKOUT },
+      {
+        words: 'Say "ships" once',
+        element: SUMMARY,
+        page: { title: "Order placed", address: "https://localhost:3000/done" },
+      },
     ]);
 
     expect(message.text).toBe(
       [
         "Notes on elements I picked in your browser:",
-        'In the tab "Checkout · Acme", https://localhost:3000/checkout',
         "",
         '1. "Make this the primary action"',
+        '   Page: "Checkout · Acme", https://localhost:3000/checkout',
         '   Element: button "Place order", form#checkout > button:nth-of-type(2)',
         "   Ref: e4182 on tab page-1, until the page reloads",
         '   Tag: <button class="btn btn-secondary" type="submit">',
@@ -57,6 +61,7 @@ describe("browserNotesMessage", () => {
         "   Picture: note-1.jpg",
         "",
         '2. "Say \\"ships\\" once"',
+        '   Page: "Order placed", https://localhost:3000/done',
         "   Element: p.summary",
         "   Ref: e2207 on tab page-1, until the page reloads",
         '   Tag: <p class="summary">',
@@ -74,10 +79,10 @@ describe("browserNotesMessage", () => {
 
 describe("notesFit", () => {
   it("holds no more notes than a message has files", () => {
-    const note = { words: "Tighten", element: SUMMARY };
+    const note = { words: "Tighten", element: SUMMARY, page: CHECKOUT };
     const most = Array.from({ length: AGENT_BOUNDS.MAX_ATTACHMENTS }, () => note);
 
-    expect(notesFit(TAB, most)).toBe(true);
-    expect(notesFit(TAB, [...most, note])).toBe(false);
+    expect(notesFit(most)).toBe(true);
+    expect(notesFit([...most, note])).toBe(false);
   });
 });

@@ -13,6 +13,7 @@ import {
 } from "@repo/features/browser-live-wire";
 import {
   BROWSER_NOTE_MAX_CHARS,
+  type BrowserNotePage,
   browserNoteElement,
   browserNotesMessage,
   notesFit,
@@ -213,6 +214,7 @@ interface NoteWriting {
   readonly key: string;
   readonly id: string | undefined;
   readonly element: BrowserLivePickedElement;
+  readonly page: BrowserNotePage;
   readonly words: string;
   readonly moves: number;
 }
@@ -809,17 +811,15 @@ export function CloudBrowserPane({
   // Note that a pin stands where its element stood, so any move of the page under it, or of the pane's size, takes it down.
   useEffect(() => setMoves(nextPageMove()), [address, tab.lastActedAt, size.width, size.height]);
 
-  const noteTab = { title: view.page?.title ?? tab.title, address };
+  // Note that a note keeps the page it was picked on, because the tab may move on before the notes are sent.
+  const page: BrowserNotePage = { title: view.page?.title ?? tab.title, address };
 
   picked.current = (element) => {
     if (element === undefined) return setPickSaid(PICK_SAID.UNREAD);
 
-    if (!notesFit(noteTab, [...notes, { words: "", element }])) {
-      return setPickSaid(PICK_SAID.FULL);
-    }
-
+    if (!notesFit([...notes, { words: "", element, page }])) return setPickSaid(PICK_SAID.FULL);
     setPickSaid(undefined);
-    setWriting({ key: crypto.randomUUID(), id: undefined, element, words: "", moves });
+    setWriting({ key: crypto.randomUUID(), id: undefined, element, page, words: "", moves });
   };
 
   const stopPicking = () => {
@@ -836,6 +836,7 @@ export function CloudBrowserPane({
       id: writing.id ?? crypto.randomUUID(),
       words: writing.words.trim().slice(0, BROWSER_NOTE_MAX_CHARS),
       element: writing.element,
+      page: writing.page,
       moves: writing.moves,
     };
 
@@ -844,25 +845,29 @@ export function CloudBrowserPane({
         ? [...notes, note]
         : notes.map((held) => (held.id === note.id ? note : held));
 
-    if (!notesFit(noteTab, next)) return setPickSaid(PICK_SAID.FULL);
-    setNotes(next);
+    if (!notesFit(next)) return setPickSaid(PICK_SAID.FULL);
+    setNotes(() => next);
     setWriting(undefined);
   };
 
-  // Note that the notes go as one message, like a member's own words with pictures, and stay in the tray where it was not taken.
+  // The ids of the notes the message on its way carries, which alone leave the tray once it is taken, since more may be noted meanwhile.
+  const sending = useRef<ReadonlySet<string>>(new Set());
+
+  // Note that the notes go as one message, like a member's own words with pictures, and stay in the tray where it was not taken; the mutation's own callbacks run after the pane is hidden too.
   const sent = useMutation({
     ...actMutation(ACT_KIND.AGENTS_MESSAGE),
     onSuccess: (answer) => {
       if ("failure" in answer) return setPickSaid(PICK_SAID.UNSENT);
-      setNotes([]);
-      stopPicking();
+      const went = sending.current;
+      setNotes((held) => held.filter((note) => !went.has(note.id)));
     },
     onError: () => setPickSaid(PICK_SAID.UNSENT),
   });
 
   const send = () => {
     if (sent.isPending || notes.length === 0) return;
-    const message = browserNotesMessage(noteTab, notes);
+    const message = browserNotesMessage(notes);
+    sending.current = new Set(notes.map((note) => note.id));
     setPickSaid(undefined);
     sent.mutate({
       agentId: tab.agentId,
@@ -1001,6 +1006,7 @@ export function CloudBrowserPane({
                       key: crypto.randomUUID(),
                       id: note.id,
                       element: note.element,
+                      page: note.page,
                       words: note.words,
                       moves: note.moves,
                     })
@@ -1068,8 +1074,8 @@ export function CloudBrowserPane({
         }))}
         sendLabel={`Send to ${owner.name}`}
         sending={sent.isPending}
-        onRemove={(id) => setNotes(notes.filter((note) => note.id !== id))}
-        onClear={() => setNotes([])}
+        onRemove={(id) => setNotes((held) => held.filter((note) => note.id !== id))}
+        onClear={() => setNotes(() => [])}
         onSend={send}
       />
     </Fill>

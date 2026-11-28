@@ -1,9 +1,9 @@
 /**
  * browser-notes.ts -- notes a member wrote on elements they picked in an agent's Browser tab, as the one message the agent is sent: words that say where each element is, and a crop of each.
  *
- * The message opens by naming the tab by its title and address, then lists
- * the notes in the order they were picked. Each is the member's words, then
- * what the agent finds the element by: its accessible role and name, as its
+ * The message lists the notes in the order they were picked. Each is the
+ * member's words, the page it was picked on by its title and address, since
+ * the tab may have moved on before the notes are sent, then what the agent finds the element by: its accessible role and name, as its
  * snapshot prints them, a selector that finds it alone in the page, its ref
  * and tab, which its browser tool acts on while the page stands, its opening tag, its
  * words where they say more than its name, its box in the visible page, and
@@ -19,16 +19,17 @@ import type { BrowserLivePickedElement } from "./browser-live-wire.js";
 /** The most characters of one note's words. */
 export const BROWSER_NOTE_MAX_CHARS = 1_000;
 
-/** One note: the member's words, and the element they are on. */
+/** The page a note was picked on, as its tab's pane named it then. */
+export interface BrowserNotePage {
+  readonly title: string;
+  readonly address: string;
+}
+
+/** One note: the member's words, the element they are on, and the page it stood on when picked. */
 export interface BrowserNote {
   readonly words: string;
   readonly element: BrowserLivePickedElement;
-}
-
-/** The tab the notes were picked in, as its pane names it. */
-export interface BrowserNotesTab {
-  readonly title: string;
-  readonly address: string;
+  readonly page: BrowserNotePage;
 }
 
 /** The message the notes make: its words, and each note's picture. */
@@ -61,6 +62,7 @@ function noteLines(note: BrowserNote, place: number): readonly string[] {
 
   return [
     `${String(place)}. ${quoted(note.words.trim())}`,
+    `   Page: ${quoted(note.page.title)}, ${note.page.address}`,
     `   Element: ${element.role === "" ? element.selector : `${browserNoteElement(element)}, ${element.selector}`}`,
     `   Ref: ${element.ref} on tab ${element.tab}, until the page reloads`,
     `   Tag: ${element.tag}`,
@@ -71,17 +73,9 @@ function noteLines(note: BrowserNote, place: number): readonly string[] {
 }
 
 /** The notes as the one message the agent is sent. */
-export function browserNotesMessage(
-  tab: BrowserNotesTab,
-  notes: readonly BrowserNote[],
-): BrowserNotesMessage {
-  const head = [
-    "Notes on elements I picked in your browser:",
-    `In the tab ${quoted(tab.title)}, ${tab.address}`,
-  ];
-
+export function browserNotesMessage(notes: readonly BrowserNote[]): BrowserNotesMessage {
   const text = [
-    head.join("\n"),
+    "Notes on elements I picked in your browser:",
     ...notes.map((note, at) => noteLines(note, at + 1).join("\n")),
   ].join("\n\n");
 
@@ -100,8 +94,8 @@ function bytesOf(base64: string): number {
 }
 
 /** Whether the notes fit one message: as many as it has files, words within its bound, and pictures within its bytes. */
-export function notesFit(tab: BrowserNotesTab, notes: readonly BrowserNote[]): boolean {
-  const { text, attachments } = browserNotesMessage(tab, notes);
+export function notesFit(notes: readonly BrowserNote[]): boolean {
+  const { text, attachments } = browserNotesMessage(notes);
   const bytes = attachments.reduce((sum, attachment) => sum + bytesOf(attachment.data), 0);
 
   return (
