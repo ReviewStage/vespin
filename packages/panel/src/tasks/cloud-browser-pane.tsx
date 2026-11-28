@@ -209,6 +209,8 @@ function fitted(body: CloudBrowserViewport, aspect: number | undefined): CloudBr
 
 /** A note being written on an element picked: a new one, or one held written again, by its id. */
 interface NoteWriting {
+  /** This writing's own key, so a card opened as the last one fades is drawn anew and takes the focus. */
+  readonly key: string;
   readonly id: string | undefined;
   readonly element: BrowserLivePickedElement;
   readonly words: string;
@@ -817,7 +819,7 @@ export function CloudBrowserPane({
     }
 
     setPickSaid(undefined);
-    setWriting({ id: undefined, element, words: "", moves });
+    setWriting({ key: crypto.randomUUID(), id: undefined, element, words: "", moves });
   };
 
   const stopPicking = () => {
@@ -996,6 +998,7 @@ export function CloudBrowserPane({
                   open={writing?.id === note.id}
                   onPress={() =>
                     setWriting({
+                      key: crypto.randomUUID(),
                       id: note.id,
                       element: note.element,
                       words: note.words,
@@ -1018,6 +1021,7 @@ export function CloudBrowserPane({
           >
             {writing === undefined ? null : (
               <PickNoteCard
+                key={writing.key}
                 value={writing.words}
                 onChange={(words) => setWriting({ ...writing, words })}
                 onAdd={addNote}
