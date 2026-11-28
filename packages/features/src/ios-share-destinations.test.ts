@@ -164,3 +164,19 @@ test("each kind stands newest moved first, cut at its bound", () => {
     Array.from({ length: SHARE_DESTINATION_BOUNDS.TASKS }, (_, index) => `t-${count - 1 - index}`),
   );
 });
+
+test("a name cut at its bound never splits a character in two", () => {
+  // Note that an emoji is two UTF-16 units, so a cut through it would leave a lone half, which JSON writes as an escape the Swift sheet's parser refuses, losing the whole snapshot.
+  const name = `${"a".repeat(SHARE_DESTINATION_BOUNDS.MAX_NAME_CHARS - 1)}🚀 launch`;
+
+  const { rows } = shareDestinationsOf({
+    workspaceId: ACME,
+    agents: [],
+    tasks: [{ ...task("t-long", 1), name }],
+    inbox: [],
+  });
+
+  expect(rows.map((row) => row.kind === SHARE_DESTINATION_KIND.TASK && row.name)).toEqual([
+    "a".repeat(SHARE_DESTINATION_BOUNDS.MAX_NAME_CHARS - 1),
+  ]);
+});

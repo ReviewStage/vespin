@@ -51,9 +51,21 @@ export interface ShareDestinationSource {
   readonly inbox: readonly InboxGroup<InboxAnyHolder>[];
 }
 
-/** `words` cut to what a row keeps. */
+/** The first and last UTF-16 unit of a surrogate pair's first half. */
+const HIGH_SURROGATE = { FIRST: 0xd800, LAST: 0xdbff } as const;
+
+/**
+ * `words` cut to what a row keeps, never between a surrogate pair's halves.
+ * Note that a lone half would be written by `JSON.stringify` as an escape
+ * Foundation's parser refuses, so the Swift sheet would read no snapshot at
+ * all.
+ */
 function clipped(words: string): string {
-  return words.slice(0, SHARE_DESTINATION_BOUNDS.MAX_NAME_CHARS);
+  const cut = words.slice(0, SHARE_DESTINATION_BOUNDS.MAX_NAME_CHARS);
+  const last = cut.charCodeAt(cut.length - 1);
+  const split = last >= HIGH_SURROGATE.FIRST && last <= HIGH_SURROGATE.LAST;
+
+  return split ? cut.slice(0, -1) : cut;
 }
 
 /** Newest moved first. */
