@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Capsule,
   Divider,
   HStack,
   Image,
@@ -17,9 +18,11 @@ import {
 } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityHidden,
   accessibilityIdentifier,
   accessibilityLabel,
   buttonStyle,
+  clipped,
   fixedSize,
   font,
   foregroundStyle,
@@ -40,10 +43,16 @@ import {
   useRef,
   useState,
 } from "react";
-import { useAccessibilitySize, useScaledSize, useTextScale } from "./accessibility.js";
+import {
+  useAccessibilitySize,
+  useReduceMotion,
+  useScaledSize,
+  useTextScale,
+} from "./accessibility.js";
 import { COMPOSER_CALL, type ComposerCall, ComposerCallPresses } from "./call.js";
 import type { CaretAtWord } from "./caret-at-word.js";
 import { type ComposerSend, pressSend } from "./composer-press.js";
+import { levelOfPower, pushedWave, QUIET_WAVE, type Wave } from "./dictation-wave-model.js";
 import {
   BAR_EDGE,
   BAR_FOOT_GAP,
@@ -263,6 +272,8 @@ export interface ComposerDictation {
   readonly onCancel: () => void;
   /** Sends the recording to be heard as words, as the strip's ✓ does. */
   readonly onFinish: () => void;
+  /** The microphone's average power just now, in decibels below full scale as iOS's recorder meters it, which the strip's wave reads on its own beat while the recording runs, as the desktop's wave reads its analyzer; none metered reads as silence. */
+  readonly readPower: () => number | undefined;
 }
 
 /** The desktop's words for a dictation's presses and its wait (`dictation-strip.tsx`). */
@@ -275,6 +286,19 @@ const DICTATION_WORDS = {
 
 /** How far the row under the field stands in from the glass on each side, so Send's round at its end keeps the room the + keeps at its start, rather than meeting the glass's edge once the reader's text grows it past its press frame. */
 const ROW_SIDES = padding({ horizontal: SPACE.TIGHT });
+
+/** The wave's height at the default text size, in points, as tall as the desktop's. */
+const WAVE_HEIGHT = 20;
+
+/** A bar's width and the room between bars, in points, as the desktop's stand. */
+const WAVE_BAR_WIDTH = 2;
+const WAVE_BAR_GAP = 2;
+
+/** The least a bar stands at, as a share of the wave's height, so silence is a dot rather than nothing. */
+const WAVE_REST = 0.08;
+
+/** How often the wave reads the microphone and adds a bar: ten bars a second, half the desktop's pace, so the wave renders on the JavaScript thread ten times a second rather than twenty. */
+const WAVE_BEAT_MS = 100;
 
 /** How far ahead a recording's clock may count, which no dictation reaches: a day. */
 const CLOCK_REACH_MS = 86_400_000;
@@ -331,10 +355,69 @@ function DictationPress({
 }
 
 /**
+ * The voice as it is heard, as the desktop's strip draws it: one bar per
+ * beat, as loud as the microphone was, scrolling in at the trailing end and
+ * clipped at the leading one, each bar centered on the line so silence is a
+ * row of dots. Note that the bars are SwiftUI's own capsules, because neither
+ * SwiftUI nor `@expo/ui` nor Expo offers a level meter to stand in their
+ * place, and each bar is named by its beat, so a beat adds one bar and lets
+ * one go rather than redrawing every bar. Where the reader reduces motion
+ * the bars rest, as the desktop holds its own still, while the clock counts.
+ */
+function DictationWave({ readPower }: { readonly readPower: () => number | undefined }) {
+  const colors = useColors();
+  const reduced = useReduceMotion();
+  const height = useScaledSize(WAVE_HEIGHT);
+  const [wave, setWave] = useState<Wave>(QUIET_WAVE);
+
+  useEffect(() => {
+    if (reduced) return;
+
+    const beat = setInterval(
+      () => setWave((held) => pushedWave(held, levelOfPower(readPower()))),
+      WAVE_BEAT_MS,
+    );
+
+    return () => clearInterval(beat);
+  }, [readPower, reduced]);
+
+  return (
+    <HStack
+      spacing={WAVE_BAR_GAP}
+      modifiers={[
+        frame({
+          minWidth: 0,
+          maxWidth: Infinity,
+          minHeight: height,
+          maxHeight: height,
+          alignment: "trailing",
+        }),
+        clipped(),
+        accessibilityHidden(),
+      ]}
+    >
+      {wave.levels.map((level, index) => (
+        <Capsule
+          key={wave.first + index}
+          modifiers={[
+            frame({
+              width: WAVE_BAR_WIDTH,
+              height: Math.max(WAVE_BAR_WIDTH, Math.max(WAVE_REST, level) * height),
+            }),
+            foregroundStyle(colors.TEXT_MUTED),
+          ]}
+        />
+      ))}
+    </HStack>
+  );
+}
+
+/**
  * The row under the field while a dictation stands, as the desktop's strip
  * stands at its box's foot: ✕, which drops the recording, how long it has
- * run, and ✓, which sends it to be heard; and, once sent, that it is being
- * heard, under the system's spinner, until the words land in the field.
+ * run, the voice as it is heard, and ✓, which sends it to be heard; and,
+ * once sent, that it is being heard, under the system's spinner, until the
+ * words land in the field.
  */
 function DictationStrip({ dictation }: { readonly dictation: ComposerDictation }) {
   const colors = useColors();
@@ -361,7 +444,7 @@ function DictationStrip({ dictation }: { readonly dictation: ComposerDictation }
         onPress={dictation.onCancel}
       />
       <DictationClock startedAt={dictation.startedAt} />
-      <Spacer />
+      <DictationWave readPower={dictation.readPower} />
       <DictationPress
         glyph={GLYPH.CHECK}
         label={DICTATION_WORDS.FINISH}

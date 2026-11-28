@@ -80,7 +80,8 @@ builds a control of its own.
   holds the model, effort, Fast and the permission mode, each once, a
   popover from the chip in a regular window, `ModelChoicePopover`),
   Dictate, and Send, a dictation under way standing its strip in the row's
-  place (✕, how long it has run, ✓, then Transcribing), as the desktop's;
+  place (✕, how long it has run, the voice's wave as it is heard, ✓, then
+  Transcribing), as the desktop's;
   and its head, inside the same glass, holds an agent's
   `DeniesWaiting` (that a message sent now denies the call waiting, a press
   scrolling to the call's row, whose Deny and Allow alone answer it), a
