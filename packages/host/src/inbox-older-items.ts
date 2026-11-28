@@ -27,14 +27,28 @@
  * copy the moment it is asked, and taken back where the service refused
  * it. They hand no wait, so a write the service answered is taken into the
  * copy in its place, and stands there once it stands down.
+ *
+ * Beside them stand the items each place's search found on the service
+ * (`AGENTS_INBOX_SEARCH`), by the place (`INBOX_SEARCH_PLACE`), told as the
+ * document's slice of them (`LIVE_READ.INBOX_FOUND`). A place holds one
+ * search's: each answer taken (`found`) stands in the place of the one
+ * before, until the place lets them go (`letGo`), its caller taking only
+ * the answer to the place's newest words. The member's writes are drawn
+ * over them, and the feed's carrying lets them go, as for the older items.
  */
 
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { inboxInOrder } from "@repo/features/inbox-live";
+import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { type EntityPool, type HeldRows, ROW_GONE } from "@repo/sync";
 import { Effect, type Scope } from "effect";
-import type { AppHostRead, AppInboxItems } from "./app-state.js";
+import {
+  type AppHostRead,
+  type AppInboxFoundPlaces,
+  type AppInboxItems,
+  NO_INBOX_FOUND,
+} from "./app-state.js";
 import {
   changedIds,
   INBOX_ITEM,
@@ -51,7 +65,15 @@ export interface OlderInboxItems {
   readonly took: (items: readonly PlacedInboxItem[]) => void;
   /** Lets go of the items `ids` names, which the feed carried, and tells the rest where any was held. */
   readonly carried: (ids: readonly string[]) => void;
-  /** Lets go of every item held, as a sign-out does, and tells none read. */
+  /** Takes the items `place`'s search for `query` found, each on its plan, in the place of those it held, and tells them. */
+  readonly found: (
+    place: InboxSearchPlace,
+    query: string,
+    items: readonly PlacedInboxItem[],
+  ) => void;
+  /** Lets go of `place`'s search and the items it found, and tells the places left. */
+  readonly letGo: (place: InboxSearchPlace) => void;
+  /** Lets go of every item held, the older and the found, as a sign-out does, and tells none read. */
   readonly clear: () => void;
 }
 
@@ -60,10 +82,43 @@ export interface OlderInboxItemsDependencies {
   readonly pool: EntityPool;
   /** Tells the items as they now stand, the writes standing drawn over them. */
   readonly tell: (read: AppHostRead<AppInboxItems>) => void;
+  /** Tells each place's found items as they now stand, the writes standing drawn over them. */
+  readonly tellFound: (found: AppInboxFoundPlaces) => void;
+}
+
+/** The items one place's search found, by id, and the words they were found by. */
+interface PlaceFound {
+  readonly query: string;
+  readonly rows: Map<string, PlacedInboxItem>;
 }
 
 /** No item told: the slice before any page is read, and after a sign-out. */
 const NONE_READ: AppHostRead<AppInboxItems> = {};
+
+/** `rows` with every change of `standing` drawn over them, those a change took away left out. */
+function drawnRows(
+  rows: Iterable<PlacedInboxItem>,
+  standing: readonly InboxChange[],
+): PlacedInboxItem[] {
+  return [...rows].flatMap((row) => {
+    const drawn = drawnOver(row, standing);
+
+    return drawn === undefined ? [] : [drawn];
+  });
+}
+
+/** Takes `change` into each of `rows` it names, in place, letting go of one it took away. */
+function takeInto(rows: Map<string, PlacedInboxItem>, change: InboxChange): void {
+  for (const id of changedIds(change)) {
+    const row = rows.get(id);
+
+    if (row === undefined) continue;
+    const drawn = drawnOver(row, [change]);
+
+    if (drawn === undefined) rows.delete(id);
+    else rows.set(id, drawn);
+  }
+}
 
 /** `row` with every change of `standing` that names it drawn over it, in order; none where one took it away. */
 function drawnOver(
@@ -114,20 +169,32 @@ function itemsByHolder(rows: Iterable<PlacedInboxItem>): AppInboxItems {
 export function olderInboxItems(dependencies: OlderInboxItemsDependencies): OlderInboxItems {
   /** Every item held, as the service last answered it or a write's answer left it, by its id. */
   let held = new Map<string, PlacedInboxItem>();
+  /** Each place's found items, by the place, while it holds them. */
+  let places = new Map<InboxSearchPlace, PlaceFound>();
   /** The items as they stand beside the pool, while a session stands them. */
   let writes: HeldRows<PlacedInboxItem, InboxChange> | undefined;
 
+  const olderToldNow = (standing: readonly InboxChange[]) =>
+    dependencies.tell({ rows: itemsByHolder(drawnRows(held.values(), standing)) });
+
+  const foundToldNow = (standing: readonly InboxChange[]) => {
+    const told: { [Place in InboxSearchPlace]?: AppInboxFoundPlaces[Place] } = {};
+
+    for (const [place, { query, rows }] of places) {
+      told[place] = { rows: { query, items: itemsByHolder(drawnRows(rows.values(), standing)) } };
+    }
+
+    dependencies.tellFound(told);
+  };
+
   const toldNow = () => {
     const standing = writes?.standing() ?? [];
-
-    const rows = [...held.values()].flatMap((row) => {
-      const drawn = drawnOver(row, standing);
-
-      return drawn === undefined ? [] : [drawn];
-    });
-
-    dependencies.tell({ rows: itemsByHolder(rows) });
+    olderToldNow(standing);
+    foundToldNow(standing);
   };
+
+  /** Whether any place holds the item `id` found. */
+  const foundHolds = (id: string) => [...places.values()].some(({ rows }) => rows.has(id));
 
   const stand = Effect.gen(function* () {
     const stood: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
@@ -137,17 +204,11 @@ export function olderInboxItems(dependencies: OlderInboxItemsDependencies): Olde
         // Note that the items follow nothing, so a write over one is taken into its copy once the service answers it.
         confirmation: () => undefined,
         beside: {
-          shows: (key) => held.has(key),
+          shows: (key) => held.has(key) || foundHolds(key),
           take: (change) => {
-            for (const id of changedIds(change)) {
-              const row = held.get(id);
+            takeInto(held, change);
 
-              if (row === undefined) continue;
-              const drawn = drawnOver(row, [change]);
-
-              if (drawn === undefined) held.delete(id);
-              else held.set(id, drawn);
-            }
+            for (const { rows } of places.values()) takeInto(rows, change);
           },
         },
       },
@@ -169,14 +230,34 @@ export function olderInboxItems(dependencies: OlderInboxItemsDependencies): Olde
     },
     carried: (ids) => {
       const before = held.size;
+      let foundMoved = false;
 
-      for (const id of ids) held.delete(id);
+      for (const id of ids) {
+        held.delete(id);
 
-      if (held.size !== before) toldNow();
+        for (const { rows } of places.values()) {
+          if (rows.delete(id)) foundMoved = true;
+        }
+      }
+
+      const standing = writes?.standing() ?? [];
+
+      if (held.size !== before) olderToldNow(standing);
+
+      if (foundMoved) foundToldNow(standing);
+    },
+    found: (place, query, items) => {
+      places.set(place, { query, rows: new Map(items.map((item) => [item.id, item])) });
+      foundToldNow(writes?.standing() ?? []);
+    },
+    letGo: (place) => {
+      if (places.delete(place)) foundToldNow(writes?.standing() ?? []);
     },
     clear: () => {
       held = new Map();
+      places = new Map();
       dependencies.tell(NONE_READ);
+      dependencies.tellFound(NO_INBOX_FOUND);
     },
   };
 }

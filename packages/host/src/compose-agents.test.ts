@@ -18,6 +18,7 @@ import {
 import { FAILURE_FACT, GATE_CLOSED_BY } from "@repo/features/failure-facts";
 import { GITHUB_IMAGE_TYPE } from "@repo/features/github-image";
 import { FAILED_RUN_WINDOW_MILLIS } from "@repo/features/inbox-live";
+import { INBOX_SEARCH_PLACE } from "@repo/features/inbox-service-search";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -3761,4 +3762,87 @@ it.effect(
       assert.deepEqual(launch.pool.queued(), []);
       assert.deepEqual(yield* keptItemIds(launch.pool), [HELD_ITEM.id]);
     }).pipe(Effect.provide(keptPlatform)),
+);
+
+/** What the host last told each place's search found: the words, and the ids found by the plan each is on, by the place. */
+function foundIdsOf(told: readonly WireValue[]) {
+  const last = told.at(-1);
+
+  return Object.fromEntries(
+    Object.entries(isRecord(last) ? last : {}).map(([place, read]) => {
+      const rows = isRecord(read) && isRecord(read.rows) ? read.rows : {};
+      const items = isRecord(rows.items) ? rows.items[INBOX_SCOPE_KIND.TASK] : undefined;
+
+      return [
+        place,
+        {
+          query: rows.query,
+          ids: olderIdsOf([{ rows: { [INBOX_SCOPE_KIND.TASK]: items ?? {} } }])?.tasks,
+        },
+      ];
+    }),
+  );
+}
+
+it.effect(
+  "a place's newer words wait for its search out, and only the latest are asked once it answers, while another place asks beside it; the words they replaced answer replaced, and are drawn nowhere",
+  () =>
+    Effect.gen(function* () {
+      const { open, reset, acts, answerSearch, foundItems, coldDrawn, asked } = yield* subject();
+      yield* open;
+      const held = yield* Deferred.make<void>();
+      answerSearch("ce", FIRST_OLDER_PAGE, Deferred.await(held));
+
+      answerSearch("cents", {
+        stamps: [stampOf(OLDEST_ITEM, OLDER_TASK_ID)],
+        items: [{ ...ITEM_ROW, ...OLDEST_ITEM }],
+      });
+
+      answerSearch("flag", FIRST_OLDER_PAGE);
+
+      const inInbox = (query: string) =>
+        acts.AGENTS_INBOX_SEARCH({ place: INBOX_SEARCH_PLACE.INBOX, query });
+
+      const out = yield* Effect.forkChild(inInbox("ce"));
+      yield* settled;
+      const between = yield* Effect.forkChild(inInbox("cen"));
+      yield* settled;
+      const latest = yield* Effect.forkChild(inInbox("cents"));
+      yield* settled;
+
+      assert.deepEqual(yield* Fiber.join(between), { replaced: true });
+
+      assert.deepEqual(
+        yield* acts.AGENTS_INBOX_SEARCH({ place: INBOX_SEARCH_PLACE.EVERYTHING, query: "flag" }),
+        {},
+      );
+
+      const searched = () => asked.filter((each) => each.startsWith("inbox-search:"));
+      assert.deepEqual(searched(), ["inbox-search:ce", "inbox-search:flag"]);
+
+      yield* Deferred.succeed(held, undefined);
+      assert.deepEqual(yield* Fiber.join(out), { replaced: true });
+      assert.deepEqual(yield* Fiber.join(latest), {});
+      assert.deepEqual(searched(), ["inbox-search:ce", "inbox-search:flag", "inbox-search:cents"]);
+
+      assert.deepEqual(foundIdsOf(foundItems()), {
+        [INBOX_SEARCH_PLACE.INBOX]: { query: "cents", ids: { [OLDER_TASK_ID]: [OLDEST_ITEM.id] } },
+        [INBOX_SEARCH_PLACE.EVERYTHING]: {
+          query: "flag",
+          ids: { [OLDER_TASK_ID]: [OLDER_ITEM.id] },
+        },
+      });
+
+      // Note that the replaced words' answer drew neither its items nor its tasks.
+      assert.ok(
+        foundItems().every((told) => foundIdsOf([told])[INBOX_SEARCH_PLACE.INBOX]?.query !== "ce"),
+      );
+      assert.equal(coldDrawn.length, 2);
+
+      // The Inbox's words cleared let its found items go, and a sign-out every place's.
+      assert.deepEqual(yield* acts.AGENTS_INBOX_SEARCH({ place: INBOX_SEARCH_PLACE.INBOX }), {});
+      assert.deepEqual(Object.keys(foundIdsOf(foundItems())), [INBOX_SEARCH_PLACE.EVERYTHING]);
+      yield* reset;
+      assert.deepEqual(foundItems().at(-1), {});
+    }),
 );

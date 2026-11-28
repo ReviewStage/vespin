@@ -340,6 +340,7 @@
     "./task-tree-model": "./src/task-tree-model.js",
     "./settled-paging": "./src/settled-paging.js",
     "./inbox-older-pages": "./src/inbox-older-pages.js",
+    "./inbox-service-search": "./src/inbox-service-search.js",
     "./at-word": "./src/at-word.js",
     "./attachment-model": "./src/attachment-model.js",
     "./attached-files": "./src/attached-files.js",

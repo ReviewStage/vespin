@@ -2537,7 +2537,7 @@ export function CommandPalette({
     tasks.signedIn &&
     (filter === PALETTE_FILTER.INBOX || tokens.length > 0 || (pageEmpty && inboxOn));
 
-  const inboxSearch = useInboxSearch(tasks, inboxAsked);
+  const inboxSearch = useInboxSearch(tasks, inboxAsked, sought);
 
   // Note that each Inbox item's words are read once for the items pushed rather than on every key.
   const inboxList = useMemo(

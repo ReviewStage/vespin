@@ -56,6 +56,7 @@ import type {
   AppAccessSlice,
   AppAccountPreferences,
   AppHostRead,
+  AppInboxFoundPlaces,
   AppInboxItems,
   AppInboxRead,
   AppThisMacHosts,
@@ -133,6 +134,7 @@ export interface HostOperator {
   /** Every inbox item the account reaches, whole, each time the host's read of them for the session moves. */
   onInboxItemsChanged(listener: (read: AppInboxRead) => void): () => void;
   onInboxOlderChanged(listener: (read: AppHostRead<AppInboxItems>) => void): () => void;
+  onInboxFoundChanged(listener: (found: AppInboxFoundPlaces) => void): () => void;
   /** The account's preferences row, whole, each time the host's read of it for the session moves or a write is drawn over it. */
   onAccountPreferencesChanged(listener: (held: AppAccountPreferences) => void): () => void;
   onSettingsChanged(listener: (change: HostSettingsChange) => void): () => void;
@@ -348,6 +350,13 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         // Note that the read is the host's own, handed over in this process, so it is passed on as built, as the feed's is.
         (payload) =>
           isRecord(payload) ? answered<AppHostRead<AppInboxItems>>(payload) : undefined,
+        listener,
+      ),
+    onInboxFoundChanged: (listener) =>
+      on(
+        GATEWAY_EVENT.INBOX_FOUND_CHANGED,
+        // Note that the places are the host's own, handed over in this process, so they are passed on as built, as the older items are.
+        (payload) => (isRecord(payload) ? answered<AppInboxFoundPlaces>(payload) : undefined),
         listener,
       ),
     onSettingsChanged: (listener) =>

@@ -83,6 +83,7 @@ import type { HostLine } from "@repo/features/host-live";
 import { HOST_PAIRING_CALL_FAILURE } from "@repo/features/host-pairing-view";
 import type { HostPairingAnswer } from "@repo/features/host-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
+import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import {
   INBOX_APPROVAL_OPTION,
   INBOX_ASK,
@@ -159,6 +160,7 @@ import {
 } from "@repo/features/picture-source-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { TASK_SECTION_GLYPH, TASK_SECTION_ICON_KIND } from "@repo/features/task-section-wire";
 import {
   DESCRIPTION_ACTOR,
@@ -193,6 +195,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
 import {
   type AppHeldById,
+  type AppInboxFound,
   type AppInboxItems,
   type AppInboxTask,
   type AppInboxTaskHolding,
@@ -915,6 +918,52 @@ function olderThread(n: number): InboxItem {
     { status: INBOX_STATUS.CLOSED, settledAt: LANDED - ago + 10 * MINUTE },
   );
 }
+
+/** The item only a search finds: a closed thread of the rounding task three months back, past every page of older items. */
+function foundOnlyThread(): InboxItem {
+  const ago = 92 * DAY;
+  const at = 21_000;
+
+  return item(
+    2100,
+    AGENT.ROUNDING,
+    "found-0",
+    "Quarter close: why the ledger rounds to even",
+    [
+      agentSaid(at, ago, LARGE_WORDS),
+      adaSaid(at + 1, ago - 10 * MINUTE, "To even, as the ledger does; the invoice follows it."),
+    ],
+    { status: INBOX_STATUS.CLOSED, settledAt: LANDED - ago + 10 * MINUTE },
+  );
+}
+
+/** Every staged item past the feed a search may find, by the task each stands on: the older threads, read or not, and the one only a search finds. */
+function searchableItems(): readonly { readonly taskId: string; readonly item: InboxItem }[] {
+  const total = OLDER_PAGE_ITEMS.reduce((sum, each) => sum + each, 0);
+
+  const older = Array.from({ length: total }, (_, n) => ({
+    taskId: (LARGE_HOLDERS[n % LARGE_HOLDERS.length] ?? LARGE_HOLDERS[0]).taskId,
+    item: olderThread(n),
+  }));
+
+  return [...older, { taskId: TASK.ROUNDING, item: foundOnlyThread() }];
+}
+
+/** The staged items past the feed whose title holds every word of `query`, by the task each stands on, as the service's search answers them into the host. */
+function stagedFound(query: string): AppInboxItems {
+  const tokens = searchTokens(query);
+  const onTasks = new Map<string, InboxItem[]>();
+
+  for (const { taskId, item: found } of searchableItems()) {
+    if (!matchesTokens([found.title], tokens)) continue;
+    onTasks.set(taskId, [...(onTasks.get(taskId) ?? []), found]);
+  }
+
+  return { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(onTasks) };
+}
+
+/** What each place's search found in the run, by the place, as the host holds it (`LIVE_READ.INBOX_FOUND`). */
+const foundAt = new Map<InboxSearchPlace, AppInboxFound>();
 
 /** How many pages of older items the run has read, which All lists past the feed. */
 let olderPagesRead = 0;
@@ -2913,6 +2962,9 @@ export function inboxAppState(
       rows: { [INBOX_SCOPE_KIND.TASK]: fed, agents: AGENT_INBOXES },
     },
     ...(olderPagesRead === 0 ? undefined : { [LIVE_READ.INBOX_OLDER]: { rows: olderItemsRead() } }),
+    [LIVE_READ.INBOX_FOUND]: Object.fromEntries(
+      [...foundAt].map(([place, found]) => [place, { rows: found }]),
+    ),
     [LIVE_READ.HELD_TASK]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
     [LIVE_READ.DESCRIPTION_COMMENTS]: stagedComments(state),
@@ -3954,6 +4006,13 @@ const ANSWERS: StagedAnswers = {
     olderPagesRead = Math.max(olderPagesRead, Math.min(page, OLDER_PAGES));
 
     return page < OLDER_PAGES ? { next: olderCursor(page) } : {};
+  },
+  // A place's search finds the staged items past the feed whose title holds its words, and its words cleared let them go.
+  [ACT_KIND.AGENTS_INBOX_SEARCH]: ({ place, query }) => {
+    if (query === undefined) foundAt.delete(place);
+    else foundAt.set(place, { query, items: stagedFound(query) });
+
+    return {};
   },
   [ACT_KIND.AGENTS_CHAT_REACT]: ({ agentId, messageId, kind, reacted }) => {
     if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };

@@ -34,6 +34,7 @@ import {
   READING_INBOX,
   READING_OLDER_INBOX,
   SEARCH_INBOX,
+  SEARCHING_OLDER_INBOX,
 } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, inboxAddressedTo } from "@repo/features/inbox-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
@@ -926,7 +927,7 @@ export function InboxListSkeleton({
 }: {
   /** How many placeholder rows stand, at most five. */
   rows?: number;
-  /** What the region says is being read: the Inbox, or the older items under All's rows. */
+  /** What the region says is being read: the Inbox, the older items under All's rows, or those a search asks the service for. */
   label?: string;
 }): React.JSX.Element {
   return (
@@ -1293,6 +1294,7 @@ export function InboxListNote({
   onList,
   onRetry,
   searched,
+  searching = false,
   onNewTask,
   none = NEEDS_YOU.NONE,
 }: {
@@ -1314,6 +1316,8 @@ export function InboxListNote({
   onRetry: () => void;
   /** The words the list's search narrows it by, where it narrows it, which an empty list says found nothing. */
   searched?: string | undefined;
+  /** Whether the service is still asked for the items those words find past what the Inbox holds, so an empty list says it is searching rather than that nothing matched. */
+  searching?: boolean | undefined;
   /** What the list standing alone says holding none: that nothing needs the reader, or `NOTHING_HERE` on a task's. */
   none?: string | undefined;
 }): React.JSX.Element | null {
@@ -1336,7 +1340,13 @@ export function InboxListNote({
 
   if (reading || readingOlder) return <InboxListSkeleton />;
 
-  if (searched !== undefined) return <SearchEmpty searched={searched} />;
+  if (searched !== undefined) {
+    return searching ? (
+      <InboxListSkeleton rows={1} label={SEARCHING_OLDER_INBOX} />
+    ) : (
+      <SearchEmpty searched={searched} />
+    );
+  }
 
   if (filteredOut !== undefined)
     return <ShowEmpty view={filteredOut} counts={counts} onList={onList} />;

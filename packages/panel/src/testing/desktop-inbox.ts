@@ -20,6 +20,7 @@ import {
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { AUTOMATION_FOLLOW } from "@repo/features/automation-view";
 import type { AutomationSummary } from "@repo/features/automation-wire";
+import type { AgentInboxSearchParams, InboxSearchPlace } from "@repo/features/inbox-service-search";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -48,6 +49,8 @@ import type {
   AppHolderInbox,
   AppHolderInboxes,
   AppHostRead,
+  AppInboxFound,
+  AppInboxFoundPlaces,
   AppInboxItems,
   AppInboxSlice,
   AppInboxTask,
@@ -330,6 +333,14 @@ class InboxWorld {
   olderAsked: string[] = [];
   /** Delivers the older items the host holds to the window, as main delivers a move of them; nothing before a mount. */
   deliverOlder: (read: AppHostRead<AppInboxItems>) => void = () => undefined;
+  /** The items the service's search finds by each query, by the task each stands on; a query none names finds nothing. */
+  searchFinds = new Map<string, Readonly<Record<string, readonly InboxItem[]>>>();
+  /** Each place's search the window asked the host for, in order. */
+  searchAsked: AgentInboxSearchParams[] = [];
+  /** What each place's search found, as the host holds it. */
+  foundAt = new Map<InboxSearchPlace, AppInboxFound>();
+  /** Delivers what each place's search found to the window, as main delivers a move of it; nothing before a mount. */
+  deliverFound: (found: AppInboxFoundPlaces) => void = () => undefined;
   /** Whether a read of a plan's agents is held open, never answering. */
   agentListHeld = false;
   /** How a read of a task from the start answers, where a test holds it in its own hands. */
@@ -385,6 +396,23 @@ function olderPageRead(before: string | undefined): FakeActAnswer {
   world.deliverOlder({ rows: { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(read) } });
 
   return { status: FAKE_ANSWER.DONE, value: page.next === undefined ? {} : { next: page.next } };
+}
+
+/** A place's search as the host answers it: what the words find held for the place and delivered, or the place let go. */
+function searchRead(params: AgentInboxSearchParams): FakeActAnswer {
+  world.searchAsked.push(params);
+
+  if (params.query === undefined) world.foundAt.delete(params.place);
+  else {
+    const items = { [INBOX_SCOPE_KIND.TASK]: world.searchFinds.get(params.query) ?? {} };
+    world.foundAt.set(params.place, { query: params.query, items });
+  }
+
+  world.deliverFound(
+    Object.fromEntries([...world.foundAt].map(([place, found]) => [place, { rows: found }])),
+  );
+
+  return { status: FAKE_ANSWER.DONE, value: {} };
 }
 
 /** A read of a task's inbox as the act answers it: done, carrying the view the service answered. */
@@ -613,10 +641,18 @@ beforeEach(() => {
   world.olderPages = new Map();
   world.olderAsked = [];
   world.deliverOlder = () => undefined;
+  world.searchFinds = new Map();
+  world.searchAsked = [];
+  world.foundAt = new Map();
+  world.deliverFound = () => undefined;
   fakeActs({
     act: (request: AnyAct): Promise<FakeActAnswer> => {
       if (request.kind === ACT_KIND.AGENTS_INBOX_OLDER_PAGE) {
         return Promise.resolve(olderPageRead(request.payload.before));
+      }
+
+      if (request.kind === ACT_KIND.AGENTS_INBOX_SEARCH) {
+        return Promise.resolve(searchRead(request.payload));
       }
 
       if (request.kind === ACT_KIND.AGENTS_INBOX_ITEMS_RETRY) {
@@ -807,6 +843,7 @@ export function mount({
   world.deliverFeed = reads.deliverItems;
   world.deliverHolders = reads.deliverHolders;
   world.deliverOlder = reads.deliverOlder;
+  world.deliverFound = reads.deliverFound;
   // Note that a workspace's automations are laid on the document as the window holds them, as the host lays them.
   holdAutomations(reads.deliverAutomations, {
     [AUTOMATION_FOLLOW.WORKSPACE]: () => ({ rows: world.automations }),

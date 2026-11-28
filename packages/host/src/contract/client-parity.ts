@@ -167,6 +167,9 @@ const IOS = {
   INBOX_OLDER: notYet(
     "iOS's Inbox All lists the items its feed holds; reading older ones at its end comes with its own screen",
   ),
+  INBOX_SEARCH: notYet(
+    "iOS's Inbox and Search tabs search the items the phone holds; asking the service for more comes with its own screens",
+  ),
   ACTIVE_TASK: byDesign(
     "iOS follows each open task's description by its id (TASKS_HELD_FOLLOW), so it has no one active task to select or leave",
   ),
@@ -377,6 +380,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ITEM_HOME]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_OLDER_PAGE]: panel(IOS.INBOX_OLDER),
+  [PORT_ACT_KIND.AGENTS_INBOX_SEARCH]: panel(IOS.INBOX_SEARCH),
   [PORT_ACT_KIND.AGENTS_INBOX_READ_ALL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ATTACHMENT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PICTURE]: EVERYWHERE,

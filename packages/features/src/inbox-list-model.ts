@@ -84,6 +84,9 @@ export const READING_INBOX = "Reading your inbox…";
 /** What the placeholder row under All's rows says while the next page of older items is read. */
 export const READING_OLDER_INBOX = "Reading older items…";
 
+/** What the placeholder rows a search has found nothing in yet say while the service is still asked for older items it finds. */
+export const SEARCHING_OLDER_INBOX = "Searching older items…";
+
 /** What the Inbox, the window's or a task's own, says where a read of its items did not answer. */
 export const INBOX_NOT_READ = "The inbox could not be read.";
 

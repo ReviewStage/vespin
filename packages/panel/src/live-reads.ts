@@ -69,6 +69,7 @@ import {
 } from "@repo/features/agent-view";
 import { AUTOMATION_FOLLOW, type AutomationFollow } from "@repo/features/automation-view";
 import type { FailureFacts } from "@repo/features/failure-facts";
+import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { IntegrationProviderParams } from "@repo/features/integration-view";
 import { integrationConnectionOf } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -354,6 +355,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.AGENT_ORIGINS,
   LIVE_READ.INBOX_ITEMS,
   LIVE_READ.INBOX_OLDER,
+  LIVE_READ.INBOX_FOUND,
   LIVE_READ.HOLDER_INBOX,
   LIVE_READ.LINK_STANDINGS,
   LIVE_READ.PAGES,
@@ -595,6 +597,10 @@ export const inboxItemsQuery = () => liveReadQuery(LIVE_READ.INBOX_ITEMS, []);
 
 /** The account's settled items older than the feed holds, as All read them a page at a time past it, which the host holds for the session; none before a page is read. */
 export const inboxOlderQuery = () => liveReadQuery(LIVE_READ.INBOX_OLDER, []);
+
+/** The items `place`'s search found on the service past what the host holds, and the words they were found by, held while its words stand; disabled while the place asks nothing. */
+export const inboxFoundQuery = (place: InboxSearchPlace | undefined) =>
+  liveReadQuery(LIVE_READ.INBOX_FOUND, place === undefined ? undefined : [place]);
 
 /** One holder's own inbox, by its kind and its id. */
 export const holderInboxQuery = (holder: InboxHolderKey | undefined) =>
