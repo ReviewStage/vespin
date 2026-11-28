@@ -135,6 +135,15 @@ type StartDraft = {
  */
 const startDrafts = new Map<string, Map<number, Map<number, StartDraft>>>();
 
+/** How many times the drafts were let go at a sign-out, so a refusal that lands after one keeps nothing of the account gone. */
+let startDraftsForgotten = 0;
+
+/** Lets go of every new thread's draft, as the account they were typed under signs out, so the next account on the phone never opens on its words. */
+export function forgetStartDrafts(): void {
+  startDrafts.clear();
+  startDraftsForgotten += 1;
+}
+
 /** The draft kept at one block's offsets of a task, whatever block it was typed on; none kept, or no block yet read. */
 function heldDraftAt(taskId: string, block: StartSpan | undefined): StartDraft | undefined {
   if (block === undefined) return undefined;
@@ -773,6 +782,7 @@ export function useCommentStart(
       }
 
       inFlight.current = true;
+      const forgotten = startDraftsForgotten;
       const files = pictures.files ?? [];
       const carried = heldPictures.current;
       const repeated = sameSend(sent, kept, files) ? sent : undefined;
@@ -814,6 +824,8 @@ export function useCommentStart(
                 : COMMENT_NOTE.NOT_POSTED,
           unanswered: COMMENT_NOTE.NOT_POSTED,
           inPlace: (why, noticed) => {
+            // Note that a refusal landing after a sign-out keeps nothing, and is said to no one, since its account is gone.
+            if (forgotten !== startDraftsForgotten) return;
             const now = heldDraftAt(taskId, block);
 
             // Note that words typed toward this block since the send, in a field opened on it again, are kept over the refused ones, and so is a draft another block's words now stand under at these offsets; an earlier refusal's draft on this block gives way to this one.

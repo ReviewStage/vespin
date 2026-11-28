@@ -28,12 +28,13 @@ import {
 } from "@repo/ui-native";
 import { randomUUID } from "expo-crypto";
 import { Stack, useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMemberPictures } from "../member-pictures.js";
 import { LINK_OPENS, useOpenLink } from "../open-link.js";
 import { useSheetAtHalf } from "../sheet-stack.js";
 import {
   type CommentReply,
+  forgetStartDrafts,
   type StartSpan,
   threadMessages,
   threadOpen,
@@ -222,6 +223,27 @@ const selectedSpans = new Map<string, MeasuredBlock>();
  * their key and why are kept with the block's draft (`useCommentStart`).
  */
 const refusedBlocks = new Map<string, MeasuredBlock>();
+
+/**
+ * Lets go of what the comment sheet holds of a description as the account
+ * signs out: new threads' drafts, the words selected and the blocks refused
+ * starts were measured on, each with the description's text, so the next
+ * account on the phone never opens on another's words.
+ */
+export function useCommentDraftsSignOut(signedIn: boolean): void {
+  const wasSignedIn = useRef(signedIn);
+
+  useEffect(() => {
+    if (wasSignedIn.current && !signedIn) {
+      forgetStartDrafts();
+      selectedSpans.clear();
+      refusedBlocks.clear();
+      earlyRefusals.clear();
+    }
+
+    wasSignedIn.current = signedIn;
+  }, [signedIn]);
+}
 
 /**
  * What a new comment's page shows where it has no block to answer: the
