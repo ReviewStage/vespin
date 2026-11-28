@@ -1,0 +1,4436 @@
+[ {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MAESTRO_FILENAME" : "j03-manager-chat",
+        "MAESTRO_DEVICE_UDID" : "CE9E34B9-693F-475C-8AC7-308952029222",
+        "MAESTRO_SHARD_ID" : "1",
+        "MAESTRO_SHARD_INDEX" : "0"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855728904,
+    "duration" : 4,
+    "sequenceNumber" : 0,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MAESTRO_FILENAME" : "j03-manager-chat",
+          "MAESTRO_DEVICE_UDID" : "CE9E34B9-693F-475C-8AC7-308952029222",
+          "MAESTRO_SHARD_ID" : "1",
+          "MAESTRO_SHARD_INDEX" : "0"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855728908,
+    "duration" : 586,
+    "sequenceNumber" : 1,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "FLOATING_TABS" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855729496,
+    "duration" : 1,
+    "sequenceNumber" : 2,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "launchAppCommand" : {
+      "appId" : "dev.vespin.ios",
+      "clearState" : true,
+      "launchArguments" : {
+        "fixture" : "inbox-large"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855729497,
+    "duration" : 2760,
+    "sequenceNumber" : 3,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "launchAppCommand" : {
+        "appId" : "dev.vespin.ios",
+        "clearState" : true,
+        "launchArguments" : {
+          "fixture" : "inbox-large"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "idRegex" : "workspace-switcher",
+          "optional" : false
+        }
+      },
+      "timeout" : "30000",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855732260,
+    "duration" : 6089,
+    "sequenceNumber" : 4,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "idRegex" : "workspace-switcher",
+            "optional" : false
+          }
+        },
+        "timeout" : "30000",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "1500"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855738350,
+    "duration" : 1122,
+    "sequenceNumber" : 5,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "1500"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "1500"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855738355,
+    "duration" : 0,
+    "sequenceNumber" : 6,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "1500"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855738356,
+    "duration" : 0,
+    "sequenceNumber" : 7,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855738356,
+    "duration" : 745,
+    "sequenceNumber" : 8,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "1500",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-009-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-009-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "TAB" : "Tasks"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "defineVariablesCommand" : {
+          "env" : {
+            "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "repeatCommand" : {
+              "times" : "10",
+              "condition" : {
+                "notVisible" : {
+                  "idRegex" : "${TAB.toLowerCase()}-tab",
+                  "optional" : false
+                }
+              },
+              "commands" : [ {
+                "runFlowCommand" : {
+                  "commands" : [ {
+                    "tapOnElement" : {
+                      "selector" : {
+                        "textRegex" : "Collapsed",
+                        "optional" : false
+                      },
+                      "retryIfNoChange" : false,
+                      "waitUntilVisible" : false,
+                      "longPress" : false,
+                      "optional" : false
+                    }
+                  } ],
+                  "condition" : {
+                    "visible" : {
+                      "textRegex" : "Collapsed",
+                      "optional" : false
+                    }
+                  },
+                  "optional" : false
+                }
+              }, {
+                "runFlowCommand" : {
+                  "commands" : [ {
+                    "tapOnElement" : {
+                      "selector" : {
+                        "idRegex" : "BackButton",
+                        "optional" : false
+                      },
+                      "retryIfNoChange" : false,
+                      "waitUntilVisible" : false,
+                      "longPress" : false,
+                      "optional" : false
+                    }
+                  } ],
+                  "condition" : {
+                    "visible" : {
+                      "idRegex" : "BackButton",
+                      "optional" : false
+                    },
+                    "notVisible" : {
+                      "idRegex" : "${TAB.toLowerCase()}-tab",
+                      "optional" : false
+                    }
+                  },
+                  "optional" : false
+                }
+              }, {
+                "waitForAnimationToEndCommand" : {
+                  "optional" : false
+                }
+              } ],
+              "optional" : false
+            }
+          }, {
+            "assertConditionCommand" : {
+              "condition" : {
+                "visible" : {
+                  "idRegex" : "${TAB.toLowerCase()}-tab",
+                  "optional" : false
+                }
+              },
+              "timeout" : "30000",
+              "optional" : false
+            }
+          }, {
+            "tapOnElement" : {
+              "selector" : {
+                "idRegex" : "${TAB.toLowerCase()}-tab",
+                "optional" : false
+              },
+              "retryIfNoChange" : false,
+              "waitUntilVisible" : false,
+              "longPress" : false,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${FLOATING_TABS != 'true'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "assertConditionCommand" : {
+              "condition" : {
+                "visible" : {
+                  "textRegex" : "(Show|Hide) Sidebar",
+                  "optional" : false
+                }
+              },
+              "timeout" : "30000",
+              "optional" : false
+            }
+          }, {
+            "waitForAnimationToEndCommand" : {
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${FLOATING_TABS == 'true'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "applyConfigurationCommand" : {
+                  "config" : {
+                    "appId" : "dev.vespin.ios"
+                  },
+                  "optional" : false
+                }
+              }, {
+                "defineVariablesCommand" : {
+                  "env" : {
+                    "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+                  },
+                  "optional" : false
+                }
+              }, {
+                "runFlowCommand" : {
+                  "commands" : [ {
+                    "assertConditionCommand" : {
+                      "condition" : {
+                        "visible" : {
+                          "textRegex" : "(Show|Hide) Sidebar",
+                          "optional" : false
+                        }
+                      },
+                      "timeout" : "30000",
+                      "optional" : false
+                    }
+                  } ],
+                  "condition" : {
+                    "scriptCondition" : "${FLOATING_TABS == 'true'}"
+                  },
+                  "optional" : false
+                }
+              }, {
+                "runFlowCommand" : {
+                  "commands" : [ {
+                    "tapOnElement" : {
+                      "selector" : {
+                        "textRegex" : "Show Sidebar",
+                        "optional" : false
+                      },
+                      "retryIfNoChange" : false,
+                      "waitUntilVisible" : false,
+                      "longPress" : false,
+                      "optional" : false
+                    }
+                  }, {
+                    "waitForAnimationToEndCommand" : {
+                      "optional" : false
+                    }
+                  } ],
+                  "condition" : {
+                    "visible" : {
+                      "textRegex" : "Show Sidebar",
+                      "optional" : false
+                    }
+                  },
+                  "optional" : false
+                }
+              } ],
+              "sourceDescription" : "show-sidebar.yaml",
+              "config" : {
+                "appId" : "dev.vespin.ios"
+              },
+              "optional" : false
+            }
+          }, {
+            "assertConditionCommand" : {
+              "condition" : {
+                "visible" : {
+                  "textRegex" : "${TAB}",
+                  "idRegex" : "place-row",
+                  "optional" : false
+                }
+              },
+              "timeout" : "30000",
+              "optional" : false
+            }
+          }, {
+            "tapOnElement" : {
+              "selector" : {
+                "textRegex" : "${TAB}",
+                "idRegex" : "place-row",
+                "optional" : false
+              },
+              "retryIfNoChange" : false,
+              "waitUntilVisible" : false,
+              "longPress" : false,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "notVisible" : {
+              "textRegex" : "${TAB}",
+              "optional" : false
+            },
+            "scriptCondition" : "${FLOATING_TABS == 'true'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "tapOnElement" : {
+              "selector" : {
+                "textRegex" : "${TAB}",
+                "idRegex" : "place-row",
+                "optional" : false
+              },
+              "retryIfNoChange" : false,
+              "waitUntilVisible" : false,
+              "longPress" : false,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "visible" : {
+              "textRegex" : "${TAB}",
+              "idRegex" : "place-row",
+              "optional" : false
+            },
+            "scriptCondition" : "${FLOATING_TABS == 'true'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "waitForAnimationToEndCommand" : {
+          "optional" : false
+        }
+      } ],
+      "sourceDescription" : "../../subflows/tab.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855739473,
+    "duration" : 3199,
+    "sequenceNumber" : 9,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "TAB" : "Tasks"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "defineVariablesCommand" : {
+            "env" : {
+              "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "repeatCommand" : {
+                "times" : "10",
+                "condition" : {
+                  "notVisible" : {
+                    "idRegex" : "${TAB.toLowerCase()}-tab",
+                    "optional" : false
+                  }
+                },
+                "commands" : [ {
+                  "runFlowCommand" : {
+                    "commands" : [ {
+                      "tapOnElement" : {
+                        "selector" : {
+                          "textRegex" : "Collapsed",
+                          "optional" : false
+                        },
+                        "retryIfNoChange" : false,
+                        "waitUntilVisible" : false,
+                        "longPress" : false,
+                        "optional" : false
+                      }
+                    } ],
+                    "condition" : {
+                      "visible" : {
+                        "textRegex" : "Collapsed",
+                        "optional" : false
+                      }
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "runFlowCommand" : {
+                    "commands" : [ {
+                      "tapOnElement" : {
+                        "selector" : {
+                          "idRegex" : "BackButton",
+                          "optional" : false
+                        },
+                        "retryIfNoChange" : false,
+                        "waitUntilVisible" : false,
+                        "longPress" : false,
+                        "optional" : false
+                      }
+                    } ],
+                    "condition" : {
+                      "visible" : {
+                        "idRegex" : "BackButton",
+                        "optional" : false
+                      },
+                      "notVisible" : {
+                        "idRegex" : "${TAB.toLowerCase()}-tab",
+                        "optional" : false
+                      }
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "waitForAnimationToEndCommand" : {
+                    "optional" : false
+                  }
+                } ],
+                "optional" : false
+              }
+            }, {
+              "assertConditionCommand" : {
+                "condition" : {
+                  "visible" : {
+                    "idRegex" : "${TAB.toLowerCase()}-tab",
+                    "optional" : false
+                  }
+                },
+                "timeout" : "30000",
+                "optional" : false
+              }
+            }, {
+              "tapOnElement" : {
+                "selector" : {
+                  "idRegex" : "${TAB.toLowerCase()}-tab",
+                  "optional" : false
+                },
+                "retryIfNoChange" : false,
+                "waitUntilVisible" : false,
+                "longPress" : false,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${FLOATING_TABS != 'true'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "assertConditionCommand" : {
+                "condition" : {
+                  "visible" : {
+                    "textRegex" : "(Show|Hide) Sidebar",
+                    "optional" : false
+                  }
+                },
+                "timeout" : "30000",
+                "optional" : false
+              }
+            }, {
+              "waitForAnimationToEndCommand" : {
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${FLOATING_TABS == 'true'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "applyConfigurationCommand" : {
+                    "config" : {
+                      "appId" : "dev.vespin.ios"
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "defineVariablesCommand" : {
+                    "env" : {
+                      "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "runFlowCommand" : {
+                    "commands" : [ {
+                      "assertConditionCommand" : {
+                        "condition" : {
+                          "visible" : {
+                            "textRegex" : "(Show|Hide) Sidebar",
+                            "optional" : false
+                          }
+                        },
+                        "timeout" : "30000",
+                        "optional" : false
+                      }
+                    } ],
+                    "condition" : {
+                      "scriptCondition" : "${FLOATING_TABS == 'true'}"
+                    },
+                    "optional" : false
+                  }
+                }, {
+                  "runFlowCommand" : {
+                    "commands" : [ {
+                      "tapOnElement" : {
+                        "selector" : {
+                          "textRegex" : "Show Sidebar",
+                          "optional" : false
+                        },
+                        "retryIfNoChange" : false,
+                        "waitUntilVisible" : false,
+                        "longPress" : false,
+                        "optional" : false
+                      }
+                    }, {
+                      "waitForAnimationToEndCommand" : {
+                        "optional" : false
+                      }
+                    } ],
+                    "condition" : {
+                      "visible" : {
+                        "textRegex" : "Show Sidebar",
+                        "optional" : false
+                      }
+                    },
+                    "optional" : false
+                  }
+                } ],
+                "sourceDescription" : "show-sidebar.yaml",
+                "config" : {
+                  "appId" : "dev.vespin.ios"
+                },
+                "optional" : false
+              }
+            }, {
+              "assertConditionCommand" : {
+                "condition" : {
+                  "visible" : {
+                    "textRegex" : "${TAB}",
+                    "idRegex" : "place-row",
+                    "optional" : false
+                  }
+                },
+                "timeout" : "30000",
+                "optional" : false
+              }
+            }, {
+              "tapOnElement" : {
+                "selector" : {
+                  "textRegex" : "${TAB}",
+                  "idRegex" : "place-row",
+                  "optional" : false
+                },
+                "retryIfNoChange" : false,
+                "waitUntilVisible" : false,
+                "longPress" : false,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "notVisible" : {
+                "textRegex" : "${TAB}",
+                "optional" : false
+              },
+              "scriptCondition" : "${FLOATING_TABS == 'true'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "tapOnElement" : {
+                "selector" : {
+                  "textRegex" : "${TAB}",
+                  "idRegex" : "place-row",
+                  "optional" : false
+                },
+                "retryIfNoChange" : false,
+                "waitUntilVisible" : false,
+                "longPress" : false,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "visible" : {
+                "textRegex" : "${TAB}",
+                "idRegex" : "place-row",
+                "optional" : false
+              },
+              "scriptCondition" : "${FLOATING_TABS == 'true'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "waitForAnimationToEndCommand" : {
+            "optional" : false
+          }
+        } ],
+        "sourceDescription" : "../../subflows/tab.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "TAB" : "Tasks"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855739476,
+    "duration" : 0,
+    "sequenceNumber" : 10,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "TAB" : "Tasks"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855739476,
+    "duration" : 2,
+    "sequenceNumber" : 11,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "FLOATING_TABS" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855739479,
+    "duration" : 0,
+    "sequenceNumber" : 12,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "repeatCommand" : {
+          "times" : "10",
+          "condition" : {
+            "notVisible" : {
+              "idRegex" : "${TAB.toLowerCase()}-tab",
+              "optional" : false
+            }
+          },
+          "commands" : [ {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "tapOnElement" : {
+                  "selector" : {
+                    "textRegex" : "Collapsed",
+                    "optional" : false
+                  },
+                  "retryIfNoChange" : false,
+                  "waitUntilVisible" : false,
+                  "longPress" : false,
+                  "optional" : false
+                }
+              } ],
+              "condition" : {
+                "visible" : {
+                  "textRegex" : "Collapsed",
+                  "optional" : false
+                }
+              },
+              "optional" : false
+            }
+          }, {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "tapOnElement" : {
+                  "selector" : {
+                    "idRegex" : "BackButton",
+                    "optional" : false
+                  },
+                  "retryIfNoChange" : false,
+                  "waitUntilVisible" : false,
+                  "longPress" : false,
+                  "optional" : false
+                }
+              } ],
+              "condition" : {
+                "visible" : {
+                  "idRegex" : "BackButton",
+                  "optional" : false
+                },
+                "notVisible" : {
+                  "idRegex" : "${TAB.toLowerCase()}-tab",
+                  "optional" : false
+                }
+              },
+              "optional" : false
+            }
+          }, {
+            "waitForAnimationToEndCommand" : {
+              "optional" : false
+            }
+          } ],
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "idRegex" : "${TAB.toLowerCase()}-tab",
+              "optional" : false
+            }
+          },
+          "timeout" : "30000",
+          "optional" : false
+        }
+      }, {
+        "tapOnElement" : {
+          "selector" : {
+            "idRegex" : "${TAB.toLowerCase()}-tab",
+            "optional" : false
+          },
+          "retryIfNoChange" : false,
+          "waitUntilVisible" : false,
+          "longPress" : false,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${FLOATING_TABS != 'true'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855739481,
+    "duration" : 2622,
+    "sequenceNumber" : 13,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "repeatCommand" : {
+            "times" : "10",
+            "condition" : {
+              "notVisible" : {
+                "idRegex" : "${TAB.toLowerCase()}-tab",
+                "optional" : false
+              }
+            },
+            "commands" : [ {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "tapOnElement" : {
+                    "selector" : {
+                      "textRegex" : "Collapsed",
+                      "optional" : false
+                    },
+                    "retryIfNoChange" : false,
+                    "waitUntilVisible" : false,
+                    "longPress" : false,
+                    "optional" : false
+                  }
+                } ],
+                "condition" : {
+                  "visible" : {
+                    "textRegex" : "Collapsed",
+                    "optional" : false
+                  }
+                },
+                "optional" : false
+              }
+            }, {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "tapOnElement" : {
+                    "selector" : {
+                      "idRegex" : "BackButton",
+                      "optional" : false
+                    },
+                    "retryIfNoChange" : false,
+                    "waitUntilVisible" : false,
+                    "longPress" : false,
+                    "optional" : false
+                  }
+                } ],
+                "condition" : {
+                  "visible" : {
+                    "idRegex" : "BackButton",
+                    "optional" : false
+                  },
+                  "notVisible" : {
+                    "idRegex" : "${TAB.toLowerCase()}-tab",
+                    "optional" : false
+                  }
+                },
+                "optional" : false
+              }
+            }, {
+              "waitForAnimationToEndCommand" : {
+                "optional" : false
+              }
+            } ],
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "idRegex" : "${TAB.toLowerCase()}-tab",
+                "optional" : false
+              }
+            },
+            "timeout" : "30000",
+            "optional" : false
+          }
+        }, {
+          "tapOnElement" : {
+            "selector" : {
+              "idRegex" : "${TAB.toLowerCase()}-tab",
+              "optional" : false
+            },
+            "retryIfNoChange" : false,
+            "waitUntilVisible" : false,
+            "longPress" : false,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "repeatCommand" : {
+      "times" : "10",
+      "condition" : {
+        "notVisible" : {
+          "idRegex" : "${TAB.toLowerCase()}-tab",
+          "optional" : false
+        }
+      },
+      "commands" : [ {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "tapOnElement" : {
+              "selector" : {
+                "textRegex" : "Collapsed",
+                "optional" : false
+              },
+              "retryIfNoChange" : false,
+              "waitUntilVisible" : false,
+              "longPress" : false,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "visible" : {
+              "textRegex" : "Collapsed",
+              "optional" : false
+            }
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "tapOnElement" : {
+              "selector" : {
+                "idRegex" : "BackButton",
+                "optional" : false
+              },
+              "retryIfNoChange" : false,
+              "waitUntilVisible" : false,
+              "longPress" : false,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "visible" : {
+              "idRegex" : "BackButton",
+              "optional" : false
+            },
+            "notVisible" : {
+              "idRegex" : "${TAB.toLowerCase()}-tab",
+              "optional" : false
+            }
+          },
+          "optional" : false
+        }
+      }, {
+        "waitForAnimationToEndCommand" : {
+          "optional" : false
+        }
+      } ],
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795855739487,
+    "duration" : 240,
+    "sequenceNumber" : 14,
+    "depth" : 2,
+    "evaluatedCommand" : {
+      "repeatCommand" : {
+        "times" : "10",
+        "condition" : {
+          "notVisible" : {
+            "idRegex" : "${TAB.toLowerCase()}-tab",
+            "optional" : false
+          }
+        },
+        "commands" : [ {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "tapOnElement" : {
+                "selector" : {
+                  "textRegex" : "Collapsed",
+                  "optional" : false
+                },
+                "retryIfNoChange" : false,
+                "waitUntilVisible" : false,
+                "longPress" : false,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "visible" : {
+                "textRegex" : "Collapsed",
+                "optional" : false
+              }
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "tapOnElement" : {
+                "selector" : {
+                  "idRegex" : "BackButton",
+                  "optional" : false
+                },
+                "retryIfNoChange" : false,
+                "waitUntilVisible" : false,
+                "longPress" : false,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "visible" : {
+                "idRegex" : "BackButton",
+                "optional" : false
+              },
+              "notVisible" : {
+                "idRegex" : "${TAB.toLowerCase()}-tab",
+                "optional" : false
+              }
+            },
+            "optional" : false
+          }
+        }, {
+          "waitForAnimationToEndCommand" : {
+            "optional" : false
+          }
+        } ],
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "idRegex" : "${TAB.toLowerCase()}-tab",
+          "optional" : false
+        }
+      },
+      "timeout" : "30000",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855739729,
+    "duration" : 230,
+    "sequenceNumber" : 15,
+    "depth" : 2,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "idRegex" : "tasks-tab",
+            "optional" : false
+          }
+        },
+        "timeout" : "30000",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "idRegex" : "${TAB.toLowerCase()}-tab",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855739961,
+    "duration" : 2140,
+    "sequenceNumber" : 16,
+    "depth" : 2,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "idRegex" : "tasks-tab",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "(Show|Hide) Sidebar",
+              "optional" : false
+            }
+          },
+          "timeout" : "30000",
+          "optional" : false
+        }
+      }, {
+        "waitForAnimationToEndCommand" : {
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${FLOATING_TABS == 'true'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795855742105,
+    "duration" : 8,
+    "sequenceNumber" : 17,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "(Show|Hide) Sidebar",
+                "optional" : false
+              }
+            },
+            "timeout" : "30000",
+            "optional" : false
+          }
+        }, {
+          "waitForAnimationToEndCommand" : {
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "applyConfigurationCommand" : {
+              "config" : {
+                "appId" : "dev.vespin.ios"
+              },
+              "optional" : false
+            }
+          }, {
+            "defineVariablesCommand" : {
+              "env" : {
+                "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+              },
+              "optional" : false
+            }
+          }, {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "assertConditionCommand" : {
+                  "condition" : {
+                    "visible" : {
+                      "textRegex" : "(Show|Hide) Sidebar",
+                      "optional" : false
+                    }
+                  },
+                  "timeout" : "30000",
+                  "optional" : false
+                }
+              } ],
+              "condition" : {
+                "scriptCondition" : "${FLOATING_TABS == 'true'}"
+              },
+              "optional" : false
+            }
+          }, {
+            "runFlowCommand" : {
+              "commands" : [ {
+                "tapOnElement" : {
+                  "selector" : {
+                    "textRegex" : "Show Sidebar",
+                    "optional" : false
+                  },
+                  "retryIfNoChange" : false,
+                  "waitUntilVisible" : false,
+                  "longPress" : false,
+                  "optional" : false
+                }
+              }, {
+                "waitForAnimationToEndCommand" : {
+                  "optional" : false
+                }
+              } ],
+              "condition" : {
+                "visible" : {
+                  "textRegex" : "Show Sidebar",
+                  "optional" : false
+                }
+              },
+              "optional" : false
+            }
+          } ],
+          "sourceDescription" : "show-sidebar.yaml",
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "${TAB}",
+              "idRegex" : "place-row",
+              "optional" : false
+            }
+          },
+          "timeout" : "30000",
+          "optional" : false
+        }
+      }, {
+        "tapOnElement" : {
+          "selector" : {
+            "textRegex" : "${TAB}",
+            "idRegex" : "place-row",
+            "optional" : false
+          },
+          "retryIfNoChange" : false,
+          "waitUntilVisible" : false,
+          "longPress" : false,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "notVisible" : {
+          "textRegex" : "${TAB}",
+          "optional" : false
+        },
+        "scriptCondition" : "${FLOATING_TABS == 'true'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795855742115,
+    "duration" : 7,
+    "sequenceNumber" : 18,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "applyConfigurationCommand" : {
+                "config" : {
+                  "appId" : "dev.vespin.ios"
+                },
+                "optional" : false
+              }
+            }, {
+              "defineVariablesCommand" : {
+                "env" : {
+                  "FLOATING_TABS" : "${FLOATING_TABS || 'false'}"
+                },
+                "optional" : false
+              }
+            }, {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "assertConditionCommand" : {
+                    "condition" : {
+                      "visible" : {
+                        "textRegex" : "(Show|Hide) Sidebar",
+                        "optional" : false
+                      }
+                    },
+                    "timeout" : "30000",
+                    "optional" : false
+                  }
+                } ],
+                "condition" : {
+                  "scriptCondition" : "${FLOATING_TABS == 'true'}"
+                },
+                "optional" : false
+              }
+            }, {
+              "runFlowCommand" : {
+                "commands" : [ {
+                  "tapOnElement" : {
+                    "selector" : {
+                      "textRegex" : "Show Sidebar",
+                      "optional" : false
+                    },
+                    "retryIfNoChange" : false,
+                    "waitUntilVisible" : false,
+                    "longPress" : false,
+                    "optional" : false
+                  }
+                }, {
+                  "waitForAnimationToEndCommand" : {
+                    "optional" : false
+                  }
+                } ],
+                "condition" : {
+                  "visible" : {
+                    "textRegex" : "Show Sidebar",
+                    "optional" : false
+                  }
+                },
+                "optional" : false
+              }
+            } ],
+            "sourceDescription" : "show-sidebar.yaml",
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "${TAB}",
+                "idRegex" : "place-row",
+                "optional" : false
+              }
+            },
+            "timeout" : "30000",
+            "optional" : false
+          }
+        }, {
+          "tapOnElement" : {
+            "selector" : {
+              "textRegex" : "${TAB}",
+              "idRegex" : "place-row",
+              "optional" : false
+            },
+            "retryIfNoChange" : false,
+            "waitUntilVisible" : false,
+            "longPress" : false,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "notVisible" : {
+            "textRegex" : "Tasks",
+            "optional" : false
+          },
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "tapOnElement" : {
+          "selector" : {
+            "textRegex" : "${TAB}",
+            "idRegex" : "place-row",
+            "optional" : false
+          },
+          "retryIfNoChange" : false,
+          "waitUntilVisible" : false,
+          "longPress" : false,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "visible" : {
+          "textRegex" : "${TAB}",
+          "idRegex" : "place-row",
+          "optional" : false
+        },
+        "scriptCondition" : "${FLOATING_TABS == 'true'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795855742123,
+    "duration" : 5,
+    "sequenceNumber" : 19,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "tapOnElement" : {
+            "selector" : {
+              "textRegex" : "${TAB}",
+              "idRegex" : "place-row",
+              "optional" : false
+            },
+            "retryIfNoChange" : false,
+            "waitUntilVisible" : false,
+            "longPress" : false,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "visible" : {
+            "textRegex" : "Tasks",
+            "idRegex" : "place-row",
+            "optional" : false
+          },
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "waitForAnimationToEndCommand" : {
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855742129,
+    "duration" : 543,
+    "sequenceNumber" : 20,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "waitForAnimationToEndCommand" : {
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "1500"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855742673,
+    "duration" : 2234,
+    "sequenceNumber" : 21,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "1500"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "1500"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855742674,
+    "duration" : 0,
+    "sequenceNumber" : 22,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "1500"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855742674,
+    "duration" : 0,
+    "sequenceNumber" : 23,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855742674,
+    "duration" : 1931,
+    "sequenceNumber" : 24,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "1500",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-025-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-025-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Release manager",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855744908,
+    "duration" : 1181,
+    "sequenceNumber" : 25,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Release manager",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "2500"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855746091,
+    "duration" : 3137,
+    "sequenceNumber" : 26,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "2500"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "2500"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855746093,
+    "duration" : 1,
+    "sequenceNumber" : 27,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "2500"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855746096,
+    "duration" : 1,
+    "sequenceNumber" : 28,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855746098,
+    "duration" : 2855,
+    "sequenceNumber" : 29,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "2500",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-030-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-030-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "DIR" : "up"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "swipeCommand" : {
+              "startRelative" : "50%, 78%",
+              "endRelative" : "50%, 28%",
+              "duration" : 220,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${DIR == 'down'}"
+          },
+          "optional" : false
+        }
+      }, {
+        "runFlowCommand" : {
+          "commands" : [ {
+            "swipeCommand" : {
+              "startRelative" : "50%, 28%",
+              "endRelative" : "50%, 78%",
+              "duration" : 220,
+              "optional" : false
+            }
+          } ],
+          "condition" : {
+            "scriptCondition" : "${DIR == 'up'}"
+          },
+          "optional" : false
+        }
+      } ],
+      "sourceDescription" : "_flick.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855749229,
+    "duration" : 1492,
+    "sequenceNumber" : 30,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "DIR" : "up"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "swipeCommand" : {
+                "startRelative" : "50%, 78%",
+                "endRelative" : "50%, 28%",
+                "duration" : 220,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${DIR == 'down'}"
+            },
+            "optional" : false
+          }
+        }, {
+          "runFlowCommand" : {
+            "commands" : [ {
+              "swipeCommand" : {
+                "startRelative" : "50%, 28%",
+                "endRelative" : "50%, 78%",
+                "duration" : 220,
+                "optional" : false
+              }
+            } ],
+            "condition" : {
+              "scriptCondition" : "${DIR == 'up'}"
+            },
+            "optional" : false
+          }
+        } ],
+        "sourceDescription" : "_flick.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "DIR" : "up"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855749237,
+    "duration" : 0,
+    "sequenceNumber" : 31,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "DIR" : "up"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855749238,
+    "duration" : 0,
+    "sequenceNumber" : 32,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "swipeCommand" : {
+          "startRelative" : "50%, 78%",
+          "endRelative" : "50%, 28%",
+          "duration" : 220,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${DIR == 'down'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "SKIPPED",
+    "timestamp" : 1795855749239,
+    "duration" : 5,
+    "sequenceNumber" : 33,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "swipeCommand" : {
+            "startRelative" : "50%, 78%",
+            "endRelative" : "50%, 28%",
+            "duration" : 220,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "false"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "swipeCommand" : {
+          "startRelative" : "50%, 28%",
+          "endRelative" : "50%, 78%",
+          "duration" : 220,
+          "optional" : false
+        }
+      } ],
+      "condition" : {
+        "scriptCondition" : "${DIR == 'up'}"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855749245,
+    "duration" : 1475,
+    "sequenceNumber" : 34,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "swipeCommand" : {
+            "startRelative" : "50%, 28%",
+            "endRelative" : "50%, 78%",
+            "duration" : 220,
+            "optional" : false
+          }
+        } ],
+        "condition" : {
+          "scriptCondition" : "true"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "swipeCommand" : {
+      "startRelative" : "50%, 28%",
+      "endRelative" : "50%, 78%",
+      "duration" : 220,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855749249,
+    "duration" : 1469,
+    "sequenceNumber" : 35,
+    "depth" : 2,
+    "evaluatedCommand" : {
+      "swipeCommand" : {
+        "startRelative" : "50%, 28%",
+        "endRelative" : "50%, 78%",
+        "duration" : 220,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "1000"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855750722,
+    "duration" : 1638,
+    "sequenceNumber" : 36,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "1000"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "1000"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855750724,
+    "duration" : 1,
+    "sequenceNumber" : 37,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "1000"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855750725,
+    "duration" : 1,
+    "sequenceNumber" : 38,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855750727,
+    "duration" : 1371,
+    "sequenceNumber" : 39,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "1000",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-040-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-040-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "idRegex" : "composer-field",
+        "optional" : false
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855752360,
+    "duration" : 1528,
+    "sequenceNumber" : 40,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "idRegex" : "composer-field",
+          "optional" : false
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "800"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855753889,
+    "duration" : 1612,
+    "sequenceNumber" : 41,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "800"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "800"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855753892,
+    "duration" : 1,
+    "sequenceNumber" : 42,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "800"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855753894,
+    "duration" : 1,
+    "sequenceNumber" : 43,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855753896,
+    "duration" : 1292,
+    "sequenceNumber" : 44,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "800",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-045-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-045-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "inputTextCommand" : {
+      "text" : "What's left before it ships?",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855755501,
+    "duration" : 2055,
+    "sequenceNumber" : 45,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "inputTextCommand" : {
+        "text" : "What's left before it ships?",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Send",
+        "optional" : true
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855757558,
+    "duration" : 1525,
+    "sequenceNumber" : 46,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Send",
+          "optional" : true
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : true
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "2500"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855759086,
+    "duration" : 3386,
+    "sequenceNumber" : 47,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "2500"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "2500"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855759102,
+    "duration" : 15,
+    "sequenceNumber" : 48,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "2500"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855759104,
+    "duration" : 0,
+    "sequenceNumber" : 49,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855759105,
+    "duration" : 3046,
+    "sequenceNumber" : 50,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "2500",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-051-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-051-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "swipeCommand" : {
+          "startRelative" : "50%, 50%",
+          "endRelative" : "50%, 40%",
+          "duration" : 400,
+          "optional" : false
+        }
+      }, {
+        "waitForAnimationToEndCommand" : {
+          "optional" : false
+        }
+      } ],
+      "sourceDescription" : "../../subflows/lower-keyboard.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855762473,
+    "duration" : 2066,
+    "sequenceNumber" : 51,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "swipeCommand" : {
+            "startRelative" : "50%, 50%",
+            "endRelative" : "50%, 40%",
+            "duration" : 400,
+            "optional" : false
+          }
+        }, {
+          "waitForAnimationToEndCommand" : {
+            "optional" : false
+          }
+        } ],
+        "sourceDescription" : "../../subflows/lower-keyboard.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855762474,
+    "duration" : 0,
+    "sequenceNumber" : 52,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "swipeCommand" : {
+      "startRelative" : "50%, 50%",
+      "endRelative" : "50%, 40%",
+      "duration" : 400,
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855762475,
+    "duration" : 1375,
+    "sequenceNumber" : 53,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "swipeCommand" : {
+        "startRelative" : "50%, 50%",
+        "endRelative" : "50%, 40%",
+        "duration" : 400,
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "waitForAnimationToEndCommand" : {
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855763851,
+    "duration" : 687,
+    "sequenceNumber" : 54,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "waitForAnimationToEndCommand" : {
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "1000"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855764539,
+    "duration" : 1826,
+    "sequenceNumber" : 55,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "1000"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "1000"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855764540,
+    "duration" : 0,
+    "sequenceNumber" : 56,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "1000"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855764540,
+    "duration" : 0,
+    "sequenceNumber" : 57,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855764540,
+    "duration" : 1504,
+    "sequenceNumber" : 58,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "1000",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-059-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-059-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "[0-9]+ repl(y|ies)",
+        "optional" : true
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855766365,
+    "duration" : 1762,
+    "sequenceNumber" : 59,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "[0-9]+ repl(y|ies)",
+          "optional" : true
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : true
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "2000"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855768129,
+    "duration" : 2530,
+    "sequenceNumber" : 60,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "2000"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "2000"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855768131,
+    "duration" : 1,
+    "sequenceNumber" : 61,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "2000"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855768132,
+    "duration" : 1,
+    "sequenceNumber" : 62,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855768134,
+    "duration" : 2304,
+    "sequenceNumber" : 63,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "2000",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-064-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-064-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "idRegex" : "composer-field",
+        "optional" : true
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855770660,
+    "duration" : 1273,
+    "sequenceNumber" : 64,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "idRegex" : "composer-field",
+          "optional" : true
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : true
+      }
+    }
+  }
+}, {
+  "command" : {
+    "inputTextCommand" : {
+      "text" : "Thanks.",
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855771935,
+    "duration" : 1328,
+    "sequenceNumber" : 65,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "inputTextCommand" : {
+        "text" : "Thanks.",
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Send",
+        "optional" : true
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855773265,
+    "duration" : 1209,
+    "sequenceNumber" : 66,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Send",
+          "optional" : true
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : true
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "1500"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855774475,
+    "duration" : 2231,
+    "sequenceNumber" : 67,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "1500"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "1500"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855774477,
+    "duration" : 1,
+    "sequenceNumber" : 68,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "1500"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855774478,
+    "duration" : 1,
+    "sequenceNumber" : 69,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855774479,
+    "duration" : 1960,
+    "sequenceNumber" : 70,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "1500",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-071-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-071-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "idRegex" : "BackButton",
+        "optional" : true
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855776707,
+    "duration" : 2153,
+    "sequenceNumber" : 71,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "idRegex" : "BackButton",
+          "optional" : true
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : true
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "2500"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855778862,
+    "duration" : 3331,
+    "sequenceNumber" : 72,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "2500"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "2500"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855778864,
+    "duration" : 1,
+    "sequenceNumber" : 73,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "2500"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855778865,
+    "duration" : 0,
+    "sequenceNumber" : 74,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855778866,
+    "duration" : 3010,
+    "sequenceNumber" : 75,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "2500",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-076-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-076-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "idRegex" : "BackButton",
+        "optional" : true
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855782193,
+    "duration" : 2605,
+    "sequenceNumber" : 76,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "idRegex" : "BackButton",
+          "optional" : true
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : true
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "1500"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855784799,
+    "duration" : 2244,
+    "sequenceNumber" : 77,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "1500"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "1500"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855784801,
+    "duration" : 0,
+    "sequenceNumber" : 78,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "1500"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855784801,
+    "duration" : 1,
+    "sequenceNumber" : 79,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855784803,
+    "duration" : 1930,
+    "sequenceNumber" : 80,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "1500",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-081-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-081-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "textRegex" : "Release manager",
+        "optional" : true
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855787044,
+    "duration" : 2660,
+    "sequenceNumber" : 81,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "textRegex" : "Release manager",
+          "optional" : true
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : true
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "3000"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855789705,
+    "duration" : 3632,
+    "sequenceNumber" : 82,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "3000"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "3000"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855789706,
+    "duration" : 1,
+    "sequenceNumber" : 83,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "3000"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855789707,
+    "duration" : 1,
+    "sequenceNumber" : 84,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855789709,
+    "duration" : 3350,
+    "sequenceNumber" : 85,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "3000",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-086-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-086-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+}, {
+  "command" : {
+    "tapOnElement" : {
+      "selector" : {
+        "idRegex" : "BackButton",
+        "optional" : true
+      },
+      "retryIfNoChange" : false,
+      "waitUntilVisible" : false,
+      "longPress" : false,
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855793338,
+    "duration" : 2175,
+    "sequenceNumber" : 86,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "tapOnElement" : {
+        "selector" : {
+          "idRegex" : "BackButton",
+          "optional" : true
+        },
+        "retryIfNoChange" : false,
+        "waitUntilVisible" : false,
+        "longPress" : false,
+        "optional" : true
+      }
+    }
+  }
+}, {
+  "command" : {
+    "runFlowCommand" : {
+      "commands" : [ {
+        "defineVariablesCommand" : {
+          "env" : {
+            "MS" : "1500"
+          },
+          "optional" : false
+        }
+      }, {
+        "applyConfigurationCommand" : {
+          "config" : {
+            "appId" : "dev.vespin.ios"
+          },
+          "optional" : false
+        }
+      }, {
+        "assertConditionCommand" : {
+          "condition" : {
+            "visible" : {
+              "textRegex" : "zz-glitch-sweep-never-drawn",
+              "optional" : false
+            }
+          },
+          "timeout" : "${MS}",
+          "optional" : true
+        }
+      } ],
+      "sourceDescription" : "_pause.yaml",
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855795514,
+    "duration" : 2308,
+    "sequenceNumber" : 87,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "runFlowCommand" : {
+        "commands" : [ {
+          "defineVariablesCommand" : {
+            "env" : {
+              "MS" : "1500"
+            },
+            "optional" : false
+          }
+        }, {
+          "applyConfigurationCommand" : {
+            "config" : {
+              "appId" : "dev.vespin.ios"
+            },
+            "optional" : false
+          }
+        }, {
+          "assertConditionCommand" : {
+            "condition" : {
+              "visible" : {
+                "textRegex" : "zz-glitch-sweep-never-drawn",
+                "optional" : false
+              }
+            },
+            "timeout" : "${MS}",
+            "optional" : true
+          }
+        } ],
+        "sourceDescription" : "_pause.yaml",
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "defineVariablesCommand" : {
+      "env" : {
+        "MS" : "1500"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855795516,
+    "duration" : 1,
+    "sequenceNumber" : 88,
+    "depth" : 0,
+    "evaluatedCommand" : {
+      "defineVariablesCommand" : {
+        "env" : {
+          "MS" : "1500"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "applyConfigurationCommand" : {
+      "config" : {
+        "appId" : "dev.vespin.ios"
+      },
+      "optional" : false
+    }
+  },
+  "metadata" : {
+    "status" : "COMPLETED",
+    "timestamp" : 1795855795517,
+    "duration" : 1,
+    "sequenceNumber" : 89,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "applyConfigurationCommand" : {
+        "config" : {
+          "appId" : "dev.vespin.ios"
+        },
+        "optional" : false
+      }
+    }
+  }
+}, {
+  "command" : {
+    "assertConditionCommand" : {
+      "condition" : {
+        "visible" : {
+          "textRegex" : "zz-glitch-sweep-never-drawn",
+          "optional" : false
+        }
+      },
+      "timeout" : "${MS}",
+      "optional" : true
+    }
+  },
+  "metadata" : {
+    "status" : "WARNED",
+    "timestamp" : 1795855795518,
+    "duration" : 2004,
+    "sequenceNumber" : 90,
+    "depth" : 1,
+    "evaluatedCommand" : {
+      "assertConditionCommand" : {
+        "condition" : {
+          "visible" : {
+            "textRegex" : "zz-glitch-sweep-never-drawn",
+            "optional" : false
+          }
+        },
+        "timeout" : "1500",
+        "optional" : true
+      }
+    },
+    "artifacts" : [ {
+      "type" : "SCREEN_HIERARCHY",
+      "path" : "screen-hierarchy/step-091-assertCondition-zz-glitch-sweep-never-dr.json"
+    }, {
+      "type" : "SCREENSHOT",
+      "path" : "screenshots/step-091-assertCondition-zz-glitch-sweep-never-dr.png"
+    } ]
+  }
+} ]

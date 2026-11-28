@@ -74,7 +74,15 @@ Tap on (Optional) id: BackButton... COMPLETED
 Run _pause.yaml...
   Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
 Run _pause.yaml... COMPLETED
-Tap on (Optional) id: BackButton...
-==== Debug output (logs & screenshots) ====
-
-/Users/deanstratakos/vespin-ipad-agent/out/sjglitch1j/vjglitch1/j03-manager-chat/debug/.maestro/tests/2026-11-27_205541
+Tap on (Optional) id: BackButton... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Tap on (Optional) "Release manager"... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Tap on (Optional) id: BackButton... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED

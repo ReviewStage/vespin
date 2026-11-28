@@ -119,35 +119,41 @@ Run ../../subflows/tab.yaml...
   Run flow when ${FLOATING_TABS != 'true'} is true...
     Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
       Run flow when "Collapsed" is visible...
-        Tap on "Collapsed"...Exception in thread "main" UnknownFailure(errorResponse=Request for viewHierarchy failed, code: 500, body: )
-	at xcuitest.XCTestDriverClient.handleExceptions(XCTestDriverClient.kt:355)
-	at xcuitest.XCTestDriverClient.processResponse(XCTestDriverClient.kt:300)
-	at xcuitest.XCTestDriverClient.executeJsonRequest$lambda$7(XCTestDriverClient.kt:279)
-	at xcuitest.XCTestDriverClient.transportCall(XCTestDriverClient.kt:67)
-	at xcuitest.XCTestDriverClient.executeJsonRequest(XCTestDriverClient.kt:267)
-	at xcuitest.XCTestDriverClient.executeJsonRequest$default(XCTestDriverClient.kt:266)
-	at xcuitest.XCTestDriverClient.viewHierarchy(XCTestDriverClient.kt:83)
-	at ios.xctest.XCTestIOSDevice.viewHierarchy$lambda$1(XCTestIOSDevice.kt:39)
-	at ios.xctest.XCTestIOSDevice.execute(XCTestIOSDevice.kt:240)
-	at ios.xctest.XCTestIOSDevice.viewHierarchy(XCTestIOSDevice.kt:37)
-	at ios.LocalIOSDevice.viewHierarchy(LocalIOSDevice.kt:49)
-	at maestro.drivers.IOSDriver.viewHierarchy(IOSDriver.kt:198)
-	at maestro.drivers.IOSDriver.contentDescriptor$lambda$22$lambda$21(IOSDriver.kt:193)
-	at maestro.drivers.IOSDriver.runDeviceCall(IOSDriver.kt:655)
-	at maestro.drivers.IOSDriver.contentDescriptor$lambda$22(IOSDriver.kt:193)
-	at maestro.utils.Metrics.measured(Metrics.kt:48)
-	at maestro.drivers.IOSDriver.contentDescriptor(IOSDriver.kt:192)
-	at maestro.ViewHierarchy$Companion.from-8JJjmZI(ViewHierarchy.kt:29)
-	at maestro.Maestro$viewHierarchy$2.invoke-prqvCes(Maestro.kt:535)
-	at maestro.Maestro$viewHierarchy$2.invoke(Maestro.kt:534)
-	at kotlinx.coroutines.InterruptibleKt.runInterruptibleInExpectedContext(Interruptible.kt:48)
-	at kotlinx.coroutines.InterruptibleKt.access$runInterruptibleInExpectedContext(Interruptible.kt:1)
-	at kotlinx.coroutines.InterruptibleKt$runInterruptible$2.invokeSuspend(Interruptible.kt:40)
-	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
-	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
-	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:124)
-	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
-	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+        Tap on "Collapsed"... COMPLETED
+      Run flow when "Collapsed" is visible... COMPLETED
+      Run flow when id: BackButton is visible and id: ${TAB.toLowerCase()}-tab is not visible...
+      Run flow when id: BackButton is visible and id: inbox-tab is not visible... SKIPPED
+      Wait for animation to end... COMPLETED
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... COMPLETED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when "${TAB}" is not visible and ${FLOATING_TABS == 'true'} is true...
+  Run flow when "Inbox" is not visible and false is true... SKIPPED
+  Run flow when "${TAB}", id: place-row is visible and ${FLOATING_TABS == 'true'} is true...
+  Run flow when "Inbox", id: place-row is visible and false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run ../../subflows/tab.yaml... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
+Run ../../subflows/tab.yaml...
+  Run flow when ${FLOATING_TABS != 'true'} is true...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)...
+    Repeat while id: ${TAB.toLowerCase()}-tab is not visible (up to 10 times)... SKIPPED
+    Assert that id: ${TAB.toLowerCase()}-tab is visible... COMPLETED
+    Tap on id: ${TAB.toLowerCase()}-tab... COMPLETED
+  Run flow when true is true... COMPLETED
+  Run flow when ${FLOATING_TABS == 'true'} is true...
+  Run flow when false is true... SKIPPED
+  Run flow when "${TAB}" is not visible and ${FLOATING_TABS == 'true'} is true...
+  Run flow when "Tasks" is not visible and false is true... SKIPPED
+  Run flow when "${TAB}", id: place-row is visible and ${FLOATING_TABS == 'true'} is true...
+  Run flow when "Tasks", id: place-row is visible and false is true... SKIPPED
+  Wait for animation to end... COMPLETED
+Run ../../subflows/tab.yaml... COMPLETED
+Run _pause.yaml...
+  Assert that (Optional) "zz-glitch-sweep-never-drawn" is visible... WARNED
+Run _pause.yaml... COMPLETED
