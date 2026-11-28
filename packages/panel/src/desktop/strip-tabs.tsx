@@ -1,11 +1,4 @@
 import type { AgentStatus, AgentSummary } from "@repo/features/agent-wire";
-import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
-import {
-  type CopiedTranscript,
-  type TranscriptCopy,
-  type TranscriptUnread,
-  transcriptMarkdown,
-} from "@repo/features/transcript-copy";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import {
   IconButton,
@@ -14,7 +7,6 @@ import {
   POPOVER_ALIGN,
   POPOVER_BOUNDS,
   SearchableMenu,
-  STATUS_TONE,
   type StatusTone,
   Tooltip,
 } from "@repo/ui";
@@ -31,16 +23,14 @@ import {
   useState,
 } from "react";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
-import { useCopyToast } from "../copy-feedback.js";
 import type { ShortcutSubject } from "../shortcut-target.js";
 import type { HeldTranscript } from "../tasks/agent-tab-card.js";
-import { useToast } from "../toast.js";
 import { actingCommand, type MenuAction, type MenuEnds, type MenuEntry } from "./action-menu.js";
 import { type AgentMenuDoors, agentMenuGroups } from "./agent-actions.js";
 import { MenuTab } from "./tab-strip.js";
 
 /**
- * strip-tabs.tsx -- what the task's column's strip and the side panel's draw alike: a tab with its actions, the "+" after the last tab and the menu it drops, a transcript's copy, and what the agents' tabs last drew.
+ * strip-tabs.tsx -- what the task's column's strip and the side panel's draw alike: a tab with its actions, the "+" after the last tab and the menu it drops, and what the agents' tabs last drew.
  *
  * Both strips are the one `TabStrip` (tab-strip.tsx), each of its tabs a
  * `MenuTab` whose right-click offers the actions `tabActionGroups` lists:
@@ -84,12 +74,6 @@ export const CHOSEN_TAB_KEYS: readonly KeyedCommand[] = [
   APP_COMMAND.OPEN_IN_TASK,
   APP_COMMAND.DELETE,
 ];
-
-/** What the toast says once a tab's transcript, concise or full, is on the clipboard. */
-const TRANSCRIPT_COPIED_NOTE = "Transcript copied";
-
-/** What the toast says when a tab's transcript could not be read whole for a copy. */
-const TRANSCRIPT_UNREAD_NOTE = "The transcript could not be copied. Try again.";
 
 /** A tab's pin to the sidebar, as its menu offers it: whether it stands, and the press that sets it or takes it away. */
 export interface TabPin {
@@ -630,36 +614,6 @@ export function AddTabButton({
       ) : null}
     </div>
   );
-}
-
-/** A transcript read on demand for a copy, or why it could not be read; nothing where no read says why. */
-export type TranscriptRead = () => Promise<CopiedTranscript | TranscriptUnread | undefined>;
-
-/** A copy of a transcript as the strips' tabs and the sidebar's pins offer it: read, then put on the clipboard as concise or full markdown. */
-export type TranscriptCopier = (read: TranscriptRead) => (copy: TranscriptCopy) => void;
-
-/** The copy of a transcript read on demand, answered with the window's toast: copied, or not read. */
-export function useTranscriptCopier(): TranscriptCopier {
-  const copyWithToast = useCopyToast();
-  const toast = useToast();
-
-  const unread = (cause: unknown) =>
-    toast({
-      words: TRANSCRIPT_UNREAD_NOTE,
-      tone: STATUS_TONE.DANGER,
-      failure: { surface: FAILURE_SURFACE.TRANSCRIPT_COPY, cause },
-      replayUnmasked: true,
-    });
-
-  return (read) => (copy) => {
-    read().then((transcript) => {
-      if (transcript === undefined) return unread(FAILURE_CONDITION.UNREAD);
-
-      if ("unread" in transcript) return unread(transcript.unread);
-
-      return copyWithToast(transcriptMarkdown(transcript, copy), TRANSCRIPT_COPIED_NOTE);
-    }, unread);
-  };
 }
 
 /** The transcripts the agents' and the delegated workers' tabs last drew, by agent and by the call that started each worker, read as a card is hung; the same value from page to page until a title it names moves. */

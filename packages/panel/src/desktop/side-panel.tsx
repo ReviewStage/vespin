@@ -238,13 +238,12 @@ import {
   type TabLook,
   type TabPin,
   type TabViews,
-  type TranscriptCopier,
-  useTranscriptCopier,
   type WorkerStandings,
 } from "./strip-tabs.js";
 import { LOOK_STRIP, useStripLooks } from "./switcher-looks.js";
 import { type CardSubject, tabCard } from "./tab-card.js";
 import { TabStrip } from "./tab-strip.js";
+import { type TranscriptCopier, useTranscriptCopier } from "./transcript-copier.js";
 
 /** A phone's Activity, as the panel's strip is handed it: where it lists the tabs, how a row's press leaves the list, none where the panel lists none (a task's), and where the tab shown is handed on. */
 interface StripActivity {
