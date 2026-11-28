@@ -450,7 +450,9 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   photo's Delete stands under Change photo.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
-  checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
+  checks one, a "Recommended" tag before the check, and a detail line, its
+  label and detail drawn as Markdown so a link of ours stands as its chip,
+  whose press opens it and picks nothing; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it, at the system's regular size,
   Mark done filled as the card's one act and Couldn't do it its words
   alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
