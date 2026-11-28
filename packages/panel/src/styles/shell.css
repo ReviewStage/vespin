@@ -59,6 +59,9 @@
      buttons stand at the window's edge, as in full screen; the desktop
      profile sets both by the traffic lights (desktop.css). */
   --title-bar-middle: calc(var(--ui-control-height) / 2 + var(--ui-title-bar-inset));
+  /* A control in the title bar's row: the window's own, whatever height the
+     column under it draws its rows at. */
+  --title-bar-control: var(--ui-control-height);
   --title-bar-left: var(--column-inset);
   /* Where the work column's toolbar starts its tab while the sidebar is
      folded: clear of where the title bar starts and both buttons there, by a
@@ -97,9 +100,10 @@
 /* The sidebar draws its rows at its own roles (`profiles.css`'s
    `--ui-sidebar-*`): a row's height stands for a control's, its words' size
    for the body's, its gaps for the list's and the section's, its corner for
-   a control's, its inset for a row's, and its glyph's gap for the icon gap,
-   so every row, head, and button in it follows them without a class of its
-   own. The places at its top stand a gap of their own apart. */
+   a control's, its inset for a row's, its glyph's gap for the icon gap, and
+   its open row's ground and edge for a column's, so every row, head, and
+   button in it follows them without a class of its own. The places at its
+   top stand a gap of their own apart. */
 .desktop-sidebar {
   --ui-control-height: var(--ui-sidebar-row-height);
   --ui-type-body-size: var(--ui-sidebar-text-size);
@@ -108,10 +112,25 @@
   --ui-control-radius: var(--ui-sidebar-row-radius);
   --ui-row-inset: var(--ui-sidebar-row-inset);
   --ui-icon-gap: var(--ui-sidebar-icon-gap);
+  --ui-row-current-fill: var(--ui-sidebar-row-current-fill);
+  --ui-row-current-edge: var(--ui-sidebar-row-current-edge);
 }
 
 .desktop-sidebar .sidebar-places {
   --ui-list-gap: var(--ui-sidebar-places-gap);
+}
+
+/* The title bar's own buttons over the column stand at the title bar's
+   control height, as the toggle beside them does, rather than a row's. */
+.desktop-sidebar > .title-bar-controls {
+  --ui-control-height: var(--title-bar-control);
+}
+
+/* A group's heading, and the place it is named in, stand at the heading's
+   own control height rather than a row's, its buttons with it, so it reads
+   as the label over its rows rather than one more of them. */
+.desktop-sidebar :is(.ui-group-header-head, .ui-group-header-editing) {
+  --ui-control-height: var(--ui-sidebar-head-height);
 }
 
 /* The head stands on the lines of the column under it and the buttons over
@@ -157,9 +176,17 @@
 
 /* Note that the strip over it keeps a top row's hairline the work's own row
    beside it leaves out (`.desktop-main`'s `--desktop-bar-height`), so the
-   head rises by it to stand level. A drawer keeps no strip. */
+   head rises by it to stand level, and by half of what a sidebar row stands
+   taller than the title bar's controls, so its middle stays level with the
+   tabs' beside it. A drawer keeps no strip. */
 :where(:root):not([data-ui-room="narrow"]) .sidebar-workspace {
-  margin-top: calc(2 * var(--title-bar-middle) - var(--desktop-bar-height));
+  margin-top: calc(
+    2 *
+    var(--title-bar-middle) -
+    var(--desktop-bar-height) -
+    (var(--ui-control-height) - var(--title-bar-control)) /
+    2
+  );
 }
 
 .desktop-shell {
