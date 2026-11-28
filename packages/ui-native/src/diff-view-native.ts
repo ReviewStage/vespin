@@ -15,10 +15,14 @@ export interface NativeDiffLook {
   readonly added: ColorValue;
   readonly removed: ColorValue;
   readonly hunk: ColorValue;
+  /** The color of each style the highlighter names, in `SYNTAX_COLORS`' order. */
+  readonly syntax: readonly ColorValue[];
 }
 
 interface NativeDiffViewProps {
   readonly rows: DiffColumns;
+  /** The file's path, whose extension names the language its code is colored in; none colors nothing. */
+  readonly path: string;
   readonly look: NativeDiffLook;
   readonly style?: StyleProp<ViewStyle>;
   readonly testID?: string | undefined;

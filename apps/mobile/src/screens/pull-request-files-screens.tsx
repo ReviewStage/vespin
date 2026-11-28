@@ -309,7 +309,7 @@ export function PullRequestFileScreen() {
     return (
       <>
         {bar}
-        <DiffView patch={file.patch} wrap={wrap} testID="pull-request-diff" />
+        <DiffView patch={file.patch} path={file.path} wrap={wrap} testID="pull-request-diff" />
       </>
     );
   }
