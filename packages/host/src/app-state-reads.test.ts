@@ -18,6 +18,7 @@ import {
   inboxHoldingsWithOlder,
   selectInboxBeyondFeed,
   selectInboxFeed,
+  selectInboxHeldBeyondFeed,
   selectInboxHoldings,
   shareAppState,
 } from "./app-state-reads.js";
@@ -304,5 +305,24 @@ describe("selectInboxHoldings", () => {
     expect(
       selectInboxBeyondFeed(document, { older: true, place: INBOX_SEARCH_PLACE.EVERYTHING }),
     ).toBe(older);
+  });
+
+  it("holds a thread any place's search found for a screen that opens it by its id", () => {
+    // A Manager's thread the Search tab found long settled, which neither the feed nor All's older pages hold, so its screen has nowhere else to read it from.
+    const found = { ...thread("q", 1), status: INBOX_STATUS.CLOSED };
+
+    const document: AppStateSnapshot = {
+      ...documentWith(byTask, false, [{ taskId: "newer" }]),
+      [LIVE_READ.INBOX_FOUND]: {
+        [INBOX_SEARCH_PLACE.EVERYTHING]: {
+          rows: {
+            query: "ledger",
+            items: { [INBOX_SCOPE_KIND.TASK]: {}, agents: { "manager-1": [found] } },
+          },
+        },
+      },
+    };
+
+    expect(selectInboxHeldBeyondFeed(document)?.agents?.["manager-1"]).toEqual([found]);
   });
 });

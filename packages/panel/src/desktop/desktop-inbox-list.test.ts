@@ -1786,7 +1786,7 @@ function paneTitle(page: HTMLElement): string | null | undefined {
   return page.querySelector(".inbox-view-items .inbox-subject-title")?.textContent;
 }
 
-test("a search's words are asked of the service once typing pauses, and an item it finds past the feed joins the items the list found already, after them, under the scope shown; its words cleared let it go", async () => {
+test("a search's words are asked of the service once typing pauses, and an item it finds past the feed joins the items the list found already, after them, under the scope shown; its words cleared list it no more", async () => {
   const FOUND: InboxItem = {
     ...noticeOf(item("a1b2c3d4-0000-4000-8000-000000000041", "Was on-call paged last night?", 300)),
     status: INBOX_STATUS.CLOSED,
@@ -1817,9 +1817,10 @@ test("a search's words are asked of the service once typing pauses, and an item 
     "Open lists no settled item found",
   );
 
+  showScope(page, "All");
   searchList(page, "");
   await settle();
-  assert.deepEqual(world.searchAsked.at(-1), { place: INBOX_SEARCH_PLACE.INBOX });
+  assert.equal(listed(page).includes("Was on-call paged last night?"), false);
 });
 
 test("a thread on no task that ⌘K's search found past the feed opens in the Inbox by its id, and stays drawn once ⌘K closes", async () => {

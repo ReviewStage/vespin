@@ -1,3 +1,4 @@
+import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { inboxReadRows } from "@repo/features/inbox-digest";
 import {
   anyToMarkRead,
@@ -21,8 +22,12 @@ import { INBOX_SEARCH_PLACE } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import type { TaskSummary } from "@repo/features/task-wire";
-import type { AppInboxTaskHolding } from "@repo/host/app-state";
-import { inboxBeyondFeed, inboxHoldingsWithOlder } from "@repo/host/app-state-reads";
+import type { AppInboxItems, AppInboxTaskHolding } from "@repo/host/app-state";
+import {
+  inboxBeyondFeed,
+  inboxHoldingsWithOlder,
+  selectInboxHeldBeyondFeed,
+} from "@repo/host/app-state-reads";
 import { useMinute } from "@repo/ui";
 import { afterPaint } from "@repo/ui/after-paint";
 import { useQuery } from "@tanstack/react-query";
@@ -38,6 +43,7 @@ import {
   useTaskListRow,
   useTaskListRows,
 } from "../task-list-collections.js";
+import { appStateQuery } from "../use-app-state.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
 import { wholeInboxItems } from "./inbox-whole-items.js";
@@ -139,6 +145,34 @@ export function anyChoiceOf(listed: InboxListed<InboxAnyHolder>): InboxChoice {
   const held = onTask(listed);
 
   return held === undefined ? { itemId: listed.item.id, opened: true } : choiceOf(held);
+}
+
+/**
+ * The one item `itemId` names among `held`, on its task or its agent as
+ * `held` holds it, alone; none where `held` holds no such item. Note that it
+ * is what an item opened by its id is drawn from past what the list lists,
+ * so a thread another place's search found opens without that place's other
+ * finds joining the list.
+ */
+function openedAmong(
+  held: AppInboxItems | undefined,
+  itemId: string | undefined,
+): AppInboxItems | undefined {
+  if (held === undefined || itemId === undefined) return undefined;
+
+  const onTask = Object.entries(held[INBOX_SCOPE_KIND.TASK]).flatMap(([taskId, items]) =>
+    items.flatMap((item) =>
+      item.id === itemId ? [{ [INBOX_SCOPE_KIND.TASK]: { [taskId]: [item] } }] : [],
+    ),
+  );
+
+  const onAgent = Object.entries(held.agents ?? {}).flatMap(([agentId, items]) =>
+    items.flatMap((item) =>
+      item.id === itemId ? [{ [INBOX_SCOPE_KIND.TASK]: {}, agents: { [agentId]: [item] } }] : [],
+    ),
+  );
+
+  return [...onTask, ...onAgent][0];
 }
 
 /** A listed item as held by a task, or none where an agent on no task holds it. */
@@ -315,8 +349,15 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // The list's search, which narrows what it lists, never what it counts, and asks the service for what it finds past what the host holds.
   const [query, setQuery] = useState("");
   const serviceSearch = useInboxServiceSearch(INBOX_SEARCH_PLACE.INBOX, query, tasks.signedIn);
+  // Note that the item asked for stands too where only the host's holdings past the feed hold it, a thread ⌘K's search found among them, so it opens by its id and stays open once ⌘K closes.
+  const { data: heldBeyond } = useQuery({ ...appStateQuery, select: selectInboxHeldBeyondFeed });
+  const opened = useMemo(() => openedAmong(heldBeyond, asked?.itemId), [heldBeyond, asked?.itemId]);
+
   // Note that what the list lists past the feed is All's older items and the items the search found, which every scope filters as it does the feed's.
-  const older = inboxBeyondFeed(listsOlder ? olderHeld : undefined, serviceSearch.found);
+  const older = inboxBeyondFeed(
+    inboxBeyondFeed(listsOlder ? olderHeld : undefined, serviceSearch.found),
+    opened,
+  );
 
   const {
     groups: taskless,
