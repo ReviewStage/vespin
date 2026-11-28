@@ -19,6 +19,7 @@ import {
   accessibilityAddTraits,
   accessibilityIdentifier,
   accessibilityLabel,
+  accessibilityValue,
   background,
   buttonStyle,
   fixedSize,
@@ -32,6 +33,7 @@ import {
   textFieldStyle,
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
+import { fieldValueWords } from "@repo/features/inbox-wire";
 import { linkLabels } from "@repo/features/mention-link";
 import { FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
@@ -596,7 +598,11 @@ function HeldFieldRow({ field }: { readonly field: AnswerField }) {
         modifiers={[
           padding(ROW_PADDING),
           SwiftModifiers.accessibilityElement("combine"),
-          accessibilityLabel(ticked ? `${field.label}, ${TICKED}` : field.label),
+          accessibilityLabel(field.label),
+          // Note that the answer is heard as its value, yes or no, so a no is said rather than left silent; a yes or no the answer left empty says nothing.
+          ...(Predicate.isBoolean(field.value)
+            ? [accessibilityValue(fieldValueWords(field.value))]
+            : []),
         ]}
       >
         <TickMark ticked={ticked} />

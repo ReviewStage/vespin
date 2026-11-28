@@ -362,6 +362,10 @@ export function AnsweredAskCard({
         recommended={recommendedLabels(ask)}
         picked={draft.choices}
         multiple={ask.multiple === true}
+        // Note that a pick of None of these stands checked on its own row, as the open card offered it, since no option is checked.
+        none={
+          optionsCarryMedia(ask) ? { label: NONE_OF_THESE, picked: picksNone(draft) } : undefined
+        }
         {...linked}
       />
     );

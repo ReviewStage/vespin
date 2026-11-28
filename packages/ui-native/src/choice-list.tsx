@@ -40,7 +40,8 @@ export type Choice = {
 export type NoneChoice = {
   readonly label: string;
   readonly picked: boolean;
-  readonly onPress: () => void;
+  /** Picks it; none for an ask no longer waiting, whose row stands as it was answered. */
+  readonly onPress?: (() => void) | undefined;
 };
 
 type ChoiceListProps = {
