@@ -20,6 +20,7 @@
 
 import { type WireValue, WireValueSchema } from "@repo/wire";
 import { Option, Schema } from "effect";
+import { INBOX_RUNS, INBOX_SHOW, INBOX_WHOSE } from "./inbox-list-model.js";
 import { wireUuidSchema } from "./service-wire.js";
 import { ASSIGNED_TO, TASK_GROUPING } from "./task-list-model.js";
 import { workspaceIdSchema } from "./task-wire.js";
@@ -53,6 +54,14 @@ export const VIEW_CHOICE_KEY = {
   SIDEBAR_FOLDED_SECTIONS: "sidebarFoldedSections",
   /** The tasks whose sub-tasks stand open under them in the sidebar, by id, the latest opened last. */
   SIDEBAR_OPENED_TASKS: "sidebarOpenedTasks",
+  /** Which scope the Inbox shows (`INBOX_SHOW`). */
+  INBOX_SHOW: "inboxShow",
+  /** Whom the items the Inbox lists are addressed to: the reader, anyone, or one teammate (`InboxWhose`). */
+  INBOX_WHOSE: "inboxWhose",
+  /** Whether the Inbox stands its pinned tasks' items first, under a heading of their own. */
+  INBOX_PINNED_FIRST: "inboxPinnedFirst",
+  /** The Inbox's runs folded while its pinned tasks' items stand first (`INBOX_RUNS`). */
+  INBOX_FOLDED_RUNS: "inboxFoldedRuns",
 } as const;
 
 export type ViewChoiceKey = (typeof VIEW_CHOICE_KEY)[keyof typeof VIEW_CHOICE_KEY];
@@ -97,6 +106,17 @@ const assignedToSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.FOLLOWING) }),
   Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.ANYONE) }),
   Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.MEMBER), userId: Schema.String }),
+]);
+
+/** Whom the items the Inbox lists are addressed to (`InboxWhose`), a teammate by id with the name the list last knew them by. */
+const inboxWhoseSchema = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal(INBOX_WHOSE.EVERYONE) }),
+  Schema.Struct({ kind: Schema.Literal(INBOX_WHOSE.MINE) }),
+  Schema.Struct({
+    kind: Schema.Literal(INBOX_WHOSE.PERSON),
+    userId: Schema.String,
+    name: Schema.String,
+  }),
 ]);
 
 /** Whether a sidebar head stands folded. */
@@ -155,6 +175,26 @@ export const VIEW_CHOICE = {
     VIEW_CHOICE_KEY.SIDEBAR_OPENED_TASKS,
     VIEW_CHOICE_SCOPE.ACCOUNT,
     idsSchema.check(Schema.isMaxLength(MAX_OPENED_TASKS)),
+  ),
+  [VIEW_CHOICE_KEY.INBOX_SHOW]: viewChoice(
+    VIEW_CHOICE_KEY.INBOX_SHOW,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Literals(Object.values(INBOX_SHOW)),
+  ),
+  [VIEW_CHOICE_KEY.INBOX_WHOSE]: viewChoice(
+    VIEW_CHOICE_KEY.INBOX_WHOSE,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    inboxWhoseSchema,
+  ),
+  [VIEW_CHOICE_KEY.INBOX_PINNED_FIRST]: viewChoice(
+    VIEW_CHOICE_KEY.INBOX_PINNED_FIRST,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Boolean,
+  ),
+  [VIEW_CHOICE_KEY.INBOX_FOLDED_RUNS]: viewChoice(
+    VIEW_CHOICE_KEY.INBOX_FOLDED_RUNS,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Array(Schema.Literals(INBOX_RUNS)),
   ),
 } as const satisfies { readonly [Key in ViewChoiceKey]: ViewChoice<ViewChoiceSchema> };
 
