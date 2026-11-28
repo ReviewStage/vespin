@@ -1,0 +1,49 @@
+-- jchev11285: main pinned to 3ab3084252: main's natives moved past Vmain-current (mainref.zsh, the Manager 05:07 UTC Nov 26)
+pinned to 3ffe4980cb
+== bundle PJjchev11285 base 3ffe4980cb
+  built 3ffe4980cb base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== bundle PJchevM base fdd208852c
+  built fdd208852c base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== M bundle fdd208852c over Vmain-current.app, flows from 3ffe4980cb, full
+M/automations: fails 2 shots 6   Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  M/automations shots: automations-by-name.png automations-finished-open.png automations-list.png automations-order.png 
+M/zchevron a: fails 0 shots 3 
+  M finished header:  accessibilityText='Finished, 1' text='Expanded' value='Expanded' selected='false' bounds='[0,626][402,662]'| accessibilityText='Finished' selected='false' bounds='[45,636][97,652]'| accessibilityText='Fix ledger rounding before the close' text='Started “Fix ledger rounding”, Last run: Finished, 4d' value='Started “Fix ledger rounding”, Last run: Finished, 4d' selected='false' bounds='[0,662][402,756]'|
+M/zchevron b: fails 0 shots 4 
+  M/zchevron shots: c1-finished-open.png c2-finished-open-3s.png c3-ada-folded.png c4-ada-open.png c5-launch-folded.png c6-launch-open.png 
+== F bundle 3ffe4980cb over Vmain-current.app, flows from 3ffe4980cb, full
+F/automations: fails 2 shots 6   Scrolling DOWN until "${ITEM}" is visible with speed 40, visibility percentage 100%, timeout 20000 ms, with centering disabled... FAILED
+  F/automations shots: automations-by-name.png automations-finished-open.png automations-list.png automations-order.png 
+F/zchevron a: fails 0 shots 3 
+  F finished header:  accessibilityText='Finished, 1' text='Expanded' value='Expanded' selected='false' bounds='[0,626][402,662]'| accessibilityText='Finished' selected='false' bounds='[45,636][97,652]'| accessibilityText='Fix ledger rounding before the close' text='Started “Fix ledger rounding”, Last run: Finished, 4d' value='Started “Fix ledger rounding”, Last run: Finished, 4d' selected='false' bounds='[0,662][402,756]'|
+F/zchevron b: fails 0 shots 4 
+  F/zchevron shots: c1-finished-open.png c2-finished-open-3s.png c3-ada-folded.png c4-ada-open.png c5-launch-folded.png c6-launch-open.png 
+== bundle PJchevN base 6af4a3ae72
+  built 6af4a3ae72 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== N bundle 6af4a3ae72 over Vmain-current.app, flows from 3ffe4980cb, adump
+N/zchevron a: fails 0 shots 3 
+  N finished header:  accessibilityText='Finished, 1' text='Expanded' value='Expanded' selected='false' bounds='[0,626][402,662]'| accessibilityText='Finished' selected='false' bounds='[45,636][97,652]'| accessibilityText='Fix ledger rounding before the close' text='Started “Fix ledger rounding”, Last run: Finished, 4d' value='Started “Fix ledger rounding”, Last run: Finished, 4d' selected='false' bounds='[0,662][402,756]'|
+N/zchevron b: not run (adump)
+  N/zchevron shots: c1-finished-open.png c2-finished-open-3s.png 
+== bundle PJchevK base b03abcac53
+  built b03abcac53 base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== K bundle b03abcac53 over Vmain-current.app, flows from 3ffe4980cb, aonly
+K/zchevron a: fails 0 shots 3 
+K/zchevron b: not run (aonly)
+  K/zchevron shots: c1-finished-open.png c2-finished-open-3s.png 
