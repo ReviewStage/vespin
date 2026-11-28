@@ -7,8 +7,9 @@
  * search out at a time for its place; the host reads what the service finds
  * and holds it for the place (`LIVE_READ.INBOX_FOUND`), which is read back
  * here only while the field's words ask, for the surface to lay beside the
- * items it holds, under the scope it shows. A screen gone lets its place's
- * search go.
+ * items it holds, under the scope it shows. A field that stops asking, its
+ * screen gone or ⌘K closed, leaves its place's search (`leave`) rather than
+ * letting it go, so an item opened from what it found stays drawn.
  */
 
 import {
@@ -41,15 +42,17 @@ export function useInboxServiceSearch(
 
   const words = asked ? typed : "";
 
-  useEffect(() => {
-    search.type(words);
-  }, [search, words]);
+  const asks = serviceInboxSearchQuery(words) !== undefined;
 
-  // Note that the place's search is let go as the field goes, so the host holds nothing a screen no longer shows.
-  useEffect(() => () => search.end(), [search]);
+  // Note that a field asking nothing more, ⌘K closed or its words cleared, leaves its place's found items standing in the host, where an item opened from them is still read (`selectInboxHeldBeyondFeed`), until the place's next search or a sign-out.
+  useEffect(() => {
+    if (asks) search.type(words);
+    else search.leave();
+  }, [search, words, asks]);
+
+  useEffect(() => () => search.leave(), [search]);
 
   const searching = useSyncExternalStore(search.subscribe, search.searching);
-  const asks = serviceInboxSearchQuery(words) !== undefined;
   const { data } = useQuery(inboxFoundQuery(asks ? place : undefined));
 
   return { found: asks ? data?.items : undefined, searching };
