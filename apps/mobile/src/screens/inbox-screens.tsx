@@ -876,6 +876,7 @@ function ThreadDetail({
   readonly place: ThreadPlace;
 }) {
   const colors = useColors();
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const { holder, item } = listed;
   const title = cardTitle(item.title, useTitleLinkNames(item.title));
   // Note that a thread on no task, a Manager's, stands in its agent's workspace and names no task, as the panel's Inbox draws it under its agent alone.
@@ -1281,6 +1282,11 @@ function ThreadDetail({
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         }}
       />
+      {/* Note that the task the thread stands in, or the agent of one on no task, stands muted under its title as the bar's own subtitle, as the agent page stands its state, so the page says where it is with its heading out of sight; a thread wears no face, being no one's conversation. */}
+      <StackSubtitle
+        words={task === undefined ? holderName(holder) : task.name}
+        leading={regular}
+      />
       <Stack.Toolbar placement="right">
         {/* Note that the arrows and ⋯ stand in one bar, since a screen's last `Stack.Toolbar` of a placement replaces the ones before it, and an arrow at the list's end stands dimmed rather than gone, so the other one never moves under the thumb, as Mail's do. */}
         {/* Note that a glyph here is named as a symbol, as ⋯'s is, because a top bar loads an `xcasset` as a React Native image, which drew our Lucide symbol sets as empty glass. */}
@@ -1482,10 +1488,11 @@ function useInboxScreen(
 // workspace switcher beside it at the bar's leading edge, and its search and
 // its ⋯ menu, which holds the scopes, as round glass buttons at its trailing
 // one, each row pushing its thread as the Stack's next screen.
-/** What an agent's own Inbox is headed by: the agent's name in the bar, "Inbox" under it, led by a Manager's face. */
+/** What an agent's own Inbox is headed by: the agent's name in the bar, "Inbox" under it, led by a Manager's face or the agent's harness mark, as its page heads it. */
 type InboxHeading = {
   readonly title: string;
   readonly face: ManagerFace | undefined;
+  readonly harness: ModelProvider | undefined;
 };
 
 function InboxStackList({ heading, ...held }: InboxHeld & { readonly heading?: InboxHeading }) {
@@ -1539,11 +1546,12 @@ function InboxStackList({ heading, ...held }: InboxHeld & { readonly heading?: I
         <StackSubtitle
           words={INBOX_TITLE}
           leading={regular}
-          face={
-            heading.face === undefined
-              ? undefined
-              : { title: heading.title, face: heading.face, working: false }
-          }
+          face={{
+            title: heading.title,
+            face: heading.face,
+            harness: heading.harness,
+            working: false,
+          }}
         />
       )}
       {choosing !== undefined ? (
@@ -1871,11 +1879,11 @@ function useInboxHeld(agent?: string): InboxHeld {
 export function AgentInboxScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
   const held = useInboxHeld(id);
-  const { name, face } = useAgentLabel(id);
+  const { name, face, harness } = useAgentLabel(id);
 
   return (
     <>
-      <InboxStackList {...held} heading={{ title: name, face }} />
+      <InboxStackList {...held} heading={{ title: name, face, harness }} />
       {held.remind.sheet}
     </>
   );
