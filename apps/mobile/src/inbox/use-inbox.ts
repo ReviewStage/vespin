@@ -4,7 +4,7 @@
  * What the list holds, in what order, and what each row says are the list
  * model's (`@repo/features/inbox-list-model`), which the panel's Inbox reads
  * too, over the holders the host's document groups
- * (`inbox-groups.ts`); this only reads them
+ * (`inbox-groups.tsx`); this only reads them
  * into the app's Query client and sends the panel's acts on the host's port,
  * each thread drawn with the reader's sends still out (`use-thread-answer.ts`).
  */

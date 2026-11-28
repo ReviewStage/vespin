@@ -89,10 +89,9 @@ const PATH: Path.Path = Effect.runSync(Effect.provide(Path.Path, NodePath.layer)
 /**
  * The services this suite's own promise face runs the store's effects under: the
  * store's own methods are effects, and this suite holds them as the promises
- * its assertions are written against. `settings-store-awaited.ts` once
- * answered production callers the same shape by name and is now deleted;
- * this is that shape kept for the suite alone, where the run-outside-an-edge
- * rule does not reach (tests are exempt by extension).
+ * its assertions are written against, a shape kept for the suite alone,
+ * where the run-outside-an-edge rule does not reach (tests are exempt by
+ * extension).
  */
 const SERVICES: Context.Context<never> = Context.empty();
 

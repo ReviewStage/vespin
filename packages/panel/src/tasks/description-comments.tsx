@@ -381,7 +381,7 @@ function MarginSlot({
   );
 }
 
-/** The column's room a margin needs beside the reading width: the gap and the card, as `planning.css` spends them. */
+/** The column's room a margin needs beside the reading width: the gap and the card, as `desktop.css`'s `--comment-margin-room` spends them. */
 const MARGIN_ROOM = 48 + 288;
 
 /** The reading width, as `--ui-page-measure` spends it. */

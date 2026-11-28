@@ -847,7 +847,7 @@ export const PULL_REQUEST_ACT_KIND = {
 } as const;
 
 /**
- * A coding agent's Terminal tab (`messages/terminal.ts`): its shells listed,
+ * A coding agent's Terminal tab (`terminals.ts`): its shells listed,
  * started, named, and ended, its sandbox resumed on the developer's click,
  * and a shell attached, detached as the panel closes the port. What a shell
  * prints travels on the port an attach posts to the asking panel, never on
