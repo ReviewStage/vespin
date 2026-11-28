@@ -4,7 +4,11 @@ import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
-import { CHAT_EDIT_WORDS, CHAT_THREAD_WORDS } from "@repo/features/manager-chat-view";
+import {
+  CHAT_EDIT_WORDS,
+  CHAT_THREAD_WORDS,
+  chatWorkWords,
+} from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
@@ -60,7 +64,7 @@ import {
 import { InlineHost } from "./inline-host.js";
 import { ROW_ACTION_TONE } from "./list-row.js";
 import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
-import { IntegrationMark, WorkingMark } from "./marks.js";
+import { IntegrationMark, ManagerFace, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
 import { LoaderImage, PICTURE_FIT, type PictureRef, usePictureRef } from "./picture-source.js";
@@ -1285,6 +1289,61 @@ function TranscriptRow({
         </View>
       );
     case TRANSCRIPT_ITEM.WORKING:
+      // MOCK: a Manager's chat says it works in a quiet line at its end, in its messages' column, led by its face, with Show work after it.
+      if (item.chat === true) {
+        const manager = drawing.channel?.manager;
+
+        return (
+          <View
+            style={[
+              styles.row,
+              {
+                paddingLeft: SPACE.EDGE + CHANNEL_SEAT,
+                paddingVertical: SPACE.ROW,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: SPACE.TIGHT * 2,
+              },
+            ]}
+          >
+            {manager === undefined ? null : (
+              <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <InlineHost style={{ width: MARK_SIZE.WRITER, height: MARK_SIZE.WRITER }}>
+                  <ManagerFace
+                    face={manager}
+                    size={MARK_SIZE.WRITER}
+                    working={item.waiting !== true}
+                  />
+                </InlineHost>
+              </View>
+            )}
+            <Text
+              numberOfLines={1}
+              style={{
+                flexShrink: 1,
+                fontSize: ROLE_SIZE.ROW_LINE,
+                color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
+              }}
+            >
+              {item.words}
+            </Text>
+            {item.workShown === undefined ? null : (
+              <Press
+                onPress={() => drawing.onToggle(item)}
+                accessibilityRole="button"
+                hitSlop={LINE_REACH}
+              >
+                <Text
+                  style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "500", color: colors.TEXT }}
+                >
+                  {chatWorkWords(item.workShown)}
+                </Text>
+              </Press>
+            )}
+          </View>
+        );
+      }
+
       // Note that the line is words alone, as the panel's Working line is, its mark left to the rows of what runs; and that an agent held for an answer says so in the attention ink, since it waits on the reader rather than working.
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>

@@ -79,6 +79,7 @@ import {
   chatWorkWords,
   type ManagerChatLine,
   type ManagerChatView,
+  managerWorkingLine,
   repliesWords,
 } from "@repo/features/manager-chat-view";
 import { type MessageFileChip, messageFileChips } from "@repo/features/message-files";
@@ -386,6 +387,10 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly words: string;
       /** Whether the agent waits on the reader's answer rather than working, which the line says in the attention ink with no spinner. */
       readonly waiting?: boolean | undefined;
+      /** Whether it is a Manager's chat's status line, which stands in its messages' column led by the Manager's face. */
+      readonly chat?: boolean | undefined;
+      /** Whether the turn under way's work stands open above it (Show work); none while it has done none. */
+      readonly workShown?: boolean | undefined;
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.RULE;
@@ -1782,11 +1787,28 @@ export function managerChatItems(
     runs,
   );
 
-  if (!reading.writing || !reading.toggles.liveWork || view.live.length === 0) return drawn;
+  if (!reading.writing) return drawn;
   const last = going.at(-1)?.clientKey ?? newest?.id ?? GREETING_PLACE.message;
+  const liveShown = view.live.length > 0 && reading.toggles.liveWork;
+  const line = managerWorkingLine(view, {
+    working: true,
+    name: reading.managerName ?? "",
+    waiting: 0,
+  });
 
-  // Note that the turn under way says so over the box (`managerWorkingLine`), never in a row of the chat, and its work, once Show work there opens it, stands at the chat's end still moving, as the panel opens it.
-  return [...drawn, ...workItems(view.live, last, CHAT_WORK_PLACE.LIVE, true, read)];
+  // MOCK: the turn under way's status line at the chat's end, its work above it once opened.
+  return [
+    ...drawn,
+    ...(liveShown ? workItems(view.live, last, CHAT_WORK_PLACE.LIVE, true, read) : []),
+    {
+      place: { ...linePlace(last, last), piece: TRANSCRIPT_PIECE.WORKING },
+      depth: 0,
+      kind: TRANSCRIPT_ITEM.WORKING,
+      words: line?.words ?? WORKING_LINE,
+      chat: true,
+      workShown: view.live.length === 0 ? undefined : liveShown,
+    },
+  ];
 }
 
 /**
@@ -1876,6 +1898,8 @@ export function toggledLiveWork(toggles: TranscriptToggles): TranscriptToggles {
 
 /** The toggles with a fold's, by its place, or a call's, by its id, turned the other way. */
 export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): TranscriptToggles {
+  if (item.kind === TRANSCRIPT_ITEM.WORKING) return { ...toggles, liveWork: !toggles.liveWork };
+
   if (item.kind === TRANSCRIPT_ITEM.CALL) {
     const calls = new Set(toggles.calls);
 

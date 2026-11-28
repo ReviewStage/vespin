@@ -39,7 +39,6 @@ import {
   CHAT_LANDING,
   chatMessageLanding,
   managerChatView,
-  managerWorkingLine,
 } from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
 import { agentName, modelLabel } from "@repo/features/model-label";
@@ -91,7 +90,6 @@ import {
   type Glyph,
   glyphSymbol,
   ListSection,
-  ManagerWorkingLine,
   MentionSuggestions,
   MenuRow,
   type MenuRowAct,
@@ -116,7 +114,6 @@ import {
   type TranscriptToggles,
   taskLead,
   toggledAt,
-  toggledLiveWork,
   transcriptItems,
   transcriptOriginOf,
   type UndeliveredLine,
@@ -1039,16 +1036,6 @@ const AgentConversation = memo(function AgentConversation({
   const [reveal, setReveal] = useState<TranscriptReveal | undefined>(undefined);
   const waitingCall = approvals.waiting?.callId;
 
-  // Note that a Manager's chat says it works over its box, never in a row of the chat, by the rule the panel's chat reads.
-  const workingLine =
-    chatView === undefined
-      ? undefined
-      : managerWorkingLine(chatView, {
-          working: writing,
-          name: chatFaces?.managerName ?? "",
-          waiting: approvals.waiting?.count ?? 0,
-        });
-
   const showWaiting =
     waitingCall === undefined
       ? undefined
@@ -1363,23 +1350,7 @@ const AgentConversation = memo(function AgentConversation({
       note={note}
       call={talk.call}
       otherCall={otherCall}
-      working={
-        workingLine === undefined ? undefined : (
-          <ManagerWorkingLine
-            face={chatFaces?.faces.manager}
-            words={workingLine.words}
-            waiting={workingLine.waiting}
-            work={
-              workingLine.work
-                ? {
-                    shown: toggles.liveWork,
-                    onToggle: () => setToggles(toggledLiveWork),
-                  }
-                : undefined
-            }
-          />
-        )
-      }
+      working={undefined}
       ending={
         continueOf === undefined ? undefined : (
           <ContinueLine
