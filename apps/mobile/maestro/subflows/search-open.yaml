@@ -1,4 +1,4 @@
-# search-open.yaml -- searches the Tasks list for `WORDS` over whatever its field holds, and opens the task `TASK` names from what it finds, waiting for the task's page.
+# search-open.yaml -- searches the Tasks list for `WORDS` over whatever its field holds, opens the task `TASK` names from what it finds, and from the task's page its agent `AGENT`, waiting for the agent's words `SAID`.
 #
 # Note that the field is reached as `tasks.yaml` reaches it: a compact
 # window's round button above the tab bar, and on an iPad the field itself
@@ -37,3 +37,13 @@ env:
 - extendedWaitUntil:
     visible: "Created by .*"
     timeout: 20000
+- runFlow:
+    file: scroll-in.yaml
+    env:
+      ELEMENT: "${AGENT}"
+      BESIDE: ${FLOATING_TABS}
+- waitForAnimationToEnd
+- tapOn: "${AGENT}"
+- extendedWaitUntil:
+    visible: "${SAID}"
+    timeout: 10000

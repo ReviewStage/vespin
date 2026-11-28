@@ -1,4 +1,4 @@
-# tasks-search-open.yaml -- a Tasks search's result opens its task again and again, two searches taking turns, each typed over the other's words, and the app stands through every open.
+# tasks-search-open.yaml -- a Tasks search's result opens its task again and again while another task's agent stands open, two searches taking turns, each typed over the other's words and each going on to its task's agent, and the app stands through every open.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -8,15 +8,23 @@ env:
 ---
 # Launched on the host's Inbox fixture, whose read marks the fixture takes at
 # once, so each open's read hands the search new rows the moment its row is
-# picked; nothing reaches a server. Note that this crashed an iPad inside
-# SwiftUI's own List, as UIKit asked a search result's separator while the
-# pick's selection was applied (iOS simulators run 46074454724, the second
-# search of `transcript-switch.yaml`), so the two searches take turns several
-# times over, as a reader going back and forth between two tasks does.
+# picked, and opened on the rounding agent's page, as `transcript-switch.yaml`
+# opens it; nothing reaches a server. Note that a pick made while an agent's
+# page stands pushed over an iPad's split view goes back to the list's root
+# as it selects, and that pick crashed the iPad inside SwiftUI's own List, as
+# UIKit asked a search result's separator while the selection was applied
+# (iOS simulators runs 46074454724 and 46083002398, the second search of
+# `transcript-switch.yaml`), so each search here is made from the agent page
+# the one before opened, the two taking turns several times over, as a reader
+# going back and forth between two agents does.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
+      agent: 70d19314-5c8e-4fa6-81ce-8d9eafb0c1d7
+- extendedWaitUntil:
+    visible: "Rounding is settled: every total now rounds half-cents to even.*"
+    timeout: 30000
 - repeat:
     times: 4
     commands:
@@ -25,9 +33,13 @@ env:
           env:
             WORDS: digest
             TASK: Weekly digest email
+            AGENT: Send the weekly digest
+            SAID: Reading this week's merged pull requests before I write the digest.
       - runFlow:
           file: subflows/search-open.yaml
           env:
             WORDS: rounding
             TASK: Ledger rounding
+            AGENT: Fix ledger rounding
+            SAID: "Rounding is settled: every total now rounds half-cents to even.*"
 - takeScreenshot: tasks-search-open
