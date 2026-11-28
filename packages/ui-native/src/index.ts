@@ -101,14 +101,12 @@ export {
   type AttachedPicture,
   AttachedPictures,
   EditingLine,
-  ManagerWorkingLine,
   type MentionCrumb,
   type MentionSuggestion,
   type MentionSuggestionGroup,
   MentionSuggestions,
   type SkillSuggestion,
   SkillSuggestions,
-  type WorkingLineWork,
 } from "./composer-head.js";
 
 export type { ComposerSend } from "./composer-press.js";
@@ -562,7 +560,6 @@ export {
   type TranscriptItem,
   type TranscriptToggles,
   toggledAt,
-  toggledLiveWork,
   transcriptItems,
   transcriptOriginOf,
   withSending,

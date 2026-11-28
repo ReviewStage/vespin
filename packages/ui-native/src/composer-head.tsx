@@ -1,4 +1,4 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, the line saying the field holds a sent message's words to send in its place, and the line saying a Manager is working.
+// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, the line saying the field holds a sent message's words to send in its place.
 
 import { Button, HStack, Image, ScrollView, Spacer, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -13,8 +13,6 @@ import {
   lineLimit,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { chatWorkWords } from "@repo/features/manager-chat-view";
-import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { CHIP_MARK, type ChipMark } from "./chip-mark-model.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -568,83 +566,6 @@ export function EditingLine({ onCancel }: { readonly onCancel: () => void }) {
           {EDITING_WORDS.CANCEL}
         </Text>
       </Button>
-    </HStack>
-  );
-}
-
-/** Show work beside a Manager's working line: whether the turn's work stands open at the chat's end, and the press that opens or folds it. */
-export interface WorkingLineWork {
-  readonly shown: boolean;
-  readonly onToggle: () => void;
-}
-
-/**
- * The line over a Manager's chat's field while a turn runs, as a channel
- * says who is typing by its box, and never a row of the chat
- * (`@repo/features/manager-chat-view`'s `managerWorkingLine`): the
- * Manager's face, working while it works, beside "Release manager is
- * working…" in the muted ink, or what waits on the reader in the attention
- * ink, the face at rest; and at its end Show work, where the turn has done
- * work, which opens it at the chat's end and folds it again.
- */
-export function ManagerWorkingLine({
-  face,
-  words,
-  waiting,
-  work,
-}: {
-  /** The Manager's face; none where a service older than faces names none. */
-  readonly face: ManagerFaceValue | undefined;
-  readonly words: string;
-  /** Whether the Manager waits on the reader's answer rather than working. */
-  readonly waiting: boolean;
-  /** Show work; none while the turn has done no work. */
-  readonly work?: WorkingLineWork | undefined;
-}) {
-  const colors = useColors();
-  const faceSize = useScaledSize(MARK_SIZE.WRITER);
-  const glyph = useScaledSize(MARK_SIZE.GLYPH);
-
-  return (
-    <HStack spacing={SPACE.TIGHT * 2}>
-      {face === undefined ? null : <ManagerFace face={face} size={faceSize} working={!waiting} />}
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.ROW_LINE }),
-          foregroundStyle(waiting ? colors.ATTENTION : colors.TEXT_MUTED),
-          lineLimit(1),
-          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-        ]}
-      >
-        {words}
-      </Text>
-      {work === undefined ? null : (
-        <Button onPress={work.onToggle} modifiers={[buttonStyle("plain")]}>
-          {/* Note that the press's frame and its shape stand on the label, since a plain button takes a press only where its label is hit. */}
-          <HStack
-            spacing={SPACE.TIGHT}
-            modifiers={[
-              frame({ minHeight: PRESS_SIZE }),
-              SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-            ]}
-          >
-            <Image
-              {...glyphImage(GLYPH.SHOW_WORK)}
-              size={glyph}
-              color={colors.TEXT_BODY}
-              modifiers={[accessibilityHidden()]}
-            />
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
-                foregroundStyle(colors.TEXT_BODY),
-              ]}
-            >
-              {chatWorkWords(work.shown)}
-            </Text>
-          </HStack>
-        </Button>
-      )}
     </HStack>
   );
 }

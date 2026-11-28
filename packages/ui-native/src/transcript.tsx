@@ -4,7 +4,11 @@ import { Image, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import { accessibilityLabel, buttonStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
-import { CHAT_EDIT_WORDS, CHAT_THREAD_WORDS } from "@repo/features/manager-chat-view";
+import {
+  CHAT_EDIT_WORDS,
+  CHAT_THREAD_WORDS,
+  chatWorkWords,
+} from "@repo/features/manager-chat-view";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
@@ -60,7 +64,7 @@ import {
 import { InlineHost } from "./inline-host.js";
 import { ROW_ACTION_TONE } from "./list-row.js";
 import { Markdown, type MarkdownWordPicture, Picture } from "./markdown.js";
-import { IntegrationMark, WorkingMark } from "./marks.js";
+import { IntegrationMark, ManagerFace, WorkingMark } from "./marks.js";
 import { MEDIA_BOUNDS } from "./media-frame.js";
 import { PictureSet } from "./picture-set.js";
 import { LoaderImage, PICTURE_FIT, type PictureRef, usePictureRef } from "./picture-source.js";
@@ -164,6 +168,13 @@ const OLDER_WORDS = {
 } as const;
 
 const styles = StyleSheet.create({
+  chatWorking: {
+    paddingLeft: SPACE.EDGE + CHANNEL_SEAT,
+    paddingVertical: SPACE.ROW,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACE.TIGHT * 2,
+  },
   list: { flex: 1 },
   content: { paddingVertical: SPACE.ROW },
   // Note that while there are no rows the content fills the list, so the empty state has room to center in.
@@ -1146,6 +1157,60 @@ function ShownMediaView({
   }
 }
 
+/**
+ * The line a Manager's chat ends on while a turn runs, in its messages'
+ * column and no row of the Manager's: its face, working while it works and
+ * at rest while it waits on the reader, then what it is doing in the muted
+ * ink, or the attention ink while it waits, and Show work after it where
+ * the turn has done work, which opens that work above the line.
+ */
+function ChatWorkingRow({
+  item,
+  drawing,
+}: {
+  readonly item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.WORKING }>;
+  readonly drawing: RowDrawing;
+}) {
+  const colors = useColors();
+  const face = useScaledSize(MARK_SIZE.WRITER);
+  const manager = drawing.channel?.manager;
+  const waiting = item.waiting === true;
+
+  return (
+    <View style={[styles.row, styles.chatWorking]}>
+      {manager === undefined ? null : (
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <InlineHost style={{ width: face, height: face }}>
+            <ManagerFace face={manager} size={face} working={!waiting} />
+          </InlineHost>
+        </View>
+      )}
+      <Text
+        numberOfLines={1}
+        style={{
+          flexShrink: 1,
+          fontSize: ROLE_SIZE.ROW_LINE,
+          color: waiting ? colors.ATTENTION : colors.TEXT_MUTED,
+        }}
+      >
+        {item.words}
+      </Text>
+      {item.workShown === undefined ? null : (
+        <Press
+          onPress={() => drawing.onToggle(item)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: item.workShown }}
+          hitSlop={LINE_REACH}
+        >
+          <Text style={{ fontSize: ROLE_SIZE.ROW_LINE, fontWeight: "500", color: colors.TEXT }}>
+            {chatWorkWords(item.workShown)}
+          </Text>
+        </Press>
+      )}
+    </View>
+  );
+}
+
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
   item,
@@ -1285,6 +1350,9 @@ function TranscriptRow({
         </View>
       );
     case TRANSCRIPT_ITEM.WORKING:
+      // Note that a Manager's chat ends on a quiet line in its messages' column, never a row of the Manager's, as the panel's chat ends on it.
+      if (item.chat === true) return <ChatWorkingRow item={item} drawing={drawing} />;
+
       // Note that the line is words alone, as the panel's Working line is, its mark left to the rows of what runs; and that an agent held for an answer says so in the attention ink, since it waits on the reader rather than working.
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>
