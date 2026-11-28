@@ -37,31 +37,41 @@ function bolder(weight: Weight): Weight {
   return isListed(key) ? BOLDER[key] : weight;
 }
 
-/** Whether a Text stands inside another, whose face and weight it inherits unless it names its own. */
-const NESTED = createContext(false);
+/** The face and weight a Text's words are drawn in, which a Text inside it takes where it names none of its own. */
+type Drawn = { readonly family: string; readonly weight: Weight };
+
+/** What the Text around this one draws in, or nothing for a Text that leads its words. */
+const AROUND = createContext<Drawn | undefined>(undefined);
 
 /**
  * React Native's Text in the app's face. A Text that leads its words stands
- * in Geist unless its style names a face, such as code's Geist Mono, and a
- * nested one inherits it; under Bold Text, a weight it names, or a leading
- * Text's regular, is set a step heavier (`BOLDER`), so a strong run nested in
- * stepped words still stands out of them. Note that an embedded face does
- * not thicken under Bold Text on its own, as the system's does.
+ * in Geist at regular unless its style names a face or a weight, such as
+ * code's Geist Mono, and one inside it takes the face and weight around it
+ * unless it names its own. Each Text sets both on itself rather than leave
+ * them to React Native's inheritance, because a View inside a line of words,
+ * such as a mention's chip, starts React Native's anew, and the chip's label
+ * would stand in the system's face. Under Bold Text, a weight a Text names,
+ * or a leading Text's regular, is set a step heavier (`BOLDER`), so a strong
+ * run in stepped words still stands out of them. Note that an embedded face
+ * does not thicken under Bold Text on its own, as the system's does.
  */
 export function NativeText({ style, ...props }: ComponentProps<typeof ReactNativeText>) {
-  const nested = useContext(NESTED);
+  const around = useContext(AROUND);
   const bold = useBoldText();
   const flat: TextStyle = StyleSheet.flatten(style) ?? {};
-  const named = flat.fontWeight ?? (nested ? undefined : "400");
+  const named = flat.fontWeight ?? (around === undefined ? "400" : undefined);
 
-  const face: TextStyle = {
-    ...(!nested && flat.fontFamily === undefined && { fontFamily: TEXT_FONT }),
-    ...(bold && named !== undefined && { fontWeight: bolder(named) }),
+  const drawn: Drawn = {
+    family: flat.fontFamily ?? around?.family ?? TEXT_FONT,
+    weight: named === undefined ? (around?.weight ?? "400") : bold ? bolder(named) : named,
   };
 
   return (
-    <NESTED.Provider value>
-      <ReactNativeText {...props} style={[style, face]} />
-    </NESTED.Provider>
+    <AROUND.Provider value={drawn}>
+      <ReactNativeText
+        {...props}
+        style={[style, { fontFamily: drawn.family, fontWeight: drawn.weight }]}
+      />
+    </AROUND.Provider>
   );
 }
