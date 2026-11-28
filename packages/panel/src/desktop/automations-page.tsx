@@ -611,7 +611,11 @@ function managerColumn(
   const name = agentName(manager);
 
   // Note that the Manager is named as an agent is wherever it speaks: its face, its card while the pointer rests on it, and its page on a press.
-  return <SendingAgent actor={agentActor(manager, name)} agentId={manager.id} />;
+  return (
+    <ReplayMask>
+      <SendingAgent actor={agentActor(manager, name)} agentId={manager.id} />
+    </ReplayMask>
+  );
 }
 
 /** The mark a phone's row leads with: its newest run's while that works or failed, else the mark of what fires it (`FiringGlyph`). */
@@ -668,6 +672,8 @@ function PhoneAutomationRow({
             <ActorMark actor={agentActor(manager, agentName(manager))} size={ACTOR_SIZE.INLINE} />
           ),
           onSelect: () => openPlace({ kind: LINK_DESTINATION.AGENT, agentId: manager.id }),
+          // Note that the Manager's name is a person's words, masked in a screen recording though the menu's own words are not.
+          replayMasked: true,
         };
 
   return (
