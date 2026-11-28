@@ -127,6 +127,7 @@ async function collectionsAt(
         syncMode: "on-demand",
       }),
     close: () => database.closeAsync(),
+    generations: persistence.adapter,
   };
 }
 

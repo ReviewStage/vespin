@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { NodeFileSystem, NodePath } from "@effect/platform-node";
@@ -41,7 +41,7 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { ForegroundClock } from "@repo/runtime/effect";
 import { temporaryDirectoryScoped, testForegroundClock } from "@repo/runtime/testing";
-import { type EntityPool, entityPool } from "@repo/sync";
+import { type EntityPool, entityPool, type FieldChange, fieldKind, type RowKind } from "@repo/sync";
 import { nodeKeptCollections } from "@repo/sync/testing";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
@@ -61,7 +61,7 @@ import {
 } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppManagerChats, AppTranscript } from "./app-state.js";
-import { INBOX_CHANGE, INBOX_KEEPING, INBOX_THREAD } from "./inbox-collections.js";
+import { INBOX_CHANGE, INBOX_KEEPING, INBOX_THREAD, placedRow } from "./inbox-collections.js";
 import { INBOX_MESSAGE } from "./inbox-messages.js";
 import { LIVE_RESTART } from "./live-follow.js";
 import { type LocalCopy, localCopy } from "./local-copy.js";
@@ -3107,6 +3107,114 @@ it.effect(
         { before: said, after: yield* searchedThreads(first, ["said"]) },
         { before: [HELD_ITEM.id], after: [] },
         "the next account's search finds none of the first's messages' words",
+      );
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+/** The Inbox's whole items as a build before the lean threads kept them on disk, by their id alone. */
+const RETIRED_ITEMS: RowKind<{ readonly id: string }, FieldChange<{ readonly id: string }>> = {
+  ...fieldKind((row: { readonly id: string }) => row.id),
+  stored: { name: "inboxItem", version: 1 },
+};
+
+/** The tables `file`'s database holds now, and the one the persistence keeps `name`'s collection in where it keeps one. */
+function tablesOf(file: string, name: string) {
+  const database = new DatabaseSync(file, { readOnly: true });
+
+  try {
+    const tables = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+      .all()
+      .map((row) => String(row.name));
+
+    const kept = database
+      .prepare(
+        `SELECT registry.table_name AS name FROM collection_registry AS registry
+         JOIN cache_generation AS generation ON generation.physical_id = registry.collection_id
+         WHERE generation.logical_id = ?`,
+      )
+      .all(name)
+      .map((row) => String(row.name));
+
+    return { tables, kept };
+  } finally {
+    database.close();
+  }
+}
+
+it.effect(
+  "a launch drops the collection a build before kept the Inbox's whole items in, and leaves the lean threads kept beside it",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-retired-");
+      const folder = join(root, "accounts", "user-dana");
+      const file = join(folder, "collections.sqlite");
+      mkdirSync(folder, { recursive: true, mode: 0o700 });
+
+      // Note that the first launch is an older build's, which kept the whole items, with a lean thread beside them as one launch of this build would.
+      const before = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const database = nodeKeptCollections(file);
+          const scope = yield* Scope.make();
+          yield* Effect.addFinalizer(() =>
+            Effect.andThen(
+              Scope.close(scope, Exit.void),
+              Effect.promise(() => database.close()),
+            ),
+          );
+
+          const pool = yield* entityPool({
+            mintKey: () => "key",
+            replayRefused: Effect.void,
+            store: { collections: () => ({ keep: database.keep, scope }) },
+          });
+
+          const old = yield* pool.stand(RETIRED_ITEMS, {
+            owns: true,
+            redraw: () => Effect.void,
+            confirmation: () => undefined,
+          });
+
+          yield* old.answer([{ id: HELD_ITEM.id }]);
+
+          const threads = yield* pool.stand(INBOX_THREAD, {
+            owns: true,
+            redraw: () => Effect.void,
+            confirmation: () => undefined,
+          });
+
+          yield* threads.answer([placedRow({ ...ITEM, ...HELD_ITEM }, TASK_ID)]);
+
+          return yield* Effect.repeat(
+            Effect.sync(() => tablesOf(file, RETIRED_ITEMS.stored?.name ?? "")),
+            { until: ({ kept }) => kept.length > 0, times: 200 },
+          );
+        }),
+      );
+
+      const next = yield* keptLaunch(root);
+
+      // Note that the drop runs beside the open, on the persistence's own scheduler, which turns on the event loop rather than the fibers', so the case reads the tables once a turn, a few times, before it judges.
+      const after = yield* Effect.repeat(
+        Effect.promise(
+          () =>
+            new Promise<ReturnType<typeof tablesOf>>((resolve) =>
+              setImmediate(() => resolve(tablesOf(file, RETIRED_ITEMS.stored?.name ?? ""))),
+            ),
+        ),
+        {
+          until: ({ tables }) => before.kept.every((table) => !tables.includes(table)),
+          times: 200,
+        },
+      );
+
+      assert.deepEqual(
+        {
+          keptBefore: before.kept.length,
+          stillThere: before.kept.filter((table) => after.tables.includes(table)),
+          threads: yield* keptItemIds(next.pool),
+        },
+        { keptBefore: 1, stillThere: [], threads: [HELD_ITEM.id] },
       );
     }).pipe(Effect.provide(keptPlatform)),
 );

@@ -88,6 +88,8 @@ function nodeDriver(database: DatabaseSync): SQLiteDriver {
 export interface NodeKeptCollections {
   readonly keep: (stored: StoredKind) => KeepCollection;
   readonly close: () => Promise<void>;
+  /** The persistence's cache generations, as a platform hands them for its retired kinds to be dropped. */
+  readonly generations: ReturnType<typeof createSQLiteCorePersistenceAdapter>;
 }
 
 /** The database of kept collections at `file`, each stored kind's collection kept on demand as the iPhone keeps it. */
@@ -109,5 +111,6 @@ export function nodeKeptCollections(file: string): NodeKeptCollections {
         syncMode: "on-demand",
       }),
     close: async () => database.close(),
+    generations: persistence.adapter,
   };
 }
