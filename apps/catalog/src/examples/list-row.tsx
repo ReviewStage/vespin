@@ -6,7 +6,9 @@ import {
   ChipName,
   GAP,
   IconButton,
+  INLINE_REF_LOOK,
   Inline,
+  InlineRef,
   LIST_DENSITY,
   LIST_HEADS_ACTS,
   LIST_ROW_ACTIONS,
@@ -29,6 +31,8 @@ import {
   RowCount,
   STATUS_TONE,
   Switch,
+  TEXT_TONE,
+  Text,
   TrashIcon,
   UserIcon,
 } from "@repo/ui";
@@ -132,6 +136,36 @@ function HeadedAutomations(): React.JSX.Element {
           />
         ))}
       </List>
+    </>
+  );
+}
+
+/** Rows whose metadata names a thing that opens on its own press, standing beside the row's press, the rest of it still opening the row. */
+function MetadataPresses(): React.JSX.Element {
+  const [opened, setOpened] = useState("Nothing opened yet");
+
+  return (
+    <>
+      <List label="Automations">
+        {AUTOMATIONS.map((automation) => (
+          <ListRow
+            key={automation.id}
+            title={automation.name}
+            description={automation.trigger}
+            metaPresses
+            meta={
+              <InlineRef
+                look={INLINE_REF_LOOK.WASH}
+                glyph={<UserIcon />}
+                label="Release manager"
+                onPress={() => setOpened("Opened Release manager")}
+              />
+            }
+            onPress={() => setOpened(`Opened ${automation.name}`)}
+          />
+        ))}
+      </List>
+      <Text tone={TEXT_TONE.MUTED}>{opened}</Text>
     </>
   );
 }
@@ -325,6 +359,11 @@ function ListRows(): React.JSX.Element {
       <CatalogSection id="list-row-heads" title="Heads over the rows' columns">
         <div className="catalog-column">
           <HeadedAutomations />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="list-row-meta-presses" title="Metadata that opens on its own press">
+        <div className="catalog-column">
+          <MetadataPresses />
         </div>
       </CatalogSection>
       <CatalogSection id="list-row-foot" title="A line under the description">
