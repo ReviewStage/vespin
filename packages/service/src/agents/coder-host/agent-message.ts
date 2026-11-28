@@ -194,6 +194,37 @@ function messageLine(sender: Agent, senderMention: string, text: string): string
   return [head, text, agentMessageReplyLine(sender.id)].join("\n\n");
 }
 
+/**
+ * The words handed to another agent as the sender's message, as
+ * `message_agent` sends them: the line minted for the receiving agent's
+ * starter, whose principal its turn runs under, under the sender's name and
+ * mention link, keyed by the call's own id, so a call run again sends once.
+ */
+export const steerAgentMessage = (
+  call: AgentCall,
+  sender: Agent,
+  target: Agent,
+  workspaceId: string,
+  text: string,
+) =>
+  Effect.gen(function* () {
+    const userId = callerUserId(call.caller);
+    const step = yield* workspaceStepOf(userId, workspaceId);
+
+    const mention = writtenMention(
+      { kind: MENTION_KIND.AGENT, agentId: sender.id },
+      agentName(sender),
+      step,
+    );
+
+    return yield* steerAgent(call.agentSessionsAs(target.userId), call.writer, userId, target, {
+      text: messageLine(sender, mention, text),
+      clientKey: call.clientKey,
+      sender: agentLineSender(sender),
+      metadata: { channel: MESSAGE_CHANNEL.AGENT_MESSAGE },
+    }).pipe(Effect.result);
+  });
+
 /** One call of `message_agent`: the words handed to another agent of the caller's workspace, or why nothing was sent. */
 export function runMessageAgent(
   call: AgentCall,
@@ -235,22 +266,7 @@ export function runMessageAgent(
       // A tool never brings an archived agent back, so the caller unarchives it itself first; one archived meanwhile the steer refuses.
       if (found.value.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
       const target = found.value;
-      // The line is minted for the receiving agent's starter, whose principal its turn runs under.
-      const agentSessions = call.agentSessionsAs(target.userId);
-      const step = yield* workspaceStepOf(userId, workspace.value);
-
-      const mention = writtenMention(
-        { kind: MENTION_KIND.AGENT, agentId: sender.id },
-        agentName(sender),
-        step,
-      );
-
-      const sent = yield* steerAgent(agentSessions, call.writer, userId, target, {
-        text: messageLine(sender, mention, text),
-        clientKey: call.clientKey,
-        sender: agentLineSender(sender),
-        metadata: { channel: MESSAGE_CHANNEL.AGENT_MESSAGE },
-      }).pipe(Effect.result);
+      const sent = yield* steerAgentMessage(call, sender, target, workspace.value, text);
 
       if (Result.isFailure(sent)) return agentToolRejected(messageRefusalWords(sent.failure));
 

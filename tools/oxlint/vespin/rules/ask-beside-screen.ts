@@ -4,7 +4,7 @@ import { defineRule } from "@oxlint/plugins";
 /** The tag a screen of the iOS app draws its content in: `@repo/ui-native`'s SwiftUI host. */
 const SCREEN_TAG = "Screen";
 
-/** A component presented over a screen from a host of its own, by its name's end: `ConfirmAsk`, `StatusQuestionAsk`, `RenameAsk`, `RemindPickSheet`. */
+/** A component presented over a screen from a host of its own, by its name's end: `ConfirmAsk`, `StatusQuestionAsk`, `RemindPickSheet`. */
 const PRESENTED_TAG = /(?:Ask|Sheet)$/u;
 
 /** A presented element held in a name, a member read off a hook (`remind.sheet`, `sidebar.ask`) or a variable (`archiveAsk`, `sheet`), by the name's end; `task` and `basket` are not. */

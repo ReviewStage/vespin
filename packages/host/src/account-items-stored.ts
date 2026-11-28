@@ -9,7 +9,8 @@
  * replaces what the database keeps, an answer past a sync id upserts the
  * items it carries, each on the task its stamp names, and deletes those that
  * stand no longer for the account (`gone`); the sync id rides beside them in
- * the same transaction, so a launch always reads past it, the database
+ * the same transaction, so a launch, and an attempt started again after a
+ * refusal or a follow that stopped, always reads past it, the database
  * keeping every item it was answered. An item settled before the read's
  * window leaves it by the clock, which no answer says, so after each
  * standing and each answer the follow asks the database for those alone,
@@ -30,19 +31,31 @@ import {
   INBOX_ITEMS_READ,
   inboxOfLiveRows,
 } from "@repo/features/inbox-live";
-import { INBOX_STATUS } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
+import { failureKind, reportUnexpected } from "@repo/runtime/effect";
 import type { EntityPool, HeldRows } from "@repo/sync";
-import { and, createLiveQueryCollection, eq, isUndefined, lt, not, or } from "@tanstack/db";
-import { Clock, Effect, Option, Schema } from "effect";
+import {
+  and,
+  createLiveQueryCollection,
+  eq,
+  inArray,
+  isUndefined,
+  lt,
+  not,
+  or,
+} from "@tanstack/db";
+import { Clock, Effect, Option, Schema, type Scope } from "effect";
 import type { AppInboxItems, AppInboxRead } from "./app-state.js";
 import {
-  INBOX_ITEM,
+  INBOX_THREAD,
   type InboxChange,
-  type PlacedInboxItem,
-  placedItem,
+  type PlacedInboxRow,
+  placedRow,
 } from "./inbox-collections.js";
+import { INBOX_MESSAGE, type ThreadMessage, threadMessagesOf } from "./inbox-messages.js";
+import { type KeptWords, type MessageWords, messageWordsOf } from "./kept-words.js";
 import {
   followTakingRows,
   type LiveFailure,
@@ -118,7 +131,7 @@ function holdersOf(cursor: StoredCursor | undefined): Holders {
  */
 function holdersAfter(
   holders: Holders,
-  items: readonly PlacedInboxItem[],
+  items: readonly PlacedInboxRow[],
   listed: (taskIds: readonly string[]) => readonly TaskSummary[],
 ): Holders {
   const at = new Map(holders.at);
@@ -160,15 +173,41 @@ function cursorOf(holders: Holders, standing: SyncStanding | undefined): StoredC
   return standing === undefined ? kept : { at: standing.next, ...kept };
 }
 
-/** Each item an answer carries that its stamps place, on the task its stamp names. */
-function placedOf(rows: AccountInboxItemsLiveRows): readonly PlacedInboxItem[] {
+/** Each item an answer carries that its stamps place, whole, with the task its stamp names. */
+function placedOf(rows: AccountInboxItemsLiveRows): readonly PlacedItem[] {
   const taskOf = new Map(rows.stamps.map((stamp) => [stamp.id, stamp.taskId]));
 
   return inboxOfLiveRows(rows).flatMap((item) => {
     const taskId = taskOf.get(item.id);
 
-    return taskId === undefined ? [] : [placedItem(item, taskId)];
+    return taskId === undefined ? [] : [{ item, taskId }];
   });
+}
+
+/** An item an answer carries, whole, and the task it stands on, from which its lean row and its messages are each written. */
+interface PlacedItem {
+  readonly item: InboxItem;
+  readonly taskId: string | null;
+}
+
+/** The first page of a whole answer in pages, as the follow wrote it ahead of the rest: its items' keys, their messages, and the words those say. */
+interface FirstPage {
+  readonly keys: readonly string[];
+  readonly messages: readonly ThreadMessage[];
+  readonly words: readonly MessageWords[];
+}
+
+/** No first page held, as between whole answers in pages. */
+const NO_FIRST_PAGE: FirstPage = { keys: [], messages: [], words: [] };
+
+/** Every message of the items placed, each a row of the message kind. */
+function messagesOf(placed: readonly PlacedItem[]): readonly ThreadMessage[] {
+  return placed.flatMap(({ item }) => threadMessagesOf(item));
+}
+
+/** The lean row of each item placed, its digest taken from its thread whole. */
+function rowsOf(placed: readonly PlacedItem[]): readonly PlacedInboxRow[] {
+  return placed.map(({ item, taskId }) => placedRow(item, taskId));
 }
 
 /**
@@ -180,7 +219,7 @@ function placedOf(rows: AccountInboxItemsLiveRows): readonly PlacedInboxItem[] {
 function agedIds(pool: EntityPool, now: number): Effect.Effect<readonly string[]> {
   const before = now - ACCOUNT_INBOX_ITEMS.SETTLED_WINDOW_MILLIS;
 
-  return Effect.flatMap(pool.collection(INBOX_ITEM), (collection) =>
+  return Effect.flatMap(pool.collection(INBOX_THREAD), (collection) =>
     Effect.promise(async () => {
       const aged = createLiveQueryCollection({
         query: (q) =>
@@ -210,6 +249,66 @@ function agedIds(pool: EntityPool, now: number): Effect.Effect<readonly string[]
   );
 }
 
+/** The ids of every message the message kind keeps on the threads `threadIds` names; none where it names none. Note that the filter runs in SQLite, so only those threads' messages are read. */
+function threadMessageIds(
+  pool: EntityPool,
+  threadIds: readonly string[],
+): Effect.Effect<ReadonlySet<string>> {
+  if (threadIds.length === 0) return Effect.succeed(new Set());
+
+  return Effect.flatMap(pool.collection(INBOX_MESSAGE), (collection) =>
+    Effect.promise(async () => {
+      const kept = createLiveQueryCollection({
+        query: (q) =>
+          q
+            .from({ message: collection })
+            .where(({ message }) => inArray(message.threadId, [...threadIds]))
+            .select(({ message }) => ({ id: message.id })),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      try {
+        await kept.preload();
+
+        return new Set(kept.toArray.map((row) => row.id));
+      } finally {
+        await kept.cleanup();
+      }
+    }),
+  );
+}
+
+/**
+ * The messages an answer moves: every message of each item it carries, and
+ * the ids of those kept on these items, or on those `gone`, that it no
+ * longer carries, since an item that moves comes whole, its latest messages
+ * among it, and one gone takes its thread with it.
+ */
+function movedMessages(
+  pool: EntityPool,
+  placed: readonly PlacedItem[],
+  gone: readonly string[],
+): Effect.Effect<{ readonly rows: readonly ThreadMessage[]; readonly gone: readonly string[] }> {
+  const rows = messagesOf(placed);
+  const carried = new Set(rows.map((row) => row.id));
+
+  return Effect.map(
+    threadMessageIds(pool, [...placed.map(({ item }) => item.id), ...gone]),
+    (kept) => ({ rows, gone: [...kept].filter((id) => !carried.has(id)) }),
+  );
+}
+
+/** What Sentry is told of the words a search reads that would not be written. */
+const KEPT_WORDS_REPORT = "host.keptWords.writeFailed";
+
+/** `write` of the words a search reads, waited on; a failure is reported by its kind alone and leaves the follow going, since a search that misses a message's words is all it costs. */
+function wordsWritten(write: Promise<void>): Effect.Effect<void> {
+  return Effect.tryPromise({ try: () => write, catch: (cause) => cause }).pipe(
+    Effect.catch((cause) => reportUnexpected(KEPT_WORDS_REPORT, { cause: failureKind(cause) })),
+  );
+}
+
 /** What the stored follow is handed. */
 export interface StoredItemsFollow {
   /** The account's items read past the sync id named, whole where it is empty, or the page of a whole answer named; a failure where the service answered none. */
@@ -219,9 +318,11 @@ export interface StoredItemsFollow {
   ) => Effect.Effect<AccountInboxItemsLiveAnswer | LiveFailure>;
   readonly pool: EntityPool;
   /** The items the follow stands on, kept on disk whole. */
-  readonly items: HeldRows<PlacedInboxItem, InboxChange>;
-  /** Whether this attempt may read past the sync id kept, as the first of a follow's does. */
-  readonly resumes: boolean;
+  readonly items: HeldRows<PlacedInboxRow, InboxChange>;
+  /** Stands the follow on each message of their threads, kept on disk whole beside them, which a thread reads as it opens; stood only once the kept Inbox is told, since no first draw reads a message. */
+  readonly messages: Effect.Effect<HeldRows<ThreadMessage, never>, never, Scope.Scope>;
+  /** The words each of those messages says, which a search reads, written as the messages are. */
+  readonly words: KeptWords;
   /** The task list's summaries of the tasks named, of those it holds now. */
   readonly tasksListed: (taskIds: readonly string[]) => readonly TaskSummary[];
   /** Hears the read's wait for a write's transaction once the follow hands one. */
@@ -237,7 +338,9 @@ export interface StoredItemsFollow {
  * there and the aged items deleted, until the follow stops. Answers whether
  * the read was answered at all, false where the service refused its first.
  */
-export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<boolean> {
+export function followStoredItems(
+  follow: StoredItemsFollow,
+): Effect.Effect<boolean, never, Scope.Scope> {
   return Effect.gen(function* () {
     const { items, pool } = follow;
     const kept = items.loaded ? Option.getOrUndefined(decodeCursor(items.stored)) : undefined;
@@ -255,42 +358,80 @@ export function followStoredItems(follow: StoredItemsFollow): Effect.Effect<bool
 
     /** Deletes every item kept that settled before the read's window now, but one a write stands over, which draws over it until it lands. */
     const agedOut = Effect.gen(function* () {
-      const found = yield* agedIds(pool, yield* Clock.currentTimeMillis);
-      const pending = pool.standing(INBOX_ITEM)?.pending;
-      const aged = found.filter((id) => pending?.has(id) !== true);
+      /** Of `ids`, those still aged and no write stands over now, read again after each wait, since a write asked meanwhile draws over its item until it lands, and one taken in place reopens it in its row. */
+      const stillAged = (ids: readonly string[] | undefined) =>
+        Effect.gen(function* () {
+          const found = yield* agedIds(pool, yield* Clock.currentTimeMillis);
+          const asked = ids === undefined ? undefined : new Set(ids);
+          const pending = pool.standing(INBOX_THREAD)?.pending;
 
-      if (aged.length > 0) yield* items.answer([], { gone: aged });
+          return found.filter((id) => asked?.has(id) !== false && pending?.has(id) !== true);
+        });
+
+      const aged = yield* stillAged(undefined);
+
+      if (aged.length === 0) return;
+      // Note that an item's words and messages go before it, so a launch never finds an item kept whose thread is gone, and one cut short deletes the rest again; one reopened between the two is answered again with its thread whole, which writes both back.
+      yield* wordsWritten(follow.words.rewritten(aged, []));
+      const left = yield* threadMessageIds(pool, yield* stillAged(aged));
+
+      if (left.size > 0) yield* messages.answer([], { gone: [...left] });
+      const gone = yield* stillAged(aged);
+
+      if (gone.length > 0) yield* items.answer([], { gone });
     });
 
-    // Note that a database that kept the items is told at once, so a launch draws the kept Inbox before the read answers.
+    // Note that a database that kept the items is told at once, so a launch draws the kept Inbox before the read answers, and before the messages' collection is made, which no first draw reads.
     if (kept !== undefined) yield* told(true);
+    const messages = yield* follow.messages;
     yield* agedOut;
 
-    const first = yield* follow.seal(follow.resumes ? (kept?.at ?? "") : "");
+    const first = yield* follow.seal(kept?.at ?? "");
 
     if ("failure" in first) return false;
-    /** The items of the first page of a whole answer in pages, written ahead so its newest items draw, which the last keeps beside its own as it replaces what the database keeps; none between whole answers in pages. */
-    let firstPage: readonly string[] = [];
+    /** The first page of a whole answer in pages, written ahead so its newest items draw: its items' keys, their messages, and the words those say, which the last page keeps beside its own as it replaces what the database keeps; none between whole answers in pages. */
+    let firstPage: FirstPage = NO_FIRST_PAGE;
 
     const landed = (rows: AccountInboxItemsLiveRows, standing: SyncStanding | undefined) =>
       Effect.gen(function* () {
         const placed = placedOf(rows);
-        holders = holdersAfter(holders, placed, follow.tasksListed);
+        const threads = rowsOf(placed);
+        holders = holdersAfter(holders, threads, follow.tasksListed);
         const at = syncIdOf(standing);
         const cursor = cursorOf(holders, standing);
-        // Note that the last page of a whole answer in pages comes with every other page but the first (`followTakingRows`), so with the first's items it names every item there is, as one whole answer does, and replaces what the database keeps, which a store that cannot list its keys lets go no other way. The first page's items are held by key rather than written again, so each stands as the pool holds it now, a read mark made since among them.
+        // Note that the last page of a whole answer in pages comes with every other page but the first (`followTakingRows`), so with the first's it names every item there is, as one whole answer does, and replaces what the database keeps, which a store that cannot list its keys lets go no other way. The first page's items are held by key rather than written again, so each stands as the pool holds it now, a read mark made since among them.
         const lastPage = standing?.paged === true && standing.carried !== undefined;
-        const held = lastPage ? [...firstPage, ...placed.map(INBOX_ITEM.key)] : undefined;
-        firstPage = standing?.paged === true && !lastPage ? placed.map(INBOX_ITEM.key) : [];
+        const earlier = firstPage;
+        const ids = placed.map(({ item }) => item.id);
+        const whole = standing?.past === undefined || lastPage;
+        const held = lastPage ? [...earlier.keys, ...ids] : undefined;
+
+        // Note that the messages are written before the items and the sync id beside them, so a launch cut short between the two reads past an older id and writes them again, never past messages it lacks.
+        const said = placed.flatMap(({ item }) => messageWordsOf(item));
+        const carried = messagesOf(placed);
+        firstPage =
+          standing?.paged === true && !lastPage
+            ? { keys: ids, messages: carried, words: said }
+            : NO_FIRST_PAGE;
+
+        // Note that a page before the last writes only the threads it carries, so the whole answer replaces the messages and their words once, as its last page lands with the first page's beside it.
+        if (whole) {
+          yield* messages.answer([...earlier.messages, ...carried]);
+          yield* wordsWritten(follow.words.replaced([...earlier.words, ...said]));
+        } else {
+          const moved = yield* movedMessages(pool, placed, standing.gone);
+          yield* messages.answer(moved.rows, { gone: moved.gone });
+          yield* wordsWritten(follow.words.rewritten([...ids, ...standing.gone], said));
+        }
 
         // Note that a whole answer names every item there is, so it replaces what the database keeps; one past a sync id names only what moved, and what stands no longer.
-        yield* standing?.past === undefined || held !== undefined
-          ? items.answer(placed, {
+        yield* whole
+          ? items.answer(threads, {
               ...(held === undefined ? undefined : { held }),
               ...(at === undefined ? undefined : { at }),
               cursor,
             })
-          : items.answer(placed, {
+          : items.answer(threads, {
               gone: standing.gone,
               ...(at === undefined ? undefined : { at }),
               cursor,

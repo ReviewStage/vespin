@@ -40,7 +40,7 @@ import { useOpenPlace } from "./use-open-link.js";
  * An agent's tab hands its messages what forking takes (`ForkProvider`):
  * the press that forks one into the task's draft, offered only on an
  * agent's tab of a task that is not archived, and the agents each message
- * was forked to, read off the task's agents (`fork-model.ts`). A worker's
+ * was forked to, read off the task's agents (`@repo/features/agent-fork-model`). A worker's
  * tab and an agent of no task hand none, so their messages
  * offer no fork and name none. The draft's chip names the source by its
  * chip and the message by its opening words, either one opening the

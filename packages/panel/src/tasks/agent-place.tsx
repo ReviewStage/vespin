@@ -1,15 +1,12 @@
 import {
   AGENT_MACHINE,
   type AgentSummary,
-  agentMachineOf,
   DEVICE_STANDING,
   type DeviceStanding,
 } from "@repo/features/agent-wire";
-import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { machineName } from "@repo/features/machine-name";
 import { sandboxMemoryGb } from "@repo/features/sandbox-size";
 import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
-import { workspaceMachineStanding } from "@repo/features/workspace-machine-view";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import {
   ChipName,
@@ -45,14 +42,7 @@ import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { MachineValue, type ReachableMachines, useReachableMachines } from "./agent-machines.js";
 import type { PlaceMove } from "./move-agent.js";
-import {
-  CLOUD_ROW,
-  DeviceGlyph,
-  DeviceStandingGlyph,
-  rowRequest,
-  runsOnRows,
-  useOwnedMachines,
-} from "./runs-on.js";
+import { CLOUD_ROW, DeviceGlyph, DeviceStandingGlyph, rowRequest, runsOnRows } from "./runs-on.js";
 import {
   SANDBOX_STATE_WORDS,
   SandboxStateGlyph,
@@ -73,10 +63,6 @@ import {
  * "Where this agent works": where it runs, with the places to move it to
  * where a move is offered (`move-agent.tsx`'s `useMovePlace`), and its
  * default machine (`CloudChip`).
- *
- * An agent on a machine its workspace owns names that machine, its glyph
- * wearing the dot the workspace's read of its machines gives it, and offers
- * the same move (`WorkspaceMachineChip`).
  *
  * An agent on a device names its device, and where a move is offered or
  * it has a Default machine row, a press opens the same popover, "Where this
@@ -125,10 +111,6 @@ function macWords(name: string, standing: DeviceStanding | undefined): string {
 
 /** What the card says under its head of an agent on a device. */
 const DEVICE_NOTE = "This agent runs on this machine. Set when it was started.";
-
-/** What the card says under its head of an agent on a machine its workspace owns. */
-const WORKSPACE_MACHINE_NOTE =
-  "This agent runs in its own VM on this workspace machine. Set when it was started.";
 
 /** What a place chip's popover says: its title, its facts' labels, its rows' labels, and the move's heading. */
 const PLACE_WORDS = {
@@ -307,32 +289,29 @@ export function AgentPlace({
   /** Whether the box is too narrow for the chip's words, so it draws its glyph alone. */
   narrow?: boolean;
 }): React.JSX.Element | null {
-  switch (agentMachineOf(agent)) {
-    case AGENT_MACHINE.VERCEL:
-      return (
-        <CloudChip
-          agentId={agent.id}
-          sandbox={agent.sandbox}
-          vcpus={agent.sandboxVcpus}
-          move={move}
-          narrow={narrow}
-        />
-      );
-    case AGENT_MACHINE.DEVICE:
-      return agent.mac === undefined ? null : (
-        <MacChip
-          agentId={agent.id}
-          mac={agent.mac}
-          owner={agent.startedBy}
-          move={move}
-          narrow={narrow}
-        />
-      );
-    case AGENT_MACHINE.WORKSPACE:
-      return agent.mac === undefined ? null : (
-        <WorkspaceMachineChip mac={agent.mac} move={move} narrow={narrow} />
-      );
+  if (agent.machine !== AGENT_MACHINE.DEVICE) {
+    return (
+      <CloudChip
+        agentId={agent.id}
+        sandbox={agent.sandbox}
+        vcpus={agent.sandboxVcpus}
+        move={move}
+        narrow={narrow}
+      />
+    );
   }
+
+  if (agent.mac === undefined) return null;
+
+  return (
+    <MacChip
+      agentId={agent.id}
+      mac={agent.mac}
+      owner={agent.startedBy}
+      move={move}
+      narrow={narrow}
+    />
+  );
 }
 
 /** The id of the row that opens Settings › Machines, which no place's id is. */
@@ -355,18 +334,14 @@ function useMoveMenu(
   here: string | undefined,
   move: PlaceMove | undefined,
 ): Omit<ChipPopoverMenu, "heading"> | undefined {
-  const unplaced = move === undefined || (here === undefined && move.pushedOnly);
-  const listed = unplaced ? [] : move.devices;
+  const listed = move === undefined || (here === undefined && move.pushedOnly) ? [] : move.devices;
   const book = useDevicePresence(listed.length > 0);
   const thisMac = useThisMac();
   const openSettings = useOpenSettings();
-  // Note that the workspace's machines are the directory's around the task's page, offered after the member's devices.
-  const { workspaceId } = useMemberDirectory();
-  const owned = useOwnedMachines(unplaced ? undefined : workspaceId);
 
   if (move === undefined) return undefined;
 
-  const places = runsOnRows(listed, book, thisMac, owned).map(
+  const places = runsOnRows(listed, book, thisMac).map(
     (row): MenuRow =>
       row.id === here || move.detail === undefined ? row : { detail: move.detail, ...row },
   );
@@ -390,7 +365,7 @@ function useMoveMenu(
     onPick: (id) => {
       if (id === SET_UP_ROW) return openSettings({ page: SETTINGS_VIEW.HOSTS });
 
-      if (id !== here) move.moveTo(rowRequest(id, owned));
+      if (id !== here) move.moveTo(rowRequest(id));
     },
   };
 }
@@ -479,55 +454,6 @@ function PlaceChip({
         <ChipName>{words}</ChipName>
       </StaticChip>
     </Tooltip>
-  );
-}
-
-/**
- * The chip of an agent on a machine its workspace owns: its platform's glyph
- * wearing its standing's dot, read off the workspace's own read of its
- * machines (`workspaceMachineStanding`), and its name, saying why where it
- * takes no agent now, as a device's chip does; its glyph alone, a Linux
- * server's, before that read lands or where it no longer lists the machine.
- * It offers the move a device's chip offers, and no Default machine, since
- * no command of the agent's goes to a member's Mac from a VM.
- */
-function WorkspaceMachineChip({
-  mac,
-  move,
-  narrow,
-}: {
-  mac: NonNullable<AgentSummary["mac"]>;
-  move: PlaceMove | undefined;
-  narrow: boolean;
-}): React.JSX.Element {
-  const owned = useOwnedMachines(useMemberDirectory().workspaceId);
-  const listed = owned.find((machine) => machine.id === mac.deviceId);
-  const standing = listed === undefined ? undefined : workspaceMachineStanding(listed);
-  const device = { platform: listed?.platform ?? DEVICE_PLATFORM.LINUX };
-
-  const glyph =
-    standing === undefined ? (
-      <DeviceGlyph device={device} />
-    ) : (
-      <DeviceStandingGlyph device={device} standing={standing} hinted={false} />
-    );
-
-  return (
-    <PlaceChip
-      here={mac.deviceId}
-      move={move}
-      glyph={glyph}
-      words={macWords(mac.name, standing)}
-      sub={
-        standing === DEVICE_STANDING.ONLINE
-          ? RUNS_ON_WORDS.ONLINE
-          : RUNS_ON_WORDS.WORKSPACE_MACHINES
-      }
-      note={WORKSPACE_MACHINE_NOTE}
-      quiet={standing === undefined || standing === DEVICE_STANDING.ONLINE}
-      reachable={undefined}
-      narrow={narrow}
-    />
   );
 }
 

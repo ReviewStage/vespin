@@ -72,7 +72,6 @@ import {
   pointCard,
   QuietWords,
   RectFloat,
-  SCROLL_FADE,
   SCROLL_OVERSCROLL,
   SCROLL_SIZE,
   ScrollArea,
@@ -382,7 +381,7 @@ function MarginSlot({
   );
 }
 
-/** The column's room a margin needs beside the reading width: the gap and the card, as `planning.css` spends them. */
+/** The column's room a margin needs beside the reading width: the gap and the card, as `desktop.css`'s `--comment-margin-room` spends them. */
 const MARGIN_ROOM = 48 + 288;
 
 /** The reading width, as `--ui-page-measure` spends it. */
@@ -1747,11 +1746,7 @@ function ThreadCard({
   return (
     <CommentCard place={place} open data-thread={thread.id}>
       {/* Note that the entries scroll inside a card taller than the room it stands in, so the field that answers them stays in view under them; a swipe past their end, or over a card with nothing to scroll, moves the description. */}
-      <ScrollArea
-        size={SCROLL_SIZE.CONTENT}
-        fade={SCROLL_FADE.BOTH}
-        overscroll={SCROLL_OVERSCROLL.CHAIN}
-      >
+      <ScrollArea size={SCROLL_SIZE.CONTENT} overscroll={SCROLL_OVERSCROLL.CHAIN}>
         <div className="comment-entries">
           {first === undefined ? head : null}
           {thread.entries.map((entry) =>
@@ -3620,7 +3615,7 @@ function ThreadsPane({
             />
           }
         />
-        <ScrollArea ref={list} fade={SCROLL_FADE.BOTH}>
+        <ScrollArea ref={list}>
           <ThreadList
             key={filter}
             control={control}

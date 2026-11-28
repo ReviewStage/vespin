@@ -49,6 +49,7 @@ import { EXPERIMENT, type ExperimentChoices } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { agentTab, changesTab, draftTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
+import { relayout } from "@repo/ui/testing/resize-observer";
 import { Effect } from "effect";
 import { act, createElement, Fragment, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -64,7 +65,6 @@ import { fakeActPort, fakeAppBridge, quietHold } from "../testing/app-bridge.js"
 import { DESKTOP_LINKS, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
-import { relayout } from "../testing/resize-observer.js";
 import { ToastHost } from "../toast.js";
 import "../file-tree/index.js";
 import { useTaskRenameOffer } from "../tasks/task-menu-items.js";

@@ -39,6 +39,7 @@ export const TERM = {
   COMMIT: { one: "commit", many: "commits" },
   MEMORY: { one: "memory", many: "memories" },
   CHANNEL: { one: "channel", many: "channels" },
+  AUTOMATION: { one: "automation", many: "automations" },
 } as const satisfies Record<string, Noun>;
 
 /** The glossary's verbs: the one label each act goes by. */
@@ -48,6 +49,7 @@ export const VERB = {
   RECONNECT: "Reconnect",
   OPEN: "Open",
   OPEN_IN_BROWSER: "Open in browser",
+  COPY: "Copy",
   RESET_TO_DEFAULTS: "Reset to defaults",
 } as const;
 

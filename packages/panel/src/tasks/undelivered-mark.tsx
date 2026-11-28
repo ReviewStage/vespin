@@ -70,7 +70,7 @@ const NO_MARKS: SentLineMarks = {
 
 const MarksContext = createContext<SentLineMarks>(NO_MARKS);
 
-/** What a line that did not go is reported under: its condition, as its code, one for each line. */
+/** What a line that did not go is reported under where it holds no refusal of its own: its condition, as its code, one for each line. */
 interface LineCause {
   readonly code: typeof FAILURE_CONDITION.REFUSED | typeof FAILURE_CONDITION.NOT_KEPT;
 }
@@ -252,7 +252,9 @@ export function UndeliveredMark({ messageId }: { messageId: string }): ReactNode
       ]}
       failure={failureShown({
         surface: FAILURE_SURFACE.AGENT_SEND,
-        cause: lineCause(messageId, FAILURE_CONDITION.NOT_KEPT),
+        // Note that the line is reported under the refusal it holds, so one the service worded, as its plan's limit, is reported as refused and opens no issue.
+        cause:
+          marks.notes.get(messageId)?.cause ?? lineCause(messageId, FAILURE_CONDITION.NOT_KEPT),
       })}
     />
   );

@@ -39,9 +39,9 @@ import type { WebServices } from "../runtime.js";
 import {
   connectWorkspaceGitHub,
   type FakeGitHub,
-  GITHUB_FIXTURE_INSTALLATION_TOKEN,
   githubReaching,
   type InstallationFixture,
+  onRepositoryToken,
   openGithubUser,
   repositoryIdOf,
   type SentToGitHub,
@@ -180,9 +180,7 @@ function repositoryScript(repository: FakeRepository) {
 
     if (!url.pathname.startsWith(base)) return undefined;
 
-    const reached =
-      !repository.private ||
-      sent.headers.get("authorization") === `Bearer ${GITHUB_FIXTURE_INSTALLATION_TOKEN}`;
+    const reached = !repository.private || onRepositoryToken(sent);
 
     if (!reached) return notFound();
     const rest = url.pathname.slice(base.length);

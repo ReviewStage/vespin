@@ -65,6 +65,21 @@ interface KeptDoor {
 /** A door's name: `onOpen`, `onChoose`, the press handlers a part is handed, whose identity no reader keys a read on. */
 const DOOR_NAME = /^on[A-Z]/;
 
+/**
+ * Which of a value's functions `useSteadyDoors` makes steady doors: those
+ * under an `on…` name anywhere in it, every other part laid over the one
+ * handed back last wherever it says the same; or every function among the
+ * value's own fields, its other fields handed back as they were handed, for
+ * a control whose every function is a press (`useAgentComposer`'s), whose
+ * data a reader may find by identity.
+ */
+export const STEADY_DOORS = {
+  NAMED: "named",
+  OWN_FUNCTIONS: "own-functions",
+} as const;
+
+export type SteadyDoors = (typeof STEADY_DOORS)[keyof typeof STEADY_DOORS];
+
 /** Whether an object (`Predicate.isObject`) is one `useSteadyDoors` looks into: made of plain fields, not a React element, a class's instance, or a collection. */
 function isPlainRecord(value: ReadonlyRecord<string, unknown>): boolean {
   if ("$$typeof" in value) return false;
@@ -160,6 +175,41 @@ function keptPlace<Handed>(
 }
 
 /**
+ * The value kept with each of its own functions a steady door and its other
+ * fields as handed: the one handed back last where every field is the same.
+ */
+function ownFunctionsPlace<Handed>(kept: KeptPlace | undefined, handed: Handed): KeptPlace {
+  if (kept !== undefined && kept.handed === handed) return kept;
+
+  if (!Predicate.isObject(handed) || !isPlainRecord(handed)) {
+    return { handed, steady: handed, door: undefined, within: undefined };
+  }
+
+  const within = new Map<string, KeptPlace>();
+
+  const steady = Object.fromEntries(
+    Object.entries(handed).map(([key, item]) => {
+      if (!Predicate.isFunction(item)) return [key, item];
+      // SAFETY: a field that is a function is a press the panel calls with its own arguments, which `keptDoor` passes through unread.
+      const place = keptDoor(kept?.within?.get(key), item as (...args: never[]) => void);
+      within.set(key, place);
+
+      return [key, place.steady];
+    }),
+  );
+
+  const last = kept?.steady;
+
+  const same =
+    Predicate.isObject(last) &&
+    isPlainRecord(last) &&
+    Object.keys(last).length === Object.keys(steady).length &&
+    Object.entries(steady).every(([key, item]) => key in last && last[key] === item);
+
+  return { handed, steady: same ? last : steady, door: undefined, within: placesKept(within) };
+}
+
+/**
  * The value handed over, made afresh on each draw, handed back as the one
  * handed back last wherever it says the same, as the window's document keeps
  * the identity of what a delivery did not change (`use-app-state.ts`'s
@@ -171,9 +221,17 @@ function keptPlace<Handed>(
  * `readSkills` is handed back as it is, because a new one means something
  * new to read.
  */
-export function useSteadyDoors<Value>(value: Value): Value {
+export function useSteadyDoors<Value>(
+  value: Value,
+  doors: SteadyDoors = STEADY_DOORS.NAMED,
+): Value {
   const kept = useRef<KeptPlace | undefined>(undefined);
-  const place = keptPlace(kept.current, value, false);
+
+  const place =
+    doors === STEADY_DOORS.OWN_FUNCTIONS
+      ? ownFunctionsPlace(kept.current, value)
+      : keptPlace(kept.current, value, false);
+
   kept.current = place;
 
   // SAFETY: a value's steady copy has the value's own shape, each door in it replaced by a steady one of the same signature.

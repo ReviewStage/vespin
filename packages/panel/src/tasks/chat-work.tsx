@@ -5,14 +5,15 @@
  * and keeps the work each turn did, its thoughts, calls, and own words, out
  * of sight until the reader asks. A turn that has ended offers Show work
  * among the actions of its first message and in that message's menu
- * (`manager-chat-tab.tsx`, `chat-message-menu.tsx`); the turn under way offers it
- * beside its working line. Either draws the work under its row as the
- * transcript draws a turn's, and Hide work folds it away again, so a
+ * (`manager-chat-tab.tsx`, `chat-message-menu.tsx`), which draws the work
+ * under it as the transcript draws a turn's; the turn under way offers it
+ * beside its working line over the box, which draws the work at the chat's
+ * end (`manager-working-dock.tsx`). Hide work folds either away again, so a
  * finished chat draws no more than its messages.
  */
 
 import { chatWorkWords } from "@repo/features/manager-chat-view";
-import { MessageActions } from "@repo/ui";
+import { BUTTON_SIZE, BUTTON_VARIANT, Button } from "@repo/ui";
 import { ListTreeIcon } from "@repo/ui/icons";
 import type { ReactNode } from "react";
 import { MessageAction } from "../ai-elements/message.js";
@@ -35,11 +36,16 @@ export function WorkMessageAction({ toggle }: { toggle: ChatWorkToggle }): React
   );
 }
 
-/** Show work standing beside the working line by itself, as a message's stands among its actions. */
+/** Show work beside the working line over the box, its words standing, since no message's hover shows it there. */
 export function WorkingWorkAction({ toggle }: { toggle: ChatWorkToggle }): React.JSX.Element {
   return (
-    <MessageActions>
-      <WorkMessageAction toggle={toggle} />
-    </MessageActions>
+    <Button
+      variant={BUTTON_VARIANT.QUIET}
+      size={BUTTON_SIZE.COMPACT}
+      icon={<ListTreeIcon />}
+      onClick={toggle.onToggle}
+    >
+      {chatWorkWords(toggle.shown)}
+    </Button>
   );
 }

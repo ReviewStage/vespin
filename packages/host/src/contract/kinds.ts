@@ -118,6 +118,16 @@ export const ACCOUNT_ASK_ACT_KIND = {
   SOUND_REMOVE: "sound.remove",
   SOUND_CHOOSE: "sound.choose",
   /**
+   * The account's view choices (a sort, a filter, a fold): held for the
+   * window while it holds the stream open and a while after, read again at
+   * once as Try again asks, and one kept or forgotten, drawn over them the
+   * moment it is asked. What it holds reaches the panel on app state
+   * (`LIVE_READ.VIEW_CHOICES`).
+   */
+  VIEW_CHOICES_FOLLOW: "viewChoices.follow",
+  VIEW_CHOICES_RETRY: "viewChoices.retry",
+  VIEW_CHOICE_WRITE: "viewChoices.write",
+  /**
    * A clip dictated into a message box, carried once from the panel that
    * recorded it to the service and answered with its words. Nothing on the
    * way keeps it.
@@ -295,6 +305,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_CHAT_SEND: "agents.chat.send",
   /** A member's 👍 or 👎 given a message of a Manager's chat, or taken off it, which the panel draws at once and the chat's next read carries: whether it changed what stood, or why it was not taken. */
   AGENTS_CHAT_REACT: "agents.chatReact",
+  /** A member's edit of their own message of a Manager's chat, its words changed in place and the Manager told, which the panel draws at once and the chat's next read carries: whether the words changed, or why it was not taken. */
+  AGENTS_CHAT_EDIT: "agents.chatEdit",
   AGENTS_CHOOSE: "agents.choose",
   AGENTS_RENAME: "agents.rename",
   AGENTS_SERVERS: "agents.servers",
@@ -426,6 +438,10 @@ export const AGENT_INBOX_ACT_KIND = {
   AGENTS_INBOX_REMIND: "agents.inboxRemind",
   /** Where one item stands, its agent, task, and workspace, as a link by its id alone is opened; it reads, and changes nothing. */
   AGENTS_INBOX_ITEM_HOME: "agents.inboxItemHome",
+  /** A page of the account's settled items older than its feed holds read into the host, past the cursor named, as All asks at its end; the items reach the panel on app state (`LIVE_READ.INBOX_OLDER`), the answer only the cursor after them. */
+  AGENTS_INBOX_OLDER_PAGE: "agents.inboxOlderPage",
+  /** The items the service's search finds by a place's words read into the host for that place, interrupting the place's search still out, or, with no words, the place's search let go; the items reach the panel on app state (`LIVE_READ.INBOX_FOUND`), the answer only once they are drawn. */
+  AGENTS_INBOX_SEARCH: "agents.inboxSearch",
   /** Every item of the account's Inbox marked read, in one workspace or in all; the dots alone. */
   AGENTS_INBOX_READ_ALL: "agents.inboxReadAll",
   /** One image of an inbox item, fetched by the host under the account, so the window holds no bearer and no address. */
@@ -831,7 +847,7 @@ export const PULL_REQUEST_ACT_KIND = {
 } as const;
 
 /**
- * A coding agent's Terminal tab (`messages/terminal.ts`): its shells listed,
+ * A coding agent's Terminal tab (`terminals.ts`): its shells listed,
  * started, named, and ended, its sandbox resumed on the developer's click,
  * and a shell attached, detached as the panel closes the port. What a shell
  * prints travels on the port an attach posts to the asking panel, never on
@@ -974,20 +990,6 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
   /** The machines of a workspace's members, as the @ list offers them and a machine's chip names its owner, read as a place drawing them opens. */
   WORKSPACE_MACHINES_READ: "workspace.machinesRead",
-  /**
-   * The machines a workspace owns, which every member's agents may run on,
-   * held for the window while it holds the stream open; the stream carries
-   * nothing, and what they hold reaches the panel on app state
-   * (`LIVE_READ.WORKSPACE_MACHINES`), where a rename or a removal is drawn
-   * the moment it is asked.
-   */
-  WORKSPACE_OWNED_MACHINES_FOLLOW: "workspace.ownedMachinesFollow",
-  /** A held workspace's own machines read again at once, as Try again asks. */
-  WORKSPACE_OWNED_MACHINES_RETRY: "workspace.ownedMachinesRetry",
-  /** One of a workspace's own machines renamed by an owner or an admin. */
-  WORKSPACE_OWNED_MACHINE_RENAME: "workspace.ownedMachineRename",
-  /** One of a workspace's own machines removed by an owner or an admin, its box refused at once. */
-  WORKSPACE_OWNED_MACHINE_REMOVE: "workspace.ownedMachineRemove",
 } as const;
 
 /**
@@ -1181,6 +1183,9 @@ export const PORT_ACT_USE = {
   MACHINES_REMOVE: ACT_USE.WRITE,
   MACHINE_ASKS_FOLLOW: ACT_USE.READ,
   MACHINE_ASKS_RETRY: ACT_USE.READ,
+  VIEW_CHOICES_FOLLOW: ACT_USE.READ,
+  VIEW_CHOICES_RETRY: ACT_USE.READ,
+  VIEW_CHOICE_WRITE: ACT_USE.WRITE,
   MACHINE_ASK_ANSWER: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
@@ -1202,6 +1207,7 @@ export const PORT_ACT_USE = {
   AGENTS_MESSAGE: ACT_USE.WRITE,
   AGENTS_CHAT_SEND: ACT_USE.WRITE,
   AGENTS_CHAT_REACT: ACT_USE.WRITE,
+  AGENTS_CHAT_EDIT: ACT_USE.WRITE,
   AGENTS_CHOOSE: ACT_USE.WRITE,
   AGENTS_RENAME: ACT_USE.WRITE,
   AGENTS_SERVERS: ACT_USE.WRITE,
@@ -1258,6 +1264,8 @@ export const PORT_ACT_USE = {
   AGENTS_INBOX_READ_STATE: ACT_USE.WRITE,
   AGENTS_INBOX_REMIND: ACT_USE.WRITE,
   AGENTS_INBOX_ITEM_HOME: ACT_USE.FETCH,
+  AGENTS_INBOX_OLDER_PAGE: ACT_USE.FETCH,
+  AGENTS_INBOX_SEARCH: ACT_USE.FETCH,
   AGENTS_INBOX_READ_ALL: ACT_USE.WRITE,
   AGENTS_INBOX_ATTACHMENT: ACT_USE.FETCH,
   AGENTS_PICTURE: ACT_USE.FETCH,
@@ -1482,10 +1490,6 @@ export const PORT_ACT_USE = {
   WORKSPACE_BILLING_PORTAL: ACT_USE.WRITE,
   WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
   WORKSPACE_MACHINES_READ: ACT_USE.FETCH,
-  WORKSPACE_OWNED_MACHINES_FOLLOW: ACT_USE.READ,
-  WORKSPACE_OWNED_MACHINES_RETRY: ACT_USE.READ,
-  WORKSPACE_OWNED_MACHINE_RENAME: ACT_USE.WRITE,
-  WORKSPACE_OWNED_MACHINE_REMOVE: ACT_USE.WRITE,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**

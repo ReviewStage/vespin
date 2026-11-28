@@ -13,6 +13,7 @@
 
 import type { AgentPageAnswerView } from "@repo/features/agent-view";
 import type { ListedAgent } from "@repo/features/agent-wire";
+import { inboxRowsOf } from "@repo/features/inbox-digest";
 import {
   agentHolder,
   type InboxAgentHolder,
@@ -20,11 +21,15 @@ import {
   type InboxHolderAgent,
   inboxGroup,
 } from "@repo/features/inbox-list-model";
+import type { InboxItem } from "@repo/features/inbox-wire";
+import { sameManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import type { CatalogModel } from "@repo/features/models-wire";
+import type { AppInboxItems } from "@repo/host/app-state";
+import { inboxWithOlder } from "@repo/host/app-state-reads";
 import { inArray, useLiveQuery } from "@tanstack/react-db";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { inboxItemsQuery } from "../live-reads.js";
 import { useTaskListCollections } from "../task-list-collections.js";
 import { agentPageQueryOptions } from "./agent-reads.js";
@@ -59,14 +64,19 @@ function sameAgent(a: InboxHolderAgent, b: InboxHolderAgent): boolean {
     a.model === b.model &&
     a.workspaceId === b.workspaceId &&
     a.repository === b.repository &&
-    a.face?.character === b.face?.character &&
-    a.face?.color === b.face?.color
+    sameManagerFace(a.face, b.face)
   );
 }
 
 /** The agents on no task the Inbox lists, and where the account's feed they are told in stands. */
 export interface TasklessInboxGroups {
   readonly groups: readonly InboxGroup<InboxAgentHolder>[];
+  /** Each agent's whole items as the feed holds them, by the agent's id, for a surface drawing a thread itself; none until it first answers. */
+  readonly whole: Readonly<Record<string, readonly InboxItem[]>> | undefined;
+  /** The groups with the older items handed in beside the feed's (`inboxWithOlder`), as All lists them; the very `groups` where none was handed. */
+  readonly listed: readonly InboxGroup<InboxAgentHolder>[];
+  /** Each agent's whole items with the older ones handed in, as `whole` holds the feed's. */
+  readonly listedWhole: Readonly<Record<string, readonly InboxItem[]>> | undefined;
   /** Whether the feed, or the read naming an agent it holds items of, has not answered yet, so an agent's items may still be on their way. */
   readonly pending: boolean;
   /** Whether the feed refused, so the list offers to read it again whether or not a task holds items. */
@@ -79,16 +89,29 @@ export interface TasklessInboxGroups {
  * followed live first, where it carries them (`carried`), and else from their
  * own read; and where the feed stands, since a
  * reader whose only threads stand on no task is told the feed's state by
- * nothing else.
+ * nothing else. Where `older` hands the account's older items in, as All
+ * lists them, its agents are named and grouped beside the feed's too
+ * (`listed`), an item the feed holds the feed's alone.
  */
 export function useTasklessInboxGroups(
   workspaceId: string | undefined,
   carried: boolean,
   models: readonly CatalogModel[] | undefined,
+  older?: AppInboxItems | undefined,
 ): TasklessInboxGroups {
   const feed = useQuery(inboxItemsQuery());
   const fed = feed.data?.agents;
-  const ids = useMemo(() => Object.keys(fed ?? NO_AGENTS), [fed]);
+  const { data: feedData } = feed;
+
+  const all = useMemo(
+    () =>
+      feedData === undefined || older === undefined
+        ? undefined
+        : inboxWithOlder(feedData, older).agents,
+    [feedData, older],
+  );
+
+  const ids = useMemo(() => Object.keys(all ?? fed ?? NO_AGENTS), [all, fed]);
   const { agents } = useTaskListCollections();
 
   // Note that the agents are read as what names them alone, and only those the feed holds, so a step of any agent's turn tells the query nothing.
@@ -148,35 +171,57 @@ export function useTasklessInboxGroups(
   // The holders named last, by agent, so an agent named the same is held by the very holder it was.
   const kept = useRef(new Map<string, InboxHolderAgent>());
 
-  const groups = useMemo(() => {
-    if (fed === undefined) return NO_GROUPS;
-    const sources = new Map<string, NamedSource>(byId);
+  const sources = useMemo(() => {
+    const named = new Map<string, NamedSource>(byId);
 
-    for (const page of pages) if (!sources.has(page.id)) sources.set(page.id, page);
+    for (const page of pages) if (!named.has(page.id)) named.set(page.id, page);
 
-    return Object.entries(fed).flatMap(([agentId, items]) => {
-      const source = sources.get(agentId);
+    return named;
+  }, [byId, pages]);
 
-      if (source === undefined) return [];
+  const groupsOf = useCallback(
+    (held: Readonly<Record<string, readonly InboxItem[]>> | undefined) => {
+      if (held === undefined) return NO_GROUPS;
 
-      if (workspaceId !== undefined && source.workspaceId !== workspaceId) return [];
+      return Object.entries(held).flatMap(([agentId, items]) => {
+        const source = sources.get(agentId);
 
-      const named: InboxHolderAgent = {
-        id: agentId,
-        name: agentName(source, models),
-        model: source.model,
-        workspaceId: source.workspaceId,
-        repository: source.repository,
-        ...(source.face === undefined ? undefined : { face: source.face }),
-      };
+        if (source === undefined) return [];
 
-      const was = kept.current.get(agentId);
-      const agent = was !== undefined && sameAgent(was, named) ? was : named;
-      kept.current.set(agentId, agent);
+        if (workspaceId !== undefined && source.workspaceId !== workspaceId) return [];
 
-      return [inboxGroup(agentHolder(agent), items)];
-    });
-  }, [fed, workspaceId, byId, pages, models]);
+        const named: InboxHolderAgent = {
+          id: agentId,
+          name: agentName(source, models),
+          model: source.model,
+          workspaceId: source.workspaceId,
+          repository: source.repository,
+          ...(source.face === undefined ? undefined : { face: source.face }),
+        };
 
-  return { groups, pending: feed.isPending || naming, failed: feed.isError };
+        const was = kept.current.get(agentId);
+        const agent = was !== undefined && sameAgent(was, named) ? was : named;
+        kept.current.set(agentId, agent);
+
+        return [inboxGroup(agentHolder(agent), inboxRowsOf(items))];
+      });
+    },
+    [workspaceId, sources, models],
+  );
+
+  const groups = useMemo(() => groupsOf(fed), [groupsOf, fed]);
+
+  const withOlder = useMemo(
+    () => (all === undefined ? groups : groupsOf(all)),
+    [groupsOf, all, groups],
+  );
+
+  return {
+    groups,
+    whole: fed,
+    listed: withOlder,
+    listedWhole: all ?? fed,
+    pending: feed.isPending || naming,
+    failed: feed.isError,
+  };
 }

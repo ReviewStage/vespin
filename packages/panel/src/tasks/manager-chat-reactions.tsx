@@ -4,10 +4,10 @@
  * Every message of the chat with an id, in the channel or in a thread, may
  * be given a 👍 or a 👎: two presses first among the actions over its
  * corner, before Reply in thread, each pressed where the reader gave it,
- * and under its words a chip to each reaction it was given (`@repo/ui`'s
- * `ReactionChip`), its emoji and how many gave it, lit where the reader
- * did. Pressing either takes the reader's own back where it
- * stands, and gives it where it does not.
+ * and under its words a chip to each reaction it was given, of any kind
+ * (`@repo/ui`'s `ReactionChip`), its emoji and how many gave it, lit where
+ * the reader did. Pressing a press or a chip takes the reader's own back
+ * where it stands, and gives it where it does not.
  *
  * A press is drawn at once (`useChatReact`): over the window's document
  * until its ask settles (`drawAhead`), by when the host has written it into
@@ -25,6 +25,7 @@ import {
 } from "@repo/features/manager-chat-live";
 import {
   CHAT_REACTION_REFUSED_WORDS,
+  chatReactionEmoji,
   chatReactionWords,
   MANAGER_CHAT_REACTION_FACES,
 } from "@repo/features/manager-chat-view";
@@ -67,7 +68,7 @@ function withChatPress(
 }
 
 /** Whether the reader gave `message` the reaction `kind`. */
-function reactedTo(message: ManagerChatLiveMessage, kind: ManagerChatReaction): boolean {
+function reactedTo(message: ManagerChatLiveMessage, kind: string): boolean {
   return message.reactions?.some((each) => each.kind === kind && each.reacted) ?? false;
 }
 
@@ -82,7 +83,8 @@ export function useChatReact(agentId: string): ChatReact {
       const { promise: settled, resolve } = Promise.withResolvers<void>();
       drawAhead(client, (state) => withChatPress(state, agentId, press), settled);
       // Note that the host's refusal is said by the mutation's toast, and the service's, which answers rather than fails, here.
-      react({ agentId, ...press }).then(
+      // Note that the emoji is the window's own to draw by, so the host is asked the reaction alone.
+      react({ agentId, messageId: press.messageId, kind: press.kind, reacted: press.reacted }).then(
         (answer) => {
           if ("failure" in answer) {
             showToast({
@@ -149,12 +151,17 @@ export function ChatReactions({
       {reactions.map((reaction) => (
         <ReactionChip
           key={reaction.kind}
-          emoji={MANAGER_CHAT_REACTION_FACES[reaction.kind].emoji}
+          emoji={chatReactionEmoji(reaction)}
           count={reaction.count}
           label={chatReactionWords(reaction)}
           reacted={reaction.reacted}
           onPress={() =>
-            react({ messageId: message.id, kind: reaction.kind, reacted: !reaction.reacted })
+            react({
+              messageId: message.id,
+              kind: reaction.kind,
+              reacted: !reaction.reacted,
+              emoji: reaction.emoji,
+            })
           }
         />
       ))}

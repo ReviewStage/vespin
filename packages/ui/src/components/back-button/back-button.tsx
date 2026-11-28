@@ -2,6 +2,7 @@ import { backToWords } from "@repo/features/words";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { useMemo } from "react";
 import { GLYPH } from "../../icons/glyph-registry.js";
+import { IconButton } from "../button/button.js";
 import { FoldingButton, type FoldingButtonHint } from "../folding-button/folding-button.js";
 import { NavItem } from "../nav-item/nav-item.js";
 import { Tooltip } from "../tooltip/hint.js";
@@ -17,6 +18,11 @@ import { Tooltip } from "../tooltip/hint.js";
  *   does (`FoldingButton`).
  * - `column`, the first row of a column of places: a nav row in the
  *   column's voice (`NavItem`), its glyph then its words.
+ * - `glyph`, at a bar's very start before the title it leads back from:
+ *   its glyph alone in a control's square, its words its name, as a pane's
+ *   toggle stands at a bar's edge, so its glyph stands the same inset in as
+ *   the bar's last glyph does from the other edge (a thread alone in its
+ *   tab, "‹ Thread").
  *
  * Both wear the one back glyph (`GLYPH.BACK`), which nothing else draws,
  * and raise the one hint, "Back to {place}" (`backToWords`), with the
@@ -35,6 +41,8 @@ export const BACK_BUTTON_LOOK = {
   HEADER: "header",
   /** At the top of a column of places: a nav row. */
   COLUMN: "column",
+  /** At a bar's very start, before the title it leads back from: its glyph alone. */
+  GLYPH: "glyph",
 } as const;
 
 export type BackButtonLook = (typeof BACK_BUTTON_LOOK)[keyof typeof BACK_BUTTON_LOOK];
@@ -85,6 +93,20 @@ export function BackButton({
       },
     [hint, command],
   );
+
+  if (look === BACK_BUTTON_LOOK.GLYPH) {
+    return (
+      <Tooltip label={hint} command={command}>
+        <IconButton
+          icon={<GLYPH.BACK />}
+          label={name ?? label}
+          keepFocus={keepFocus}
+          tabbable={tabbable}
+          onClick={onBack}
+        />
+      </Tooltip>
+    );
+  }
 
   if (look === BACK_BUTTON_LOOK.COLUMN) {
     return (

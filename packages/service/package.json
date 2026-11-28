@@ -157,7 +157,6 @@
     "./maintenance/maintenance-app": "./src/maintenance/maintenance-app.js",
     "./member-mcp/admission": "./src/member-mcp/admission.js",
     "./member-mcp/app": "./src/member-mcp/app.js",
-    "./member-mcp/client-consents": "./src/member-mcp/client-consents.js",
     "./member-mcp/resource": "./src/member-mcp/resource.js",
     "./maintenance/maintenance-bounds": "./src/maintenance/maintenance-bounds.js",
     "./maintenance/maintenance-sweep": "./src/maintenance/maintenance-sweep.js",
@@ -231,8 +230,8 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "4.0.108",
-    "@ai-sdk/openai": "4.0.123",
+    "@ai-sdk/anthropic": "4.0.111",
+    "@ai-sdk/openai": "4.0.125",
     "@better-auth/cimd": "1.7.7",
     "@better-auth/drizzle-adapter": "1.7.7",
     "@better-auth/electron": "1.7.7",

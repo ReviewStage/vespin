@@ -78,7 +78,6 @@ import {
   ProgressCount,
   RepositoryPicture,
   reachedKey,
-  SCROLL_FADE,
   SCROLL_GUTTER,
   SCROLL_OVERSCROLL,
   SCROLL_SIZE,
@@ -887,7 +886,6 @@ function TaskBoardColumnView({
           <ScrollArea
             ref={scroller}
             size={narrow ? SCROLL_SIZE.FILL : SCROLL_SIZE.CONTENT}
-            fade={SCROLL_FADE.BOTH}
             gutter={SCROLL_GUTTER.STABLE}
             overscroll={SCROLL_OVERSCROLL.CHAIN}
           >

@@ -67,12 +67,14 @@ appId: dev.vespin.ios
 - assertNotVisible: "Sign in to Vespin"
 # The workspace switcher leads the Inbox's bar, and its menu's account,
 # heard as Settings and its address, opens it.
+- runFlow:
+    file: subflows/show-sidebar.yaml
 - assertVisible:
     id: "workspace-switcher"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-account
-- tapOn:
-    id: "workspace-switcher"
+- runFlow:
+    file: subflows/switcher.yaml
 # Note that the account's row stands last in the list, below the fold at an
 # accessibility text size, so the list scrolls to it first.
 - scrollUntilVisible:

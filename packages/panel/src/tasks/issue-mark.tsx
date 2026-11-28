@@ -8,7 +8,7 @@ import { CircleCheckIcon, CircleDotIcon, CircleSlashIcon } from "lucide-react";
  * wears `pull-request-mark.tsx`'s: open in the success green, closed as done
  * in the merged purple GitHub closes one in, and closed as not planned in
  * the muted ink. The color is the stylesheet's, keyed on
- * `data-issue-state` (`planning.css`).
+ * `data-issue-state` (`tasks.css`).
  */
 
 /** The glyph an issue is drawn with for where it stands, as GitHub draws it. */

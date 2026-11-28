@@ -5,7 +5,7 @@ import type {
   WorkspaceSentry,
   WorkspaceSentryInstallation,
 } from "@repo/features/sentry-install-wire";
-import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { FAILURE_SURFACE, type FailureSurface } from "@repo/features/shown-failure";
 import type { SlackListedChannel } from "@repo/features/slack-bot-wire";
 import { andList, countWords, noneYetWords, TERM } from "@repo/features/words";
 import type { WorkspaceSlack } from "@repo/features/workspace-integrations-live";
@@ -804,7 +804,7 @@ function IntegrationsRead({
 }: {
   workspace: Workspace;
   failedLine: string;
-  failedSurface: (typeof FAILURE_SURFACE)[keyof typeof FAILURE_SURFACE];
+  failedSurface: FailureSurface;
   children: (integrations: {
     slack: WorkspaceSlack;
     sentry: WorkspaceSentry;

@@ -1,5 +1,6 @@
-// automation-screens.tsx -- the Automations tab's list, as the desktop's Automations page lists them: the workspace's and then the reader's own, each in the order View options chose, a finished one-time automation folded under Finished, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
+// automation-screens.tsx -- the Automations tab's list, as the desktop's Automations page lists them: the workspace's and then the reader's own, each under its owner's picture and folding with its count, each in the order View options chose, the one-time automations that ran folded under Finished, the latest first, each saying what its run started, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
 
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
 import { firingMark } from "@repo/features/automation-firing-mark";
 import {
@@ -7,16 +8,25 @@ import {
   AUTOMATIONS_ORDER,
   AUTOMATIONS_ORDER_WORDS,
   type AutomationsOrder,
+  automationFoldsWith,
   automationGroups,
+  automationManager,
   automationRunStanding,
   automationTriggerText,
   DEFAULT_AUTOMATIONS_ORDER,
   finishedAutomations,
 } from "@repo/features/automation-list-model";
 import { automationPreset } from "@repo/features/automation-presets";
-import type { AutomationSummary } from "@repo/features/automation-wire";
+import {
+  AUTOMATION_LIST_GROUP,
+  AUTOMATION_SCOPE,
+  type AutomationListGroup,
+  type AutomationScope,
+  type AutomationSummary,
+} from "@repo/features/automation-wire";
 import {
   AUTOMATION_DELETE_WORDS,
+  AUTOMATION_FINISHED,
   AUTOMATION_PHONE_WORDS,
   AUTOMATION_SUGGESTION_WORDS,
   AUTOMATION_TAKE_OVER_WORDS,
@@ -26,9 +36,12 @@ import {
   automationPhoneLine,
   READING_AUTOMATIONS,
 } from "@repo/features/automation-words";
+import { iosAgentRoute } from "@repo/features/ios-app-links";
+import { agentName } from "@repo/features/model-label";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { TASKS_VIEW_WORDS } from "@repo/features/tasks-page-model";
 import { sinceText } from "@repo/features/time-format";
+import { VIEW_CHOICE_KEY } from "@repo/features/view-choice-wire";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -43,7 +56,9 @@ import {
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
+  ListColumn,
   ListSection,
+  NoSelection,
   ROW_ACTION_TONE,
   RowForEach,
   RowList,
@@ -52,8 +67,18 @@ import {
   useMinute,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { Option } from "effect";
 import { Stack, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import {
+  type ComponentProps,
+  createContext,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { newAutomationRoute } from "../automations/automation-editor-route.js";
 import {
   AUTOMATION_RUNS_ROUTE,
@@ -80,15 +105,25 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHeldSearchPlacement, useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { APP_SIDEBAR } from "../sidebar-shown.js";
+import { TabColumns } from "../split-columns.js";
 import { useOnOwnTab } from "../tab-route.js";
+import { useViewChoice } from "../view-choices.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { useComposeAction } from "./app-sidebar.js";
+import { useComposeAction, useDetailColumnBar, useSplitBuild } from "./app-sidebar.js";
 
 /** What the list's field says before anything is typed. */
 const SEARCH_AUTOMATIONS = "Search automations";
 
 /** What the folded group of finished one-time automations is called, as the desktop's list calls it. */
-const FINISHED = "Finished";
+/** What a fold that did not keep says in the failure notice. */
+const FOLDS_REFUSED = "Couldn't keep how the automations are folded.";
+
+/** Which of the list's groups stand folded until the reader folds or opens one: Finished alone, as the desktop's list folds it. */
+const FOLDED_AT_FIRST: readonly AutomationListGroup[] = [AUTOMATION_LIST_GROUP.FINISHED];
+
+/** What a row's long press says before its Manager's name, opening the Manager's page. */
+const OPEN_MANAGER = "Open";
 
 /** What the list says where a search keeps none. */
 const NO_MATCH = "No automations match.";
@@ -98,6 +133,9 @@ const NEW_AUTOMATION = "New automation";
 
 /** What the workspace's runs are called, on the bar's button that opens them, as the desktop's tab names them. */
 const RUNS = "Runs";
+
+/** What an iPad's page column says before an automation is opened beside the list. */
+const NO_AUTOMATION_SELECTED = "No automation selected";
 
 /** What View options is called, on its button and to VoiceOver. */
 const VIEW_OPTIONS = "View options";
@@ -176,6 +214,93 @@ function found(automation: AutomationSummary, tokens: readonly string[]): boolea
  * workspace, so nothing of one workspace's list stands over another's.
  */
 export function AutomationsScreen() {
+  return APP_SIDEBAR ? <AutomationsPageScreen /> : <AutomationsStackScreen />;
+}
+
+/**
+ * The Automations tab's root on an iPad: an automation opened beside its
+ * list, pushed on its own stack, as Mail stands a message beside its
+ * mailbox, and none before one is, New task leading its bar; the list
+ * stands in the middle column (`AutomationsListColumn`).
+ */
+function AutomationsPageScreen() {
+  const detailBar = useDetailColumnBar(undefined);
+  const build = useSplitBuild();
+
+  return (
+    <>
+      <TabColumns
+        build={build}
+        sidebar={null}
+        detail={<NoSelection title={NO_AUTOMATION_SELECTED} />}
+        detailBar={detailBar}
+      />
+    </>
+  );
+}
+
+/** The automations' search, held above an iPad's split view for its list column, so it outlives a turn to another place and back. */
+const AutomationsSearchContext = createContext<
+  { readonly search: string; readonly setSearch: (search: string) => void } | undefined
+>(undefined);
+
+/** What an iPad's Automations holds above the system's split view: its list's search. */
+export function AutomationsSearchProvider({ children }: { readonly children: ReactNode }) {
+  const [search, setSearch] = useState("");
+  const held = useMemo(() => ({ search, setSearch }), [search]);
+
+  return <AutomationsSearchContext value={held}>{children}</AutomationsSearchContext>;
+}
+
+/**
+ * The automations in an iPad's middle column, beside the sidebar: the
+ * workspace's automations under who owns them, under the column's title,
+ * search, View options, Runs and New automation. Note that the sidebar
+ * holds the workspace switcher, so the list's bar stands none.
+ */
+export function AutomationsListColumn() {
+  const held = useContext(AutomationsSearchContext);
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const { chosen } = useChosenWorkspace(workspaces);
+  const { order, setOrder } = useAutomationsOrder();
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+
+  if (held === undefined)
+    throw new Error("An iPad's automations stand under AutomationsSearchProvider.");
+
+  const { search, setSearch } = held;
+
+  return (
+    <ListColumn
+      view={
+        chosen === undefined ? null : (
+          <AutomationsList key={chosen.id} workspace={chosen} order={order} search={search} />
+        )
+      }
+      bar={{
+        title: AUTOMATION_PHONE_WORDS.TITLE,
+        menu: viewMenu(order, setOrder),
+        acts: [
+          {
+            label: RUNS,
+            symbol: GLYPH.HISTORY,
+            onPress: () => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE)),
+          },
+          {
+            label: NEW_AUTOMATION,
+            symbol: GLYPH.ADD,
+            onPress: () => router.push(newAutomationRoute()),
+          },
+        ],
+        search: { placeholder: SEARCH_AUTOMATIONS, text: search, onChange: setSearch },
+      }}
+    />
+  );
+}
+
+/** The Automations tab's root under the Stack's bar, on an iPhone. */
+function AutomationsStackScreen() {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
   const switcher = useWorkspaceSwitcher();
@@ -210,18 +335,24 @@ export function AutomationsScreen() {
           icon={glyphSymbol(GLYPH.HISTORY)}
           accessibilityLabel={RUNS}
           onPress={() => router.push(onOwnTab(AUTOMATION_RUNS_ROUTE))}
-        />
+        >
+          {RUNS}
+        </Stack.Toolbar.Button>
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.ADD)}
           accessibilityLabel={NEW_AUTOMATION}
           onPress={() => router.push(newAutomationRoute())}
-        />
+        >
+          {NEW_AUTOMATION}
+        </Stack.Toolbar.Button>
         {/* Note that New task's compose ends the bar, as every tab root's does. */}
         <Stack.Toolbar.Button
           icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
           accessibilityLabel={compose.label}
           onPress={compose.onPress}
-        />
+        >
+          {compose.label}
+        </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
         {chosen === undefined ? null : (
@@ -246,13 +377,35 @@ function AutomationsList({
   const now = useMinute();
   const read = useWorkspaceAutomations(workspace.id);
   const acts = useAutomationActs();
+  const managers = useWorkspaceManagers(workspace.id);
   const [asking, setAsking] = useState<AutomationSummary | undefined>(undefined);
-  // Note that Finished opens folded, as the desktop's group does, since a one-time automation that ran is done with.
-  const [finishedFolded, setFinishedFolded] = useState(true);
+  const switcher = useWorkspaceSwitcher();
+  // Note that the folds are the account's, as the desktop's list keeps them, and Finished stands folded until one is chosen, since a one-time automation that ran is done with.
+  const folds = useViewChoice(VIEW_CHOICE_KEY.AUTOMATIONS_FOLDED, null, FOLDS_REFUSED);
+  const kept = Option.getOrElse(folds.value, () => FOLDED_AT_FIRST);
+  const [waiting, setWaiting] = useState<readonly FoldPress[]>([]);
+  const folded = waiting.reduce(foldedWith, kept);
+
+  // Note that a fold pressed before the account's folds were read waits for them and is laid over them, so a press built on the default never writes over the folds another device kept.
+  useEffect(() => {
+    if (!folds.answered || waiting.length === 0) return;
+    setWaiting([]);
+    folds.choose(waiting.reduce(foldedWith, kept));
+  }, [folds, kept, waiting]);
+
+  const fold = (group: AutomationListGroup) => ({
+    foldable: true,
+    folded: folded.includes(group),
+    onFold: (next: boolean) =>
+      folds.answered
+        ? folds.choose(foldedWith(folded, { group, folded: next }))
+        : setWaiting((was) => [...was, { group, folded: next }]),
+  });
+
   const tokens = searchTokens(search);
   const automations = read.rows?.filter((automation) => found(automation, tokens));
   const groups = automations === undefined ? [] : automationGroups(automations, order);
-  const finished = automations === undefined ? [] : finishedAutomations(automations, order);
+  const finished = automations === undefined ? [] : finishedAutomations(automations);
 
   // Note that a Delete asked about one deleted elsewhere since withdraws its question.
   const asked =
@@ -267,6 +420,7 @@ function AutomationsList({
     <AutomationListRow
       automation={automation}
       workspace={workspace}
+      managers={managers}
       acts={acts}
       now={now}
       onOpen={() => open(automation)}
@@ -311,6 +465,8 @@ function AutomationsList({
             key={group.owner}
             title={automationOwnerName(group.owner, workspace.name, true)}
             count={group.automations.length}
+            owner={sectionOwner(group.owner, switcher)}
+            {...fold(group.owner)}
           >
             <RowForEach data={group.automations} keyOf={automationKey}>
               {row}
@@ -319,11 +475,10 @@ function AutomationsList({
         ))}
         {finished.length === 0 ? null : (
           <ListSection
-            title={FINISHED}
+            title={AUTOMATION_FINISHED}
             count={finished.length}
-            foldable
-            folded={finishedFolded}
-            onFold={setFinishedFolded}
+            glyph={GLYPH.HISTORY}
+            {...fold(AUTOMATION_LIST_GROUP.FINISHED)}
           >
             <RowForEach data={finished} keyOf={automationKey}>
               {row}
@@ -440,21 +595,55 @@ function SuggestedAutomations({
   );
 }
 
+/**
+ * Whose an owner's group is, as its header's picture: the workspace's tile
+ * for its automations, and the reader's own photo for theirs, as the
+ * desktop's groups lead with them; none before the workspaces are read.
+ */
+function sectionOwner(
+  owner: AutomationScope,
+  switcher: ReturnType<typeof useWorkspaceSwitcher>,
+): ComponentProps<typeof ListSection>["owner"] {
+  if (switcher === undefined) return undefined;
+
+  if (owner === AUTOMATION_SCOPE.WORKSPACE) return { workspace: switcher.chosen };
+
+  return switcher.account === undefined
+    ? undefined
+    : { person: { name: switcher.account.name, picture: switcher.account.picture } };
+}
+
+/** A press on a group's header: the group, and whether it now stands folded. */
+interface FoldPress {
+  readonly group: AutomationListGroup;
+  readonly folded: boolean;
+}
+
+/** `folds` with a press's group folded or opened as it asked. */
+function foldedWith(
+  folds: readonly AutomationListGroup[],
+  press: FoldPress,
+): readonly AutomationListGroup[] {
+  return automationFoldsWith(folds, press.group, press.folded);
+}
+
 /** An automation's row id in the list. */
 function automationKey(automation: AutomationSummary): string {
   return automation.id;
 }
 
 /**
- * One automation's row: what fires it and when it runs next, how its newest
- * run went, and when, faded while it is off. Its swipe and long press hold
- * Run now and its switch; its long press then Copy link and, for an owner or
+ * One automation's row: what fires it and when it runs next, the Manager its
+ * runs land on and how its newest run went, and when, faded while it is off. Its swipe and long press hold
+ * Run now and its switch; its long press then opens its Manager, where its
+ * runs land on one, then Copy link and, for an owner or
  * an admin where its creator left, Take over; and Delete, red behind a
  * swipe from the trailing edge and last in the menu, asks first.
  */
 function AutomationListRow({
   automation,
   workspace,
+  managers,
   acts,
   now,
   onOpen,
@@ -462,12 +651,30 @@ function AutomationListRow({
 }: {
   readonly automation: AutomationSummary;
   readonly workspace: Workspace;
+  /** The workspace's Managers, whose face and name the row leads its last line with where its runs land on one. */
+  readonly managers: readonly ListedAgent[];
   readonly acts: AutomationActs;
   readonly now: number;
   readonly onOpen: () => void;
   readonly onAskDelete: () => void;
 }) {
   const maker = useAutomationMaker(automation, workspace.id);
+  const manager = automationManager(automation, managers);
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+
+  // Note that the Manager opens from the row's long press, as an agent's pull request does, since a row never nests a second press over its own.
+  const openManager =
+    manager === undefined
+      ? []
+      : [
+          {
+            label: `${OPEN_MANAGER} ${agentName(manager)}`,
+            symbol: GLYPH.OPEN,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => router.push(onOwnTab(iosAgentRoute(manager.id))),
+          },
+        ];
 
   const takeOver = takesOver(maker, workspace)
     ? [
@@ -487,12 +694,14 @@ function AutomationListRow({
       line={automationPhoneLine(automation, now)}
       standing={automationRunStanding(automation.lastRun)}
       standingWords={automationLastRunWords(automation)}
+      manager={manager === undefined ? undefined : { name: agentName(manager), face: manager.face }}
       {...firingLook(firingMark(automation.trigger))}
       when={lastRunWhen(automation, now)}
       faded={!automation.enabled}
       onPress={onOpen}
       acts={automationRowActs(automation, acts)}
       more={[
+        ...(openManager.length === 0 ? [] : [openManager]),
         [
           {
             label: AUTOMATION_PHONE_WORDS.COPY_LINK,

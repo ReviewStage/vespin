@@ -39,6 +39,7 @@ import { net } from "electron";
 import { computerUseHelperLayer } from "../native/computer-use";
 import { thisMacHostLayer } from "../native/this-mac-host";
 import type { DesktopConfig } from "./desktop-config";
+import { hostedConnection } from "./hosted-connection";
 import { mainLoopStalls } from "./main-loop-stalls";
 import { matchMirrorsInUtilityProcess } from "./mirror-matching";
 import { mainSentryTracer } from "./telemetry-service";
@@ -144,7 +145,10 @@ export function hostAssemblyLayerFor(
       Layer.provideMerge(hostKernelLayer, seams),
       // The computer-use helper is the app's own child, so the Mac's grants are the app's.
       Layer.provideMerge(computerUseHelperLayer(), spawning),
-      FetchHttpClient.layer,
+      // Every call goes out on the one warm HTTP/2 connection (`hosted-connection.ts`).
+      FetchHttpClient.layer.pipe(
+        Layer.provide(Layer.succeed(FetchHttpClient.Fetch, hostedConnection.fetch)),
+      ),
     ),
   ).pipe(Layer.provideMerge(serviceReachLayer));
 }

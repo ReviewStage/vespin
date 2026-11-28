@@ -949,6 +949,7 @@ body,
 .desktop-agent .agent-todos-dock,
 .desktop-agent .agent-published-dock,
 .desktop-agent .agent-threads-dock,
+.desktop-agent .agent-working-dock,
 .desktop-agent .agent-follow-offer-dock,
 .desktop-agent .agent-computer-dock,
 .desktop-agent .agent-queue-dock,
@@ -958,6 +959,17 @@ body,
 .desktop-inbox .conversation-log.inbox-board,
 .desktop-inbox > .inbox-answer-dock .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
+}
+
+/* An agent's box stands the profile's least lines tall while it is empty
+   (`--ui-composer-least-lines`), and still grows to its eight as the words
+   are written; a box writing a sent message again keeps its own. */
+.desktop-agent .agent-composer .agent-composer-input {
+  min-height: calc(
+    var(--ui-composer-least-lines) *
+    var(--agent-composer-line) +
+    var(--agent-composer-field-block)
+  );
 }
 
 /* A Manager's chat (`desktop-agent-page.tsx`'s `data-chat`) stands both
@@ -1706,6 +1718,7 @@ body,
 .side-panel-content .agent-todos-dock,
 .side-panel-content .agent-published-dock,
 .side-panel-content .agent-threads-dock,
+.side-panel-content .agent-working-dock,
 .side-panel-content .agent-follow-offer-dock,
 .side-panel-content .agent-computer-dock,
 .side-panel-content .agent-queue-dock,
@@ -1713,6 +1726,12 @@ body,
 .side-panel-content .draft-fork-dock,
 .side-panel-content .agent-tab-foot .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
+}
+
+/* A Manager's thread beside its chat (`desktop-agent-page.tsx`) stands its
+   box on the content edge its messages and its head's words stand on. */
+.manager-thread-pane .agent-tab-foot .agent-composer {
+  padding-inline: var(--content-inset);
 }
 /* The apps an agent is using float at the right edge of that same column,
    and across it in a narrow foot (`tasks.css`). */

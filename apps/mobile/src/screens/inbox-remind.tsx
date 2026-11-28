@@ -1,5 +1,6 @@
 // inbox-remind.tsx -- Remind me on an Inbox thread, or on several chosen at once: the menu a row's swipe, its long press, the thread's ⋯ menu, or the Inbox's Select mode opens, offering the panel's times, and the sheet its "Pick a date and time…" opens.
 
+import type { InboxFields } from "@repo/features/inbox-digest";
 import { hasReminder } from "@repo/features/inbox-list-model";
 import {
   REMIND_TIMES,
@@ -7,7 +8,6 @@ import {
   remindPickOpensAt,
   remindWords,
 } from "@repo/features/inbox-remind-times";
-import type { InboxItem } from "@repo/features/inbox-wire";
 import {
   type BarMenu,
   GLYPH,
@@ -36,16 +36,16 @@ type RemindMenu = RowSubmenu & BarMenu & { readonly actions: readonly RowAction[
 
 type UseRemindResult = {
   /** Remind me's menu on the threads given, calling `after` once a time is sent, such as Select mode letting go. */
-  readonly menu: (items: readonly InboxItem[], after?: () => void) => RemindMenu;
+  readonly menu: (items: readonly InboxFields[], after?: () => void) => RemindMenu;
   /** Remind me's menu on one thread, as a row offers it; the same function from draw to draw. */
-  readonly itemMenu: (item: InboxItem) => RemindMenu;
+  readonly itemMenu: (item: InboxFields) => RemindMenu;
   /** The picker sheet "Pick a date and time…" opens, which a screen draws beside its rows. */
   readonly sheet: ReactNode;
 };
 
 /** The threads the picker stands open on, when it opened, and what runs once a time is sent. */
 type Held = {
-  readonly items: readonly InboxItem[];
+  readonly items: readonly InboxFields[];
   readonly at: number;
   readonly after?: (() => void) | undefined;
 };
@@ -65,7 +65,7 @@ export function useRemind(): UseRemindResult {
   const [held, setHeld] = useState<Held>();
 
   const send = useCallback(
-    (items: readonly InboxItem[], until: number | null, after?: () => void) => {
+    (items: readonly InboxFields[], until: number | null, after?: () => void) => {
       const [only] = items;
 
       if (items.length === 1 && only !== undefined) remind(only.id, until);
@@ -89,7 +89,7 @@ export function useRemind(): UseRemindResult {
   );
 
   const menu = useCallback(
-    (items: readonly InboxItem[], after?: () => void): RemindMenu => {
+    (items: readonly InboxFields[], after?: () => void): RemindMenu => {
       const times: RowAction[] = REMIND_TIMES.map((time, at) => ({
         label: time.label,
         // Note that VoiceOver's Actions hear a time with its verb, "Remind me tomorrow", as Mail's do, since they list it apart from its menu.
@@ -130,7 +130,7 @@ export function useRemind(): UseRemindResult {
     [send, details],
   );
 
-  const itemMenu = useCallback((item: InboxItem) => menu([item]), [menu]);
+  const itemMenu = useCallback((item: InboxFields) => menu([item]), [menu]);
 
   const openedAt = held?.at ?? Date.now();
 

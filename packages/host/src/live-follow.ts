@@ -6,6 +6,7 @@ import {
   liveDigestOn,
   type SealedLiveQueryWire,
 } from "@repo/features/live-wire";
+import { ForegroundClock, foregroundAfter, foregroundPassed } from "@repo/runtime/effect";
 import { cappedExponential } from "@repo/wire/effect";
 import {
   Cause,
@@ -609,22 +610,19 @@ function liveAnswers<Part extends string>(
       let sync = syncStandingOf(first)?.next;
       /** The page of a whole answer the last answer named, asked for next; kept through a failed poll, which asks for it again. */
       let page = pageOf(first);
-      /** When the sync id last moved, a page was answered, or a stall was last asked around, by the host's clock. */
-      let syncMovedAt = yield* Clock.currentTimeMillis;
+      const foreground = yield* ForegroundClock;
+      /** When the sync id is taken as stalled unless it moves first: `SYNC_STALL` past when it last moved, a page was answered, or a stall was last asked around, in foreground time. */
+      let stallAt = foregroundAfter(foreground.now(), SYNC_STALL);
       /** How many polls have failed in a row since the last answer. */
       let failures = 0;
       yield* answered(first);
 
       const pollOnce = Effect.gen(function* () {
-        const now = yield* Clock.currentTimeMillis;
-
         // Note that a whole answer read a page at a time stands at one id until its last page, which no stall asks around, since that would ask its first page again.
         const stalled =
-          page === undefined &&
-          sync !== undefined &&
-          now - syncMovedAt > Duration.toMillis(SYNC_STALL);
+          page === undefined && sync !== undefined && foregroundPassed(foreground, stallAt);
 
-        if (stalled) syncMovedAt = now;
+        if (stalled) stallAt = foregroundAfter(foreground.now(), SYNC_STALL);
         const read = yield* dependencies.poll(seen, cursor, stalled ? undefined : sync, page);
 
         if ("failure" in read) {
@@ -654,7 +652,7 @@ function liveAnswers<Part extends string>(
 
         if (next !== undefined && (next !== sync || paged)) {
           sync = next;
-          syncMovedAt = yield* Clock.currentTimeMillis;
+          stallAt = foregroundAfter(foreground.now(), SYNC_STALL);
         }
 
         return yield* answered(read);
@@ -834,7 +832,9 @@ export function followTakingRows<
  * delta back, as a migration during a deploy does, or a database nothing
  * writes to, where a whole answer each 30 s costs nothing. The host cannot
  * see the wakes behind a stalled id, since a delta held over one answers
- * empty and carries no txids.
+ * empty and carries no txids. It is foreground time (`ForegroundClock`), so
+ * an app back from the background, its id standing where it was left, asks
+ * past it rather than whole.
  */
 const SYNC_STALL = Duration.seconds(30);
 

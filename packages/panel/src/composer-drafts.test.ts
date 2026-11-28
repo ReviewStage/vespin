@@ -1084,11 +1084,12 @@ test("a task's inbox carries its own outdated answers' words to the item as it n
   assert.equal(kept.draftOf(theirs).note, "Weekly");
 });
 
-test("a pick kept by a build that stored its revision in the place still stands on the item at that revision", async () => {
+test("an entry storage holds in a shape no longer read is passed over, and the drafts beside it still stand", async () => {
   const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
   window.localStorage.setItem(
     "app.composerDrafts",
     JSON.stringify([
+      { accountId: null, place: { kind: "chat" }, text: "A box long removed" },
       {
         accountId: null,
         place: {
@@ -1096,10 +1097,10 @@ test("a pick kept by a build that stored its revision in the place still stands 
           taskId: INVITES.plan.id,
           agentId: INVITES.agent.id,
           itemId: mine.id,
-          revision: 1,
         },
         text: "Only teammates",
         choices: ["Approve"],
+        revision: 1,
       },
     ]),
   );

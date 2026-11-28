@@ -9,7 +9,12 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
-import { handHostReads, holdRepositoryLists, type RepositoriesRead } from "../testing/app-state.js";
+import {
+  handHostReads,
+  heldPreferences,
+  holdRepositoryLists,
+  type RepositoriesRead,
+} from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout, pressInComposer } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -88,7 +93,11 @@ async function mount(
   scope: { id: string | undefined } = { id: ACME.id },
   recent: readonly string[] = [],
 ) {
-  const { again } = holdRepositoryLists(handHostReads({}).deliverRepositoryLists, read);
+  const { again } = holdRepositoryLists(
+    handHostReads({ preferences: heldPreferences() }).deliverRepositoryLists,
+    read,
+  );
+
   const control = tasksControl();
   const starts: (string | null)[] = [];
   const container = document.body.appendChild(document.createElement("div"));

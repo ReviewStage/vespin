@@ -35,7 +35,6 @@ import {
   RowHint,
   RowHintOptions,
   reachedKey,
-  SCROLL_FADE,
   ScrollArea,
   ShowMoreRow,
   SKELETON_KIND,
@@ -213,7 +212,7 @@ const SECTIONS_FAILED = readFailedWords("the sections it changed");
 /** How wide each placeholder row of a revision's sections stands, a section's name as a share of its line. */
 const SECTIONS_SKELETON = ["46%", "62%", "38%"] as const;
 
-/** A placeholder revision's writer's mark, at a row's actor mark's size (`avatar.css`). */
+/** A placeholder revision's writer's mark, at a row's actor mark's size (`ACTOR_SIZE.ROW`, `actor-ref.tsx`). */
 const ROW_MARK_SKELETON = "20px";
 
 /** How wide a placeholder revision's time stands, a short moment's ("2h", "Mon"). */
@@ -1011,7 +1010,7 @@ export function DesktopVersionHistory({
               </Text>
             )}
             <Fill className="sidebar-section -m-ring-reach">
-              <ScrollArea ref={log} fade={SCROLL_FADE.BOTH}>
+              <ScrollArea ref={log}>
                 {/* biome-ignore lint/a11y/noStaticElementInteractions: the keys and the focus are the rows' own, which the box only hears bubble. */}
                 <div
                   {...roving}
@@ -1081,7 +1080,7 @@ export function DesktopVersionHistory({
             aria-label={LIST_LABEL.SECTIONS}
             inert={opened === undefined}
           >
-            <ScrollArea fade={SCROLL_FADE.BOTH}>
+            <ScrollArea>
               {/* biome-ignore lint/a11y/noStaticElementInteractions: the keys and the focus are the rows' own, which the box only hears bubble. */}
               <div
                 className="sidebar-section-body flex min-h-full flex-col p-ring-reach"

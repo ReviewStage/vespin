@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { ServiceReach } from "@repo/features";
 import { LIVE_POLL_URL, LIVE_SIGNED_OUT, type SealedLiveQueryWire } from "@repo/features/live-wire";
+import { ForegroundClock } from "@repo/runtime/effect";
+import { testForegroundClock } from "@repo/runtime/testing";
 import {
   Clock,
+  Deferred,
   Duration,
   Effect,
   Exit,
@@ -242,7 +245,8 @@ it.effect(
   "a poll waiting out its backoff is asked again the moment the service answers again",
   () =>
     Effect.gen(function* () {
-      const reach = yield* SubscriptionRef.make({ reachable: false, answeredAt: 0 });
+      const answeredAt = (yield* ForegroundClock).now();
+      const reach = yield* SubscriptionRef.make({ reachable: false, answeredAt });
       let asks = 0;
 
       const following = yield* Effect.forkChild(
@@ -262,7 +266,7 @@ it.effect(
       yield* settled;
       assert.equal(asks, 1, "the first poll failed and waits");
 
-      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt: 1 });
+      yield* SubscriptionRef.set(reach, { reachable: true, answeredAt });
       yield* settled;
       assert.equal(asks, 2, "asked again with no time passing");
       yield* Fiber.interrupt(following);
@@ -575,6 +579,50 @@ it.effect(
         ],
         [[], { past: undefined, next: "50", gone: [] }],
       ]);
+      yield* Fiber.interrupt(following);
+    }).pipe(Effect.provideServiceEffect(ForegroundClock, testForegroundClock)),
+);
+
+it.effect(
+  "a read back from minutes in the background asks past its sync id rather than whole, the foreground clock having stood still",
+  () =>
+    Effect.gen(function* () {
+      const foreground = yield* testForegroundClock;
+      const asked: (string | undefined)[] = [];
+      const resumed = yield* Deferred.make<void>();
+
+      const read = (next: string): SealedRead<Part> => ({
+        url: LIVE_POLL_URL,
+        queries: {
+          left: { ...sealed("left"), rows: [], sync: { next } },
+          right: { ...sealed("right"), rows: [], sync: { next } },
+        },
+      });
+
+      const poll = (_after: string | undefined, _cursor?: string, sync?: string) =>
+        Effect.gen(function* () {
+          asked.push(sync);
+
+          // Note that the first poll is the one the background cut off: it answers only once the app is back, nothing having moved.
+          if (asked.length === 1) yield* Deferred.await(resumed);
+
+          return read("10");
+        });
+
+      const following = yield* Effect.forkChild(
+        followTakingRows<Part, unknown>({ poll }, read("10"), Schema.Unknown, () => Effect.void),
+      ).pipe(Effect.provideService(ForegroundClock, foreground));
+
+      yield* settled;
+      foreground.away();
+      yield* TestClock.adjust(Duration.minutes(7));
+      foreground.back();
+      yield* Deferred.succeed(resumed, undefined);
+      yield* settled;
+      yield* TestClock.adjust(Duration.seconds(1));
+      yield* settled;
+
+      assert.deepEqual(asked.slice(0, 2), ["10", "10"]);
       yield* Fiber.interrupt(following);
     }),
 );

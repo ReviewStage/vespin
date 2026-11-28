@@ -17,7 +17,7 @@ import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { BUTTON_VARIANT, Button, STATUS_TONE } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
-import type { ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
 import { useToast } from "../toast.js";
 import { TryAgainPress } from "./agent-end-row.js";
 import {
@@ -124,7 +124,16 @@ export function useAgentEndDoors({
   };
 
   // The box's words and files, which a press carries into the continue where it takes the box's place, read as it is pressed.
-  const carry = { now: composer.unsent, taskId: agent.taskId };
+  // Note that what the box carries on, and the remedy built from it, are the same while the box and the agent are, because the dock that draws the remedy holds while what it is handed does.
+  const carry = useMemo(
+    () => ({ now: composer.unsent, taskId: agent.taskId }),
+    [composer.unsent, agent.taskId],
+  );
+
+  const closedRemedy = useMemo(
+    () => <ContinueAgent agentId={agent.id} control={control} carry={carry} />,
+    [agent.id, control, carry],
+  );
 
   // The failed end line holds the press, Continue again once another agent continued this one.
   const { status, failure } = tabTurnOf(agent, composer);
@@ -180,7 +189,7 @@ export function useAgentEndDoors({
           shown={shown}
         />
       ),
-    closedRemedy: <ContinueAgent agentId={agent.id} control={control} carry={carry} />,
+    closedRemedy,
     continuable: continued.length > 0 || control.continueAgent !== undefined,
   };
 }

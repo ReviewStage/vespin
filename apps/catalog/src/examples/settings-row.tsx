@@ -12,6 +12,7 @@ import {
   Inline,
   JUSTIFY,
   MARK_PROVIDER,
+  type MarkProvider,
   MoreButton,
   PlusIcon,
   PROVIDER_MARK_SIZE,
@@ -138,7 +139,7 @@ function Rows(): React.JSX.Element {
 }
 
 /** A provider's mark, at the size a row's leading mark stands. */
-function Mark({ provider }: { provider: (typeof MARK_PROVIDER)[keyof typeof MARK_PROVIDER] }) {
+function Mark({ provider }: { provider: MarkProvider }) {
   return <ProviderMark provider={provider} size={PROVIDER_MARK_SIZE.ROW} />;
 }
 

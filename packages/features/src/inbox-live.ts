@@ -26,6 +26,7 @@ import {
   inboxItemSchema,
   inboxMessageSchema,
   inboxReadAskSchema,
+  inboxThreadOrder,
   standingAsk,
 } from "./inbox-wire.js";
 import {
@@ -39,6 +40,7 @@ import {
 import { ACCOUNT_INBOX_ITEMS, LIVE_READ, LIVE_USER_QUERY } from "./live-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
+import { TASK_LIST_READ } from "./task-list-live.js";
 
 /** An item of an agent with no plan as its row delivers it: the workspace as the column holds it, null for none. Carried empty for a released desktop, which reads it; this build reads none. */
 const tasklessLiveRowSchema = EffectSchema.Struct({
@@ -69,14 +71,11 @@ function latestOrder<Key extends string>(key: Key) {
  * `taskless`, `automations`, and `agents` hold nothing; they stay declared
  * for a released desktop (v0.22.0), which reads them, and keeps every part
  * but `agents`, whose decode strips it, so it sends the digest over those
- * (`olderParts`). This build reads none of the three. The items of an agent
- * on a machine its workspace owns are carried only to a build that reads
- * one (`HOSTED_API_VERSION` 7 on), which the service binds as
- * `workspaceMachines` from the headers the build names itself in, as a
- * plan's inbox and the account's items carry them. An item on no task, a
+ * (`olderParts`). This build reads none of the three. An item on no task, a
  * Manager's thread, waits in `items` with a null `taskId`, carried only to a
  * build that reads one (`HOSTED_API_VERSION` 6 on), which the service binds
- * as `taskless` the same way, so the Dock counts it as a task's.
+ * as `taskless` from the headers the build names itself in, so the Dock
+ * counts it as a task's.
  * The service answers `unavailable` where its
  * deployment's Realtime is misconfigured, which the desktop answers by
  * asking again.
@@ -88,7 +87,6 @@ export const ACCOUNT_INBOX_READ = liveRead({
     [LIVE_USER_QUERY]: LIVE_PARAM.USER,
     [ACCOUNT_INBOX_REPOSITORYLESS.QUERY]: LIVE_PARAM.OPTIONAL_TEXT,
     taskless: LIVE_PARAM.SERVED,
-    workspaceMachines: LIVE_PARAM.SERVED,
   },
   query: {
     [ACCOUNT_INBOX_REPOSITORYLESS.QUERY]: EffectSchema.optionalKey(
@@ -337,11 +335,7 @@ export const TASK_INBOX_READ = liveRead({
   name: "taskInbox",
   path: HOSTED_SERVICE_PATH.LIVE_TASK_INBOX,
   // Note that the account is named first, so a session of another is refused as signed out before the id is read.
-  params: {
-    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
-    id: LIVE_PARAM.ID,
-    workspaceMachines: LIVE_PARAM.SERVED,
-  },
+  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, id: LIVE_PARAM.ID },
   mode: LIVE_MODE.SNAPSHOT,
   parts: SCOPE_INBOX_PARTS,
   refuses: refuses(HOSTED_API_ERROR.NOT_FOUND),
@@ -427,20 +421,13 @@ function threadOf(
   messages: readonly InboxLiveMessage[],
   openAskMessageId: string | null,
 ): readonly InboxLiveMessage[] {
-  const ordered = messages.toSorted(threadOrder);
+  const ordered = messages.toSorted(inboxThreadOrder);
   const latest = new Set(ordered.slice(-INBOX_BOUNDS.MAX_MESSAGES_READ).map((each) => each.id));
   const firstId = ordered[0]?.id;
 
   return ordered.filter(
     (each) => latest.has(each.id) || each.id === firstId || each.id === openAskMessageId,
   );
-}
-
-/** A thread's messages oldest first, as the held read orders them. */
-function threadOrder(one: InboxLiveMessage, other: InboxLiveMessage): number {
-  if (one.createdAt !== other.createdAt) return one.createdAt - other.createdAt;
-
-  return one.id < other.id ? -1 : one.id > other.id ? 1 : 0;
 }
 
 /** A row as the wire carries its item, its thread and its files joined to it, each absent field left out rather than null, as the held read writes it. */
@@ -499,8 +486,10 @@ function inboxItemOfLiveRow(
 }
 
 /** Items as the held read orders a scope's: every open one, then the settled, each the latest changed first. */
-export function inboxInOrder(items: readonly InboxItem[]): readonly InboxItem[] {
-  const ordered = latestFirst((item: InboxItem) => item.id);
+export function inboxInOrder<Item extends Pick<InboxItem, "id" | "status" | "updatedAt">>(
+  items: readonly Item[],
+): readonly Item[] {
+  const ordered = latestFirst((item: Item) => item.id);
 
   return [
     ...items.filter((item) => item.status === INBOX_STATUS.OPEN).toSorted(ordered),
@@ -566,7 +555,6 @@ export const INBOX_ITEMS_READ = liveRead({
     [ACCOUNT_INBOX_ITEMS.SINCE]: LIVE_PARAM.OPTIONAL_TEXT,
     settledSince: LIVE_PARAM.SERVED,
     taskless: LIVE_PARAM.SERVED,
-    workspaceMachines: LIVE_PARAM.SERVED,
   },
   mode: LIVE_MODE.DELTA,
   parts: {
@@ -578,5 +566,100 @@ export const INBOX_ITEMS_READ = liveRead({
 
 export type AccountInboxItemsLiveAnswer = LiveReadAnswer<typeof INBOX_ITEMS_READ>;
 
+/** How many items one page of `INBOX_OLDER_READ` answers at most. */
+export const INBOX_OLDER_PAGE_SIZE = 50;
+
+/**
+ * One page of the account's settled inbox items the items read leaves out,
+ * read once rather than followed, for an Inbox that lists items past what
+ * `INBOX_ITEMS_READ` carries: those the account may read, on no task only
+ * for a build that reads one (`taskless`), settled, and last changed,
+ * settled, and brought back by the reader's reminder before `settledSince`,
+ * which the service binds from its clock as the items read does and answers
+ * beside the rows. They come the latest changed first (`updatedAt`, then
+ * id), each whole as the items read answers it: its stamp, its row, and the
+ * messages and files its thread draws, beside what holds it as the task
+ * list answers it, on the list's rule of who reads it: each item's task
+ * with every agent of it, and the agent of an item on no task alone, so a
+ * reader draws the page under holders its list no longer holds.
+ *
+ * A page names the page it reads past (`before`), the first page none, and
+ * answers the page after it beside the rows (`next`), absent from the last;
+ * a `before` the service did not answer is refused as invalid. The service
+ * finds the page once, binding its items' ids (`pageKeys`) and the page
+ * after it (`pageNext`) itself. Note that the pages read past a cursor, so
+ * an item that leaves the items read after the first page was read stands
+ * before it, and only a read from the first page again finds it.
+ */
+export const INBOX_OLDER_READ = liveRead({
+  name: "inboxOlder",
+  path: HOSTED_SERVICE_PATH.LIVE_INBOX_OLDER,
+  params: {
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    before: LIVE_PARAM.OPTIONAL_TEXT,
+    settledSince: LIVE_PARAM.SERVED,
+    taskless: LIVE_PARAM.SERVED,
+    pageKeys: LIVE_PARAM.SERVED,
+    pageNext: LIVE_PARAM.SERVED,
+  },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    stamps: INBOX_ITEMS_READ.parts.stamps,
+    ...SCOPE_INBOX_PARTS,
+    tasks: TASK_LIST_READ.parts.tasks,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+  beside: {
+    /** The page after this one, as the reader names it in `before`; absent where this was the last. */
+    next: EffectSchema.optionalKey(EffectSchema.String),
+    /** The instant, as epoch milliseconds, the items on the page were each last moved before, as the service bound it for this answer: those moved at or after it are the items read's. */
+    settledSince: countedNumber,
+  },
+});
+
 /** Each part's rows of the account's inbox items, decoded. */
 export type AccountInboxItemsLiveRows = typeof INBOX_ITEMS_READ.rows.Type;
+
+/** The most items one Inbox search answers, the latest changed first, so a query of one letter reads no account whole. */
+export const INBOX_SEARCH_LIMIT = 50;
+
+/** The longest query an Inbox search reads, in UTF-16 units; a longer one is refused, so no query binds patterns without end. */
+export const INBOX_SEARCH_QUERY_MAX_CHARS = 200;
+
+/**
+ * The inbox items a search's `query` finds (`inboxSearch`), read once
+ * rather than followed, for a client searching past the items it holds:
+ * each item the account may read, of any age, every word of whose query
+ * (`searchTokens`) its title, a message of its thread, or its holder's name
+ * (its task's, or its agent's for an item on no task) holds, whatever its
+ * case, the latest changed first and at most `INBOX_SEARCH_LIMIT`. Each
+ * comes as the account's inbox items carry one, its stamp and its row whole
+ * with its thread and files (`INBOX_ITEMS_READ`), so a client draws a hit as
+ * an item it holds, and ranks the hits itself; beside them stand the tasks
+ * that hold them and the hits' own agents, as the task list answers them
+ * (`TASK_LIST_READ`), since a hit is often of a task or an agent long
+ * settled, which the list a client holds no longer carries. The rows are
+ * read on the rules of who may read an item, a task, and an agent that
+ * every read of them keeps, so one the account does not reach is never
+ * answered. Items on no task, and their agents, are carried only to a build
+ * that reads a null `taskId`, as `INBOX_ITEMS_READ` carries them. The service
+ * binds the items found itself (`found`), reading the query once. A query of
+ * no words finds nothing; one longer than `INBOX_SEARCH_QUERY_MAX_CHARS` is
+ * refused as an invalid request.
+ */
+export const INBOX_SEARCH_READ = liveRead({
+  name: "inboxSearch",
+  path: HOSTED_SERVICE_PATH.LIVE_INBOX_SEARCH,
+  params: {
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    query: LIVE_PARAM.TEXT,
+    taskless: LIVE_PARAM.SERVED,
+    found: LIVE_PARAM.SERVED,
+  },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    ...INBOX_ITEMS_READ.parts,
+    tasks: TASK_LIST_READ.parts.tasks,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});

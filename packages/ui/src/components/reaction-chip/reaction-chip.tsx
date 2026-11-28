@@ -8,8 +8,8 @@ import { Tooltip } from "../tooltip/hint.js";
 /**
  * reaction-chip.tsx -- the reactions something wears, under its words: each its emoji and how many gave it, lit where the reader did, a press that gives the reader's own or takes it back.
  *
- * A reaction is a compact filter chip (`CHIP_LOOK.FILTER`): on the chip's
- * face at rest, in the ink where the reader gave it (`aria-pressed`), as a
+ * A reaction is a compact chip (`CHIP_LOOK.REACTION`): on the chip's
+ * face at rest, in a soft accent tint, outline, and words where the reader gave it (`aria-pressed`), as a
  * pull request's and a Manager chat's reactions both stand. Its emoji and
  * count are drawn alone, and what it says to a reader and in its tooltip
  * is its caller's words (`label`), who gave it. One that may not be pressed
@@ -69,7 +69,7 @@ export function ReactionChip({
           </span>
         ) : (
           <Chip
-            look={CHIP_LOOK.FILTER}
+            look={CHIP_LOOK.REACTION}
             size={CHIP_SIZE.COMPACT}
             aria-label={label}
             aria-pressed={reacted}

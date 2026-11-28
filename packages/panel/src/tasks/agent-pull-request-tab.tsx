@@ -34,6 +34,7 @@ import {
 } from "@repo/features/link-grammar";
 import { type LinkStanding, PULL_REQUEST_MOMENT } from "@repo/features/link-standing-model";
 import { formatCount } from "@repo/features/number-format";
+import { CHAPTERS_SHOWN, chaptersShown } from "@repo/features/pull-request-chapters-shown";
 import {
   CHECK_WORDS,
   checksCountOf,
@@ -78,10 +79,6 @@ import {
   checksCount,
   DETAIL_PAGE_INSET,
   DetailPage,
-  DISCLOSURE_SUMMARY,
-  DisclosureChevron,
-  DisclosureFrame,
-  DisclosureSummary,
   EmptyState,
   ErrorState,
   Fill,
@@ -103,8 +100,6 @@ import {
   OutsideLink,
   PAGE_FRAME,
   PaneBar,
-  SCROLL_FADE,
-  SCROLL_FADE_INSET,
   SCROLL_GUTTER,
   ScrollArea,
   SKELETON_KIND,
@@ -128,7 +123,7 @@ import {
   VisuallyHidden,
 } from "@repo/ui";
 import { actorName } from "@repo/ui/actor-model";
-import { renderingText } from "@repo/ui/github-html";
+import { renderedAddresses, renderingText } from "@repo/ui/github-html";
 import {
   ExternalLinkIcon,
   GLYPH,
@@ -166,7 +161,6 @@ import {
   useState,
 } from "react";
 import { ACTOR_SIZE, ActorMark, ActorRef, BotBadge, commentAuthor } from "../actor-ref.js";
-import { Fold, FoldBody } from "../ai-elements/fold.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
@@ -218,7 +212,7 @@ import {
   type AnnotationReply,
 } from "./annotation-card.js";
 import { threadPreview } from "./changes-model.js";
-import { CHAPTERS_SHOWN, chapterPaths, chaptersShown, chapterViewed } from "./chapters-model.js";
+import { chapterPaths, chapterViewed } from "./chapters-model.js";
 import { type ChaptersRead, useChaptersRead } from "./chapters-read.js";
 import { CommentTools } from "./comment-menu.js";
 import {
@@ -272,6 +266,7 @@ import {
 } from "./pull-request-pictures.js";
 import { Reactions } from "./pull-request-reactions.js";
 import { PullRequestReview } from "./pull-request-review.js";
+import { Section, type SectionFold } from "./pull-request-section.js";
 import {
   type PullRequestSource,
   PullRequestSourceProvider,
@@ -305,7 +300,7 @@ import {
   useLandedThread,
   useWindowThreadReveal,
 } from "./thread-reveal.js";
-import { type GitHubPictureDrawer, GitHubWords, TranscriptWords } from "./transcript-blocks.js";
+import { type GitHubPictureDrawer, GitHubWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
 import { usePlaceStanding } from "./use-link-standing.js";
 import { linkPressOf, type OpenHere, OpenHereFirst, useOpenLink } from "./use-open-link.js";
@@ -358,9 +353,9 @@ const chaptersTabLoaded = (): boolean => chaptersTabLanded;
 /**
  * A view of the tab, filling the room under the header and the tabs, the
  * others kept drawn but hidden, so switching back draws what each last read.
- * Note that it hands the tab's band down as its scroller's own, so the fade
- * begins beneath a section's heading at whatever height it stands
- * (`SCROLL_FADE_INSET.BAND`).
+ * Note that it hands the tab's band down as its scroller's own, so a
+ * section's heading stands, and the scroller's scroll padding clears it, at
+ * whatever height the band stands.
  */
 const VIEW_CLASS =
   "pull-request-view [--ui-scroll-band:var(--pull-request-band)] [&[hidden]]:hidden";
@@ -622,87 +617,6 @@ function headerQueuedOf(
   if (pullRequest !== undefined) return pullRequest.merging?.queued;
 
   return published?.number === number && published.queued === true ? {} : undefined;
-}
-
-/** Whether a section that folds stands open, and the press that opens or folds it. */
-interface SectionFold {
-  readonly open: boolean;
-  readonly onOpenChange: (open: boolean) => void;
-}
-
-/**
- * A section of the page: its heading, what it counts beside it, and what it
- * holds. One that folds (`fold`) heads itself with a press across its whole
- * row, the chevron leading, which opens and folds it as the app's own
- * disclosure does, its motion and its reduced motion the disclosure's; what
- * stands at the row's end (`end`) keeps its own presses rather than folding
- * it. That row sticks to the top of the Conversation's scroller while its
- * section is in view, and the next section's pushes it off (tasks.css).
- */
-export function Section({
-  title,
-  count,
-  fold,
-  end,
-  children,
-}: {
-  title: string;
-  count?: ReactNode;
-  fold?: SectionFold | undefined;
-  end?: ReactNode;
-  children: ReactNode;
-}): React.JSX.Element {
-  const heading = (
-    <Text
-      as={TEXT_ELEMENT.H3}
-      variant={TEXT_VARIANT.GROUP}
-      truncate
-      className="pull-request-heading mx-0 mt-0 mb-item-gap flex items-baseline gap-item-gap px-row-inset"
-    >
-      {/* Note that the title is cut in a line of its own, since a flex row's bare words are never cut, and the count after it stays whole. */}
-      <OneLine className="flex-initial">{title}</OneLine>
-      {count === undefined ? null : (
-        <span className="pull-request-count flex-none font-ui-regular text-muted-foreground tabular-nums">
-          {count}
-        </span>
-      )}
-    </Text>
-  );
-
-  if (fold === undefined) {
-    return (
-      <section className="pull-request-section" aria-label={title}>
-        {heading}
-        {children}
-      </section>
-    );
-  }
-
-  return (
-    <section className="pull-request-section" aria-label={title}>
-      <DisclosureFrame
-        actions={
-          end === undefined ? undefined : (
-            <span className="pull-request-section-end flex flex-none items-center gap-control-gap">
-              {end}
-            </span>
-          )
-        }
-      >
-        <Fold
-          className="pull-request-section-fold"
-          open={fold.open}
-          onOpenChange={fold.onOpenChange}
-        >
-          <DisclosureSummary look={DISCLOSURE_SUMMARY.TRANSCRIPT}>
-            <DisclosureChevron />
-            {heading}
-          </DisclosureSummary>
-          <FoldBody className="pull-request-section-body pt-tight-gap">{children}</FoldBody>
-        </Fold>
-      </DisclosureFrame>
-    </section>
-  );
 }
 
 /** The App's square at a check's size: its picture once it loads, and its hard hat on the quiet tile until then and where there is none. */
@@ -1012,7 +926,7 @@ function Anchored({ children }: { children: ReactNode }): ReactNode {
   return open === undefined ? children : <OpenHereFirst open={open}>{children}</OpenHereFirst>;
 }
 
-/** Words GitHub rendered, or, where it rendered none the read could carry, the words as markdown. */
+/** Words GitHub rendered, or, where it rendered none the read could carry, the words as markdown, drawn through the same steps (`GitHubWords`). */
 function EntryWords({
   entry,
   picture,
@@ -1030,7 +944,7 @@ function EntryWords({
       <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
         <EntryPictures html={entry.html}>
           <Anchored>
-            <GitHubWords html={entry.html} picture={picture} taskTick={taskTick} />
+            <GitHubWords source={{ html: entry.html }} picture={picture} taskTick={taskTick} />
           </Anchored>
         </EntryPictures>
         {note}
@@ -1041,7 +955,7 @@ function EntryWords({
   return entry.body === "" ? null : (
     <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
       <Anchored>
-        <TranscriptWords text={entry.body} />
+        <GitHubWords source={{ markdown: entry.body }} picture={picture} />
       </Anchored>
     </div>
   );
@@ -2201,12 +2115,37 @@ function DescriptionWords({
     <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
       <EntryPictures html={html}>
         <Anchored>
-          <GitHubWords html={html} picture={picture} taskTick={taskTick} />
+          <GitHubWords source={{ html }} picture={picture} taskTick={taskTick} />
         </Anchored>
       </EntryPictures>
       {note}
     </div>
   );
+}
+
+/**
+ * A block of the description the editor keeps as written, its HTML say,
+ * drawn as GitHub renders it (`GitHubWords`), so an HTML comment stands
+ * hidden and a bot's buttons as their pictures while the description is
+ * open; each picture read where GitHub's rendering reads it.
+ */
+function DescriptionRawBlock({
+  source,
+  html,
+  picture,
+}: {
+  source: string;
+  html: string;
+  picture: GitHubPictureDrawer;
+}): React.JSX.Element {
+  const addresses = useMemo(() => renderedAddresses(html), [html]);
+
+  const rendered = useCallback<GitHubPictureDrawer>(
+    (src, ...rest) => picture(addresses.get(src) ?? src, ...rest),
+    [addresses, picture],
+  );
+
+  return <GitHubWords source={{ markdown: source }} picture={rendered} />;
 }
 
 /** The description, as the pull request's read carries it, edited in place where the member may edit it (`./pull-request-description.tsx`), with the reactions it wears once the conversation's read, which carries them, lands; a skeleton while its read is out, and nothing where it failed, whose failure stands under the title. */
@@ -2253,6 +2192,9 @@ function DescriptionPart({
           pullRequest={part.value}
           body={part.value.body}
           drawn={words}
+          drawRaw={(source) => (
+            <DescriptionRawBlock source={source} html={part.value.html} picture={picture} />
+          )}
           onRead={onRead}
         />
       ) : (
@@ -2702,10 +2644,8 @@ function ConversationViewOptions({
  * comment is written in at its foot. Each of the two sections folds under
  * its heading, the choice kept for every pull request
  * (`conversation-filters.ts`), and its heading sticks to the scroller's top
- * while it is in view, what scrolls under it fading beneath it
- * (`SCROLL_FADE_INSET.BAND`) rather than cut at its edge. A thread or an
- * entry brought into view opens a folded Conversation, so its card is drawn
- * to land on.
+ * while it is in view. A thread or an entry brought into view opens a folded
+ * Conversation, so its card is drawn to land on.
  */
 function ConversationView({
   pictures,
@@ -2758,10 +2698,27 @@ function ConversationView({
 
   useVirtualFind({ root: scroller, rows: findRows, handle: entries, findable: viewShown });
   const asked = landing?.ask;
+  const target = landing?.target;
   const conversationOpen = filters.conversationOpen;
+
+  // The landing that last opened a folded Conversation, by what it lands on and its ask, since a thread's and a comment's asks are counted apart; so each asks it once, however long the account's read takes to draw the choice, and the guard goes with the landing.
+  const openedFor = useRef<{ readonly target: string; readonly ask: number } | undefined>(
+    undefined,
+  );
+
   useEffect(() => {
-    if (asked !== undefined && !conversationOpen) change({ conversationOpen: true });
-  }, [asked, conversationOpen, change]);
+    if (asked === undefined || target === undefined) {
+      openedFor.current = undefined;
+
+      return;
+    }
+
+    const standing = openedFor.current;
+
+    if (conversationOpen || (standing?.target === target && standing.ask === asked)) return;
+    openedFor.current = { target, ask: asked };
+    change({ conversationOpen: true });
+  }, [asked, target, conversationOpen, change]);
 
   return (
     // Note that it is in the tab order, because it scrolls on its own, and a column of words holds nothing else a keyboard could reach to scroll it by.
@@ -2770,8 +2727,6 @@ function ConversationView({
       role="region"
       aria-label="Pull request conversation"
       tabIndex={0}
-      fade={SCROLL_FADE.START}
-      fadeInset={SCROLL_FADE_INSET.BAND}
       gutter={SCROLL_GUTTER.STABLE}
     >
       {/* Its words at the measure, as far in from the sides as a `DetailPage` at a column's inset
@@ -2840,8 +2795,7 @@ interface ThreadJump {
  * A card brought into sight in the Conversation's own scroller, never by
  * `scrollIntoView`, which would scroll every box around it (panel
  * AGENTS.md): centered in the room under the heading stuck at the scroller's
- * top and the fade beneath it, which the scroller's own scroll padding
- * clears, and, where it is taller than that room, its top standing just
+ * top, which the scroller's own scroll padding clears, and, where it is taller than that room, its top standing just
  * under them rather than behind the heading.
  */
 function centerCard(card: HTMLElement): void {

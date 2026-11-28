@@ -3,7 +3,12 @@ import type { MachineAskLine } from "@repo/features/machine-ask-live";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { machineAsksQuery } from "./live-reads.js";
-import { appStateQuery, selectAccount, selectMachineCommands } from "./use-app-state.js";
+import {
+  appStateQuery,
+  selectAccount,
+  selectMachineCommands,
+  useAppStateSlice,
+} from "./use-app-state.js";
 
 /**
  * machine-asks.ts -- the asks the account's machines hold for the developer, every one still waiting on an answer, and those another machine holds, which this window puts over itself.
@@ -23,7 +28,7 @@ const NO_ASKS: readonly MachineAskLine[] = [];
 
 /** The asks still waiting on the developer, whichever machine holds them, the earliest asked first. */
 export function useMachineAsks(): readonly MachineAskLine[] {
-  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const accountId = signedInAccountId(useAppStateSlice(selectAccount));
   const asks = useQuery(machineAsksQuery(accountId)).data ?? NO_ASKS;
 
   return useMemo(() => asks.filter((ask) => ask.answer === undefined), [asks]);

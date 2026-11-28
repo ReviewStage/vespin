@@ -299,6 +299,22 @@ test("an edit takes the message's files into the box, read as its row draws them
   });
 });
 
+test("an edit takes a file of a type this window does not know into the box as a file of any other kind, rather than closing", async () => {
+  const queued = {
+    ...message("m1", "Read this."),
+    files: [{ name: "plan.later", mediaType: "application/vnd.later-type", id: SHOT_ID }],
+  };
+
+  act(() => now().page({ messages: [queued], revision: 1 }));
+  act(() => now().editing.edit(queued));
+  await answer({ queue: { messages: [{ ...queued, editing: true }], revision: 2 } });
+
+  assert.equal(now().editing.editing, "m1");
+  assert.deepEqual(now().composer.held.attachments, [
+    { name: "plan.later", mediaType: AGENT_ATTACHMENT_TYPE.OTHER, data: SHOT.data },
+  ]);
+});
+
 test("a message queued with an image names the id its bytes stand under for the host to draw it by, and once the service answers it under an id of its own, the bytes the box held stand under that too, never read back", async () => {
   act(() => now().page({ messages: [], revision: 1 }));
   act(() => now().composer.updateHeld((now) => ({ ...now, attachments: [SHOT] })));

@@ -276,36 +276,6 @@ function titleBarButtons(page: HTMLElement): string[] {
   );
 }
 
-test("while Settings is still loading its frame stands, a page of placeholder sections under the one bar Settings stands under beside the page list's column, and Escape pressed there leaves Settings for the plans, as it does once Settings stands", async () => {
-  const tabs: PanelTab[] = [];
-  const page = mount(false, {}, PANEL_TAB.SETTINGS, (tab) => tabs.push(tab));
-  // The router goes to Settings, whose frame stands while its chunk is read.
-  await act(async () => {
-    await Promise.resolve();
-  });
-  const placeholder = page.querySelector('section[aria-label="Settings"] [role="status"]');
-
-  const bars = page.querySelectorAll(
-    'section[aria-label="Settings"] :is(.desktop-drag-strip, .ui-toolbar)',
-  );
-
-  assert.deepEqual(
-    [
-      page.querySelector('nav[aria-label="Settings pages"]') !== null,
-      placeholder?.textContent,
-      placeholder?.querySelectorAll(".ui-settings-section-card").length,
-      bars.length,
-    ],
-    [true, "Reading Settings", 1, 1],
-  );
-
-  act(() => {
-    assert.ok(runAppCommand(APP_COMMAND.EXIT_SETTINGS), "Settings' way out is offered");
-  });
-
-  assert.deepEqual(tabs, [PANEL_TAB.TASKS]);
-});
-
 /** The shell on the tasks with its tab chosen from outside, so a test can open Settings and leave it. */
 async function mountSwitching(): Promise<(tab: PanelTab) => Promise<void>> {
   const container = document.createElement("div");
@@ -737,7 +707,7 @@ test("a plan opened with its Inbox tab shown rather than its plan is read at onc
   assert.equal(unreadOnOpen(true), "true");
 });
 
-/** A second plan beside `DOCUMENT_PLAN`, saved after it. */
+/** A second task beside `DOCUMENT_TASK`, saved after it. */
 const NOTES_TASK: Task = {
   ...DOCUMENT_TASK,
   id: "0c9a3f1e-6b2d-4e8f-a1c7-3d5e7f9a1b2c",

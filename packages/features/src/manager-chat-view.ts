@@ -23,21 +23,25 @@
  * lines that reached it, and the messages and sets it sent. A turn that
  * has ended keeps its work folded over the Manager's first message of the
  * turn, words or a set, in the order it was done, as a chat app stands what
- * it thought over its answer; the turn under way's work opens under the
- * working line instead, so a finished chat draws no more than its messages
- * and its folds.
+ * it thought over its answer; the turn under way's work opens at the
+ * chat's end from the working line over its box instead
+ * (`managerWorkingLine`), so a finished chat draws no more than its
+ * messages and its folds.
  */
 
+import { waitingOnYouWords } from "./agent-approval-model.js";
 import { AGENT_PART, type AgentPart, agentParts, isShownSet } from "./agent-parts.js";
 import { isChatSendTool } from "./agent-tools.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 import {
+  isOfferedReaction,
   MANAGER_CHAT_AUTHOR,
   MANAGER_CHAT_REACTION,
   type ManagerChatLiveMessage,
   type ManagerChatReaction,
   type ManagerChatReactionCount,
 } from "./manager-chat-live.js";
+import { WORKING_LINE } from "./time-format.js";
 import { isAgentTurn } from "./voice-call-lines.js";
 import { countWords } from "./words.js";
 
@@ -59,6 +63,9 @@ export const CHAT_THREAD_WORDS = {
   /** What a thread's page says once the message it hung on is gone from the chat, as a rewind drops it. */
   GONE: "This thread is no longer in the chat.",
 } as const;
+
+/** What the rule over the first message after the reader's mark of the chat says, on every client, as Slack's New line does. */
+export const CHAT_NEW_WORDS = "New";
 
 /** What a thread's replies are counted in. */
 const REPLY_NOUN = { one: "reply", many: "replies" } as const;
@@ -111,7 +118,7 @@ export interface ManagerChatView {
   readonly threads: ReadonlyMap<string, readonly ManagerChatLine[]>;
   readonly sending: ChatSendingPlaces;
   readonly work: ReadonlyMap<string, readonly AgentPart[]>;
-  /** The turn under way's work so far, which its working line opens; none where no turn is under way or it has done none. */
+  /** The turn under way's work so far, which the working line over the box opens; none where no turn is under way or it has done none. */
   readonly live: readonly AgentPart[];
 }
 
@@ -124,6 +131,36 @@ function isWork(part: AgentPart): boolean {
 
 /** The place of a message that stands in a run of its own. */
 export const CHAT_RUN_ALONE: ChatRunPlace = { opens: true, closes: true };
+
+/** Where a link to one of the chat's messages lands among the messages read (`chatMessageLanding`). */
+export const CHAT_LANDING = {
+  /** On its row at the chat's top. */
+  CHAT: "chat",
+  /** In its thread, where it is a reply standing there alone. */
+  THREAD: "thread",
+  /** Nowhere yet: it is not among the messages read, so it stands on an older page, or is gone. */
+  UNREAD: "unread",
+} as const;
+
+export type ChatLanding =
+  | { readonly kind: typeof CHAT_LANDING.CHAT }
+  | { readonly kind: typeof CHAT_LANDING.THREAD; readonly root: string }
+  | { readonly kind: typeof CHAT_LANDING.UNREAD };
+
+/**
+ * Where a link to one of the chat's messages, by its id, lands among the
+ * messages read: on its row at the chat's top, a reply also posted to the
+ * chat among them, as Slack lands one; in its thread, by the thread's root,
+ * where it is a reply standing there alone; or nowhere yet.
+ */
+export function chatMessageLanding(view: ManagerChatView, messageId: string): ChatLanding {
+  if (view.top.some((line) => line.message.id === messageId)) return { kind: CHAT_LANDING.CHAT };
+  const root = view.messages.find((line) => line.message.id === messageId)?.message.threadRoot;
+
+  return root === undefined || root === null
+    ? { kind: CHAT_LANDING.UNREAD }
+    : { kind: CHAT_LANDING.THREAD, root };
+}
 
 /** What a message's place in its sender's run is read from: who wrote it, and when. */
 type RunMark = Pick<ManagerChatLiveMessage, "authorKind" | "authorUserId" | "createdAt">;
@@ -186,7 +223,7 @@ export function repliesWords(count: number): string {
   return countWords(count, REPLY_NOUN);
 }
 
-/** Each reaction a message of the chat is given: its emoji, its name as a reaction's words say it, and the name of the press that gives it. */
+/** Each reaction offered first: its emoji, its name as a reaction's words say it, and the name of the press that gives it. */
 export const MANAGER_CHAT_REACTION_FACES = {
   [MANAGER_CHAT_REACTION.THUMBS_UP]: { emoji: "👍", name: "thumbs up", press: "Thumbs up" },
   [MANAGER_CHAT_REACTION.THUMBS_DOWN]: { emoji: "👎", name: "thumbs down", press: "Thumbs down" },
@@ -198,17 +235,45 @@ export const MANAGER_CHAT_REACTION_FACES = {
 /** What a reaction the service would not take says, as it is taken back off. */
 export const CHAT_REACTION_REFUSED_WORDS = "Could not react to the message.";
 
+/** The words of a person's edit of their own message: the mark an edited message wears after its words, as Slack's, the edit box's presses, and what an edit the service would not take says as its words go back. */
+export const CHAT_EDIT_WORDS = {
+  EDITED: "(edited)",
+  SAVE: "Save",
+  CANCEL: "Cancel",
+  REFUSED: "Could not edit the message.",
+} as const;
+
 /** Who else gave a reaction beside the reader. */
 const OTHER_NOUN = { one: "other", many: "others" } as const;
+
+/** A kind as Slack writes it in words, which a kind with no emoji to draw is drawn as too: `:tada:`. */
+function slackName(kind: string): string {
+  return `:${kind}:`;
+}
+
+/**
+ * What a reaction's chip draws: an offered one's own emoji, any other's as
+ * the service sent it, and a kind sent with none by its name as Slack
+ * writes it, so a kind a later service gives always draws.
+ */
+export function chatReactionEmoji({
+  kind,
+  emoji,
+}: Pick<ManagerChatReactionCount, "kind" | "emoji">): string {
+  if (isOfferedReaction(kind)) return MANAGER_CHAT_REACTION_FACES[kind].emoji;
+
+  return emoji ?? slackName(kind);
+}
 
 /**
  * Who gave a reaction, as its chip says it to a reader: the reader as
  * "You" where they gave it, the rest counted, since the chat's read counts
- * who gave it without naming them. "You reacted with thumbs up", "You and 1
- * other reacted with thumbs up", "2 reacted with thumbs down".
+ * who gave it without naming them, and an offered kind by its name, any
+ * other as Slack writes it. "You reacted with thumbs up", "You and 1 other
+ * reacted with thumbs up", "2 reacted with :tada:".
  */
 export function chatReactionWords({ kind, count, reacted }: ManagerChatReactionCount): string {
-  const { name } = MANAGER_CHAT_REACTION_FACES[kind];
+  const name = isOfferedReaction(kind) ? MANAGER_CHAT_REACTION_FACES[kind].name : slackName(kind);
 
   if (!reacted) return `${count} reacted with ${name}`;
   const others = count - 1;
@@ -224,12 +289,60 @@ export function chatWorkWords(shown: boolean): string {
 }
 
 /**
+ * The line a Manager's chat stands just over its box while a turn runs, as
+ * a channel says who is typing by its box: never a row of the chat, so the
+ * chat holds only what was said. It says the Manager is working, or what a
+ * client's own words name of a turn that is doing something else
+ * (`phase`, such as stopping or waiting for a usage limit to reset), or,
+ * while the Manager holds a call for the reader's answer, that it waits on
+ * them. While it works, its face types; while it waits, it rests.
+ */
+export interface ManagerWorkingLine {
+  readonly words: string;
+  /** Whether the Manager waits on the reader's answer to a call it holds, rather than working. */
+  readonly waiting: boolean;
+  /** Whether the turn has done work its chat leaves out, which Show work beside the line opens. */
+  readonly work: boolean;
+}
+
+/** What a Manager's chat says over its box while it works: its name, or the bare working words where none is read yet. */
+function managerWorkingWords(name: string): string {
+  return name === "" ? WORKING_LINE : `${name} is working…`;
+}
+
+/**
+ * The line over a Manager's chat's box (`ManagerWorkingLine`): none while
+ * no turn runs; the approvals waiting on the reader, where any does;
+ * otherwise the client's own words for a turn that is doing something other
+ * than working (`phase`), else that the Manager is working.
+ */
+export function managerWorkingLine(
+  view: Pick<ManagerChatView, "live">,
+  standing: {
+    readonly working: boolean;
+    readonly name: string;
+    /** How many of the Manager's calls wait on the reader's answer. */
+    readonly waiting: number;
+    /** The client's words for a turn neither starting nor working; none where it is either. */
+    readonly phase?: string | undefined;
+  },
+): ManagerWorkingLine | undefined {
+  if (!standing.working) return undefined;
+  const work = view.live.length > 0;
+
+  if (standing.waiting > 0)
+    return { words: waitingOnYouWords(standing.waiting), waiting: true, work };
+
+  return { words: standing.phase ?? managerWorkingWords(standing.name), waiting: false, work };
+}
+
+/**
  * A Manager's chat as a page draws it: its rows, read newest first, drawn
  * oldest first, each placed in its sender's run; each ended turn's work,
  * from the transcript held, folded over the Manager's first message of the
- * turn; and the work of the turn under way (`running`, its id), drawn
- * under the working line. A turn whose journal is not held keeps its work
- * nowhere, so its messages offer none.
+ * turn; and the work of the turn under way (`running`, its id), which the
+ * working line over the box opens at the chat's end. A turn whose journal
+ * is not held keeps its work nowhere, so its messages offer none.
  */
 export function managerChatView(
   rows: readonly ManagerChatLiveMessage[],

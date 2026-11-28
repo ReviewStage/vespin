@@ -500,7 +500,7 @@ function keepsMentions(before: string, after: string): boolean {
 
 /**
  * Whether a correction keeps every picture the text held, counted by its
- * address (`descriptionPicturesIn`), on the same terms as a mention: a correction
+ * address (`taskPicturesIn`), on the same terms as a mention: a correction
  * may reword a picture's alt text or caption, or move it within the phrase
  * it corrects, but one that drops it, or leaves its address as a link that
  * draws no picture, is not taken; striking the

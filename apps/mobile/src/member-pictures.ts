@@ -3,6 +3,7 @@
 import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { readerFirst } from "@repo/features/member-order";
+import type { WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -57,6 +58,70 @@ function useMembers(workspaceId: string | undefined) {
   return members;
 }
 
+/** The members of a workspace as the host holds them, and whether their read failed; none while unread. */
+export interface HeldMembers {
+  readonly members: readonly WorkspaceMember[] | undefined;
+  readonly failed: boolean;
+  /** Reads the members again, as a failed read's Try again and a pull do. */
+  readonly retry: () => void;
+}
+
+/**
+ * The members of the workspace `workspaceId` names, as a search reads them:
+ * the rows the host holds, and whether their read failed, so a search under
+ * People says it reads them, or that it could not, rather than that it
+ * found no one. Note that it holds no follow of its own, since the tabs
+ * hold the chosen workspace's members followed (`useMemberPicturesFollow`).
+ */
+export function useHeldMembers(workspaceId: string | undefined): HeldMembers {
+  const acts = useHostActs();
+
+  const { data } = useQuery({
+    ...appStateQuery,
+    select: useCallback(
+      (state: AppStateSnapshot) => {
+        const held =
+          workspaceId === undefined ? undefined : state[LIVE_READ.WORKSPACE_MEMBERS][workspaceId];
+
+        return { members: held?.rows?.members, failed: held?.failed === true };
+      },
+      [workspaceId],
+    ),
+  });
+
+  const retry = useCallback(() => {
+    if (workspaceId === undefined) return;
+    acts[ACT_KIND.WORKSPACE_MEMBERS_RETRY]({ workspaceId }).catch((cause: unknown) =>
+      console.error("Reading the members again did not go.", cause),
+    );
+  }, [acts, workspaceId]);
+
+  return useMemo(
+    () => ({ members: data?.members, failed: data?.failed === true, retry }),
+    [data, retry],
+  );
+}
+
+/** No members by id, before their list is read. */
+const NO_MEMBER_INDEX: ReadonlyMap<string, WorkspaceMember> = new Map();
+
+/** Each list of members read, by id, built once per list, so every caller of one list, as each chip in a transcript, shares one index. */
+const memberIndexes = new WeakMap<
+  readonly WorkspaceMember[],
+  ReadonlyMap<string, WorkspaceMember>
+>();
+
+/** The members of `members` by their id, the one index every caller of that list shares. */
+function memberIndexOf(members: readonly WorkspaceMember[]): ReadonlyMap<string, WorkspaceMember> {
+  const held = memberIndexes.get(members);
+
+  if (held !== undefined) return held;
+  const index = new Map(members.map((member) => [member.userId, member]));
+  memberIndexes.set(members, index);
+
+  return index;
+}
+
 /**
  * Each member's name and picture by their id, of the workspace
  * `workspaceId` names, or of the one the phone works in where none is
@@ -69,7 +134,7 @@ export function useMemberFaces(workspaceId?: string): MemberOf {
   const members = useMembers(workspaceId ?? chosenId);
 
   return useMemo(() => {
-    const byId = new Map((members ?? []).map((member) => [member.userId, member]));
+    const byId = members === undefined ? NO_MEMBER_INDEX : memberIndexOf(members);
 
     return (userId) => {
       const member = byId.get(userId);

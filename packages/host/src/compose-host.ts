@@ -91,12 +91,15 @@ import {
   NOT_ON_THIS_PLATFORM,
   unavailableConcern,
 } from "./host-concerns.js";
+import { INBOX_KEEPING } from "./inbox-collections.js";
 import { inboxRowsSource } from "./inbox-rows.js";
 import { KEPT_CONTENT_CHARACTERS, keptContent } from "./kept-content.js";
+import { heardWords, keptWordsInMemory } from "./kept-words.js";
 import { shutdownStepsFlushingEvents } from "./lifecycle.js";
 import { liveSocketClient } from "./live-socket.js";
-import { localCopy } from "./local-copy.js";
+import { LocalStoreBackend, localCopy } from "./local-copy.js";
 import { LocalDatabaseDriver } from "./local-database.js";
+import { sqliteBackend } from "./local-sqlite.js";
 import { HOST_NODE_CAPABILITY } from "./node-capabilities.js";
 import { offlineRefusedCount } from "./queued-writes.js";
 import { createGatewayService } from "./service.js";
@@ -297,6 +300,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const shutdownSignal = yield* ShutdownSignal;
     const { report } = yield* Reporter;
     const localDriver = yield* Effect.serviceOption(LocalDatabaseDriver);
+    const localBackend = yield* Effect.serviceOption(LocalStoreBackend);
     const fileSystemContext = yield* Effect.context<FileSystem.FileSystem | Path.Path>();
     yield* Effect.provideContext(forgetRetiredEntityFile(kernel.stateRoot), fileSystemContext);
 
@@ -380,20 +384,31 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     );
 
     /**
-     * The signed-in account's local database (`local-copy.ts`), the only
-     * place the pool's waiting writes and the messages refused are kept, and
-     * which every kept list draws from at the gate opening and writes as it
-     * answers: only where the platform has a driver,
-     * the Mac and the iPhone, and the run needs an account, so neither a
-     * browser tab nor a fixture run keeps one.
+     * The signed-in account's local store (`local-copy.ts`), which every
+     * kept list draws from at the gate opening and writes as it answers: only
+     * where the platform keeps one and the run needs an account, so a
+     * fixture run keeps none. The Mac and the iPhone keep it in SQLite over
+     * their driver, the only place the pool's waiting writes and the
+     * messages refused are kept; a browser tab keeps its kept lists in its
+     * own backend (`LocalStoreBackend`, IndexedDB) and those two in memory.
      */
-    const local =
-      Option.isSome(localDriver) && kernel.runMode.requiresAccount
-        ? yield* localCopy(kernel.stateRoot).pipe(
+    const backend = Option.isSome(localBackend)
+      ? localBackend.value
+      : Option.isSome(localDriver)
+        ? yield* sqliteBackend(kernel.stateRoot).pipe(
             Effect.provideService(LocalDatabaseDriver, localDriver.value),
             Effect.provideContext(fileSystemContext),
           )
         : undefined;
+
+    const local =
+      backend !== undefined && kernel.runMode.requiresAccount
+        ? yield* localCopy(backend)
+        : undefined;
+
+    /** The words the kept Inbox messages say, as the follow writes them and a search reads them: the local copy's, or one held in memory where none stands, the same store for both. */
+    const memoryWords = keptWordsInMemory();
+    const keptWords = local?.words ?? heardWords(() => memoryWords);
 
     /**
      * Every row the composers' reads hold, once, and the writes drawn over
@@ -542,6 +557,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const agents = yield* served(
       composeAgents({
         kernel,
+        // Note that a platform keeping collections on disk keeps the Inbox lean beside its messages, whether or not the account's database opened, so its screens read one path.
+        inboxKeeping: local?.keepsCollections === true ? INBOX_KEEPING.LEAN : INBOX_KEEPING.WHOLE,
+        keptWords,
         fileDownload: Option.getOrUndefined(fileDownload),
         account,
         accountId,
@@ -562,6 +580,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         pullRequestListings: tasks.pullRequestListings,
         openedOutside: tasks.openedOutside,
         inboxNamed: tasks.inboxNamed,
+        coldMarked: tasks.coldMarked,
         tasksListed,
         pool,
         agentListed,
@@ -769,10 +788,10 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         };
 
     /**
-     * The signed-in account's local database opened where the host has one,
+     * The signed-in account's local store opened where the host has one,
      * with its refused messages and its waiting writes laid back before any
-     * read draws, so the first answer draws under them. A host with no
-     * database keeps them in memory alone.
+     * read draws, so the first answer draws under them. A host whose store
+     * keeps no queues, or that has none, keeps them in memory alone.
      */
     const openLocal = Effect.gen(function* () {
       const signedInId = account.signedIn() ? accountId() : undefined;
@@ -782,7 +801,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       yield* pool.requeue(waiting, [...tasks.queueable, ...agents.queueable]);
     });
 
-    /** The account's queues let go and its local database and any file an older build kept deleted, as a sign-out does. */
+    /** The account's queues let go and its local store and any file an older build kept deleted, as a sign-out does. */
     const forgetEntities = Effect.gen(function* () {
       yield* pool.letGoQueued;
       yield* agents.refused.forgotten;
@@ -943,7 +962,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       nodes: kernel.nodes,
       concerns: new Set(Object.values(HOST_CONCERN).filter(running)),
       startOrder: HOST_START_ORDER.flatMap((name) => (running(name) ? [concerns[name]] : [])),
-      inboxRows: inboxRowsSource(pool),
+      inboxRows: inboxRowsSource(pool, keptWords),
       /**
        * The launch's own arming: where the account's capabilities already
        * stand open, the launch opens the gate exactly as a sign-in does; and

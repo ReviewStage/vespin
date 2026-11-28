@@ -34,6 +34,8 @@ export const HOSTED_SERVICE_PATH = {
   ACCOUNT_SOUNDS: "/api/account/sounds",
   /** Which of the account's sounds one of its two sounds plays (PUT). */
   ACCOUNT_SOUND_CHOICE: "/api/account/sounds/choice",
+  /** One of the account's view choices kept, or forgotten with a null value (PUT). `view-choice-wire.ts` declares the body. */
+  ACCOUNT_VIEW_CHOICES: "/api/account/view-choices",
   /** One of the account's subscriptions named, or its name cleared (PUT). */
   ACCOUNT_SUBSCRIPTION_LABEL: "/api/account/provider-keys/label",
   /** One of a ChatGPT plan's rate-limit reset credits spent (POST). */
@@ -175,6 +177,13 @@ export const HOSTED_SERVICE_PATH = {
    * whole, or `unavailable`. `live-wire.ts` declares the answer.
    */
   LIVE_INBOX_ITEMS: "/api/live/inbox-items",
+  /**
+   * One page of the account's settled inbox items older than the items read
+   * carries, the latest changed first, past `?before=` where named, each
+   * whole as that read answers it: none the account may not read.
+   * `inbox-live.ts` declares the answer.
+   */
+  LIVE_INBOX_OLDER: "/api/live/inbox-older",
   /** One task's pages and calls under `?id=`, each part's mark sealed for following over Neon Realtime (GET), or `not-found` or `unavailable`. */
   LIVE_TASK_RECORD: "/api/live/task-record",
   /** One task's pages under `?id=`, each at its newest version, sealed for following over Neon Realtime (GET), or with `?poll=true` their rows inline; or `not-found`. */
@@ -209,6 +218,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_TASK_RELATIONS: "/api/live/task-relations",
   /** The tasks a search finds by their name, number, or key under `?query=`, the latest changed first and few, with every agent of them, as the task list answers them, with `?poll=true` their rows inline. `task-list-live.ts` declares the answer. */
   LIVE_TASK_SEARCH: "/api/live/task-search",
+  /** The inbox items a search finds by their title, their threads' words, or their holder's name under `?query=`, of any age, the latest changed first and at most 50, as the account's inbox items carry them, with `?poll=true` their rows inline. `inbox-live.ts` declares the answer. */
+  LIVE_INBOX_SEARCH: "/api/live/inbox-search",
   /** One page of a workspace's settled tasks under `?workspaceId=`, the newest finished first, past `?beforeAt=&beforeId=` where named, each with every agent of it, as the task list answers them: none the account does not reach. `task-list-live.ts` declares the answer. */
   LIVE_TASK_PAGE: "/api/live/task-page",
   /** A person's tasks and agents in a workspace under `?workspaceId=&personId=`: how many of each the account may read, and a page of the newest, each with every agent of it, as the task list answers them. `task-list-live.ts` declares the answer. */
@@ -251,6 +262,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_INTEGRATION_STATUSES: "/api/live/integration-statuses",
   /** The account's preferences row, its default agent, chapters model, and Slack notifications as stored, sealed for following over Neon Realtime (GET), or its row inline where polled, none for an account that stored nothing. `account-preferences-live.ts` declares the answer. */
   LIVE_ACCOUNT_PREFERENCES: "/api/live/account-preferences",
+  /** The account's view choices, each by its key and the workspace it is kept for, sealed for following over Neon Realtime (GET), or their rows inline where polled. `view-choice-live.ts` declares the answer. */
+  LIVE_VIEW_CHOICES: "/api/live/view-choices",
   /**
    * A workspace's agents, on any task, newest started first and
    * the archived ones left out unless the query asks for them, narrowed to
@@ -307,11 +320,11 @@ export const HOSTED_SERVICE_PATH = {
   HOST_PAIRING_APPROVE: "/api/hosts/pairing/approve",
   /** A pending pairing denied by its code, so its box is answered denied (POST). */
   HOST_PAIRING_DENY: "/api/hosts/pairing/deny",
-  /** The machines one workspace owns, to a member of it (GET, `WORKSPACE_MACHINES_QUERY`). `workspace-machine-wire.ts` declares the bodies. */
+  /** The machines one workspace owns, to a member of it (GET, `WORKSPACE_MACHINES_QUERY`), answered with none to a released build until the floor reaches 11. `workspace-machine-wire.ts` declares the bodies. */
   WORKSPACE_MACHINES: "/api/workspaces/machines",
-  /** One of a workspace's machines renamed by an owner or an admin of it (POST). */
+  /** One of a workspace's machines renamed, as a released build asks, answered not found until the floor reaches 11 (POST). */
   WORKSPACE_MACHINE_RENAME: "/api/workspaces/machines/rename",
-  /** One of a workspace's machines removed by an owner or an admin of it, its secret refused at once (POST). */
+  /** One of a workspace's machines removed, as a released build asks, answered not found until the floor reaches 11 (POST). */
   WORKSPACE_MACHINE_REMOVE: "/api/workspaces/machines/remove",
   /**
    * The shell commands the account's agents asked to run on the developer's
@@ -393,7 +406,7 @@ export const HOSTED_SERVICE_PATH = {
    * GitHub holds it now (GET), named by the workspace and the repository
    * (`GITHUB_REPOSITORIES_QUERY`), for a place with no plan to name it by,
    * such as an agent an automation started; the answer is a plan's tree's
-   * (`description-wire.ts`).
+   * (`task-wire.ts`).
    */
   GITHUB_REPOSITORY_TREE: "/api/github/repositories/tree",
   /**
@@ -406,7 +419,7 @@ export const HOSTED_SERVICE_PATH = {
   /**
    * The skills a developer may choose of a repository a workspace's
    * installation reaches (GET), named as `GITHUB_REPOSITORY_TREE` names it;
-   * the answer is a plan's skills' (`description-wire.ts`).
+   * the answer is a plan's skills' (`task-wire.ts`).
    */
   GITHUB_REPOSITORY_SKILLS: "/api/github/repositories/skills",
   /**

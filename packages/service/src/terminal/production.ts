@@ -12,8 +12,6 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { hasRepository, readVisibleAgent } from "@repo/database/models/agent-store";
-import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import {
   claimCredentialRenewal,
   credentialRenewedAt,
@@ -24,7 +22,6 @@ import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
-import { controlsAgent } from "../agents/agent-reach.js";
 import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import type { AgentImage } from "../agents/coder-host/agent-image.js";
 import { agentRepositoryToken, repositoryCredentialOf } from "../agents/coder-host/checkout.js";
@@ -32,6 +29,7 @@ import { workspaceEnvironmentOf } from "../agents/coder-host/runner-sessions.js"
 import { connectPty } from "../agents/sandbox-pty.js";
 import { touchedAgentSandbox } from "../agents/sandbox-use.js";
 import { AgentSandbox, agentSandboxLayer } from "../agents/terminal/agent-sandbox.js";
+import { relayReachedAgent } from "../agents/terminal/sandbox-reach.js";
 import type { HostedEnvironment } from "../environment.js";
 import type { GitHubApp } from "../github/github-app.js";
 import type { RelayDependencies } from "./relay.js";
@@ -65,23 +63,16 @@ export const relayDependencies: Effect.Effect<RelayDependencies, never, RelaySer
       reach: (userId, agentId) =>
         run(
           Effect.gen(function* () {
-            const found = yield* readVisibleAgent(userId, agentId);
+            const reached = yield* relayReachedAgent(userId, agentId);
 
-            if (Option.isNone(found) || found.value.archivedAt !== null) return Option.none();
-            const agent = found.value;
-
-            // Note that a shell in an agent on its starter's own GitHub token is its starter's alone.
-            if (!controlsAgent(userId, agent)) return Option.none();
-
-            // An agent with no repository opens no sandbox for a shell to reach.
-            if (!hasRepository(agent)) return Option.none();
+            if (Option.isNone(reached)) return Option.none();
+            const { agent, sessionId } = reached.value;
             const target = { userId: agent.userId, conversationId: agent.conversationId };
-            const [session] = yield* standingSessionsOf(agent.userId, [agent.conversationId]);
 
             return Option.some({
               userId: agent.userId,
               conversationId: agent.conversationId,
-              sessionId: session?.sessionId,
+              sessionId,
               repositoryCredential: run(
                 Effect.map(agentRepositoryToken(target, agent), repositoryCredentialOf),
               ),

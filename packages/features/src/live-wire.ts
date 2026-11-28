@@ -258,12 +258,18 @@ export type TranscriptNowAnswer = typeof transcriptNowAnswerSchema.Type;
 export const LIVE_READ = {
   /** The account's preferences row, its default agent, chapters model, and Slack notifications as stored, by the account: the service's `accountPreferences` query, held for the signed-in session into the sync engine's pool, every write to one drawn over it the moment it is asked. */
   ACCOUNT_PREFERENCES: "accountPreferences",
+  /** The account's view choices (a sort, a filter, a fold), by the account: the service's `viewChoicesRead`, declared as `VIEW_CHOICES_READ`, held for the signed-in session, so a choice made on one device is drawn on every other. */
+  VIEW_CHOICES: "viewChoices",
   /** The shell commands the account always allows its coding agents to run unasked, by the account: fetched by the host while a window holds it, and laid from each write's own answer. */
   ALLOWED_COMMANDS: "allowedCommands",
-  /** The run of an automation that started one agent, by the agent: the service's `agentOriginLive` query, held for the windows that show the agent's page and a few they showed lately. */
+  /** The run of an automation that started one agent, by the agent: the service's `agentOriginRead` query, held for the windows that show the agent's page and a few they showed lately. */
   AGENT_ORIGINS: "agentOrigins",
   /** Every inbox item the account reaches. */
   INBOX_ITEMS: "inboxItems",
+  /** The account's settled inbox items older than `INBOX_ITEMS` carries: the service's `inboxOlder` read, a page at a time as an Inbox listing every item reaches its end, held for the signed-in session beside the feed. */
+  INBOX_OLDER: "inboxOlder",
+  /** The inbox items each place a search is asked from found on the service's `inboxSearch` read past what the host holds, by the place (`INBOX_SEARCH_PLACE`): its words and the items they found, held while the place's words stand. */
+  INBOX_FOUND: "inboxFound",
   /** One plan's inbox, or one agent's, by its holder: the service's `taskInbox` or `agentInbox` query, by the holder's kind, held for the windows that chose it and a few they chose lately. */
   HOLDER_INBOX: "holderInbox",
   /** The skills the account sees in one workspace, the workspace's and its own, by the workspace: the service's `installedSkills` query, held for the windows that draw Settings › Skills and a few they drew lately. */
@@ -278,13 +284,13 @@ export const LIVE_READ = {
   MEMORIES: "workspaceMemories",
   /** The models a coding agent may run on as the account is offered them, and its devices a task may run on, by the account: fetched by the host while a window holds it, and asked again as a window comes forward, and as the account's provider keys move. */
   MODELS: "models",
-  /** One task's pages, or one agent's on no task, by what they stand on: the service's `taskPagesLive` or `agentPagesLive` query, by its kind, held for the windows that chose it and a few they chose lately. */
+  /** One task's pages, or one agent's on no task, by what they stand on: the service's `taskPagesRead` or `agentPagesRead` query, by its kind, held for the windows that chose it and a few they chose lately. */
   PAGES: "pages",
   /** The account's own provider keys and plans, as hints and statuses and never a key, by the account: fetched by the host while a window holds it, and laid from each write's own answer. */
   PROVIDER_KEYS: "providerKeys",
   /** The account's own GitHub token as its login, hint, and status, never the token, by the account: fetched by the host while a window holds it, and laid from each save's and removal's own answer. */
   GITHUB_TOKEN: "githubToken",
-  /** One agent's pull request's newest chapters, by the agent and the pull request's number: the service's `pullRequestChaptersLive` query. */
+  /** One agent's pull request's newest chapters, by the agent and the pull request's number: the service's `pullRequestChaptersRead` query. */
   PULL_REQUEST_CHAPTERS: "pullRequestChapters",
   /** One pull request's newest chapters, by the workspace, its repository, and its number: the service's `repositoryPullRequestChapters` query. */
   REPOSITORY_PULL_REQUEST_CHAPTERS: "repositoryPullRequestChapters",
@@ -304,13 +310,13 @@ export const LIVE_READ = {
   REPOSITORY_PULL_REQUEST_VIEWED: "repositoryPullRequestViewed",
   /** What the reviewer and label pickers offer of one pull request's repository, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
   REPOSITORY_REVIEW_OPTIONS: "repositoryReviewOptions",
-  /** One task's comments, its description's own threads or one page's: the service's `taskCommentsLive` query. */
+  /** One task's comments, its description's own threads or one page's: the service's `taskCommentsRead` query. */
   DESCRIPTION_COMMENTS: "taskComments",
-  /** One task's description history, by the task: the service's `taskHistoryLive` query for its newest page, then the older pages its version history read past it, held for the windows that show it and a few they showed lately. */
+  /** One task's description history, by the task: the service's `taskHistoryRead` query for its newest page, then the older pages its version history read past it, held for the windows that show it and a few they showed lately. */
   HISTORY: "taskHistory",
   /** One Manager's chat, by the agent: the service's `managerChat` query for its newest page, then the older pages its chat read past it, held for the windows that show the chat and a few they showed lately. */
   MANAGER_CHAT: "managerChat",
-  /** One task's cloud Browser tabs, every one of its agents', or one agent's, by what they are listed for: the service's `taskBrowserTabsLive` or `agentBrowserTabsLive` query, by its kind, held for the windows whose side panel lists them and a few they listed lately. */
+  /** One task's cloud Browser tabs, every one of its agents', or one agent's, by what they are listed for: the service's `taskBrowserTabsRead` or `agentBrowserTabsRead` query, by its kind, held for the windows whose side panel lists them and a few they listed lately. */
   BROWSER_TABS: "browserTabs",
   /** The repositories the account reaches in one workspace, or in every one where a list names none, by the workspace: fetched by the host while a window holds it. */
   REPOSITORY_LISTS: "repositoryLists",
@@ -320,7 +326,7 @@ export const LIVE_READ = {
   HOSTS: "hosts",
   /** The account's machines with their own settings for agents' commands and apps, by the account: the service's `machinesRead`, declared as `MACHINES_READ`, held while Settings › Machines draws them and a while after. */
   MACHINES: "machines",
-  /** The machines one workspace owns, by the workspace: the service's `workspaceMachinesRead`, declared as `WORKSPACE_MACHINES_READ`, held while Settings › Machines draws them and a while after. */
+  /** The machines one workspace owns, by the workspace: the service's `workspaceMachinesRead`, declared as `WORKSPACE_MACHINES_READ`, which answers a released build's Settings › Machines with none until the floor reaches 11. */
   WORKSPACE_MACHINES: "workspaceMachines",
   /** The asks the account's machines hold for its answer, by the account: the service's `machineAsksRead`, declared as `MACHINE_ASKS_READ`, held while a window could draw one and by each machine of the account, which takes its answers from it. */
   MACHINE_ASKS: "machineAsks",
@@ -353,7 +359,7 @@ export const LIVE_READ = {
   /**
    * One task's description, by the task, held for the windows that opened it and a
    * few they opened lately. Note that no live query carries its text: the
-   * host follows the task's record (`taskRecordLive`), whose description mark moves
+   * host follows the task's record (`taskRecordRead`), whose description mark moves
    * with each save, and reads the description again where it moved past the copy held.
    */
   HELD_TASK: "heldTask",

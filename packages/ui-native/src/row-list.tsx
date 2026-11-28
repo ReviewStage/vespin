@@ -63,21 +63,24 @@ import { actContent } from "./glyph-label.js";
 import { dropLink, headerMenu, rowHeard, sideMargins, stackScrollEdge } from "./interactions.js";
 import { useRowInset } from "./layout-margin.js";
 import type { LongPressGroup } from "./list-row.js";
-import { RepositoryPicture, ToneGlyph } from "./marks.js";
+import { Avatar, RepositoryPicture, ToneGlyph } from "./marks.js";
 import { ProblemLine } from "./problem-line.js";
 import { useRollingCount } from "./rolling-count.js";
 import { menuPressAt, menuTree } from "./row-menu-model.js";
 import {
   RowChoosingContext,
   RowOpenContext,
+  RowPickContext,
   RowSearchedContext,
   RowSelectedContext,
+  RowSystemLookContext,
 } from "./row-open.js";
 import { sectionInk } from "./section-ink.js";
 import { Text } from "./text.js";
 import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
 /** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
 const FOLD_HEARD = { OPEN: "Expanded", SHUT: "Collapsed" } as const;
@@ -107,6 +110,8 @@ const HEADER_VERTICAL = SPACE.ROW;
 export const LIST_LOOK = {
   PLAIN: "plain",
   DETAIL: "grouped",
+  /** An iPad's own sidebar, the system's sidebar list, so it keeps the system's sidebar metrics, keyboard focus and arrow keys, and pointer hover. */
+  SIDEBAR: "sidebar",
 } as const;
 
 export type ListLook = (typeof LIST_LOOK)[keyof typeof LIST_LOOK];
@@ -288,6 +293,8 @@ export function RowList({
   // Whether a two-finger drag started Select mode before the list was drawn in it.
   const dragged = useRef(false);
   const chooses = choosing !== undefined;
+  const sidebar = look === LIST_LOOK.SIDEBAR;
+  const picked = useContext(RowPickContext);
 
   useEffect(() => {
     if (!chooses) dragged.current = false;
@@ -335,12 +342,15 @@ export function RowList({
 
         const id = selectedId(selection);
 
-        if (id !== undefined) onSelect?.(id);
+        if (id === undefined || onSelect === undefined) return;
+        picked?.();
+        onSelect(id);
       }}
       modifiers={[
         listStyle(look),
         scrollContentBackground("hidden"),
-        ...listGround(colors),
+        // Note that the system's sidebar list paints no ground of ours, so it stands clear on the sidebar's glass.
+        ...(sidebar ? [] : listGround(colors)),
         onGeometryChange(({ width: next }) => setWidth(next)),
         ...(sides > 0 ? [sideMargins(sides)] : []),
         // Note that a page's sections stand as close as the system lets them, since its small headers already part them.
@@ -360,18 +370,20 @@ export function RowList({
       ]}
     >
       <ListLookContext value={look}>
-        <RowOpenContext value={onSelect}>
-          <RowSelectedContext value={choosing === undefined ? selected : undefined}>
-            {/* Note that Select mode leaves the lead out too, since the rows chosen are what the screen acts on then. */}
-            {lead === undefined || choosing !== undefined ? null : lead}
-            {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
-            {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
-            <RowSearchedContext value={searchedWords}>
-              <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
-            </RowSearchedContext>
-            {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
-          </RowSelectedContext>
-        </RowOpenContext>
+        <RowSystemLookContext value={sidebar}>
+          <RowOpenContext value={onSelect}>
+            <RowSelectedContext value={choosing === undefined && !sidebar ? selected : undefined}>
+              {/* Note that Select mode leaves the lead out too, since the rows chosen are what the screen acts on then. */}
+              {lead === undefined || choosing !== undefined ? null : lead}
+              {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
+              {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
+              <RowSearchedContext value={searchedWords}>
+                <RowChoosingContext value={choosing !== undefined}>{children}</RowChoosingContext>
+              </RowSearchedContext>
+              {empty === undefined ? null : <EmptyRow>{empty}</EmptyRow>}
+            </RowSelectedContext>
+          </RowOpenContext>
+        </RowSystemLookContext>
       </ListLookContext>
     </List>
   );
@@ -411,6 +423,16 @@ export function RowForEach<Item>({ data, keyOf, children }: RowForEachProps<Item
   );
 }
 
+/** Whose a section's rows are, as its header's picture: a workspace, by its tile, or a person, by their photo or their letter. */
+type SectionOwner =
+  | { readonly workspace: SwitcherWorkspace }
+  | {
+      readonly person: {
+        readonly name: string;
+        readonly picture?: string | undefined;
+      };
+    };
+
 type ListSectionProps = {
   /** The words heading the section, small and muted. */
   readonly title?: string | undefined;
@@ -426,6 +448,8 @@ type ListSectionProps = {
   readonly emoji?: string | undefined;
   /** The repository, `owner/name`, whose owner's picture stands in the glyph's place, as the panel's sidebar leads a repository's group; the glyph stands in until it draws. */
   readonly repository?: string | undefined;
+  /** Whose the group's rows are, their picture in the glyph's place: a workspace's tile, or a person's photo or letter, as the panel's Automations groups lead with their owner. */
+  readonly owner?: SectionOwner | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
   readonly foldable?: boolean | undefined;
   /** Whether a foldable section stands folded, where its screen holds that across a change of layout; it holds its own where none is given. */
@@ -504,6 +528,7 @@ function GroupHeader({
   glyphColor,
   emoji,
   repository,
+  owner,
   folded,
 }: {
   readonly title: string;
@@ -514,6 +539,7 @@ function GroupHeader({
   readonly glyphColor: TaskSectionIconColor | undefined;
   readonly emoji: string | undefined;
   readonly repository: string | undefined;
+  readonly owner: SectionOwner | undefined;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
@@ -533,7 +559,16 @@ function GroupHeader({
         accessibilityAddTraits(["isHeader"]),
       ]}
     >
-      {repository !== undefined ? (
+      {owner !== undefined ? (
+        // Note that the picture is hidden, since the title beside it names the owner already.
+        <HStack modifiers={[accessibilityHidden()]}>
+          {"workspace" in owner ? (
+            <WorkspaceTile workspace={owner.workspace} size={glyphSize} />
+          ) : (
+            <Avatar name={owner.person.name} picture={owner.person.picture} size={glyphSize} />
+          )}
+        </HStack>
+      ) : repository !== undefined ? (
         <RepositoryPicture repository={repository} size={glyphSize} />
       ) : emoji !== undefined ? (
         <Text modifiers={[font({ textStyle: TYPE_ROLE.GROUP_HEADER }), accessibilityHidden()]}>
@@ -744,6 +779,7 @@ export function ListSection({
   glyphColor,
   emoji,
   repository,
+  owner,
   foldable = false,
   folded: held,
   onFold,
@@ -763,6 +799,7 @@ export function ListSection({
   const reduceMotion = useReduceMotion();
   const inset = useRowInset();
   const colors = useColors();
+  const dark = useColorScheme() === "dark";
 
   const setFolded = (next: boolean) => {
     setOwn(next);
@@ -783,6 +820,7 @@ export function ListSection({
         glyphColor={glyphColor}
         emoji={emoji}
         repository={repository}
+        owner={owner}
         folded={foldable ? folded : undefined}
       />
     );
@@ -809,6 +847,7 @@ export function ListSection({
         groups: menuTree(menu, {
           act: colors.TEXT_MUTED,
           tone: (tone) => toneColor(colors, tone),
+          section: (color) => sectionInk(color, dark),
         }),
       })
     : undefined;

@@ -68,16 +68,6 @@ export const MANAGER_FACE_PICK_COLORS = [
   MANAGER_FACE_COLOR.GRAY,
 ] as const satisfies readonly ManagerFaceColor[];
 
-/** The colors today's pickers offer, in their order, until they offer `MANAGER_FACE_PICK_COLORS`. */
-export const MANAGER_FACE_OFFERED_COLORS = [
-  MANAGER_FACE_COLOR.YELLOW,
-  MANAGER_FACE_COLOR.GREEN,
-  MANAGER_FACE_COLOR.BLUE,
-  MANAGER_FACE_COLOR.PINK,
-  MANAGER_FACE_COLOR.PURPLE,
-  MANAGER_FACE_COLOR.PEACH,
-] as const satisfies readonly ManagerFaceColor[];
-
 /** What each character is called, as a face is named to a reader who cannot see it. */
 export const MANAGER_FACE_CHARACTER_NAME = {
   [MANAGER_FACE_CHARACTER.GHOST]: "Ghost",
@@ -135,9 +125,9 @@ export function managerFaceName(face: ManagerFace): string {
   return `${color} ${MANAGER_FACE_CHARACTER_NAME[face.character].toLowerCase()}`;
 }
 
-/** Every face a Manager may wear, character by character, each in every offered color, in the order every picker lists them. */
+/** Every face a Manager may wear, character by character, each in every color a face is given in, in the order every picker lists them. */
 export const MANAGER_FACES: readonly ManagerFace[] = Object.values(MANAGER_FACE_CHARACTER).flatMap(
-  (character) => MANAGER_FACE_OFFERED_COLORS.map((color) => ({ character, color })),
+  (character) => MANAGER_FACE_PICK_COLORS.map((color) => ({ character, color })),
 );
 
 /** The faces whose name holds every word of `query`, whatever its case, in the pickers' order: "purple", "cat", "purple cat". */
@@ -156,3 +146,15 @@ export function managerFacesFound(query: string): readonly ManagerFace[] {
 
 /** What a client says where a change of a Manager's face did not take. */
 export const MANAGER_FACE_FAILED = "Couldn't change the Manager's face.";
+
+/** Whether two faces are one: the same character and color, and the same emoji or none, so a pick that changes the emoji alone is a change. */
+export function sameManagerFace(
+  one: ManagerFace | undefined,
+  other: ManagerFace | undefined,
+): boolean {
+  return (
+    one?.character === other?.character &&
+    one?.color === other?.color &&
+    one?.emoji === other?.emoji
+  );
+}

@@ -1,0 +1,25 @@
+/* working-mark.css -- the working mark's lap, played while endless loops run.
+
+   The mark's cells draw its still frame, the two pixels mid-lap. While
+   --ui-loop-motion runs, the mark hides them and draws itself instead
+   through its lap's frames (`--ui-working-lap-frames`, an animated image
+   the compositor steps five times a second), a mask over the ink around it.
+   Note that the loop is an image rather than keyframes, because Chromium
+   ticks a running keyframe animation on every vsync and an image only on
+   its frames (`scripts/loop-frames.ts`). Reduced motion, a capture run,
+   and a hidden page pause the loop, and a browser that cannot query a
+   custom property keeps the still frame. Every mark shows the same image,
+   so marks side by side step in phase. */
+
+@layer components {
+  @container style(--ui-loop-motion: running) {
+    .ui-working-mark {
+      background-color: currentColor;
+      mask: var(--ui-working-lap-frames) center / 100% 100% no-repeat;
+    }
+
+    .ui-working-mark > * {
+      visibility: hidden;
+    }
+  }
+}

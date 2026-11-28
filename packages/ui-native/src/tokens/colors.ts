@@ -120,10 +120,8 @@ export function useColors(elevated?: boolean): BrandColors {
   const dark = useColorScheme() === "dark";
   const stronger = useIncreaseContrast();
   const lifted = useContext(ElevatedContext) || elevated === true;
-  const onAccent = useContext(OnAccentContext);
-  const colors = baseColors(dark, stronger, lifted);
 
-  return onAccent ? onAccentOf(colors) : colors;
+  return baseColors(dark, stronger, lifted);
 }
 
 /** The theme by the window's scheme, the reader's contrast, and whether it stands lifted. */
@@ -133,60 +131,6 @@ function baseColors(dark: boolean, stronger: boolean, lifted: boolean): BrandCol
   if (stronger) return dark ? STRONGER.DARK : STRONGER.LIGHT;
 
   return dark ? THEME.DARK : THEME.LIGHT;
-}
-
-/** How much of the ink on the accent a fill inside it washes with, and an edge, as two hex digits of alpha. */
-const ON_ACCENT_WASH = {
-  FILL: "33",
-  EDGE: "59",
-} as const;
-
-/** Each theme as it reads on the accent, kept once per theme, so a bubble's words draw against one stable value. */
-const ON_ACCENT_THEMES = new WeakMap<BrandColors, BrandColors>();
-
-/**
- * A theme as words read on the accent's fill, as the reader's own bubble
- * stands in a Manager's chat, as Messages inks its blue bubble white: every
- * ink, a link's among them, the ink on the accent, and every fill and edge
- * a chip, a code block, or a card inside stands on a wash of that ink, so
- * nothing inside draws the page's gray on copper.
- */
-function onAccentOf(colors: BrandColors): BrandColors {
-  const kept = ON_ACCENT_THEMES.get(colors);
-
-  if (kept !== undefined) return kept;
-  const ink = colors.ON_ACCENT;
-  const fill = `${ink}${ON_ACCENT_WASH.FILL}`;
-  const edge = `${ink}${ON_ACCENT_WASH.EDGE}`;
-
-  const read: BrandColors = {
-    ...colors,
-    TEXT: ink,
-    TEXT_BODY: ink,
-    TEXT_MUTED: ink,
-    ACCENT_TEXT: ink,
-    SIDEBAR_INK: ink,
-    FILL_STRONG: fill,
-    WELL: fill,
-    CHIP: fill,
-    CHIP_HOVER: fill,
-    SURFACE: fill,
-    CARD: fill,
-    CHIP_EDGE: edge,
-    CHIP_EDGE_STRONG: edge,
-  };
-
-  ON_ACCENT_THEMES.set(colors, read);
-
-  return read;
-}
-
-/** Whether what is drawn stands on the accent's fill, such as the reader's own bubble. */
-const OnAccentContext = createContext(false);
-
-/** What stands on the accent's fill, its words, links, chips and code inked to read on it (`onAccentOf`). */
-export function OnAccentInk({ children }: { readonly children: ReactNode }) {
-  return createElement(OnAccentContext.Provider, { value: true }, children);
 }
 
 /**

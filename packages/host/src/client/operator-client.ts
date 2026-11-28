@@ -118,6 +118,12 @@ export const createOperatorClient = /* @__PURE__ */ Effect.fn("client/createOper
       gateway.host.onInboxItemsChanged((read) => {
         state.update({ [LIVE_READ.INBOX_ITEMS]: read });
       }),
+      gateway.host.onInboxOlderChanged((read) => {
+        state.update({ [LIVE_READ.INBOX_OLDER]: read });
+      }),
+      gateway.host.onInboxFoundChanged((found) => {
+        state.update({ [LIVE_READ.INBOX_FOUND]: found });
+      }),
       gateway.host.onThisMacHostChanged((held) => {
         state.update({ [LIVE_READ.THIS_MAC_HOST]: held });
       }),

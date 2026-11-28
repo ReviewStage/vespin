@@ -188,7 +188,7 @@ function resolvedAt(css: string, resolution: Resolution): string {
   return resolved + css.slice(from);
 }
 
-/** jsdom plays no animation, so the sheets are laid with their motion held still, as a capture run holds it: a test that wants motion hands the window its own tokens inline, as `playMotions` does. */
+/** jsdom plays no animation, so the sheets are laid with their motion held still, as a capture run holds it: a test that wants motion hands the window its own tokens inline. */
 const STILL_MOTION =
   ":root { --ui-duration-shape: 0s; --ui-duration-exit: 0s; --ui-duration-quick: 0s; --ui-duration-fast: 0s; --ui-duration-pane: 0s; }";
 

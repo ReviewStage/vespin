@@ -86,6 +86,7 @@ export const CHIP_LOOK = {
   PILL: "pill",
   FIELD: "field",
   FILTER: "filter",
+  REACTION: "reaction",
   OUTLINE: "outline",
 } as const;
 
@@ -211,6 +212,8 @@ const LOOK_FACE = {
     "border-chip-edge bg-chip text-foreground hover:not-disabled:not-aria-disabled:bg-chip-hover aria-expanded:bg-chip-hover",
   [CHIP_LOOK.FILTER]:
     "border-chip-edge bg-chip text-muted-foreground hover:not-disabled:not-aria-disabled:not-aria-pressed:bg-chip-hover hover:not-disabled:not-aria-disabled:not-aria-pressed:text-foreground aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-ink-foreground",
+  [CHIP_LOOK.REACTION]:
+    "border-chip-edge bg-chip text-muted-foreground hover:not-disabled:not-aria-disabled:not-aria-pressed:bg-chip-hover hover:not-disabled:not-aria-disabled:not-aria-pressed:text-foreground aria-pressed:border-accent-fill aria-pressed:bg-accent-fill/10 aria-pressed:text-accent-ink",
   [CHIP_LOOK.OUTLINE]:
     "border-border-strong bg-transparent text-foreground hover:not-disabled:not-aria-disabled:bg-fill-selected aria-expanded:bg-fill-selected active:not-disabled:not-aria-disabled:bg-fill-pressed",
 } as const satisfies Record<ChipLook, string>;
@@ -238,6 +241,7 @@ const LOOK_CORNER = {
   [CHIP_LOOK.FIELD]: "rounded-control",
   [CHIP_LOOK.PILL]: "rounded-full",
   [CHIP_LOOK.FILTER]: "rounded-full",
+  [CHIP_LOOK.REACTION]: "rounded-full",
   [CHIP_LOOK.OUTLINE]: "rounded-control",
 } as const satisfies Record<ChipLook, string>;
 
@@ -247,6 +251,7 @@ const LOOK_INSET = {
   [CHIP_LOOK.FIELD]: "ps-control-inset pe-chip-inset",
   [CHIP_LOOK.PILL]: "ps-chip-inset pe-chip-inset-wide",
   [CHIP_LOOK.FILTER]: "px-chip-inset-wide",
+  [CHIP_LOOK.REACTION]: "px-chip-inset-wide",
   [CHIP_LOOK.OUTLINE]: "ps-control-inset pe-chip-inset",
 } as const satisfies Record<ChipLook, string>;
 
@@ -256,6 +261,7 @@ const REMOVABLE_INSET = {
   [CHIP_LOOK.FIELD]: "ps-chip-inset-wide pe-chip-tight",
   [CHIP_LOOK.PILL]: "ps-chip-inset pe-chip-tight",
   [CHIP_LOOK.FILTER]: "ps-chip-inset-wide pe-chip-tight",
+  [CHIP_LOOK.REACTION]: "ps-chip-inset-wide pe-chip-tight",
   [CHIP_LOOK.OUTLINE]: "ps-chip-inset-wide pe-chip-tight",
 } as const satisfies Record<ChipLook, string>;
 
@@ -314,8 +320,8 @@ function chipClasses(
     width === CHIP_WIDTH.MIN_FIELD ? "" : "min-w-0",
     WIDTH_BOX[width],
     compact
-      ? "h-chip-compact gap-chip-tight text-caption leading-caption"
-      : `h-control text-label ${removable ? "gap-chip-tight" : "gap-icon-gap"}`,
+      ? "h-chip-compact gap-icon-gap-compact text-caption leading-caption"
+      : `h-control text-label ${removable ? "gap-chip-tight" : "gap-icon-gap-regular"}`,
     !compact ? "font-label" : look === CHIP_LOOK.PILL ? "font-tag" : "font-caption",
     // Note that a mark alone is a square of its own height spelled as a width, because Safari 26 sizes an `aspect-ratio` box's track through its `max-w-full` to nothing.
     iconOnly ? `flex-none ${compact ? "w-chip-compact" : "w-control"}` : "flex-initial",
@@ -509,8 +515,8 @@ export function StaticChip({
         : "flex-initial px-chip-inset";
 
   const box = compact
-    ? "h-chip-compact gap-chip-tight text-caption leading-caption font-tag"
-    : "h-control text-label gap-icon-gap font-label";
+    ? "h-chip-compact gap-icon-gap-compact text-caption leading-caption font-tag"
+    : "h-control text-label gap-icon-gap-regular font-label";
 
   return (
     <span
@@ -565,6 +571,9 @@ export function ChipName(props: ChipNameProps): React.JSX.Element {
   const kept = props.cut === CHIP_CUT.MIDDLE ? keptEnd(props.children) : "";
 
   // Note that a name cut in its middle is a row of its two parts, so only its start ends in the ellipsis.
+  // Note that the code face's size is asked on its face's mark, because the inherited role takes the whole
+  // `font` from the chip, size included, and a plain size beside it loses: the code face is a caption's
+  // size, keeping the chip's line, since a monospace face set at a label's reads larger than the words beside it.
   return (
     <Text
       as={TEXT_ELEMENT.SPAN}
@@ -573,7 +582,7 @@ export function ChipName(props: ChipNameProps): React.JSX.Element {
       truncate={kept === ""}
       className={[
         NAME,
-        props.mono === true ? "text-caption leading-[inherit]" : "",
+        props.mono === true ? "data-[font=mono]:text-caption-inline" : "",
         kept === "" ? "" : "inline-flex min-w-0 overflow-hidden whitespace-nowrap",
       ]
         .filter((part) => part !== "")

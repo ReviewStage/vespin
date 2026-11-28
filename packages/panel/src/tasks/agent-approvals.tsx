@@ -14,6 +14,7 @@ import {
   type AgentPermissionMode,
   APPROVAL_ANSWER,
   APPROVAL_BOUNDS,
+  type ApprovalAnswer,
   type ApprovalAnswerRequest,
 } from "@repo/features/agent-approval-wire";
 import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
@@ -165,7 +166,7 @@ const WIRE_ANSWER = {
   [APPROVAL_ACTION.ALLOW]: APPROVAL_ANSWER.ALLOW,
   [APPROVAL_ACTION.ALLOW_FOR_AGENT]: APPROVAL_ANSWER.ALLOW_FOR_AGENT,
   [APPROVAL_ACTION.DENY]: APPROVAL_ANSWER.DENY,
-} as const satisfies Record<ApprovalAction, (typeof APPROVAL_ANSWER)[keyof typeof APPROVAL_ANSWER]>;
+} as const satisfies Record<ApprovalAction, ApprovalAnswer>;
 
 /** The mode an agent runs on: full access where its row names none. */
 function modeOf(agent: Pick<AgentSummary, "permissionMode">): AgentPermissionMode {
@@ -366,8 +367,11 @@ export function useAgentApprovals(input: {
     state.agentId === agent.id ? state : { agentId: agent.id, held: new Map<string, HeldAsk>() };
 
   const held = heldWith(fresh.held, pending, running);
+  const same = fresh === state && sameHeld(held, state.held);
 
-  if (fresh !== state || !sameHeld(held, state.held)) setState({ ...fresh, held });
+  if (!same) setState({ ...fresh, held });
+  // Note that the asks are cut from the asks held while they stand the same, because a map made afresh each draw handed every call's row new asks on every write to the transcript, and drew each again.
+  const standing = same ? state.held : held;
   const latest = useRef(input);
   latest.current = input;
 
@@ -431,7 +435,7 @@ export function useAgentApprovals(input: {
 
   const asks = useMemo(
     () =>
-      [...held.values()]
+      [...standing.values()]
         .toSorted((a, b) => a.approval.askedAt - b.approval.askedAt)
         .map(
           (ask): ApprovalView => ({
@@ -442,7 +446,7 @@ export function useAgentApprovals(input: {
             onAnswer: (card, message) => answer(agent.id, ask.approval.id, card, message),
           }),
         ),
-    [held, answer, agent.id],
+    [standing, answer, agent.id],
   );
 
   return {

@@ -74,6 +74,147 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.45.0 — 2026-11-27
+
+### Vespin is now signed by Stage Incorporated
+
+The Mac app is now signed and notarized by Stage Incorporated, the company
+that makes it, rather than a personal Apple developer account. macOS treats a
+build signed by another team as a new app, so on first launch it may ask once
+whether Vespin may use the Keychain item that protects your sign-in (Always
+Allow keeps you signed in; Deny signs you out, and you sign in again once), and
+it asks again for any permission the app held, such as the microphone or a
+folder. An install older than 0.33.0 cannot take this update: download
+Vespin.dmg from vespin.dev once.
+
+[#8683](https://github.com/ReviewStage/vespin/pull/8683)
+
+### Improvements
+
+- A conversation now stays at its end until you scroll away, and lets a find or
+  a screen reader take you anywhere in it
+  ([#11176](https://github.com/ReviewStage/vespin/pull/11176),
+  [#11175](https://github.com/ReviewStage/vespin/pull/11175),
+  [#11180](https://github.com/ReviewStage/vespin/pull/11180),
+  [#11193](https://github.com/ReviewStage/vespin/pull/11193))
+- Hovering a Manager now shows its own card, like a task's or a person's
+  ([#11172](https://github.com/ReviewStage/vespin/pull/11172))
+- You can now attach a file of any kind from the message box, and a still GIF
+  goes as a GIF ([#11163](https://github.com/ReviewStage/vespin/pull/11163),
+  [#11164](https://github.com/ReviewStage/vespin/pull/11164),
+  [#11161](https://github.com/ReviewStage/vespin/pull/11161))
+- A pull request's conversation now loads faster
+  ([#11169](https://github.com/ReviewStage/vespin/pull/11169))
+- The Mac app now reaches the service over one warm connection, so every call
+  is quicker ([#11110](https://github.com/ReviewStage/vespin/pull/11110))
+- The working line now reads in quiet words, without a shimmer
+  ([#11149](https://github.com/ReviewStage/vespin/pull/11149),
+  [#11151](https://github.com/ReviewStage/vespin/pull/11151))
+- On an iPad, Vespin now stands in the system's three-column split view
+  ([#10743](https://github.com/ReviewStage/vespin/pull/10743))
+- On a phone, an agent's Machine chip menu now leads with where the agent runs
+  ([#11171](https://github.com/ReviewStage/vespin/pull/11171))
+
+### Fixes
+
+- Fixed a link the app refuses showing as "[blocked]" instead of its words
+  ([#11148](https://github.com/ReviewStage/vespin/pull/11148))
+- Fixed a date chip with seconds in its time drawing as a plain link
+  ([#11146](https://github.com/ReviewStage/vespin/pull/11146))
+- On a phone, fixed holding a link chip opening two menus at once
+  ([#10919](https://github.com/ReviewStage/vespin/pull/10919))
+- On an iPad, fixed Back from a person's page landing on Tasks instead of where
+  you came from ([#11179](https://github.com/ReviewStage/vespin/pull/11179))
+- On a phone, fixed a sent message showing "[Picture 1]" until its picture
+  arrived ([#11085](https://github.com/ReviewStage/vespin/pull/11085))
+- On a phone, fixed an inline video opening without the system player's
+  controls ([#10999](https://github.com/ReviewStage/vespin/pull/10999))
+- On a phone, fixed Select mode's title missing from the Inbox bar
+  ([#11138](https://github.com/ReviewStage/vespin/pull/11138))
+- On a phone, fixed a crash opening a menu whose photo file was gone
+  ([#11184](https://github.com/ReviewStage/vespin/pull/11184))
+
+### Misc
+
+- The iOS app now records every session as a fully masked Sentry replay, as
+  the Mac and web apps do
+  ([#11134](https://github.com/ReviewStage/vespin/pull/11134))
+
+## 0.44.0 — 2026-11-26
+
+### See the pictures your agent's tools looked at
+
+When an agent's own tools read or make a picture, such as a screenshot or a
+page of a PDF, the picture now shows in the conversation under that step.
+
+[#11035](https://github.com/ReviewStage/vespin/pull/11035),
+[#11031](https://github.com/ReviewStage/vespin/pull/11031),
+[#11033](https://github.com/ReviewStage/vespin/pull/11033)
+
+### Improvements
+
+- Tab bars and panel headings now sit on the page's own background
+  ([#11131](https://github.com/ReviewStage/vespin/pull/11131))
+- The pull request card now matches its tab, with its checks on their own row
+  ([#11121](https://github.com/ReviewStage/vespin/pull/11121))
+- Your own reactions now stand out in a soft accent tint
+  ([#11115](https://github.com/ReviewStage/vespin/pull/11115))
+- While you're offline, Vespin now says so once instead of on every page
+  ([#11093](https://github.com/ReviewStage/vespin/pull/11093))
+- Long-running cloud agents now pick back up faster after a pause
+  ([#11108](https://github.com/ReviewStage/vespin/pull/11108),
+  [#11141](https://github.com/ReviewStage/vespin/pull/11141))
+- Opening tasks and typing in the message box are now quicker
+  ([#11058](https://github.com/ReviewStage/vespin/pull/11058),
+  [#11050](https://github.com/ReviewStage/vespin/pull/11050),
+  [#11055](https://github.com/ReviewStage/vespin/pull/11055),
+  [#11045](https://github.com/ReviewStage/vespin/pull/11045),
+  [#11037](https://github.com/ReviewStage/vespin/pull/11037))
+- The section icon picker now draws its choices larger
+  ([#11063](https://github.com/ReviewStage/vespin/pull/11063))
+- On a phone, Search now narrows to All, Tasks, Inbox, People, or Automations
+  ([#10958](https://github.com/ReviewStage/vespin/pull/10958))
+- On a phone, typing in Commands now finds places as "Go to …"
+  ([#10954](https://github.com/ReviewStage/vespin/pull/10954))
+- On a phone, a pull request now shows reviewers' faces and colored line counts
+  ([#10961](https://github.com/ReviewStage/vespin/pull/10961),
+  [#11060](https://github.com/ReviewStage/vespin/pull/11060))
+- On a phone, a pull request's Description and Conversation now fold
+  ([#10957](https://github.com/ReviewStage/vespin/pull/10957))
+- On a phone, holding a pull request's ⋯ now offers its GitHub link's actions
+  ([#10959](https://github.com/ReviewStage/vespin/pull/10959))
+- On a phone, the Inbox now opens at once from what the phone keeps
+  ([#10893](https://github.com/ReviewStage/vespin/pull/10893),
+  [#11071](https://github.com/ReviewStage/vespin/pull/11071))
+- On a phone, a sender's name in a conversation now opens their page
+  ([#11039](https://github.com/ReviewStage/vespin/pull/11039))
+
+### Fixes
+
+- Fixed a pull request description's HTML showing as raw text while editing
+  ([#11092](https://github.com/ReviewStage/vespin/pull/11092))
+- Fixed a step that read several files saying "+N" instead of "+N more"
+  ([#11104](https://github.com/ReviewStage/vespin/pull/11104))
+- Fixed an agent's conversation that could stop updating after a very large step
+  ([#11038](https://github.com/ReviewStage/vespin/pull/11038))
+- Fixed a sidebar row changing size while you rename it
+  ([#11095](https://github.com/ReviewStage/vespin/pull/11095))
+- Fixed a section icon's color picker getting cut off or mishandling Escape
+  ([#11021](https://github.com/ReviewStage/vespin/pull/11021),
+  [#11068](https://github.com/ReviewStage/vespin/pull/11068))
+- Fixed a searchable menu's highlight lingering on its rows
+  ([#11082](https://github.com/ReviewStage/vespin/pull/11082))
+- Fixed a step's words wrapping under its icon
+  ([#11067](https://github.com/ReviewStage/vespin/pull/11067))
+- Fixed the phone app stalling for a moment when you came back to it
+  ([#11143](https://github.com/ReviewStage/vespin/pull/11143))
+- Fixed an Inbox thread on a phone briefly saying it was missing while it opened
+  ([#11136](https://github.com/ReviewStage/vespin/pull/11136))
+- Fixed the Live Activity's timer not fitting in the Dynamic Island
+  ([#11001](https://github.com/ReviewStage/vespin/pull/11001))
+- Fixed unsent drafts on a phone staying after you signed out
+  ([#11087](https://github.com/ReviewStage/vespin/pull/11087))
+
 ## 0.43.0 — 2026-11-25
 
 ### Panes, folds, and buttons answer at once
@@ -112,20 +253,15 @@ buttons now open, close, and respond the moment you press them.
 
 ## 0.42.0 — 2026-11-25
 
-### Vespin in your phone's browser
-
-On a phone, Vespin's web app now has a tab bar with Inbox, Tasks,
-Automations, and Search, opens New task as a full-height sheet, and puts
-New agent in a task's bar.
-
-[#10928](https://github.com/ReviewStage/vespin/pull/10928),
-[#10941](https://github.com/ReviewStage/vespin/pull/10941),
-[#10929](https://github.com/ReviewStage/vespin/pull/10929),
-[#10942](https://github.com/ReviewStage/vespin/pull/10942),
-[#10933](https://github.com/ReviewStage/vespin/pull/10933)
-
 ### Improvements
 
+- On a phone, the web app's tab bar adds Automations and Search, and New task
+  opens full height
+  ([#10928](https://github.com/ReviewStage/vespin/pull/10928),
+  [#10941](https://github.com/ReviewStage/vespin/pull/10941),
+  [#10929](https://github.com/ReviewStage/vespin/pull/10929),
+  [#10942](https://github.com/ReviewStage/vespin/pull/10942),
+  [#10933](https://github.com/ReviewStage/vespin/pull/10933))
 - Opening a task, New task, and typing in a message box are faster
   ([#10857](https://github.com/ReviewStage/vespin/pull/10857),
   [#10882](https://github.com/ReviewStage/vespin/pull/10882),

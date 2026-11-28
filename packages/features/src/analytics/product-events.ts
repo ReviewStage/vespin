@@ -58,10 +58,12 @@ export const PRODUCT_EVENT = {
   ROWS_DROPPED: "rows:dropped",
   /** A reply sent on an Inbox thread stood in its thread, counted once a send by how long that took from the press, on a rung, and whether it carried pictures. */
   REPLY_DRAWN: "reply:drawn",
-  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was held by long tasks (50 ms or more) before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew. */
+  /** A page pushed open on the iOS app, a thread, a task, or an agent, counted once an open by how long its push took to start and to stand and how long the JS thread was held by long tasks (50 ms or more) before it started, each on a rung of `productOpenMilliseconds`, its kind, whether it was the first of its kind since launch, and whether its data was held as it first drew; and, for an open a list's row picked, how many row picks reached JavaScript since the last open, on a rung of `productLoadCount`, and how long from the touch that got through to the page's first render, on a rung of `productOpenMilliseconds`: never where a touch landed. */
   OPEN_DRAWN: "open:drawn",
   /** A tab of the iOS app chosen for the first time since launch, Tasks, counted once a launch by how long from the tap that chose it the app took to hear the switch, to draw the tab's first frame, and to draw its rows, each on a rung of `productOpenMilliseconds`, and its kind: never what it shows. */
   TAB_DRAWN: "tab:drawn",
+  /** The iOS app brought back from the background, counted once a return by its first minute: how many times the JS thread was held over 50 ms, for how long in all, and its longest hold, each on a rung, how many documents the host delivered to the screens meanwhile, and how long the app was away, on rungs; never what ran or what was delivered. */
+  RESUME_LOAD: "resume:load",
   /** A launch of the iOS app begun in front, counted once its first three minutes are over, or as it leaves the front before then: how many times the JS thread was held over 50 ms and for how long in all, and how many tasks outside the live list were read one by one and drawn and how long their drawing took, each on a rung, and whether the window ran its whole length; never what was read. */
   LAUNCH_LOAD: "launch:load",
   /** A page an agent showed, opened on the iOS app, counted once an open by how long it took to read its HTML and to draw it, each on a rung of `productOpenMilliseconds`, whether its opener named its version or it waited on the task's pages for the newest, and whether it was the first page since launch. */
@@ -96,6 +98,7 @@ export const PRODUCT_SURFACE_EVENT = {
   REPLY_DRAWN: PRODUCT_EVENT.REPLY_DRAWN,
   OPEN_DRAWN: PRODUCT_EVENT.OPEN_DRAWN,
   TAB_DRAWN: PRODUCT_EVENT.TAB_DRAWN,
+  RESUME_LOAD: PRODUCT_EVENT.RESUME_LOAD,
   LAUNCH_LOAD: PRODUCT_EVENT.LAUNCH_LOAD,
   PAGE_SHOWN: PRODUCT_EVENT.PAGE_SHOWN,
   PICTURE_SHOWN: PRODUCT_EVENT.PICTURE_SHOWN,
@@ -177,6 +180,10 @@ export const PRODUCT_EVENT_PROPERTY = {
   LOAD_WINDOW: "load_window",
   KIND: "kind",
   SIZE_BUCKET: "size_bucket",
+  TAP_MS: "tap_ms",
+  PRESSES: "presses",
+  LONGEST_TASK_MS: "longest_task_ms",
+  AWAY_SECONDS: "away_seconds",
 } as const;
 
 type ProductEventProperty = (typeof PRODUCT_EVENT_PROPERTY)[keyof typeof PRODUCT_EVENT_PROPERTY];
@@ -415,6 +422,7 @@ export const PRODUCT_EXPERIMENT = {
   MOVE_AGENTS: "move-agents",
   CURSOR: "cursor",
   MANAGERS: "managers",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   MANAGER_ACTS_FOR_ASKER: "manager-acts-for-asker",
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   STARTER_TASKS: "starter-tasks",
@@ -722,6 +730,17 @@ export function productLoadCount(count: number): ProductLoadCount {
   return PRODUCT_LOAD_COUNT_LADDER.find((rung) => count >= rung) ?? PRODUCT_LOAD_COUNT.NONE;
 }
 
+/**
+ * Whether a return from the background counts as its own `resume:load`: only
+ * where the app left after the launch's own load window closed (`launch:load`).
+ * Note that a return whose leaving fell inside that window is the launch's,
+ * such as the brief trip away iOS can take while a cold launch settles, so
+ * counting it again would hold the launch's work as a resume's.
+ */
+export function productResumeCounted(leftAt: number, launchWindowEnd: number): boolean {
+  return leftAt >= launchWindowEnd;
+}
+
 /** The rungs a launch's held time travels on, in milliseconds summed over its first minutes (`launch:load`), each the least that reaches it: from a quarter second to two minutes, the range between a launch nobody felt and one that took no touch for minutes. */
 const PRODUCT_LOAD_MS = {
   UNDER_250: 0,
@@ -941,6 +960,10 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.LOAD_WINDOW]: ProductLoadWindow;
   [PRODUCT_EVENT_PROPERTY.KIND]: ProductAttachmentKind;
   [PRODUCT_EVENT_PROPERTY.SIZE_BUCKET]: ProductAttachmentSize;
+  [PRODUCT_EVENT_PROPERTY.TAP_MS]: ProductOpenMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.PRESSES]: ProductLoadCount;
+  [PRODUCT_EVENT_PROPERTY.LONGEST_TASK_MS]: ProductLoadMilliseconds;
+  [PRODUCT_EVENT_PROPERTY.AWAY_SECONDS]: ProductElapsedSeconds;
 }
 
 /**
@@ -978,6 +1001,10 @@ type EnumeratedProductEventProperty = Exclude<
   | typeof PRODUCT_EVENT_PROPERTY.LONG_TASK_MS
   | typeof PRODUCT_EVENT_PROPERTY.COLD_READS
   | typeof PRODUCT_EVENT_PROPERTY.COLD_READ_MS
+  | typeof PRODUCT_EVENT_PROPERTY.TAP_MS
+  | typeof PRODUCT_EVENT_PROPERTY.PRESSES
+  | typeof PRODUCT_EVENT_PROPERTY.LONGEST_TASK_MS
+  | typeof PRODUCT_EVENT_PROPERTY.AWAY_SECONDS
 >;
 
 /** Every value each enumerable property may ever hold. */
@@ -1086,6 +1113,14 @@ const PRODUCT_EVENT_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.COLD_READ_MS,
     PRODUCT_EVENT_PROPERTY.LOAD_WINDOW,
   ],
+  [PRODUCT_EVENT.RESUME_LOAD]: [
+    PRODUCT_EVENT_PROPERTY.LONG_TASKS,
+    PRODUCT_EVENT_PROPERTY.LONG_TASK_MS,
+    PRODUCT_EVENT_PROPERTY.LONGEST_TASK_MS,
+    PRODUCT_EVENT_PROPERTY.DELIVERIES,
+    PRODUCT_EVENT_PROPERTY.AWAY_SECONDS,
+    PRODUCT_EVENT_PROPERTY.LOAD_WINDOW,
+  ],
   [PRODUCT_EVENT.PAGE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.READ_MS,
     PRODUCT_EVENT_PROPERTY.SHOWN_MS,
@@ -1146,9 +1181,12 @@ const PRODUCT_EVENT_OPTIONAL_PROPERTIES = {
     PRODUCT_EVENT_PROPERTY.APP_BUILD,
     PRODUCT_EVENT_PROPERTY.BUSY_MS,
     PRODUCT_EVENT_PROPERTY.PAGE_DATA,
+    PRODUCT_EVENT_PROPERTY.TAP_MS,
+    PRODUCT_EVENT_PROPERTY.PRESSES,
   ],
   [PRODUCT_EVENT.TAB_DRAWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.LAUNCH_LOAD]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
+  [PRODUCT_EVENT.RESUME_LOAD]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PAGE_SHOWN]: [PRODUCT_EVENT_PROPERTY.APP_BUILD],
   [PRODUCT_EVENT.PICTURE_SHOWN]: [
     PRODUCT_EVENT_PROPERTY.PICTURE_BYTES,
@@ -1380,6 +1418,10 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   [PRODUCT_EVENT_PROPERTY.LONG_TASK_MS]: loadMillisecondsReader,
   [PRODUCT_EVENT_PROPERTY.COLD_READS]: loadCountReader,
   [PRODUCT_EVENT_PROPERTY.COLD_READ_MS]: loadMillisecondsReader,
+  [PRODUCT_EVENT_PROPERTY.TAP_MS]: openReader,
+  [PRODUCT_EVENT_PROPERTY.PRESSES]: loadCountReader,
+  [PRODUCT_EVENT_PROPERTY.LONGEST_TASK_MS]: loadMillisecondsReader,
+  [PRODUCT_EVENT_PROPERTY.AWAY_SECONDS]: elapsedReader,
   [PRODUCT_EVENT_PROPERTY.EXPERIMENT_SCOPE]: experimentScopeReader,
 };
 

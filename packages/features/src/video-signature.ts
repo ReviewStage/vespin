@@ -4,7 +4,7 @@
  * An agent records what it did in its sandbox as a WebM, the one format the
  * encoder already in its sandbox writes (Playwright's `recordVideo`, or the
  * browser's screencast piped through that encoder), and shows it as it
- * shows a picture (`coder-host/show-image.ts`). A recording of an app on the
+ * shows a picture (`coder-host/show-media.ts`). A recording of an app on the
  * developer's Mac is an H.264 MP4 instead, the one format macOS writes
  * natively, which every player the app has plays as it is, iOS's among them,
  * so it is kept as it came, with no copy. As with a picture, the

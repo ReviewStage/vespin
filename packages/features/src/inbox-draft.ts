@@ -14,6 +14,7 @@
 import { isWireString } from "@repo/wire";
 import type { AgentAttachment } from "./agent-wire.js";
 import { INBOX_MISSING, type InboxMissing } from "./inbox-ask-words.js";
+import type { InboxRow } from "./inbox-digest.js";
 import { type InboxDoAsk, inboxLineAsk, knownAsk } from "./inbox-list-model.js";
 import {
   INBOX_ASK,
@@ -28,7 +29,6 @@ import {
   type InboxFieldValue,
   type InboxForm,
   type InboxFormValue,
-  type InboxItem,
   type InboxMessage,
   type InboxReadAsk,
   type InboxReply,
@@ -585,7 +585,7 @@ const INBOX_PRESSES = {
  * draft, else those ticked by hand; none where no draft stands.
  */
 export function inboxShownTicks(
-  item: InboxItem,
+  item: InboxRow,
   draft: Pick<InboxDraft, "steps" | "press"> | undefined,
 ): readonly number[] {
   if (draft === undefined) return [];

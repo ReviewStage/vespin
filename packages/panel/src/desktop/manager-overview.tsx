@@ -23,6 +23,7 @@
  */
 
 import type { AgentPullRequest, ListedAgent } from "@repo/features/agent-wire";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import { inboxLineKind, inboxPreview } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
@@ -73,6 +74,7 @@ import { inboxLineGlyph } from "../tasks/inbox-item-parts.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
 import { type AgentsControl, placeAgents, readAgentById } from "../tasks/use-agents.js";
+import { usePlainLinkNames } from "../tasks/use-link-standing.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import {
@@ -166,11 +168,14 @@ function WaitingRow({
   const nameOf = (member: Parameters<typeof personActor>[0]) =>
     actorName(personActor(member, directory.members, directory.readerId, directory.former));
 
+  const row = inboxRowOf(item);
+  const links = usePlainLinkNames();
+
   return (
     <ListRow
-      leading={inboxLineGlyph(inboxLineKind(item))}
+      leading={inboxLineGlyph(inboxLineKind(row))}
       title={item.title}
-      description={inboxPreview(item, nameOf)}
+      description={inboxPreview(row, nameOf, undefined, links)}
       chevron
       onPress={() => threads.onOpen(item)}
     />

@@ -15,12 +15,7 @@ import {
   taskNamesOf,
 } from "@repo/database/models/agent-store";
 import { currentAutomationRun } from "@repo/database/models/automation-store";
-import {
-  type Device,
-  devicesSeenSince,
-  type WorkspaceOwnedMachine,
-  workspaceOwnedMachinesOf,
-} from "@repo/database/models/device-store";
+import { type Device, devicesSeenSince } from "@repo/database/models/device-store";
 import {
   listMessagesBefore,
   listMessagesFrom,
@@ -79,13 +74,13 @@ import {
   LOCAL_AGENT_REFUSAL,
   type LocalAgentRefusal,
   MAC_PRESENCE,
-  personalRunsOnSchema,
   type RefusedDevice,
   startBranchSchema,
 } from "@repo/features/agent-wire";
 import { deviceAgentRegisterRequestSchema } from "@repo/features/device-agent-wire";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
 import { cleanMachineName } from "@repo/features/machine-name";
+import { type ManagerFace, managerFacePickSchema } from "@repo/features/manager-face";
 import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
 import { contextWindowsOf, windowOf } from "@repo/features/model-effort";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
@@ -146,7 +141,7 @@ import {
   type ImageForwarder,
 } from "./coder-host/forwarded-images.js";
 import { agentPublishedUnwritten } from "./coder-host/published.js";
-import { callEntry, cutText, lineWords, senderName } from "./coder-host/replay.js";
+import { callEntry, lineWords, senderName } from "./coder-host/replay.js";
 import type { SummaryModelOf } from "./coder-host/replay-summary.js";
 import {
   accountModelChoices,
@@ -176,6 +171,7 @@ import {
   writeTaskBlocks,
 } from "./task-block-changes.js";
 import { TASK_REF_INPUT, TASK_REF_WORDS, taskIdOfInput } from "./task-ref.js";
+import { cutText } from "./text-cut.js";
 import {
   AGENT_LIST_INPUT,
   type AgentTask,
@@ -491,7 +487,6 @@ export const START_AGENT_REFUSAL = {
   BILLING_REQUIRED: `Not started: the workspace has used its free cloud usage for the month and has no billing set up, or its last payment failed; an owner or admin sets up or manages billing in Settings › Billing, or start it on a member's Mac.`,
   DEVICE_REMOVED: `Not started: the machine it would run on was removed. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add the machine again.`,
   NO_DEVICES: `Not started: the member has no device registered to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add a machine in Settings › Machines.`,
-  NO_WORKSPACE_MACHINES: `Not started: the workspace owns no machine to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask a workspace admin to connect one in Settings › Machines.`,
   NO_SOURCE:
     "Not started: no agent of your workspace has that id to start from; " +
     `${AGENT_TOOL.LIST_AGENTS} names them.`,
@@ -586,31 +581,6 @@ function namedMachines<M extends { readonly name: string }>(
   const wanted = cleanMachineName(name).toLowerCase();
 
   return machines.filter((machine) => cleanMachineName(machine.name).toLowerCase() === wanted);
-}
-
-/**
- * Why a start naming a workspace's machine by its name started nothing: the
- * name matches none of the workspace's machines, or more than one, said
- * with every one of them by name, id, and whether it is online, so the call
- * can be made again naming one; or the workspace has none to list.
- */
-function workspaceMachineNameRefusal(
-  name: string,
-  matched: number,
-  machines: readonly WorkspaceOwnedMachine[],
-  now: number,
-): string {
-  if (machines.length === 0) return START_AGENT_REFUSAL.NO_WORKSPACE_MACHINES;
-  const named = JSON.stringify(name);
-
-  const why =
-    matched === 0
-      ? `no machine of the workspace's is named ${named}`
-      : `${matched} machines of the workspace's are named ${named}, so name the one you mean by its deviceId`;
-
-  const listed = machines.map((machine) => listedDevice(machine, now)).join("; ");
-
-  return `Not started: ${why}. Its machines: ${listed}. Name one by its name or its deviceId, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`;
 }
 
 /**
@@ -799,34 +769,21 @@ const DEVICE_BY_NAME = Schema.Struct({
 
 /**
  * Where an automation's runs start, as its tools name it: as the automation
- * keeps it (`personalRunsOnSchema`), the cloud or one of its creator's
+ * keeps it (`agentRunsOnRequestSchema`), the cloud or one of its creator's
  * devices by its id, or one of those devices by its name.
  */
-export const AUTOMATION_RUNS_ON = Schema.Union([...personalRunsOnSchema.members, DEVICE_BY_NAME]);
-
-/**
- * Where a started agent may run, as a start names it: as a start request
- * does (`agentRunsOnRequestSchema`), or one of the member's own devices, or
- * a machine the workspace owns, by its name, which the call matches to its
- * id (`runsOnOfStart`) before the start is asked.
- */
-const START_RUNS_ON = Schema.Union([
+export const AUTOMATION_RUNS_ON = Schema.Union([
   ...agentRunsOnRequestSchema.members,
   DEVICE_BY_NAME,
-  Schema.Struct({
-    machine: Schema.Literal(AGENT_MACHINE.WORKSPACE),
-    name: deviceAgentRegisterRequestSchema.fields.name,
-  }),
 ]);
 
 /**
- * Where `start_agent` offers to run an agent: the cloud or one of the
- * member's own devices, by its id or its name, and no machine the workspace
- * owns, since every launch on one is refused until a machine of ours runs
- * it (`machine/agent-machines.ts`). Note that PR 8 of the workspace-hosts
- * rollout (STAG-3712), which runs them, offers `START_RUNS_ON` here again.
+ * Where a started agent may run, as a start names it: as a start request
+ * does (`agentRunsOnRequestSchema`), or one of the member's own devices by
+ * its name, which the call matches to its id (`runsOnOfStart`) before the
+ * start is asked.
  */
-const OFFERED_START_RUNS_ON = Schema.Union([...personalRunsOnSchema.members, DEVICE_BY_NAME]);
+const START_RUNS_ON = Schema.Union([...agentRunsOnRequestSchema.members, DEVICE_BY_NAME]);
 
 const START_FROM_AGENT_ID = describeWire(
   wireUuidSchema,
@@ -941,7 +898,7 @@ const START_CHOICE_FIELDS = {
     ),
     runsOn: Schema.optionalKey(
       describeWire(
-        OFFERED_START_RUNS_ON,
+        START_RUNS_ON,
         START_RUNS_ON_WORDS +
           "Leave it out to run where you run, the runsOn your instructions' own values name, " +
           "or with from where the agent it starts from runs; naming another place moves it there.",
@@ -969,7 +926,7 @@ const START_CHOICE_FIELDS = {
     ),
     runsOn: Schema.optionalKey(
       describeWire(
-        OFFERED_START_RUNS_ON,
+        START_RUNS_ON,
         START_RUNS_ON_WORDS +
           "Every start names it but one with from, which runs where the agent it starts from " +
           "runs unless it names another place, which moves it there.",
@@ -1332,9 +1289,12 @@ export const UPDATE_AGENT_REFUSAL = {
   UNREADABLE:
     `Not changed: name the agent by the id ${AGENT_TOOL.LIST_AGENTS} answered and at least one ` +
     `change: a title of at most ${AGENT_BOUNDS.MAX_TITLE_CHARS} characters (empty clears ` +
-    "it), a model with its effort, both or neither, a contextWindow only with them, pinned, or " +
-    `disabledServers as connection names; archive it with ${AGENT_TOOL.ARCHIVE_AGENT}.`,
+    "it), a model with its effort, both or neither, a contextWindow only with them, pinned, " +
+    "disabledServers as connection names, or a Manager's face; archive it with " +
+    `${AGENT_TOOL.ARCHIVE_AGENT}.`,
   UNAVAILABLE: "Not changed: the models could not be read just now. The call may be made again.",
+  NOT_A_MANAGER:
+    "Not changed: only a Manager wears a face, and that agent is a coding agent; leave face out.",
 } as const;
 
 /** Why an archive or a bring-back changed nothing, in words the model can act on; one refused for its starter's subscription names the starter (`archiveRefusalWords`). */
@@ -1394,9 +1354,10 @@ function updateNamesAChange(update: {
   readonly contextWindow?: string;
   readonly pinned?: boolean;
   readonly disabledServers?: readonly string[];
+  readonly face?: ManagerFace;
 }): boolean {
-  const { title, model, effort, contextWindow, pinned, disabledServers } = update;
-  const changes = [title, model, pinned, disabledServers];
+  const { title, model, effort, contextWindow, pinned, disabledServers, face } = update;
+  const changes = [title, model, pinned, disabledServers, face];
 
   if ((model === undefined) !== (effort === undefined)) return false;
 
@@ -1408,9 +1369,10 @@ function updateNamesAChange(update: {
 /**
  * A change names the agent and at least one of: a title, the model with its
  * effort and, at most, its context window, which the catalog then checks,
- * whether the member pins it, and the MCP servers switched off for it, the
- * whole list. Each is the change a member makes from the agent's own menu, model chip,
- * or composer.
+ * whether the member pins it, the MCP servers switched off for it, the
+ * whole list, and a Manager's face, as `create_manager` and the face picker
+ * take it. Each is the change a member makes from the agent's own menu, model
+ * chip, or composer, or from a Manager's Settings › General.
  */
 const UPDATE_AGENT_INPUT = Schema.Struct({
   agentId: AGENT_ID,
@@ -1454,6 +1416,13 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
         "replaces the one standing; empty switches every server back on. Its next turn reads it.",
     ),
   ),
+  face: Schema.optionalKey(
+    describeWire(
+      managerFacePickSchema,
+      "A Manager's face, the whole of it, as its Settings pick it: a character and a color, " +
+        "and one emoji worn in the character's place or none. Refused for a coding agent.",
+    ),
+  ),
 }).check(Schema.makeFilter(updateNamesAChange));
 
 const readUpdateAsked = Schema.decodeUnknownResult(UPDATE_AGENT_INPUT);
@@ -1465,7 +1434,8 @@ export const UPDATE_AGENT_TOOL = {
     "composer would, for the developer you work for: rename it, move it to another model, effort, " +
     "and context window from its next step, the window named wherever the model's " +
     `${AGENT_TOOL.LIST_MODELS} contextWindows are not empty, pin it, or replace the MCP servers ` +
-    "switched off for it; the changes land together or not at all. Change a teammate's agent " +
+    "switched off for it, or change a Manager's face as its Settings would; the changes land " +
+    "together or not at all. Change a teammate's agent " +
     "still in use only where the developer asked for it. A rejected model or effort lists the " +
     "choices. Then say which agent you changed and how.",
   inputSchema: UPDATE_AGENT_INPUT,
@@ -1650,13 +1620,12 @@ const standingsOf = (agents: readonly Agent[]) =>
   });
 
 /**
- * The models offered as the catalog last read them, or none where it cannot
- * be read: a model is then named from its id, as the screen names it before
- * the catalog arrives.
+ * The models offered as this instance already holds them, or none: a model
+ * is then named from its id, as the screen names it before the catalog
+ * arrives. Note that this never fetches, because a call that only names
+ * models by the catalog is not worth a cold instance's wait on the gateway.
  */
-const offeredModels = Effect.flatMap(ModelCatalog, (catalog) =>
-  Effect.orElseSucceed(catalog.read, (): readonly OfferedModel[] => []),
-);
+const offeredModels = Effect.flatMap(ModelCatalog, (catalog) => catalog.held);
 
 /** The newest journal of each agent's conversation, read once for the lot, keyed by conversation. The agents were read through their workspace's gate, so their conversations are read by id. */
 const newestJournalsOf = (agents: readonly Agent[]) =>
@@ -1721,6 +1690,21 @@ export function callerAgent(caller: AgentCaller): Agent | undefined {
 /** The member a call acts for: the starter of the coding agent calling, or the member calling. */
 export function callerUserId(caller: AgentCaller): string {
   return caller.kind === AGENT_CALLER.AGENT ? caller.agent.userId : caller.userId;
+}
+
+/**
+ * The member a write acts as: a Manager's, the member who asked for its turn
+ * under way (`turnAsker`), its owner standing in where no member did, since a
+ * Manager is shared across its workspace; any other caller's own member.
+ */
+export function askingMember(
+  caller: AgentCaller,
+): Effect.Effect<string, StoreFailure, DatabaseServices> {
+  const agent = callerAgent(caller);
+
+  if (agent?.kind !== AGENT_KIND.MANAGER) return Effect.succeed(callerUserId(caller));
+
+  return turnAsker({ userId: agent.userId, conversationId: agent.conversationId });
 }
 
 /** The workspace a call is in, whose experiments it reads: the coding agent's own, or the one the member's call is about. */
@@ -1836,7 +1820,7 @@ function withReset(words: string, refusal: HostedRefusal): string {
 }
 
 /** A start's refusal in the model's words. */
-function startRefusalWords(refusal: HostedRefusal): string {
+export function startRefusalWords(refusal: HostedRefusal): string {
   if (refusal.localAgentRefusal === LOCAL_AGENT_REFUSAL.NOT_OWNER) {
     return notOwnerWords(refusal.refusedDevice);
   }
@@ -2529,8 +2513,8 @@ function startModeRefusal(
 
 /**
  * Where the agent its row names runs, as `start_agent`'s runsOn names it: the
- * cloud, its starter's device, or its workspace's machine, each by its id;
- * none for one on a device or machine whose row is gone.
+ * cloud, or its starter's device by its id; none for one on a device whose
+ * row is gone.
  */
 export function agentRunsOnOf(
   agent: Pick<Agent, "machine" | "deviceId">,
@@ -2640,16 +2624,13 @@ function startValuesOf(
 /**
  * The place a start's runsOn names, as a start request names it: a device
  * named by its name is the starting member's own registered device of that
- * name, any case, by its id, and a workspace's machine named by its name is
- * one of that name the workspace the start lands in owns (`workspaceId`);
- * a name that matches none of those, or more than one, is refused with them
- * listed (`machineNameRefusal`). Note that only the member's own devices
- * and the workspace's own machines are read, so a teammate's device of that
- * name never matches and is never listed.
+ * name, any case, by its id; a name that matches none of them, or more than
+ * one, is refused with them listed (`deviceNameRefusal`). Note that only the
+ * member's own devices are read, so a teammate's device of that name never
+ * matches and is never listed.
  */
 const runsOnOfStart = Effect.fnUntraced(function* (
   userId: string,
-  workspaceId: string,
   runsOn: typeof START_RUNS_ON.Type | undefined,
 ): Effect.fn.Return<
   Result.Result<AgentRunsOnRequest | undefined, string>,
@@ -2672,29 +2653,14 @@ const runsOnOfStart = Effect.fnUntraced(function* (
     return Result.fail(deviceNameRefusal(runsOn.device, matched.length, devices, now));
   }
 
-  if ("name" in runsOn) {
-    const machines = yield* workspaceOwnedMachinesOf(userId, workspaceId);
-    const matched = namedMachines(machines, runsOn.name);
-    const [only] = matched;
-
-    if (matched.length === 1 && only !== undefined) {
-      return Result.succeed({ machine: AGENT_MACHINE.WORKSPACE, deviceId: only.id });
-    }
-
-    const now = yield* Clock.currentTimeMillis;
-
-    return Result.fail(workspaceMachineNameRefusal(runsOn.name, matched.length, machines, now));
-  }
-
   return Result.succeed(runsOn);
 });
 
 /**
- * The account a start makes its agent under. A Manager's fresh start, where
- * its workspace has Managers act for whoever asked on, is the account of the
- * member whose line opened the Manager's turn under way (`turnAsker`), so
- * their payer, machines, skills, and GitHub identity carry the work and the
- * agent is theirs; a turn no member opened has no asker, and the Manager's
+ * The account a start makes its agent under. A Manager's fresh start is the
+ * account of the member whose line opened the Manager's turn under way
+ * (`turnAsker`), so their payer, machines, skills, and GitHub identity carry
+ * the work and the agent is theirs; a turn no member opened has no asker, and the Manager's
  * owner stands in. Every other start is the caller's own: a coding agent on
  * a task acts for its starter, and a start from another agent lands where
  * that agent stands, which the caller reads as itself.
@@ -2705,10 +2671,6 @@ const startAccountOf = (caller: AgentCaller, from: AgentStartFrom | undefined) =
     const owner = callerUserId(caller);
 
     if (calling?.kind !== AGENT_KIND.MANAGER || from !== undefined) return owner;
-
-    if (!(yield* experimentOnIn(calling.organizationId, EXPERIMENT.MANAGER_ACTS_FOR_ASKER))) {
-      return owner;
-    }
 
     return yield* turnAsker({ userId: calling.userId, conversationId: calling.conversationId });
   });
@@ -2880,7 +2842,7 @@ export function runStartAgent(
         return agentToolRejected(`Not started: ${forwardedImageRefusalWords(images.failure)}`);
       }
 
-      const runsOn = yield* runsOnOfStart(account, callerWorkspaceId(caller), runsOnAsked);
+      const runsOn = yield* runsOnOfStart(account, runsOnAsked);
 
       if (Result.isFailure(runsOn)) return agentToolRejected(runsOn.failure);
       const place: StartWhere = landing?.success.place ?? { taskId };
@@ -3541,11 +3503,13 @@ export function runUnarchiveAgent(
 /**
  * One call of `update_agent`: an agent of the caller's workspace renamed,
  * moved to another choice the catalog takes, pinned or unpinned for the
- * caller's member, or given another list of servers switched off, by the
- * one operation the app's menu runs (`agent-change.ts`). A choice is
- * checked before anything is written, so one refused changes nothing, and
- * every change asked is written in one transaction, so none stands where
- * another failed.
+ * caller's member, given another list of servers switched off, or, a
+ * Manager alone, given another face, by the one operation the app's menu and
+ * a Manager's Settings run (`agent-change.ts`), written as the member who
+ * asked (`askingMember`); a choice is checked against the catalog
+ * `list_models` reads. A choice and a face are checked before anything is
+ * written, so one refused changes nothing, and every change asked is written
+ * in one transaction, so none stands where another failed.
  */
 export function runUpdateAgent(
   call: AgentCall,
@@ -3557,9 +3521,10 @@ export function runUpdateAgent(
     return Effect.succeed(agentToolRejected(UPDATE_AGENT_REFUSAL.UNREADABLE));
   }
 
-  const { agentId, title, model, effort, contextWindow, pinned, disabledServers } = asked.success;
+  const { agentId, title, model, effort, contextWindow, pinned, disabledServers, face } =
+    asked.success;
+
   const { caller } = call;
-  const userId = callerUserId(caller);
 
   return orStoreRefusal(
     Effect.gen(function* () {
@@ -3567,7 +3532,14 @@ export function runUpdateAgent(
 
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       const { task } = found.value;
-      const choices = yield* Effect.result(accountModelChoices(userId));
+
+      // Note that only a Manager wears a face, so a coder asked for one is refused rather than not found.
+      if (face !== undefined && found.value.agent.kind !== AGENT_KIND.MANAGER) {
+        return agentToolRejected(UPDATE_AGENT_REFUSAL.NOT_A_MANAGER);
+      }
+
+      // Note that the choices are read as list_models reads them, so what it lists is what is taken.
+      const choices = yield* Effect.result(accountModelChoices(callerUserId(caller)));
 
       if (Result.isFailure(choices)) return agentToolRejected(UPDATE_AGENT_REFUSAL.UNAVAILABLE);
       const { offered } = choices.success;
@@ -3608,11 +3580,12 @@ export function runUpdateAgent(
       // The catalog's own reading of the choice is written, a window the model does not offer apart dropped.
       const choice = accepted === undefined ? undefined : Result.getOrUndefined(accepted);
 
-      const written = yield* changedAgent(userId, found.value.agent, {
+      const written = yield* changedAgent(yield* askingMember(caller), found.value.agent, {
         title,
         choice,
         pinned,
         disabledServers,
+        face,
       });
 
       if (Option.isNone(written)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
@@ -3632,6 +3605,9 @@ export function runUpdateAgent(
           onYourTask: task.onYourTask,
           archived: agent.archivedAt !== null,
           ...(pinned === undefined ? undefined : { pinned }),
+          ...(face === undefined
+            ? undefined
+            : { face: agent.face == null ? null : { ...agent.face } }),
         },
       };
     }),

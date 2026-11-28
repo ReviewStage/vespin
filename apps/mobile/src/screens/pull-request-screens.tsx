@@ -1,15 +1,17 @@
-// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks, reviews and conversation held live, a row each pushing its checks and the files it changes, its conversation inline under them, its merge or Remove from queue under its heading in every window, as the panel's head stands it, and on its state chip and in the bar's ⋯ the changes to where it stands (Ready for review, Convert to draft, Close, Reopen), and Open on GitHub.
+// pull-request-screens.tsx -- one pull request on its own screen, by its workspace, its repository, and its number, whoever opened it: where it stands, its checks, reviewers and conversation held live, a row each pushing its checks and the files it changes, its conversation inline under them, its merge or Remove from queue under its heading in every window, as the panel's head stands it, its title edited from a tap on it, on its state chip the changes to where it stands (Ready for review, Convert to draft, Close, Reopen), and in the bar's ⋯ Copy GitHub link and Open on GitHub, as the panel's are.
 
 import {
   type AgentOverviewPullRequest,
-  CHECK_SUMMARY,
+  type CheckSummary,
   PULL_REQUEST_STATE,
+  type PullRequestCheck,
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { changesLine } from "@repo/features/changed-files";
+import { filesWords } from "@repo/features/changed-files";
 import {
   iosAgentPullRequestOf,
+  iosPullRequestChaptersRoute,
   iosPullRequestChecksRoute,
   iosPullRequestCommentRoute,
   iosPullRequestFilesRoute,
@@ -18,10 +20,17 @@ import {
 import { pullRequestActivity } from "@repo/features/ios-system-activity";
 import { GITHUB_PAGE, gitHubPageLink, samePullRequest } from "@repo/features/link-grammar";
 import { MERGE_QUEUE_PAGE_WORDS } from "@repo/features/merge-queue-model";
+import { formatCount } from "@repo/features/number-format";
+import {
+  CHAPTERS_SHOWN,
+  CHAPTERS_WORDS,
+  type ChaptersShown,
+  chaptersShown,
+} from "@repo/features/pull-request-chapters-shown";
 import {
   CHECK_SUMMARY_WORDS,
   CLOSE_WORDS,
-  checksLineOf,
+  checksCountOf,
   checksSummaryOf,
   conversationCount,
   descriptionFolds,
@@ -80,7 +89,6 @@ import {
   LinkRow,
   ListSection,
   LoadingRow,
-  MARK_FACE,
   MarkRow,
   MergeActRow,
   markdownShows,
@@ -90,6 +98,7 @@ import {
   REVIEW_LOOK,
   ROW_ACTION_TONE,
   type RowAction,
+  type RowCount,
   RowList,
   Screen,
   STATUS_TONE,
@@ -115,11 +124,12 @@ import {
   usePullRequestRetry,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { usePullRequestChapters } from "../pull-requests/use-pull-request-chapters.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
 
-/** What the bar's ⋯ menu offers beside the merge, in the panel's words. */
+/** What the bar's ⋯ menu and the state chip are named, in the panel's words. */
 const MENU_WORDS = {
   MORE: "More",
   /** What the state chip's menu is heard as before where it stands, as the panel's pill is named "Pull request Open". */
@@ -140,6 +150,7 @@ const CONVERSATION_WORDS = "Conversation";
 /** The ids of the rows that push a screen of their own: the checks, and the files changed. */
 const PAGE_ROW = {
   CHECKS: "checks",
+  CHAPTERS: "chapters",
   FILES: "files",
   COMMENT: "comment",
 } as const;
@@ -147,6 +158,7 @@ const PAGE_ROW = {
 /** What those rows say, as the screens they push are titled. */
 const PAGE_ROW_WORDS = {
   CHECKS: "Checks",
+  CHAPTERS: CHAPTERS_WORDS.CHAPTERS,
   FILES_CHANGED: "Files changed",
   COMMENT: "Comment",
 } as const;
@@ -318,6 +330,89 @@ function methodsOffered(pullRequest: AgentOverviewPullRequest | undefined): read
   return chooses ? (pullRequest?.merging?.methods ?? []) : [];
 }
 
+/** What the Files changed row counts, as the panel's tab counts the files: how many, heard with its noun. */
+function filesRowCount(files: number): RowCount {
+  return {
+    words: formatCount(files),
+    tone: STATUS_TONE.NEUTRAL,
+    heard: filesWords(files),
+  };
+}
+
+/**
+ * What the Checks row counts, as the panel's tab counts the checks
+ * (`checksCount`): how they went, by its glyph in its tone from the first
+ * frame, and how many once read (`checksCountOf`): those that failed, those
+ * still running, or every one once they passed; nothing where neither
+ * stands.
+ */
+function checksRowCount(
+  summary: CheckSummary | undefined,
+  checks: readonly PullRequestCheck[] | undefined,
+): RowCount | undefined {
+  if (summary === undefined) return undefined;
+  const look = CHECK_SUMMARY_LOOK[summary];
+  const count = checks === undefined ? undefined : checksCountOf(checks, summary);
+
+  if (look === undefined && count === undefined) return undefined;
+  const words = count === undefined ? "" : formatCount(count);
+
+  return {
+    words,
+    tone: look?.tone ?? STATUS_TONE.NEUTRAL,
+    glyph: look?.symbol,
+    heard: [words, CHECK_SUMMARY_WORDS[summary]].filter((part) => part !== "").join(" "),
+  };
+}
+
+/** What the Chapters row says of where they stand beside its glyph, to a reader who cannot see it, as the panel's tab says it. */
+const CHAPTERS_ROW_HEARD = {
+  GENERATING: "generating",
+  FAILED: "failed",
+  STALE: "out of date",
+} as const;
+
+/**
+ * What the Chapters row counts, as the panel's Chapters tab does
+ * (`chaptersTabCount`): the wait's mark while they are made, a cross in
+ * the danger tone where the generation failed, and once ready their count,
+ * in the attention tone under a warning where new commits came since, as
+ * `headKnown` lets it say; nothing while there are none.
+ */
+function chaptersRowCount(shown: ChaptersShown, headKnown: boolean): RowCount | undefined {
+  switch (shown.kind) {
+    case CHAPTERS_SHOWN.GENERATING:
+      return {
+        words: "",
+        tone: STATUS_TONE.NEUTRAL,
+        glyph: GLYPH.CHECK_RUNNING,
+        heard: CHAPTERS_ROW_HEARD.GENERATING,
+      };
+    case CHAPTERS_SHOWN.GENERATION_FAILED:
+      return {
+        words: "",
+        tone: STATUS_TONE.DANGER,
+        glyph: GLYPH.REMOVE,
+        heard: CHAPTERS_ROW_HEARD.FAILED,
+      };
+    case CHAPTERS_SHOWN.READY: {
+      const words = formatCount(shown.chapters.length);
+
+      return shown.stale && headKnown
+        ? {
+            words,
+            tone: STATUS_TONE.ATTENTION,
+            glyph: GLYPH.FAILED,
+            heard: `${words}, ${CHAPTERS_ROW_HEARD.STALE}`,
+          }
+        : { words, tone: STATUS_TONE.NEUTRAL, heard: words };
+    }
+
+    default:
+      return undefined;
+  }
+}
+
 /** The glyph each change to where the pull request stands leads its item with, the panel's own. */
 const STATE_ACTION_GLYPHS = {
   [PULL_REQUEST_ACTION.READY_FOR_REVIEW]: GLYPH.PULL_REQUEST,
@@ -326,7 +421,7 @@ const STATE_ACTION_GLYPHS = {
   [PULL_REQUEST_ACTION.REOPEN]: GLYPH.PULL_REQUEST,
 } as const satisfies Record<PullRequestStateAction, Glyph>;
 
-/** One change to where the pull request stands, as the bar's ⋯ offers it. */
+/** One change to where the pull request stands, as its state chip offers it. */
 interface StateChange {
   readonly action: PullRequestStateAction;
   readonly disabled: boolean;
@@ -337,55 +432,21 @@ interface StateChange {
 const DESCRIPTION_WORDS = "Description";
 
 /**
- * The bar's one act, the ⋯ menu, grouped as the panel's and Mail's are:
- * Edit title, as a task's ⋯ offers Rename, then the changes to where the
- * pull request stands, as the panel's state pill
- * offers them, Close in red, then Copy GitHub link and Open on GitHub.
- * It offers no Refresh, since a pull down on the page reads it again in
- * every window, as Mail's menu offers none, and a read that failed says so
- * in the page's place with Try again. The merge stands in the page under
- * the heading, where the panel's head stands it, so the bar's title keeps
- * its place.
+ * The bar's one act, the ⋯ menu, as the panel's toolbar ⋯ offers it on the
+ * pull request: Copy GitHub link and Open on GitHub. Its title is edited
+ * from a tap on it, and where it stands is changed from its state chip, as
+ * the panel's title and pill change them, so the menu repeats neither. It
+ * offers no Refresh, since a pull down on the page reads it again in every
+ * window, as Mail's menu offers none, and a read that failed says so in the
+ * page's place with Try again. The merge stands in the page under the
+ * heading, where the panel's head stands it, so the bar's title keeps its
+ * place.
  */
-function PullRequestToolbar({
-  url,
-  editTitle,
-  changes,
-}: {
-  readonly url: string | undefined;
-  /** Opens the title's edit; none until the pull request is read, and dimmed while a change is out. */
-  readonly editTitle: { readonly disabled: boolean; readonly onPress: () => void } | undefined;
-  readonly changes: readonly StateChange[];
-}) {
+function PullRequestToolbar({ url }: { readonly url: string | undefined }) {
   return (
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
-        {editTitle === undefined ? null : (
-          <Stack.Toolbar.Menu inline>
-            <Stack.Toolbar.MenuAction
-              icon={glyphSymbol(GLYPH.RENAME)}
-              disabled={editTitle.disabled}
-              onPress={editTitle.onPress}
-            >
-              {PULL_REQUEST_TITLE_WORDS.EDIT}
-            </Stack.Toolbar.MenuAction>
-          </Stack.Toolbar.Menu>
-        )}
-        {changes.length === 0 ? null : (
-          <Stack.Toolbar.Menu inline>
-            {changes.map((change) => (
-              <Stack.Toolbar.MenuAction
-                key={change.action}
-                icon={glyphSymbol(STATE_ACTION_GLYPHS[change.action])}
-                destructive={change.action === PULL_REQUEST_ACTION.CLOSE}
-                disabled={change.disabled}
-                onPress={change.onPress}
-              >
-                {PULL_REQUEST_STATE_ACTION_WORDS[change.action]}
-              </Stack.Toolbar.MenuAction>
-            ))}
-          </Stack.Toolbar.Menu>
-        )}
+        <Stack.Toolbar.Label>{MENU_WORDS.MORE}</Stack.Toolbar.Label>
         {url === undefined ? null : (
           <Stack.Toolbar.Menu inline>
             <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LINK)} onPress={() => copyLink(url)}>
@@ -410,16 +471,22 @@ function PullRequestToolbar({
  * its heading, where it stands as the panel's pill says it and its
  * branches, with GitHub's sentence of whether it merges; its description
  * as its author wrote it, in Markdown, where it has one; a row for its
- * checks, how many stand where, a failure first, and a row for the files
- * it changes, how many and their lines where its agent's listing counts
- * them, each pushing its own screen, as GitHub's app pushes its Checks and
- * Files changed; its reviewers, where each stands; and its conversation
+ * checks and a row for the files it changes, each counting them as the
+ * panel's tabs do, the checks by how they went and how many, and the files
+ * by how many where its agent's listing counts them, their lines standing
+ * after its branches, and a row for its chapters between them, counting
+ * them as the panel's Chapters tab does and held live with the page, each
+ * row pushing its own screen, as GitHub's app pushes its Checks and
+ * Files changed; its reviewers' faces in its heading, each wearing where
+ * they stand, as the panel's people line draws them; and its conversation
  * inline, as GitHub's app runs its timeline under the page: each comment
  * and review by who wrote it, where a review left them and when, a short
  * plain preview of its words that a press opens whole in Markdown, and each
  * review thread under the review that started it, by its file and lines,
  * opened to its comments; the earlier entries a read left on GitHub
- * counted first, opening there. Its
+ * counted first, opening there. The Description and the Conversation each
+ * fold under their headings, as the panel's do, and open again on a second
+ * tap. Its
  * parts are held live while the screen is in focus, and a pull down reads
  * them again. The merge's one press merges, or arms auto-merge where the
  * repository merges through a queue, once its question is answered, as a
@@ -511,6 +578,7 @@ function PullRequestPage({
   const parts = usePullRequestParts(key);
   const retry = usePullRequestRetry(key);
   const writes = usePullRequestWrites(key);
+  const chapters = usePullRequestChapters(key);
   const [chosen, setChosen] = useState<MergeMethod | undefined>(undefined);
   const [unfolded, setUnfolded] = useState(false);
   // The conversation's entries and threads opened whole, by their row's id.
@@ -633,7 +701,7 @@ function PullRequestPage({
             }),
         };
 
-  // Note that the state chip offers the same changes as the bar's ⋯, as the panel's pill opens them where it says where the pull request stands; none once merged, where nothing changes.
+  // Note that the state chip offers the changes, as the panel's pill opens them where it says where the pull request stands; none once merged, where nothing changes.
   // A queued pull request's chip offers View merge queue first, while the account has the page on, as the panel's pill does, opening it on this pull request's row.
   const viewQueue: readonly FieldAct[] =
     inQueue && mergeQueueOn
@@ -699,7 +767,7 @@ function PullRequestPage({
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
-      <PullRequestToolbar url={url} editTitle={editTitle} changes={changes} />
+      <PullRequestToolbar url={url} />
     </>
   );
 
@@ -720,7 +788,13 @@ function PullRequestPage({
   }
 
   const action = pullRequest === undefined ? undefined : mergeActionFor(pullRequest);
-  const summary = checks === undefined ? undefined : checksSummaryOf(checks);
+
+  // Note that how the checks went is said from the first frame, by the merge read's word for them or what the agent published, and their own read's once it lands, as the panel's Checks tab counts them.
+  const summary =
+    checks === undefined
+      ? (pullRequest?.merging?.checks ?? listed?.checks)
+      : checksSummaryOf(checks);
+
   // Note that a pull request with no description, one read from a service before it, or one that holds only HTML GitHub's page hides (a template's comments, a bot's badges), shows no Description section, rather than the panel's "No description provided.", since the phone draws no empty section.
   const description = pullRequest?.body ?? "";
   // Note that the review threads still unresolved are said beside GitHub's sentence, as a branch that requires them resolved holds the merge for them, so the reader sees why before scrolling to them.
@@ -743,6 +817,7 @@ function PullRequestPage({
   // Each row a press pushes a screen of its own for, by its id: the checks, the files changed, and a new comment.
   const pushes = new Map<string, string>([
     [PAGE_ROW.CHECKS, iosPullRequestChecksRoute(key)],
+    [PAGE_ROW.CHAPTERS, iosPullRequestChaptersRoute(key)],
     [PAGE_ROW.FILES, iosPullRequestFilesRoute(key)],
     [PAGE_ROW.COMMENT, iosPullRequestCommentRoute(key)],
   ]);
@@ -823,6 +898,15 @@ function PullRequestPage({
                 }
           }
           labels={pullRequest?.labels}
+          lines={
+            listed === undefined
+              ? undefined
+              : { additions: listed.additions, deletions: listed.deletions }
+          }
+          reviewers={reviewers.map((reviewer) => ({
+            by: githubFace(reviewer.by),
+            state: reviewer.state,
+          }))}
         />
         {writes.note === undefined ? null : (
           <WriteNoteRow words={writes.note.words} said={writes.note.said} />
@@ -854,7 +938,7 @@ function PullRequestPage({
         )}
       </ListSection>
       {described ? (
-        <ListSection title={DESCRIPTION_WORDS}>
+        <ListSection title={DESCRIPTION_WORDS} foldable>
           <WordsRow
             words={description}
             repository={agent?.repository}
@@ -884,55 +968,36 @@ function PullRequestPage({
       <ListSection>
         <MarkRow
           id={PAGE_ROW.CHECKS}
-          mark={
-            (summary === undefined ? undefined : CHECK_SUMMARY_LOOK[summary]) ?? {
-              symbol: GLYPH.CHECK,
-              tone: STATUS_TONE.NEUTRAL,
-            }
-          }
+          mark={{ symbol: GLYPH.CHECKS, tone: STATUS_TONE.NEUTRAL }}
           title={PAGE_ROW_WORDS.CHECKS}
-          detail={
-            checks === undefined
-              ? undefined
-              : (checksLineOf(checks) ?? CHECK_SUMMARY_WORDS[CHECK_SUMMARY.NONE])
-          }
+          count={checksRowCount(summary, checks)}
+          pushes
+        />
+        <MarkRow
+          id={PAGE_ROW.CHAPTERS}
+          mark={{ symbol: GLYPH.CHAPTERS, tone: STATUS_TONE.NEUTRAL }}
+          title={PAGE_ROW_WORDS.CHAPTERS}
+          count={chaptersRowCount(
+            chaptersShown(chapters.answer, chapters.generating, {
+              pullRequest: pullRequest?.merging?.headSha,
+              files: pullRequest?.merging?.headSha,
+            }),
+            pullRequest?.merging?.headSha !== undefined,
+          )}
           pushes
         />
         <MarkRow
           id={PAGE_ROW.FILES}
           mark={{ symbol: GLYPH.CHANGES, tone: STATUS_TONE.NEUTRAL }}
           title={PAGE_ROW_WORDS.FILES_CHANGED}
-          detail={
-            listed === undefined
-              ? undefined
-              : changesLine({
-                  files: listed.changedFiles,
-                  additions: listed.additions,
-                  deletions: listed.deletions,
-                })
-          }
+          count={listed === undefined ? undefined : filesRowCount(listed.changedFiles)}
           pushes
         />
-      </ListSection>
-      <ListSection title="Reviews" count={reviewers.length}>
-        {reviewers.map((reviewer) => {
-          const face = githubFace(reviewer.by);
-
-          return (
-            <MarkRow
-              key={reviewer.by.login}
-              id={reviewer.by.login}
-              mark={REVIEW_LOOK[reviewer.state]}
-              title={face.name}
-              detail={REVIEW_WORDS[reviewer.state]}
-              face={{ of: face, stands: MARK_FACE.LEAD }}
-            />
-          );
-        })}
       </ListSection>
       <ListSection
         title={CONVERSATION_WORDS}
         count={conversation === undefined ? undefined : conversationCount(conversation)}
+        foldable
       >
         {conversation === undefined ? (
           answerFailed(parts.conversation) ? (

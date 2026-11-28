@@ -15,21 +15,33 @@
  * A write a member asks stands over the rows in the pool, never in the
  * collection, since a TanStack transaction would hold back every answer its
  * collection is synced. So the same query runs over a second source, the
- * rows the writes standing draw (`StandingRows.pending`), and the two are
+ * rows the writes standing draw, which the pool holds in one collection made
+ * with the kind (`StandingRows.drawn`), and the two are
  * merged (`inboxRowsMerged`): every key a write stands over is taken from
  * the second, where its drawn row still matches, and left out where it no
  * longer does, as a settle leaves Open at once. Note that no library lays a
  * write layer of another's over a live query, which is why this is ours.
  */
 
+import type { InboxRow } from "@repo/features/inbox-digest";
 import { inboxInOrder } from "@repo/features/inbox-live";
-import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
-import { ROW_GONE, rowOf, type StandingRows } from "@repo/sync";
+import { INBOX_STATUS } from "@repo/features/inbox-wire";
+import {
+  type ROW_GONE,
+  type RowCollection,
+  type RowKind,
+  rowOf,
+  type StandingRows,
+} from "@repo/sync";
 import { eq, type IR, isUndefined, not, or, type Ref } from "@tanstack/db";
 import type { InboxHoldings } from "./app-state-reads.js";
-import { INBOX_ITEM, itemOf, type PlacedInboxItem } from "./inbox-collections.js";
+import { INBOX_THREAD, type PlacedInboxRow, threadRowOf } from "./inbox-collections.js";
+import { INBOX_MESSAGE, type ThreadMessage } from "./inbox-messages.js";
+import type { HeardWords } from "./kept-words.js";
 
-export type { PlacedInboxItem } from "./inbox-collections.js";
+export type { PlacedInboxRow } from "./inbox-collections.js";
+
+export { type ThreadMessage, threadOfRows } from "./inbox-messages.js";
 
 /** How much of the Inbox a screen reads: what Open, Questions, and Reminders can list, one agent's threads, or every item kept. */
 export const INBOX_REACH = {
@@ -61,17 +73,49 @@ export const INBOX_WHOLE: InboxReach = { kind: INBOX_REACH.WHOLE };
 /** The Inbox kind's rows as the screens read them where they are kept on disk, and the moving of them. */
 export interface InboxRowsSource {
   /** The kind's collection and the rows the writes standing over it draw; none before the follow first stood on it. */
-  readonly standing: () => StandingRows<PlacedInboxItem> | undefined;
+  readonly standing: () => StandingRows<PlacedInboxRow> | undefined;
+  /** The collection each thread's messages are kept in, which a thread reads as it opens; none before the follow first stood on it. */
+  readonly messages: () => RowCollection<ThreadMessage, string> | undefined;
   /** Hears each moving of the kind's collection or of the writes standing over it; answers how to stop hearing. */
   readonly watch: (heard: () => void) => () => void;
+  /**
+   * Each thread whose kept messages say any of `tokens`, each lowercased, with
+   * those they say, found in SQLite off the JavaScript thread
+   * (`KeptWords.threadsSaying`), so a row answers a search where its own
+   * words and these hold every word typed (`InboxSearch`).
+   */
+  readonly threadsSaying: (
+    tokens: readonly string[],
+  ) => Promise<ReadonlyMap<string, readonly string[]>>;
+  /** Hears each write of the kept messages' words once it lands, so a search standing asks again; answers how to stop hearing. */
+  readonly wordsMoved: (heard: () => void) => () => void;
 }
 
-/** The Inbox kind's rows over the pool `pool` names. */
-export function inboxRowsSource(pool: {
-  readonly standing: (kind: typeof INBOX_ITEM) => StandingRows<PlacedInboxItem> | undefined;
-  readonly watch: (heard: () => void) => () => void;
-}): InboxRowsSource {
-  return { standing: () => pool.standing(INBOX_ITEM), watch: pool.watch };
+/** The Inbox kind's rows over the pool `pool` names, its messages' words searched in `words`, the store the follow writes them to. */
+export function inboxRowsSource(
+  pool: {
+    readonly standing: <Row extends object, Change>(
+      kind: RowKind<Row, Change>,
+    ) => StandingRows<Row> | undefined;
+    readonly watch: (heard: () => void) => () => void;
+  },
+  words: HeardWords,
+): InboxRowsSource {
+  return {
+    standing: () => pool.standing(INBOX_THREAD),
+    messages: () => pool.standing(INBOX_MESSAGE)?.collection,
+    watch: pool.watch,
+    threadsSaying: words.threadsSaying,
+    wordsMoved: words.heard,
+  };
+}
+
+/** The filter a thread's query reads its messages by: those on the thread `threadId` names, run in SQLite. */
+export function threadMessagesWhere(
+  message: Ref<ThreadMessage>,
+  threadId: string,
+): IR.BasicExpression<boolean> {
+  return eq(message.threadId, threadId);
 }
 
 /**
@@ -80,7 +124,7 @@ export function inboxRowsSource(pool: {
  * runs on both, its comparisons run in SQLite on the kept ones.
  */
 export function inboxRowsWhere(
-  item: Ref<PlacedInboxItem>,
+  item: Ref<PlacedInboxRow>,
   reach: InboxFilteredReach,
 ): IR.BasicExpression<boolean> {
   switch (reach.kind) {
@@ -109,34 +153,27 @@ export function inboxRowsWhere(
  * matches or the writes took it away.
  */
 export function inboxRowsMerged(
-  kept: readonly PlacedInboxItem[],
-  drawn: readonly PlacedInboxItem[],
-  pending: ReadonlyMap<string, PlacedInboxItem | typeof ROW_GONE>,
-): readonly PlacedInboxItem[] {
+  kept: readonly PlacedInboxRow[],
+  drawn: readonly PlacedInboxRow[],
+  pending: ReadonlyMap<string, PlacedInboxRow | typeof ROW_GONE>,
+): readonly PlacedInboxRow[] {
   if (pending.size === 0) return kept;
 
   return [...kept.filter((row) => !pending.has(row.id)), ...drawn];
 }
 
-/** The rows the writes standing draw, those they take away left out, as the second source a screen's query runs over. */
-export function inboxRowsDrawn(
-  pending: ReadonlyMap<string, PlacedInboxItem | typeof ROW_GONE>,
-): readonly PlacedInboxItem[] {
-  return [...pending.values()].filter((row): row is PlacedInboxItem => row !== ROW_GONE);
-}
-
-/** Each holder's items among `rows`, in the order a holder's list draws them. */
-function byHolder(rows: readonly PlacedInboxItem[], holderOf: (row: PlacedInboxItem) => string) {
-  const lists = new Map<string, InboxItem[]>();
+/** Each holder's rows among `rows`, in the order a holder's list draws them. */
+function byHolder(rows: readonly PlacedInboxRow[], holderOf: (row: PlacedInboxRow) => string) {
+  const lists = new Map<string, InboxRow[]>();
 
   for (const row of rows) {
     const holder = holderOf(row);
-    // Note that a row is read out of the collection without TanStack's own fields or the task the pool holds it on, as the document tells an item, the same object while the row stands.
-    const item = itemOf(rowOf<PlacedInboxItem, PlacedInboxItem>(row));
+    // Note that a row is read out of the collection without TanStack's own fields or the task the pool holds it on, as the list draws it, the same object while the row stands.
+    const listed = threadRowOf(rowOf<PlacedInboxRow, PlacedInboxRow>(row));
     const list = lists.get(holder);
 
-    if (list === undefined) lists.set(holder, [item]);
-    else list.push(item);
+    if (list === undefined) lists.set(holder, [listed]);
+    else list.push(listed);
   }
 
   return new Map([...lists].map(([holder, items]) => [holder, inboxInOrder(items)] as const));
@@ -150,9 +187,9 @@ function byHolder(rows: readonly PlacedInboxItem[], holderOf: (row: PlacedInboxI
  * tasks the phone kept beside its items standing as `told` names them.
  */
 export function inboxHoldingsOfRows(
-  rows: readonly PlacedInboxItem[],
+  rows: readonly PlacedInboxRow[],
   told: InboxHoldings,
-): InboxHoldings {
+): InboxHoldings<InboxRow> {
   const onTasks = rows.filter((row) => row.taskId !== null);
   const read = byHolder(onTasks, (row) => row.taskId ?? row.agentId);
 

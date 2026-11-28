@@ -124,7 +124,6 @@ test("a pull request's card names the coding agent whose it is on a row by its t
           pullRequest: published,
           place: { taskId: null },
           lines: published,
-          files: published.changedFiles,
           agent: {
             subject: agentSubject(control, THIRD.id, NOTHING_HELD, false),
             models: [],
@@ -135,10 +134,6 @@ test("a pull request's card names the coding agent whose it is on a row by its t
     ),
   );
   assert.equal(container.querySelector(".ui-hover-card-name")?.textContent, "Expire invitations");
-  assert.equal(
-    container.querySelector(".ui-hover-card-note")?.textContent,
-    "+210 −14 in 6 files · Checks passing",
-  );
 
   const named = container.querySelector<HTMLButtonElement>(
     '.ui-hover-card-row button[data-actor-ref][data-kind="agent"]',

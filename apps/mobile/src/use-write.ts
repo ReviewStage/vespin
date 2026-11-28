@@ -91,6 +91,7 @@ export const WRITE_SUBJECT = {
   TASK_PRIORITY: "task-priority",
   TASK_ASSIGNEE: "task-assignee",
   TASK_PIN: "task-pin",
+  REPOSITORY_PIN: "repository-pin",
   AGENT_PIN: "agent-pin",
   AGENT_NAME: "agent-name",
   AGENT_DEFAULT_MACHINE: "agent-default-machine",

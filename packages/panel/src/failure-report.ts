@@ -52,6 +52,7 @@ import {
   type FailureAbout,
   type FailureKind,
   type FailureSurface,
+  READ_SURFACES,
   type ShownFailureReport,
   type ShownFailureSent,
   shownFailureDetails,
@@ -207,6 +208,17 @@ function now(): number {
 }
 
 /**
+ * Whether `failure` is a read the window's connection explains while the app
+ * does not reach the service: shown on a read's surface (`READ_SURFACES`),
+ * and named no refusal. Note that a write's failure, a Start or a Revert
+ * among them, is still said in place, since nothing sends it again by
+ * itself once the service answers.
+ */
+function readOfConnection(failure: ShownFailure): boolean {
+  return READ_SURFACES.has(failure.surface) && kindOf(failure) !== FAILURE_KIND.REFUSED;
+}
+
+/**
  * What a component showing `failure` is handed: reported the first time it
  * says it stands, answering the same details every time after while it
  * stands, and reported anew once it stood unshown for `LAPSE_MS`.
@@ -233,6 +245,7 @@ function keptFailure(failure: ShownFailure): ReportedFailure {
       if (standing === 0) hiddenAt = now();
     },
     copy: (text) => appPlatform().copyText(text),
+    saidByConnection: readOfConnection(failure),
   };
 }
 

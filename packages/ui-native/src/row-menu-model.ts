@@ -3,6 +3,7 @@
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import type { ManagerFace } from "@repo/features/manager-face";
 import type { ModelProvider } from "@repo/features/models-wire";
+import type { TaskSectionIconColor } from "@repo/features/task-section-wire";
 import {
   TASK_PRIORITY_WORDS,
   TASK_STATUS_TONE,
@@ -77,7 +78,7 @@ export function menuPhotoFile(address: string): MenuPhotoFile | undefined {
   return address as MenuPhotoFile;
 }
 
-/** What an entity's choice is led by, each drawn as its rows draw it: a task's status, a task's priority, a person, no one, a section's emoji, or an integration. */
+/** What an entity's choice is led by, each drawn as its rows draw it: a task's status, a task's priority, a person, no one, a section's emoji or glyph, or an integration. */
 export const CHOICE_MARK = {
   STATUS: "status",
   PRIORITY: "priority",
@@ -88,6 +89,7 @@ export const CHOICE_MARK = {
   MANAGER: "manager",
   HARNESS: "harness",
   REPOSITORY: "repository",
+  SECTION_GLYPH: "section-glyph",
 } as const;
 
 /**
@@ -118,6 +120,12 @@ export type ChoiceMark =
       readonly repository: string;
       /** Its owner's picture as a file on this device, which a menu draws; none while it isn't read. */
       readonly picture: MenuPhotoFile | undefined;
+    }
+  | {
+      readonly kind: typeof CHOICE_MARK.SECTION_GLYPH;
+      readonly glyph: Glyph;
+      /** The color a section's glyph wears, as its header draws it (`sectionInk`); the menu's own ink where none is chosen. */
+      readonly color: TaskSectionIconColor | undefined;
     };
 
 /** What leads a menu's item, a choice or an act: its entity's own mark (`mark`), such as a status or a person, or a plain glyph (`symbol`), such as Group by's, never both. */
@@ -173,6 +181,8 @@ export type ChoiceLook =
       readonly kind: typeof MENU_ICON.GLYPH;
       readonly glyph: Glyph;
       readonly tone?: StatusTone | undefined;
+      /** A section's color, which its glyph is inked in as its header inks it, in place of a tone. */
+      readonly section?: TaskSectionIconColor | undefined;
       readonly under?: MarkLayer | undefined;
     }
   | {
@@ -236,6 +246,8 @@ export function markLook(mark: ChoiceMark): ChoiceLook {
           };
     case CHOICE_MARK.MANAGER:
       return { kind: MENU_ICON.MARK, asset: managerFaceAsset(mark.face, false), sized: false };
+    case CHOICE_MARK.SECTION_GLYPH:
+      return { kind: MENU_ICON.GLYPH, glyph: mark.glyph, section: mark.color };
   }
 }
 
@@ -409,10 +421,11 @@ export type MenuNode =
       readonly nodes: readonly MenuNode[];
     };
 
-/** The inks a menu's nodes stand in: an act's and a menu's own, the muted ink a menu's glyph takes, and a choice's glyph's for its tone. */
+/** The inks a menu's nodes stand in: an act's and a menu's own, the muted ink a menu's glyph takes, a choice's glyph's for its tone, and a section's glyph's for its color. */
 export type MenuInks = {
   readonly act: string;
   readonly tone: (tone: StatusTone) => string;
+  readonly section: (color: TaskSectionIconColor) => string;
 };
 
 /** The swipes from one edge as the native module stands them: their nodes, and whether a full swipe runs the first. */
@@ -446,11 +459,24 @@ function glyphIcon(glyph: Glyph, color?: string, under?: MarkLayer): MenuIcon {
   };
 }
 
-/** Whether a choice says what it says under its words: not one led by an integration's mark or an emoji, as `markContent` and `emojiContent` draw it. */
+/** Whether a choice says what it says under its words: not one led by an integration's mark or an emoji (`choiceLook`). */
 export function saysUnder(choice: MenuLead): boolean {
   const kind = choiceLook(choice)?.kind;
 
   return kind !== MENU_ICON.MARK && kind !== MENU_ICON.EMOJI;
+}
+
+/** A glyph's ink in a menu: its section's color, or its tone's ink; none for a glyph in the menu's own ink. */
+function lookInk(
+  look: {
+    readonly tone?: StatusTone | undefined;
+    readonly section?: TaskSectionIconColor | undefined;
+  },
+  inks: MenuInks,
+): string | undefined {
+  if (look.section !== undefined) return inks.section(look.section);
+
+  return look.tone === undefined ? undefined : inks.tone(look.tone);
 }
 
 /** A choice's icon: its entity's mark or its plain glyph, as `choiceLook` draws it, a glyph in its tone's ink; none for a choice of words alone. */
@@ -479,7 +505,7 @@ function choiceIcon(choice: LedItem, inks: MenuInks): MenuIcon | undefined {
     case MENU_ICON.GLYPH:
       return glyphIcon(
         look.glyph,
-        look.tone === undefined ? undefined : inks.tone(look.tone),
+        lookInk(look, inks),
         choice.detail === undefined ? look.under : undefined,
       );
   }
@@ -533,7 +559,7 @@ function submenuNode(
         (choice): MenuNode => ({
           kind: MENU_NODE.CHOICE,
           label: choice.label,
-          // Note that a choice led by an integration's mark or an emoji says nothing under its words, as `markContent` and `emojiContent` drew it.
+          // Note that a choice led by an integration's mark or an emoji says nothing under its words (`saysUnder`).
           detail: saysUnder(choice) ? choice.detail : undefined,
           icon: choiceIcon(choice, inks),
           on: choice.on,

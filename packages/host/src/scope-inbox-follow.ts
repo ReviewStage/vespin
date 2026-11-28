@@ -7,7 +7,7 @@ import {
 } from "@repo/features/inbox-live";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
-import type { EntityPool, HeldRows } from "@repo/sync";
+import type { EntityPool, HeldRows, RowKind } from "@repo/sync";
 import { Data, Effect, Equal, RcMap, type Scope, Stream, SubscriptionRef } from "effect";
 import { type AppHolderInboxes, NO_HOLDER_INBOXES } from "./app-state.js";
 import {
@@ -79,6 +79,8 @@ export interface ScopeInboxDependencies {
   readonly accountId: () => string | undefined;
   /** The sync engine's pool, which each scope's items stand in while it is followed. */
   readonly pool: EntityPool;
+  /** The kind a scope's items stand on: the Inbox's own (`INBOX_ITEM`) unless said otherwise, which a test may name otherwise. */
+  readonly kind?: RowKind<PlacedInboxItem, InboxChange>;
 }
 
 /** The follows the windows' reads share, each held while read and a while after. */
@@ -125,7 +127,7 @@ export function scopeInboxes(
         );
 
         const items: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
-          INBOX_ITEM,
+          dependencies.kind ?? INBOX_ITEM,
           {
             redraw: () => drawn,
             confirmation: () => {

@@ -17,6 +17,7 @@ import {
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHidden,
+  accessibilityIdentifier,
   accessibilityLabel,
   accessibilityRemoveTraits,
   accessibilityValue,
@@ -104,9 +105,11 @@ import {
   RowOpenContext,
   RowSearchedContext,
   RowSelectedContext,
+  RowSystemLookContext,
 } from "./row-open.js";
 import { previewTree, type RowPreview } from "./row-preview-model.js";
 import { searchedTitleMarkdown } from "./searched-title-model.js";
+import { sectionInk } from "./section-ink.js";
 import { sparedMarksDropped } from "./task-row-fit-model.js";
 import { Text } from "./text.js";
 import { type BrandColors, STATUS_TONE, toneColor, useColors } from "./tokens/colors.js";
@@ -142,6 +145,19 @@ const TITLE_LOOK = {
   PLAIN: "plain",
   MARKED: "marked",
 } as const;
+
+/** The ids a flow finds a row by, one for each kind of row, beside the row's own words. */
+export const ROW_TEST_ID = {
+  THREAD: "inbox-row",
+  TASK: "task-row",
+  /** A place an iPad's sidebar goes to, such as the Inbox, found beside its name. */
+  PLACE: "place-row",
+} as const;
+
+type RowTestId = (typeof ROW_TEST_ID)[keyof typeof ROW_TEST_ID];
+
+/** The system's primary hierarchical style, which a row's title in the system's sidebar list stands in. */
+const PRIMARY_STYLE = { type: "hierarchical", style: "primary" } as const;
 
 /** What parts the pieces of what a row is heard as, as VoiceOver pauses between a label's phrases. */
 const HEARD_PART = ", ";
@@ -212,7 +228,7 @@ type RowActs = {
   readonly menuGroups?: readonly RowMenuGroup[] | undefined;
   /** The long press menu whole, in its own order, for a row whose menu follows the panel's right-click rather than leading with its swipes: each group set apart by a divider, after Open. Where given, the swipes stand behind the swipe alone, and `menuSubmenus`, `menuActions` and `menuGroups` are left out. */
   readonly menu?: readonly LongPressGroup[] | undefined;
-  /** What the long press lifts over its menu, a glance at what the row opens (`ThreadPreview`, `TaskPreview`, `AgentPreview`), as the system's own apps lift one. */
+  /** What the long press lifts over its menu, a glance at what the row opens (`threadPreview`, `taskPreview`, `agentPreview`), as the system's own apps lift one. */
   readonly preview?: RowPreview | undefined;
   /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
   readonly link?: string | undefined;
@@ -456,6 +472,7 @@ export function rowPlacement(
     indent = 0,
     dot = true,
     reach = 0,
+    system = false,
   }: {
     readonly selected?: boolean | undefined;
     readonly vertical?: number | undefined;
@@ -463,12 +480,15 @@ export function rowPlacement(
     /** Whether the row draws the unread dot's column, which stands in the margin; a task's row, which draws none, starts its lead at `inset.lead`. */
     readonly dot?: boolean | undefined;
     readonly reach?: number | undefined;
+    /** Whether the row keeps the system sidebar list's own ground and selection highlight, as an iPad's own sidebar's rows do, rather than clearing it for a fill of ours. */
+    readonly system?: boolean | undefined;
   } = {},
 ) {
   const leading = dot ? inset.dotted : inset.lead;
 
   return [
-    listRowBackground("clear"),
+    // Note that a row of the system's sidebar list keeps its cell's ground, since a row ground of ours hides the list's own selection highlight.
+    ...(system ? [] : [listRowBackground("clear")]),
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({
       leading: leading - ROW_INSET.FILL,
@@ -494,6 +514,23 @@ export function rowPlacement(
   ];
 }
 
+/** A long press menu's tree as the native module reads it, SwiftUI's menu (`rowMenu`) and UIKit's (`ContextMenu`) alike: its groups (`menuTree`) in the menu's muted ink, a section's glyph in its own color, headed by `title` where it has one. */
+export function longPressTree(
+  groups: readonly LongPressGroup[],
+  title: string | undefined,
+  colors: BrandColors,
+  dark: boolean,
+): string {
+  return JSON.stringify({
+    title,
+    groups: menuTree(groups, {
+      act: colors.TEXT_MUTED,
+      tone: (tone) => toneColor(colors, tone),
+      section: (color) => sectionInk(color, dark),
+    }),
+  });
+}
+
 /**
  * The one long press menu the app opens on anything held, as the panel opens
  * its right-click menu on the same things: SwiftUI's own menu, its groups in
@@ -516,16 +553,11 @@ export function LongPressMenu({
   readonly children: ReactElement;
 }) {
   const colors = useColors();
+  const dark = useColorScheme() === "dark";
 
   if (filledGroups(groups).length === 0) return children;
 
-  const tree = JSON.stringify({
-    title,
-    groups: menuTree(groups, {
-      act: colors.TEXT_MUTED,
-      tone: (tone) => toneColor(colors, tone),
-    }),
-  });
+  const tree = longPressTree(groups, title, colors, dark);
 
   return (
     <HStack modifiers={[rowMenu(tree, false, (path) => menuPressAt(groups, path)?.())]}>
@@ -574,9 +606,12 @@ export function RowFrame({
   indent,
   dot,
   now,
+  testId,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
+  /** What a flow finds the row by, its kind's id (`ROW_TEST_ID`), beside its words, so it never matches the same words elsewhere on screen. */
+  readonly testId?: RowTestId | undefined;
   /** The row's top and bottom inset, where it stands roomier than the list's own, as an Inbox thread does. */
   readonly vertical?: number | undefined;
   /** How far past the list's text column the row's words start, where it stands in deeper, a second mark leads it, or its lead grows, so its hairline starts under them. */
@@ -591,6 +626,7 @@ export function RowFrame({
   const fills = useSystemColors();
   const open = useContext(RowOpenContext);
   const selected = useContext(RowSelectedContext) === id;
+  const system = useContext(RowSystemLookContext);
   const disclosed = useContext(RowDisclosedContext);
   const chevronRoom = useScaledSize(DISCLOSURE_CHEVRON_ROOM);
   const choosing = useContext(RowChoosingContext);
@@ -629,7 +665,12 @@ export function RowFrame({
 
   // Note that a row in Select mode offers no long press and no swipe, as Mail's rows don't while it selects, so a press only ticks it.
   const plain = choosing || (!ownGroup && groups.length === 0 && preview === undefined);
-  const inks: MenuInks = { act: colors.TEXT_MUTED, tone: (tone) => toneColor(colors, tone) };
+
+  const inks: MenuInks = {
+    act: colors.TEXT_MUTED,
+    tone: (tone) => toneColor(colors, tone),
+    section: (color) => sectionInk(color, dark),
+  };
 
   // Note that the menu, its preview, and its VoiceOver Actions reach the native module as one string, read only as a long press opens the menu or while something reads the Actions, so the row holds no view of either and builds nothing for them as it draws; a press comes back as its place, which finds its handler here.
   const tree = plain
@@ -654,12 +695,14 @@ export function RowFrame({
   // Note that a heard row is one element whose children's own acts are left out, the swipes' and the menu's, which VoiceOver listed twice and each submenu's items with no verb; its Actions are read once from its menu's tree instead (`rowHeard`), and Select mode offers none, as it offers no long press.
   const frameModifiers = [
     tag(id),
+    ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
     ...rowPlacement(colors, inset, {
       selected,
       vertical,
       indent,
       dot,
       reach: disclosed ? inset.margin + chevronRoom : 0,
+      system,
     }),
     ...(heard === undefined
       ? []
@@ -783,6 +826,7 @@ export function RowHead({
   /** Where given, what the title's whole width and its room on the line are told to, so the row can let marks of its end go before the title is cut. */
   readonly fit?: TitleFit | undefined;
 }) {
+  const system = useContext(RowSystemLookContext);
   const lines = useRowLines();
   const stacked = useAccessibilitySize();
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
@@ -792,7 +836,8 @@ export function RowHead({
       title={title}
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "semibold" : "regular" }),
-        foregroundStyle(ink),
+        // Note that a title in the system's sidebar list stands in the system's primary style, so the sidebar's own selection turns it as it turns its own rows' words.
+        foregroundStyle(system ? PRIMARY_STYLE : ink),
         lineLimit(lines.title),
       ]}
     />
@@ -1090,6 +1135,7 @@ export function ListRow(props: ListRowProps) {
     <RowFrame
       {...props}
       id={id}
+      testId={ROW_TEST_ID.THREAD}
       row={row}
       heard={props.heard ?? threadHeard(props, now)}
       vertical={ROW_INSET.THREAD_VERTICAL}
@@ -1595,6 +1641,7 @@ export function TaskRow(props: TaskRowProps) {
     <RowFrame
       {...props}
       id={id}
+      testId={ROW_TEST_ID.TASK}
       row={row}
       indent={indent}
       dot={false}

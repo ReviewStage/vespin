@@ -417,3 +417,100 @@ it.effect(
       });
     }),
 );
+
+it.effect(
+  "a stored kind held in memory because no database opened keeps neither its rows nor its kept read's cursor in the rows store, so the next launch reads it whole",
+  () =>
+    Effect.gen(function* () {
+      const kept: string[] = [];
+
+      const reading = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const pool = yield* entityPool({
+            mintKey: () => "key",
+            replayRefused: Effect.void,
+            store: {
+              collections: () => undefined,
+              rows: {
+                answered: (answer) =>
+                  Effect.sync(() => {
+                    kept.push(answer.read);
+                  }),
+                loaded: () => Effect.succeed({ rows: [ADA], cursor: { at: "9" } }),
+              },
+            },
+          });
+
+          const owner = yield* standing(pool, { owns: true, kept: KEPT });
+          yield* owner.rows.answer([ADA, BO], { cursor: { at: "7" } });
+
+          return {
+            stored: owner.rows.stored,
+            loaded: owner.rows.loaded,
+            held: owner.rows.rows().map((row) => row.id),
+          };
+        }),
+      );
+
+      assert.deepEqual(
+        { ...reading, kept },
+        { stored: undefined, loaded: false, held: [ADA.id, BO.id], kept: [] },
+      );
+    }),
+);
+
+it.effect(
+  "a stored kind's drawn rows stand in one collection made with the kind, holding each write's row by the time the watchers hear, and nothing once it stands down",
+  () =>
+    Effect.gen(function* () {
+      const file = join(yield* folder, "account.sqlite");
+
+      const seen = yield* launch(file, (pool) =>
+        Effect.gen(function* () {
+          const confirmed = yield* Deferred.make<void>();
+
+          const owner = yield* standing(pool, {
+            owns: true,
+            kept: KEPT,
+            confirmation: () => () => Deferred.await(confirmed),
+          });
+
+          yield* owner.rows.answer([ADA, BO], { cursor: { at: "1" } });
+          const before = pool.standing(STORED)?.drawn;
+
+          const drawnNames = () =>
+            [...(pool.standing(STORED)?.drawn?.values() ?? [])].map((row) => row.name).sort();
+
+          // Note that each hearing reads the collection as it stands then, which is what a screen drawn again at once reads.
+          const heardWith: string[][] = [];
+          const stop = pool.watch(() => heardWith.push(drawnNames()));
+          yield* pool.write(writing(RENAMED, "tx-1"), "a");
+          yield* pool.write(writing(REMOVED, "tx-2"), "b");
+          yield* Effect.repeat(Effect.yieldNow, { times: 20 });
+
+          const during = {
+            names: drawnNames(),
+            pending: [...(pool.standing(STORED)?.pending.keys() ?? [])].sort(),
+          };
+
+          yield* Deferred.succeed(confirmed, undefined);
+          yield* Effect.repeat(Effect.yieldNow, { times: 20 });
+          stop();
+
+          return {
+            sameCollection: pool.standing(STORED)?.drawn === before && before !== undefined,
+            firstHeard: heardWith[0],
+            during,
+            after: drawnNames(),
+          };
+        }),
+      );
+
+      assert.deepEqual(seen, {
+        sameCollection: true,
+        firstHeard: ["Renamed"],
+        during: { names: ["Renamed"], pending: ["a", "b"] },
+        after: [],
+      });
+    }),
+);

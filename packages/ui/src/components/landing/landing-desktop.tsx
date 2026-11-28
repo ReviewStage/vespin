@@ -15,7 +15,7 @@ import { HarnessMark } from "../../marks/harness-mark.js";
 import { ProductMark } from "../../marks/product-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
-import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar, type AvatarSize } from "../avatar/avatar.js";
 import { IconButton } from "../button/button.js";
 import { GROUP_HEADING, GroupHeader } from "../group-header/group-header.js";
 import {
@@ -133,11 +133,7 @@ export function useLandingTeammate(): LandingPerson {
 }
 
 /** The workspace's face at `size`: the product's own mark on its copper tile, since the workspace is ours. */
-export function WorkspaceFace({
-  size,
-}: {
-  size: (typeof AVATAR_SIZE)[keyof typeof AVATAR_SIZE];
-}): React.JSX.Element {
+export function WorkspaceFace({ size }: { size: AvatarSize }): React.JSX.Element {
   return (
     <Avatar
       name={PRODUCT_NAME}
@@ -154,10 +150,7 @@ export function WorkspaceFace({
 export const REPOSITORY = "ReviewStage/vespin";
 
 /** An agent's face: its name on the square of the harness it runs in. */
-export function agentFace(
-  name: string,
-  size: (typeof AVATAR_SIZE)[keyof typeof AVATAR_SIZE],
-): ReactNode {
+export function agentFace(name: string, size: AvatarSize): ReactNode {
   return (
     <Avatar
       name={name}

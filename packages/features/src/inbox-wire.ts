@@ -1088,6 +1088,16 @@ export const INBOX_MESSAGE_AUTHOR = {
 
 export type InboxMessageAuthor = (typeof INBOX_MESSAGE_AUTHOR)[keyof typeof INBOX_MESSAGE_AUTHOR];
 
+/** A thread's messages oldest first, those written at one instant by id in code-unit order, as every read of a thread orders it. */
+export function inboxThreadOrder(
+  one: { readonly createdAt: number; readonly id: string },
+  other: { readonly createdAt: number; readonly id: string },
+): number {
+  if (one.createdAt !== other.createdAt) return one.createdAt - other.createdAt;
+
+  return one.id < other.id ? -1 : one.id > other.id ? 1 : 0;
+}
+
 /**
  * One message on an item's thread as an item read carries it: who wrote it,
  * the member by id and name where a member did, and none for a member whose
@@ -1252,43 +1262,17 @@ export function openAskOf(thread: readonly InboxMessage[]): InboxAsking | undefi
  * (`inbox-store.ts`'s `WAITS_ON`); its starter from a service before it
  * said; none where it names neither.
  */
-export function inboxWaitsOn(item: InboxItem): InboxPerson | undefined {
+export function inboxWaitsOn(
+  item: Pick<InboxItem, "waitsOn" | "startedBy">,
+): InboxPerson | undefined {
   return item.waitsOn ?? item.startedBy;
 }
 
 /** The member an item's agent addressed it to by name (`addressed`), whom it waits on; none where it waits on whoever the service derives. */
-export function inboxAddressedTo(item: InboxItem): InboxPerson | undefined {
+export function inboxAddressedTo(
+  item: Pick<InboxItem, "addressed" | "waitsOn">,
+): InboxPerson | undefined {
   return item.addressed === true ? item.waitsOn : undefined;
-}
-
-/** Whether a thread still asks someone something: open, and holding an ask open, as the service's `ASKING` reads it. */
-function inboxAsksOpen(item: InboxItem): boolean {
-  return item.status === INBOX_STATUS.OPEN && openAskOf(item.thread ?? []) !== undefined;
-}
-
-/**
- * Whether the thread is its agent's turn: its ask stands open and a
- * member wrote last, a follow-up asked before answering, which the agent
- * hears and answers on the thread. The ask still stands, so it may be
- * answered at once all the same; the turn comes back with the agent's
- * next post.
- */
-export function inboxAgentsTurn(item: InboxItem): boolean {
-  return inboxAsksOpen(item) && item.thread?.at(-1)?.author === INBOX_MESSAGE_AUTHOR.MEMBER;
-}
-
-/**
- * Whether a thread needs the reader: its ask stands open and waits on them,
- * and it is not its agent's turn (`inboxAgentsTurn`). The one reading of it,
- * which Needs you and the tint draw from.
- */
-export function threadNeedsReader(item: InboxItem, readerId: string | undefined): boolean {
-  return (
-    readerId !== undefined &&
-    inboxAsksOpen(item) &&
-    !inboxAgentsTurn(item) &&
-    inboxWaitsOn(item)?.userId === readerId
-  );
 }
 
 /** Where a reader of an inbox starts: before anything. */

@@ -131,6 +131,8 @@ export interface TasksViewFrame {
   readonly onDisplay: (display: TasksDisplay) => void;
   /** What the view tells the paging of settled tasks past those the list holds, while it shows them in full: a run that may hold them at its end, and whether it draws any (`use-settled-pages.ts`); none pages none. */
   readonly settledPages?: SettledPages | undefined;
+  /** Whether the run is a fixture's, whose choices the view keeps nothing of. */
+  readonly staged: boolean;
   /** Where the view's chosen tasks are held across the page's visits; the view's own while nothing outlives it. */
   readonly chosen?: ChosenTasksStore | undefined;
   /** What each run of the view's rows measured, by the run's key, held across the page's visits; none while nothing outlives the view. */
@@ -148,6 +150,7 @@ const FIELD_WORDS = {
   [TASKS_FILTER_FIELD.PRIORITY]: "Priority",
   [TASKS_FILTER_FIELD.ASSIGNEE]: "Assignee",
   [TASKS_FILTER_FIELD.CREATOR]: "Creator",
+  [TASKS_FILTER_FIELD.FOLLOWER]: "Followed by",
   [TASKS_FILTER_FIELD.MADE_BY]: "Made by",
   [TASKS_FILTER_FIELD.REPOSITORY]: "Repository",
 } as const satisfies Record<TasksFilterField, string>;
@@ -158,6 +161,7 @@ const FIELD_ICON = {
   [TASKS_FILTER_FIELD.PRIORITY]: <SignalHighIcon />,
   [TASKS_FILTER_FIELD.ASSIGNEE]: <UserCheckIcon />,
   [TASKS_FILTER_FIELD.CREATOR]: <UserIcon />,
+  [TASKS_FILTER_FIELD.FOLLOWER]: <GLYPH.SHOW />,
   [TASKS_FILTER_FIELD.MADE_BY]: <UserPenIcon />,
   [TASKS_FILTER_FIELD.REPOSITORY]: <GLYPH.REPOSITORY />,
 } as const satisfies Record<TasksFilterField, React.JSX.Element>;
@@ -263,6 +267,20 @@ export function assigneeFor(
 
   return personActor(
     named ?? { userId: assigneeId, name: "" },
+    reader.members,
+    reader.readerId,
+    reader.former,
+  );
+}
+
+/** Who a follower is, as the directory draws them, else by their account alone, since a task names its followers by id. */
+function followerFor(followerId: string, reader: ReturnType<typeof useMemberDirectory>): Actor {
+  const member = reader.members?.find((each) => each.userId === followerId);
+
+  if (member !== undefined) return memberActor(member, reader.readerId);
+
+  return personActor(
+    { userId: followerId, name: "" },
     reader.members,
     reader.readerId,
     reader.former,
@@ -380,6 +398,8 @@ function fieldValues(
             ]
           : []),
       ];
+    case TASKS_FILTER_FIELD.FOLLOWER:
+      return peopleValues(held, reader, (id) => followerFor(id, reader));
     case TASKS_FILTER_FIELD.MADE_BY:
       return TASK_MAKER_ORDER.map((maker) => ({
         value: maker,
@@ -416,8 +436,15 @@ function fieldValues(
 const SEARCH_MEMBERS = "Search members";
 const SEARCH_REPOSITORIES = "Search repositories";
 
-/** The fields that name a person, which a workspace nobody shares has no use for. */
+/** The fields that name a person. */
 const PERSON_FIELDS: readonly TasksFilterField[] = [
+  TASKS_FILTER_FIELD.ASSIGNEE,
+  TASKS_FILTER_FIELD.CREATOR,
+  TASKS_FILTER_FIELD.FOLLOWER,
+];
+
+/** The person fields a workspace nobody shares has no use for; Followed by stays, since its reader follows tasks there too. */
+const SHARED_FIELDS: readonly TasksFilterField[] = [
   TASKS_FILTER_FIELD.ASSIGNEE,
   TASKS_FILTER_FIELD.CREATOR,
 ];
@@ -436,7 +463,7 @@ function namesData(field: TasksFilterField): boolean {
 /** The fields the Filter offers: Assignee and Creator only where the workspace is shared. */
 function offeredFields(shared: boolean): readonly TasksFilterField[] {
   return Object.values(TASKS_FILTER_FIELD).filter(
-    (field) => shared || !PERSON_FIELDS.includes(field),
+    (field) => shared || !SHARED_FIELDS.includes(field),
   );
 }
 

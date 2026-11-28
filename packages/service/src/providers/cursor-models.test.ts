@@ -9,6 +9,7 @@ import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { Effect, Layer } from "effect";
 import { TestClock } from "effect/testing";
+import { keptAfterResponse } from "../http/after-response.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import { LOCAL_AGENT_ENVIRONMENT } from "../testing/local-agent.js";
 import {
@@ -209,6 +210,21 @@ it("offers no Cursor model to an account without Cursor agents on, or a client t
   assert.deepEqual(withCursorModels([], { experimentOn: true, apiVersion: 3 }, models), []);
 });
 
+/** A user row, with a Cursor key saved unless it asks for none. */
+const savedAccount = (options: { readonly saveKey?: boolean } = {}) =>
+  Effect.gen(function* () {
+    const userId = `user-${randomUUID()}`;
+    yield* Effect.flatMap(Database, (db) =>
+      db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
+    );
+
+    if (options.saveKey !== false) {
+      yield* connectAgentApiKeys(userId, { providers: [PROVIDER_KEY_PROVIDER.CURSOR] });
+    }
+
+    return userId;
+  });
+
 it.layer(getTestDB())("Cursor's list as the service reads it", (it) => {
   it.effect(
     "keeps offering the account's last list it read while Cursor's list cannot be read",
@@ -244,4 +260,80 @@ it.layer(getTestDB())("Cursor's list as the service reads it", (it) => {
         assert.ok(later.some((model) => model.catalogId === "cursor/claude-opus-5.5"));
       }),
   );
+
+  it.effect(
+    "answers an expired list at once and reads Cursor again after the response, for that account alone",
+    () => {
+      const after = keptAfterResponse();
+
+      return Effect.gen(function* () {
+        const reader = yield* savedAccount();
+        const stranger = yield* savedAccount({ saveKey: false });
+        let reads = 0;
+
+        // Cursor answers its full list once, then a list of Auto alone.
+        const cursor = fakeHttpClientLayer(() => {
+          reads += 1;
+
+          return Response.json({ items: reads === 1 ? LIST : [{ id: "default" }] });
+        });
+
+        const catalog = yield* Effect.provide(
+          CursorModelCatalog,
+          cursorModelCatalogLayer.pipe(Layer.provide(Layer.merge(cursor, LOCAL_AGENT_ENVIRONMENT))),
+        );
+
+        const first = yield* catalog.forAccount(reader);
+        yield* TestClock.adjust("1 hour");
+        const expired = yield* catalog.forAccount(reader);
+
+        // The expired list is answered with no read waited on.
+        assert.equal(reads, 1);
+        assert.deepEqual(expired, first);
+
+        yield* after.run;
+        const refreshed = yield* catalog.forAccount(reader);
+
+        assert.equal(reads, 2);
+        assert.deepEqual(
+          refreshed.map((model) => model.catalogId),
+          ["cursor/auto"],
+        );
+
+        // An account with no Cursor key stands on the pinned models, never another account's list.
+        const unkeyed = yield* catalog.forAccount(stranger);
+        assert.ok(unkeyed.some((model) => model.catalogId === "cursor/composer-2.5"));
+        assert.equal(reads, 2);
+      }).pipe(Effect.provide(after.layer));
+    },
+  );
+
+  it.effect("drops an account's list once Cursor refuses its key", () => {
+    const after = keptAfterResponse();
+
+    return Effect.gen(function* () {
+      const userId = yield* savedAccount();
+      let refused = false;
+
+      const cursor = fakeHttpClientLayer(() =>
+        refused ? new Response("revoked", { status: 401 }) : Response.json({ items: LIST }),
+      );
+
+      const catalog = yield* Effect.provide(
+        CursorModelCatalog,
+        cursorModelCatalogLayer.pipe(Layer.provide(Layer.merge(cursor, LOCAL_AGENT_ENVIRONMENT))),
+      );
+
+      const listed = yield* catalog.forAccount(userId);
+      assert.ok(listed.some((model) => model.catalogId === "cursor/claude-opus-5.5"));
+
+      refused = true;
+      yield* TestClock.adjust("1 hour");
+      yield* catalog.forAccount(userId);
+      yield* after.run;
+
+      const later = yield* catalog.forAccount(userId);
+      assert.ok(!later.some((model) => model.catalogId === "cursor/claude-opus-5.5"));
+    }).pipe(Effect.provide(after.layer));
+  });
 });

@@ -12,9 +12,16 @@ import {
   threadInChapter,
 } from "@repo/features/pull-request-chapters";
 import {
-  type ChaptersRunsOn,
-  PULL_REQUEST_CHAPTERS_FAILURE_KIND,
-} from "@repo/features/pull-request-chapters-wire";
+  CHAPTER_RISK_WORDS,
+  CHAPTERS_FAILURE_WORDS,
+  CHAPTERS_SHOWN,
+  type ChapterRisk,
+  type ChaptersShown,
+  chaptersModelLabel,
+  chaptersShown,
+  CHAPTERS_WORDS as SHARED_CHAPTERS_WORDS,
+} from "@repo/features/pull-request-chapters-shown";
+import type { ChaptersRunsOn } from "@repo/features/pull-request-chapters-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -61,7 +68,6 @@ import {
   Pager,
   PaneBar,
   RowHint,
-  SCROLL_FADE,
   SCROLL_OVERSCROLL,
   SCROLL_SIZE,
   ScrollArea,
@@ -104,15 +110,10 @@ import {
   type LineComments,
 } from "./agent-changes-tab.js";
 import { API_KEY_WORDS } from "./agent-model.js";
-import { Section } from "./agent-pull-request-tab.js";
 import { typingInto } from "./changes-list.js";
 import {
-  CHAPTERS_SHOWN,
-  type ChaptersShown,
   chapterMarks,
   chapterPaths,
-  chaptersModelLabel,
-  chaptersShown,
   chapterThreadCount,
   chapterViewed,
   drawnLines,
@@ -127,6 +128,7 @@ import { drawnIn, useFloatsOver } from "./drawn-in.js";
 import { FileCard } from "./file-ref.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import type { TreeShown } from "./file-view.js";
+import { Section } from "./pull-request-section.js";
 import type { PullRequestSource } from "./pull-request-source.js";
 import { TranscriptWords } from "./transcript-blocks.js";
 
@@ -202,40 +204,25 @@ import { TranscriptWords } from "./transcript-blocks.js";
  * left out of it whole (`file-diff.tsx`).
  */
 
-/** The view's own words. */
+/** The view's own words, beside those every client's Chapters view says (`SHARED_CHAPTERS_WORDS`). */
 const CHAPTERS_WORDS = {
-  READING: "Reading chapters",
-  FAILED: "The chapters could not be read.",
-  NO_PULL_REQUEST: "No pull request yet.",
+  ...SHARED_CHAPTERS_WORDS,
   /** That no chapters stand yet, and whose key a Generate would spend where the read says. */
   none: (runsOn: ChaptersRunsOn | undefined) =>
     runsOn === undefined
-      ? "No chapters yet."
-      : `No chapters yet. Generating them runs on your ${API_KEY_WORDS[runsOn.provider]}.`,
+      ? SHARED_CHAPTERS_WORDS.NO_CHAPTERS
+      : `${SHARED_CHAPTERS_WORDS.NO_CHAPTERS} Generating them runs on your ${API_KEY_WORDS[runsOn.provider]}.`,
   /** What the Generate's chevron is named by, which opens the models to pick from. */
   PICK_MODEL: "Choose a model for chapters",
   /** What the Generate says while a pick is on its way, its press waiting on it. */
   PICKING: "Switching model",
   /** What a toast says where a pick was not kept, the press naming the model it runs on again. */
   PICK_FAILED: "The model could not be switched. Try again.",
-  /** The Generate, naming the model it would run on where the read says, short enough that an empty state's width holds it whole. */
-  generate: (runsOn: ChaptersRunsOn | undefined) =>
-    runsOn === undefined
-      ? "Generate chapters"
-      : `Generate with ${chaptersModelLabel(runsOn.model)}`,
   /** Why no chapters can be generated, naming the page an API key is saved on by its link. */
   unavailable: (page: ReactNode) => <>Save an API key in {page} settings to generate chapters.</>,
-  GENERATING: "Generating chapters",
-  REGENERATE: "Regenerate",
-  REGENERATE_CHAPTERS: "Regenerate chapters",
-  NOTHING: "This pull request has nothing to chapter.",
   NO_FILES: "None of this chapter's changes are in the pull request now.",
   STALE_DIFF: "Regenerate the chapters to see this chapter's changes.",
-  /** Which model told the chapters, as quiet caption text at the rail's foot. */
-  credit: (model: string) => `Chapters by ${model}`,
-  STALE: "New commits since these chapters",
   BRIEF: "Summary",
-  WHAT_TO_REVIEW: "What to review",
   /** What a key change's lines name, as a reader hears its pill's kind. */
   FILE: "file",
   /** What parts a key change's file from its lines, as a reader hears its pill. */
@@ -252,41 +239,16 @@ const CHAPTERS_WORDS = {
   HIDE_RAIL: "Hide chapters",
   RAIL: "Chapters",
   ACTIONS_THING: "Chapters",
-  RISK_REASONS: "Why",
   /** What an arrow's hint says: where it steps, and the chapter it steps to. */
   stepTo: (words: string, chapter: Chapter | undefined) =>
     chapter === undefined ? words : `${words}: ${chapter.title}`,
   /** How many review threads stand on a chapter's hunks, as its row's speech mark says to a reader. */
   threads: "threads",
-  /** How many files a chapter holds, as its row says where it counts no line: a binary file or a pure rename. */
-  files: (count: number) => (count === 1 ? "1 file" : `${formatCount(count)} files`),
-  /** A chapter's place in the rail, as a reader hears it before its title. */
-  place: (at: number) => `${at}. `,
   /** That a chapter is viewed, as its row's check says to a reader. */
   VIEWED: "viewed",
 } as const;
 
-/** Why a generation failed, as the view says it. */
-const FAILURE_WORDS = {
-  [PULL_REQUEST_CHAPTERS_FAILURE_KIND.TOO_LARGE]: "This pull request is too large to chapter.",
-  [PULL_REQUEST_CHAPTERS_FAILURE_KIND.TIMEOUT]: "Generating chapters took too long.",
-  [PULL_REQUEST_CHAPTERS_FAILURE_KIND.MODEL_REFUSED]:
-    "The model declined to chapter this pull request.",
-  [PULL_REQUEST_CHAPTERS_FAILURE_KIND.INVALID_ANSWER]: "The model's chapters could not be read.",
-  [PULL_REQUEST_CHAPTERS_FAILURE_KIND.UNEXPECTED]: "The chapters could not be generated.",
-} as const satisfies Record<
-  (typeof PULL_REQUEST_CHAPTERS_FAILURE_KIND)[keyof typeof PULL_REQUEST_CHAPTERS_FAILURE_KIND],
-  string
->;
-
-type Risk = NonNullable<Chapter["risk"]>;
-
-/** A chapter's risk in words, as its chip and its row say it. */
-const RISK_WORDS = {
-  high: "High risk",
-  medium: "Medium risk",
-  low: "Low risk",
-} as const satisfies Record<Risk, string>;
+type Risk = ChapterRisk;
 
 /** The tone a chapter's risk chip takes. */
 const RISK_TONES = {
@@ -503,7 +465,7 @@ function RiskChip({
               <RiskMark risk={risk} />
             </span>
           }
-          name={RISK_WORDS[risk]}
+          name={CHAPTER_RISK_WORDS[risk]}
         />
         {reasons.map((reason) => (
           <HoverCardNote key={reason}>{reason}</HoverCardNote>
@@ -514,7 +476,7 @@ function RiskChip({
   return (
     <Tooltip label={card === undefined ? undefined : CHAPTERS_WORDS.RISK_REASONS} card={card}>
       <Chip look={CHIP_LOOK.PILL} size={CHIP_SIZE.COMPACT} tone={RISK_TONES[risk]}>
-        {RISK_WORDS[risk]}
+        {CHAPTER_RISK_WORDS[risk]}
       </Chip>
     </Tooltip>
   );
@@ -648,7 +610,9 @@ function ChapterRail({
               <>
                 <VisuallyHidden>{CHAPTERS_WORDS.place(index + 1)}</VisuallyHidden>
                 {title}
-                {risk === null ? null : <VisuallyHidden>{`, ${RISK_WORDS[risk]}`}</VisuallyHidden>}
+                {risk === null ? null : (
+                  <VisuallyHidden>{`, ${CHAPTER_RISK_WORDS[risk]}`}</VisuallyHidden>
+                )}
               </>
             }
             titleLines={LIST_ROW_TITLE_LINES.TWO}
@@ -1016,11 +980,7 @@ function ChaptersReading({
           />
           <div className="flex max-h-1/2 min-h-0 flex-initial flex-col border-b border-border">
             {/* Note that a brief cut short by its share fades at the cut, never slicing a line through its letters, and a swipe past its end scrolls the Pull request tab, which a short window scrolls to the foot. */}
-            <ScrollArea
-              size={SCROLL_SIZE.CONTENT}
-              fade={SCROLL_FADE.BOTH}
-              overscroll={SCROLL_OVERSCROLL.CHAIN}
-            >
+            <ScrollArea size={SCROLL_SIZE.CONTENT} overscroll={SCROLL_OVERSCROLL.CHAIN}>
               <div className="chapter-brief pb-list-inset">
                 <Section
                   title={CHAPTERS_WORDS.BRIEF}
@@ -1146,7 +1106,7 @@ function chaptersState(
           onRetry={state.generatable ? read.generate : undefined}
           placement={ERROR_STATE_PLACEMENT.CENTERED}
         >
-          {FAILURE_WORDS[state.failureKind]}
+          {CHAPTERS_FAILURE_WORDS[state.failureKind]}
         </ErrorState>
       );
   }

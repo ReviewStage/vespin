@@ -25,7 +25,7 @@ on a PR (`ios-simulators.yml`, on GitHub's `xcode-27` image): it builds the
 app for the simulator, runs its Maestro flows on an iPhone, the iPhone Duo,
 and an iPad, and uploads each one's screenshots as a `mobile-screenshots-*`
 artifact, which `apps/mobile/AGENTS.md` says how to read. No workflow runs the
-desktop app's tests on a Mac: the release job (`release.yml`'s `macos-15` job,
+desktop app's tests on a Mac: the release job (`release.yml`'s `xcode-27` job,
 run on a `v*` tag push or a manual dispatch) only builds, signs, notarizes,
 and verifies the app. A green PR says nothing about either app on a device.
 
@@ -166,7 +166,15 @@ component, or add the component or variant there.
   trace, a counted event, or a fixture, and session replay
   masks the live view and the transcript's screenshots; the cookies a member
   types into it stay in that agent's sandbox, and its snapshots, for the
-  sandbox's life. An agent may record its browser as a video (`record` and
+  sandbox's life. A member who may message the agent may pick elements of a
+  tab's page to note (`packages/service/src/browser-live/pick.ts`): each
+  element's selector, ref, role, name, opening tag, words, and a crop of it go
+  to that member's panel alone and are held in its window until sent, and the
+  notes go to the agent as the member's own message, its crops attached, so
+  their words, the page's address and title among them, reach the agent's
+  transcript, the model, and its traces as a typed line does, and the crops
+  are kept as a message's pictures are; none of it goes into a counted event
+  or a fixture. An agent may record its browser as a video (`record` and
   `stop_recording`), whose frames the recorder in its sandbox writes to that
   sandbox's disk until the next recording clears them, and whose WebM the
   service keeps beside the transcript the call is written to as it keeps a
@@ -238,6 +246,14 @@ component, or add the component or variant there.
   what leaves the machine is layout and the app's own words, not a person's;
   an unmasked attribute or a new way of drawing words is what would change
   that.
+- The iOS app's session replay is Sentry's mobile replay
+  (`apps/mobile/src/crash-reports.ts`), recorded every session with everything
+  masked (`REPLAY_MASKING`: every word, field, symbol, vector, and picture the
+  app did not ship with drawn as a box, and web views, video, PDFs and Safari
+  sheets always), filed under no account, and stopped with the SDK by Share
+  usage data; nothing is unmasked, since `@repo/ui-native` has no mark for the
+  app's own words, and an unmask option, a network detail allowed for an
+  address, or a way of drawing the SDK cannot mask is what would change that.
 - Never push PR media to a branch but `pr-assets`, under `pr-<number>/`, if
   you add any. PR media is not required.
 - Never add to this file (`AGENTS.md`, which `CLAUDE.md` links to) unless the

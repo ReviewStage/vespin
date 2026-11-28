@@ -17,6 +17,7 @@ import { descriptionSections } from "@repo/features/description-sections";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND, type EntityKind, entityOfMention } from "@repo/features/entity-kind";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
+import { inboxRowOf } from "@repo/features/inbox-digest";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
@@ -131,7 +132,12 @@ import { memberRows, YOU_WORD } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { Highlighted } from "../search-field.js";
 import { useTaskListCollections, useTaskListRowAs } from "../task-list-collections.js";
-import { appStateQuery, selectMachineCommandDevice, selectWorkspaces } from "../use-app-state.js";
+import {
+  appStateQuery,
+  selectMachineCommandDevice,
+  selectWorkspaces,
+  useAppStateSlice,
+} from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
 import { useComputerApps } from "./agent-pictures.js";
@@ -1593,7 +1599,7 @@ function RowGlyph({ row, workspace }: { row: MentionRow; workspace: string }): R
 
   if ("picksDate" in row) return <EntityGlyph kind={ENTITY_KIND.DATE} />;
 
-  if ("thread" in row) return inboxItemGlyph(row.item);
+  if ("thread" in row) return inboxItemGlyph(inboxRowOf(row.item));
 
   if ("automation" in row) {
     return <ActorMark actor={automationActor(row.automation)} size={ACTOR_SIZE.INLINE} />;
@@ -2189,7 +2195,7 @@ export function useMentionPicker({
 
   // The tasks offered are the workspace's the words stand in: the one that names it, else the plan's, else the one its slug names.
   const collections = useTaskListCollections();
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
+  const workspaces = useAppStateSlice(selectWorkspaces) ?? NO_WORKSPACES;
 
   // Note that the words' own task is read for the three facts the list takes of it, so a turn of its agents, which moves its row, leaves the list as it was.
   const ownTaskId = taskId ?? undefined;

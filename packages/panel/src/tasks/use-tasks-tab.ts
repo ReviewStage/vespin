@@ -105,7 +105,7 @@ import {
 } from "../task-list-collections.js";
 import type { TaskRoute } from "../task-route.js";
 import { useToast } from "../toast.js";
-import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
 import { useVersionHistoryRoute } from "../version-history-route.js";
 import {
   type HomeRoute,
@@ -1527,7 +1527,7 @@ export function useTasksTab(input: {
   // workspace's: a task the window holds none of by the workspace its link names, else by the open task's, whose words
   // mention it, else by the listed one. Its choices are read off main's document, as the description's own page reads
   // them (`useWorkspaceExperiment`), so the two agree.
-  const choosing = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_CHOOSING;
+  const choosing = useAppStateSlice(selectWorkspaces) ?? NO_CHOOSING;
   const openWorkspace = region.kind === TASK_REGION.READY ? region.task.workspaceId : undefined;
 
   const workspaceOfTask = (taskId: string, step?: string): string | undefined =>

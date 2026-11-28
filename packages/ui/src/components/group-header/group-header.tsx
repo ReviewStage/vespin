@@ -18,6 +18,7 @@ import {
   DisclosureScope,
   useDisclosureFold,
 } from "../disclosure/disclosure.js";
+import { GLYPH_PLACE_CONTROL } from "../glyph-slot/glyph-slot.js";
 import { INLINE_EDIT_FIELD, INLINE_EDIT_LOOK } from "../inline-edit/inline-edit.js";
 import { type ContextMenuProps, withContextMenu } from "../menu/context-menu.js";
 import { NAV_COUNT_SHOWN, type NavCount } from "../nav-item/nav-item.js";
@@ -47,7 +48,9 @@ import { Tooltip } from "../tooltip/hint.js";
  * says it folds. A fold its holder keeps, as the sidebar keeps which groups
  * are folded, is handed `open` and hears `onOpenChange`.
  *
- * A head reads as a row among the rows (`look`), or, in the sidebar, as a
+ * A head reads as a row among the rows (`look`), as a band over a page's
+ * list of rows on the well's tint (`GROUP_LOOK.BAND`), its glyph in the rows'
+ * leading column (`rowLead`) and its label where their titles stand, or, in the sidebar, as a
  * heading set apart over them: a step shorter than the rows, so it no longer
  * passes for a nav row or a task, and with its chevron brought only by the
  * pointer or the keyboard, in the glyph's place or in an empty glyph cell
@@ -130,9 +133,30 @@ export const GROUP_LOOK = {
   ROW: "row",
   HEADING: "heading",
   SECTION: "section",
+  /**
+   * A group's band over a page's list of rows, as Linear heads its list's
+   * groups: a heading on the well's tint, its lead at a list row's insets
+   * and its glyph in the rows' leading column (`rowLead`), so its label
+   * stands where the rows' titles do, in the label's ink and weight.
+   */
+  BAND: "band",
 } as const;
 
 export type GroupLook = (typeof GROUP_LOOK)[keyof typeof GROUP_LOOK];
+
+/** The leading mark of the rows under a band (`GROUP_LOOK.BAND`), whose column its glyph stands in: a glyph's, or a row's avatar. */
+export const GROUP_ROW_LEAD = {
+  GLYPH: "glyph",
+  AVATAR: "avatar",
+} as const;
+
+export type GroupRowLead = (typeof GROUP_ROW_LEAD)[keyof typeof GROUP_ROW_LEAD];
+
+/** How wide a band's glyph column stands, its rows' leading mark's width. */
+const BAND_GLYPH_WIDTH = {
+  [GROUP_ROW_LEAD.GLYPH]: "min-w-control-icon",
+  [GROUP_ROW_LEAD.AVATAR]: "min-w-avatar-row",
+} as const satisfies Record<GroupRowLead, string>;
 
 /** Whether a group's actions wait for the pointer or the keyboard, or stand at rest. */
 export const GROUP_ACTIONS = {
@@ -206,9 +230,9 @@ const FADE = "isolate transition-[opacity] duration-(--ui-duration-hover) ease-p
  */
 const PART = {
   HEADING: "ui-group-header-heading m-0 flex min-w-0 flex-auto [font:inherit]",
-  LEAD: "ui-group-header-lead group/lead m-0 flex min-w-0 flex-auto items-center gap-icon-gap rounded-control border-0 bg-transparent px-row-inset py-0 text-left font-ui text-muted-foreground",
+  LEAD: "ui-group-header-lead group/lead m-0 flex min-w-0 flex-auto items-center gap-icon-gap rounded-control border-0 bg-transparent py-0 text-left font-ui text-muted-foreground",
   GLYPH:
-    "ui-group-header-glyph grid min-h-control-icon min-w-control-icon flex-none place-items-center *:[grid-area:1/1]",
+    "ui-group-header-glyph grid min-h-control-icon flex-none place-items-center *:[grid-area:1/1]",
   ICON: `ui-group-header-icon grid place-items-center [&>svg]:size-control-icon ${FADE}`,
   CHEVRON: `ui-group-header-chevron grid place-items-center ${FADE}`,
   MARK: "ui-group-header-mark inline-flex flex-none text-muted-foreground [&>svg]:size-group-header-mark",
@@ -222,16 +246,49 @@ const LEAD_HEIGHT = {
   [GROUP_LOOK.ROW]: "h-control",
   [GROUP_LOOK.HEADING]: "h-control-compact",
   [GROUP_LOOK.SECTION]: "h-control",
+  [GROUP_LOOK.BAND]: "h-control",
 } as const satisfies Record<GroupLook, string>;
 
-/** An editing head's lead, laid out as a head's lead with nothing to press, and its field, bare in the group role's type in the label's place. */
+/** A lead's insets in each look: a row's, or, on a band, a list row's at its start, so its glyph stands in the rows' leading column. */
+const LEAD_INSET = {
+  [GROUP_LOOK.ROW]: "px-row-inset",
+  [GROUP_LOOK.HEADING]: "px-row-inset",
+  [GROUP_LOOK.SECTION]: "px-row-inset",
+  [GROUP_LOOK.BAND]: "ps-list-inset pe-row-inset",
+} as const satisfies Record<GroupLook, string>;
+
+/**
+ * A band's ground and its label's ink and weight, the section role's,
+ * standing over its rows as their section's head. Note that a band that folds wears the row's hover on
+ * its lead, over its own ground, rather than in its ground's place, because
+ * the hover's fill is translucent and a band that sticks would show the rows
+ * scrolling beneath it through.
+ */
+const BAND = {
+  HEAD: "bg-well",
+  LEAD_PRESSED: "hover:bg-muted",
+  LABEL: "font-section text-foreground",
+} as const;
+
+/**
+ * An editing head's lead, laid out as a head's lead with nothing to press,
+ * as tall as the place its head holds (`EDITING_PLACE`) and in the label's
+ * ink, and its field, bare in the group role's type in the label's place.
+ * The glyph's control stands in the glyph's own footprint
+ * (`GLYPH_PLACE_CONTROL`), so the field stands where the label stood.
+ */
 const EDITOR = {
-  LEAD: "ui-group-header-editor-lead flex h-control min-w-0 flex-auto items-center gap-icon-gap px-row-inset text-group font-group text-foreground",
-  /* The glyph's control is a compact button, a step wider than the glyph, so it overhangs the cell by that step and the field stands where the label stood. Note that it is let out of a button's own cap at its holder's width, which would squeeze it to the cell and push its glyph off the glyph's place by its edge. */
-  GLYPH:
-    "ui-group-header-editor-glyph grid min-h-control-icon min-w-control-icon flex-none place-items-center *:-m-ui-4 *:max-w-none",
+  LEAD: "ui-group-header-editor-lead flex min-w-0 flex-auto items-center self-stretch gap-icon-gap px-row-inset text-group font-group text-muted-foreground",
+  GLYPH: `ui-group-header-editor-glyph grid min-h-control-icon min-w-control-icon flex-none place-items-center ${GLYPH_PLACE_CONTROL}`,
   FIELD: `${INLINE_EDIT_FIELD} data-[look=well]:min-w-0 data-[look=well]:flex-auto`,
 } as const;
+
+/**
+ * Where a head being named stands: the head's own place, as tall as its
+ * lead in its look, sticking and spanning the grid as the head does, so
+ * nothing above or below it moves as the edit opens and ends.
+ */
+const EDITING_PLACE = "ui-group-header-editing flex min-w-0 *:flex-auto";
 
 /** A head that folds is pressed as a row is, so it wears a row's hover; and it gives the one press cursor, the Mac's arrow on the desktop as a Mac's list does, the hand on the web. */
 const PRESSED_AS_ROW = {
@@ -251,6 +308,9 @@ const HEAD = `ui-group-header-head ${HEAD_BOX}`;
 
 /** A head that sticks stands at the top of its scroller while its rows scroll beneath it, on the page's ground so they do not show through. */
 const STICKS = "sticky top-0 z-3 bg-ground";
+
+/** A band that sticks stands on its own tint rather than the page's ground. */
+const STICKS_BAND = "sticky top-0 z-3";
 
 /**
  * A group in a grid hands the grid's columns on through its root and the
@@ -288,6 +348,7 @@ function Lead({
   glyph,
   folds,
   look,
+  rowLead,
   label,
   mark,
   count,
@@ -295,11 +356,14 @@ function Lead({
   glyph: ReactNode;
   folds: boolean;
   look: GroupLook;
+  rowLead: GroupRowLead;
   label: ReactNode;
   mark: ReactNode;
   count: NavCount | undefined;
 }): React.JSX.Element {
-  const heading = look === GROUP_LOOK.HEADING;
+  const band = look === GROUP_LOOK.BAND;
+  // Note that a band brings its chevron as a heading does, its glyph giving way to it.
+  const heading = look === GROUP_LOOK.HEADING || band;
   const section = look === GROUP_LOOK.SECTION;
   // Note that with a glyph the chevron waits unseen in its cell, and without one it stands at rest, so a fold always says it folds, except over a heading's, whose chevron is only ever brought, and a section's, whose chevron stands at rest over its glyph.
   const swaps = said(glyph) && folds && !section;
@@ -310,7 +374,10 @@ function Lead({
   return (
     <>
       {said(glyph) || folds || keepsCell ? (
-        <span className={PART.GLYPH} aria-hidden="true">
+        <span
+          className={`${PART.GLYPH} ${band ? BAND_GLYPH_WIDTH[rowLead] : "min-w-control-icon"}`}
+          aria-hidden="true"
+        >
           {said(glyph) && !(section && folds) ? (
             <span className={`${PART.ICON} ${swaps ? GIVES_WAY : ""}`}>{glyph}</span>
           ) : null}
@@ -321,7 +388,12 @@ function Lead({
           ) : null}
         </span>
       ) : null}
-      <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.GROUP} truncate>
+      <Text
+        as={TEXT_ELEMENT.SPAN}
+        variant={TEXT_VARIANT.GROUP}
+        truncate
+        className={band ? BAND.LABEL : undefined}
+      >
         {label}
       </Text>
       {said(mark) ? <span className={PART.MARK}>{mark}</span> : null}
@@ -478,6 +550,7 @@ export function GroupHeader({
   actionsShown = GROUP_ACTIONS.ON_HOVER,
   fold,
   look = GROUP_LOOK.ROW,
+  rowLead = GROUP_ROW_LEAD.GLYPH,
   standing,
   tooltip,
   card,
@@ -506,6 +579,8 @@ export function GroupHeader({
   fold?: GroupFold | undefined;
   /** How the head reads: as a row, or as a heading set apart over the rows, the sidebar's; a row unless it says so. */
   look?: GroupLook;
+  /** The leading mark of the rows under a band (`GROUP_LOOK.BAND`), whose column its glyph stands in; a glyph's unless it says so. */
+  rowLead?: GroupRowLead;
   /** What a folded group leaves drawn under its head in its rows' place; nothing is drawn while the group stands open. */
   standing?: ReactNode;
   /** The head's hover hint, where the label alone does not say the whole of it. */
@@ -556,17 +631,26 @@ export function GroupHeader({
         };
 
   const lead = (
-    <Lead glyph={glyph} folds={folds} look={look} label={label} mark={mark} count={counted} />
+    <Lead
+      glyph={glyph}
+      folds={folds}
+      look={look}
+      rowLead={rowLead}
+      label={label}
+      mark={mark}
+      count={counted}
+    />
   );
 
-  const leadBox = `${PART.LEAD} ${LEAD_HEIGHT[look]}`;
+  const leadBox = `${PART.LEAD} ${LEAD_INSET[look]} ${LEAD_HEIGHT[look]}`;
+  const band = look === GROUP_LOOK.BAND;
   const hint = tooltip ?? (card === undefined || !Predicate.isString(label) ? undefined : label);
 
   // Note that only a head with a hint or a card is wrapped, because the tooltip hands its control a click handler of its own, which a head that folds nothing must not hear.
   const control = folds ? (
     <button
       type="button"
-      className={`${leadBox} ${PRESSED_AS_ROW.LEAD}`}
+      className={`${leadBox} ${PRESSED_AS_ROW.LEAD} ${band ? BAND.LEAD_PRESSED : ""}`}
       aria-expanded={state.open}
       aria-controls={rows ? rowsId : undefined}
       onClick={state.toggle}
@@ -602,13 +686,23 @@ export function GroupHeader({
       >
         {/* Note that the head is the root's first child whether or not it stands, so its rows stay the same element as it comes and goes. */}
         {!headed ? null : said(editing) ? (
-          editing
+          <div
+            className={[
+              EDITING_PLACE,
+              LEAD_HEIGHT[look],
+              head === GROUP_HEAD.STICKS ? STICKS : "",
+              subgrid ? SUBGRID.HEAD : "",
+            ].join(" ")}
+          >
+            {editing}
+          </div>
         ) : (
           <div
             className={[
               HEAD,
-              folds ? PRESSED_AS_ROW.HEAD : "",
-              head === GROUP_HEAD.STICKS ? STICKS : "",
+              folds && !band ? PRESSED_AS_ROW.HEAD : "",
+              head === GROUP_HEAD.STICKS ? (band ? STICKS_BAND : STICKS) : "",
+              band ? BAND.HEAD : "",
               subgrid ? SUBGRID.HEAD : "",
             ].join(" ")}
             data-menu-open={menuOpen ? "true" : undefined}

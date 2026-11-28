@@ -616,7 +616,7 @@ export const ROUTED_PLACE = {
     binding: PLACE_BINDING.NONE,
     overThePlan: false,
     inTaskPlace: false,
-    // Note that Back reaches Home under whichever workspace it stood in, as it always has, and stands it under the one listed (`home-route.ts`).
+    // Note that Back reaches Home under whichever workspace it stood in, and stands it under the one listed (`workspace-routes.ts`'s `useHomeRoute`).
     listedOnly: false,
     title: () => ({ label: HOME_WORDS }),
     named: () => undefined,

@@ -341,6 +341,26 @@ test("a click on the description opens the editor on its Markdown, and Esc with 
   assert.match(description(container).textContent ?? "", /Expires invitations after seven days\./u);
 });
 
+test("the open editor draws the description's HTML as GitHub renders it: a comment hidden, an allowed tag drawn, a script stripped", async () => {
+  onGitHub = [
+    "Expires invitations after seven days.",
+    "<!-- This is an auto-generated description by a bot. -->",
+    '<a href="https://example.com/review"><img alt="View guided diff" src="https://example.com/button.svg"></a> <kbd>Esc</kbd>',
+    "<script>alert(1)</script>",
+    "",
+  ].join("\n\n");
+  const container = await drawTab();
+
+  await clickWords(container, "Expires invitations after seven days.");
+  const editor = editorIn(container) ?? assert.fail("the editor opens in the description's place");
+  const words = editor.textContent ?? "";
+
+  assert.doesNotMatch(words, /auto-generated|<!--|<a |<kbd>|alert/u);
+  assert.match(words, /View guided diff/u, "the picture stands by its words");
+  assert.equal(editor.querySelector("kbd")?.textContent, "Esc");
+  assert.equal(editor.querySelector("script"), null);
+});
+
 test("an edit is written to GitHub with the words it began from, line endings kept, and the description is drawn again from the read after it", async () => {
   const container = await drawTab();
   await clickWords(container, "Expires invitations after seven days.");

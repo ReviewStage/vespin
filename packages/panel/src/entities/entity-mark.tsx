@@ -14,7 +14,7 @@ import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { AppIcon, ProviderMark } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, APP_ACTOR } from "@repo/ui/actor-model";
 import { MANAGER_FACE_SIZE, ManagerFace } from "@repo/ui/manager-face";
-import { useQuery } from "@tanstack/react-query";
+
 import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorGlyph, ActorMark, automationActor } from "../actor-ref.js";
 import { useAutomation } from "../automation-directory.js";
@@ -33,7 +33,7 @@ import { AgentGlyph, AgentMark, PlanGlyph } from "../tasks/tab-look.js";
 import { useAgentFace, useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
 import { useTaskReadIn } from "../tasks/use-task-outside.js";
 import { MachineMark } from "../tasks/workspace-machines.js";
-import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { selectWorkspaces, useAppStateSlice } from "../use-app-state.js";
 import { EntityGlyph } from "./entity-glyph.js";
 
 /**
@@ -170,7 +170,7 @@ function PersonMark({
   name: string;
   workspace: string;
 }): React.JSX.Element {
-  const listed = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const listed = useAppStateSlice(selectWorkspaces);
   const named = listed === undefined ? undefined : workspaceOfSlug(listed, workspace);
   const face = <PersonFace userId={userId} name={name} />;
 
@@ -204,7 +204,7 @@ function AutomationTile({
 
 /** A workspace's tile as its rows draw it; its letter by its slug where the window holds it not. */
 function WorkspaceMark({ slug }: { slug: string }): React.JSX.Element {
-  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const workspaces = useAppStateSlice(selectWorkspaces);
   const listed = workspaces === undefined ? undefined : workspaceOfSlug(workspaces, slug);
 
   return <WorkspaceTile workspace={listed ?? { id: slug, name: slug }} size={TILE_SIZE.INLINE} />;

@@ -26,6 +26,7 @@ import {
   readersItem,
   sentStamp,
 } from "@repo/features/inbox-list-model";
+import { askHasControls } from "@repo/features/inbox-settled-asks";
 import {
   filesLost,
   UNDELIVERED_FILES_LOST,
@@ -98,20 +99,20 @@ import {
   memberActor,
   SOMEONE_REASON,
 } from "@repo/ui/actor-model";
-import { GLYPH } from "@repo/ui/icons";
-import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
-import { isWireString } from "@repo/wire";
-import { useQuery } from "@tanstack/react-query";
-import { CheckIcon } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
 import {
   Conversation,
   ConversationContent,
   ConversationRows,
   ConversationScrollButton,
-} from "../ai-elements/conversation.js";
+} from "@repo/ui/conversation";
+import { GLYPH } from "@repo/ui/icons";
+import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
+import type { VirtualRowPlace, VirtualRowsHandle } from "@repo/ui/virtual-rows";
+import { isWireString } from "@repo/wire";
+
+import { CheckIcon } from "lucide-react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ActorGlyph, ActorLine, ActorRef, commentAuthor } from "../actor-ref.js";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import {
   AgentCrumbMenu,
@@ -128,7 +129,7 @@ import { type Directory, useMemberDirectory, usePerson } from "../member-directo
 import { useShortcutTarget } from "../shortcut-target.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { appStateQuery, selectAccount } from "../use-app-state.js";
+import { selectAccount, useAppStateSlice } from "../use-app-state.js";
 import { LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
@@ -141,7 +142,6 @@ import {
   bareKey,
   DraftQuestion,
   HeldControls,
-  hasControls,
   INBOX_ASK_BOX,
   INBOX_ASK_KIND,
   INBOX_ASK_STANDING,
@@ -172,9 +172,9 @@ import { InboxStamp } from "./inbox-stamp.js";
 import { REPLY_SCOPE, ReplyDoorProvider } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
 import { TAB_KIND, tabLook } from "./tab-look.js";
-import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
 import { INERT_LINK_CLASS, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
+import { usePlainLinkNames } from "./use-link-standing.js";
 import { opensAsLink } from "./use-open-link.js";
 import {
   type InboxImageReads,
@@ -224,7 +224,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
  *
  * The draft reply is the reader's chip, "You" and nothing after it, over
  * the agent composer's box, its card and its field, with its `@` mentions,
- * its skills, and its microphone (`inbox-answer-box.tsx`), flowing at the
+ * which the page holding the pane hands it as it hands every box there
+ * (`task-mentions.tsx`), its skills, and its microphone (`inbox-answer-box.tsx`), flowing at the
  * thread's end as its last row rather than docked under it, and a notice's
  * Send reads "Got it" until a word is written. The draft reply ends a
  * settled item's thread too. The board is a log, as an agent's transcript
@@ -371,7 +372,7 @@ const DRAFT_HEAD = {
 
 /** The reader as the window draws them: as the workspace's members list them, else as their account signs in, else by their id alone. */
 function useReader(readerId: string | undefined): Actor {
-  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const account = useAppStateSlice(selectAccount);
   const { members } = useMemberDirectory();
   const member = members?.find((each) => each.userId === readerId);
 
@@ -714,7 +715,7 @@ function HeldAsk({
   title: string;
 }): React.JSX.Element | null {
   // A to-do naming no steps draws the item's title as its one step, and a later post may have renamed the item since, so the title it drew then is not known.
-  if (!hasControls(ask) || (ask.type === INBOX_ASK.DO && ask.steps.length === 0)) return null;
+  if (!askHasControls(ask) || (ask.type === INBOX_ASK.DO && ask.steps.length === 0)) return null;
 
   return (
     <div
@@ -1297,6 +1298,8 @@ function Subject({
   /** The item's pager and ⋯ at the title's end, where no bar stands over the pane (`INBOX_PANE_ACTIONS.SUBJECT`); none where its bar holds them. */
   actions?: React.ReactNode;
 }): React.JSX.Element {
+  const links = usePlainLinkNames();
+
   return (
     <header
       className="inbox-subject flex flex-col gap-tight-gap border-b border-border pb-block-gap"
@@ -1310,7 +1313,7 @@ function Subject({
           className="inbox-subject-title min-w-0 flex-1"
           data-inbox-title=""
         >
-          {cardTitle(item.title)}
+          {cardTitle(item.title, links)}
         </Text>
         {actions === undefined ? null : (
           <div className="flex flex-none items-center gap-control-gap">{actions}</div>
@@ -1364,17 +1367,6 @@ function useHeadingAway(
   }, [board, heading, itemId]);
 
   return away.itemId === itemId && away.away;
-}
-
-/** The box's mentions where the pane is handed them; the page's own where it is not. */
-function AnswerMentions({
-  value,
-  children,
-}: {
-  value: TaskMentionsValue | undefined;
-  children: React.ReactNode;
-}): React.ReactNode {
-  return value === undefined ? children : <TaskMentions value={value}>{children}</TaskMentions>;
 }
 
 /** The words a dictation into an item's box is likely to say: its task's repository's, its title's, and its thread's. */
@@ -1597,7 +1589,6 @@ export function InboxPane({
   hidden,
   onBack,
   pager,
-  mentions,
   phone,
   newThread,
   within,
@@ -1616,11 +1607,9 @@ export function InboxPane({
   onBack: (() => void) | undefined;
   /** Where the item stands in the list and the steps either side, drawn at the bar's end where the item stands alone among others. */
   pager: InboxPager | undefined;
-  /** What the box's `@` offers where the page around the pane hands nothing, as the window's Inbox does; the page's own otherwise. */
-  mentions?: TaskMentionsValue | undefined;
   /**
    * A phone's head (`phone-head.tsx`), where the item stands alone on a
-   * phone: the way back's glyph, what holds the item centered (`PhoneHolder`), and one ⋯
+   * phone: the way back's glyph, the item's title centered, and one ⋯
    * holding the pager, what the crumbs open, the panel, and the item's own
    * actions; none elsewhere, where the bar draws its crumbs and buttons.
    */
@@ -1643,6 +1632,9 @@ export function InboxPane({
   actionsAt?: InboxPaneActions | undefined;
 }): React.JSX.Element {
   const now = useMinute();
+  const title = cardTitle(item.title, usePlainLinkNames());
+  // Note that an ask's controls and its cards keep the title's own addresses, since a to-do of no steps stands its title as its one step, drawn as Markdown, where an address is its chip.
+  const askTitle = cardTitle(item.title);
   const board = useRef<HTMLDivElement>(null);
   const pane = useRef<HTMLElement>(null);
 
@@ -1751,7 +1743,7 @@ export function InboxPane({
       >
         <AskControls
           ask={openAsk}
-          title={cardTitle(item.title)}
+          title={askTitle}
           doors={{ draft, disabled: !open, text: formText, onDraft }}
         />
       </DraftQuestion>
@@ -1775,26 +1767,24 @@ export function InboxPane({
   };
 
   const answerBox = (
-    <AnswerMentions value={mentions}>
-      <InboxAnswerBox
-        item={item}
-        readerId={readerId}
-        control={control}
-        agent={by.subject.agent}
-        agents={agents}
-        thread={thread}
-        controls={question}
-        skills={agents.readSkills}
-        keywords={answerKeywords(holder, item)}
-        replyScope={board}
-        onQuoteDoor={onQuoteDoor}
-        onQuoted={onQuoted}
-        onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
-        newThread={
-          newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
-        }
-      />
-    </AnswerMentions>
+    <InboxAnswerBox
+      item={item}
+      readerId={readerId}
+      control={control}
+      agent={by.subject.agent}
+      agents={agents}
+      thread={thread}
+      controls={question}
+      skills={agents.readSkills}
+      keywords={answerKeywords(holder, item)}
+      replyScope={board}
+      onQuoteDoor={onQuoteDoor}
+      onQuoted={onQuoted}
+      onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
+      newThread={
+        newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
+      }
+    />
   );
 
   const draftReply = (place: VirtualRowPlace) => (
@@ -1828,12 +1818,7 @@ export function InboxPane({
   const barless = atSubject && onBack === undefined;
 
   return (
-    <section
-      ref={pane}
-      className={INBOX_VIEW_ITEMS}
-      aria-label={cardTitle(item.title)}
-      hidden={hidden}
-    >
+    <section ref={pane} className={INBOX_VIEW_ITEMS} aria-label={title} hidden={hidden}>
       {barless ? null : phoneHead ? (
         <PhoneHead
           place="inbox-item"
@@ -1845,7 +1830,7 @@ export function InboxPane({
               onBack={onBack}
             />
           }
-          title={cardTitle(item.title)}
+          title={title}
           end={
             <>
               <PhoneSteps pager={pager} />
@@ -1885,12 +1870,12 @@ export function InboxPane({
                 by={by}
                 doors={doors}
                 agents={agents}
-                title={cardTitle(item.title)}
+                title={title}
                 titleShown={headingAway}
               />
             )
           }
-          pickUp={within === true ? { name: cardTitle(item.title), shown: headingAway } : undefined}
+          pickUp={within === true ? { name: title, shown: headingAway } : undefined}
           actions={atSubject ? undefined : itemActions}
         />
       )}
@@ -1898,9 +1883,7 @@ export function InboxPane({
         {/* Note that the item's words stand around the thread and the docked box alike, so an ask's pictures in the box read and open as the thread's do. */}
         <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
           <Conversation list={board}>
-            <ConversationContent
-              className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
-            >
+            <ConversationContent className={`inbox-board ${LOG_OVER_COMPOSER_CLASS}`}>
               <Subject
                 item={item}
                 heading={setHeading}
@@ -1940,7 +1923,7 @@ export function InboxPane({
                         return (
                           <ThreadMessage
                             itemId={item.id}
-                            title={cardTitle(item.title)}
+                            title={askTitle}
                             threadAddressedTo={inboxAddressedTo(item)}
                             message={row.message}
                             thread={thread}
@@ -1961,7 +1944,7 @@ export function InboxPane({
                             itemId={item.id}
                             readerId={readerId}
                             reply={row.reply}
-                            title={cardTitle(item.title)}
+                            title={askTitle}
                             thread={thread}
                             now={now}
                             place={place}

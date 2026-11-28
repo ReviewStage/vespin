@@ -7,6 +7,13 @@ import {
   type TaskSectionIconColor,
   taskSectionIconSchema,
 } from "@repo/features/task-section-wire";
+import {
+  REMOVE_SECTION_ICON,
+  SECTION_ICON_COLOR_WORDS,
+  sectionGlyphWords,
+  textInkWords,
+} from "@repo/features/task-sections-model";
+import { VIEW_CHOICE_KEY, VIEW_CHOICE_LIST_BOUNDS } from "@repo/features/view-choice-wire";
 import { noMatchWords, readingWords } from "@repo/features/words";
 import {
   BUTTON_SIZE,
@@ -16,24 +23,24 @@ import {
   type ButtonVariant,
   CHOICE_BAR_LOOK,
   ChoiceBar,
-  IconButton,
   IconPicker,
   IconPickerChoice,
+  type IconPickerColor,
+  IconPickerColors,
+  IconPickerEmoji,
+  IconPickerEmojiChoice,
   IconPickerGroup,
   NOTE_LINE_LOOK,
   NoteLine,
   PopoverIconButton,
+  useEmojiGroups,
 } from "@repo/ui";
 import { drawnDark } from "@repo/ui/appearance";
 import { SmilePlusIcon } from "@repo/ui/icons";
 import {
-  type EmojiGroup,
-  emojiGroups,
-  findEmoji,
   findGlyphs,
   glyphChoices,
   glyphKey,
-  glyphLabel,
   isSuggestedGlyph,
   recentIcons,
 } from "@repo/ui/section-icon-model";
@@ -56,25 +63,29 @@ import {
   ZapIcon,
 } from "lucide-react";
 import { memo, type RefObject, useCallback, useId, useMemo, useRef, useState } from "react";
-import { readKept, writeKept } from "../kept-storage.js";
 import { QUERY_ROOT } from "../query-keys.js";
+import { selectFixtureStaged, useAppStateSlice } from "../use-app-state.js";
+import { keptKey, useKeptLeaving } from "../use-kept.js";
+import { useAccountChoice } from "../view-choices.js";
 
 /**
- * section-icon-picker.tsx -- how a sidebar section's icon is drawn, and the icon well that changes it: a button wearing the icon, hanging a picker of every Lucide glyph, each asked its color once pressed, and every emoji, the icons this Mac picked last and the suggested ones first, under one search.
+ * section-icon-picker.tsx -- how a sidebar section's icon is drawn, and the icon well that changes it: a button wearing the icon, hanging a picker of every Lucide glyph, each asked its color once pressed, and every emoji, the icons the account picked last and the suggested ones first, under one search.
  *
  * A glyph travels by its Lucide name (`task-section-wire.ts`). The few the
  * picker suggests are drawn from the bundle every window parses, so a
  * section wearing one draws it at once; any other is drawn from the whole
  * of Lucide, a chunk of its own loaded the first time a section or the
  * picker needs it, and a name this Mac's Lucide does not know draws an
- * empty cell rather than failing. The emoji, `unicode-emoji-json`'s, load
- * the first time the picker's Emoji tab is shown or a search is typed.
+ * empty cell rather than failing. The emoji, `@repo/features/emoji-data`'s, load
+ * the first time the picker's Emoji tab is shown or a search is typed;
+ * `@repo/ui`'s `IconPickerEmoji` draws them and the emoji a search finds,
+ * and its `IconPickerColors` draws a glyph's colors.
  *
  * The well is the section's icon, or a quiet add-icon glyph where it has
  * none, and hangs the picker in a popover of its own, so neither a sidebar's
  * column nor a dialog's card cuts it. The picker opens on its search. With
  * nothing searched it shows the tab chosen: Icons offers Recent, the icons
- * this Mac chose last (kept in this window's storage, the newest first),
+ * the account chose last (kept on the account, the newest first),
  * each glyph among them in the color it was chosen in, then Suggested, then
  * every other glyph by name, in the text's own ink but the one chosen, in
  * its color; Emoji offers every emoji by category. A search finds glyphs and
@@ -133,18 +144,6 @@ function inkOf(color: TaskSectionIconColor | undefined): string {
   return color === undefined ? "text-foreground" : COLOR_INK[color];
 }
 
-/** What each color of the palette is called. */
-const COLOR_LABEL = {
-  [TASK_SECTION_ICON_COLOR.RED]: "Red",
-  [TASK_SECTION_ICON_COLOR.ORANGE]: "Orange",
-  [TASK_SECTION_ICON_COLOR.YELLOW]: "Yellow",
-  [TASK_SECTION_ICON_COLOR.GREEN]: "Green",
-  [TASK_SECTION_ICON_COLOR.TEAL]: "Teal",
-  [TASK_SECTION_ICON_COLOR.BLUE]: "Blue",
-  [TASK_SECTION_ICON_COLOR.PURPLE]: "Purple",
-  [TASK_SECTION_ICON_COLOR.PINK]: "Pink",
-} as const satisfies Record<TaskSectionIconColor, string>;
-
 /** The picker's two tabs. */
 const ICON_TAB = {
   ICONS: "icons",
@@ -165,34 +164,21 @@ const ALL_ICONS = "All icons";
 /** What the glyphs a search found are offered under. */
 const FOUND_ICONS = "Icons";
 
-/** What the picker says where a set could not be loaded. */
-const LOAD_FAILED = {
-  [ICON_TAB.ICONS]: "The icons could not be loaded.",
-  [ICON_TAB.EMOJI]: "The emoji could not be loaded.",
-} as const satisfies Record<IconTab, string>;
+/** What the picker says where Lucide could not be loaded. */
+const ICONS_FAILED = "The icons could not be loaded.";
 
-/** What the picker says while a set is loaded. */
-const READING = {
-  [ICON_TAB.ICONS]: readingWords("icons"),
-  [ICON_TAB.EMOJI]: readingWords("emoji"),
-} as const satisfies Record<IconTab, string>;
+/** What the picker says while Lucide loads. */
+const ICONS_READING = readingWords("icons");
 
-/** What the picker says where the search found nothing in a set. */
-const NO_MATCH = {
-  [ICON_TAB.ICONS]: noMatchWords({ one: "icon", many: "icons" }),
-  [ICON_TAB.EMOJI]: noMatchWords({ one: "emoji", many: "emoji" }),
-} as const satisfies Record<IconTab, string>;
+/** What the picker says where the search found no glyph. */
+const NO_ICON_MATCH = noMatchWords({ one: "icon", many: "icons" });
 
 /** What the picker says where a search found neither a glyph nor an emoji. */
 const NO_MATCH_EITHER = noMatchWords({ one: "icon or emoji", many: "icons or emoji" });
 
-/** Whether a value is an icon the wire takes. */
-const isSectionIcon = Schema.is(taskSectionIconSchema);
-
 /** The wholes the picker loads on demand, each next in its query's key. */
 const SECTION_ICONS = {
   LUCIDE: "lucide",
-  EMOJI: "emoji",
 } as const;
 
 /** Lucide's every glyph, by its PascalCase name. */
@@ -211,20 +197,7 @@ const lucideQuery = queryOptions({
   queryFn: (): Promise<LucideIcons> =>
     import("lucide-react").then(
       (module) => module.icons,
-      () => Promise.reject(new Error(LOAD_FAILED[ICON_TAB.ICONS])),
-    ),
-  staleTime: Number.POSITIVE_INFINITY,
-  gcTime: Number.POSITIVE_INFINITY,
-  retry: false,
-});
-
-/** Every emoji by category, loaded once per window the first time the picker's Emoji tab is shown. */
-const emojiQuery = queryOptions({
-  queryKey: [QUERY_ROOT.SECTION_ICONS, SECTION_ICONS.EMOJI],
-  queryFn: (): Promise<EmojiGroup[]> =>
-    import("unicode-emoji-json/data-by-group.json").then(
-      (module) => emojiGroups(module.default),
-      () => Promise.reject(new Error(LOAD_FAILED[ICON_TAB.EMOJI])),
+      () => Promise.reject(new Error(ICONS_FAILED)),
     ),
   staleTime: Number.POSITIVE_INFINITY,
   gcTime: Number.POSITIVE_INFINITY,
@@ -283,23 +256,37 @@ export function sectionGlyph(icon: TaskSectionIcon | undefined): React.JSX.Eleme
   return drawnGlyph(icon.glyph, icon.color);
 }
 
-/** Where this Mac keeps the icons it chose last, newest first. */
-const RECENT_KEY = "app.recentSectionIcons";
+/** Where an earlier build kept the icons this Mac chose last, newest first, moved up to the account once. */
+const KEPT_RECENT = keptKey(
+  "app.recentSectionIcons",
+  Schema.fromJsonString(Schema.Array(taskSectionIconSchema)),
+);
 
-/** The icons kept as chosen last. */
-const keptRecent = Schema.fromJsonString(Schema.Array(taskSectionIconSchema));
+/** No icon chosen yet, one list for every draw. */
+const NO_RECENT: readonly TaskSectionIcon[] = [];
 
-/** How many icons Recent offers. */
-const RECENT_MOST = 10;
-
-/** The icons this Mac chose last, newest first, none where storage holds none or refuses the read. */
-function readRecent(): readonly TaskSectionIcon[] {
-  return readKept(RECENT_KEY, keptRecent, []);
+/** The icons chosen last, newest first, which Recent offers, and the door that keeps one more among them. */
+interface RecentIcons {
+  readonly recent: readonly TaskSectionIcon[];
+  readonly keep: (icon: TaskSectionIcon) => void;
 }
 
-/** Keeps `icon` as the one this Mac chose last. */
-function keepRecent(icon: TaskSectionIcon): void {
-  writeKept(RECENT_KEY, keptRecent, recentIcons(readRecent(), icon, RECENT_MOST));
+/** The icons the account chose last, kept on the account (`VIEW_CHOICE_KEY.RECENT_SECTION_ICONS`) so every device offers them, Recent's worth of them. */
+function useRecentIcons(): RecentIcons {
+  const [left, forgetLeft] = useKeptLeaving(KEPT_RECENT);
+
+  const { value, change } = useAccountChoice(
+    VIEW_CHOICE_KEY.RECENT_SECTION_ICONS,
+    null,
+    NO_RECENT,
+    useAppStateSlice(selectFixtureStaged) === true,
+    [left?.slice(0, VIEW_CHOICE_LIST_BOUNDS.RECENT), forgetLeft],
+  );
+
+  return {
+    recent: value,
+    keep: (icon) => change((held) => recentIcons(held, icon, VIEW_CHOICE_LIST_BOUNDS.RECENT)),
+  };
 }
 
 /** Whether a glyph is the icon chosen, a name Lucide draws alike (`flask` and `flask-conical`) being the same glyph. */
@@ -310,6 +297,11 @@ function chosenGlyph(icon: TaskSectionIcon | undefined, glyph: string): boolean 
 /** Whether an emoji is the icon chosen. */
 function chosenEmoji(icon: TaskSectionIcon | undefined, emoji: string): boolean {
   return icon?.kind === TASK_SECTION_ICON_KIND.EMOJI && icon.emoji === emoji;
+}
+
+/** The emoji chosen, none where the icon chosen is no emoji. */
+function chosenEmojiOf(icon: TaskSectionIcon | undefined): string | undefined {
+  return icon?.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : undefined;
 }
 
 /** Whether `one` is the icon chosen. */
@@ -330,7 +322,7 @@ function glyphIcon(glyph: string, color: TaskSectionIconColor | undefined): Task
 
 /** What an icon is called for a reader. */
 function iconLabel(icon: TaskSectionIcon): string {
-  return icon.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : glyphLabel(icon.glyph);
+  return icon.kind === TASK_SECTION_ICON_KIND.EMOJI ? icon.emoji : sectionGlyphWords(icon.glyph);
 }
 
 /** A glyph whose colors stand open over the grid: the group it was pressed in, and the color they start on. */
@@ -348,7 +340,7 @@ const GLYPH_COLORS: readonly (TaskSectionIconColor | undefined)[] = [
 
 /** What the text's own ink is called as the window draws it: white over a dark ground, black over a light one. */
 function textInkLabel(): string {
-  return drawnDark() ? "White" : "Black";
+  return textInkWords(drawnDark());
 }
 
 /**
@@ -362,37 +354,38 @@ function glyphColors(
   Glyph: LucideIcon | undefined,
   starts: TaskSectionIconColor | undefined,
   onColor: (color: TaskSectionIconColor | undefined) => void,
-): React.JSX.Element[] {
-  return GLYPH_COLORS.map((value) => (
-    <IconButton
-      key={value ?? "text"}
-      icon={Glyph === undefined ? null : <Glyph data-icon-color={value} className={inkOf(value)} />}
-      label={value === undefined ? textInkLabel() : COLOR_LABEL[value]}
-      pressed={value === starts}
-      roving
-      onClick={() => onColor(value)}
+): React.JSX.Element {
+  const colors: readonly IconPickerColor<TaskSectionIconColor | undefined>[] = GLYPH_COLORS.map(
+    (value) => ({
+      value,
+      label: value === undefined ? textInkLabel() : SECTION_ICON_COLOR_WORDS[value],
+    }),
+  );
+
+  return (
+    <IconPickerColors
+      colors={colors}
+      starts={starts}
+      face={(value) =>
+        Glyph === undefined ? null : <Glyph data-icon-color={value} className={inkOf(value)} />
+      }
+      onColor={onColor}
     />
-  ));
+  );
 }
 
-/** What a panel says in its grid's place while its set loads, failed to, or holds nothing the search found. */
-function PanelNote({
-  loaded,
-  tab,
-}: {
-  loaded: UseQueryResult<unknown>;
-  tab: IconTab;
-}): React.JSX.Element {
-  const words = loaded.isError ? LOAD_FAILED[tab] : loaded.isSuccess ? NO_MATCH[tab] : READING[tab];
+/** What the Icons tab says in its grid's place while Lucide loads or failed to; that nothing matched once it has. */
+function iconsNote(loaded: UseQueryResult<unknown>): string {
+  if (loaded.isError) return ICONS_FAILED;
 
-  return <NoteLine look={NOTE_LINE_LOOK.LIST}>{words}</NoteLine>;
+  return loaded.isSuccess ? NO_ICON_MATCH : ICONS_READING;
 }
 
 /** What the grids are handed: the icon chosen, the glyph whose colors stand open, and where an emoji, a glyph's press, a color, and its colors put away go. */
 interface GridProps {
   readonly icon: TaskSectionIcon | undefined;
   readonly opened: OpenedGlyph | undefined;
-  readonly onIcon: (icon: TaskSectionIcon) => void;
+  readonly onEmoji: (emoji: string) => void;
   readonly onOpen: (opened: OpenedGlyph) => void;
   readonly onColor: (color: TaskSectionIconColor | undefined) => void;
   readonly onCloseColors: () => void;
@@ -541,24 +534,6 @@ function openedIn(group: string, opened: OpenedGlyph | undefined): string | unde
   return opened?.group === group ? opened.glyph : undefined;
 }
 
-/** One emoji's choice, which a press chooses at once. */
-function emojiChoice(
-  one: { emoji: string; name: string },
-  props: GridProps,
-  stop: boolean,
-): React.JSX.Element {
-  return (
-    <IconPickerChoice
-      key={one.emoji}
-      label={one.name}
-      pressed={chosenEmoji(props.icon, one.emoji)}
-      stop={stop}
-      face={<span className="section-emoji-face text-foreground">{one.emoji}</span>}
-      onPress={() => props.onIcon({ kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: one.emoji })}
-    />
-  );
-}
-
 /** A recent icon's choice: an emoji chosen at once, a glyph in the color it was chosen in, whose press opens its colors starting there. */
 function recentChoice(
   icons: LucideIcons,
@@ -567,7 +542,16 @@ function recentChoice(
   stop: boolean,
 ): React.JSX.Element {
   if (one.kind === TASK_SECTION_ICON_KIND.EMOJI) {
-    return emojiChoice({ emoji: one.emoji, name: one.emoji }, props, stop);
+    return (
+      <IconPickerEmojiChoice
+        key={one.emoji}
+        emoji={one.emoji}
+        label={one.emoji}
+        pressed={chosenEmoji(props.icon, one.emoji)}
+        stop={stop}
+        onPress={() => props.onEmoji(one.emoji)}
+      />
+    );
   }
 
   return (
@@ -612,7 +596,8 @@ const GlyphPanel = memo(function GlyphPanel(
     [choices],
   );
 
-  if (icons === undefined) return <PanelNote loaded={loaded} tab={ICON_TAB.ICONS} />;
+  if (icons === undefined)
+    return <NoteLine look={NOTE_LINE_LOOK.LIST}>{iconsNote(loaded)}</NoteLine>;
   const first = props.recent[0] ?? suggested[0];
 
   // Note that a glyph this Mac's Lucide does not know is chosen but shown nowhere, so the first choice keeps the stop.
@@ -663,39 +648,38 @@ const GlyphPanel = memo(function GlyphPanel(
   );
 });
 
-/** The Emoji tab with nothing searched: every emoji under its category's name; the one chosen, or the first, is the grid's tab stop. */
-const EmojiPanel = memo(function EmojiPanel(props: GridProps): React.JSX.Element {
-  const loaded = useQuery(emojiQuery);
-  const groups = loaded.data;
-
-  if (groups === undefined || groups.length === 0) {
-    return <PanelNote loaded={loaded} tab={ICON_TAB.EMOJI} />;
-  }
-
-  const all = groups.flatMap((group) => group.emojis);
-  const stop = all.find((one) => chosenEmoji(props.icon, one.emoji)) ?? all[0];
+/** The Emoji tab with nothing searched: every emoji under its category's name, read the first time the tab is shown. */
+const EmojiPanel = memo(function EmojiPanel({
+  icon,
+  onEmoji,
+}: {
+  icon: TaskSectionIcon | undefined;
+  onEmoji: (emoji: string) => void;
+}): React.JSX.Element {
+  const emoji = useEmojiGroups();
 
   return (
-    <>
-      {groups.map((group) => (
-        <IconPickerGroup key={group.name} name={group.name}>
-          {group.emojis.map((one) => emojiChoice(one, props, one === stop))}
-        </IconPickerGroup>
-      ))}
-    </>
+    <IconPickerEmoji
+      groups={emoji.data}
+      failed={emoji.isError}
+      query=""
+      chosen={chosenEmojiOf(icon)}
+      onEmoji={onEmoji}
+    />
   );
 });
 
 /**
  * What a search found, glyphs and emoji alike, each under its kind: an
  * emoji typed into the search first, then the glyphs, then the emoji whose
- * name it matches. The first found is the grid's tab stop.
+ * name it matches (`IconPickerEmoji`, the glyphs beside its own). The first
+ * found is the grid's tab stop.
  */
 const FoundPanel = memo(function FoundPanel(
   props: GridProps & { query: string },
 ): React.JSX.Element {
   const lucide = useQuery(lucideQuery);
-  const emoji = useQuery(emojiQuery);
+  const emoji = useEmojiGroups();
   const icons = lucide.data;
   const choices = useMemo(() => glyphChoices(Object.keys(icons ?? {})), [icons]);
 
@@ -704,56 +688,36 @@ const FoundPanel = memo(function FoundPanel(
     [icons, choices, props.query],
   );
 
-  const groups = emoji.data === undefined ? [] : findEmoji(emoji.data, props.query);
-  const typed = { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: props.query.trim() };
-  const typedOne = isSectionIcon(typed) ? [{ emoji: typed.emoji, name: typed.emoji }] : [];
-
-  const found = [
-    ...typedOne,
-    ...groups.flatMap((group) => group.emojis).filter((one) => one.emoji !== typed.emoji),
-  ];
-
-  if (glyphs.length === 0 && found.length === 0) {
-    // Note that nothing found says why where a set did not load, rather than that nothing matched.
-    if (!lucide.isSuccess) return <PanelNote loaded={lucide} tab={ICON_TAB.ICONS} />;
-
-    if (!emoji.isSuccess) return <PanelNote loaded={emoji} tab={ICON_TAB.EMOJI} />;
-
-    return <NoteLine look={NOTE_LINE_LOOK.LIST}>{NO_MATCH_EITHER}</NoteLine>;
-  }
-
-  const firstEmoji = typedOne.length > 0;
+  const found =
+    icons === undefined || glyphs.length === 0
+      ? undefined
+      : (stop: boolean) => (
+          <GlyphGroup
+            name={FOUND_ICONS}
+            icons={icons}
+            choices={glyphs}
+            icon={props.icon}
+            opened={openedIn(FOUND_ICONS, props.opened)}
+            stop={stop ? glyphs[0]?.glyph : undefined}
+            onOpen={props.onOpen}
+            onColor={props.onColor}
+            onClose={props.onCloseColors}
+          />
+        );
 
   return (
-    <>
-      {firstEmoji ? (
-        <IconPickerGroup name="Emoji">
-          {typedOne.map((one) => emojiChoice(one, props, true))}
-        </IconPickerGroup>
-      ) : null}
-      {icons === undefined || glyphs.length === 0 ? null : (
-        <GlyphGroup
-          name={FOUND_ICONS}
-          icons={icons}
-          choices={glyphs}
-          icon={props.icon}
-          opened={openedIn(FOUND_ICONS, props.opened)}
-          stop={firstEmoji ? undefined : glyphs[0]?.glyph}
-          onOpen={props.onOpen}
-          onColor={props.onColor}
-          onClose={props.onCloseColors}
-        />
-      )}
-      {found.length === typedOne.length ? null : (
-        <IconPickerGroup name={firstEmoji ? "More emoji" : "Emoji"}>
-          {found
-            .slice(typedOne.length)
-            .map((one, at) =>
-              emojiChoice(one, props, !firstEmoji && glyphs.length === 0 && at === 0),
-            )}
-        </IconPickerGroup>
-      )}
-    </>
+    <IconPickerEmoji
+      groups={emoji.data}
+      failed={emoji.isError}
+      query={props.query}
+      chosen={chosenEmojiOf(props.icon)}
+      onEmoji={props.onEmoji}
+      beside={{
+        found,
+        unloaded: lucide.isSuccess ? undefined : iconsNote(lucide),
+        noMatch: NO_MATCH_EITHER,
+      }}
+    />
   );
 });
 
@@ -762,16 +726,19 @@ const FoundPanel = memo(function FoundPanel(
  * so the popover opens on it, and Icons and Emoji over what it offers. An
  * emoji pressed is chosen at once; a glyph pressed opens its colors under
  * its row, asked every time, and the color pressed there chooses the glyph
- * in it. A choice is handed to `onIcon` and kept among this Mac's recent
- * ones; Remove icon hands on none.
+ * in it. A choice is handed to `onIcon` and kept among the account's recent
+ * ones (`kept`), which Recent offers as they stood when the picker opened;
+ * Remove icon hands on none.
  */
 function SectionIconPicker({
   icon,
   search,
+  kept,
   onIcon,
 }: {
   icon: TaskSectionIcon | undefined;
   search?: RefObject<HTMLInputElement | null> | undefined;
+  kept: RecentIcons;
   onIcon: (icon: TaskSectionIcon | undefined) => void;
 }): React.JSX.Element {
   const [tab, setTab] = useState<IconTab>(
@@ -779,7 +746,7 @@ function SectionIconPicker({
   );
 
   const [query, setQuery] = useState("");
-  const [recent] = useState(readRecent);
+  const [recent] = useState(kept.recent);
   const [opened, setOpened] = useState<OpenedGlyph | undefined>(undefined);
   const panelId = useId();
 
@@ -789,11 +756,11 @@ function SectionIconPicker({
   } satisfies Record<IconTab, string>;
 
   // Note that the grid's doors read the latest owner and opened glyph through refs, so they stand the same from draw to draw and a press redraws none of the cells it reaches.
-  const latest = useRef({ onIcon, opened });
-  latest.current = { onIcon, opened };
+  const latest = useRef({ onIcon, opened, keep: kept.keep });
+  latest.current = { onIcon, opened, keep: kept.keep };
 
   const choose = useCallback((next: TaskSectionIcon) => {
-    keepRecent(next);
+    latest.current.keep(next);
     latest.current.onIcon(next);
   }, []);
 
@@ -811,6 +778,11 @@ function SectionIconPicker({
     [choose],
   );
 
+  const emoji = useCallback(
+    (picked: string) => choose({ kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: picked }),
+    [choose],
+  );
+
   const closeColors = useCallback(() => setOpened(undefined), []);
 
   const searching = query.trim() !== "";
@@ -818,7 +790,7 @@ function SectionIconPicker({
   const props: GridProps = {
     icon,
     opened,
-    onIcon: choose,
+    onEmoji: emoji,
     onOpen: open,
     onColor: color,
     onCloseColors: closeColors,
@@ -852,7 +824,7 @@ function SectionIconPicker({
             />
             {icon === undefined ? null : (
               <Button variant={BUTTON_VARIANT.SUBTLE} onClick={() => onIcon(undefined)}>
-                Remove icon
+                {REMOVE_SECTION_ICON}
               </Button>
             )}
           </div>
@@ -865,7 +837,7 @@ function SectionIconPicker({
         ) : tab === ICON_TAB.ICONS ? (
           <GlyphPanel {...props} recent={recent} />
         ) : (
-          <EmojiPanel {...props} />
+          <EmojiPanel icon={icon} onEmoji={emoji} />
         )}
       </IconPicker>
     </ReplayUnmask>
@@ -900,6 +872,8 @@ export function SectionIconWell({
   title?: string | undefined;
 }): React.JSX.Element {
   const search = useRef<HTMLInputElement | null>(null);
+  // Note that the icons chosen last are read while the well stands, so the picker opens on them.
+  const kept = useRecentIcons();
   const label = icon === undefined ? "Add icon" : "Change icon";
 
   return (
@@ -917,6 +891,7 @@ export function SectionIconWell({
       <SectionIconPicker
         icon={icon}
         search={search}
+        kept={kept}
         onIcon={(next) => {
           onIcon(next);
           onOpenChange(false, false);

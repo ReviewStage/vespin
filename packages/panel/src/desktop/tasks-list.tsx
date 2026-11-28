@@ -24,12 +24,7 @@ import {
   TASK_PRIORITY_WORDS,
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
-import {
-  TASK_PRIORITY_ORDER,
-  TASK_STATUS_ORDER,
-  type TaskStanding,
-  type TaskSummary,
-} from "@repo/features/task-wire";
+import type { TaskStanding, TaskSummary } from "@repo/features/task-wire";
 import { TASK_MARK } from "@repo/features/tasks-model";
 import {
   COMPLETED_WINDOW,
@@ -104,7 +99,6 @@ import {
   type VirtualRowsHandle,
   type VirtualRuns,
 } from "@repo/ui/virtual-rows";
-import { Schema } from "effect";
 import {
   Fragment,
   memo,
@@ -129,7 +123,6 @@ import { newTaskAction } from "../tasks/inbox-list.js";
 import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { keptKey, useKept } from "../use-kept.js";
 import { useFittedColumns } from "./fitted-columns.js";
 import { groupNewTaskWords, NewTaskInButton, quickAddInto } from "./new-task-button.js";
 import { useTasksWaiting } from "./places-waiting.js";
@@ -139,6 +132,7 @@ import { groupCount, sidebarFold } from "./sidebar-fold.js";
 import { type OpenedTask, openedTaskOf, type TaskRowTab, useTaskRowTab } from "./task-actions.js";
 import { TaskListRow } from "./task-list-row.js";
 import { CreatorFace, useStandingDoor, WaitingCount } from "./task-row-parts.js";
+import { type ListFolds, useListFoldsChoice } from "./tasks-page-choices.js";
 import {
   assigneeFor,
   assigneeWords,
@@ -182,7 +176,7 @@ import { useTaskDrag } from "./use-row-drag.js";
  * drag still reach the rows left undrawn, each brought in where it is
  * reached.
  *
- * A group's head folds it, kept on this Mac (`KEPT.FOLDS`), its count
+ * A group's head folds it, kept on the account (`tasks-page-choices.ts`), its count
  * standing beside its name either way. A row is dragged by its press
  * (`use-row-drag.ts`): within Pinned or a section to a new place there; onto
  * another status's, priority's, or assignee's group, which sends it that
@@ -247,26 +241,6 @@ const DROP_ZONE = {
   NO_ASSIGNEE: "no-assignee",
 } as const;
 
-/** The groups folded, each kind by the values its groups stand for; absent where none is. */
-const storedFolds = Schema.fromJsonString(
-  Schema.Struct({
-    pinned: Schema.optionalKey(Schema.Boolean),
-    sections: Schema.optionalKey(Schema.Array(Schema.String)),
-    status: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_STATUS_ORDER))),
-    priority: Schema.optionalKey(Schema.Array(Schema.Literals(TASK_PRIORITY_ORDER))),
-    repository: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
-    assignee: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
-    creator: Schema.optionalKey(Schema.Array(Schema.NullOr(Schema.String))),
-  }),
-);
-
-type ListFolds = typeof storedFolds.Type;
-
-/** The List's folded groups, kept on this Mac. */
-const KEPT = {
-  FOLDS: keptKey("app.tasksListFolds", storedFolds),
-} as const;
-
 /** A set of folded values with one folded or opened. */
 function flipped<T>(held: readonly T[] | undefined, value: T): readonly T[] {
   const kept = held ?? [];
@@ -323,13 +297,13 @@ type UseListFoldsResult = {
   toggle: (head: TasksGroupHead) => void;
 };
 
-/** Which groups are folded, and the press that folds or opens one, kept on this Mac as it is pressed. */
-function useListFolds(): UseListFoldsResult {
-  const [folds, keep] = useKept(KEPT.FOLDS, {});
+/** Which groups are folded, and the press that folds or opens one, kept on the account as it is pressed, unless the run is `staged`. */
+function useListFolds(staged: boolean): UseListFoldsResult {
+  const { folds, change } = useListFoldsChoice(staged);
 
   return {
     folded: (head) => foldedIn(folds, head),
-    toggle: (head) => keep(toggledIn(folds, head)),
+    toggle: (head) => change((standing) => toggledIn(standing, head)),
   };
 }
 
@@ -954,7 +928,7 @@ export function TasksList({
   const { filter, display } = frame;
   const directory = useMemberDirectory();
   const now = useMinute();
-  const folds = useListFolds();
+  const folds = useListFolds(frame.staged);
   const waitingOn = useTasksWaiting(tasks);
   const narrow = room === SHELL_ROOM.NARROW;
   // Note that a finger's rows draw no ⋯, as a phone's mail list draws none, so their names keep the room: a long press opens a row's menu.

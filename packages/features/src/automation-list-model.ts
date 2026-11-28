@@ -6,7 +6,9 @@ import {
   AUTOMATION_RUN_REASON,
   AUTOMATION_RUN_STATUS,
   AUTOMATION_SCOPE,
+  AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
+  type AutomationListGroup,
   type AutomationRunReason,
   type AutomationRunSummary,
   type AutomationScope,
@@ -270,6 +272,22 @@ export type AutomationNext =
   | { readonly kind: typeof AUTOMATION_NEXT.RAN }
   | { readonly kind: typeof AUTOMATION_NEXT.AT; readonly at: number };
 
+/**
+ * The list's folded groups with `group` folded or opened as asked, each
+ * group named once and every other group as it stood, so a fold asked for
+ * before the account's folds were read is laid over them as asked, never as
+ * a toggle that the folds read could undo.
+ */
+export function automationFoldsWith(
+  folds: readonly AutomationListGroup[],
+  group: AutomationListGroup,
+  folded: boolean,
+): readonly AutomationListGroup[] {
+  const others = folds.filter((each) => each !== group);
+
+  return folded ? [...others, group] : others;
+}
+
 /** One owner's automations, in the order the list was asked for. */
 export interface AutomationGroup {
   readonly owner: AutomationScope;
@@ -401,6 +419,23 @@ export function automationOwner(automation: AutomationSummary): AutomationScope 
 }
 
 /**
+ * The Manager an automation hands every run to, among `managers`, the
+ * workspace's, as its row names it: none for one that starts a new agent
+ * each run, one whose agent its first run is still to start, or one whose
+ * agent is no Manager the workspace lists, a coding agent or one archived.
+ */
+export function automationManager<Manager extends { readonly id: string }>(
+  automation: Pick<AutomationSummary, "target">,
+  managers: readonly Manager[],
+): Manager | undefined {
+  const target = automation.target;
+
+  if (target?.kind !== AUTOMATION_TARGET.SAME_AGENT || target.agentId === null) return undefined;
+
+  return managers.find((manager) => manager.id === target.agentId);
+}
+
+/**
  * Whether a one-time automation is finished: it ran, as its schedule asked,
  * and stands paused for it. Note that one whose run set it going again is
  * on, so it is never finished.
@@ -465,12 +500,18 @@ export function automationGroups(
   });
 }
 
-/** The one-time automations that ran and stand paused for it, in `order`, which the list folds away under Finished. */
+/**
+ * The one-time automations that ran and stand paused for it, which the list
+ * folds away under Finished as their history: the one that ran last first,
+ * whatever order the list was asked for, since what they did is the one thing
+ * left to read of them, and a tie to the newest made.
+ */
 export function finishedAutomations(
   automations: readonly AutomationSummary[],
-  order: AutomationsOrder = DEFAULT_AUTOMATIONS_ORDER,
 ): readonly AutomationSummary[] {
-  return automations.filter(automationFinished).toSorted(byOrder(order));
+  return automations
+    .filter(automationFinished)
+    .toSorted((a, b) => byInstant(a.lastRun?.firedAt, b.lastRun?.firedAt, true) || byNewest(a, b));
 }
 
 /**
@@ -643,6 +684,19 @@ export function automationRunTitle(run: AutomationRunSummary): string {
   if (title !== null && !titlesNothing(title)) return title;
 
   return automationFiringTitle(run.firing);
+}
+
+/**
+ * What a finished one-time automation's run did, as its row in Finished says
+ * it, so the list keeps what each was used for: the agent it started, by its
+ * title, or that it started one with none yet; and why it did not start,
+ * where it did not.
+ */
+export function automationRanLine(run: AutomationRunSummary): string {
+  if (run.agent === null) return automationRunLine(run);
+  const title = run.agent.title;
+
+  return title === null || titlesNothing(title) ? "Started an agent" : `Started “${title}”`;
 }
 
 /** Where one agent's run stands among its automation's runs that started an agent: that run, its place counted from the oldest, and the agents of the runs either side. */

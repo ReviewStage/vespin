@@ -16,6 +16,7 @@ import {
   LIST_COLUMN,
   listPropertiesFitting,
   NO_TASKS_FILTER,
+  showsSettledInFull,
   TASK_MAKER,
   TASK_PROPERTY,
   TASK_PROPERTY_ORDER,
@@ -74,6 +75,7 @@ function task(
     createdAt = updatedAt,
     completedAt,
     parent,
+    followers,
   }: {
     status?: TaskStatus;
     priority?: TaskPriority;
@@ -85,6 +87,8 @@ function task(
     completedAt?: number;
     /** The name of the task it is a sub-task of. */
     parent?: string;
+    /** Who follows it, by account id. */
+    followers?: readonly string[];
   } = {},
 ): TaskSummary {
   return {
@@ -98,6 +102,11 @@ function task(
     ...(priority === undefined ? undefined : { priority }),
     ...(completedAt === undefined ? undefined : { completedAt }),
     ...(parent === undefined ? undefined : { parentTaskId: parent }),
+    ...(followers === undefined
+      ? undefined
+      : {
+          followers: followers.map((userId) => ({ userId, assignee: false, machines: false })),
+        }),
     ...(creator === undefined
       ? undefined
       : { ownerId: creator, createdBy: { userId: creator, name: NAMES.get(creator) ?? "" } }),
@@ -201,6 +210,18 @@ test("a filter keeps the tasks holding one of each field's values, its fields an
   expect(listed(tasks, { grouping: TASKS_GROUPING.NONE }, nowhere)).toEqual([
     [["all"], ["Dean's unweighed, nowhere"]],
   ]);
+
+  // A task stands under Followed by where any one of its followers is kept.
+  const followed = [
+    task("Followed by both", { followers: [MAYA, DEAN] }),
+    task("Followed by Maya", { followers: [MAYA] }),
+    task("Followed by no one"),
+  ];
+
+  const deans = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.FOLLOWER, DEAN);
+  expect(listed(followed, { grouping: TASKS_GROUPING.NONE }, deans)).toEqual([
+    [["all"], ["Followed by both"]],
+  ]);
   expect(
     toggledFilter(
       clearedField(filter, TASKS_FILTER_FIELD.CREATOR),
@@ -257,6 +278,19 @@ test("a settled status the filter names stands in full whatever the completed wi
   }).map((column) => [headOf(column.head), column.tasks.map((each) => each.name), column.older]);
 
   expect(board).toEqual([[["status", "done"], ["Shipped in spring", "Shipped Monday"], undefined]]);
+});
+
+test("the settled past the list are read in only where they can stand: All with no status named, or a settled status the filter names", () => {
+  const all = { ...DEFAULT_LIST_DISPLAY, completed: COMPLETED_WINDOW.ALL };
+  const none = { ...DEFAULT_LIST_DISPLAY, completed: COMPLETED_WINDOW.NONE };
+  const todo = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.STATUS, TASK_STATUS.TODO);
+  const todoOrDone = toggledFilter(todo, TASKS_FILTER_FIELD.STATUS, TASK_STATUS.DONE);
+
+  expect([
+    showsSettledInFull(NO_TASKS_FILTER, all),
+    showsSettledInFull(todo, all),
+    showsSettledInFull(todoOrDone, none),
+  ]).toEqual([true, false, true]);
 });
 
 test("grouped by repository the groups run by name and the tasks with none last; by creator the reader's own first, then teammates by name, then nobody's", () => {

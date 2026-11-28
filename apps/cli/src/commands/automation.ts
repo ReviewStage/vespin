@@ -23,10 +23,15 @@ import {
   type AutomationTrigger,
   automationTriggerSchema,
   GITHUB_TRIGGER_EVENT,
+  type GitHubTriggerEvent,
   scheduleRunsOnce,
 } from "@repo/features/automation-wire";
 import { CLI_EXIT } from "@repo/features/cli-exit";
-import { SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
+import {
+  SENTRY_TRIGGER_EVENT,
+  type SentryTriggerEvent,
+  TRIGGER_PROVIDER,
+} from "@repo/features/trigger-catalog";
 import { Effect, Option, Result, Schema } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { answer, CommandFailed, columns, readInput } from "../output.js";
@@ -110,10 +115,10 @@ interface TriggerFlags {
   readonly cron: Option.Option<string>;
   readonly at: Option.Option<string>;
   readonly timezone: Option.Option<string>;
-  readonly github: Option.Option<(typeof GITHUB_TRIGGER_EVENT)[keyof typeof GITHUB_TRIGGER_EVENT]>;
+  readonly github: Option.Option<GitHubTriggerEvent>;
   readonly label: readonly string[];
   readonly branch: readonly string[];
-  readonly sentry: Option.Option<(typeof SENTRY_TRIGGER_EVENT)[keyof typeof SENTRY_TRIGGER_EVENT]>;
+  readonly sentry: Option.Option<SentryTriggerEvent>;
   readonly trigger: Option.Option<string>;
 }
 
