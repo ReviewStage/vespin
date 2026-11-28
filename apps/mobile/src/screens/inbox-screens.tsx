@@ -22,6 +22,7 @@ import {
   INBOX_READ_MARK,
   INBOX_RUN_LABEL,
   INBOX_SCOPES,
+  INBOX_SETTLED_STANDING,
   INBOX_SHOW,
   INBOX_SHOW_EMPTY,
   INBOX_SHOW_LABEL,
@@ -48,6 +49,7 @@ import {
   READING_INBOX,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
+import { inboxAnsweredAsks, inboxAnsweredMarks } from "@repo/features/inbox-settled-asks";
 import {
   filesLost,
   UNDELIVERED_FILES_LOST,
@@ -196,6 +198,7 @@ import {
   useSplitBuild,
 } from "./app-sidebar.js";
 import {
+  AnsweredAskCard,
   NO_THREAD_ACTS,
   OpenAskCard,
   openAskFiles,
@@ -901,6 +904,13 @@ function ThreadDetail({
     [undelivered.item, agentName, readerId],
   );
 
+  // Note that an answered ask keeps its card at the head of the reply that answered it, and one with no such card ends its message with Answered, as the panel draws a settled thread, so what was asked and picked still reads.
+  const settledAsks = useMemo(() => {
+    const thread = undelivered.item.thread ?? [];
+
+    return { answered: inboxAnsweredAsks(thread), marked: inboxAnsweredMarks(thread) };
+  }, [undelivered.item]);
+
   const hostActs = useHostActs();
 
   // Note that the closers are named from the thread's own workspace's members, followed here, since a link may open a thread outside the workspace the phone works in.
@@ -1099,66 +1109,81 @@ function ThreadDetail({
 
   const undeliveredLines = new Map(undelivered.lines.map((line) => [line.key, line]));
 
-  const drawn: readonly ThreadMessage[] = messages.map((message, index) => ({
-    ...message,
-    after: events.get(index),
-    undelivered: undeliveredOf(undeliveredLines.get(message.id), answer),
-    writer: {
-      ...message.writer,
-      id: message.writer.agent ? undefined : message.writer.userId,
-      picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
-      harness: message.writer.agent ? harness : undefined,
-      manager: message.writer.agent ? writerManager : undefined,
-      onOpen: writerOpen(message.writer),
-    },
-    stamp:
-      message.stamp === undefined
-        ? undefined
-        : { words: message.stamp.words, ahead: message.stamp.tone === ANSWER_TONE.AHEAD },
-    media: message.media.map((each): ThreadMedia => {
-      const source = sources.get(each.attachmentId);
-      const key = each.attachmentId;
-      const onRetry = () => retry(key);
+  const drawn: readonly ThreadMessage[] = messages.map((message, index) => {
+    const answered = settledAsks.answered.get(message.id);
 
-      if (each.kind === INBOX_MEDIA.VIDEO) {
+    return {
+      ...message,
+      after: events.get(index),
+      answered:
+        answered === undefined ? undefined : (
+          <AnsweredAskCard
+            answered={answered}
+            title={cardTitle(item.title)}
+            links={{ repository: holderRepository(holder), openLink }}
+          />
+        ),
+      settled: settledAsks.marked.has(message.id) ? INBOX_SETTLED_STANDING.ANSWERED : undefined,
+      // Note that the card says what its stamp and values would, but for a do's press, which its stamp still says.
+      values: answered === undefined ? message.values : undefined,
+      undelivered: undeliveredOf(undeliveredLines.get(message.id), answer),
+      writer: {
+        ...message.writer,
+        id: message.writer.agent ? undefined : message.writer.userId,
+        picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
+        harness: message.writer.agent ? harness : undefined,
+        manager: message.writer.agent ? writerManager : undefined,
+        onOpen: writerOpen(message.writer),
+      },
+      stamp:
+        message.stamp === undefined || answered?.stamped === false
+          ? undefined
+          : { words: message.stamp.words, ahead: message.stamp.tone === ANSWER_TONE.AHEAD },
+      media: message.media.map((each): ThreadMedia => {
+        const source = sources.get(each.attachmentId);
+        const key = each.attachmentId;
+        const onRetry = () => retry(key);
+
+        if (each.kind === INBOX_MEDIA.VIDEO) {
+          return {
+            kind: THREAD_MEDIA.VIDEO,
+            key,
+            source,
+            label: each.name,
+            onOpenElsewhere: openOnWeb,
+            onRetry,
+          };
+        }
+
+        if (each.kind === INBOX_MEDIA.AUDIO) {
+          return { kind: THREAD_MEDIA.AUDIO, key, source, label: each.name, onRetry };
+        }
+
+        if (each.kind === INBOX_MEDIA.FILE) {
+          const size = sizes.get(key);
+
+          return {
+            kind: THREAD_MEDIA.FILE,
+            key,
+            source,
+            name: each.name,
+            mediaType: each.mediaType,
+            size,
+            onRetry,
+          };
+        }
+
         return {
-          kind: THREAD_MEDIA.VIDEO,
+          kind: THREAD_MEDIA.PICTURE,
           key,
           source,
-          label: each.name,
-          onOpenElsewhere: openOnWeb,
+          alt: each.name,
+          size: pictureSizes.get(key),
           onRetry,
         };
-      }
-
-      if (each.kind === INBOX_MEDIA.AUDIO) {
-        return { kind: THREAD_MEDIA.AUDIO, key, source, label: each.name, onRetry };
-      }
-
-      if (each.kind === INBOX_MEDIA.FILE) {
-        const size = sizes.get(key);
-
-        return {
-          kind: THREAD_MEDIA.FILE,
-          key,
-          source,
-          name: each.name,
-          mediaType: each.mediaType,
-          size,
-          onRetry,
-        };
-      }
-
-      return {
-        kind: THREAD_MEDIA.PICTURE,
-        key,
-        source,
-        alt: each.name,
-        size: pictureSizes.get(key),
-        onRetry,
-      };
-    }),
-  }));
+      }),
+    };
+  });
 
   // Note that a picture the words name by one of the thread's own files is drawn from its bytes as read, and any other from the address it names.
   const pictureSource = (written: string): string | null | undefined => {

@@ -19,6 +19,7 @@ import {
   accessibilityAddTraits,
   accessibilityIdentifier,
   accessibilityLabel,
+  accessibilityValue,
   background,
   buttonStyle,
   fixedSize,
@@ -32,6 +33,7 @@ import {
   textFieldStyle,
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
+import { fieldValueWords } from "@repo/features/inbox-wire";
 import { linkLabels } from "@repo/features/mention-link";
 import { FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
@@ -254,7 +256,7 @@ export function RecommendedTag() {
   );
 }
 
-/** A checkbox's mark, the accent's once ticked, as a step's and a yes or no's lead their row. */
+/** A checkbox's mark, the accent's once ticked, as a step's, a yes or no's, and a held yes or no's lead their row. */
 function TickMark({ ticked }: { readonly ticked: boolean }) {
   const colors = useColors();
 
@@ -289,11 +291,13 @@ function StepRow({
 }: {
   readonly step: string;
   readonly ticked: boolean;
-  readonly onPress: () => void;
+  /** Ticks the step or lets it go; none for an ask no longer waiting, whose step stands as the answer left it. */
+  readonly onPress: (() => void) | undefined;
   readonly repository: string | null | undefined;
   readonly onOpenLink: (address: string) => void;
 }) {
   const heard = linkLabels(step);
+  const heardAs = accessibilityLabel(ticked ? `${heard}, ${TICKED}` : heard);
 
   return (
     <HStack
@@ -304,15 +308,15 @@ function StepRow({
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
       ]}
     >
-      <SwiftUIButton
-        onPress={onPress}
-        modifiers={[
-          buttonStyle("plain"),
-          accessibilityLabel(ticked ? `${heard}, ${TICKED}` : heard),
-        ]}
-      >
-        <TickMark ticked={ticked} />
-      </SwiftUIButton>
+      {onPress === undefined ? (
+        <HStack modifiers={[SwiftModifiers.accessibilityElement("combine"), heardAs]}>
+          <TickMark ticked={ticked} />
+        </HStack>
+      ) : (
+        <SwiftUIButton onPress={onPress} modifiers={[buttonStyle("plain"), heardAs]}>
+          <TickMark ticked={ticked} />
+        </SwiftUIButton>
+      )}
       <RNHostView matchContents={{ vertical: true }}>
         <Pressable accessible={false} onPress={onPress}>
           <Markdown words={step} repository={repository} onOpenLink={onOpenLink} />
@@ -322,20 +326,21 @@ function StepRow({
   );
 }
 
-/** A do ask's steps as a card of checkbox rows, by their place from the first at 0, with its acts under it. */
+/** A do ask's steps as a card of checkbox rows, by their place from the first at 0, with its acts under it; with no `onToggle`, standing as an answer left it, ticked as it ticked them, taking no press. */
 export function StepList({
   steps,
   ticked,
   onToggle,
-  acts,
+  acts = [],
   repository,
   onOpenLink,
 }: {
   readonly steps: readonly string[];
   readonly ticked: readonly number[];
-  /** Called with a step's place once its toggle is pressed. */
-  readonly onToggle: (index: number) => void;
-  readonly acts: readonly AskAct[];
+  /** Called with a step's place once its toggle is pressed; none for an ask no longer waiting. */
+  readonly onToggle?: ((index: number) => void) | undefined;
+  /** The acts under the card; none for an ask no longer waiting. */
+  readonly acts?: readonly AskAct[] | undefined;
   /** The thread's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository: string | null | undefined;
   /** Opens a link or a chip pressed in a step's words, by the address it was written as, where the app draws it or in Safari. */
@@ -350,14 +355,14 @@ export function StepList({
               key={step}
               step={step}
               ticked={ticked.includes(index)}
-              onPress={() => onToggle(index)}
+              onPress={onToggle === undefined ? undefined : () => onToggle(index)}
               repository={repository}
               onOpenLink={onOpenLink}
             />
           ))}
         </Card>
       )}
-      <AskActs acts={acts} />
+      {acts.length === 0 ? null : <AskActs acts={acts} />}
     </VStack>
   );
 }
@@ -576,18 +581,104 @@ function BooleanRow({
 }
 
 /**
+ * A field as an answer filled it, taking nothing, as the panel's held form
+ * stands: a yes or no as its checkbox, ticked where it was, beside its
+ * name; any other field its name, muted, over what was put in it, which
+ * stays empty where the answer left it so.
+ */
+function HeldFieldRow({ field }: { readonly field: AnswerField }) {
+  const colors = useColors();
+
+  if (field.kind === ANSWER_FIELD.BOOLEAN) {
+    const ticked = field.value === true;
+
+    return (
+      <HStack
+        spacing={SPACE.ROW}
+        modifiers={[
+          padding(ROW_PADDING),
+          SwiftModifiers.accessibilityElement("combine"),
+          accessibilityLabel(field.label),
+          // Note that the answer is heard as its value, yes or no, so a no is said rather than left silent; a yes or no the answer left empty says nothing.
+          ...(Predicate.isBoolean(field.value)
+            ? [accessibilityValue(fieldValueWords(field.value))]
+            : []),
+        ]}
+      >
+        <TickMark ticked={ticked} />
+        <FieldWords
+          label={field.label}
+          optional={!field.required}
+          textStyle={TYPE_ROLE.ROW_TITLE}
+          ink={colors.TEXT}
+        />
+        <Spacer />
+      </HStack>
+    );
+  }
+
+  const words = Predicate.isString(field.value) ? field.value : "";
+
+  return (
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[
+        padding(ROW_PADDING),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        SwiftModifiers.accessibilityElement("combine"),
+      ]}
+    >
+      <FieldWords
+        label={field.label}
+        optional={false}
+        textStyle={TYPE_ROLE.ROW_LINE}
+        ink={colors.TEXT_MUTED}
+      />
+      {words === "" ? null : (
+        <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}>
+          {words}
+        </Text>
+      )}
+    </VStack>
+  );
+}
+
+/**
  * An answer ask's fields as a card of the system's form controls, a row
  * each: a text or number field under its label, a select's options as rows
  * under its label, the recommended one tagged, and a yes or no's checkbox. Note that it is a card in the thread's scroll rather
  * than a SwiftUI `Form`, because a `Form` scrolls on its own and the thread
- * it stands in already does; its rows are the controls a `Form` holds.
+ * it stands in already does; its rows are the controls a `Form` holds. With
+ * no `onChange`, the card stands as an answer filled it (`HeldFieldRow`).
  */
 export function AnswerFields({
   fields,
   onChange,
 }: {
   readonly fields: readonly AnswerField[];
-  /** Called with a field's label and what it now holds. */
+  /** Called with a field's label and what it now holds; none for an ask no longer waiting. */
+  readonly onChange?: ((label: string, value: string | boolean) => void) | undefined;
+}) {
+  if (onChange === undefined) {
+    return (
+      <Card inset={CARD_WORDS_INSET.BARE}>
+        {fields.map((field) => (
+          <HeldFieldRow key={field.label} field={field} />
+        ))}
+      </Card>
+    );
+  }
+
+  return <OpenFields fields={fields} onChange={onChange} />;
+}
+
+/** An open answer ask's fields, as `AnswerFields` draws them while the ask waits. */
+function OpenFields({
+  fields,
+  onChange,
+}: {
+  readonly fields: readonly AnswerField[];
   readonly onChange: (label: string, value: string | boolean) => void;
 }) {
   const focused = useRef<TextFieldRef | null>(null);

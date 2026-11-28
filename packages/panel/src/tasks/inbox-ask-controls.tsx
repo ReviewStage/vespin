@@ -20,6 +20,7 @@ import {
   decideButtons,
   RECOMMENDED,
 } from "@repo/features/inbox-list-model";
+import { askHasControls } from "@repo/features/inbox-settled-asks";
 import {
   INBOX_ASK,
   INBOX_BOUNDS,
@@ -961,11 +962,6 @@ function LeftControls({
   }
 }
 
-/** Whether an ask draws any controls once it no longer waits: every one but an `answer` of words alone. */
-export function hasControls(ask: InboxAsk): boolean {
-  return ask.type !== INBOX_ASK.ANSWER || ask.fields !== undefined;
-}
-
 /**
  * The open question's controls as the draft reply's card's body, over its
  * foot, with no card, border, or head of their own, since the agent's
@@ -1026,7 +1022,7 @@ export function AnsweredCard({
   title: string | undefined;
   answers: InboxAnswers;
 }): React.JSX.Element | null {
-  if (!hasControls(ask)) return null;
+  if (!askHasControls(ask)) return null;
 
   return (
     // Note that it is no `inbox-ask` card: the controls stand in the reply itself, at its words' left edge.

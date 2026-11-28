@@ -1,9 +1,10 @@
-// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
+// inbox-ask.tsx -- a thread's open ask as its card, an answered ask's card as the answer left it, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note, replies, or starts a new thread with the agent, its empty Send a notice's Got it, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
   fieldValueOf,
+  type InboxDraft,
   picksNone,
   shownTicks,
   withNoneOfThese,
@@ -12,12 +13,14 @@ import {
   withValue,
 } from "@repo/features/inbox-draft";
 import { INBOX_READ_MARK, isUnread, knownAsk } from "@repo/features/inbox-list-model";
+import type { InboxAnsweredAsk } from "@repo/features/inbox-settled-asks";
 import {
   INBOX_ASK,
   INBOX_FIELD,
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
+  type InboxField,
   type InboxItem,
   type InboxOption,
   type InboxOptionMedia,
@@ -167,6 +170,22 @@ function cardChoice(option: InboxOption, doors: OptionMediaDoors): Choice {
   return { label: option.label, detail: option.detail, media };
 }
 
+/** An answer ask's fields as the card draws them, each holding what `draft` gives it. */
+function cardFields(fields: readonly InboxField[], draft: InboxDraft): readonly AnswerField[] {
+  return fields.map((field) => {
+    const value = fieldValueOf(draft, field.label);
+
+    return {
+      kind: FIELD_KIND[field.type],
+      label: field.label,
+      required: field.required === true,
+      value: Predicate.isBoolean(value) ? value : value === undefined ? "" : String(value),
+      options: field.options,
+      recommended: field.recommended,
+    };
+  });
+}
+
 /** The files an open ask's options carry, by attachment and kind, which the thread reads beside its messages' own. */
 export function openAskFiles(item: InboxItem) {
   const ask = openAsk(item);
@@ -299,19 +318,7 @@ function AskControls({
 
   if (ask.fields === undefined) return null;
 
-  const fields: readonly AnswerField[] = ask.fields.map((field) => {
-    const kind = FIELD_KIND[field.type];
-    const value = fieldValueOf(draft, field.label);
-
-    return {
-      kind,
-      label: field.label,
-      required: field.required === true,
-      value: Predicate.isBoolean(value) ? value : value === undefined ? "" : String(value),
-      options: field.options,
-      recommended: field.recommended,
-    };
-  });
+  const fields = cardFields(ask.fields, draft);
 
   return (
     <AnswerFields
@@ -322,6 +329,61 @@ function AskControls({
       }}
     />
   );
+}
+
+/**
+ * The ask a member's reply answered, at the head of that reply, as the
+ * panel's answered card stands it: the ask's card as the answer left it,
+ * taking nothing, so what was asked and what was picked still read once the
+ * thread is settled. A decide's options with the picks checked, the
+ * recommended tagged; a do's steps ticked as they were, its press said by
+ * the reply's stamp over it; an answer's fields as they were filled. Note
+ * that an option's media stands with the agent's message rather than here,
+ * since the thread draws a settled ask's files there.
+ */
+export function AnsweredAskCard({
+  answered,
+  title,
+  links,
+}: {
+  readonly answered: InboxAnsweredAsk;
+  /** The thread's title, which stands as the one step of a do that names none. */
+  readonly title: string;
+  /** What a link or a chip in an option's or a step's words opens with, as the open card's. */
+  readonly links: Pick<OptionMediaDoors, "repository" | "openLink">;
+}): ReactNode {
+  const { ask, draft } = answered;
+  const linked = { repository: links.repository, onOpenLink: links.openLink };
+
+  if (ask.type === INBOX_ASK.DECIDE) {
+    return (
+      <ChoiceList
+        choices={ask.options.map((option) => ({ label: option.label, detail: option.detail }))}
+        recommended={recommendedLabels(ask)}
+        picked={draft.choices}
+        multiple={ask.multiple === true}
+        // Note that a pick of None of these stands checked on its own row, as the open card offered it, since no option is checked.
+        none={
+          optionsCarryMedia(ask) ? { label: NONE_OF_THESE, picked: picksNone(draft) } : undefined
+        }
+        {...linked}
+      />
+    );
+  }
+
+  if (ask.type === INBOX_ASK.DO) {
+    return (
+      <StepList
+        steps={ask.steps.length === 0 ? [title] : ask.steps}
+        ticked={draft.steps ?? []}
+        {...linked}
+      />
+    );
+  }
+
+  if (ask.fields === undefined) return null;
+
+  return <AnswerFields fields={cardFields(ask.fields, draft)} />;
 }
 
 /** A notice's empty Send, as the panel's reads Got it. */
