@@ -32,6 +32,7 @@ import {
   type PullRequestCheck,
   REVIEW_DECISION,
   REVIEW_STATE,
+  type ReviewState,
 } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -349,13 +350,7 @@ const CHECKS: ReadonlyMap<number, readonly PullRequestCheck[]> = new Map([
 ]);
 
 /** A comment or a review on one of them, `ago` before the fixture landed. */
-function entry(
-  number: number,
-  by: GitHubPerson,
-  body: string,
-  ago: number,
-  state?: (typeof REVIEW_STATE)[keyof typeof REVIEW_STATE],
-) {
+function entry(number: number, by: GitHubPerson, body: string, ago: number, state?: ReviewState) {
   const url = `${REPOSITORY_URL}/pull/${number}#${state === undefined ? "issuecomment" : "pullrequestreview"}-${ago}`;
   const at = LANDED - ago;
 

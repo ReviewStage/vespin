@@ -15,7 +15,7 @@
  * redirect is the loopback one the client registered.
  */
 
-import { SIGN_IN_FAILURE } from "@repo/features/words";
+import { SIGN_IN_FAILURE, type SignInFailure } from "@repo/features/words";
 import { Effect, Result } from "effect";
 import { Base64Url } from "effect/encoding";
 import type {
@@ -48,7 +48,7 @@ type PastedRead =
   | { readonly code: string }
   | {
       readonly reason: string;
-      readonly failure?: (typeof SIGN_IN_FAILURE)[keyof typeof SIGN_IN_FAILURE];
+      readonly failure?: SignInFailure;
     };
 
 function stateOf(prefix: string | undefined): string {
