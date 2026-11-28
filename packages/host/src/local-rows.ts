@@ -21,14 +21,27 @@
  *
  * The pool runs on without its store, so a failed write is logged and
  * left, and a failed load answers none, so the read waits on the service.
+ *
+ * A load parses its rows a slice at a time (`LOAD_SLICE_CHARACTERS`),
+ * yielding to the event loop between slices, because the Mac's host runs on
+ * Electron's main process over `node:sqlite`'s synchronous calls: a busy
+ * account's kept Inbox is some 19 MB of JSON, and read and parsed in one go
+ * it held main's loop for over half a second at launch.
  */
 
 import type { KeptAnswer, KeptLoad, KeptName, RowsStore } from "@repo/sync";
-import { Effect, Schema } from "effect";
-import type { LocalDatabaseConnection } from "./local-database.js";
+import { Effect, Predicate, Schema } from "effect";
+import type { LocalDatabaseConnection, LocalDatabaseStatement } from "./local-database.js";
 
 /** The workspace a read that names none is kept under. */
 const NO_WORKSPACE = "";
+
+/**
+ * About how many characters of kept rows' JSON a load reads and parses
+ * before it yields to the event loop: some 2 ms of work on a Mac, so no
+ * launch holds main's loop past its budget however much is kept.
+ */
+const LOAD_SLICE_CHARACTERS = 512_000;
 
 /** A `held` row as a write compares it. */
 const heldRowSchema = Schema.Struct({ key: Schema.String, position: Schema.Number });
@@ -36,8 +49,8 @@ const heldRowSchema = Schema.Struct({ key: Schema.String, position: Schema.Numbe
 /** The last place a read holds a key at, none where it holds none. */
 const lastPositionSchema = Schema.Struct({ last: Schema.NullOr(Schema.Number) });
 
-/** A `row` row's JSON, as a load reads it in held order, before it is parsed. */
-const loadedRowSchema = Schema.Struct({ row: Schema.String });
+/** A key a read holds, in held order, as a load reads it before its row. */
+const heldKeySchema = Schema.Struct({ kind: Schema.String, key: Schema.String });
 
 /** A `cursor` row's JSON, none where the read answered none. */
 const cursorRowSchema = Schema.Struct({
@@ -46,7 +59,7 @@ const cursorRowSchema = Schema.Struct({
 
 const decodeHeldRows = Schema.decodeUnknownSync(Schema.Array(heldRowSchema));
 const decodeLastPosition = Schema.decodeUnknownSync(Schema.Array(lastPositionSchema));
-const decodeLoadedRows = Schema.decodeUnknownSync(Schema.Array(loadedRowSchema));
+const decodeHeldKeys = Schema.decodeUnknownSync(Schema.Array(heldKeySchema));
 const decodeCursorRows = Schema.decodeUnknownSync(Schema.Array(cursorRowSchema));
 
 /** Runs `step` inside one immediate transaction, rolled back where it throws. */
@@ -162,8 +175,14 @@ function written(connection: LocalDatabaseConnection, answer: KeptAnswer): void 
   });
 }
 
-/** What `connection` holds of `name`: its rows in held order and its cursor; none where it never answered. */
-function loadedFrom(connection: LocalDatabaseConnection, name: KeptName): KeptLoad | undefined {
+/** What `connection` holds of `name` before its rows are read: the keys it holds in held order and its cursor; none where it never answered. */
+interface StoredRead {
+  readonly keys: readonly (typeof heldKeySchema.Type)[];
+  readonly cursor: unknown;
+}
+
+/** The keys and cursor `connection` holds of `name`, none where it never answered: small, so read in one go. */
+function storedOf(connection: LocalDatabaseConnection, name: KeptName): StoredRead | undefined {
   const workspace = name.workspace ?? NO_WORKSPACE;
 
   const [stored] = decodeCursorRows(
@@ -174,17 +193,71 @@ function loadedFrom(connection: LocalDatabaseConnection, name: KeptName): KeptLo
 
   if (stored === undefined) return undefined;
 
-  // Note that each row's JSON is parsed by `JSON.parse` itself rather than through a schema's, because a launch loads every kept row, thousands of them, and the schema's walk cost as much as the parse; a row that is no JSON throws as the schema's did.
-  const rows = decodeLoadedRows(
+  const keys = decodeHeldKeys(
     connection
-      .prepare(
-        "SELECT row.row AS row FROM held JOIN row ON row.kind = held.kind AND row.key = held.key WHERE held.read = ? AND held.workspace = ? ORDER BY held.position",
-      )
+      .prepare("SELECT kind, key FROM held WHERE read = ? AND workspace = ? ORDER BY position")
       .all(name.read, workspace),
-  ).map(({ row }) => JSON.parse(row));
+  );
 
-  return { rows, cursor: stored.cursor ?? undefined };
+  return { keys, cursor: stored.cursor ?? undefined };
 }
+
+/**
+ * The rows of `keys` from `from` on, each parsed onto `rows`, until a slice
+ * of `LOAD_SLICE_CHARACTERS` is parsed, answering where the next slice
+ * starts. A key with no row is passed over, as the held keys' join left it
+ * out. Note that each row's JSON is parsed by `JSON.parse` itself rather
+ * than through a schema's, because a launch loads every kept row, thousands
+ * of them, and the schema's walk cost as much as the parse.
+ */
+function sliceLoaded(
+  rowOf: LocalDatabaseStatement,
+  keys: StoredRead["keys"],
+  from: number,
+  rows: unknown[],
+): number {
+  let characters = 0;
+
+  for (let at = from; at < keys.length; at += 1) {
+    const held = keys[at];
+
+    if (held === undefined || characters >= LOAD_SLICE_CHARACTERS) return at;
+    const { kind, key } = held;
+    const text = rowOf.all(kind, key)[0]?.["row"];
+
+    if (text === undefined) continue;
+
+    if (!Predicate.isString(text)) throw new TypeError(`the kept row ${key} is not text`);
+    rows.push(JSON.parse(text));
+    characters += text.length;
+  }
+
+  return keys.length;
+}
+
+/** What `connection` holds of `name`, its rows in held order and its cursor, read a slice at a time; none where it never answered. */
+const loadedFrom = Effect.fnUntraced(function* (
+  connection: LocalDatabaseConnection,
+  name: KeptName,
+) {
+  const stored = yield* Effect.try(() => storedOf(connection, name));
+
+  if (stored === undefined) return undefined;
+  const rowOf = yield* Effect.try(() =>
+    connection.prepare("SELECT row FROM row WHERE kind = ? AND key = ?"),
+  );
+  const rows: unknown[] = [];
+  let at = 0;
+
+  while (at < stored.keys.length) {
+    // Note that the loop yields before every slice but the first, so the event loop runs between them.
+    if (at > 0) yield* Effect.yieldNow;
+    const from = at;
+    at = yield* Effect.try(() => sliceLoaded(rowOf, stored.keys, from, rows));
+  }
+
+  return { rows, cursor: stored.cursor } satisfies KeptLoad;
+});
 
 /** The pool's rows store over the account's open database. */
 export function localRows(connection: LocalDatabaseConnection): RowsStore {
@@ -196,7 +269,7 @@ export function localRows(connection: LocalDatabaseConnection): RowsStore {
         ),
       ),
     loaded: (name) =>
-      Effect.try(() => loadedFrom(connection, name)).pipe(
+      loadedFrom(connection, name).pipe(
         Effect.catch((failure) =>
           Effect.as(
             Effect.logWarning(`the local rows of ${name.read} were not loaded: ${failure._tag}`),

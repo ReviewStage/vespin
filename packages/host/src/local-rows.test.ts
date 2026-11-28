@@ -4,7 +4,7 @@ import { NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import type { KeptAnswer } from "@repo/sync";
-import { Effect, Layer } from "effect";
+import { Effect, Fiber, Layer } from "effect";
 import { openLocalDatabase } from "./local-database.js";
 import { localRows } from "./local-rows.js";
 import { nodeSqliteDriverLayer } from "./node/index.js";
@@ -103,4 +103,46 @@ it.effect("keeps a row two reads hold as one lets it go, and deletes it once nei
 
     assert.deepEqual((yield* rows.loaded(sidebar))?.rows, []);
   }).pipe(Effect.scoped, Effect.provide(platform)),
+);
+
+it.effect(
+  "loads a large keep a slice at a time, so other work runs before it is read back whole",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped();
+      // Note that the rows come to some 1.5 MB of JSON, several slices' worth, as a busy account's Inbox is many.
+      const kept = Array.from({ length: 150 }, (_, at) => ({
+        id: `p${at}`,
+        name: "x".repeat(10_000),
+      }));
+
+      const order: string[] = [];
+
+      const loaded = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const rows = localRows(yield* openLocalDatabase(root, ACCOUNT));
+
+          yield* rows.answered(
+            answer("inbox", {
+              upserted: kept.map((row) => ({ key: row.id, row })),
+              held: { every: kept.map((row) => row.id) },
+              cursor: { syncId: "7" },
+            }),
+          );
+
+          const loading = yield* Effect.forkChild(
+            Effect.tap(rows.loaded({ read: "inbox", kind: "plan", workspace: "w1" }), () =>
+              Effect.sync(() => order.push("loaded")),
+            ),
+          );
+
+          yield* Effect.forkChild(Effect.sync(() => order.push("other")));
+
+          return yield* Fiber.join(loading);
+        }),
+      );
+
+      assert.deepEqual(order, ["other", "loaded"], "the load yields between its slices");
+      assert.deepEqual(loaded, { rows: kept, cursor: { syncId: "7" } });
+    }).pipe(Effect.scoped, Effect.provide(platform)),
 );
