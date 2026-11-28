@@ -716,7 +716,7 @@
 
 /* Round six: playful scenes. Motion plays once as the page opens (data-play), then only a doze and an ask keep moving. */
 .fun-scene {
-  padding: 8px 0 24px;
+  padding: 0 0 16px;
 }
 .fun-name {
   font-size: 12px;
@@ -788,6 +788,9 @@
 .fun-garden {
   position: relative;
   padding-top: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .fun-garden-row {
   display: flex;
@@ -987,6 +990,9 @@
 /* City */
 .fun-city {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   border-radius: 16px;
   overflow: hidden;
   padding: 56px 24px 0;
@@ -1041,7 +1047,7 @@
   background: color-mix(in oklab, var(--fun-ink) 30%, #1b1f33);
 }
 .fun-window {
-  height: 30px;
+  height: auto;
   border-radius: 3px;
   background: color-mix(in oklab, var(--ui-color-text) 55%, transparent);
 }
@@ -1149,7 +1155,7 @@
     gap: 4px;
   }
   .fun-window {
-    height: 13px;
+    height: auto;
   }
   .fun-moon {
     right: 16px;
@@ -1157,4 +1163,7 @@
     width: 28px;
     height: 28px;
   }
+}
+.fun-garden-stage {
+  position: relative;
 }

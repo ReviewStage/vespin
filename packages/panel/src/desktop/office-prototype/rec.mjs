@@ -15,6 +15,7 @@ await p.goto(url, { waitUntil: "networkidle", timeout: 150000 });
 await p.waitForSelector(".fun-scene", { timeout: 150000 });
 await p.addStyleTag({ content: ".ui-toast-stack{display:none!important}" });
 await p.waitForTimeout(2500);
+const box = +w < 700 ? null : await p.locator("[aria-label=Home]").boundingBox();
 const t0 = (Date.now() - start) / 1000;
 await p.evaluate(() => window.replayScene());
 await p.waitForTimeout(+seconds * 1000 + 400);
@@ -32,6 +33,12 @@ execFileSync("ffmpeg", [
   raw,
   "-t",
   seconds,
+  ...(box
+    ? [
+        "-vf",
+        `crop=${Math.round(box.width / 2) * 2}:${Math.round(box.height / 2) * 2}:${Math.round(box.x)}:${Math.round(box.y)}`,
+      ]
+    : []),
   "-c:v",
   "libvpx-vp9",
   "-b:v",

@@ -35,6 +35,13 @@ function moodOf(m: GoalManager): Mood {
 
 const PHONE = typeof window !== "undefined" && window.innerWidth < 700;
 
+/** The room the scene has under the page's title, so it fills the pane rather than its top. */
+const ROOM_H =
+  typeof window === "undefined" ? 700 : Math.max(420, window.innerHeight - (PHONE ? 220 : 170));
+/** The pane's width beside the sidebar, which the city's buildings share. */
+const ROOM_W =
+  typeof window === "undefined" ? 1100 : PHONE ? window.innerWidth - 48 : window.innerWidth - 330;
+
 /** Plays the scene's opening once it is on screen, as a reader arriving would see it. */
 function usePlay(): boolean {
   const [play, setPlay] = useState(false);
@@ -71,7 +78,7 @@ function Face({ m, size }: { m: GoalManager; size: ManagerFaceSize }): React.JSX
 
 /* ---------- Garden ---------- */
 
-const PLANT_H = PHONE ? 150 : 290;
+const PLANT_H = PHONE ? 150 : Math.min(460, Math.max(220, ROOM_H - 230));
 
 /** A plant growing out of a Manager's head: a leaf per step done, the new ones sprouting as you look, a bud where its goal is. */
 function Plant({ m }: { m: GoalManager }): React.JSX.Element {
@@ -140,13 +147,15 @@ function Plant({ m }: { m: GoalManager }): React.JSX.Element {
 
 function Garden(): React.JSX.Element {
   return (
-    <div className="fun-garden">
-      <div className="fun-garden-row">
-        {TEAM.map((m) => (
-          <Plant key={m.id} m={m} />
-        ))}
+    <div className="fun-garden" style={{ minHeight: ROOM_H }}>
+      <div className="fun-garden-stage">
+        <div className="fun-garden-row">
+          {TEAM.map((m) => (
+            <Plant key={m.id} m={m} />
+          ))}
+        </div>
+        <div className="fun-garden-sill" />
       </div>
-      <div className="fun-garden-sill" />
     </div>
   );
 }
@@ -272,7 +281,10 @@ function Track(): React.JSX.Element {
 
 /* ---------- City ---------- */
 
-const FLOOR = PHONE ? 14 : 30;
+const FLOOR = PHONE ? 14 : Math.max(24, Math.min(46, Math.floor((ROOM_W - 260 - 72) / 20)));
+const FLOOR_H = PHONE
+  ? 13
+  : Math.max(24, Math.min(72, Math.floor((ROOM_H - 56 - 30 - 130) / 6) - 6));
 
 /** A Manager's building: a lit window per step done, the new ones switching on as you look, dark ones still to build. */
 function Building({ m, i }: { m: GoalManager; i: number }): React.JSX.Element {
@@ -297,7 +309,8 @@ function Building({ m, i }: { m: GoalManager; i: number }): React.JSX.Element {
         className="fun-tower"
         style={{
           gridTemplateColumns: `repeat(${cols}, ${FLOOR}px)`,
-          minHeight: floors * (FLOOR + 6),
+          minHeight: floors * (FLOOR_H + 6),
+          gridAutoRows: `${FLOOR_H}px`,
         }}
       >
         {Array.from({ length: m.total }, (_, k) => {
@@ -323,7 +336,7 @@ function Building({ m, i }: { m: GoalManager; i: number }): React.JSX.Element {
 
 function City(): React.JSX.Element {
   return (
-    <div className="fun-city">
+    <div className="fun-city" style={{ minHeight: ROOM_H }}>
       <span className="fun-moon" aria-hidden="true" />
       <div className="fun-city-row">
         {TEAM.map((m, i) => (
