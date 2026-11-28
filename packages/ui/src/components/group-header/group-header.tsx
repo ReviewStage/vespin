@@ -257,9 +257,16 @@ const LEAD_INSET = {
   [GROUP_LOOK.BAND]: "ps-list-inset pe-row-inset",
 } as const satisfies Record<GroupLook, string>;
 
-/** A band's ground and its label's ink and weight, standing over its rows as their section's head. */
+/**
+ * A band's ground and its label's ink and weight, standing over its rows as
+ * their section's head. Note that a band that folds wears the row's hover on
+ * its lead, over its own ground, rather than in its ground's place, because
+ * the hover's fill is translucent and a band that sticks would show the rows
+ * scrolling beneath it through.
+ */
 const BAND = {
   HEAD: "bg-well",
+  LEAD_PRESSED: "hover:bg-muted",
   LABEL: "font-ui-semibold text-foreground",
 } as const;
 
@@ -643,7 +650,7 @@ export function GroupHeader({
   const control = folds ? (
     <button
       type="button"
-      className={`${leadBox} ${PRESSED_AS_ROW.LEAD}`}
+      className={`${leadBox} ${PRESSED_AS_ROW.LEAD} ${band ? BAND.LEAD_PRESSED : ""}`}
       aria-expanded={state.open}
       aria-controls={rows ? rowsId : undefined}
       onClick={state.toggle}
@@ -693,7 +700,7 @@ export function GroupHeader({
           <div
             className={[
               HEAD,
-              folds ? PRESSED_AS_ROW.HEAD : "",
+              folds && !band ? PRESSED_AS_ROW.HEAD : "",
               head === GROUP_HEAD.STICKS ? (band ? STICKS_BAND : STICKS) : "",
               band ? BAND.HEAD : "",
               subgrid ? SUBGRID.HEAD : "",
