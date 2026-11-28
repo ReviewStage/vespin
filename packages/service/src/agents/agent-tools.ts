@@ -141,7 +141,7 @@ import {
   type ImageForwarder,
 } from "./coder-host/forwarded-images.js";
 import { agentPublishedUnwritten } from "./coder-host/published.js";
-import { callEntry, cutText, lineWords, senderName } from "./coder-host/replay.js";
+import { callEntry, lineWords, senderName } from "./coder-host/replay.js";
 import type { SummaryModelOf } from "./coder-host/replay-summary.js";
 import {
   accountModelChoices,
@@ -171,6 +171,7 @@ import {
   writeTaskBlocks,
 } from "./task-block-changes.js";
 import { TASK_REF_INPUT, TASK_REF_WORDS, taskIdOfInput } from "./task-ref.js";
+import { cutText } from "./text-cut.js";
 import {
   AGENT_LIST_INPUT,
   type AgentTask,
