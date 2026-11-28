@@ -33,6 +33,7 @@ import {
   REVIEW_DECISION,
   REVIEW_STATE,
   type ReviewState,
+  type ReviewThread,
 } from "@repo/features/agent-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -396,6 +397,38 @@ const EXPIRY_THREAD = {
   more: 0,
 } as const;
 
+/** The review bot's thread on the ready pull request's resend, on the line that renews an expired invitation, so a file's diff stands a thread under its line. */
+const RESEND_THREAD = {
+  path: "src/invites/resend.ts",
+  line: 16,
+  startLine: null,
+  originalLine: 16,
+  originalStartLine: null,
+  side: DIFF_SIDE.RIGHT,
+  startSide: null,
+  diffHunk: "",
+  resolved: false,
+  outdated: false,
+  comments: [
+    {
+      by: REVIEW_BOT,
+      html: "<p>Should a renewed invite keep its original sender?</p>",
+      body: "Should a renewed invite keep its original sender?",
+      at: LANDED - 30 * MINUTE,
+      url: `${REPOSITORY_URL}/pull/128#discussion_r1701`,
+    },
+    {
+      by: ADA,
+      html: "<p>Yes, kept as is.</p>",
+      body: "Yes, kept as is.",
+      at: LANDED - 25 * MINUTE,
+      url: `${REPOSITORY_URL}/pull/128#discussion_r1702`,
+    },
+  ],
+  more: 0,
+  id: "PRRT_resend",
+} satisfies ReviewThread;
+
 /** Each one's conversation: where its reviewers stand, and its comments and reviews, oldest first. */
 const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerView> = new Map([
   [
@@ -407,13 +440,16 @@ const CONVERSATIONS: ReadonlyMap<number, RepositoryOverviewConversationAnswerVie
           { by: REVIEW_BOT, state: REVIEW_STATE.COMMENTED },
         ],
         conversation: [
-          entry(
-            128,
-            REVIEW_BOT,
-            "One note on the expiry check; the rest reads well.",
-            30 * MINUTE,
-            REVIEW_STATE.COMMENTED,
-          ),
+          {
+            ...entry(
+              128,
+              REVIEW_BOT,
+              "One note on the expiry check; the rest reads well.",
+              30 * MINUTE,
+              REVIEW_STATE.COMMENTED,
+            ),
+            threads: [RESEND_THREAD],
+          },
           entry(
             128,
             GRACE,

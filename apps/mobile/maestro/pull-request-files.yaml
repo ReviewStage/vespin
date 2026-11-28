@@ -1,4 +1,4 @@
-# pull-request-files.yaml -- a pull request's Files changed: opened from its page's Files changed row, one list of its files in the tree's order, each with its letter, lines, and folder under its name, a search by path narrowing them, and a file's diff on its own screen, stepping to the next file, and the 5,000-line generated file shown from its fold.
+# pull-request-files.yaml -- a pull request's Files changed: opened from its page's Files changed row, one list of its files in the tree's order, each with its letter, lines, and folder under its name, a search by path narrowing them, and a file's diff on its own screen, stepping to the next file, the 5,000-line generated file shown from its fold, and a review thread under its line opened whole.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -109,3 +109,20 @@ env:
     duration: 200
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-diff-long
+# A review thread stands as a card under the line it is on, and a press on
+# it opens the thread whole, each comment with its writer.
+- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128/file?path=src%2Finvites%2Fresend.ts"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: ".*Should a renewed invite keep its original sender.*"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-diff-thread
+- tapOn: ".*Should a renewed invite keep its original sender.*"
+- extendedWaitUntil:
+    visible: "Yes, kept as is."
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-thread
