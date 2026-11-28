@@ -40,6 +40,7 @@ import type { InboxRoute } from "../inbox-route.js";
 import { inboxItemsQuery, workspaceMembersQuery } from "../live-reads.js";
 import type { RouteAccess } from "../route-gates.js";
 import { useTaskListCollections } from "../task-list-collections.js";
+import { usePlainLinkNames } from "../tasks/use-link-standing.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import type { HistoryRows } from "./history-rows.js";
 import { placeParamsOf } from "./place-params.js";
@@ -777,6 +778,7 @@ export function useStepNames(input: {
     .data?.members;
 
   const queryClient = useQueryClient();
+  const links = usePlainLinkNames();
 
   // The first line of the thread an Inbox item's id names, as the account's items read now; none where they hold no such item.
   const itemTitle = (itemId: string) => {
@@ -784,7 +786,7 @@ export function useStepNames(input: {
     const tasksItems = fed === undefined ? [] : Object.values(fed[INBOX_SCOPE_KIND.TASK]);
     const item = tasksItems.flat().find((each) => each.id === itemId);
 
-    return item === undefined ? undefined : cardTitle(item.title);
+    return item === undefined ? undefined : cardTitle(item.title, links);
   };
 
   // The task an Inbox item is of, by the item's id, where a door chose it.
