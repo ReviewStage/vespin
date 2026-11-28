@@ -248,6 +248,8 @@ export const GLYPH = {
   ADD_SECTION: system("folder.badge.plus"),
   REMOVE_FROM_SECTION: system("folder.badge.minus"),
   /** A section's Change icon and Add icon, the panel's Lucide SmilePlus, which the catalog's Lucide names FaceSlightlySmilingPlus, among every glyph it holds. */
+  /** A Manager, as the desktop's Managers head wears it (`GLYPH.MANAGER`). */
+  MANAGER: catalogLucide("BriefcaseBusiness"),
   CHANGE_ICON: catalogLucide("FaceSlightlySmilingPlus"),
   /** A section's icon's Color, the colors its glyph may wear, Lucide's Palette, among every glyph the catalog holds. */
   ICON_COLOR: catalogLucide("Palette"),

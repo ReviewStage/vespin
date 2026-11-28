@@ -19,10 +19,16 @@ import { AGENT_KIND, type ListedAgent } from "@repo/features/agent-wire";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { agentName } from "@repo/features/model-label";
 import type { ModelChoice } from "@repo/features/models-wire";
+import type { PinPlace } from "@repo/features/pin-order";
 import { READ_MARK, type ReadMark, unreadThroughOf } from "@repo/features/read-mark";
-import { NO_TASK_SECTIONS, sectionedTasks } from "@repo/features/task-sections-model";
+import {
+  NO_TASK_SECTIONS,
+  sectionEntries,
+  sectionedTasks,
+} from "@repo/features/task-sections-model";
 import type { TaskAgentPin } from "@repo/features/task-wire";
 import {
+  type PlacedManager,
   pinnedManagersOf,
   sortedManagers,
   workspaceManagersOf,
@@ -139,12 +145,22 @@ function openedStay(agentId: string | undefined, mark: ChatMarkRead | undefined)
   };
 }
 
+/** Where a section's entry stands among its rows, as the sidebar places it. */
+function entryPlace(entry: {
+  readonly position?: string | undefined;
+  readonly addedAt: number;
+}): PinPlace {
+  return { position: entry.position, at: entry.addedAt };
+}
+
 /** Where the reader placed a workspace's Managers: those pinned, those kept in each of their sections, and the rest. */
 export interface PlacedManagers {
-  /** The pinned ones, in the order Pinned stands its pins. */
-  readonly pinned: readonly ListedAgent[];
-  /** Each section's, by the section's id, in the section's order. */
-  readonly bySection: ReadonlyMap<string, readonly ListedAgent[]>;
+  /** The pinned ones, each where its pin stands, in the order Pinned stands its pins. */
+  readonly pinned: readonly PlacedManager<ListedAgent>[];
+  /** Each section's, by the section's id, each where its entry stands, in the section's order. */
+  readonly bySection: ReadonlyMap<string, readonly PlacedManager<ListedAgent>[]>;
+  /** Where each task stands in its section, by the task's id, which places a section's Managers among its tasks. */
+  readonly sectionPlaces: ReadonlyMap<string, PinPlace>;
   /** Those neither pinned nor in a section, which the Managers group lists. */
   readonly rest: readonly ListedAgent[];
 }
@@ -171,8 +187,8 @@ export function usePlacedManagers(
   });
 
   return useMemo(() => {
-    const pinned = pinnedManagersOf(managers, pins).map(({ agent }) => agent);
-    const pinnedIds = new Set(pinned.map(({ id }) => id));
+    const pinned = pinnedManagersOf(managers, pins);
+    const pinnedIds = new Set(pinned.map(({ agent }) => agent.id));
     const unpinned = managers.filter(({ id }) => !pinnedIds.has(id));
     const sectioned = sectionedTasks(sections, workspaceId, [], unpinned);
 
@@ -181,8 +197,11 @@ export function usePlacedManagers(
       bySection: new Map(
         sectioned.sections.map((drawn) => [
           drawn.section.id,
-          drawn.managers.map(({ agent }) => agent),
+          drawn.managers.map(({ agent, entry }) => ({ agent, place: entryPlace(entry) })),
         ]),
+      ),
+      sectionPlaces: new Map(
+        [...sectionEntries(sections)].map(([taskId, entry]) => [taskId, entryPlace(entry)]),
       ),
       rest: unpinned.filter(({ id }) => !sectioned.agentIds.has(id)),
     };

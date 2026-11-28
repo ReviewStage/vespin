@@ -145,3 +145,79 @@ export function pinnedManagersOf<Agent extends AgentSummary>(
 
   return inPinOrder(pinned, (each) => each.place);
 }
+
+/** What a run of a group's rows is: task rows, or one Manager. */
+export const PLACED_RUN = {
+  ROWS: "rows",
+  MANAGER: "manager",
+} as const;
+
+/** A run of a group's rows: consecutive task rows, each top row with the rows under it, or one Manager. */
+export type PlacedRun<Row, Agent> =
+  | { readonly kind: typeof PLACED_RUN.ROWS; readonly rows: readonly Row[] }
+  | { readonly kind: typeof PLACED_RUN.MANAGER; readonly agent: Agent };
+
+/** A Manager a group holds, and where it stands among the group's tasks. */
+export interface PlacedManager<Agent> {
+  readonly agent: Agent;
+  readonly place: PinPlace;
+}
+
+/**
+ * A group's rows with its Managers standing among its tasks in the one order
+ * of their places, as the desktop's Pinned mixes pinned Managers among its
+ * pins and a section mixes the Managers it keeps among its tasks
+ * (`sidebar-entries.tsx`): each top task row, with the rows under it, at
+ * `placeOf` its task, each Manager at its own place. A top row `placeOf`
+ * places nowhere keeps its place after the ones placed, in the group's order.
+ */
+export function managersAmongRows<
+  Row extends { readonly depth: number; readonly task: { readonly id: string } },
+  Agent,
+>(
+  rows: readonly Row[],
+  managers: readonly PlacedManager<Agent>[],
+  placeOf: (taskId: string) => PinPlace | undefined,
+): PlacedRun<Row, Agent>[] {
+  type Item =
+    | { readonly rows: readonly Row[]; readonly place: PinPlace | undefined }
+    | { readonly agent: Agent; readonly place: PinPlace };
+
+  const tops: Row[][] = [];
+
+  for (const row of rows) {
+    const last = tops.at(-1);
+
+    if (row.depth === 0 || last === undefined) tops.push([row]);
+    else last.push(row);
+  }
+
+  const taskItems: Item[] = tops.map((top) => ({
+    rows: top,
+    place: top[0] === undefined ? undefined : placeOf(top[0].task.id),
+  }));
+
+  const placed = (item: Item): item is Item & { readonly place: PinPlace } =>
+    item.place !== undefined;
+
+  const ordered: Item[] = [
+    ...inPinOrder(
+      [...taskItems.filter(placed), ...managers.map((each) => ({ ...each }))],
+      (item) => item.place,
+    ),
+    ...taskItems.filter((item) => !placed(item)),
+  ];
+
+  const runs: PlacedRun<Row, Agent>[] = [];
+
+  for (const item of ordered) {
+    const last = runs.at(-1);
+
+    if ("agent" in item) runs.push({ kind: PLACED_RUN.MANAGER, agent: item.agent });
+    else if (last?.kind === PLACED_RUN.ROWS)
+      runs[runs.length - 1] = { ...last, rows: [...last.rows, ...item.rows] };
+    else runs.push({ kind: PLACED_RUN.ROWS, rows: item.rows });
+  }
+
+  return runs;
+}

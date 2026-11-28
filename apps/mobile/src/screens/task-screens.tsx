@@ -37,6 +37,7 @@ import {
   taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
+import type { PinPlace } from "@repo/features/pin-order";
 import { SEARCH_FOUND_KIND } from "@repo/features/search-found-model";
 import {
   agentLastMovedAt,
@@ -131,6 +132,9 @@ import {
   MANAGER_SORT,
   MANAGER_SORT_WORDS,
   managerChatUnread,
+  managersAmongRows,
+  PLACED_RUN,
+  type PlacedManager,
 } from "@repo/features/workspace-managers-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
@@ -1520,7 +1524,10 @@ function groupAdd(
 }
 
 /** No Manager in a group, the same array every render. */
-const NO_LISTED_MANAGERS: readonly ListedAgent[] = [];
+const NO_PLACED_MANAGERS: readonly PlacedManager<ListedAgent>[] = [];
+
+/** No task placed: a group whose tasks no Manager stands among. */
+const NO_PLACE = (): PinPlace | undefined => undefined;
 
 /** Pinned holding no task, where only Managers are pinned. */
 const NO_PINNED_TASKS: TaskTreeGroup = {
@@ -1593,13 +1600,16 @@ function GroupSection({
   group,
   listing,
   hold,
-  managers = NO_LISTED_MANAGERS,
+  managers = NO_PLACED_MANAGERS,
+  placeOf = NO_PLACE,
 }: {
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
   readonly hold: TreeHold;
-  /** The Managers it holds after its tasks, Pinned's pinned and a section's kept there, each its Managers row; none elsewhere. */
-  readonly managers?: readonly ListedAgent[] | undefined;
+  /** The Managers it holds among its tasks, Pinned's pinned and a section's kept there, each its Managers row at its place; none elsewhere. */
+  readonly managers?: readonly PlacedManager<ListedAgent>[] | undefined;
+  /** Where a task of its stands among its Managers: its pin, or its entry in the section. */
+  readonly placeOf?: ((taskId: string) => PinPlace | undefined) | undefined;
 }) {
   const asking = useAgentRowAsk();
   const newTaskIn = useNewTaskIn();
@@ -1626,10 +1636,18 @@ function GroupSection({
       onDropLink={headed ? dropOnto(group, listing) : undefined}
       add={groupAdd(group, newTaskIn, newTaskInRepository)}
     >
-      <FoldedRows rows={group.rows} listing={listing} parents={treeParents(hold)} />
-      {managers.map((agent) => (
-        <ManagerTaskRow key={agent.id} agent={agent} asking={asking} />
-      ))}
+      {managersAmongRows(group.rows, managers, placeOf).map((run) =>
+        run.kind === PLACED_RUN.MANAGER ? (
+          <ManagerTaskRow key={run.agent.id} agent={run.agent} asking={asking} />
+        ) : (
+          <FoldedRows
+            key={run.rows[0]?.task.id}
+            rows={run.rows}
+            listing={listing}
+            parents={treeParents(hold)}
+          />
+        ),
+      )}
     </ListSection>
   );
 }
@@ -1789,6 +1807,13 @@ function TreeSections({
   const myTasksFolded = underMyTasksAny && hold.tasksFolded;
   // Note that a Manager pinned stands Pinned even where no task is pinned, as the panel's Pinned stands once anything is.
   const pinned = tree.pinned ?? (placed.pinned.length > 0 ? NO_PINNED_TASKS : undefined);
+  const pinnedTasks = new Map(pinned?.rows.map(({ task }) => [task.id, task]));
+
+  const pinPlaceOf = (taskId: string): PinPlace | undefined => {
+    const task = pinnedTasks.get(taskId);
+
+    return task === undefined ? undefined : { position: task.pinPosition, at: task.pinnedAt ?? 0 };
+  };
 
   return (
     <>
@@ -1799,7 +1824,13 @@ function TreeSections({
         hold={hold}
       />
       {pinned === undefined ? null : (
-        <GroupSection group={pinned} listing={listing} hold={hold} managers={placed.pinned} />
+        <GroupSection
+          group={pinned}
+          listing={listing}
+          hold={hold}
+          managers={placed.pinned}
+          placeOf={pinPlaceOf}
+        />
       )}
       {tree.following === undefined ? null : (
         <GroupSection group={tree.following} listing={listing} hold={hold} />
@@ -1819,6 +1850,7 @@ function TreeSections({
               listing={listing}
               hold={hold}
               managers={sectionManagers(group)}
+              placeOf={(taskId) => placed.sectionPlaces.get(taskId)}
             />
           ))}
     </>
@@ -1881,6 +1913,7 @@ function ManagersSection({
   return (
     <ListSection
       title={MANAGERS_WORDS.HEAD}
+      glyph={GLYPH.MANAGER}
       count={managers.length}
       foldable={managers.length > 0}
       folded={hold.managersFolded}
