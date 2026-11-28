@@ -71,7 +71,9 @@ const BOLDER: Record<Weight, Weight> = {
  * `Font.custom` would scale it with Dynamic Type where the caller already
  * scaled it (a reviewer's badge on its disc), and so does a rounded or serif
  * design, a letter's avatar, since Geist has neither. Bold Text sets each
- * weight a step heavier (`BOLDER`), as it thickens the system's faces.
+ * weight a step heavier (`BOLDER`), as it thickens the system's faces; it is
+ * read as the modifier is built, and every host builds its content anew when
+ * it changes (`host.tsx`).
  */
 export function font(params: FontParams): ReturnType<typeof systemFont> {
   const { design, textStyle } = params;

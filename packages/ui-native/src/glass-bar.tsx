@@ -1,6 +1,6 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
-import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
+import { HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   frame,
@@ -20,6 +20,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Host } from "./host.js";
 import { KeyboardDockArea } from "./keyboard-dock.js";
 import { useColors } from "./tokens/colors.js";
 import { PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";

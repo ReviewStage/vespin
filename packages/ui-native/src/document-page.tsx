@@ -1,6 +1,6 @@
 // document-page.tsx -- a page a document is edited whole on, as Notion edits a page: its rich field filling the page, what went wrong over it, and the people and things an `@` offers docked over the keyboard.
 
-import { Host, VStack } from "@expo/ui/swift-ui";
+import { VStack } from "@expo/ui/swift-ui";
 import { layoutPriority, padding } from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode, Ref } from "react";
 import { StyleSheet, View } from "react-native";
@@ -21,6 +21,7 @@ import {
   useDockKeyboard,
   useDockRoom,
 } from "./glass-bar.js";
+import { Host } from "./host.js";
 import { ProblemLine } from "./problem-line.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";

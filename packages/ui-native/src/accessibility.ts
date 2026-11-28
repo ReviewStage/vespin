@@ -102,7 +102,7 @@ export function useBoldText(): boolean {
   return useSetting(SETTING.BOLD_TEXT);
 }
 
-/** Bold Text as it stands, for `font`, a modifier built outside a hook; a screen redraws on its change through `useBoldText`. */
+/** Bold Text as it stands, for `font`, a modifier built outside a hook; every SwiftUI host builds its content anew on a change (`host.tsx`). */
 export function boldTextOn(): boolean {
   return STORES[SETTING.BOLD_TEXT].peek();
 }

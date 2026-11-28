@@ -1,6 +1,6 @@
 // call.tsx -- a voice call into an agent as the phone draws it: what an agent's composer offers of calls (Talk, which the composer draws in Send's place), the call's presses there while the call is into that agent, and the slim way back to the call's agent from every other screen, over the tab bar.
 
-import { Host, HStack, Image, Spacer, Button as SwiftUIButton, VStack } from "@expo/ui/swift-ui";
+import { HStack, Image, Spacer, Button as SwiftUIButton, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHint,
@@ -18,6 +18,7 @@ import { StyleSheet } from "react-native";
 import { useScaledSize } from "./accessibility.js";
 import { font } from "./font.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { Host } from "./host.js";
 import { AgentTile } from "./marks.js";
 import { Text } from "./text.js";
 import { useColors } from "./tokens/colors.js";

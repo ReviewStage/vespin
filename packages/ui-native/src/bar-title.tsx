@@ -1,8 +1,9 @@
 // bar-title.tsx -- the muted line under a page's name in its stack's bar, such as an agent's state and model: UIKit's own subtitle, with a Manager's face before its name.
 
-import { Host, Spacer } from "@expo/ui/swift-ui";
+import { Spacer } from "@expo/ui/swift-ui";
 import type { ManagerFace } from "@repo/features/manager-face";
 import { StyleSheet } from "react-native";
+import { Host } from "./host.js";
 import { BAR_KIND, barSubtitle } from "./interactions.js";
 import { managerFaceAsset } from "./manager-face-look.js";
 

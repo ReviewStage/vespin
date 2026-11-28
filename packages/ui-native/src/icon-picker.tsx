@@ -4,7 +4,6 @@ import {
   BottomSheet,
   Form,
   Group,
-  Host,
   HStack,
   Image,
   NavigationStack,
@@ -36,6 +35,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useScaledSize } from "./accessibility.js";
+import { Host } from "./host.js";
 import { Text } from "./text.js";
 import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";

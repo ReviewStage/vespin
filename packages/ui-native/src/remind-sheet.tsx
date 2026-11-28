@@ -5,7 +5,6 @@ import {
   DatePicker,
   Form,
   Group,
-  Host,
   NavigationStack,
   Button as SwiftUIButton,
   Toolbar,
@@ -25,6 +24,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import { useEffect, useState } from "react";
+import { Host } from "./host.js";
 import { useColors } from "./tokens/colors.js";
 
 /** What closes the sheet without setting a time, and what sets the one picked. */

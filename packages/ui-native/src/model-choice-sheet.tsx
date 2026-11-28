@@ -4,7 +4,6 @@ import {
   BottomSheet,
   Form,
   Group,
-  Host,
   NavigationStack,
   Popover,
   Section,
@@ -29,6 +28,7 @@ import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import type { ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { MenuPickRow } from "./form-rows.js";
+import { Host } from "./host.js";
 import { HarnessMark } from "./marks.js";
 import { FOOTER_TONE, SectionFooter } from "./row-list.js";
 import { type PickOption, PickRows, ToggleRow } from "./settings-form.js";

@@ -2,7 +2,6 @@
 
 import {
   Divider,
-  Host,
   HStack,
   Image,
   Menu,
@@ -52,6 +51,7 @@ import { font } from "./font.js";
 import { GlassDock } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
+import { Host } from "./host.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
 import { RepositoryPicture } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";

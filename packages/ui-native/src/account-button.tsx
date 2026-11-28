@@ -1,7 +1,8 @@
 // account-button.tsx -- the signed-in account's photo at the leading edge of a tab's bar, the button that opens Settings.
 
-import { Host, Button as SwiftUIButton } from "@expo/ui/swift-ui";
+import { Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import { accessibilityLabel, buttonStyle } from "@expo/ui/swift-ui/modifiers";
+import { Host } from "./host.js";
 import { Avatar } from "./marks.js";
 import { MARK_SIZE } from "./tokens/space.js";
 
