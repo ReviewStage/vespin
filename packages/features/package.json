@@ -125,7 +125,6 @@
     "./agent-runtime-models": "./src/agent-runtime-models.js",
     "./agent-tools": "./src/agent-tools.js",
     "./workspace-managers-model": "./src/workspace-managers-model.js",
-    "./workspace-tools-model": "./src/workspace-tools-model.js",
     "./workspace-tools-wire": "./src/workspace-tools-wire.js",
     "./agent-move-model": "./src/agent-move-model.js",
     "./agent-continue-model": "./src/agent-continue-model.js",
