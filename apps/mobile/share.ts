@@ -5,7 +5,11 @@
 // and none of the app's router, host, notifications, or crash reports.
 
 import "./src/host/polyfills.js";
-import { AppRegistry } from "react-native";
+import { Appearance, AppRegistry } from "react-native";
+import { shareExtensionModule } from "./src/share/share-extension-module.js";
 import { ShareExtensionPage } from "./src/share/share-extension-page.js";
+
+// Note that the page's first frame is drawn in the sheet's appearance, which React Native cannot read in an extension, and the extension's Swift tells it every change after.
+Appearance.setColorScheme(shareExtensionModule.colorScheme());
 
 AppRegistry.registerComponent("ShareExtension", () => ShareExtensionPage);

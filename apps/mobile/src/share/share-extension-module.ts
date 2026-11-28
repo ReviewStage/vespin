@@ -18,6 +18,8 @@ type ShareExtensionEvents = {
 };
 
 declare class ShareExtensionModule extends NativeModule<ShareExtensionEvents> {
+  /** The appearance the sheet stands in, which the page's first frame is drawn in. */
+  colorScheme(): "light" | "dark";
   /** The extension's version, which names it on every call, as the app's names the app. */
   readonly appVersion: string;
   /** What another app shared, once the extension has read it. */

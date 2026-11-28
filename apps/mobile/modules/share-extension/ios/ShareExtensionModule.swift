@@ -40,6 +40,8 @@ public enum ShareExtensionBridge {
   public static weak var host: ShareExtensionHost?
   /// Posted with `text` in its user info as the bar's search field changes.
   public static let searched = Notification.Name("dev.vespin.ios.share.searched")
+  /// The appearance the sheet stands in, `light` or `dark`, which the controller sets before the page starts, so its first frame is drawn in it.
+  nonisolated(unsafe) public static var colorScheme = "light"
 }
 
 public final class ShareExtensionModule: Module {
@@ -50,6 +52,11 @@ public final class ShareExtensionModule: Module {
 
     Constant("appVersion") {
       Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+    }
+
+    // Note that this is read as the page's bundle loads, before its first frame, since an extension has no key window for React Native to read the appearance from.
+    Function("colorScheme") { () -> String in
+      ShareExtensionBridge.colorScheme
     }
 
     Events("onSearch")

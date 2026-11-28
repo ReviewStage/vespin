@@ -22,6 +22,10 @@ internal import Expo
 /// How tall the sheet asks to stand on an iPad, in points: the places to tick over the composer, rather than a form sheet's default.
 private let padSheetHeight: CGFloat = 640
 
+/// React Native's notice of a change of appearance and the key its traits ride under (`RCTConstants.h`), which its `Appearance` module reads the color scheme from.
+private let appearanceChanged = Notification.Name("RCTUserInterfaceStyleDidChangeNotification")
+private let appearanceTraitsKey = "traitCollection"
+
 /// The name the extension's JavaScript registers its page under (`share.ts`).
 private let pageModuleName = "ShareExtension"
 
@@ -52,6 +56,11 @@ final class ShareViewController: UIViewController, ShareExtensionHost, UISearchR
       preferredContentSize = CGSize(width: preferredContentSize.width, height: padSheetHeight)
     }
     ShareExtensionBridge.host = self
+    ShareExtensionBridge.colorScheme = Self.colorScheme(of: UIScreen.main.traitCollection)
+    // Note that React Native follows the sheet's appearance from here on, since it would read it from a key window an extension never has.
+    registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _: UITraitCollection) in
+      self.tellAppearance()
+    }
     let inputs = (extensionContext?.inputItems as? [NSExtensionItem]) ?? []
     items = Task { await SharedItems.read(inputs) }
     standPage()
@@ -145,6 +154,19 @@ final class ShareViewController: UIViewController, ShareExtensionHost, UISearchR
 
   func drawn() {
     gate.drawn()
+    tellAppearance()
+  }
+
+  /// Hands React Native's appearance the sheet's own, as its root view would on a change, so the page's colors follow the sheet's light or dark.
+  private func tellAppearance() {
+    ShareExtensionBridge.colorScheme = Self.colorScheme(of: view.traitCollection)
+    NotificationCenter.default.post(
+      name: appearanceChanged, object: self, userInfo: [appearanceTraitsKey: view.traitCollection])
+  }
+
+  /// `traits`' appearance as React Native names it.
+  private static func colorScheme(of traits: UITraitCollection) -> String {
+    traits.userInterfaceStyle == .dark ? "dark" : "light"
   }
 
   func finish() {
