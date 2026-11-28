@@ -15,9 +15,9 @@
  * clears the other: a run of rows a settled task may stand in at its end
  * (`onRunEnd`), and a view that draws no such row at all, as a filter none of
  * the pages read so far matches, which has no run to come to its end
- * (`onDrawn`). Either, heard while a page is out, reads the next once it
- * lands, since a page that draws no row the view shows moves nothing that
- * would tell it again.
+ * (`onDrawn`). Either, heard while a page is out, or before the first went
+ * out, reads the next once it lands, since a page that draws no row the view
+ * shows moves nothing that would tell it again.
  *
  * What was read stands in the list for the session, so the paging reads a
  * workspace's first page again only as the list comes back to it. A page the
@@ -65,8 +65,9 @@ export interface SettledPaging extends SettledPages {
 /** A list's paging of its settled rows, each page asked through `ask`, a failure or a throw read as a page the service did not answer. */
 export function settledPaging<Cursor>(ask: SettledPageAsk<Cursor>): SettledPaging {
   let paging: ScopePaging<Cursor> | undefined;
-  // Note that the view tells what it draws before its list starts paging, as a child's effect runs before its parent's, so it is kept apart from any one scope's paging.
+  // Note that the view tells what it draws, and whether a run stands at its end, before its list starts paging, as a child's effect runs before its parent's, so both are kept apart from any one scope's paging.
   let drawsNone = false;
+  let atEnd = false;
 
   // A page asked, its answer kept only while the list still pages the scope that asked.
   const read = (held: ScopePaging<Cursor>): void => {
@@ -111,20 +112,23 @@ export function settledPaging<Cursor>(ask: SettledPageAsk<Cursor>): SettledPagin
 
     paging = held;
     read(held);
+    // Note that a run's end told before the paging began stands while the first page is out, so a first page that draws nothing new, which tells it again nowhere, reads the next.
+    held.endWhileReading = atEnd;
   };
 
-  const onRunEnd = (atEnd: boolean): void => {
+  const onRunEnd = (end: boolean): void => {
+    atEnd = end;
     const held = paging;
 
     if (held === undefined) return;
 
     if (held.reading) {
-      held.endWhileReading = atEnd;
+      held.endWhileReading = end;
 
       return;
     }
 
-    if (atEnd) read(held);
+    if (end) read(held);
   };
 
   const onDrawn = (drawsSettled: boolean): void => {
