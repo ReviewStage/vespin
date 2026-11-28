@@ -230,6 +230,8 @@ export function OpenAskCard({
         // Note that a pick of several says so over its card, in the panel's words, since its round marks read as a pick of one until something is picked.
         title={ask.multiple === true ? askHeadWords(ask, undefined) : undefined}
         onChange={(choices) => onDraft(withPicks(draft, choices))}
+        repository={doors.repository}
+        onOpenLink={doors.openLink}
         none={
           cards
             ? {
