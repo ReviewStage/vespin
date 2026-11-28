@@ -3,8 +3,6 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
-env:
-  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, whose models and repositories are
 # staged and whose task start is answered with the task made and its agent
@@ -121,16 +119,16 @@ env:
 - extendedWaitUntil:
     notVisible: "Describe the task"
     timeout: 5000
-# The sheet's + menu's Photos opens the system's photo picker. Maestro may
-# read none of it, since XCTest's snapshot stops at its remote view, run out
-# of the app's process: always on an iPad, and now and then on an iPhone,
-# where a run has drawn the picker and read none of its words for half a
-# minute. So the picker is known by our own sheet's words going, which it
-# covers, and coming back once it closes unpicked; nothing in it is pressed
-# by name. A picture laid into the field as a pill is `pill-field.yaml`'s.
-# Note that the wait on the picker is long, because the picker's process
-# starts cold on a fresh simulator, which has taken a loaded runner thirteen
-# seconds.
+# The sheet's + menu's Photos opens the system's photo picker over it, run
+# out of the app's process. The picker is known by our own sheet's words
+# going, which it covers, and by its own "Select up to" line, and is shot.
+# On every device it is then closed unpicked by its own Cancel, the one
+# under that line, since the sheet's ✕ is heard as Cancel too, and its going
+# is asserted before the sheet's words come back. A picture laid into the field as a pill is
+# `pill-field.yaml`'s. Note that the waits on the picker are long, because
+# the picker's process starts cold on a fresh simulator, which has taken a
+# loaded runner thirteen seconds, and XCTest's snapshot has reached the
+# picker's words only some seconds after it was drawn.
 - launchApp:
     arguments:
       fixture: inbox
@@ -153,35 +151,17 @@ env:
 - extendedWaitUntil:
     notVisible: "Describe the task"
     timeout: 30000
+- extendedWaitUntil:
+    visible: "Select up to .*"
+    timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: new-task-picker
-# On an iPad, whose floating tabs `FLOATING_TABS` names, the picker is drawn
-# down from its top to close it, and its close pressed where that drag left
-# it. On an iPhone it fills the window under the status bar, and is drawn
-# down by its header, over its "Select up to" line.
-- runFlow:
-    when:
-      true: ${FLOATING_TABS == 'true'}
-    commands:
-      - swipe:
-          start: "50%, 6%"
-          end: "50%, 85%"
-          duration: 600
-      - waitForAnimationToEnd
-      - runFlow:
-          when:
-            notVisible: "Describe the task"
-          commands:
-            - tapOn:
-                point: "4%, 10%"
-- runFlow:
-    when:
-      true: ${FLOATING_TABS != 'true'}
-    commands:
-      - swipe:
-          start: "50%, 11%"
-          end: "50%, 90%"
-          duration: 600
+- tapOn:
+    text: "Cancel"
+    below: "Select up to .*"
+- extendedWaitUntil:
+    notVisible: "Select up to .*"
+    timeout: 10000
 # The sheet, holding nothing, is canceled without a question.
 - extendedWaitUntil:
     visible: "Describe the task"
