@@ -8,6 +8,7 @@ import {
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
+  type AutomationListGroup,
   type AutomationRunReason,
   type AutomationRunSummary,
   type AutomationScope,
@@ -270,6 +271,22 @@ export type AutomationNext =
   | { readonly kind: typeof AUTOMATION_NEXT.UNSCHEDULED }
   | { readonly kind: typeof AUTOMATION_NEXT.RAN }
   | { readonly kind: typeof AUTOMATION_NEXT.AT; readonly at: number };
+
+/**
+ * The list's folded groups with `group` folded or opened as asked, each
+ * group named once and every other group as it stood, so a fold asked for
+ * before the account's folds were read is laid over them as asked, never as
+ * a toggle that the folds read could undo.
+ */
+export function automationFoldsWith(
+  folds: readonly AutomationListGroup[],
+  group: AutomationListGroup,
+  folded: boolean,
+): readonly AutomationListGroup[] {
+  const others = folds.filter((each) => each !== group);
+
+  return folded ? [...others, group] : others;
+}
 
 /** One owner's automations, in the order the list was asked for. */
 export interface AutomationGroup {

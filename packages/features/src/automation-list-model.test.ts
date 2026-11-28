@@ -5,6 +5,7 @@ import {
   AUTOMATION_NEXT,
   AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
+  automationFoldsWith,
   automationGroups,
   automationManager,
   automationNext,
@@ -21,6 +22,7 @@ import {
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
+  AUTOMATION_LIST_GROUP,
   AUTOMATION_RUN_REASON,
   AUTOMATION_RUN_STATUS,
   AUTOMATION_SCOPE,
@@ -196,6 +198,14 @@ test.each([
     assert.equal(automationRanLine(run(made)), said);
   },
 );
+
+test("a fold asked for stands as asked over any folds, every other group kept", () => {
+  const read = [AUTOMATION_LIST_GROUP.PERSONAL] as const;
+
+  assert.deepEqual(automationFoldsWith(read, AUTOMATION_LIST_GROUP.PERSONAL, true), ["personal"]);
+  assert.deepEqual(automationFoldsWith(read, AUTOMATION_LIST_GROUP.FINISHED, false), ["personal"]);
+  assert.deepEqual(automationFoldsWith(read, AUTOMATION_LIST_GROUP.PERSONAL, false), []);
+});
 
 test.each([
   { target: undefined, named: undefined },

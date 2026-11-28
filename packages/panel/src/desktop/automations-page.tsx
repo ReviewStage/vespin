@@ -7,6 +7,7 @@ import {
   AUTOMATIONS_ORDER_WORDS,
   type AutomationGroup,
   type AutomationsOrder,
+  automationFoldsWith,
   automationGroups,
   automationManager,
   automationNext,
@@ -775,10 +776,11 @@ function AutomationList({
   // Note that a press folds or opens the group as the folds stand as it is pressed, so a fold another device made since is kept.
   const fold = (group: AutomationListGroup) => ({
     folded: folds.value.includes(group),
-    onToggle: () =>
-      folds.change((standing) =>
-        standing.includes(group) ? standing.filter((each) => each !== group) : [...standing, group],
-      ),
+    // Note that a press asks for the fold it saw undone, laid over the folds as they stand, so folds read after it was pressed never turn it back.
+    onToggle: () => {
+      const asked = !folds.value.includes(group);
+      folds.change((standing) => automationFoldsWith(standing, group, asked));
+    },
   });
 
   return (
