@@ -14,6 +14,8 @@ import {
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
+  accessibilityElement,
+  accessibilityHidden,
   accessibilityHint,
   accessibilityLabel,
   accessibilityValue,
@@ -34,6 +36,7 @@ import {
   offset,
   onTapGesture,
   padding,
+  redacted,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import {
@@ -57,6 +60,7 @@ import { LineCounts } from "./line-counts.js";
 import { RowFrame, RowHead } from "./list-row.js";
 import { Avatar, FACE_KIND, type Face, ToneGlyph } from "./marks.js";
 import { REVIEW_LOOK } from "./pull-request-look.js";
+import { PULL_REQUEST_SKELETON } from "./pull-request-skeleton-words.js";
 import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
 import { Text } from "./text.js";
 import { STATUS_TONE, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
@@ -138,6 +142,10 @@ type PullRequestHeadProps = {
   readonly reviewers?: readonly HeadReviewer[] | undefined;
   /** The lines it adds and removes, after its branches as the panel's header counts them; none until any is known. */
   readonly lines?: { readonly additions: number; readonly deletions: number } | undefined;
+  /** Whether its own read is still out, so its branches and sentence, not yet known, stand as the system's placeholders where they will. */
+  readonly reading?: boolean | undefined;
+  /** Where the whole heading stands in for one not read yet: what it is heard as, such as "Reading pull request", every word drawn as a placeholder (`PullRequestHeadSkeleton`). */
+  readonly placeholder?: string | undefined;
 };
 
 /** A reviewer as a pull request's heading draws them: by their face, and where their reviews leave them. */
@@ -388,6 +396,8 @@ export function PullRequestHead({
   labels = [],
   reviewers = [],
   lines,
+  reading = false,
+  placeholder,
 }: PullRequestHeadProps) {
   const colors = useColors();
   const inset = useRowInset();
@@ -413,6 +423,10 @@ export function PullRequestHead({
           top: SPACE.TIGHT,
           bottom: 0,
         }),
+        // Note that a heading standing in for one not read is heard as what it waits on, never its placeholder words.
+        ...(placeholder === undefined
+          ? []
+          : [redacted(), accessibilityElement("ignore"), accessibilityLabel(placeholder)]),
       ]}
     >
       <Text
@@ -466,6 +480,13 @@ export function PullRequestHead({
           </HStack>
         </ScrollView>
       )}
+      {branches === undefined && reading ? (
+        <HStack spacing={SPACE.TIGHT + 2} modifiers={[redacted(), accessibilityHidden()]}>
+          <Branch name={PULL_REQUEST_SKELETON.BRANCHES.base} wraps={false} />
+          {arrow}
+          <Branch name={PULL_REQUEST_SKELETON.BRANCHES.head} wraps={false} />
+        </HStack>
+      ) : null}
       {branches === undefined ? null : large ? (
         <VStack alignment="leading" spacing={SPACE.TIGHT}>
           <Branch name={branches.base} wraps />
@@ -487,11 +508,15 @@ export function PullRequestHead({
           )}
         </HStack>
       )}
-      {sentence === undefined ? null : (
+      {sentence === undefined && !reading ? null : (
         <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_BODY),
+            ...(sentence === undefined ? [redacted(), accessibilityHidden()] : []),
+          ]}
         >
-          {sentence}
+          {sentence ?? PULL_REQUEST_SKELETON.SENTENCE}
         </Text>
       )}
     </VStack>
@@ -516,6 +541,8 @@ type MarkRowProps = {
   readonly pushes?: boolean | undefined;
   /** What it counts at its end in the detail's place, as the panel's tab counts what it opens: "✓ 5", "1/4 viewed"; none where it counts nothing. */
   readonly count?: RowCount | undefined;
+  /** Whether what it counts is still read, so its end, where nothing says it yet, stands as the system's placeholder where it will, as the checks' count does while they are read. */
+  readonly reading?: boolean | undefined;
 };
 
 /** What a row counts at its end, as the panel's tab counts it: a glyph saying how what it counts went where one does, and the count, both in its tone; heard as `heard`. */
@@ -591,6 +618,7 @@ export function MarkRow({
   opens,
   pushes,
   count,
+  reading = false,
 }: MarkRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.FACE);
@@ -602,16 +630,17 @@ export function MarkRow({
     );
 
   const words =
-    detail === undefined ? null : (
+    detail === undefined && !reading ? null : (
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.TIME }),
           monospacedDigit(),
           foregroundStyle(colors.TEXT_MUTED),
           lineLimit(1),
+          ...(detail === undefined ? [redacted(), accessibilityHidden()] : []),
         ]}
       >
-        {detail}
+        {detail ?? PULL_REQUEST_SKELETON.COUNT}
       </Text>
     );
 

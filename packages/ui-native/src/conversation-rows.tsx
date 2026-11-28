@@ -7,6 +7,7 @@ import {
   lineLimit,
   monospacedDigit,
   padding,
+  redacted,
 } from "@expo/ui/swift-ui/modifiers";
 import { BOT_TAG_WORDS } from "@repo/features/github-login";
 import { markdownPlainText } from "@repo/features/markdown-plain-text";
@@ -143,6 +144,8 @@ type ConversationEntryRowProps = {
   readonly reactions?: string | undefined;
   /** Its long press menu's submenus, such as Add reaction; none where it offers none. */
   readonly submenus?: readonly RowSubmenu[] | undefined;
+  /** Where the row stands in for an entry not read yet: what it is heard as, such as "Reading conversation", its face and words drawn as placeholders (`ConversationSkeleton`). */
+  readonly placeholder?: string | undefined;
 };
 
 /**
@@ -167,6 +170,7 @@ export function ConversationEntryRow({
   onOpenLink,
   reactions,
   submenus = [],
+  placeholder,
 }: ConversationEntryRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.WRITER);
@@ -175,7 +179,15 @@ export function ConversationEntryRow({
     <RowHead
       unread={false}
       faded={false}
-      lead={<Avatar name={by.name} picture={by.picture} kind={by.kind} size={faceSize} />}
+      lead={
+        <Avatar
+          name={by.name}
+          picture={by.picture}
+          kind={by.kind}
+          size={faceSize}
+          placeholder={placeholder !== undefined}
+        />
+      }
       title={by.name}
       after={by.bot === true ? <BotTag /> : undefined}
       ink={colors.TEXT}
@@ -200,7 +212,11 @@ export function ConversationEntryRow({
       id={id}
       menuSubmenus={submenus}
       row={
-        <VStack alignment="leading" spacing={0}>
+        <VStack
+          alignment="leading"
+          spacing={0}
+          modifiers={placeholder === undefined ? [] : [redacted()]}
+        >
           {head}
           <EntryWords words={words} open={open} repository={repository} onOpenLink={onOpenLink} />
           {reactions === undefined ? null : (
@@ -217,10 +233,19 @@ export function ConversationEntryRow({
           )}
         </VStack>
       }
-      heard={{
-        label: by.name,
-        value: [by.bot === true && BOT_TAG_WORDS, standing?.words, agoText(at, now), reactions],
-      }}
+      heard={
+        placeholder === undefined
+          ? {
+              label: by.name,
+              value: [
+                by.bot === true && BOT_TAG_WORDS,
+                standing?.words,
+                agoText(at, now),
+                reactions,
+              ],
+            }
+          : { label: placeholder, value: [] }
+      }
     />
   );
 }

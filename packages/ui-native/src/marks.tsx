@@ -344,13 +344,17 @@ export function Avatar({
   picture,
   kind = FACE_KIND.PERSON,
   id = name,
+  placeholder = false,
 }: AvatarProps & {
   /** The address of the person's photo, such as their sign-in picture; their letter alone where none is given. */
   readonly picture?: string | undefined;
   readonly kind?: FaceKind | undefined;
   /** What its letter's hue is read off, such as a member's id; its name where none is given. */
   readonly id?: string | undefined;
+  /** Whether it stands in a skeleton's row, on the hairline's gray rather than a hue, since the system's redaction grays words and glyphs but never a fill a color is given. */
+  readonly placeholder?: boolean | undefined;
 }) {
+  const colors = useColors();
   const dark = useColorScheme() === "dark";
   const pinned = pinnedPictureUrl(picture);
   const [failed, setFailed] = useState<string | undefined>(undefined);
@@ -363,7 +367,7 @@ export function Avatar({
         <>
           <RoundedRectangle
             cornerRadius={corner}
-            modifiers={[foregroundStyle(tileHue(id, dark))]}
+            modifiers={[foregroundStyle(placeholder ? colors.CHIP_EDGE : tileHue(id, dark))]}
           />
           <Text
             modifiers={[

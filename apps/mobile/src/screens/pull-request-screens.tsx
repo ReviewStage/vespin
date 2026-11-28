@@ -78,6 +78,7 @@ import {
   CHECK_SUMMARY_LOOK,
   ConfirmAsk,
   ConversationEntryRow,
+  ConversationSkeleton,
   EmptyState,
   type FieldAct,
   type FieldMenu,
@@ -88,13 +89,13 @@ import {
   LIST_LOOK,
   LinkRow,
   ListSection,
-  LoadingRow,
   MarkRow,
   MergeActRow,
   markdownShows,
   NOTICE_KIND,
   PATH_PART,
   PullRequestHead,
+  PullRequestHeadSkeleton,
   REVIEW_LOOK,
   ROW_ACTION_TONE,
   type RowAction,
@@ -488,9 +489,14 @@ function PullRequestToolbar({ url }: { readonly url: string | undefined }) {
  * fold under their headings, as the panel's do, and open again on a second
  * tap. Its
  * parts are held live while the screen is in focus, and a pull down reads
- * them again. The merge's one press merges, or arms auto-merge where the
- * repository merges through a queue, once its question is answered, as a
- * pull request's card on the agent page asks it, so a merge asks the same
+ * them again. The page draws at once and each part as it lands, as the
+ * panel's tab does: the heading from the task list's line of it where the
+ * agent it was opened from lists it, its own skeleton otherwise, and each
+ * part still read, its branches and sentence, the checks' count, and the
+ * conversation, as its own rows' placeholders. The merge's one press
+ * merges, or arms auto-merge where the repository merges through a queue,
+ * once its question is answered, as a pull request's card on the agent page
+ * asks it, so a merge asks the same
  * wherever it is pressed; Remove from queue asks first too, as the
  * panel's does, and Disable auto-merge, which only takes back, doesn't. It stands
  * under the heading in every window, as wide as its words, as the panel's
@@ -771,21 +777,20 @@ function PullRequestPage({
     </>
   );
 
-  if (title === undefined || state === undefined) {
-    const failed = answerFailed(parts.pullRequest);
+  // Note that the page draws at once and each part as it lands, as the panel's tab does, every part still read standing as its own skeleton; only a pull request nothing names and whose read failed stands as the failure alone, since no part has a heading to stand under.
+  const readFailed = answerFailed(parts.pullRequest);
 
+  if ((title === undefined || state === undefined) && readFailed) {
     return page(
-      failed ? (
-        <EmptyState
-          title={PULL_REQUEST_READ_WORDS.FAILED}
-          symbol={GLYPH.FAILED}
-          retry={() => void retry()}
-        />
-      ) : (
-        <EmptyState title={PULL_REQUEST_READ_WORDS.READING} symbol={GLYPH.PULL_REQUEST} loading />
-      ),
+      <EmptyState
+        title={PULL_REQUEST_READ_WORDS.FAILED}
+        symbol={GLYPH.FAILED}
+        retry={() => void retry()}
+      />,
     );
   }
+
+  const reading = pullRequest === undefined && !readFailed;
 
   const action = pullRequest === undefined ? undefined : mergeActionFor(pullRequest);
 
@@ -857,57 +862,63 @@ function PullRequestPage({
       onRefresh={retry}
     >
       <ListSection>
-        <PullRequestHead
-          title={shownTitle ?? title}
-          titleEdit={
-            editTitle === undefined || editTitle.disabled
-              ? undefined
-              : { heard: PULL_REQUEST_TITLE_WORDS.EDIT, onPress: editTitle.onPress }
-          }
-          number={key.number}
-          state={state}
-          queued={queued !== null || (pullRequest === undefined && listed?.queued === true)}
-          stateLabel={
-            // Note that a change to where it stands says itself while it is out, as the panel's pill reads "Closing…".
-            isStateAction(writes.pending)
-              ? `${PULL_REQUEST_STATE_ACTION_WORDS[writes.pending]}…`
-              : queued !== null
-                ? queuedLabel(queued.position)
-                : PULL_REQUEST_STATE_LABEL[state]
-          }
-          stateMenu={stateMenu}
-          branches={
-            pullRequest === undefined
-              ? undefined
-              : { base: pullRequest.base, head: pullRequest.head }
-          }
-          sentence={
-            pullRequest !== undefined && isLivePullRequest(pullRequest)
-              ? [mergeSentence(pullRequest, action, { queueShown: true }), unresolved]
-                  .filter((part) => part !== undefined)
-                  .join(SENTENCE_PART)
-              : undefined
-          }
-          opened={
-            pullRequest === undefined
-              ? undefined
-              : {
-                  by: pullRequest.author === undefined ? undefined : githubFace(pullRequest.author),
-                  at: pullRequest.createdAt,
-                  mergedAt: pullRequest.mergedAt,
-                }
-          }
-          labels={pullRequest?.labels}
-          lines={
-            listed === undefined
-              ? undefined
-              : { additions: listed.additions, deletions: listed.deletions }
-          }
-          reviewers={reviewers.map((reviewer) => ({
-            by: githubFace(reviewer.by),
-            state: reviewer.state,
-          }))}
-        />
+        {title === undefined || state === undefined ? (
+          <PullRequestHeadSkeleton number={key.number} heard={PULL_REQUEST_READ_WORDS.READING} />
+        ) : (
+          <PullRequestHead
+            title={shownTitle ?? title}
+            titleEdit={
+              editTitle === undefined || editTitle.disabled
+                ? undefined
+                : { heard: PULL_REQUEST_TITLE_WORDS.EDIT, onPress: editTitle.onPress }
+            }
+            number={key.number}
+            state={state}
+            queued={queued !== null || (pullRequest === undefined && listed?.queued === true)}
+            stateLabel={
+              // Note that a change to where it stands says itself while it is out, as the panel's pill reads "Closing…".
+              isStateAction(writes.pending)
+                ? `${PULL_REQUEST_STATE_ACTION_WORDS[writes.pending]}…`
+                : queued !== null
+                  ? queuedLabel(queued.position)
+                  : PULL_REQUEST_STATE_LABEL[state]
+            }
+            stateMenu={stateMenu}
+            branches={
+              pullRequest === undefined
+                ? undefined
+                : { base: pullRequest.base, head: pullRequest.head }
+            }
+            sentence={
+              pullRequest !== undefined && isLivePullRequest(pullRequest)
+                ? [mergeSentence(pullRequest, action, { queueShown: true }), unresolved]
+                    .filter((part) => part !== undefined)
+                    .join(SENTENCE_PART)
+                : undefined
+            }
+            opened={
+              pullRequest === undefined
+                ? undefined
+                : {
+                    by:
+                      pullRequest.author === undefined ? undefined : githubFace(pullRequest.author),
+                    at: pullRequest.createdAt,
+                    mergedAt: pullRequest.mergedAt,
+                  }
+            }
+            labels={pullRequest?.labels}
+            lines={
+              listed === undefined
+                ? undefined
+                : { additions: listed.additions, deletions: listed.deletions }
+            }
+            reviewers={reviewers.map((reviewer) => ({
+              by: githubFace(reviewer.by),
+              state: reviewer.state,
+            }))}
+            reading={reading}
+          />
+        )}
         {writes.note === undefined ? null : (
           <WriteNoteRow words={writes.note.words} said={writes.note.said} />
         )}
@@ -971,6 +982,7 @@ function PullRequestPage({
           mark={{ symbol: GLYPH.CHECKS, tone: STATUS_TONE.NEUTRAL }}
           title={PAGE_ROW_WORDS.CHECKS}
           count={checksRowCount(summary, checks)}
+          reading={checks === undefined && !answerFailed(parts.checks)}
           pushes
         />
         <MarkRow
@@ -1008,7 +1020,7 @@ function PullRequestPage({
               opens={url}
             />
           ) : (
-            <LoadingRow words={PULL_REQUEST_READ_WORDS.READING_CONVERSATION} />
+            <ConversationSkeleton heard={PULL_REQUEST_READ_WORDS.READING_CONVERSATION} />
           )
         ) : conversation.conversation.length === 0 && conversation.earlier === 0 ? (
           <MarkRow
@@ -1089,7 +1101,7 @@ function PullRequestPage({
     <>
       <ConfirmAsk
         title={asked?.ask.title ?? MERGE_WORDS.MERGE_QUESTION}
-        message={asked?.ask.message ?? `#${key.number} ${title}`}
+        message={asked?.ask.message ?? `#${key.number} ${title ?? ""}`}
         act={asked?.words ?? ""}
         presented={asks}
         onAct={() => {
