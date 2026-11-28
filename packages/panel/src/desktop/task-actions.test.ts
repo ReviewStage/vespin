@@ -411,7 +411,7 @@ test("the plan's name reaches the recording only as masked text, never in an att
   }
 });
 
-/** The open task's tab, `SHARED_PLAN` open as `me` reads it and `OTHER` beside it in the list, its column on no tab and its panel shut. */
+/** The open task's tab, `SHARED_TASK` open as `me` reads it and `OTHER` beside it in the list, its column on no tab and its panel shut. */
 function sharedTab(me: string): TasksControl {
   return tasksControl({
     page: TASKS_PAGE.TASK,

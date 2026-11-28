@@ -4,8 +4,7 @@
  * A box lets go of what it sends as it is pressed, so the next message can
  * be written while one is out. One refused comes back ahead of what the box
  * holds by then: its words first, then those written since, and its files
- * before theirs, so nothing either holds is lost, as a reply on an Inbox
- * thread does (`use-task-inbox.ts`'s `withRefused`). Where the two together
+ * before theirs, so nothing either holds is lost. Where the two together
  * would pass the box's word bound or what a message's files may hold
  * (`AGENT_BOUNDS`), the box is left as it stands, because an editor laying in
  * words past its bound keeps none of them, and the send is kept on a toast

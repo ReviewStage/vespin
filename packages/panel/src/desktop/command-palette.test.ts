@@ -230,7 +230,7 @@ function Looker({ looked }: { looked: typeof DOCUMENT_TASK | undefined }): null 
   return null;
 }
 
-/** The palette over `DOCUMENT_PLAN` drawn, looked at or covered as `looked` says, redrawn by the answer, over `tasks` where it is given. */
+/** The palette over `DOCUMENT_TASK` drawn, looked at or covered as `looked` says, redrawn by the answer, over `tasks` where it is given. */
 function paletteOverTask(): (
   looked: typeof DOCUMENT_TASK | undefined,
   over?: TasksControl,

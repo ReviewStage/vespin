@@ -27,7 +27,7 @@ import { CODER } from "./bounds.js";
  * that holds it hears the next change once. A read whose cursor is
  * still the inbox's is held, looked at again as each write to the task's
  * items, their threads, files, and read marks lands, which notifies the
- * task's topic, as the task's live read is woken (`taskInboxLive`), or
+ * task's topic, as the task's live read is woken (`taskInboxRead`), or
  * every `MESSAGES_POLL` where the sync hub cannot wake it, each
  * look reading where the items stand and none of their words, and let
  * go at `MESSAGES_HOLD` as a transcript read is (`transcript.ts`), so the
@@ -47,7 +47,7 @@ import { CODER } from "./bounds.js";
  * answered at the hold's end at the latest. It looks again on the
  * account's topic, which an item written anywhere in its workspaces, its
  * own read marks, and its automations' runs notify, as the account's live
- * read is woken (`inboxLive`); where the sync hub cannot wake it, it looks every
+ * read is woken (`accountInboxRead`); where the sync hub cannot wake it, it looks every
  * `ACCOUNT_INBOX_POLL` rather than `MESSAGES_POLL`, because a desktop holds
  * it for as long as it is signed in rather than while a tab is on screen.
  * A reader that asks is listed the archived tasks holding items beside the
@@ -58,7 +58,7 @@ import { CODER } from "./bounds.js";
  * is what its owner is told of whichever plan is open; a run aging out of
  * that window is a change no write makes, so it shows at the hold's end.
  * An agent's inbox is held on the agent's topic as a task's is on the
- * task's (`agentInboxLive`).
+ * task's (`agentInboxRead`).
  */
 
 /** How far back a run that failed to start is still carried to its automation's owner, as the live read keeps it too. */

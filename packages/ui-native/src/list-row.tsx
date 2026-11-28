@@ -228,7 +228,7 @@ type RowActs = {
   readonly menuGroups?: readonly RowMenuGroup[] | undefined;
   /** The long press menu whole, in its own order, for a row whose menu follows the panel's right-click rather than leading with its swipes: each group set apart by a divider, after Open. Where given, the swipes stand behind the swipe alone, and `menuSubmenus`, `menuActions` and `menuGroups` are left out. */
   readonly menu?: readonly LongPressGroup[] | undefined;
-  /** What the long press lifts over its menu, a glance at what the row opens (`ThreadPreview`, `TaskPreview`, `AgentPreview`), as the system's own apps lift one. */
+  /** What the long press lifts over its menu, a glance at what the row opens (`threadPreview`, `taskPreview`, `agentPreview`), as the system's own apps lift one. */
   readonly preview?: RowPreview | undefined;
   /** Its vespin.dev link, which a drag carries out of the row: into another app as a URL, or onto a section here (`ListSection`'s `onDropLink`). */
   readonly link?: string | undefined;

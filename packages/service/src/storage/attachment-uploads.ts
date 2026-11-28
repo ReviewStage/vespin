@@ -19,7 +19,7 @@
  *
  * Bytes the service already holds go in by `putAttachment`; bytes an agent's
  * sandbox uploads itself by a presigned URL are recorded by
- * `recordAttachmentUpload` before the URL is handed out, so an upload that
+ * `reserveAttachmentUpload` before the URL is handed out, so an upload that
  * lands after its call failed is tombstoned too.
  */
 

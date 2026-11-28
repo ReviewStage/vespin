@@ -1375,7 +1375,7 @@ const START = {
 } as const;
 
 /**
- * The bot's reactions on the member's message (`STATUS_EMOJI`): 👀 while
+ * The bot's reactions on the member's message: 👀 while
  * the agent works, and ✅ once its pull request merges.
  */
 const STATUS_REACTION = { WORKING: "👀", MERGED: "✅" } as const;

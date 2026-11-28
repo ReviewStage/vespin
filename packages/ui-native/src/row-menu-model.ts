@@ -459,7 +459,7 @@ function glyphIcon(glyph: Glyph, color?: string, under?: MarkLayer): MenuIcon {
   };
 }
 
-/** Whether a choice says what it says under its words: not one led by an integration's mark or an emoji, as `markContent` and `emojiContent` draw it. */
+/** Whether a choice says what it says under its words: not one led by an integration's mark or an emoji (`choiceLook`). */
 export function saysUnder(choice: MenuLead): boolean {
   const kind = choiceLook(choice)?.kind;
 
@@ -559,7 +559,7 @@ function submenuNode(
         (choice): MenuNode => ({
           kind: MENU_NODE.CHOICE,
           label: choice.label,
-          // Note that a choice led by an integration's mark or an emoji says nothing under its words, as `markContent` and `emojiContent` drew it.
+          // Note that a choice led by an integration's mark or an emoji says nothing under its words (`saysUnder`).
           detail: saysUnder(choice) ? choice.detail : undefined,
           icon: choiceIcon(choice, inks),
           on: choice.on,

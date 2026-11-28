@@ -5,7 +5,7 @@
  * there are as many faces as pairs. They are walked in one fixed order, the
  * diagonals of the pairs, so faces side by side in it differ in both their
  * character and their color. A new Manager's id, and nothing else of it or
- * its starter, picks where the walk starts (`FACE_SEED`), and it takes the
+ * its starter, picks where the walk starts (`seedOf`), and it takes the
  * first face from there that no unarchived Manager of its workspace wears,
  * so Managers that stand together differ; where every face is worn it takes
  * the one its id picked. The workspace's Manager starts take turns on a lock
