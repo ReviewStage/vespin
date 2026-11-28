@@ -40,9 +40,9 @@ import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { useColorScheme } from "react-native";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
-import { type Glyph, glyphImage } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { choiceContent, type MenuChoice } from "./list-row.js";
+import { choiceContent, LongPressMenu, type MenuChoice } from "./list-row.js";
 import {
   Avatar,
   type Face,
@@ -51,6 +51,7 @@ import {
   ToneGlyph,
   UnassignedMark,
 } from "./marks.js";
+import { ROW_ACTION_TONE } from "./row-menu-model.js";
 import { Text } from "./text.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -141,9 +142,10 @@ export function Button(props: ButtonProps) {
 
 /**
  * A small capsule's look: filled with the ink where it stands chosen, and
- * otherwise the surface inside a hairline edge, its words in the row line's style.
+ * otherwise the surface inside a hairline edge, the chip's edge unless
+ * `edge` names another, its words in the row line's style.
  */
-function capsuleModifiers(colors: BrandColors, filled: boolean) {
+function capsuleModifiers(colors: BrandColors, filled: boolean, edge: string = colors.CHIP_EDGE) {
   return [
     padding(CAPSULE_PADDING),
     background(filled ? colors.TEXT : colors.SURFACE, SwiftModifiers.shapes.capsule()),
@@ -151,7 +153,7 @@ function capsuleModifiers(colors: BrandColors, filled: boolean) {
       ? []
       : [
           strokeBorder({
-            content: colors.CHIP_EDGE,
+            content: edge,
             // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
             shape: "capsule",
             style: { lineWidth: HAIRLINE },
@@ -614,5 +616,81 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
     >
       {words}
     </SwiftUIButton>
+  );
+}
+
+/** What VoiceOver hears of a reaction the reader gave. */
+const REACTION_HEARD = { YOURS: "Yours" } as const;
+
+/** A reaction a comment wears, as its pill says it. */
+export type ReactionPill = {
+  readonly key: string;
+  readonly emoji: string;
+  readonly count: number;
+  /** Whether the reader gave it, which lights it in the accent, as GitHub lights the viewer's. */
+  readonly mine: boolean;
+  /** Who gave it, in words ("ada and grace reacted with thumbs up"), heard as the pill and heading its long press menu. */
+  readonly who: string;
+  /** What a press does, giving it or taking the reader's back, and what that is called; none where it is not pressed here, which draws it as words alone. */
+  readonly press?: { readonly label: string; readonly onPress: () => void } | undefined;
+};
+
+/** One reaction's capsule: its emoji and count, lit in the accent where the reader gave it, a press giving it or taking it back where it takes one, and a long press naming who gave it over that same act. */
+function ReactionPillView({ pill }: { readonly pill: ReactionPill }) {
+  const colors = useColors();
+  const ink = pill.mine ? colors.ACCENT_TEXT : colors.TEXT;
+  const look = capsuleModifiers(colors, false, pill.mine ? colors.ACCENT : colors.CHIP_EDGE);
+
+  const heard = [
+    accessibilityLabel(pill.who),
+    ...(pill.mine ? [accessibilityValue(REACTION_HEARD.YOURS)] : []),
+  ];
+
+  const words = (
+    <CapsuleWords
+      label={pill.emoji}
+      count={pill.count}
+      ink={ink}
+      countInk={pill.mine ? ink : colors.TEXT_MUTED}
+    />
+  );
+
+  const { press } = pill;
+
+  if (press === undefined) {
+    return <HStack modifiers={[...look, accessibilityElement("ignore"), ...heard]}>{words}</HStack>;
+  }
+
+  const act = {
+    label: press.label,
+    symbol: GLYPH.REACT,
+    tone: ROW_ACTION_TONE.NEUTRAL,
+    onPress: press.onPress,
+  };
+
+  return (
+    <LongPressMenu title={pill.who} groups={[[act]]}>
+      <SwiftUIButton onPress={press.onPress} modifiers={[buttonStyle("plain"), ...heard]}>
+        <HStack modifiers={look}>{words}</HStack>
+      </SwiftUIButton>
+    </LongPressMenu>
+  );
+}
+
+/**
+ * The reactions a pull request's comment wears, as GitHub and the panel draw
+ * them under its words: a capsule of each emoji and how many gave it, in
+ * GitHub's order, the reader's own lit in the accent. Where it is pressed
+ * here, a tap gives it or takes the reader's back, and a long press names
+ * who gave it, as the panel's tooltip does, over the same act; VoiceOver
+ * hears who gave each as the pill.
+ */
+export function ReactionPills({ pills }: { readonly pills: readonly ReactionPill[] }) {
+  return (
+    <HStack spacing={SPACE.TIGHT}>
+      {pills.map((pill) => (
+        <ReactionPillView key={pill.key} pill={pill} />
+      ))}
+    </HStack>
   );
 }

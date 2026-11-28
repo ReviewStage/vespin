@@ -54,7 +54,6 @@ import {
   QUEUE_WARNING,
   queuedLabel,
   REVIEW_WORDS,
-  reactionsLine,
   reviewersOf,
   THREAD_ACT_WORDS,
   threadLineSpan,
@@ -116,7 +115,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { useAgentPullRequests, useFollowedAgent, useShownAgent } from "../agents/use-agent.js";
 import { MERGE_QUEUE_ROUTE, useMergeQueueOn } from "../merge-queue/merge-queue-on.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
-import { reactionMenu } from "../pull-requests/reaction-menu.js";
+import { reactionMenu, reactionPills } from "../pull-requests/reaction-menu.js";
 import {
   type PullRequestKey,
   type PullRequestWrites,
@@ -946,7 +945,12 @@ function PullRequestPage({
             hidesHtml
             edge={WORDS_EDGE.ROWS}
             folded={folded}
-            reactions={reactionsLine(conversation?.descriptionReactions ?? [])}
+            reactions={reactionPills(
+              conversation?.descriptionSubject,
+              conversation?.descriptionReactions,
+              writes,
+              false,
+            )}
             menuGroups={[
               reactionMenu(
                 conversation?.descriptionSubject,
@@ -1042,7 +1046,7 @@ function PullRequestPage({
                 open={opened.has(entry.url)}
                 repository={agent?.repository}
                 onOpenLink={openLink}
-                reactions={reactionsLine(entry.reactions ?? [])}
+                reactions={reactionPills(entry.subject, entry.reactions, writes, false)}
                 submenus={reactionMenu(entry.subject, entry.reactions, writes)}
               />,
               // Note that a thread is named by its first comment's page, which no other row shares.

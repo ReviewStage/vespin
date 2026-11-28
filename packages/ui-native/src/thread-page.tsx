@@ -40,6 +40,7 @@ import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize, useReduceMotion } from "./accessibility.js";
 import { AudioClip } from "./audio-clip.js";
 import { BarContent } from "./bar-content.js";
+import { type ReactionPill, ReactionPills } from "./button.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -163,8 +164,8 @@ export type ThreadMessage = {
   readonly values?: readonly { readonly label: string; readonly words: string }[] | undefined;
   /** That the reader sent it and it did not go, which it says under its words with what mends it; none for a message that went. */
   readonly undelivered?: UndeliveredLine | undefined;
-  /** The reactions it wears as one line, such as "👍 2  ❤️ 1", under its words; none where it wears none. */
-  readonly reactions?: string | undefined;
+  /** The reactions it wears, drawn as pills under its words (`ReactionPills`), a tap giving or taking one where it takes one; none where it wears none. */
+  readonly reactions?: readonly ReactionPill[] | undefined;
   /** What its long press menu holds after Copy message, such as Add reaction; none where it offers nothing more. */
   readonly menu?: readonly LongPressGroup[] | undefined;
 };
@@ -619,13 +620,9 @@ function MessageView({
             <Spacer />
           </HStack>
         )}
-        {message.reactions === undefined ? null : (
+        {message.reactions === undefined || message.reactions.length === 0 ? null : (
           <HStack modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}>
-            <Text
-              modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}
-            >
-              {message.reactions}
-            </Text>
+            <ReactionPills pills={message.reactions} />
             <Spacer />
           </HStack>
         )}

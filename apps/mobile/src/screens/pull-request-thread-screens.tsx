@@ -4,7 +4,6 @@ import { PULL_REQUEST_PART } from "@repo/features/agent-view";
 import type { ReviewThread } from "@repo/features/agent-wire";
 import {
   PULL_REQUEST_READ_WORDS,
-  reactionsLine,
   THREAD_ACT_WORDS,
   THREAD_STATE_WORDS,
   threadLineSpan,
@@ -30,7 +29,7 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { useOpenLink } from "../open-link.js";
-import { reactionMenu } from "../pull-requests/reaction-menu.js";
+import { reactionMenu, reactionPills } from "../pull-requests/reaction-menu.js";
 import {
   type PullRequestKey,
   type PullRequestWrites,
@@ -86,7 +85,7 @@ function threadMessagesOf(
     words: comment.markdown ?? comment.body,
     typed: false,
     media: [],
-    reactions: reactionsLine(comment.reactions ?? []),
+    reactions: reactionPills(comment.subject, comment.reactions, writes, true),
     menu: [reactionMenu(comment.subject, comment.reactions, writes)],
   }));
 }

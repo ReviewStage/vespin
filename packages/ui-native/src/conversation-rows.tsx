@@ -2,6 +2,7 @@
 
 import { HStack, RNHostView, VStack } from "@expo/ui/swift-ui";
 import {
+  accessibilityHidden,
   font,
   foregroundStyle,
   lineLimit,
@@ -13,6 +14,7 @@ import { markdownPlainText } from "@repo/features/markdown-plain-text";
 import { agoText } from "@repo/features/time-format";
 import { type ReactElement, useMemo } from "react";
 import { useScaledSize } from "./accessibility.js";
+import { type ReactionPill, ReactionPills } from "./button.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
 import { useRowInset } from "./layout-margin.js";
 import { RowFrame, RowHead } from "./list-row.js";
@@ -139,8 +141,8 @@ type ConversationEntryRowProps = {
   readonly open: boolean;
   readonly repository?: string | null | undefined;
   readonly onOpenLink: (address: string) => void;
-  /** The reactions it wears as one line, such as "👍 2  ❤️ 1", under its words; none where it wears none. */
-  readonly reactions?: string | undefined;
+  /** The reactions it wears, drawn as pills under its words, which its row offers no press of (its long press's Add reaction gives or takes one); none where it wears none. */
+  readonly reactions?: readonly ReactionPill[] | undefined;
   /** Its long press menu's submenus, such as Add reaction; none where it offers none. */
   readonly submenus?: readonly RowSubmenu[] | undefined;
 };
@@ -151,9 +153,12 @@ type ConversationEntryRowProps = {
  * and words, and when; then their words, a short plain preview of the first
  * lines while folded, so a long conversation lays out no Markdown it does
  * not show, and the whole Markdown once a press opens it. A press folds it
- * again. The reactions it wears stand under its words in one muted line,
- * and its long press menu offers what is handed it, such as Add reaction. Heard as one element: who, where a review left them, when, and
- * the preview.
+ * again. Where a review left them stands in words beside its mark ("Changes
+ * requested"), as the panel's entry says it. The reactions it wears stand
+ * under its words as pills, and its long press menu offers what is handed
+ * it, such as Add reaction, which gives or takes one, since the row is its
+ * own press. Heard as one element: who, where a review left them, when, who
+ * reacted, and the preview.
  */
 export function ConversationEntryRow({
   id,
@@ -189,6 +194,18 @@ export function ConversationEntryRow({
               hidden
             />
           )}
+          {standing === undefined ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.TIME }),
+                foregroundStyle(colors.TEXT_MUTED),
+                lineLimit(1),
+                accessibilityHidden(),
+              ]}
+            >
+              {standing.words}
+            </Text>
+          )}
           <WhenWords at={at} now={now} />
         </HStack>
       }
@@ -203,23 +220,21 @@ export function ConversationEntryRow({
         <VStack alignment="leading" spacing={0}>
           {head}
           <EntryWords words={words} open={open} repository={repository} onOpenLink={onOpenLink} />
-          {reactions === undefined ? null : (
+          {reactions === undefined || reactions.length === 0 ? null : (
             <UnderHead>
-              <Text
-                modifiers={[
-                  font({ textStyle: TYPE_ROLE.TIME }),
-                  foregroundStyle(colors.TEXT_MUTED),
-                ]}
-              >
-                {reactions}
-              </Text>
+              <ReactionPills pills={reactions} />
             </UnderHead>
           )}
         </VStack>
       }
       heard={{
         label: by.name,
-        value: [by.bot === true && BOT_TAG_WORDS, standing?.words, agoText(at, now), reactions],
+        value: [
+          by.bot === true && BOT_TAG_WORDS,
+          standing?.words,
+          agoText(at, now),
+          ...(reactions ?? []).map((pill) => pill.who),
+        ],
       }}
     />
   );
