@@ -587,6 +587,7 @@ function markedRuns(node: Text, runs: MarkdownRun[], reader: Reader): MarkdownRu
   }
 
   const over = marked.filter((span) => span.from < to && span.to > from);
+
   const cuts = [
     ...new Set([
       0,

@@ -622,16 +622,18 @@ function Runs({
   return runs.map((run, at) => <RunView key={at} run={run} drawing={drawing} />);
 }
 
+/** How marked words are drawn: their look, and the press that opens their thread. */
+interface MarkedLook {
+  readonly style?: TextStyle;
+  readonly onPress?: () => void;
+}
+
 /**
  * What words a comment thread stands on wear: the attention ink's underline,
  * as a document marks commented words, and a press that opens the thread;
  * nothing for words no thread stands on.
  */
-function markedLook(
-  marked: string | undefined,
-  drawing: Drawing,
-  struck = false,
-): { readonly style?: TextStyle; readonly onPress?: () => void } {
+function markedLook(marked: string | undefined, drawing: Drawing, struck = false): MarkedLook {
   const { openMarked, colors } = drawing;
 
   if (marked === undefined || openMarked === undefined) return {};
@@ -679,6 +681,7 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
         </Text>
       );
     }
+
     case MARKDOWN_RUN.LINK: {
       const onPress = open(run.target, drawing);
 
