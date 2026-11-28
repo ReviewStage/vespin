@@ -1,4 +1,4 @@
-# automations.yaml -- the Automations tab on the Inbox fixture: the workspace's automations, the workspace's first and Ada's own after, each with what fires it and how its newest run went; View options' Order by; a row's long press with Run now, its switch, Copy link and Delete; an automation's page with its switch, Run now, what fires it and its next runs, its prompt, where it runs, who it is for, its runs, and its ⋯; a run opening the agent it started on the tab, Back returning to the page; and the workspace's runs, narrowed to the ones that failed.
+# automations.yaml -- the Automations tab on the Inbox fixture: the workspace's automations, the workspace's first and Ada's own after, each with what fires it and how its newest run went; View options' Order by; a row's long press with Run now, its switch, Copy link and Delete; an automation's page with its switch, Run now, what fires it and its next runs, its prompt, where it runs, who it is for, its runs, and its ⋯; a run opening the agent it started on the tab, Back returning to the page; and the Runs tab of the segmented control atop the list, the workspace's runs, narrowed to the ones that failed.
 #
 # Launched on the host's Inbox fixture, whose workspace holds three
 # automations and their runs (`@repo/host/fixture-inbox`'s
@@ -100,19 +100,8 @@ env:
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
-# The workspace's runs, every automation's, narrowed to the ones that failed.
-# Note that where the bar has no room for Runs, as beside an iPad's tab bar,
-# it stands in the bar's overflow, the last "More" on screen, so the flow
-# opens that first.
-- runFlow:
-    when:
-      notVisible: "Runs"
-    commands:
-      - tapOn:
-          text: "More"
-          index: -1
-      - waitForAnimationToEnd
-- tapOn: "Runs"
+# The workspace's runs, every automation's, on the Runs segment atop the list, its count saying how many still work, narrowed to the ones that failed.
+- tapOn: "Runs.*"
 - waitForAnimationToEnd
 - assertVisible: "Check each deploy"
 - takeScreenshot: automations-runs

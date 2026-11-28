@@ -5,6 +5,9 @@ import {
   AUTOMATION_RUN_STANDING,
   AUTOMATIONS_ORDER,
   AUTOMATIONS_ORDER_WORDS,
+  AUTOMATIONS_TAB,
+  AUTOMATIONS_TAB_WORDS,
+  AUTOMATIONS_TABS_HEARD,
   type AutomationGroup,
   type AutomationsOrder,
   automationFoldsWith,
@@ -1330,7 +1333,7 @@ function AutomationsTabs({
     { value: AUTOMATIONS_PAGE.LIST, label: AUTOMATIONS },
     {
       value: AUTOMATIONS_PAGE.RUNS,
-      label: "Runs",
+      label: AUTOMATIONS_TAB_WORDS[AUTOMATIONS_TAB.RUNS],
       count: runsCount(runningRuns(read), STATUS_TONE.WORKING),
     },
   ] as const;
@@ -1338,7 +1341,7 @@ function AutomationsTabs({
   return (
     <Inline gap={GAP.SECTION}>
       <ChoiceBar<AutomationsTabKind>
-        label="Show"
+        label={AUTOMATIONS_TABS_HEARD.TABS}
         items={tabs}
         value={tab}
         look={CHOICE_BAR_LOOK.SEGMENTED}
@@ -1403,7 +1406,7 @@ function RunsPage({
         filters={
           <AutomationsTabs tasks={tasks}>
             <ChoiceBar<RunsShown>
-              label="Runs shown"
+              label={AUTOMATIONS_TABS_HEARD.RUNS_SHOWN}
               items={runsShownChoices(read !== undefined && "runs" in read ? read.runs : [])}
               value={shown}
               look={CHOICE_BAR_LOOK.SEGMENTED}

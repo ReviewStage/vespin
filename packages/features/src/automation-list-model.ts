@@ -209,6 +209,26 @@ export const AUTOMATION_RUN_STANDING = {
 export type AutomationRunStanding =
   (typeof AUTOMATION_RUN_STANDING)[keyof typeof AUTOMATION_RUN_STANDING];
 
+/** The Automations page's two tabs, which the bar at its top moves between: the automations, and every run of them. */
+export const AUTOMATIONS_TAB = {
+  LIST: "list",
+  RUNS: "runs",
+} as const;
+
+export type AutomationsTab = (typeof AUTOMATIONS_TAB)[keyof typeof AUTOMATIONS_TAB];
+
+/** What each tab is called, in the bar's order. */
+export const AUTOMATIONS_TAB_WORDS = {
+  [AUTOMATIONS_TAB.LIST]: "Automations",
+  [AUTOMATIONS_TAB.RUNS]: "Runs",
+} as const satisfies Record<AutomationsTab, string>;
+
+/** What the tabs' bar, and the narrowing of the runs beside it, are heard as. */
+export const AUTOMATIONS_TABS_HEARD = {
+  TABS: "Show",
+  RUNS_SHOWN: "Runs shown",
+} as const;
+
 /** Which of a workspace's runs its Runs list shows: all of them, the ones whose agent still works, or the ones that failed. */
 export const RUNS_SHOWN = {
   ALL: "all",
