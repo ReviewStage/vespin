@@ -1,19 +1,26 @@
-// pull-request-files-screens.tsx -- the files one pull request changes, on a screen of its own pushed from the pull request's page: one list in the tree's order, each file its letter, name, lines and folder, a search by path, and a press opening the file's diff on GitHub.
+// pull-request-files-screens.tsx -- the files one pull request changes, on a screen of its own pushed from the pull request's page: one list in the tree's order, each file its letter, name, lines and folder, and a search by path; and each file's diff on a screen of its own, drawn natively, stepping to the file before or after it.
 
 import {
   CHANGES_WORDS,
   changesLine,
+  fileNotice,
   filterFiles,
+  folderAndName,
   gitHubFileDiffLink,
+  startsCollapsed,
   treeOrder,
 } from "@repo/features/changed-files";
+import { iosPullRequestFileRoute } from "@repo/features/ios-app-links";
 import { GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import {
   BAR_TITLE,
+  BUTTON_LOOK,
   ChangedFileRow,
+  DiffView,
   EmptyState,
   footerToneOf,
   GLYPH,
+  glyphSymbol,
   LIST_LOOK,
   ListSection,
   RowList,
@@ -23,11 +30,12 @@ import {
   useWindowSizeClass,
   WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { openInSafari } from "../open-link.js";
 import type { PullRequestKey } from "../pull-requests/use-pull-request.js";
 import { usePullRequestChanges } from "../pull-requests/use-pull-request-changes.js";
+import { useOnOwnTab } from "../tab-route.js";
 
 /** What the screen says in the panel's words, beyond the changes' own (`CHANGES_WORDS`). */
 const FILES_WORDS = {
@@ -35,6 +43,43 @@ const FILES_WORDS = {
   FIND: "Find a file",
   NONE_FOUND: "No files match.",
 } as const;
+
+/** What a file's screen says and offers, in the panel's words where it has them. */
+const FILE_WORDS = {
+  MORE: "More",
+  PREVIOUS: "Previous file",
+  NEXT: "Next file",
+  WRAP: "Wrap lines",
+  OPEN_ON_GITHUB: "Open on GitHub",
+  NOT_FOUND: "This file isn't in the pull request's changes.",
+  FOLDED: "Diff folded",
+  FOLDED_WHY: "Deleted, generated, and very large files start folded.",
+  SHOW_DIFF: "Show diff",
+} as const;
+
+/** The pull request a screen's route names, by its workspace, its repository's owner and name, and its number. */
+function usePullRequestKey(): PullRequestKey {
+  const {
+    workspace = "",
+    owner = "",
+    name = "",
+    number = "",
+  } = useLocalSearchParams<{ workspace: string; owner: string; name: string; number: string }>();
+
+  return { workspaceId: workspace, repository: `${owner}/${name}`, number: Number(number) };
+}
+
+/** The pull request's address on GitHub: the one its changes' read answered with, so a file opens on the pull request as GitHub spells it, else one made from its repository and number. */
+function gitHubAddressOf(key: PullRequestKey, read: string | undefined): string {
+  return (
+    read ??
+    gitHubPageLink({
+      kind: GITHUB_PAGE.PULL_REQUEST,
+      repository: key.repository,
+      number: key.number,
+    })
+  );
+}
 
 /** What the bar says under the title: how many files, and the lines they add and remove together, as GitHub's tab counts them. */
 function summaryOf(files: readonly { readonly additions: number; readonly deletions: number }[]) {
@@ -52,40 +97,21 @@ function summaryOf(files: readonly { readonly additions: number; readonly deleti
  * tree lists them (`treeOrder`), each a row naming the folder it stands in
  * under its name (`ChangedFileRow`), as Dean picked. The bar's search
  * keeps the files whose path holds what is typed, as the desktop's does
- * (`filterFiles`). A press opens the file's diff on GitHub, at its anchor
- * on the Files changed tab, until the app draws diffs itself. Where GitHub
+ * (`filterFiles`). A press opens the file's diff on a screen of its own
+ * (`PullRequestFileScreen`). Where GitHub
  * listed more files than one read carries, the list's footer says so, in
  * the panel's words, as it says a read that failed after files were drawn,
  * which leaves them drawn.
  */
 export function PullRequestFilesScreen() {
-  const {
-    workspace = "",
-    owner = "",
-    name = "",
-    number = "",
-  } = useLocalSearchParams<{ workspace: string; owner: string; name: string; number: string }>();
-
-  const key: PullRequestKey = {
-    workspaceId: workspace,
-    repository: `${owner}/${name}`,
-    number: Number(number),
-  };
-
+  const key = usePullRequestKey();
+  const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const colors = useColors();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   const changes = usePullRequestChanges(key);
   const [search, setSearch] = useState("");
   const files = changes.files;
-
-  // Note that the address GitHub answered with is used where the read gave one, so a file opens on the pull request as GitHub spells it.
-  const url =
-    changes.url ??
-    gitHubPageLink({
-      kind: GITHUB_PAGE.PULL_REQUEST,
-      repository: key.repository,
-      number: key.number,
-    });
 
   const bar = (
     <>
@@ -138,9 +164,7 @@ export function PullRequestFilesScreen() {
           empty={empty}
           onRefresh={changes.refresh}
           onSelect={(path) => {
-            if (!byPath.has(path)) return;
-
-            void gitHubFileDiffLink(url, path).then(openInSafari);
+            if (byPath.has(path)) router.push(onOwnTab(iosPullRequestFileRoute(key, path)));
           }}
         >
           <ListSection footer={footer} footerTone={footerToneOf(refreshFailed)}>
@@ -150,6 +174,140 @@ export function PullRequestFilesScreen() {
           </ListSection>
         </RowList>
       </Screen>
+    </>
+  );
+}
+
+/**
+ * One file a pull request changes, its diff on a screen of its own, the
+ * file named by its path in the route's query: its name in the bar, in the
+ * ink, its folder under it, and the diff filling the screen
+ * (`DiffView`), drawn natively and wrapped unless Wrap lines in the ⋯ says
+ * not. The arrows beside the ⋯ step to the file before or after it in the
+ * list's order, in place, as Mail steps between messages, an arrow at the
+ * list's end standing dimmed; the ⋯ also opens the file's diff on GitHub.
+ * A file with no diff to draw says why, in the panel's words
+ * (`fileNotice`), with Open on GitHub; one that starts folded, as the
+ * desktop folds a deleted, generated, or very large file
+ * (`startsCollapsed`), says so with Show diff. The files are the list's own
+ * read (`usePullRequestChanges`), so the screen reads nothing of its own
+ * where the list read them.
+ */
+export function PullRequestFileScreen() {
+  const key = usePullRequestKey();
+  const { path = "" } = useLocalSearchParams<{ path: string }>();
+  const router = useRouter();
+  const colors = useColors();
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const changes = usePullRequestChanges(key);
+  const [wrap, setWrap] = useState(true);
+  // The files whose folded diff was asked for by Show diff, by path, held while the screen stands.
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
+  const ordered = changes.files === undefined ? [] : treeOrder(changes.files);
+  const at = ordered.findIndex((file) => file.path === path);
+  const file = ordered[at];
+  const { folder, name } = folderAndName(path);
+  const url = gitHubAddressOf(key, changes.url);
+  const openOnGitHub = () => void gitHubFileDiffLink(url, path).then(openInSafari);
+
+  // Note that a step moves the route's query in place, so the stack holds one file's screen however many files are stepped through.
+  const stepTo = (next: string | undefined) => {
+    if (next !== undefined) router.setParams({ path: next });
+  };
+
+  const bar = (
+    <>
+      <Stack.Screen
+        options={{ title: name, headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT } }}
+      />
+      <StackSubtitle words={folder} leading={regular} />
+      <Stack.Toolbar placement="right">
+        {/* Note that the arrows and ⋯ stand in one bar, as an Inbox thread's do, an arrow at the list's end dimmed rather than gone, so the other never moves under the thumb. */}
+        <Stack.Toolbar.Button
+          accessibilityLabel={FILE_WORDS.PREVIOUS}
+          disabled={at <= 0}
+          icon={glyphSymbol(GLYPH.PREVIOUS_ITEM)}
+          onPress={() => stepTo(ordered[at - 1]?.path)}
+        >
+          {FILE_WORDS.PREVIOUS}
+        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          accessibilityLabel={FILE_WORDS.NEXT}
+          disabled={at === -1 || at >= ordered.length - 1}
+          icon={glyphSymbol(GLYPH.NEXT_ITEM)}
+          onPress={() => stepTo(ordered[at + 1]?.path)}
+        >
+          {FILE_WORDS.NEXT}
+        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={FILE_WORDS.MORE}>
+          <Stack.Toolbar.Label>{FILE_WORDS.MORE}</Stack.Toolbar.Label>
+          <Stack.Toolbar.MenuAction isOn={wrap} onPress={() => setWrap(!wrap)}>
+            {FILE_WORDS.WRAP}
+          </Stack.Toolbar.MenuAction>
+          <Stack.Toolbar.MenuAction
+            icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
+            onPress={openOnGitHub}
+          >
+            {FILE_WORDS.OPEN_ON_GITHUB}
+          </Stack.Toolbar.MenuAction>
+        </Stack.Toolbar.Menu>
+      </Stack.Toolbar>
+    </>
+  );
+
+  const notice = file === undefined ? undefined : fileNotice(file);
+  const folded = file !== undefined && startsCollapsed(file) && !unfolded.has(file.path);
+
+  // Note that the diff stands as the screen's root rather than in its SwiftUI host, as the agent's transcript does, since it is a native view that scrolls by itself and sizes itself to the screen.
+  if (file !== undefined && notice === undefined && !folded && file.patch !== null) {
+    return (
+      <>
+        {bar}
+        <DiffView patch={file.patch} wrap={wrap} testID="pull-request-diff" />
+      </>
+    );
+  }
+
+  const state =
+    changes.files === undefined ? (
+      changes.failed ? (
+        <EmptyState
+          title={CHANGES_WORDS.FAILED}
+          symbol={GLYPH.FAILED}
+          retry={() => void changes.refresh()}
+        />
+      ) : (
+        <EmptyState title={CHANGES_WORDS.READING} symbol={GLYPH.CHANGES} loading />
+      )
+    ) : file === undefined ? (
+      <EmptyState title={FILE_WORDS.NOT_FOUND} symbol={GLYPH.CHANGES} />
+    ) : notice !== undefined ? (
+      <EmptyState
+        title={notice}
+        symbol={GLYPH.FILE}
+        action={{
+          label: FILE_WORDS.OPEN_ON_GITHUB,
+          onPress: openOnGitHub,
+          look: BUTTON_LOOK.BORDERED,
+        }}
+      />
+    ) : (
+      <EmptyState
+        title={FILE_WORDS.FOLDED}
+        description={FILE_WORDS.FOLDED_WHY}
+        symbol={GLYPH.CHANGES}
+        action={{
+          label: FILE_WORDS.SHOW_DIFF,
+          onPress: () => setUnfolded(new Set([...unfolded, file.path])),
+          look: BUTTON_LOOK.BORDERED,
+        }}
+      />
+    );
+
+  return (
+    <>
+      {bar}
+      <Screen>{state}</Screen>
     </>
   );
 }

@@ -4,8 +4,9 @@
  * The files are the panel's one read of them (`ACT_KIND.PULL_REQUESTS_CHANGES`,
  * `@repo/panel`'s `pullRequestChangesQueryOptions`): every file GitHub
  * lists, up to the read's bound, with its patch or why it has none. They
- * are read as the screen first shows and on a pull to refresh, never as the
- * pull request's page opens, so the page costs no more than it did; a read
+ * are read as the Files screen first shows and on a pull to refresh, never
+ * as the pull request's page opens, and a file's screen draws from that
+ * same read, so the page costs no more than it did; a read
  * that failed stands beside the files read before it, which stay drawn.
  * The reads are kept under the account signed in and the repository, whatever
  * the case it is spelled in, and the number, since a pull request's files
@@ -65,6 +66,8 @@ export function usePullRequestChanges(key: PullRequestKey): PullRequestChanges {
   const read = useQuery({
     queryKey: [QUERY_ROOT, accountId, key.repository.toLowerCase(), key.number],
     queryFn: () => acts[ACT_KIND.PULL_REQUESTS_CHANGES](key).then(landedOf),
+    // Note that the files read stand until a pull reads them again, so a file's screen draws from the list's read rather than reading them anew.
+    staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   });
 

@@ -120,6 +120,8 @@ export {
   ThreadRow,
 } from "./conversation-rows.js";
 
+export { DiffView } from "./diff-view.js";
+
 export { type DockChip, DockChips, DockPanel } from "./dock-chips.js";
 
 export {

@@ -1,4 +1,4 @@
-# pull-request-files.yaml -- a pull request's Files changed: opened from its page's Files changed row, one list of its files in the tree's order, each with its letter, lines, and folder under its name, and a search by path narrowing them.
+# pull-request-files.yaml -- a pull request's Files changed: opened from its page's Files changed row, one list of its files in the tree's order, each with its letter, lines, and folder under its name, a search by path narrowing them, and a file's diff on its own screen, stepping to the next file, and the 5,000-line generated file shown from its fold.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -25,7 +25,7 @@ env:
     env:
       LINK: "vespin://tasks/pull/workspace-personal/ada/relay/128"
 - extendedWaitUntil:
-    visible: "Ready to merge"
+    visible: "Ready to merge.*"
     timeout: 30000
 # Its Files changed row, beside Checks under the description, pushes them.
 - runFlow:
@@ -52,3 +52,42 @@ env:
 - assertNotVisible: "resend.ts"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-files-search
+# A file opens its diff on a screen of its own, drawn natively: each row is
+# heard as its line numbers and its words.
+- eraseText
+- tapOn: "Cancel"
+- tapOn: "resend.ts"
+- extendedWaitUntil:
+    visible: ".*fresh expiry.*"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-diff
+# The arrows step to the next file in the list's order, in place.
+- tapOn: "Next file"
+- extendedWaitUntil:
+    visible: ".*Whether an invitation has passed its expiry.*"
+    timeout: 10000
+# The generated table of 5,000 lines starts folded, as the desktop folds a
+# large file, and Show diff draws it; its first frame's time is logged for
+# the timing lane ("DiffView first frame").
+- openLink: "vespin://tasks/pull/workspace-personal/ada/relay/128/file?path=src%2Fgenerated%2Finvite-messages.ts"
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible: "Show diff"
+    timeout: 15000
+- tapOn: "Show diff"
+- extendedWaitUntil:
+    visible: ".*Invitation 0 is waiting for you.*"
+    timeout: 15000
+- swipe:
+    start: "50%, 80%"
+    end: "50%, 20%"
+    duration: 200
+- swipe:
+    start: "50%, 80%"
+    end: "50%, 20%"
+    duration: 200
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-diff-long
