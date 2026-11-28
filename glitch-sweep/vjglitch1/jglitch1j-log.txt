@@ -16,3 +16,5 @@ glitch j07-new-task: j07-new-task: maestro exit 1  cfr60 MISSING raw 6834226 byt
 glitch j08-double-tap: j08-double-tap: maestro exit 1  cfr60 MISSING raw 7604555 bytes
 glitch j09-background: j09-background: maestro exit 1  cfr60 MISSING raw 7811425 bytes
 glitch j10-long-transcript: j10-long-transcript: maestro exit 0  cfr60 MISSING raw 6174798 bytes
+pushed 7bfe22adcb to glitch-sweep/vjglitch1
+glitch-sweep rc 0, raw.mp4 kept under /Users/deanstratakos/vespin-ipad-agent/out/vjglitch1j-raw/<journey>/raw.mp4
