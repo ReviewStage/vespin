@@ -6,15 +6,18 @@ import {
   accountInboxOfLiveRows,
   nextFailedRunExpiry,
 } from "@repo/features/inbox-live";
-import type { EntityPool, HeldRows } from "@repo/sync";
+import type { EntityPool, PoolRead } from "@repo/sync";
 import { Clock, Duration, Effect, Queue, RcMap, type Scope, Stream, SubscriptionRef } from "effect";
 import {
   type AccountWideReads,
   changedIds,
   INBOX_CHANGE,
   INBOX_ITEM,
+  INBOX_KEEPING,
+  INBOX_THREAD,
   type InboxChange,
-  type PlacedInboxItem,
+  type InboxKeeping,
+  type PlacedInboxFields,
   settles,
 } from "./inbox-collections.js";
 import { answeredCollection, rowsOf } from "./live-collection.js";
@@ -83,6 +86,8 @@ export interface AccountInboxDependencies {
   ) => Effect.Effect<AccountInboxLiveAnswer | LiveFailure>;
   /** The sync engine's pool, beside which each account's read stands while it is followed, drawing the inbox writes standing over its rows. */
   readonly pool: EntityPool;
+  /** How the platform keeps the Inbox's items, so the read stands beside the kind its writes are drawn over and draws them over its own entries; whole where none is said. */
+  readonly inboxKeeping?: InboxKeeping;
   /** The account's own reads, among which each account's wait stands while it is followed. */
   readonly accountWide: AccountWideReads;
 }
@@ -239,26 +244,30 @@ export function accountInboxes(
         /** Whether the read lists the item `id` names, open. */
         const lists = (id: string) => answered?.items.some((entry) => entry.id === id) === true;
 
-        const writes: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
-          INBOX_ITEM,
-          {
-            redraw: () => Effect.asVoid(drawn),
-            confirmation: () => {
-              const handed = wait;
+        /** The read as it stands beside the pool, drawing the writes over its own entries. */
+        const beside: PoolRead<PlacedInboxFields, InboxChange> = {
+          redraw: () => Effect.asVoid(drawn),
+          confirmation: () => {
+            const handed = wait;
 
-              return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
-            },
-            beside: {
-              shows: lists,
-              take: (change) => {
-                const next =
-                  answered === undefined ? undefined : rowsChanged(answered, change, userId);
+            return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
+          },
+          beside: {
+            shows: lists,
+            take: (change) => {
+              const next =
+                answered === undefined ? undefined : rowsChanged(answered, change, userId);
 
-                if (answered !== undefined && next !== undefined) taken({ ...answered, ...next });
-              },
+              if (answered !== undefined && next !== undefined) taken({ ...answered, ...next });
             },
           },
-        );
+        };
+
+        // Note that the read holds no row of the kind, so it stands beside whichever kind the platform draws the Inbox's writes over.
+        const writes: { readonly standing: () => readonly InboxChange[] } =
+          yield* dependencies.inboxKeeping === INBOX_KEEPING.LEAN
+            ? dependencies.pool.stand(INBOX_THREAD, beside)
+            : dependencies.pool.stand(INBOX_ITEM, beside);
 
         yield* dependencies.accountWide.stand(() => wait);
 

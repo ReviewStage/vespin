@@ -22,6 +22,11 @@
  * (`@repo/host/node`) and `expo-sqlite` on the iPhone. A host given none
  * keeps no store and runs in memory. Nothing here imports a Node module,
  * since the iPhone bundle loads it.
+ *
+ * Where the platform keeps collections on disk, two more files stand in the
+ * account's folder beside it: the collections (`collections.sqlite`) and
+ * the words their Inbox messages say (`words.sqlite`, `kept-words.ts`),
+ * each driven through the platform's async API.
  */
 
 import { AUTOMATIONS_READ } from "@repo/features/automation-live";
@@ -35,9 +40,16 @@ import { repositoryPinSchema } from "@repo/features/task-wire";
 import { WORKSPACE_INVITATIONS_READ, WORKSPACE_MEMBERS_READ } from "@repo/features/workspace-live";
 import { workspaceSchema } from "@repo/features/workspace-wire";
 import type { KeepCollection, StoredKind } from "@repo/sync";
-import { Context, Data, Effect, Path, Schema, type Scope } from "effect";
+import { Context, Data, Effect, Option, Path, Schema, type Scope } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { placedInboxItemSchema } from "./inbox-collections.js";
+import {
+  type KeptWords,
+  type KeptWordsDatabase,
+  keptWordsIn,
+  keptWordsInMemory,
+  keptWordsOnceOpen,
+} from "./kept-words.js";
 
 /** The folder every account's own folder stands in, under the state root. */
 const ACCOUNTS_FOLDER = "accounts";
@@ -47,6 +59,9 @@ const DATABASE_FILE = "local.sqlite";
 
 /** The file the account's collections kept on disk whole stand in, beside the database, so its writes never wait on the database's. */
 const COLLECTIONS_FILE = "collections.sqlite";
+
+/** The file the words each kept Inbox message says stand in, beside the collections, which a search reads (`kept-words.ts`). */
+const WORDS_FILE = "words.sqlite";
 
 /** The account's folder, which only the user may enter. */
 const FOLDER_MODE = 0o700;
@@ -170,6 +185,22 @@ export interface LocalDatabaseDriverSeam {
    * platform keeps every kind in memory, as the Mac does.
    */
   readonly collections?: (file: string) => Promise<KeptCollectionsDatabase>;
+  /**
+   * Opens the database at `file` through the platform's async API, whose
+   * statements run off the JavaScript thread, or rejects: where the kept
+   * messages' words stand beside the collections (`kept-words.ts`). None
+   * where the platform keeps no collections; where it keeps them and gives
+   * none, the words are kept in memory.
+   */
+  readonly words?: (file: string) => Promise<KeptWordsDatabase>;
+}
+
+export type { KeptWordsDatabase } from "./kept-words.js";
+
+/** The account's kept collections as they opened: how a stored kind's collection is kept, and the words its kept messages say. */
+export interface KeptCollections {
+  readonly keep: KeptCollectionsDatabase["keep"];
+  readonly words: KeptWords;
 }
 
 /** The SQLite driver the platform's launch provides; a host given none keeps no local database. */
@@ -307,41 +338,71 @@ export const openLocalDatabase = Effect.fn("host/openLocalDatabase")(function* (
 
 /**
  * Opens `accountId`'s database of collections kept on disk whole under
- * `stateRoot` for as long as the caller's scope stands, closing it as the
- * scope closes, its file readable by the user alone as the database's is;
- * none where the platform keeps none. Fails as `LocalDatabaseFailed` where
- * the folder, the file, or the platform's persistence fails, so the caller
- * keeps every kind in memory instead.
+ * `stateRoot`, and the words its kept messages say beside it, for as long
+ * as the caller's scope stands, closing both as the scope closes, each file
+ * readable by the user alone as the database's is; none where the platform
+ * keeps none. Fails as `LocalDatabaseFailed` where the folder, a file, or
+ * the platform's persistence fails, so the caller keeps every kind, and the
+ * words, in memory instead.
  */
 export const openKeptCollections = Effect.fn("host/openKeptCollections")(function* (
   stateRoot: string,
   accountId: string,
 ): Effect.fn.Return<
-  KeptCollectionsDatabase["keep"] | undefined,
+  KeptCollections | undefined,
   LocalDatabaseFailed,
   LocalDatabaseDriver | FileSystem.FileSystem | Path.Path | Scope.Scope
 > {
-  const { collections } = yield* LocalDatabaseDriver;
+  const { collections, words } = yield* LocalDatabaseDriver;
 
   if (collections === undefined) return undefined;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const folder = yield* accountFolder(stateRoot, accountId);
-  const file = path.join(folder, COLLECTIONS_FILE);
   const failed = (cause: unknown) => new LocalDatabaseFailed({ accountId, cause });
 
-  yield* Effect.gen(function* () {
-    if (!(yield* fileSystem.exists(file)))
-      yield* fileSystem.writeFile(file, new Uint8Array(), { flag: "wx", mode: FILE_MODE });
-    yield* fileSystem.chmod(file, FILE_MODE);
-  }).pipe(Effect.mapError(failed));
+  /** `name`'s file in the account's folder, made readable by the user alone where it stands not. */
+  const placedFile = (name: string) =>
+    Effect.gen(function* () {
+      const file = path.join(folder, name);
+
+      if (!(yield* fileSystem.exists(file)))
+        yield* fileSystem.writeFile(file, new Uint8Array(), { flag: "wx", mode: FILE_MODE });
+      yield* fileSystem.chmod(file, FILE_MODE);
+
+      return file;
+    }).pipe(Effect.mapError(failed));
+
+  const file = yield* placedFile(COLLECTIONS_FILE);
 
   const opened = yield* Effect.acquireRelease(
     Effect.tryPromise({ try: () => collections(file), catch: failed }),
     (database) => Effect.promise(() => database.close()),
   );
 
-  return opened.keep;
+  if (words === undefined) return { keep: opened.keep, words: keptWordsInMemory() };
+  // Note that a words file that cannot be placed costs the launch its search over messages alone, never the collections opened beside it.
+  const wordsFile = yield* placedFile(WORDS_FILE).pipe(Effect.option);
+
+  if (Option.isNone(wordsFile)) return { keep: opened.keep, words: keptWordsInMemory() };
+
+  // Note that the words' database opens beside the launch rather than before it, since no first read waits on a search, so the kept Inbox is told as soon as the collections are.
+  const wordsDatabase = words(wordsFile.value);
+  // Note that a database that will not open is closed as nothing, the words kept in memory in its place (`keptWordsOnceOpen`).
+  wordsDatabase.catch(() => undefined);
+
+  yield* Effect.addFinalizer(() =>
+    Effect.promise(() =>
+      wordsDatabase.then(
+        (database) => database.close(),
+        () => undefined,
+      ),
+    ),
+  );
+
+  const keptWords = wordsDatabase.then(keptWordsIn);
+
+  return { keep: opened.keep, words: keptWordsOnceOpen(keptWords) };
 });
 
 /** Deletes `accountId`'s folder under `stateRoot`, its database and WAL files among it, as a sign-out does; one that stands not is already forgotten. */

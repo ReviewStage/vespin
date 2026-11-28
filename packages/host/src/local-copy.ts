@@ -28,6 +28,11 @@
  * as they move. Where the store will not open, its table will not read, or
  * its backend keeps no queues, none are laid back and they are kept in
  * memory for that launch alone, as the waiting writes are.
+ *
+ * The words the kept Inbox messages say (`kept-words.ts`) stand beside the
+ * kept collections, opened with them (`LocalStoreOpened.collections`), and
+ * are kept in memory while no store is open, or where its backend keeps
+ * none, as a sign-out lets them go.
  */
 
 import { failureKind, reportUnexpected } from "@repo/runtime/effect";
@@ -40,7 +45,8 @@ import type {
   RowsStore,
 } from "@repo/sync";
 import { Context, Effect, Exit, Result, Scope, Stream } from "effect";
-import type { KeptCollectionsDatabase, LocalDatabaseFailed } from "./local-database.js";
+import { type HeardWords, heardWords, type KeptWords, keptWordsInMemory } from "./kept-words.js";
+import type { KeptCollections, LocalDatabaseFailed } from "./local-database.js";
 import type { LocalOutbox, LocalQueueReadFailed, LocalRefused } from "./local-queues.js";
 
 /** What Sentry is told of a local database that would not open, read a queue back, or be deleted. */
@@ -74,9 +80,9 @@ export interface LocalStoreOpened {
   readonly rows: RowsStore;
   /** The waiting writes and refused messages; none where the backend keeps them in memory, as a browser tab does. */
   readonly queues: LocalQueues | undefined;
-  /** Opens the database of collections kept on disk whole beside it, in the caller's scope; none where the platform keeps every kind in memory. */
+  /** Opens the database of collections kept on disk whole beside it, with the words their Inbox messages say, in the caller's scope; none where the platform keeps every kind in memory. */
   readonly collections: Effect.Effect<
-    KeptCollectionsDatabase["keep"] | undefined,
+    KeptCollections | undefined,
     LocalDatabaseFailed,
     Scope.Scope
   >;
@@ -122,6 +128,8 @@ export interface LocalCopy {
   readonly forget: Effect.Effect<void>;
   /** Whether the platform keeps collections on disk beside the store (`LocalStoreBackendSeam.keepsCollections`). */
   readonly keepsCollections: boolean;
+  /** The words the kept Inbox messages say, as the follow writes them and a search reads them: the open store's, or held in memory while none stands, each write heard once it lands. */
+  readonly words: HeardWords;
 }
 
 /** The stores over one open store, and the scope it closes with. */
@@ -130,6 +138,8 @@ interface Opened {
   readonly outbox: OutboxStore | undefined;
   /** The database the stored kinds' collections are kept in beside it, where the platform keeps one and it opened. */
   readonly collections: CollectionsStore | undefined;
+  /** The words beside those collections, or held in memory where none opened. */
+  readonly words: KeptWords;
   readonly scope: Scope.Closeable;
 }
 
@@ -148,6 +158,8 @@ function reported(
 export const localCopy = Effect.fn("host/localCopy")(function* (backend: LocalStoreBackendSeam) {
   const { keepsCollections } = backend;
   let opened: Opened | undefined;
+  /** The words kept while no store is open, which a sign-out lets go. */
+  let unopenedWords = keptWordsInMemory();
   /** The account the last open was for, whose store a sign-out deletes even where it would not open. */
   let account: string | undefined;
 
@@ -220,7 +232,8 @@ export const localCopy = Effect.fn("host/localCopy")(function* (backend: LocalSt
       opened = {
         rows,
         outbox: queues?.outbox,
-        collections: keep === undefined ? undefined : { keep, scope },
+        collections: keep === undefined ? undefined : { keep: keep.keep, scope },
+        words: keep?.words ?? keptWordsInMemory(),
         scope,
       };
 
@@ -240,6 +253,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (backend: LocalSt
 
   const forget = Effect.gen(function* () {
     yield* close;
+    unopenedWords = keptWordsInMemory();
     const forgotten = account;
     account = undefined;
 
@@ -250,5 +264,7 @@ export const localCopy = Effect.fn("host/localCopy")(function* (backend: LocalSt
       .pipe(Effect.catch((failure) => reported(LOCAL_DATABASE_REPORT.FORGET_FAILED, failure)));
   });
 
-  return { store, open, forget, keepsCollections } satisfies LocalCopy;
+  const words = heardWords(() => opened?.words ?? unopenedWords);
+
+  return { store, open, forget, keepsCollections, words } satisfies LocalCopy;
 });

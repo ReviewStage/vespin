@@ -41,7 +41,7 @@ import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { inboxInOrder } from "@repo/features/inbox-live";
 import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { type EntityPool, type HeldRows, ROW_GONE } from "@repo/sync";
+import { type EntityPool, ROW_GONE, type RowKind } from "@repo/sync";
 import { Effect, type Scope } from "effect";
 import {
   type AppHostRead,
@@ -52,7 +52,10 @@ import {
 import {
   changedIds,
   INBOX_ITEM,
+  INBOX_KEEPING,
+  INBOX_THREAD,
   type InboxChange,
+  type InboxKeeping,
   itemOf,
   type PlacedInboxItem,
 } from "./inbox-collections.js";
@@ -84,6 +87,8 @@ export interface OlderInboxItemsDependencies {
   readonly tell: (read: AppHostRead<AppInboxItems>) => void;
   /** Tells each place's found items as they now stand, the writes standing drawn over them. */
   readonly tellFound: (found: AppInboxFoundPlaces) => void;
+  /** How the platform keeps the Inbox in the pool, so the items stand beside the kind the member's writes are declared on (`inboxWritesOn`); whole where none is said. */
+  readonly inboxKeeping?: InboxKeeping;
 }
 
 /** The items one place's search found, by id, and the words they were found by. */
@@ -171,8 +176,8 @@ export function olderInboxItems(dependencies: OlderInboxItemsDependencies): Olde
   let held = new Map<string, PlacedInboxItem>();
   /** Each place's found items, by the place, while it holds them. */
   let places = new Map<InboxSearchPlace, PlaceFound>();
-  /** The items as they stand beside the pool, while a session stands them. */
-  let writes: HeldRows<PlacedInboxItem, InboxChange> | undefined;
+  /** The writes standing over the items beside the pool, while a session stands them. */
+  let writes: { readonly standing: () => readonly InboxChange[] } | undefined;
 
   const olderToldNow = (standing: readonly InboxChange[]) =>
     dependencies.tell({ rows: itemsByHolder(drawnRows(held.values(), standing)) });
@@ -196,23 +201,28 @@ export function olderInboxItems(dependencies: OlderInboxItemsDependencies): Olde
   /** Whether any place holds the item `id` found. */
   const foundHolds = (id: string) => [...places.values()].some(({ rows }) => rows.has(id));
 
-  const stand = Effect.gen(function* () {
-    const stood: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
-      INBOX_ITEM,
-      {
-        redraw: () => Effect.sync(toldNow),
-        // Note that the items follow nothing, so a write over one is taken into its copy once the service answers it.
-        confirmation: () => undefined,
-        beside: {
-          shows: (key) => held.has(key) || foundHolds(key),
-          take: (change) => {
-            takeInto(held, change);
+  /** Stands the items beside `kind`, so each write declared on it is drawn over them while it stands. */
+  const standBeside = <Row extends object>(kind: RowKind<Row, InboxChange>) =>
+    dependencies.pool.stand(kind, {
+      redraw: () => Effect.sync(toldNow),
+      // Note that the items follow nothing, so a write over one is taken into its copy once the service answers it.
+      confirmation: () => undefined,
+      beside: {
+        shows: (key) => held.has(key) || foundHolds(key),
+        take: (change) => {
+          takeInto(held, change);
 
-            for (const { rows } of places.values()) takeInto(rows, change);
-          },
+          for (const { rows } of places.values()) takeInto(rows, change);
         },
       },
-    );
+    });
+
+  const stand = Effect.gen(function* () {
+    // Note that where the platform keeps the Inbox lean its writes are declared on the lean kind, so the items stand beside that one, drawing each change over their whole copies all the same.
+    const stood =
+      dependencies.inboxKeeping === INBOX_KEEPING.LEAN
+        ? yield* standBeside(INBOX_THREAD)
+        : yield* standBeside(INBOX_ITEM);
 
     writes = stood;
     yield* Effect.addFinalizer(() =>

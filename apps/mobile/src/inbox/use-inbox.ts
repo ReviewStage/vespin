@@ -37,7 +37,6 @@ import {
   inboxGroup,
   inboxList,
   inboxPinnedRuns,
-  inboxRowGroups,
   inboxSearchWordsOf,
   inboxShownItems,
   isUnread,
@@ -45,7 +44,12 @@ import {
   settledOnRead,
   taskHolder,
 } from "@repo/features/inbox-list-model";
-import { INBOX_REPLY, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import {
+  INBOX_REPLY,
+  INBOX_STATUS,
+  type InboxItem,
+  type InboxMessage,
+} from "@repo/features/inbox-wire";
 import {
   acknowledgedNote,
   closedNote,
@@ -69,6 +73,7 @@ import {
   type InboxFeed,
   inboxFeedHolds,
   selectInboxFeed,
+  selectInboxHoldings,
   selectInboxReader,
   selectTaskListStatus,
   selectWorkspaces,
@@ -101,7 +106,8 @@ import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { useInboxGroupsRead, useInboxWaiting } from "./inbox-groups.js";
+import { useInboxGroupsRead, useInboxWaiting, useInboxWholeGroupsIn } from "./inbox-groups.js";
+import { useSearchedWords, useThreadMessages } from "./inbox-rows.js";
 import { useInboxShown } from "./inbox-shown.js";
 import { useInboxRunFolds } from "./inbox-view-choices.js";
 import {
@@ -109,6 +115,7 @@ import {
   SETTLE,
   type SettledThread,
   useSendsDrawn,
+  useSendsDrawnOnRows,
   useSettleUndo,
 } from "./use-thread-answer.js";
 
@@ -130,9 +137,9 @@ const CLOSE_WENT = {
 } as const;
 
 type UseChosenInboxResult = {
-  /** Every holder's items as the list reads them, each as its row (`inboxRowGroups`). */
+  /** Every holder's items as the list reads them, each as its row, the reader's sends drawn on them. */
   readonly groups: readonly InboxGroup<InboxAnyHolder>[];
-  /** The same holders' whole items, the reader's sends drawn on them, which a search reads every word of. */
+  /** The same holders' whole items, the reader's sends drawn on them, which a search reads every word of, where the document holds them; none where the phone keeps them on disk. */
   readonly whole: readonly InboxGroup<InboxAnyHolder, InboxItem>[];
   /** Whether the holders were read, so a screen never says the Inbox is empty before its rows answered. */
   readonly read: boolean;
@@ -152,8 +159,8 @@ export function useChosenInbox(reach: InboxReach = INBOX_ATTENTION): UseChosenIn
   const { chosen } = useChosenWorkspace(workspaces);
 
   const { groups: read, read: answered } = useInboxGroupsRead(chosen?.id, reach);
-  const whole = useSendsDrawn(read);
-  const groups = useMemo(() => inboxRowGroups(whole), [whole]);
+  const groups = useSendsDrawnOnRows(read);
+  const whole = useSendsDrawn(useInboxWholeGroupsIn(chosen?.id));
 
   return { groups, whole, read: answered, chosen, workspaces: workspaces.length };
 }
@@ -229,14 +236,20 @@ export function useInboxListing(view: {
     select: selectInboxFeed,
   });
 
-  // Note that the search reads every word of each thread from its whole item, by the row's id, as the panel's Inbox searches it.
+  const { show, search, chosen, pinnedFirst = false, whose = MINE } = view;
+  const tokens = useMemo(() => searchTokens(search), [search]);
+  const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
+  const stored = told?.stored === true;
+  const searched = useSearchedWords(stored ? tokens : NO_TOKENS);
+
+  // Note that the search reads every word of each thread: where the phone keeps them on disk, its title and the words typed its kept messages say, and otherwise its whole item's, by the row's id, as the panel's Inbox searches it.
   const wordsOf = useMemo(() => {
+    if (stored) return (row: InboxRow) => [row.title, ...(searched.get(row.id) ?? NO_WORDS)];
     const byId = new Map(whole.flatMap(({ items }) => items.map((item) => [item.id, item])));
 
     return inboxSearchWordsOf((itemId) => byId.get(itemId));
-  }, [whole]);
+  }, [stored, searched, whole]);
 
-  const { show, search, chosen, pinnedFirst = false, whose = MINE } = view;
   const folds = useInboxRunFolds();
   const folded = pinnedFirst ? folds.folded : NO_FOLDS;
   // Note that the last listing is kept where the new one lists the same rows, because a new array resets every row its list holds (`RowForEach`), as a pick in a split view's list would on each press.
@@ -250,7 +263,7 @@ export function useInboxListing(view: {
       chosen,
       readerId,
       whose,
-      search: { tokens: searchTokens(search), wordsOf },
+      search: { tokens, wordsOf },
       pinnedFirst,
       folded,
     });
@@ -285,6 +298,8 @@ export function useInboxListing(view: {
 export interface InboxThreadHeld {
   readonly holder: InboxAnyHolder;
   readonly item: InboxItem;
+  /** Where the phone keeps the Inbox on disk, that the thread's messages are still being read, so its thread stands empty until they load. */
+  readonly reading?: true;
 }
 
 /** The threads either side of the thread in front, by id, and how its screen opens one; none at an end. */
@@ -405,9 +420,28 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
     [id],
   );
 
+  const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
   const read = useInboxGroupsRead(undefined, reach);
+  const wholeRead = useInboxWholeGroupsIn(undefined);
+  const messages = useThreadMessages(id);
+  const stored = told?.stored === true;
 
-  const groups = useSendsDrawn(read.groups);
+  // Note that where the Inbox is kept on disk the thread is made whole from its row and the messages kept for it, read as it opens, and stands with none until they load, so it is never looked for outside the feed; a fixture run's is the document's whole item.
+  const threaded = useMemo(
+    () =>
+      !stored
+        ? wholeRead
+        : read.groups.flatMap((group) => {
+            const row = group.items.find((item) => item.id === id);
+
+            return row === undefined
+              ? []
+              : [{ holder: group.holder, items: [wholeOf(row, messages ?? NO_MESSAGES)] }];
+          }),
+    [stored, wholeRead, read.groups, messages, id],
+  );
+
+  const groups = useSendsDrawn(threaded);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
 
   const { data: answered = INBOX_FEED.READING } = useQuery({
@@ -440,7 +474,16 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   const found = home === undefined || Predicate.isString(home) ? undefined : home;
   const homed = useHomeGroups(found?.taskId ?? undefined);
   const outside = useSendsDrawn(homed.groups);
-  const listed = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
+  const shown = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
+
+  // Note that a thread of the feed kept on disk says so until its messages load, so what acts on its thread, a notification's choice among it, waits for them.
+  const listed = useMemo(
+    () =>
+      shown !== undefined && shown === inFeed && stored && messages === undefined
+        ? { ...shown, reading: true as const }
+        : shown,
+    [shown, inFeed, stored, messages],
+  );
 
   const feed = threadStanding(reads, {
     drawn: listed !== undefined,
@@ -459,6 +502,22 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   };
 
   return { listed, readerId, feed, retry };
+}
+
+/** No word typed. */
+const NO_TOKENS: readonly string[] = [];
+
+/** No word typed that a thread's kept messages say. */
+const NO_WORDS: readonly string[] = [];
+
+/** No message read yet of a thread kept on disk. */
+const NO_MESSAGES: readonly InboxMessage[] = [];
+
+/** The whole item a row and its thread's messages make, as a thread's screen draws it. */
+function wholeOf(row: InboxRow, thread: readonly InboxMessage[]): InboxItem {
+  const { digest: _digest, thread: _none, ...fields } = row;
+
+  return { ...fields, thread };
 }
 
 /** The thread `id` names among `groups`, with what holds it; none where none holds it. */

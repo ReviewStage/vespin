@@ -1275,12 +1275,15 @@ function stood<Row extends object, Change>(
     release,
   );
 
+  // Note that a stored kind never keeps its rows in the rows store, even held in memory because no database opened, since what is kept beside it (another kind's rows, as its threads' messages are) is kept apart from that store, and a cursor kept without them would read past what they lack.
+  const rowsStore = rows.kind.stored === undefined ? store : undefined;
+
   return Effect.map(
     Effect.flatMap(acquired, (holding) =>
       Effect.map(
-        store === undefined || rows.synced.kept
+        rowsStore === undefined || rows.synced.kept
           ? Effect.undefined
-          : loadedFrom(rows, holding, store),
+          : loadedFrom(rows, holding, rowsStore),
         (load) => ({ holding, load }),
       ),
     ),
@@ -1316,11 +1319,11 @@ function stood<Row extends object, Change>(
             const drawn = committed();
             const { kept } = read;
 
-            if (store === undefined || kept === undefined || rows.synced.kept) return drawn;
+            if (rowsStore === undefined || kept === undefined || rows.synced.kept) return drawn;
             const answer = reported(rows, holding, kept, how);
 
             // Note that the store is told before any read is drawn, so it hears answers in the order they were taken, and uninterruptibly with the draws, so neither its baseline nor the reads fall behind the commit.
-            return Effect.uninterruptible(Effect.andThen(store.answered(answer), drawn));
+            return Effect.uninterruptible(Effect.andThen(rowsStore.answered(answer), drawn));
           });
         },
         holds: (key) => shows(holding, key),

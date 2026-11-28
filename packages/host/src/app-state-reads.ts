@@ -17,7 +17,7 @@ import {
 } from "@repo/features/agent-view";
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
-import type { InboxItemReads } from "@repo/features/inbox-digest";
+import type { InboxFields, InboxItemReads } from "@repo/features/inbox-digest";
 import {
   agentHolder,
   type InboxAgentHolder,
@@ -623,11 +623,11 @@ function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxI
  * each agent on no task holding items, a Manager among them, its items by
  * the agent's id (`AppInboxItems`' `agents`).
  */
-export interface InboxHoldings {
-  readonly read: InboxItemReads;
+export interface InboxHoldings<Item extends InboxFields = InboxItem> {
+  readonly read: ReadonlyMap<string, readonly Item[]>;
   readonly tasks: readonly { readonly taskId: string }[];
   readonly keptHolders: readonly TaskSummary[];
-  readonly agents: Readonly<Record<string, readonly InboxItem[]>>;
+  readonly agents: Readonly<Record<string, readonly Item[]>>;
   /** That the feed's items are kept on disk and read through live queries (`AppInboxRead`'s `stored`), so `read` and `agents` hold none of them. */
   readonly stored?: true;
 }
@@ -906,11 +906,11 @@ function holderAgentOf(agent: ListedAgent): InboxHolderAgent {
  * names it. An agent the list holds none of yet groups nothing, as a task
  * not listed yet groups nothing.
  */
-function agentGroupsIn(
-  held: InboxHoldings["agents"],
+function agentGroupsIn<Item extends InboxFields>(
+  held: InboxHoldings<Item>["agents"],
   listedAgents: readonly ListedAgent[],
   workspaceId: string | undefined,
-): readonly InboxGroup<InboxAgentHolder, InboxItem>[] {
+): readonly InboxGroup<InboxAgentHolder, Item>[] {
   const byId = new Map(listedAgents.map((agent) => [agent.id, agent]));
 
   return Object.entries(held).flatMap(([agentId, items]) => {
@@ -940,12 +940,12 @@ function agentGroupsIn(
  * Each group holds its whole items, which the client reads as the list's
  * rows (`inboxRowGroups`) once it has drawn its own sends on them.
  */
-export function inboxGroupsIn(
-  holdings: InboxHoldings,
+export function inboxGroupsIn<Item extends InboxFields = InboxItem>(
+  holdings: InboxHoldings<Item>,
   listed: readonly TaskSummary[],
   workspaceId: string | undefined,
   listedAgents: readonly ListedAgent[],
-): readonly InboxGroup<InboxAnyHolder, InboxItem>[] {
+): readonly InboxGroup<InboxAnyHolder, Item>[] {
   const held = new Set(listed.map((task) => task.id));
   const kept = holdings.keptHolders.filter((task) => !held.has(task.id));
   const tasks = kept.length === 0 ? listed : [...listed, ...kept];

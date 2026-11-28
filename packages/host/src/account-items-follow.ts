@@ -16,12 +16,17 @@ import type { AppInboxItems, AppInboxRead } from "./app-state.js";
 import {
   type AccountWideReads,
   INBOX_ITEM,
+  INBOX_KEEPING,
+  INBOX_THREAD,
   type InboxChange,
+  type InboxKeeping,
   itemOf,
   type PlacedInboxItem,
   placedItem,
 } from "./inbox-collections.js";
+import { INBOX_MESSAGE } from "./inbox-messages.js";
 import { KEPT_LIST } from "./kept-lists.js";
+import { type KeptWords, keptWordsInMemory } from "./kept-words.js";
 import {
   confirmWrite,
   droppedParts,
@@ -127,6 +132,10 @@ export interface AccountItemsDependencies {
   readonly tasksListed?: (taskIds: readonly string[]) => readonly TaskSummary[];
   /** Hears each part of an answer whose reading left rows out, since they did not decode, and how many (`live-follow.ts`). */
   readonly dropped?: (part: AccountItemsPart, count: number) => void;
+  /** How the platform keeps the Inbox's items in the pool: lean rows beside their messages, which the screens read through live queries, or whole, told on the document; whole where none is said. */
+  readonly inboxKeeping?: InboxKeeping;
+  /** The words the kept messages say, which a search reads, where the Inbox is kept lean; in memory where none is handed. */
+  readonly keptWords?: KeptWords;
   /** Hears the ids of the items each answer carried, which are the feed's from then on, as an older one a write moved back into its window is (`inbox-older-items.ts`). */
   readonly carried?: (ids: readonly string[]) => void;
 }
@@ -425,10 +434,10 @@ export function followAccountItems(
           return toldNow;
         });
 
-      const items: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
-        INBOX_ITEM,
-        {
-          redraw: drawn,
+      // Note that where the platform keeps the Inbox lean, the follow writes each answer to the pool's lean rows and their messages, which the screens read, and tells no item on the document (`account-items-stored.ts`).
+      if (dependencies.inboxKeeping === INBOX_KEEPING.LEAN) {
+        const threads = yield* dependencies.pool.stand(INBOX_THREAD, {
+          redraw: () => Effect.void,
           confirmation: () => {
             const handed = wait;
 
@@ -436,24 +445,23 @@ export function followAccountItems(
           },
           kept: KEPT_LIST.INBOX,
           owns: true,
-        },
-      );
+        });
 
-      yield* dependencies.accountWide.stand(() => wait);
+        yield* dependencies.accountWide.stand(() => wait);
 
-      /** The item `id` names as a window is told it, a write standing over it drawn, without the task the pool holds it on. */
-      const toldRow = (id: string) => {
-        const row = items.row(id);
+        // Note that the messages are answered by this follow alone, whole or by what moved, so it stands as the read that answers every one, once the kept Inbox is told (`followStoredItems`).
+        const messages = dependencies.pool.stand(INBOX_MESSAGE, {
+          owns: true,
+          redraw: () => Effect.void,
+          confirmation: () => undefined,
+        });
 
-        return row === undefined ? undefined : itemOf(row);
-      };
-
-      // Note that where the account's database keeps the Inbox kind whole, the follow writes each answer there and tells no item on the document (`account-items-stored.ts`).
-      if (items.onDisk) {
         const read = yield* followStoredItems({
           seal: (sync) => dependencies.seal(userId, sync),
           pool: dependencies.pool,
-          items,
+          items: threads,
+          messages,
+          words: dependencies.keptWords ?? keptWordsInMemory(),
           tasksListed: dependencies.tasksListed ?? noneListed,
           onTxWait: (handed) => {
             wait = handed;
@@ -477,6 +485,29 @@ export function followAccountItems(
 
         return true;
       }
+
+      const items: HeldRows<PlacedInboxItem, InboxChange> = yield* dependencies.pool.stand(
+        INBOX_ITEM,
+        {
+          redraw: drawn,
+          confirmation: () => {
+            const handed = wait;
+
+            return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
+          },
+          kept: KEPT_LIST.INBOX,
+          owns: true,
+        },
+      );
+
+      yield* dependencies.accountWide.stand(() => wait);
+
+      /** The item `id` names as a window is told it, a write standing over it drawn, without the task the pool holds it on. */
+      const toldRow = (id: string) => {
+        const row = items.row(id);
+
+        return row === undefined ? undefined : itemOf(row);
+      };
 
       /** The items `after` holds taken in place of those `was` held, `sent` the ones that came with it, read where `standing` says, and told. */
       const taken = (
