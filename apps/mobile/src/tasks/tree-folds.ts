@@ -73,6 +73,9 @@ export interface TreeHold {
   readonly setFolded: (group: TaskTreeGroup, folded: boolean) => void;
   readonly managersFolded: boolean;
   readonly setManagersFolded: (folded: boolean) => void;
+  /** Whether My tasks stands folded, the sidebar's Tasks head, which folds the member's sections and the groups under it together. */
+  readonly tasksFolded: boolean;
+  readonly setTasksFolded: (folded: boolean) => void;
   /** The parents whose sub-tasks stand open, by id. */
   readonly opened: ReadonlySet<string>;
   readonly toggleParent: (taskId: string) => void;
@@ -213,6 +216,8 @@ export function useTreeHold(): TreeHold {
     setFolded,
     managersFolded: managers,
     setManagersFolded: keepManagers,
+    tasksFolded: tasks,
+    setTasksFolded: keepTasks,
     opened: openedSet,
     toggleParent: (taskId) => openTask(taskId, !openedSet.has(taskId)),
   };

@@ -1,4 +1,4 @@
-# tasks-headers.yaml -- the Tasks list's group headers as the desktop's sidebar heads them: a repository's + opening New task with the repository chosen, its long press holding Keep at top beside Open on GitHub, a section's long press holding Change icon with the picker's suggested glyphs, Color, Emoji, and Remove icon, and a row's Move to holding New section, which asks for the section's name.
+# tasks-headers.yaml -- the Tasks list's group headers as the desktop's sidebar heads them: a repository's + opening New task with the repository chosen, its long press holding Keep at top beside Open on GitHub, a section's long press holding Change icon with the picker's suggested glyphs, Color, Emoji, and Remove icon, a row's Move to holding New section, which asks for the section's name, and My tasks heading the sections and groups with New section in its + and its long press.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -89,7 +89,8 @@ env:
 - assertVisible: "Emoji"
 - assertVisible: "Remove icon"
 - tapOn: "Color"
-- assertVisible: "Black"
+# The first color is the text's own ink, named as the appearance draws it.
+- assertVisible: "Black|White"
 - assertVisible: "Teal"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-headers-section-colors
@@ -122,3 +123,48 @@ env:
     notVisible: ".* moves into it"
     timeout: 5000
 - assertVisible: "Launch checklist"
+# My tasks heads the member's sections and the repository groups whatever
+# the grouping, as the desktop's and the web's phone's Tasks head does,
+# counting their tasks; its + and its long press hold New section, which
+# asks for the name in the system's alert; Cancel makes nothing.
+- launchApp:
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- scrollUntilVisible:
+    element:
+      text: "My tasks"
+      childOf: "My tasks, [0-9]+"
+    direction: DOWN
+- assertVisible: "New section"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-headers-my-tasks
+- longPressOn:
+    text: "My tasks"
+    childOf: "My tasks, [0-9]+"
+- assertVisible: "New section"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-headers-my-tasks-menu
+- launchApp:
+    arguments:
+      fixture: inbox
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- scrollUntilVisible:
+    element:
+      text: "My tasks"
+      childOf: "My tasks, [0-9]+"
+    direction: DOWN
+- tapOn: "New section"
+- assertVisible: "Create section"
+- waitForAnimationToEnd
+- takeScreenshot: tasks-headers-my-tasks-new-section
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    notVisible: "Create section"
+    timeout: 5000
