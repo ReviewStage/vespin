@@ -452,15 +452,16 @@ type CursorRead =
   | { readonly kind: typeof CURSOR_READ.LIST; readonly models: readonly CursorModel[] }
   | { readonly kind: typeof CURSOR_READ.REFUSED | typeof CURSOR_READ.UNAVAILABLE };
 
+/** The reads that carry no list. */
+const KEY_REFUSED: CursorRead = { kind: CURSOR_READ.REFUSED };
+const LIST_UNAVAILABLE: CursorRead = { kind: CURSOR_READ.UNAVAILABLE };
+
 /** Whether Cursor answered the failed read by refusing the key. */
 function keyRefused(failure: { readonly _tag: string }): boolean {
   const response = Predicate.hasProperty(failure, "response") ? failure.response : undefined;
+  const status = Predicate.hasProperty(response, "status") ? response.status : undefined;
 
-  return (
-    Predicate.hasProperty(response, "status") &&
-    typeof response.status === "number" &&
-    CURSOR_KEY_REFUSED_STATUSES.includes(response.status)
-  );
+  return CURSOR_KEY_REFUSED_STATUSES.some((refused) => refused === status);
 }
 
 /** One read of Cursor's list on the key given, answered as the models we offer, or as why there are none. */
@@ -481,15 +482,13 @@ const readCursorList = Effect.fnUntraced(function* (
     Effect.map((answer): CursorRead => {
       const models = cursorModelsOf(answer.items);
 
-      return models.length === 0
-        ? { kind: CURSOR_READ.UNAVAILABLE }
-        : { kind: CURSOR_READ.LIST, models };
+      return models.length === 0 ? LIST_UNAVAILABLE : { kind: CURSOR_READ.LIST, models };
     }),
     // Note that only the failure's kind and status are logged, because the request it describes carries the key.
     Effect.catch((failure) =>
       Effect.as(
         Effect.logWarning(`Cursor's model list could not be read: ${failureKind(failure)}`),
-        { kind: keyRefused(failure) ? CURSOR_READ.REFUSED : CURSOR_READ.UNAVAILABLE } as CursorRead,
+        keyRefused(failure) ? KEY_REFUSED : LIST_UNAVAILABLE,
       ),
     ),
   );

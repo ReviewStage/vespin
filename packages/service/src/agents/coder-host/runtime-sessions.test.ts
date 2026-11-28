@@ -2592,6 +2592,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           assert.ok(refused.failure.offered.some((model) => model.id === "cursor/auto"));
 
           reads = 0;
+
           const onCursor = yield* Effect.result(
             acceptedAgentChoice(owner, { model: "cursor/auto", effort: NO_EFFORT }).pipe(
               Effect.provide(PLAN_CATALOG),
