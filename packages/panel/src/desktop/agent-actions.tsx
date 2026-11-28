@@ -56,7 +56,7 @@ import {
   type ManagerSettingsSubject,
   useManagerSettingsDialog,
 } from "./manager-settings-dialog.js";
-import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
+import { type TranscriptRead, useTranscriptCopier } from "./transcript-copier.js";
 
 /**
  * agent-actions.tsx -- one coding agent's menu, built once (`agentMenuGroups`) and drawn the same wherever the agent is drawn: its tab's right-click and its column's ⋯ on a task, and its rows in the sidebar, a task's summary, a person's page, the sidebar's pins, and the summary's Archived.
