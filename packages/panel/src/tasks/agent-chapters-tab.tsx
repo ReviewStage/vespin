@@ -110,7 +110,6 @@ import {
   type LineComments,
 } from "./agent-changes-tab.js";
 import { API_KEY_WORDS } from "./agent-model.js";
-import { Section } from "./agent-pull-request-tab.js";
 import { typingInto } from "./changes-list.js";
 import {
   chapterMarks,
@@ -129,6 +128,7 @@ import { drawnIn, useFloatsOver } from "./drawn-in.js";
 import { FileCard } from "./file-ref.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import type { TreeShown } from "./file-view.js";
+import { Section } from "./pull-request-section.js";
 import type { PullRequestSource } from "./pull-request-source.js";
 import { TranscriptWords } from "./transcript-blocks.js";
 
