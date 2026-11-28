@@ -3051,6 +3051,36 @@ export function inboxAppState(
 /** The reminders a fixture run set, by item: an instant, or null where one was cleared. */
 export type InboxReminders = ReadonlyMap<string, number | null>;
 
+/**
+ * The document with every item of the staged feed passed through `change`,
+ * those on a task and those an agent on no task posted alike, so an overlay
+ * laid over the feed keeps a Manager's threads where it changes a task's.
+ * The very document where the feed holds no rows.
+ */
+function feedItemsChanged(
+  state: AppStateSnapshot,
+  change: (item: InboxItem) => InboxItem,
+): AppStateSnapshot {
+  const read = state[LIVE_READ.INBOX_ITEMS];
+  const { rows } = read;
+
+  if (rows === undefined) return state;
+
+  const changed = (held: Readonly<Record<string, readonly InboxItem[]>>) =>
+    Object.fromEntries(Object.entries(held).map(([id, items]) => [id, items.map(change)]));
+
+  return {
+    ...state,
+    [LIVE_READ.INBOX_ITEMS]: {
+      ...read,
+      rows: {
+        [INBOX_SCOPE_KIND.TASK]: changed(rows[INBOX_SCOPE_KIND.TASK]),
+        ...(rows.agents === undefined ? undefined : { agents: changed(rows.agents) }),
+      },
+    },
+  };
+}
+
 /** An item with the reminder set on it, or cleared, as `reminders` holds; the item handed in where they name it not. */
 function remindedItem(item: InboxItem, reminders: InboxReminders): InboxItem {
   const until = reminders.get(item.id);
@@ -3071,21 +3101,9 @@ export function inboxRemindersAppState(
   state: AppStateSnapshot,
   reminders: InboxReminders,
 ): AppStateSnapshot {
-  const fed = state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.TASK];
+  if (reminders.size === 0) return state;
 
-  if (reminders.size === 0 || fed === undefined) return state;
-
-  const reminded = Object.fromEntries(
-    Object.entries(fed).map(([taskId, items]) => [
-      taskId,
-      items.map((item) => remindedItem(item, reminders)),
-    ]),
-  );
-
-  return {
-    ...state,
-    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: reminded } },
-  };
+  return feedItemsChanged(state, (item) => remindedItem(item, reminders));
 }
 
 /** A reply with pictures a fixture run sent, as a read carries it, and each picture's bytes by the attachment it is read by. */
@@ -3155,29 +3173,17 @@ export function inboxSentRepliesAppState(
   state: AppStateSnapshot,
   sent: InboxSentReplies,
 ): AppStateSnapshot {
-  const fed = state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.TASK];
+  if (sent.size === 0) return state;
 
-  if (sent.size === 0 || fed === undefined) return state;
+  return feedItemsChanged(state, (item) => {
+    const replies = sent.get(item.id);
 
-  const replied = Object.fromEntries(
-    Object.entries(fed).map(([taskId, items]) => [
-      taskId,
-      items.map((item) => {
-        const replies = sent.get(item.id);
+    if (replies === undefined) return item;
 
-        if (replies === undefined) return item;
+    const thread = [...(item.thread ?? []), ...replies.map(({ message }) => message)];
 
-        const thread = [...(item.thread ?? []), ...replies.map(({ message }) => message)];
-
-        return { ...item, thread, updatedAt: replies.at(-1)?.message.createdAt ?? item.updatedAt };
-      }),
-    ]),
-  );
-
-  return {
-    ...state,
-    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: replied } },
-  };
+    return { ...item, thread, updatedAt: replies.at(-1)?.message.createdAt ?? item.updatedAt };
+  });
 }
 
 /** A picture a fixture run's reply carried, as the service answers its read; none for any other attachment. */
@@ -3209,27 +3215,13 @@ export function inboxReadMarksAppState(
   state: AppStateSnapshot,
   marks: InboxReadMarks,
 ): AppStateSnapshot {
-  const fed = state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.TASK];
+  if (marks.size === 0) return state;
 
-  if (marks.size === 0 || fed === undefined) return state;
+  return feedItemsChanged(state, (item) => {
+    const unread = marks.get(item.id);
 
-  const marked = Object.fromEntries(
-    Object.entries(fed).map(([taskId, items]) => [
-      taskId,
-      items.map((item) => {
-        const unread = marks.get(item.id);
-
-        return unread === undefined || (item.unread === true) === unread
-          ? item
-          : { ...item, unread };
-      }),
-    ]),
-  );
-
-  return {
-    ...state,
-    [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.TASK]: marked } },
-  };
+    return unread === undefined || (item.unread === true) === unread ? item : { ...item, unread };
+  });
 }
 
 /** The words a fixture run saved, by the memory's id: one of its own corrected, or a new one under the id the save answered. */
