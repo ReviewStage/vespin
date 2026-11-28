@@ -306,9 +306,9 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   heading the page, as Mail's message stands. An
   agent's page names the agent in the bar in the ink instead, as Messages
   names a conversation, since its transcript opens at its newest row, with
-  where it stands and its model muted under the name ("Working · Opus 5.5"):
-  the stack's own title over UIKit's own subtitle (`StackSubtitle`), a
-  press on it opening the model sheet. A page opened from a split view's detail, such as a
+  where it stands muted under the name ("Working"), its model standing on
+  the composer's model chip alone, as the panel's page names it: the
+  stack's own title over UIKit's own subtitle (`StackSubtitle`). A page opened from a split view's detail, such as a
   task's agent, its pull request, or a thread's task, is pushed on the
   tab's own stack over the whole window, as a compact window pushes it,
   never inside the detail's column.

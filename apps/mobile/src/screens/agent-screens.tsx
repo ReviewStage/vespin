@@ -41,7 +41,7 @@ import {
   managerChatView,
 } from "@repo/features/manager-chat-view";
 import { managerGreeting } from "@repo/features/manager-greeting";
-import { agentName, modelLabel } from "@repo/features/model-label";
+import { agentName } from "@repo/features/model-label";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -662,21 +662,13 @@ function suggestedSendOf(
 }
 
 /**
- * The line under the agent's name in its bar: where it stands and the model
- * it runs on, as the panel's tab and its model chip say them ("Working ·
- * Opus 5.5"); none before either is known. Note that it is UIKit's own
- * subtitle, which takes no press, so the model is chosen from the composer's
- * model chip.
+ * The line under the agent's name in its bar: where it stands, as the
+ * panel's tab says it ("Working"); none before it is known. Note that the
+ * model it runs on stands on the composer's model chip alone, as the
+ * panel's page names it nowhere over its log.
  */
-function agentSubtitle(
-  statusWords: string | undefined,
-  model: string | undefined,
-): BarSubtitle | undefined {
-  const words = [statusWords, model]
-    .filter((each) => each !== undefined && each !== "")
-    .join(" · ");
-
-  return words === "" ? undefined : { words };
+function agentSubtitle(statusWords: string | undefined): BarSubtitle | undefined {
+  return statusWords === undefined || statusWords === "" ? undefined : { words: statusWords };
 }
 
 /**
@@ -691,9 +683,9 @@ function agentSubtitle(
  * offers them, Archive, asked first, which goes back once the agent is
  * archived, and Permanently delete, red and last, which always asks in the
  * panel's words and goes back once the agent is deleted. Under
- * it, its transcript as one lazy list, its head where the agent stands and
- * the model it runs on, which opens the model sheet, as the composer's
- * model chip does. The transcript
+ * it, its transcript as one lazy list, its bar's subtitle saying where the
+ * agent stands, the model it runs on standing on the composer's model chip
+ * alone, as the panel's page names it. The transcript
  * is held live while the page is in focus, so a turn under way draws as it
  * moves, and its older pages are read as the reader scrolls up to them; one
  * that could not be read offers Try again. Each call opens in place, and
@@ -1125,10 +1117,7 @@ const AgentConversation = memo(function AgentConversation({
 
   const statusWords = status === undefined ? undefined : agentStateWords(status);
 
-  const subtitle = agentSubtitle(
-    statusWords,
-    agent === undefined ? undefined : modelLabel(agent.model),
-  );
+  const subtitle = agentSubtitle(statusWords);
 
   // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the bar's line changes out of the reader's sight.
   useAnnounced(statusWords);
@@ -1608,7 +1597,7 @@ const AgentConversation = memo(function AgentConversation({
   return (
     <>
       <Stack.Screen options={barOptions} />
-      {/* Note that the agent's state and model stand under its name as the bar's own subtitle, as the panel's tab says them, since the line over the transcript scrolled out of sight as the page opened at its newest row, the model chosen from the composer's model chip. */}
+      {/* Note that the agent's state stands under its name as the bar's own subtitle, as the panel's tab says it, since the line over the transcript scrolled out of sight as the page opened at its newest row; the model stands on the composer's model chip alone, as the panel's does. */}
       {/* Note that a regular window stands the name at the bar's leading edge, in the bar's own row, since on an iPad whose tab bar floats in the middle of that row UIKit dropped a centered name into a row of its own over the transcript. */}
       {/* Note that a Manager's name stands after its face, as the panel's page heads it, livelier while it works. */}
       <StackSubtitle
