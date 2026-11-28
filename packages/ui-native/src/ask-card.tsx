@@ -158,8 +158,8 @@ export function AskNote({ words }: { readonly words: string }) {
 
 /**
  * The card's acts in a row under it, at the system's regular size so each
- * stands a 44 pt target: the main act, such as Mark done, filled in the
- * accent as a screen's one act is, and a quiet one beside it, such as
+ * stands a 44 pt target: the main act, such as Mark done, outlined in the
+ * ink, as the panel's outline press, and a quiet one beside it, such as
  * Couldn't do it, its words alone in the ink, as the panel's quiet button.
  */
 export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
@@ -170,7 +170,7 @@ export function AskActs({ acts }: { readonly acts: readonly AskAct[] }) {
       key={act.label}
       label={act.label}
       symbol={act.symbol}
-      look={act.quiet === true ? BUTTON_LOOK.PLAIN : BUTTON_LOOK.PROMINENT}
+      look={act.quiet === true ? BUTTON_LOOK.PLAIN : BUTTON_LOOK.BORDERED}
       onPress={act.onPress}
     />
   ));

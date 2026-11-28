@@ -458,8 +458,8 @@ developer, Nov 10, 2026), in iOS's standard text sizes (the developer, Nov
   label and detail drawn as Markdown so a link of ours stands as its chip,
   whose press opens it and picks nothing; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it, at the system's regular size,
-  Mark done filled as the card's one act and Couldn't do it its words
-  alone, the two stacked past the accessibility sizes; `AnswerFields`, a row per
+  Mark done outlined and Couldn't do it its words
+  alone, as the panel's outline and quiet presses, the two stacked past the accessibility sizes; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
   card and prompting "Required" or "Optional" while empty, a number field's
   pad standing one Done over it for the card, a select's options as rows
