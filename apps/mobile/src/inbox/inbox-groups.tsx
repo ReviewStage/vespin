@@ -36,7 +36,12 @@ import {
   NO_INBOX_WAITING,
 } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { inboxGroupsIn, selectInboxHoldings, selectInboxReader } from "@repo/host/app-state-reads";
+import {
+  answerKeeper,
+  inboxGroupsIn,
+  selectInboxHoldings,
+  selectInboxReader,
+} from "@repo/host/app-state-reads";
 import { INBOX_ATTENTION, type InboxReach, inboxHoldingsOfRows } from "@repo/host/inbox-rows";
 import { heldValue, useHeldValue } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -239,6 +244,19 @@ export function useInboxGroupsRead(
   );
 
   return held ?? own;
+}
+
+/**
+ * How many of the reader's threads wait on them in each workspace `ids`
+ * names, in that order, read from the app's one read. Note that the list is
+ * the very one handed before while no count moved, so a reader of it, such
+ * as the workspace switcher, draws nothing anew on a delivery that moved none.
+ */
+export function useInboxWaitingIn(ids: readonly string[]): readonly number[] {
+  const waiting = useHeldValue(useContext(InboxAttention), (attention) => attention.waiting);
+  const [keep] = useState(answerKeeper<readonly number[]>);
+
+  return useMemo(() => keep(ids.map((id) => waiting.get(id)?.total ?? 0)), [keep, ids, waiting]);
 }
 
 /** How many of the reader's threads wait on them in the workspace `workspaceId` names, every workspace's where none is named, read from the app's one read, drawn again only as those counts move. */
