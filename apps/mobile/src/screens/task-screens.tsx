@@ -1,6 +1,7 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the tree and the task side by side in a regular one.
 
 import {
+  AGENT_KIND,
   AGENT_MACHINE,
   AGENT_STATUS,
   type AgentStatus,
@@ -138,6 +139,7 @@ import {
 } from "@repo/features/workspace-managers-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
+  selectAgentPinned,
   selectInboxReader,
   selectWorkspaceExperiment,
   selectWorkspaces,
@@ -2907,11 +2909,37 @@ export function useAgentRowAsk(): AgentAsking {
 }
 
 /**
+ * A Manager's Pin or Unpin, whichever it is not, as a task row's leading
+ * swipe offers it (`rowActs`): orange, run by a full swipe. None for any
+ * other agent, or an archived Manager, whose pin stands nowhere, as the
+ * panel's agent row offers it (`pinGroups`).
+ */
+function useManagerPin(
+  agent: ListedAgent,
+  acts: ReturnType<typeof useAgentRowActs>,
+): RowAction | undefined {
+  const select = useMemo(() => selectAgentPinned(agent.id), [agent.id]);
+  const { data: pinned = false } = useQuery({ ...appStateQuery, select });
+
+  if (agent.kind !== AGENT_KIND.MANAGER || agent.taskId !== null || agent.archivedAt !== undefined)
+    return undefined;
+
+  return {
+    label: pinned ? WORDS.UNPIN : WORDS.PIN,
+    symbol: pinned ? GLYPH.UNPIN : GLYPH.PIN,
+    tone: ROW_ACTION_TONE.PIN,
+    onPress: () => acts.pin(agent.id, !pinned),
+  };
+}
+
+/**
  * What an agent's row does, whatever row draws it: its vespin.dev link, which
  * its menu copies and a row that drags carries, and its acts: its swipes,
  * which stop it while it works or ask to archive it once it rests, the
  * question they ask by it, and its long press menu, the panel's agent menu,
- * so a task's agent and a Manager on the Tasks list offer the same acts.
+ * so a task's agent and a Manager on the Tasks list offer the same acts. A
+ * Manager's row adds Pin or Unpin, behind its leading swipe as a task's row
+ * stands it and first in its menu as the panel's agent row stands it.
  */
 function useAgentRowParts(agent: ListedAgent, name: string, asking: AgentAsking | undefined) {
   const agentActs = useAgentRowActs();
@@ -2919,6 +2947,7 @@ function useAgentRowParts(agent: ListedAgent, name: string, asking: AgentAsking 
   const keeping = useKeeping();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const linkStep = linkWorkspaceStep(agent.workspaceId, workspaces);
+  const pin = useManagerPin(agent, agentActs);
 
   const link =
     linkStep === undefined
@@ -2940,25 +2969,29 @@ function useAgentRowParts(agent: ListedAgent, name: string, asking: AgentAsking 
         agentActs,
         asking === undefined ? undefined : (agentId) => asking.archive(agentId, asker),
       ),
+      leadingActions: pin === undefined ? undefined : [pin],
       question: asking?.question(agent.id, asker),
-      menu: agentMenu({
-        agent,
-        name,
-        link,
-        acts: agentActs,
-        asking:
-          asking === undefined
-            ? undefined
-            : {
-                archive: () => asking.archive(agent.id, asker),
-                remove: () =>
-                  asking.remove(
-                    { agentId: agent.id, name, archived: agent.archivedAt !== undefined },
-                    asker,
-                  ),
-              },
-        onCopyLink: keeping.copyWords,
-      }),
+      menu: [
+        ...(pin === undefined ? [] : [[{ ...pin, tone: ROW_ACTION_TONE.NEUTRAL }]]),
+        ...agentMenu({
+          agent,
+          name,
+          link,
+          acts: agentActs,
+          asking:
+            asking === undefined
+              ? undefined
+              : {
+                  archive: () => asking.archive(agent.id, asker),
+                  remove: () =>
+                    asking.remove(
+                      { agentId: agent.id, name, archived: agent.archivedAt !== undefined },
+                      asker,
+                    ),
+                },
+          onCopyLink: keeping.copyWords,
+        }),
+      ],
     },
   };
 }

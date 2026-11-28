@@ -4,12 +4,12 @@ import {
   DESCRIPTION_COMMENT_STATUS,
 } from "@repo/features/description-comment-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { COMMENT_SUBJECT } from "@repo/features/tasks-view";
+import { COMMENT_SUBJECT, IDLE_TASKS_VIEW, NO_TASK_LIST } from "@repo/features/tasks-view";
 import { expect, test } from "vitest";
 import { ACT_KIND } from "./acts.js";
 import type { AppStateSnapshot } from "./app-state.js";
 import { initialAppState } from "./client/app-state-store.js";
-import { inboxActAnswer, inboxAppState } from "./fixture-inbox.js";
+import { chosenTasksView, inboxActAnswer, inboxAppState, inboxTasksView } from "./fixture-inbox.js";
 import { FIXTURE_IDS } from "./fixture-stage.js";
 import { runModeFor } from "./run-mode.js";
 
@@ -84,4 +84,15 @@ test("a thread the run starts, and a staged one it resolves, stand on the commen
     DESCRIPTION_COMMENT_STATUS.RESOLVED,
   );
   expect(resolved.some((thread) => thread.id === STARTED)).toBe(true);
+});
+
+test("a Manager the run pins stands among the reader's pins, as the service keeps a pin on no task", () => {
+  const staged = inboxTasksView(PROFILE, { ...IDLE_TASKS_VIEW, ...NO_TASK_LIST });
+  const release = staged.taskAgents?.find((agent) => agent.title === "Release manager");
+
+  expect(release?.taskId).toBeNull();
+
+  const pinned = chosenTasksView(staged, new Map([[release?.id ?? "", { pinned: true }]]));
+
+  expect(pinned.taskAgentPins?.some((pin) => pin.agentId === release?.id)).toBe(true);
 });

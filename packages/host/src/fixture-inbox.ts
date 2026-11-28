@@ -3443,7 +3443,7 @@ function standsOn(agent: AgentSummary, change: AgentChange): boolean {
   });
 }
 
-/** The reader's pins with each pin the run set or took off laid over, by the agent's task. */
+/** The reader's pins with each pin the run set or took off laid over, each on its agent's task, or on none for a Manager. */
 function pinnedAgents(
   pins: NonNullable<TasksView["taskAgentPins"]>,
   agents: NonNullable<TaskListParts["taskAgents"]>,
@@ -3453,9 +3453,7 @@ function pinnedAgents(
 
   const added = agents
     .filter(({ id }) => choices.get(id)?.pinned === true && !kept.some((pin) => pin.agentId === id))
-    .flatMap(({ id, taskId }) =>
-      taskId === null ? [] : [{ agentId: id, taskId, pinnedAt: LANDED }],
-    );
+    .map(({ id, taskId }) => ({ agentId: id, taskId, pinnedAt: LANDED }));
 
   return [...kept, ...added];
 }
