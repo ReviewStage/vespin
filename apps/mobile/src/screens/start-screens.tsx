@@ -1304,7 +1304,7 @@ export function NewTaskScreen({
 
   const place = { repository: repository.picked, relation: relation.relation };
   const tree = inTree(relation.relation) ? relation.task : undefined;
-  // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
+  // Note that a `/` offers the skills, and an `@` the files, of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
   const skillsRepository = tree === undefined ? repository.picked : (tree.repository ?? undefined);
 
   const skills = useSkillOffer(
@@ -1320,7 +1320,10 @@ export function NewTaskScreen({
   // The field, which draws each mention and each picture attached as its pill.
   const pillField = usePillField(prompt, setPrompt, pictures);
 
-  const mentions = useMentionOffer({ workspaceId, taskId: undefined }, pillField.mentions);
+  const mentions = useMentionOffer(
+    { workspaceId, taskId: undefined, repository: skillsRepository },
+    pillField.mentions,
+  );
 
   const unreached =
     tree !== undefined

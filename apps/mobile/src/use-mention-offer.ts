@@ -134,9 +134,11 @@ const PATHS_QUERY_ROOT = "mention-repository-paths";
 /** The paths of the repository the task names, the whole tree at its default branch; a refusal fails the read, never an empty repository. */
 async function repositoryPaths(
   acts: ReturnType<typeof useHostActs>,
-  taskId: string,
+  place:
+    | { readonly taskId: string }
+    | { readonly workspaceId: string; readonly repository: string },
 ): Promise<readonly RepositoryPath[]> {
-  const answer = await acts[ACT_KIND.TASKS_TREE]({ taskId, path: "", recursive: true });
+  const answer = await acts[ACT_KIND.TASKS_TREE]({ ...place, path: "", recursive: true });
 
   if (!("folder" in answer)) throw new Error("The repository's paths were not read.");
 
@@ -249,6 +251,8 @@ export function useMentionOffer(
     readonly taskId: string | undefined;
     /** The agent whose composer it is, which its own `@` never offers, as the panel's leaves it out. */
     readonly agentId?: string | undefined;
+    /** The repository the place works on where no task names one, as a Manager's or New task's picked one, whose files and folders its `@` offers, as the panel's place of no task offers them. */
+    readonly repository?: string | null | undefined;
     /** The words of the task's description being edited, whose sections its `@` offers, the task itself standing among them rather than among the tasks, as the panel's description offers them. */
     readonly description?: string | undefined;
   },
@@ -287,15 +291,22 @@ export function useMentionOffer(
   // Note that the task's repository's paths are read once and held while the app runs, as the panel holds them, since a repository's files rarely move while a word is typed.
 
   const current = tasks.find((task) => task.id === taskId);
-  const repository = current?.repository ?? null;
-  const readsPaths = reading && taskId !== undefined && repository !== null;
+  // Note that a place no task holds reads its repository's tree through its workspace, as the panel's does.
+  const repository = current?.repository ?? place.repository ?? null;
+  const readsPaths = reading && workspaceId !== undefined && repository !== null;
 
   const { data: paths, isPending: pathsPending } = useQuery({
-    queryKey: [PATHS_QUERY_ROOT, taskId, repository],
+    queryKey: [PATHS_QUERY_ROOT, workspaceId, taskId, repository],
     enabled: readsPaths,
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
-    queryFn: () => repositoryPaths(acts, taskId ?? ""),
+    queryFn: () =>
+      repositoryPaths(
+        acts,
+        taskId === undefined
+          ? { workspaceId: workspaceId ?? "", repository: repository ?? "" }
+          : { taskId },
+      ),
   });
 
   const taskPullRequests = useTaskListRow(useTaskListCollections().taskPullRequests, taskId);

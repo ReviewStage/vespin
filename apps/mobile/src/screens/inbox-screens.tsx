@@ -1294,7 +1294,7 @@ function ThreadDetail({
                 item={item}
                 answer={answer}
                 agentName={agentName}
-                place={{ workspaceId, taskId: task?.id }}
+                place={{ workspaceId, taskId: task?.id, repository: holderRepository(holder) }}
                 inColumn
               />
             ),
@@ -1351,7 +1351,7 @@ function ThreadDetail({
             item={item}
             answer={answer}
             agentName={agentName}
-            place={{ workspaceId, taskId: task?.id }}
+            place={{ workspaceId, taskId: task?.id, repository: holderRepository(holder) }}
           />
         }
       >
