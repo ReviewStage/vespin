@@ -9,6 +9,7 @@
 
 import type { AgentAttachment } from "./agent-wire.js";
 import { base64PictureSize, type ImageDimensions } from "./image-signature.js";
+import { type InboxRow, inboxRowDrawn } from "./inbox-digest.js";
 import {
   INBOX_ASK_STATUS,
   INBOX_MESSAGE_AUTHOR,
@@ -369,4 +370,34 @@ export function inboxSendingDrawn(
   reader: InboxReader | undefined,
 ): InboxItem {
   return sending.reduce((drawn, each) => sendingDrawn(drawn, each, reader), item);
+}
+
+/**
+ * A list row as the reader's sends leave it, drawn over the thread its
+ * digest carries (`inboxRowDrawn`); the row itself where they leave it as
+ * it was. Note that a row carries only its thread's newest messages, so a
+ * reply the service took (`taken`, by its key) is drawn only until a
+ * message as new as it stands at the row's foot, since past that the reply
+ * was carried or passed, and drawing it would lay it again past what
+ * followed it.
+ */
+export function inboxRowSendingDrawn(
+  row: InboxRow,
+  sending: readonly InboxSending[],
+  taken: ReadonlySet<string>,
+  reader: InboxReader | undefined,
+): InboxRow {
+  const newest = row.digest.tail.at(-1)?.createdAt;
+
+  const standing = sending.filter(
+    (each) =>
+      each.kind !== INBOX_SENDING.REPLY ||
+      !taken.has(each.key) ||
+      newest === undefined ||
+      newest < each.at,
+  );
+
+  if (standing.length === 0) return row;
+
+  return inboxRowDrawn(row, (item) => inboxSendingDrawn(item, standing, reader)) ?? row;
 }
