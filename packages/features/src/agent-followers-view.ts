@@ -23,23 +23,17 @@ export const agentFollowersParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
 });
 
-export type AgentFollowersParams = typeof agentFollowersParamsSchema.Type;
-
 /** The account's own switch on a Manager it follows, as the window asks it: the Manager, and whether it may use the account's machines. */
 export const agentFollowerMachinesParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   machines: EffectSchema.Boolean,
 });
 
-export type AgentFollowerMachinesParams = typeof agentFollowerMachinesParamsSchema.Type;
-
 /** Another member added to or removed from a Manager's followers, as the window asks it: the Manager, and the member by their account's id. */
 export const agentFollowerParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   userId: taskAssigneeIdSchema,
 });
-
-export type AgentFollowerParams = typeof agentFollowerParamsSchema.Type;
 
 /** Why a Manager's followers were not read or changed: the service did not answer, the Manager is out of reach, or its owner was asked to stop following. */
 export const AGENT_FOLLOWER_FAILURE = failureSetOf(agentFollowersContract);

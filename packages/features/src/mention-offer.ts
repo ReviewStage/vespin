@@ -56,8 +56,6 @@ export const MENTION_OFFER_KIND = {
 
 export type MentionOfferKind = (typeof MENTION_OFFER_KIND)[keyof typeof MENTION_OFFER_KIND];
 
-export type MentionOfferGroup = (typeof MENTION_OFFER_GROUP)[keyof typeof MENTION_OFFER_GROUP];
-
 /** The most rows a group stands, as the panel's picker stands four (`PER_GROUP`). */
 const PER_GROUP = 4;
 

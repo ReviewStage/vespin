@@ -621,8 +621,6 @@ export const INBOX_OLDER_READ = liveRead({
   },
 });
 
-export type InboxOlderLiveAnswer = LiveReadAnswer<typeof INBOX_OLDER_READ>;
-
 /** Each part's rows of the account's inbox items, decoded. */
 export type AccountInboxItemsLiveRows = typeof INBOX_ITEMS_READ.rows.Type;
 
@@ -669,5 +667,3 @@ export const INBOX_SEARCH_READ = liveRead({
     agents: TASK_LIST_READ.parts.agents,
   },
 });
-
-export type InboxSearchLiveAnswer = LiveReadAnswer<typeof INBOX_SEARCH_READ>;

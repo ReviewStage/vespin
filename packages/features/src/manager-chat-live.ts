@@ -97,8 +97,6 @@ export const managerChatReactAnswerSchema = EffectSchema.Struct({
   changed: EffectSchema.Boolean,
 });
 
-export type ManagerChatReactAnswer = typeof managerChatReactAnswerSchema.Type;
-
 /**
  * A member's edit of their own message of a Manager's chat
  * (`PATCH /api/agents/{id}/chat-messages/{message}`): its words as they now
