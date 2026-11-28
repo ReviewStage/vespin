@@ -98,6 +98,7 @@ import {
   type TaskTreeGroup,
   taskBranches,
   taskRowLook,
+  treeGroupMayHoldSettled,
 } from "@repo/features/task-tree-model";
 import {
   TASK_PRIORITY_ORDER,
@@ -113,7 +114,7 @@ import {
   repositoryPageUrl,
   type StopAgentsWords,
 } from "@repo/features/tasks-model";
-import { mayHoldSettled, TASKS_GROUP } from "@repo/features/tasks-page-model";
+import { TASKS_GROUP } from "@repo/features/tasks-page-model";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { provenanceText } from "@repo/features/time-format";
 import {
@@ -1549,7 +1550,7 @@ function GroupSection({
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
   readonly hold: TreeHold;
-  /** The paging of the settled tasks past the list, which a group that may hold one tells as its end comes and goes; none where the list reads none in. */
+  /** The paging of the settled tasks past the list, which a group that may hold one (`treeGroupMayHoldSettled`) tells as its end comes and goes; none where the list reads none in. */
   readonly settledPages?: SettledPages | undefined;
 }) {
   const newTaskIn = useNewTaskIn();
@@ -1578,9 +1579,7 @@ function GroupSection({
         listing={listing}
         parents={treeParents(hold)}
         onAtEnd={
-          group.head !== undefined && mayHoldSettled(group.head)
-            ? settledPages?.onRunEnd
-            : undefined
+          treeGroupMayHoldSettled(group, listing.treeView) ? settledPages?.onRunEnd : undefined
         }
       />
     </ListSection>
@@ -1753,13 +1752,29 @@ function TreeSections({
         hold={hold}
       />
       {tree.pinned === undefined ? null : (
-        <GroupSection group={tree.pinned} listing={listing} hold={hold} />
+        <GroupSection
+          group={tree.pinned}
+          listing={listing}
+          hold={hold}
+          settledPages={settledPages}
+        />
       )}
       {tree.following === undefined ? null : (
-        <GroupSection group={tree.following} listing={listing} hold={hold} />
+        <GroupSection
+          group={tree.following}
+          listing={listing}
+          hold={hold}
+          settledPages={settledPages}
+        />
       )}
       {tree.sections.map((group) => (
-        <GroupSection key={group.key} group={group} listing={listing} hold={hold} />
+        <GroupSection
+          key={group.key}
+          group={group}
+          listing={listing}
+          hold={hold}
+          settledPages={settledPages}
+        />
       ))}
       {tree.tasks.map((group) => (
         <GroupSection
