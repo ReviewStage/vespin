@@ -539,15 +539,17 @@ function inWindow(completed: CompletedWindow, at: number, now: number): boolean 
 
 /**
  * Whether the view shows settled tasks in full, past those finished lately:
- * its completed window at All, or its Status filter naming Done or
- * Canceled, which the window holds none of back.
+ * its Status filter naming Done or Canceled, which the window holds none of
+ * back, or, where it names no status, its completed window at All. Note that
+ * a Status filter naming only open statuses lets no settled task stand
+ * whatever the window, so the view reads none past the list.
  */
 export function showsSettledInFull(filter: TasksFilter, display: TasksDisplay): boolean {
-  return (
-    display.completed === COMPLETED_WINDOW.ALL ||
-    namedByFilter(filter, TASK_STATUS.DONE) ||
-    namedByFilter(filter, TASK_STATUS.CANCELED)
-  );
+  if (filterValues(filter, TASKS_FILTER_FIELD.STATUS).length > 0) {
+    return namedByFilter(filter, TASK_STATUS.DONE) || namedByFilter(filter, TASK_STATUS.CANCELED);
+  }
+
+  return display.completed === COMPLETED_WINDOW.ALL;
 }
 
 /** Whether the completed window keeps a task standing: every open one, and a settled one finished within the window, as of `now`. */
