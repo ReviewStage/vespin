@@ -61,7 +61,7 @@ import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { ShellRoomContext } from "../stage-room.js";
-import { fileLook } from "../tasks/file-ref.js";
+import { fileLook } from "../tasks/file-look.js";
 import { SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import { NO_LOOKS, useTaskLooks } from "../tasks/use-task-looks.js";
