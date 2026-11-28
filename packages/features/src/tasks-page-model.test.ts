@@ -16,6 +16,7 @@ import {
   LIST_COLUMN,
   listPropertiesFitting,
   NO_TASKS_FILTER,
+  showsSettledInFull,
   TASK_MAKER,
   TASK_PROPERTY,
   TASK_PROPERTY_ORDER,
@@ -277,6 +278,19 @@ test("a settled status the filter names stands in full whatever the completed wi
   }).map((column) => [headOf(column.head), column.tasks.map((each) => each.name), column.older]);
 
   expect(board).toEqual([[["status", "done"], ["Shipped in spring", "Shipped Monday"], undefined]]);
+});
+
+test("the settled past the list are read in only where they can stand: All with no status named, or a settled status the filter names", () => {
+  const all = { ...DEFAULT_LIST_DISPLAY, completed: COMPLETED_WINDOW.ALL };
+  const none = { ...DEFAULT_LIST_DISPLAY, completed: COMPLETED_WINDOW.NONE };
+  const todo = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.STATUS, TASK_STATUS.TODO);
+  const todoOrDone = toggledFilter(todo, TASKS_FILTER_FIELD.STATUS, TASK_STATUS.DONE);
+
+  expect([
+    showsSettledInFull(NO_TASKS_FILTER, all),
+    showsSettledInFull(todo, all),
+    showsSettledInFull(todoOrDone, none),
+  ]).toEqual([true, false, true]);
 });
 
 test("grouped by repository the groups run by name and the tasks with none last; by creator the reader's own first, then teammates by name, then nobody's", () => {
