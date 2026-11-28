@@ -261,6 +261,8 @@ type AgentRowProps = {
     | undefined;
   /** What a swipe from the trailing edge reveals, such as Stop or Archive, the first of it on a full swipe. */
   readonly trailingActions?: readonly RowSwipe[] | undefined;
+  /** What a swipe from the leading edge reveals, such as a Manager's Pin, the first of it on a full swipe. */
+  readonly leadingActions?: readonly RowSwipe[] | undefined;
   /** Its long press menu past its fold and its pull request, in the panel's agent menu's groups (`agentMenuGroups`): its links, Rename, Stop and Archive, and last and alone, Permanently delete. Its swipes stand behind the swipe alone. */
   readonly menu?: readonly LongPressGroup[] | undefined;
   /** What its long press lifts over its menu (`agentPreview`). */
@@ -503,6 +505,7 @@ export function AgentRow(props: AgentRowProps) {
       row={row}
       indent={(depth + (fold === undefined ? 0 : 1)) * column}
       trailingActions={props.trailingActions}
+      leadingActions={props.leadingActions}
       menu={[
         [...foldActions(fold, folding), ...pullRequestActions(pullRequest)],
         ...(props.menu ?? []),

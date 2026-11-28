@@ -1,4 +1,4 @@
-# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, the pinned ones under Pinned among its tasks by their pins and a kept one in its section, the Managers head wearing the Manager's glyph, a Manager's row unread, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
+# managers.yaml -- the workspace's Managers: their section leading the Tasks list above Pinned, the pinned ones under Pinned among its tasks by their pins and a kept one in its section, the Managers head wearing the Manager's glyph, a Manager's row unread, pinned and unpinned by its leading swipe as a task's row is, New Manager's sheet from the section's +, its press opening its chat (its messages to the account alone, its other words left out), its face changed from its row's Change face › and from its Settings' picker, its Settings from the chat's ⋯, its Overview pushed from the chat's bar (its counts, the agents it started, and their pull request), and Search finding it.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -49,6 +49,52 @@ env:
     element: "Release manager"
     direction: UP
 - waitForAnimationToEnd
+# Its row's leading swipe reveals Pin, as a task row's does, which stands it
+# under Pinned and leaves the Managers group empty; the same swipe there
+# reveals Unpin, which brings it back. Note that a regular window, whose
+# swipes read as taps under Maestro's driver, is left out.
+- runFlow:
+    when:
+      notVisible: "No task selected"
+    commands:
+      - runFlow:
+          file: subflows/to-row.yaml
+          env:
+            ROW: Release manager
+      - waitForAnimationToEnd
+      - swipe:
+          from: "Release manager"
+          direction: RIGHT
+      - waitForAnimationToEnd
+      - takeScreenshot: managers-swipe-pin
+      - tapOn: "Pin"
+      - waitForAnimationToEnd
+      - assertVisible: "No Managers yet."
+      - assertVisible:
+          text: "Release manager"
+          below:
+            text: "Pinned"
+      - takeScreenshot: managers-pinned-by-swipe
+      - runFlow:
+          file: subflows/to-row.yaml
+          env:
+            ROW: Release manager
+      - waitForAnimationToEnd
+      - swipe:
+          from: "Release manager"
+          direction: RIGHT
+      - waitForAnimationToEnd
+      - takeScreenshot: managers-swipe-unpin
+      - tapOn: "Unpin"
+      - waitForAnimationToEnd
+      - assertVisible:
+          text: "Pinned"
+          below:
+            text: "Release manager"
+      - scrollUntilVisible:
+          element: "Release manager"
+          direction: UP
+      - waitForAnimationToEnd
 # Its row's long press offers Change face › beside Rename, as the panel's
 # Manager menu does: a submenu to each character, its faces in each color.
 - longPressOn: "Release manager"
