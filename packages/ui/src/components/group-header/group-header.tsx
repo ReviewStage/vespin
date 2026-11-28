@@ -258,8 +258,8 @@ const LEAD_INSET = {
 } as const satisfies Record<GroupLook, string>;
 
 /**
- * A band's ground and its label's ink and weight, standing over its rows as
- * their section's head. Note that a band that folds wears the row's hover on
+ * A band's ground and its label's ink and weight, the section role's,
+ * standing over its rows as their section's head. Note that a band that folds wears the row's hover on
  * its lead, over its own ground, rather than in its ground's place, because
  * the hover's fill is translucent and a band that sticks would show the rows
  * scrolling beneath it through.
@@ -267,7 +267,7 @@ const LEAD_INSET = {
 const BAND = {
   HEAD: "bg-well",
   LEAD_PRESSED: "hover:bg-muted",
-  LABEL: "font-ui-semibold text-foreground",
+  LABEL: "font-section text-foreground",
 } as const;
 
 /**
