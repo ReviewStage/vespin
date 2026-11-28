@@ -96,7 +96,7 @@ export function WorkspaceCard({
  * A workspace named: its tile and its name, and under the name its `line`
  * where a row hangs one. `name` stands in for the plain name where a place
  * draws it otherwise, a search marking what matched. With `card` the ref
- * hangs it while the pointer rests on it. `marked` puts the attention dot on
+ * hangs it while the pointer rests on it. `marked` cuts the attention dot into
  * the tile's corner, the sidebar head's while a thread waits on the reader
  * in another workspace, which the place drawing it says in words.
  */
@@ -141,11 +141,11 @@ export function WorkspaceRef({
       )}
       data-size={size}
     >
-      <CornerDot shown={marked} tone={CORNER_DOT_TONE.ATTENTION} place={CORNER_DOT_PLACE.EDGE}>
-        <ReplayMask>
+      <ReplayMask>
+        <CornerDot shown={marked} tone={CORNER_DOT_TONE.ATTENTION} place={CORNER_DOT_PLACE.CUTOUT}>
           <WorkspaceTile workspace={workspace} size={TILE_OF_SIZE[size]} />
-        </ReplayMask>
-      </CornerDot>
+        </CornerDot>
+      </ReplayMask>
       {line === undefined ? (
         named
       ) : (

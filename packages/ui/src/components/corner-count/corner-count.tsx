@@ -29,15 +29,21 @@ export type CornerDotTone = (typeof CORNER_DOT_TONE)[keyof typeof CORNER_DOT_TON
 export const CORNER_DOT_PLACE = {
   /** Set in from a press's top end corner, over its padding. */
   INSIDE: "inside",
-  /** Astride a mark's own top end corner, on a ring of the window's ground, as an app icon's badge stands past its icon: a tile filled to its edge, whose middle a dot set in would land on. */
-  EDGE: "edge",
+  /**
+   * In a filled mark's own top end corner, the mark cut away a hair wider
+   * round it, as a status glyph's is (`status-dot.css`): a workspace's tile,
+   * whose middle a dot set in would land on. It stands inside the mark's
+   * box, so nothing that clips the box cuts it, and the cut shows whatever
+   * ground stands behind, never a ring of a color that would have to know it.
+   */
+  CUTOUT: "cutout",
 } as const;
 
 export type CornerDotPlace = (typeof CORNER_DOT_PLACE)[keyof typeof CORNER_DOT_PLACE];
 
 const CORNER_DOT_PLACE_CLASS = {
-  [CORNER_DOT_PLACE.INSIDE]: "top-ui-4 right-ui-4",
-  [CORNER_DOT_PLACE.EDGE]: "-top-ui-2 -right-ui-2 shadow-corner-dot-ring",
+  [CORNER_DOT_PLACE.INSIDE]: "top-ui-4 right-ui-4 size-corner-dot",
+  [CORNER_DOT_PLACE.CUTOUT]: "top-0 right-0 size-corner-dot-cutout",
 } as const satisfies Record<CornerDotPlace, string>;
 
 const CORNER_DOT_INK = {
@@ -88,17 +94,21 @@ export function CornerDot({
   shown: boolean;
   /** The dot's ink: the accent's for a view's state, the attention's for what waits on the reader. */
   tone?: CornerDotTone | undefined;
-  /** Where it stands: set in from a press's corner, or astride a filled mark's edge, a workspace's tile while a thread waits in another workspace. */
+  /** Where it stands: set in from a press's corner, or cut into a filled mark's own corner, a workspace's tile while a thread waits in another workspace. */
   place?: CornerDotPlace | undefined;
   /** The press the dot stands over. */
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <span className="ui-corner-dot relative inline-flex" data-dot={shown ? "true" : undefined}>
+    <span
+      className="ui-corner-dot relative inline-flex"
+      data-dot={shown ? "true" : undefined}
+      data-place={place}
+    >
       {children}
       {shown ? (
         <span
-          className={`ui-corner-dot-mark pointer-events-none absolute ${CORNER_DOT_PLACE_CLASS[place]} size-corner-dot rounded-disc ${CORNER_DOT_INK[tone]}`}
+          className={`ui-corner-dot-mark pointer-events-none absolute ${CORNER_DOT_PLACE_CLASS[place]} rounded-disc ${CORNER_DOT_INK[tone]}`}
           aria-hidden="true"
         />
       ) : null}
