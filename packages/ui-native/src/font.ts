@@ -38,6 +38,15 @@ const STYLE_POINTS: Record<TextStyle, number> = {
 const STYLE_WEIGHT: Partial<Record<TextStyle, Weight>> = { headline: "semibold" };
 
 /**
+ * How a custom face's lines stand, unless the caller names its own: tight,
+ * which takes 2 pt off each line, so Geist's natural leading (1.3 times its
+ * size, 22.1 pt at 17 pt) stands about as densely as the system face's
+ * (20.3 pt), and SwiftUI's rows agree with React Native's
+ * (`LINE_HEIGHT_SCALE`) (the developer, Nov 28, 2026).
+ */
+const LEADING = "tight";
+
+/**
  * Each weight a step heavier, which Bold Text asks of a custom face as it
  * thickens the system's own, so the embedded medium, semibold and bold
  * faces stand in for regular, medium and semibold.
@@ -72,6 +81,7 @@ export function font(params: FontParams): ReturnType<typeof systemFont> {
   }
 
   const custom: FontParams = {
+    leading: LEADING,
     ...params,
     family: design === "monospaced" ? FACE.CODE : FACE.TEXT,
   };
