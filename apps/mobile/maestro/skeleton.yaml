@@ -68,7 +68,10 @@ env:
       TAB: Tasks
 - assertVisible: "Tasks"
 - takeScreenshot: tasks
-- tapOn: "Teammate invitations"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Teammate invitations"
 - assertVisible: "Created by .*"
 - takeScreenshot: task
 # The Search tab is tapped by its id, since a split view's search field is
