@@ -279,6 +279,8 @@ export const GLYPH = {
   SLEEP: lucide(LUCIDE_SYMBOL.TIMER),
   WAKE: lucide(LUCIDE_SYMBOL.ALARM_CLOCK_CHECK),
   WAKE_OFF: lucide(LUCIDE_SYMBOL.ALARM_CLOCK_OFF),
+  // Where a turn was cut off and carried on by itself, as the panel's carry-on line wears it.
+  CARRY_ON: catalogLucide("StepForward"),
   MESSAGE: lucide(LUCIDE_SYMBOL.SEND),
   TODOS: lucide(LUCIDE_SYMBOL.LIST_CHECKS),
   LIST: lucide(LUCIDE_SYMBOL.LAYOUT_LIST),

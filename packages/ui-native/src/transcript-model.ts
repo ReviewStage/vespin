@@ -65,10 +65,12 @@ import {
   linesLabel,
   sizeLabel,
 } from "@repo/features/attachment-model";
+import { carryOnLineWords } from "@repo/features/carry-on-words";
 import { fileName } from "@repo/features/code-ref-words";
 import { isAudioType, isVideoType } from "@repo/features/conversation-picture-wire";
 import { fileMarkers } from "@repo/features/file-marker";
 import { githubAccountPage, isBotLogin } from "@repo/features/github-login";
+import { threadLineTitle, threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME, type IntegrationProvider } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { MANAGER_CHAT_AUTHOR, type ManagerChatAttachment } from "@repo/features/manager-chat-live";
@@ -113,12 +115,27 @@ import {
 } from "@repo/features/tool-call-model";
 import {
   agentMessageOf,
+  COMMENT_LINE_LEAD,
+  carryOnLineOf,
+  commentLineOf,
+  commentLineSubject,
+  commentLineWords,
   type GitHubLineFold,
   githubLineFold,
   githubLineOf,
   githubLineWords,
+  isWakeupLine,
+  type LineLead,
+  SLACK_LINE_LEAD,
+  SLACK_LINE_SUBJECT,
+  slackLineOf,
   suggestedByOf,
   suggestionStartOf,
+  THREAD_LINE_DID,
+  threadLineOf,
+  WAKEUP_LINE_LEAD,
+  wakeupDelayOf,
+  wakeupLineSubject,
 } from "@repo/features/transcript-lines";
 import {
   CALL_KIND,
@@ -156,6 +173,8 @@ export const TRANSCRIPT_ITEM = {
   PULL_REQUEST: "pull-request",
   /** What GitHub said on the agent's pull request, as the panel's folding card: its head, opening on what it holds. */
   GITHUB: "github",
+  /** Where a turn was cut off and carried on by itself, as the panel's step: why, opening on what the agent was sent. */
+  CARRY_ON: "carry-on",
   /** The quiet line a finished turn ends on: how long it worked and when it ended. */
   FOOT: "foot",
   /** The line the transcript ends on while its agent works. */
@@ -289,6 +308,25 @@ export interface ChatThreadMark {
   readonly words: string;
 }
 
+/**
+ * The head a line steered into the agent stands under, in place of the
+ * words the agent was handed, as the panel heads it: who sent it, where
+ * anyone but the reader did, what they did (`lead`, worded to follow their
+ * name or to open the line), and the chip of what they did it on, which
+ * opens a page (`address`) or an Inbox thread (`thread`), or says alone.
+ */
+export interface SaidHead {
+  readonly lead: string;
+  /** The chip's words; none where the head ends on its lead, as a wakeup whose wait was not kept. */
+  readonly subject: string | undefined;
+  /** Whether the chip is a wakeup's, which wears the alarm's glyph, as the panel's wakeup pill does. */
+  readonly wakeup?: boolean | undefined;
+  /** Where a press on the chip opens; none where it opens no page. */
+  readonly address?: string | undefined;
+  /** The Inbox thread a press on the chip opens, by its id. */
+  readonly thread?: string | undefined;
+}
+
 /** The card a line stands folded in: its title, and whether the reader opened it. */
 export interface SaidCard {
   readonly title: string;
@@ -327,6 +365,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly body?: string | undefined;
       /** The card an automation's prompt stands folded in, as the panel's Prompt card stands: titled by its first line, its words drawn only while open; none for every other line. */
       readonly card?: SaidCard | undefined;
+      /** What a thread's, a comment's, a Slack message's, or a wakeup's line is headed by, its sender's name inside it; none for every other line. */
+      readonly head?: SaidHead | undefined;
       /** The account that sent it, where the reader did not, which a run of lines is told apart by. */
       readonly by: string | undefined;
       /** When it was sent; none where the row kept no time. */
@@ -414,6 +454,14 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly open: boolean;
       /** The line as words, as the panel's copy reads it (`githubLineWords`), which its long press copies. */
       readonly copy: string;
+    }
+  | {
+      readonly kind: typeof TRANSCRIPT_ITEM.CARRY_ON;
+      /** What cut the turn off and that it went on (`carryOnLineWords`). */
+      readonly line: string;
+      /** The words the agent was sent to carry on, drawn only while open. */
+      readonly sent: string;
+      readonly open: boolean;
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST;
@@ -760,12 +808,129 @@ function saidFiles(chips: readonly MessageFileChip[]): readonly SaidFile[] {
   });
 }
 
-/** A line someone sent, as its item: one sent from a suggestion headed by who suggested it, its words without the lead that names that agent to the agent reading them; one GitHub sent as the panel's folding card. */
+/** What a thread line's chip names where its words name no item, as a line kept in an older shape. */
+const THREAD_CHIP_WORDS = "thread";
+
+/** A head's lead for a line another sent, after their name, or for the reader's own, opening it. */
+function leadOf(lead: LineLead, sender: string | undefined): string {
+  return sender === undefined ? lead.OWN : lead.AFTER_NAME;
+}
+
+/** What a sent line is drawn as, as the panel draws it (`MessageRow`): the member's own words alone, and the head they stand under, never the instructions the agent was handed. */
+interface SaidReading {
+  readonly words: string;
+  readonly head: SaidHead | undefined;
+}
+
+/**
+ * A line's words and head as the panel reads them: a comment's quote over
+ * its member's words, under the description or page it is on; a Slack
+ * message's member's words, under Slack's chip; a thread's words without
+ * the header that names the item to the agent, under what the member did
+ * and the thread's chip; a wakeup's prompt under the wakeup it set, by how
+ * long it waited (`before`, the turn that set it); and any other line's
+ * words as they are.
+ */
+function saidReadingOf(
+  line: AgentTranscriptMessage,
+  words: string,
+  sender: string | undefined,
+  reading: TranscriptReading,
+  before: AgentTranscriptMessage | undefined,
+): SaidReading {
+  const comment = commentLineOf(line);
+
+  if (comment !== undefined) {
+    const taskId = comment.task_id;
+    const pageId = comment.page_id;
+
+    const address =
+      taskId === undefined
+        ? undefined
+        : reading.placeAddress?.(
+            pageId === undefined
+              ? { kind: LINK_DESTINATION.TASK, taskId }
+              : { kind: LINK_DESTINATION.PAGE, taskId, pageId },
+          );
+
+    return {
+      words: commentLineWords(comment),
+      head: {
+        lead: leadOf(COMMENT_LINE_LEAD, sender),
+        subject: commentLineSubject(comment),
+        address,
+      },
+    };
+  }
+
+  const slack = slackLineOf(line);
+
+  if (slack !== undefined) {
+    return {
+      words: slack.words,
+      head: {
+        lead: leadOf(SLACK_LINE_LEAD, sender),
+        subject: SLACK_LINE_SUBJECT,
+        address: slack.url,
+      },
+    };
+  }
+
+  const thread = threadLineOf(line);
+
+  if (thread !== undefined) {
+    return {
+      words: threadLineWords(words, thread.event),
+      head: {
+        lead: leadOf(THREAD_LINE_DID[thread.event], sender),
+        subject: threadLineTitle(words, thread.event) ?? THREAD_CHIP_WORDS,
+        thread: thread.item_id,
+      },
+    };
+  }
+
+  if (!isWakeupLine(line)) return { words, head: undefined };
+  const delay = wakeupDelayOf(before);
+
+  return {
+    words,
+    head: {
+      lead: WAKEUP_LINE_LEAD,
+      subject: delay === undefined ? undefined : wakeupLineSubject(delay),
+      wakeup: true,
+    },
+  };
+}
+
+/** Where a turn was cut off and carried on by itself, as the panel's step: why, opening on the words the agent was sent, closed as it lands. */
+function carryOnItem(
+  line: AgentTranscriptMessage,
+  base: ItemBase,
+  reading: TranscriptReading,
+): TranscriptItem | undefined {
+  const carryOn = carryOnLineOf(line);
+
+  if (carryOn === undefined) return undefined;
+
+  return {
+    ...base,
+    kind: TRANSCRIPT_ITEM.CARRY_ON,
+    line: carryOnLineWords(carryOn.reason),
+    sent: messageWords(line),
+    open: foldTurned(reading.toggles, base.place),
+  };
+}
+
+/** A line someone sent, as its item: one sent from a suggestion headed by who suggested it, its words without the lead that names that agent to the agent reading them; a thread's, a comment's, a Slack message's, or a wakeup's under its head, as the panel heads it; one GitHub sent as the panel's folding card; a carry-on as the panel's step. */
 function saidItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
   reading: TranscriptReading,
+  before?: AgentTranscriptMessage,
 ): TranscriptItem {
+  const carryOn = carryOnItem(line, base, reading);
+
+  if (carryOn !== undefined) return carryOn;
   const github = githubLineOf(line);
 
   // Note that what GitHub said is drawn as the panel's card, closed as it lands since its head says what happened, never as the prompt the agent read.
@@ -794,8 +959,9 @@ function saidItem(
   const words = agentMessageOf(line) === undefined ? said : (agentMessageWords(said) ?? said);
   // Note that a started agent's first line names who started it in its head, so its sender stands nowhere else.
   const started = from !== undefined && suggestionStartOf(line) !== undefined;
+  const steered = saidReadingOf(line, words, sender, reading, before);
 
-  const shown = from === undefined ? words : suggestionWords(words);
+  const shown = from === undefined ? steered.words : suggestionWords(words);
 
   return {
     ...base,
@@ -810,6 +976,7 @@ function saidItem(
         : senderAddressOf(line.sentBy, reading),
     received: !own,
     from,
+    head: steered.head,
     by: sender === undefined ? undefined : line.sentBy?.userId,
     at: line.sentAt,
     stamp: undefined,
@@ -1392,14 +1559,15 @@ export function transcriptItems(
 
   const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
 
-  const items = placed.flatMap(({ message, arrived }): readonly TranscriptItem[] => {
+  const items = placed.flatMap(({ message, arrived }, index): readonly TranscriptItem[] => {
     if (message.role === MESSAGE_ROLE.USER) {
       const base = { place: linePlace(message.id, message.id), depth: 0 };
 
       return [
         origin !== undefined && message.id === head
           ? originItem(message, base, origin, reading.toggles)
-          : saidItem(message, base, reading),
+          : // Note that a wakeup's head says how long it waited, which the turn before it that set it says, as the panel reads it.
+            saidItem(message, base, reading, placed[index - 1]?.message),
       ];
     }
 

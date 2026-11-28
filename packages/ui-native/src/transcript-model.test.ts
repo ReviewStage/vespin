@@ -549,6 +549,71 @@ describe("transcriptItems", () => {
     ]);
   });
 
+  it.each([
+    {
+      kind: "a thread's answer, its header naming the item to the agent dropped",
+      text: 'Thread answer on "Invite limits" (key invite-limits): Approved.\n\nTen is plenty.',
+      metadata: { channel: MESSAGE_CHANNEL.THREAD, event: "answer", item_id: "item-1" },
+      words: "Approved.\n\nTen is plenty.",
+      head: { lead: "answered", subject: "Invite limits", thread: "item-1" },
+    },
+    {
+      kind: "a comment, its quote over the member's words, under the page it is on",
+      text: "Grace sent you a comment thread on the page …",
+      metadata: {
+        channel: MESSAGE_CHANNEL.COMMENT,
+        thread_id: "c1",
+        task_id: "t1",
+        page_id: "p1",
+        page_title: "Invite funnel",
+        quote: "Expired 9",
+        words: "Too many.",
+      },
+      words: "> Expired 9\n\nToo many.",
+      head: {
+        lead: "commented on",
+        subject: "Invite funnel",
+        address: "https://vespin.dev/acme/task/t1/page/p1",
+      },
+    },
+    {
+      kind: "a Slack message, the member's words alone",
+      text: "Grace wrote to you in Slack, and here is what to do about it …",
+      metadata: {
+        channel: MESSAGE_CHANNEL.SLACK,
+        words: "Who sent the invite?",
+        url: "https://acme.slack.com/p1",
+      },
+      words: "Who sent the invite?",
+      head: { lead: "wrote in", subject: "Slack", address: "https://acme.slack.com/p1" },
+    },
+  ])("heads $kind as the panel does, never the instructions the agent read", (line) => {
+    const items = transcriptItems(
+      [
+        {
+          id: "line",
+          role: MESSAGE_ROLE.USER,
+          parts: [{ type: "text", text: line.text }],
+          metadata: line.metadata,
+          sentBy: { name: "Grace", userId: "u2" },
+        },
+      ],
+      {
+        writing: false,
+        readerId: "u1",
+        toggles: NO_TOGGLES,
+        now: 2,
+        pullRequests: [],
+        placeAddress: (place) =>
+          place.kind === LINK_DESTINATION.PAGE && "taskId" in place
+            ? `https://vespin.dev/acme/task/${place.taskId}/page/${place.pageId}`
+            : undefined,
+      },
+    );
+
+    expect(items).toMatchObject([{ words: line.words, sender: "Grace", head: line.head }]);
+  });
+
   const OPENED = {
     id: "work",
     role: MESSAGE_ROLE.ASSISTANT,

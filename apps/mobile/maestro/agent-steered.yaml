@@ -1,0 +1,66 @@
+# agent-steered.yaml -- the lines steered into an agent beside its own turns, each under the head the panel draws rather than the words the agent read: the carry-on as the step saying why its turn was cut off, opening on what the agent was sent; the wakeup it set under "woke up" and its wait; and a teammate's thread line, the account's answer and comment, and a teammate's Slack message, each its member's words alone under what they did and its chip.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+#
+# Note that an iPad stands in landscape, where the transcript stands in the
+# detail column beside the list, so it is scrolled well inside that column
+# (`BESIDE`), and that the window is turned back upright however the flow
+# ends, because a run left in landscape fails every flow after it.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose steered agent holds a finished
+# run those lines reached (`@repo/host/fixture-steered-agent`), and opened on
+# its page by `-agent <id>`; nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 9d3b6f21-4c8a-4e7d-b1f5-3a6c9e2d8b40
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+# Note that the launch waits up to half a minute for its first words, as
+# `agent.yaml`'s does.
+- extendedWaitUntil:
+    visible: "The test invite went out on preview.*"
+    timeout: 30000
+# The carry-on stands closed under why the turn was cut off, what the agent
+# was sent drawn nowhere; the wakeup over it is headed by the agent, that it
+# woke up, and its five-minute wait.
+- assertVisible: "Interrupted when the agent stopped answering.*"
+- assertNotVisible: "From Vespin: your previous turn.*"
+- assertVisible: "woke up"
+- assertVisible: "5m wakeup"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-steered-wakeup
+# A press opens the carry-on on what the agent was sent.
+- tapOn: "Interrupted when the agent stopped answering.*"
+- assertVisible: "From Vespin: your previous turn.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-steered-carry-on
+- tapOn: "Interrupted when the agent stopped answering.*"
+# The lines before them: a teammate wrote in a thread, the account answered
+# one and commented on the task's page, and a teammate wrote in Slack, each
+# headed by what they did and its chip, never the header that names the
+# item to the agent.
+- runFlow:
+    file: subflows/scroll-in.yaml
+    env:
+      ELEMENT: "Commented on"
+      DIRECTION: UP
+      BESIDE: ${FLOATING_TABS}
+- assertVisible: "Answered"
+- assertNotVisible: "Thread answer on.*"
+- assertVisible: "Invite funnel"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-steered-heads

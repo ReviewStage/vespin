@@ -76,7 +76,6 @@ import { GOAL_LINE } from "@repo/features/slash-command";
 import { sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import {
   calledAgent,
@@ -112,7 +111,9 @@ import {
   suggestedByOf,
   suggestionStartOf,
   threadLineOf,
+  WAKEUP_LINE_LEAD,
   wakeupDelayOf,
+  wakeupLineSubject,
   workerLines,
 } from "@repo/features/transcript-lines";
 import { turnLinesOf } from "@repo/features/turn-files";
@@ -1828,18 +1829,15 @@ function CarryOnView({
   );
 }
 
-/** What a wakeup's line says the agent did, after its own chip. */
-const WAKEUP_LEAD = "woke up";
-
 /** A wakeup's head: that the agent woke up, then the wakeup it set, by how long it waited, where its call says. */
 function WakeupHead({ delay }: { delay: number | undefined }): React.JSX.Element {
   return (
-    <SubjectLine lead={WAKEUP_LEAD} fit={SUBJECT_FIT.OWN}>
+    <SubjectLine lead={WAKEUP_LINE_LEAD} fit={SUBJECT_FIT.OWN}>
       {delay === undefined ? null : (
         <InlineRef
           look={INLINE_REF_LOOK.PILL}
           glyph={<AlarmClockCheckIcon />}
-          label={`${workingTime(delay)} wakeup`}
+          label={wakeupLineSubject(delay)}
         />
       )}
     </SubjectLine>
