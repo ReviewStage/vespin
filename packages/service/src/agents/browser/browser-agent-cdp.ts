@@ -63,7 +63,6 @@ import {
   type BrowserCursorMove,
   type BrowserRecordingStopped,
   backendNodeIdOf,
-  cutBrowserText,
 } from "@repo/features/browser-agent-actions";
 import { EXCESS_KEYS, type UnparsedWireValue, WireValueSchema } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
@@ -81,6 +80,7 @@ import {
   type Scope,
   Stream,
 } from "effect";
+import { cutText } from "../text-cut.js";
 import { snapshotTextOf } from "./browser-agent-snapshot.js";
 import {
   CDP_FAILURE,
@@ -952,7 +952,7 @@ function typeWithCursor<R>(
 }
 
 /** A choice's option text as a result carries it, cut to its cap. */
-const optionWords = (text: string) => cutBrowserText(text, BROWSER_AGENT_LIMITS.OPTION_MAX_CHARS);
+const optionWords = (text: string) => cutText(text, BROWSER_AGENT_LIMITS.OPTION_MAX_CHARS);
 
 /**
  * Chooses an option in the native dropdown a ref names (`CHOOSE_OPTION`),
@@ -1007,7 +1007,7 @@ function choose<R>(page: Page, cursor: BrowserCursor<R> | undefined, ref: string
       case CHOICE.UNMATCHED: {
         const labels = choice.labels
           .map((label) =>
-            JSON.stringify(cutBrowserText(label, BROWSER_AGENT_LIMITS.SNAPSHOT_NAME_MAX_CHARS)),
+            JSON.stringify(cutText(label, BROWSER_AGENT_LIMITS.SNAPSHOT_NAME_MAX_CHARS)),
           )
           .join(", ");
 
@@ -1279,8 +1279,8 @@ function snapshot(cdp: CdpSession, page: Page) {
     const target = (yield* cdp.pages).find((listed) => listed.targetId === page.targetId);
 
     return {
-      url: cutBrowserText(target?.url ?? "", BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
-      title: cutBrowserText(target?.title ?? "", BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
+      url: cutText(target?.url ?? "", BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
+      title: cutText(target?.title ?? "", BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
       ...tree,
     };
   });
@@ -1308,7 +1308,7 @@ function consoleMessageOf(event: CdpEvent) {
 
     if (Result.isFailure(call)) return undefined;
     const level = CONSOLE_TYPE_LEVEL.get(call.success.type) ?? BROWSER_CONSOLE_LEVEL.LOG;
-    const text = cutBrowserText(wordsOfArgs(call.success.args), max);
+    const text = cutText(wordsOfArgs(call.success.args), max);
 
     return { at: call.success.timestamp, message: { level, text } };
   }
@@ -1320,7 +1320,7 @@ function consoleMessageOf(event: CdpEvent) {
     const { entry } = read.success;
     const level = LOG_LEVEL.get(entry.level) ?? BROWSER_CONSOLE_LEVEL.LOG;
 
-    return { at: entry.timestamp, message: { level, text: cutBrowserText(entry.text, max) } };
+    return { at: entry.timestamp, message: { level, text: cutText(entry.text, max) } };
   }
 
   return undefined;
@@ -1532,8 +1532,8 @@ function stepOf<R>(
       status: BROWSER_STEP_STATUS.DONE,
       tabs: listed.slice(0, BROWSER_AGENT_LIMITS.MAX_TABS).map((page) => ({
         tab: page.targetId,
-        url: cutBrowserText(page.url, BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
-        title: cutBrowserText(page.title, BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
+        url: cutText(page.url, BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
+        title: cutText(page.title, BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
       })),
     }));
   }
@@ -1645,7 +1645,7 @@ export function runBrowserActions<R = never>(
         const ran = yield* Effect.result(boundedStep(cdp, pages, action, opened, watched, options));
 
         if (Result.isFailure(ran)) {
-          const error = cutBrowserText(ran.failure, BROWSER_AGENT_LIMITS.ERROR_MAX_CHARS);
+          const error = cutText(ran.failure, BROWSER_AGENT_LIMITS.ERROR_MAX_CHARS);
           const failedOn = named === undefined ? {} : { tab: named };
           steps.push({
             action: action.action,

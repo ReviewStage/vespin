@@ -63,7 +63,6 @@ import {
   type BrowserAgentStep,
   type BrowserKeptScreenshot,
   browserAgentActionsSchema,
-  cutBrowserText,
 } from "@repo/features/browser-agent-actions";
 import {
   CONVERSATION_MEDIA_TYPE,
@@ -82,6 +81,7 @@ import {
 } from "../../storage/attachment-uploads.js";
 import type { BlobStoreFailure } from "../../storage/blob-store.js";
 import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "../recording-keep.js";
+import { cutText } from "../text-cut.js";
 import { AgentBrowser, type BrowserUnreachable } from "./agent-browser.js";
 import {
   type BrowserCursor,
@@ -278,8 +278,8 @@ function drivenTabs(rows: readonly AgentBrowserTabRow[], now: Date): ReadonlySet
 function shownTab(page: PageTarget): ShownTab {
   return {
     tab: page.targetId,
-    url: cutBrowserText(page.url, BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
-    title: cutBrowserText(page.title, BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
+    url: cutText(page.url, BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
+    title: cutText(page.title, BROWSER_AGENT_LIMITS.SHOWN_MAX_CHARS),
   };
 }
 
@@ -714,7 +714,7 @@ export function runBrowserTool(
               action: actions[refused.index]?.action ?? BROWSER_AGENT_ACTION.LIST,
               status: BROWSER_STEP_STATUS.FAILED,
               tab: refused.tab,
-              error: cutBrowserText(drivenWords(refused.tab), BROWSER_AGENT_LIMITS.ERROR_MAX_CHARS),
+              error: cutText(drivenWords(refused.tab), BROWSER_AGENT_LIMITS.ERROR_MAX_CHARS),
             },
           ];
 

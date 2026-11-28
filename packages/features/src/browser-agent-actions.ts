@@ -627,8 +627,3 @@ export const browserAgentRunSchema = Schema.Struct({
 });
 
 export type BrowserAgentRun = typeof browserAgentRunSchema.Type;
-
-/** A text cut to a cap, its end marked where it was cut. */
-export function cutBrowserText(text: string, max: number): string {
-  return text.length <= max ? text : `${text.slice(0, Math.max(0, max - 1))}…`;
-}
