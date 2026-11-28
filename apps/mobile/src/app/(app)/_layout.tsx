@@ -34,6 +34,7 @@ import { useSetupGate } from "../../setup/use-setup-gate.js";
 import { useShareSheet } from "../../share-sheet.js";
 import { SHORT_SHEET_DETENTS } from "../../sheet-stack.js";
 import { useSystemActivity } from "../../system-activity/use-system-activity.js";
+import { usePageDraftsSignOut } from "../../tasks/use-page-comments.js";
 import { useNoticeForAccount, useOfflineNotice } from "../../use-write.js";
 
 /** The routes the root stack presents as sheets over the app. */
@@ -161,6 +162,7 @@ export default function GuardedScreens() {
   useSystemActivity(signedIn);
   useRecentOpenedSignOut(signedIn);
   useComposerDraftsSignOut(signedIn);
+  usePageDraftsSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
   useHeldSendsSignOut(signedIn);
   useCrashReports();

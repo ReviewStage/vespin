@@ -465,6 +465,9 @@ function useFrameComments(frame: RefObject<HTMLIFrameElement | null>, asks: Fram
 
       if ("pressed" in message) return latest.current.onPressed();
 
+      // Note that a press landing in an element marked is for a client with no pins, as the iPhone is; the panel opens a thread from its pin.
+      if ("opened" in message) return;
+
       if (!latest.current.picking) return;
 
       if ("stopped" in message) return latest.current.onStopped();

@@ -725,7 +725,7 @@ export function useWholeParts(agentId: string): WholeParts {
 /** How a page's read stands: on its way, read with its HTML, or not answered. */
 type PageRead =
   | { readonly reading: true }
-  | { readonly html: string; readonly title: string }
+  | { readonly html: string; readonly title: string; readonly version: number }
   | { readonly failed: true };
 
 /** The version a page is read at where its opener named none, as a link opens it: the newest the service holds. */
@@ -774,7 +774,7 @@ export function usePageHtml(
         if ("page" in answer) standing.current = answer.page.version;
         setRead(
           "page" in answer
-            ? { html: answer.page.html, title: answer.page.title }
+            ? { html: answer.page.html, title: answer.page.title, version: answer.page.version }
             : { failed: true },
         );
       },
