@@ -1,4 +1,9 @@
-import { WORKSPACE_SWITCHER_WORDS, workspaceSharedWords } from "@repo/features/workspace-tile";
+import {
+  WORKSPACE_SWITCHER_WORDS,
+  waitingInOthers,
+  workspaceSharedWords,
+  workspaceSwitcherLine,
+} from "@repo/features/workspace-tile";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
@@ -11,6 +16,7 @@ import { appStateQuery, selectAdminAccess } from "../use-app-state.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { NewTaskButton } from "./new-task-button.js";
 import { useOpenNewWorkspace } from "./new-workspace.js";
+import { useWorkspacesWaiting } from "./places-waiting.js";
 import type { SidebarTasksControl } from "./sidebar-open.js";
 import { useWorkspaceChords } from "./workspace-keys.js";
 import { WORKSPACE_REF_SIZE, WorkspaceCard, WorkspaceRef } from "./workspace-ref.js";
@@ -29,7 +35,12 @@ import { WorkspaceTile } from "./workspace-tile.js";
  * workspace" for the account's own first workspace while no one else is in
  * it (`automations-page.tsx` reads the first listed as the account's own
  * too), is what a reader hears after its name and what its menu's row says,
- * since beside the name on one control's row it would be cut short. A press
+ * since beside the name on one control's row it would be cut short. Each
+ * other workspace's row also says how many threads wait on the reader there
+ * ("5 members · 2 waiting"), and the head's tile wears the attention dot while
+ * any does, heard as waiting in another workspace (`waitingInOthers`), since
+ * the Dock counts every workspace's threads and the sidebar the listed
+ * one's alone. A press
  * drops the menu of every workspace the account is a member of from its left
  * edge, each by its tile with who shares it under its name, the listed one
  * checked and the workspace's card hung beside it while the pointer rests on it, then New workspace, which
@@ -75,11 +86,12 @@ export function useWorkspaceMenuDoors(admin: AdminMenuDoor): WorkspaceMenuDoors 
   };
 }
 
-/** The menu's items: every workspace by its tile, with who shares it under its name, the listed one checked, and the chord that switches to it at its end; then New workspace, Workspace settings, which opens Settings on the listed workspace's page, and Admin where its door is given. */
+/** The menu's items: every workspace by its tile, with who shares it under its name and how many threads wait there by `waiting`, in the workspaces' order, the listed one checked, and the chord that switches to it at its end; then New workspace, Workspace settings, which opens Settings on the listed workspace's page, and Admin where its door is given. */
 export function workspaceMenuGroups(
   listed: Workspace,
   tasks: SidebarTasksControl,
   doors: WorkspaceMenuDoors,
+  waiting: readonly number[] = [],
 ): MenuAction[][] {
   const first = tasks.workspaces[0]?.id;
 
@@ -93,7 +105,10 @@ export function workspaceMenuGroups(
           <WorkspaceTile workspace={workspace} />
         </ReplayMask>
       ),
-      detail: workspaceSharedWords(workspace.memberCount, workspace.id === first),
+      detail: workspaceSwitcherLine(
+        workspaceSharedWords(workspace.memberCount, workspace.id === first),
+        waiting[index] ?? 0,
+      ),
       card: <WorkspaceCard workspace={workspace} personal={workspace.id === first} />,
       checked: workspace.id === listed.id,
       chord: doors.chords[index],
@@ -155,10 +170,17 @@ export function WorkspaceSwitcher({
 }): React.JSX.Element | null {
   const menu = useMenu(tasks.shown && inSight);
   const doors = useWorkspaceMenuDoors(admin);
+  const totals = useWorkspacesWaiting(tasks);
   const listed = tasks.workspace;
 
   if (listed === undefined) return null;
   const personal = tasks.workspaces[0]?.id === listed.id;
+
+  const waiting = waitingInOthers(
+    tasks.workspaces.map((workspace) => workspace.id),
+    listed.id,
+    (id) => totals.get(id) ?? 0,
+  );
 
   return (
     <div className="sidebar-workspace flex flex-none items-center">
@@ -167,13 +189,18 @@ export function WorkspaceSwitcher({
         aria-label={[
           `Workspace: ${listed.name}`,
           workspaceSharedWords(listed.memberCount, personal),
+          waiting.elsewhere ? WORKSPACE_SWITCHER_WORDS.WAITING_ELSEWHERE : undefined,
         ]
           .filter((part) => part !== undefined)
           .join(", ")}
         menu={menu.trigger(dropBelowStart)}
         mark={<ChevronDownIcon />}
       >
-        <WorkspaceRef workspace={listed} size={WORKSPACE_REF_SIZE.HEAD} />
+        <WorkspaceRef
+          workspace={listed}
+          size={WORKSPACE_REF_SIZE.HEAD}
+          marked={waiting.elsewhere}
+        />
       </NavItem>
       <NewTaskButton tasks={tasks} home={newTask.home} onNewTask={newTask.onOpen} />
       {menu.drawn === undefined ? null : (
@@ -181,7 +208,7 @@ export function WorkspaceSwitcher({
           label={WORKSPACE_SWITCHER_WORDS.MENU}
           replayUnmasked
           menu={menu.drawn}
-          groups={workspaceMenuGroups(listed, tasks, doors)}
+          groups={workspaceMenuGroups(listed, tasks, doors, waiting.counts)}
           onClose={menu.close}
         />
       )}
