@@ -4,7 +4,7 @@ export { useAnnounced, useReduceTransparency } from "./accessibility.js";
 
 export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 
-export { ArchivedBar, ContinueLine } from "./agent-end.js";
+export { ArchivedBar } from "./agent-end.js";
 
 export {
   ANSWER_FIELD,
@@ -549,6 +549,7 @@ export {
 
 export {
   drawnCallIds,
+  type EndPress,
   managerChatItems,
   managerThreadItems,
   NO_TOGGLES,
@@ -561,11 +562,13 @@ export {
   shownPictureIds,
   shownRecordingIds,
   TRANSCRIPT_ITEM,
+  type TranscriptEnd,
   type TranscriptItem,
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  withEndLine,
   withSending,
   withWaitingLine,
 } from "./transcript-model.js";

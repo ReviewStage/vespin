@@ -103,9 +103,7 @@ builds a control of its own.
   iOS's chevron, and a list narrowed to one kind, `@people:`, standing
   under its crumb, whose ‹ widens it), its `AttachedPictures`, an `EditingLine` with Cancel while the field
   holds a sent message's words to send in its place (the panel's Edit, the field
-  taking the keyboard through `focusAsk`), an `AskNote`, and an agent's
-  `ContinueLine` (why its turn failed and Continue in new agent, where only a
-  new agent goes on, as the panel's failed end line offers it). While the
+  taking the keyboard through `focusAsk`), and an `AskNote`. While the
   agent is archived, `ArchivedBar` stands in the composer's place, in the
   same glass, saying so beside Unarchive, as the panel's note stands in its
   box's.
@@ -154,7 +152,10 @@ builds a control of its own.
   Jump to latest once the reader scrolls back, and its older pages read as
   the reader scrolls up to its oldest row, which holds its place as they
   land); a call the agent holds for an answer says so under its line with
-  Deny, Always allow and Allow; its rows
+  Deny, Always allow and Allow; once its turn was stopped or failed it ends on `TurnEndLine`, the
+  panel's end line (`@repo/features/agent-end-line`): Stopped, or the failure
+  led by the failed mark, and the one press that goes on from it, Continue in
+  new agent, the API keys, or Try again; its rows
   are read by `transcript-model.ts` from the panel's own parts, folds, and
   call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
   the agent's thinking left out, and each call leads with the glyph for its

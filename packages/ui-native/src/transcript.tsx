@@ -79,6 +79,7 @@ import {
   CALL_STANDING,
   type CallStanding,
   type ChatSender,
+  type EndPress,
   type OriginPart,
   RULE_LOOK,
   type SaidCard,
@@ -90,6 +91,7 @@ import {
   type TranscriptItem,
   type TranscriptPlace,
 } from "./transcript-model.js";
+import { TurnEndLine } from "./turn-end-line.js";
 import { type UndeliveredLine, UndeliveredMark } from "./undelivered-mark.js";
 import { Video } from "./video.js";
 
@@ -1041,6 +1043,8 @@ interface RowDrawing {
   readonly messageMore?: ((item: MessageItem) => readonly HeldAct[]) | undefined;
   /** Opens an Inbox thread by its id, as a press on a call's thread chip asks; none where the app opens no thread from here. */
   readonly onOpenThread?: ((threadId: string) => void) | undefined;
+  /** Goes on from the turn by the end line's press (`withEndLine`); none where the list offers no press there. */
+  readonly onEndPress?: ((press: EndPress) => void) | undefined;
   /** Opens a pull request's own screen, as a press on its card asks; none where the app draws no screen for it. */
   readonly onOpenPullRequest?: ((item: PullRequestItem) => void) | undefined;
   /** What a pull request's card offers after Review, such as Merge where it may merge now; none where it offers nothing more. */
@@ -1340,6 +1344,15 @@ function TranscriptRow({
             {item.words}
           </Text>
         </View>
+      );
+    case TRANSCRIPT_ITEM.END:
+      return (
+        <TurnEndLine
+          words={item.words}
+          failed={item.failed}
+          press={item.press}
+          onPress={drawing.onEndPress}
+        />
       );
     case TRANSCRIPT_ITEM.RULE:
       return (

@@ -22,6 +22,7 @@
  * where it could not be read.
  */
 
+import type { EndLinePress } from "@repo/features/agent-end-line";
 import {
   AGENT_PART,
   type AgentPart,
@@ -162,6 +163,8 @@ export const TRANSCRIPT_ITEM = {
   WORKING: "working",
   /** The rule under a Manager chat thread's message that counts the replies after it. */
   RULE: "rule",
+  /** The line the transcript ends on once its turn was stopped or failed, and the press that goes on from it. */
+  END: "end",
 } as const;
 
 /** Which piece of a row an item draws: its line, the page it showed, or what it showed. */
@@ -173,6 +176,7 @@ export const TRANSCRIPT_PIECE = {
   FOOT: "foot",
   WORKING: "working",
   RULE: "rule",
+  END: "end",
 } as const;
 
 type TranscriptPiece = (typeof TRANSCRIPT_PIECE)[keyof typeof TRANSCRIPT_PIECE];
@@ -392,6 +396,15 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly sender?: ChatSender | undefined;
       /** Whether the turn under way's work stands open under it (Show work); none while it has done none since its last message. */
       readonly workShown?: boolean | undefined;
+    }
+  | {
+      readonly kind: typeof TRANSCRIPT_ITEM.END;
+      /** What ended the turn, as the panel's end line says it: "Stopped", or "Failed: " and why. */
+      readonly words: string;
+      /** Whether the turn failed, which the line marks as a failure; a stop is quiet words alone. */
+      readonly failed: boolean;
+      /** The way on from the turn, after its words; none where the line offers none. */
+      readonly press: EndPress | undefined;
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.RULE;
@@ -1878,6 +1891,44 @@ export function withWaitingLine(
         ? { ...item, running: false }
         : item,
   );
+}
+
+/** The press an end line ends on: which way on, what it says, and whether its act is out, which holds it busy. */
+export interface EndPress {
+  readonly kind: EndLinePress;
+  readonly label: string;
+  readonly busy: boolean;
+}
+
+/** The line a transcript ends on once its turn was stopped or failed (`withEndLine`). */
+export interface TranscriptEnd {
+  readonly words: string;
+  readonly failed: boolean;
+  readonly press: EndPress | undefined;
+}
+
+/** Where the end line stands: after every row, apart from any message, so it stands where the transcript holds none, as an agent that failed before writing one; there is one at most. */
+const END_PLACE: TranscriptPlace = {
+  message: "",
+  row: "",
+  member: undefined,
+  piece: TRANSCRIPT_PIECE.END,
+};
+
+/**
+ * The items with the end line after their last, as the panel's transcript
+ * ends on its `TurnEnd`: once the agent's turn was stopped or failed and it
+ * writes no more, alone where no row stands, as for an agent whose first
+ * launch failed before it wrote any; the items as they stand where it has
+ * none.
+ */
+export function withEndLine(
+  items: readonly TranscriptItem[],
+  end: TranscriptEnd | undefined,
+): readonly TranscriptItem[] {
+  if (end === undefined) return items;
+
+  return [...items, { place: END_PLACE, depth: 0, kind: TRANSCRIPT_ITEM.END, ...end }];
 }
 
 /** The calls the items draw a row for, by id, so a call the agent holds that none draws, such as a subagent's, is answered elsewhere. */

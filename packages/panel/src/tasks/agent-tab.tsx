@@ -1,6 +1,7 @@
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { bootHolds } from "@repo/features/agent-boot";
 import { endLineReason } from "@repo/features/agent-continue-model";
+import { type EndLineParts, endLineParts, RETRY_LINE } from "@repo/features/agent-end-line";
 import {
   GOAL_REACH,
   goalConditions,
@@ -265,8 +266,6 @@ import {
   agentName,
   agentWorkingSince,
   dockedPullRequests,
-  type EndLineParts,
-  endLineParts,
   finishedReplyLead,
   lineSender,
   macOwnerOf,
@@ -308,7 +307,7 @@ import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
 import { FollowOfferDock } from "./follow-offer-dock.js";
 import { ForkedToLine, useForkOffered } from "./fork-action.js";
-import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
+import { GitHubSignInCard, type GitHubSignInDoors } from "./github-sign-in-card.js";
 import {
   sameComputerApps,
   sameEntries,

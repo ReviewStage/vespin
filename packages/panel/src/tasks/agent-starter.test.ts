@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { endLineReason } from "@repo/features/agent-continue-model";
+import { endLineParts } from "@repo/features/agent-end-line";
 import {
   AGENT_BRIEF,
   AGENT_FAILURE,
@@ -25,13 +26,7 @@ import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
-import {
-  agentActor,
-  endLineParts,
-  lineSender,
-  macOwnerOf,
-  teammateStarter,
-} from "./agent-model.js";
+import { agentActor, lineSender, macOwnerOf, teammateStarter } from "./agent-model.js";
 import { AgentRef, agentCardReading, NOTHING_HELD } from "./agent-ref.js";
 import { MacOwnerProvider, TranscriptTool } from "./transcript-blocks.js";
 

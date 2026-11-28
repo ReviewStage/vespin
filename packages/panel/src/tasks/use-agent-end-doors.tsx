@@ -10,6 +10,7 @@ import {
   endLineOffersContinue,
   endLineReason,
 } from "@repo/features/agent-continue-model";
+import { endLineOffersTryAgain, RETRY_LINE } from "@repo/features/agent-end-line";
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { CONTINUE_IN_CLOUD_LABEL } from "@repo/features/failure-remedy";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -20,19 +21,13 @@ import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { type ReactNode, useMemo } from "react";
 import { useToast } from "../toast.js";
 import { TryAgainPress } from "./agent-end-row.js";
-import {
-  endLineOffersOtherModel,
-  endLineOffersTryAgain,
-  offersStop,
-  tabTurnOf,
-} from "./agent-model.js";
+import { endLineOffersOtherModel, offersStop, tabTurnOf } from "./agent-model.js";
 import {
   ContinueAgent,
   ContinuedComposerNote,
   ContinuedTrail,
   RefusalContinue,
 } from "./continue-agent.js";
-import { RETRY_LINE } from "./github-sign-in-card.js";
 import type { MoveCarry } from "./move-agent.js";
 import type { HeldComposer } from "./use-agent-composer.js";
 import type { AgentsControl } from "./use-agents.js";

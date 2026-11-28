@@ -1,0 +1,98 @@
+# agent-end-line.yaml -- an agent whose last turn was stopped or failed ends its transcript on the panel's end line: one failed past what a message mends ends on its failure and Continue in new agent, with nothing standing over the composer; one stopped ends on Stopped alone; one whose checkout failed ends on its failure and Try again; and one whose first launch failed before it wrote a message stands its end line alone, with Continue in new agent.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+#
+# Note that an iPad stands in landscape, where the transcript stands in the
+# detail column beside the list, and that the window is turned back upright
+# however the flow ends, because a run left in landscape fails every flow
+# after it.
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
+---
+# Launched on the host's Inbox fixture, whose ended agents each ran one turn
+# that did not finish (`@repo/host/fixture-ended-agents`), each opened on its
+# page by `-agent <id>`; nothing reaches a server.
+# The agent whose conversation grew too long for the model: only a new agent
+# goes on, so its end line ends on Continue in new agent.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: d637f97a-b2e3-4f0c-87ce-e3f4051627a2
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+# Note that the launch waits up to half a minute for its first words, as
+# `agent.yaml`'s does.
+- extendedWaitUntil:
+    visible: "January through August reconcile to the cent.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-end-continue
+- assertVisible: "Failed: the conversation was too long for the model"
+- assertVisible: "Continue in new agent"
+# The agent the account stopped: its line says so, quiet, with no press.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: d637f97a-b2e3-4f0c-87ce-e3f4051627a1
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+- extendedWaitUntil:
+    visible: "Reading the ledger rows written before March.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-end-stopped
+- assertVisible: "Stopped"
+# The agent whose checkout failed: a message carries it on, so its line ends
+# on Try again.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: d637f97a-b2e3-4f0c-87ce-e3f4051627a3
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+- extendedWaitUntil:
+    visible: "Cloning the ledger repository.*"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-end-try-again
+- assertVisible: "Failed: the sandbox or checkout failed"
+- assertVisible: "Try again"
+# The agent whose first launch failed before it wrote a message: its page
+# holds no row but its end line, which reads it as never started and offers
+# Continue in new agent.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: d637f97a-b2e3-4f0c-87ce-e3f4051627a4
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - setOrientation: LANDSCAPE_LEFT
+- extendedWaitUntil:
+    visible: "Failed: the agent never started"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: agent-end-never-started
+- assertVisible: "Continue in new agent"

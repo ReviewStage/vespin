@@ -134,7 +134,10 @@ builds a control of its own.
   Jump to latest once the reader scrolls back, and its older pages read as
   the reader scrolls up to its oldest row, which holds its place as they
   land); a call the agent holds for an answer says so under its line with
-  Deny and Allow; its rows
+  Deny and Allow; once its turn was stopped or failed it ends on `TurnEndLine`, the
+  panel's end line (`@repo/features/agent-end-line`): Stopped, or the failure
+  led by the failed mark, and the one press that goes on from it, Continue in
+  new agent, the API keys, or Try again; its rows
   are read by `transcript-model.ts` from the panel's own parts, folds, and
   call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
   the agent's thinking left out, and each call leads with the glyph for its

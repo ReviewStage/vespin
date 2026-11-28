@@ -216,6 +216,11 @@ import {
   fixtureManagerTranscript,
 } from "./fixture-agent-transcript.js";
 import {
+  FIXTURE_ENDED_AGENT_IDS,
+  fixtureEndedAgent,
+  fixtureEndedTranscript,
+} from "./fixture-ended-agents.js";
+import {
   FIXTURE_PICTURE_PNG,
   FIXTURE_PLAN_PDF,
   FIXTURE_SCREENSHOT_PNG,
@@ -1162,6 +1167,17 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
     agentOn(AGENT.ROUNDING, TASK.ROUNDING, "Fix ledger rounding", AGENT_STATUS.COMPLETED, 5 * DAY),
   ],
 ]);
+
+/** How long before the fixture landed the ended agents were started, which their transcripts count from. */
+const ENDED_AGENTS_AGO = 3 * HOUR;
+
+/** The agents on the rounding task whose last turn was stopped or failed, whose pages end on their end lines: staged for their pages and transcripts alone, in no task's list (`fixture-ended-agents.ts`). */
+const ENDED_AGENTS: readonly AgentSummary[] = FIXTURE_ENDED_AGENT_IDS.map((agentId) =>
+  fixtureEndedAgent(
+    agentOn(AGENT.ROUNDING, TASK.ROUNDING, "", AGENT_STATUS.COMPLETED, ENDED_AGENTS_AGO),
+    agentId,
+  ),
+);
 
 /** When the release Manager was started, which its chat counts from. */
 const MANAGER_STARTED = LANDED - 2 * HOUR;
@@ -2346,6 +2362,14 @@ const ROUNDING_TRANSCRIPT = fixtureLongTranscript(LANDED - 5 * DAY, ADA, "Fix le
 /** The digest agent's run, which the weekly digest automation's newest run opens. */
 const DIGEST_TRANSCRIPT = fixtureDigestTranscript(DIGEST_STARTED, ADA, "Send the weekly digest");
 
+/** The ended agents' runs, by agent, each ending on its turn stopped or failed. */
+const ENDED_TRANSCRIPTS = new Map(
+  FIXTURE_ENDED_AGENT_IDS.map((agentId) => [
+    agentId,
+    fixtureEndedTranscript(agentId, LANDED - ENDED_AGENTS_AGO, ADA),
+  ]),
+);
+
 /** The release Manager's run, whose turns' work its chat keeps a press away. */
 const MANAGER_TRANSCRIPT = fixtureManagerTranscript(MANAGER_STARTED, ADA, "Release manager");
 
@@ -2527,6 +2551,12 @@ function stagedTranscripts(
     [AGENT.ROUNDING]: { ...held[AGENT.ROUNDING], [OWN_TRANSCRIPT]: { rows: ROUNDING_TRANSCRIPT } },
     [AGENT.DIGEST]: { ...held[AGENT.DIGEST], [OWN_TRANSCRIPT]: { rows: DIGEST_TRANSCRIPT } },
     [AGENT.MANAGER]: { ...held[AGENT.MANAGER], [OWN_TRANSCRIPT]: { rows: MANAGER_TRANSCRIPT } },
+    ...Object.fromEntries(
+      [...ENDED_TRANSCRIPTS].map(([agentId, rows]) => [
+        agentId,
+        { ...held[agentId], [OWN_TRANSCRIPT]: { rows } },
+      ]),
+    ),
   };
 
   STAGED_TRANSCRIPTS.set(held, staged);
@@ -3474,7 +3504,7 @@ function stagedItem(itemId: string): InboxItem | undefined {
 
 /** One staged agent by its id, on whichever task it works, or the Manager, on none. */
 function stagedAgent(agentId: string): AgentSummary | undefined {
-  return [...AGENTS.values(), MANAGER].find((each) => each.id === agentId);
+  return [...AGENTS.values(), MANAGER, ...ENDED_AGENTS].find((each) => each.id === agentId);
 }
 
 /* ----- The automations ----- */
