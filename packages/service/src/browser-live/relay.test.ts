@@ -24,6 +24,7 @@ import { Sync, type SyncService } from "../sync/watch.js";
 import type { RelayFrame } from "../terminal/relay.js";
 import {
   FAKE_IMAGE,
+  type FakeCdpAnswer,
   type FakeCdpCommand,
   type FakeCdpPeer,
   fakeBridgePty,
@@ -126,6 +127,8 @@ function liveBrowser(
     readonly pages?: readonly { targetId: string; url: string; title: string }[];
     /** Whether the browser never answers a mouse event, as one stuck behind a slow page. */
     readonly mouseHangs?: boolean;
+    /** What the page answers a pick's reads with, by method. */
+    readonly page?: ReadonlyMap<string, FakeCdpAnswer>;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -150,6 +153,10 @@ function liveBrowser(
         if (options.mouseHangs === true && command.method === "Input.dispatchMouseEvent") {
           return { silent: true };
         }
+
+        const read = options.page?.get(command.method);
+
+        if (read !== undefined) return read;
 
         return { result: {} };
       },
@@ -626,6 +633,120 @@ it.effect(
     }),
 );
 
+it.effect(
+  "a member picking an element is told what stands under the pointer, then what the agent needs to find the picked one, without taking the tab over",
+  () =>
+    Effect.gen(function* () {
+      const { peer, browser, commands } = yield* liveBrowser({
+        page: new Map<string, FakeCdpAnswer>([
+          ["DOM.getNodeForLocation", { result: { backendNodeId: 42 } }],
+          [
+            "DOM.getBoxModel",
+            { result: { model: { border: [100, 50, 200, 50, 200, 80, 100, 80] } } },
+          ],
+          [
+            "DOM.describeNode",
+            {
+              result: {
+                node: { localName: "button", attributes: ["class", "btn primary"] },
+              },
+            },
+          ],
+          ["Page.createIsolatedWorld", { result: { executionContextId: 7 } }],
+          ["DOM.resolveNode", { result: { object: { objectId: "button-object" } } }],
+          [
+            "Runtime.callFunctionOn",
+            {
+              result: {
+                result: {
+                  value: {
+                    selector: "form#checkout > button.btn",
+                    tag: '<button class="btn primary">',
+                    text: "Place order",
+                    left: 100,
+                    top: 50,
+                    width: 100,
+                    height: 30,
+                    scrollX: 0,
+                    scrollY: 400,
+                    viewWidth: 1280,
+                    viewHeight: 800,
+                  },
+                },
+              },
+            },
+          ],
+          [
+            "Accessibility.getPartialAXTree",
+            {
+              result: {
+                nodes: [{ role: { value: "button" }, name: { value: "Place order" } }],
+              },
+            },
+          ],
+          ["Page.captureScreenshot", { result: { data: FRAME_DATA } }],
+        ]),
+      });
+
+      const panel = yield* scriptedViewer;
+      const store = world(browser);
+
+      const { fiber } = yield* started(
+        peer,
+        commands,
+        Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
+      );
+
+      // The page is 1280×800 and the panel draws it at 640×400, half its size.
+      yield* peer.emit(frameEvent(1));
+      yield* panel.push(VIEWPORT);
+      yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.FRAME).length === 1);
+      yield* panel.push({ type: BROWSER_LIVE_CLIENT.INSPECT, x: 75, y: 40 });
+      yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.INSPECTED).length === 1);
+      yield* panel.push({ type: BROWSER_LIVE_CLIENT.PICK, x: 75, y: 40 });
+      yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.PICKED).length === 1);
+
+      const hit = commands.find((command) => command.method === "DOM.getNodeForLocation");
+      assert.deepEqual(hit?.params, { x: 150, y: 80 }, "the point is the page's, not the panel's");
+      assert.equal(hit?.sessionId, TARGET_SESSION);
+
+      assert.deepEqual(panel.ofType(BROWSER_LIVE_SERVER.INSPECTED)[0], {
+        type: BROWSER_LIVE_SERVER.INSPECTED,
+        box: { x: 50, y: 25, width: 50, height: 15 },
+        label: "button.btn · 100×30",
+      });
+
+      assert.deepEqual(panel.ofType(BROWSER_LIVE_SERVER.PICKED)[0], {
+        type: BROWSER_LIVE_SERVER.PICKED,
+        element: {
+          box: { x: 50, y: 25, width: 50, height: 15 },
+          pageBox: { x: 100, y: 50, width: 100, height: 30 },
+          ref: "e42",
+          selector: "form#checkout > button.btn",
+          role: "button",
+          name: "Place order",
+          tag: '<button class="btn primary">',
+          text: "Place order",
+          crop: FRAME_DATA,
+        },
+      });
+
+      const resolve = commands.find((command) => command.method === "DOM.resolveNode");
+      assert.equal(
+        resolve?.params.executionContextId,
+        7,
+        "the element is read apart from the page's scripts",
+      );
+
+      // The element with a 24px margin, held to the visible page, scrolled 400px down.
+      const capture = commands.find((command) => command.method === "Page.captureScreenshot");
+      assert.deepEqual(capture?.params.clip, { x: 76, y: 426, width: 148, height: 78, scale: 1 });
+      assert.equal(panel.ofType(BROWSER_LIVE_SERVER.DRIVER).at(-1)?.driver ?? null, null);
+      yield* panel.leave;
+      yield* Fiber.join(fiber);
+    }),
+);
+
 it.effect("a member who does not control the agent cannot take its tab over", () =>
   Effect.gen(function* () {
     const { peer, browser, commands } = yield* liveBrowser();
@@ -647,13 +768,19 @@ it.effect("a member who does not control the agent cannot take its tab over", ()
 
     yield* panel.push({ type: BROWSER_LIVE_CLIENT.TAKE_OVER });
     yield* panel.push(CLICK);
-    yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.REFUSED).length === 2);
+    yield* panel.push({ type: BROWSER_LIVE_CLIENT.PICK, x: 10, y: 10 });
+    yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.REFUSED).length === 3);
 
     assert.deepEqual(
       panel.ofType(BROWSER_LIVE_SERVER.REFUSED).map((message) => message.reason),
-      [BROWSER_LIVE_REFUSAL.NOT_PERMITTED, BROWSER_LIVE_REFUSAL.NOT_DRIVING],
+      [
+        BROWSER_LIVE_REFUSAL.NOT_PERMITTED,
+        BROWSER_LIVE_REFUSAL.NOT_DRIVING,
+        BROWSER_LIVE_REFUSAL.NOT_PERMITTED,
+      ],
     );
     assert.deepEqual(inputs(commands), []);
+    assert.deepEqual(panel.ofType(BROWSER_LIVE_SERVER.PICKED), [], "nothing of the page was read");
     yield* panel.leave;
     yield* Fiber.join(fiber);
   }),

@@ -70,6 +70,7 @@ import {
   BROWSER_LIVE_MOUSE_ACTION,
   BROWSER_LIVE_REFUSAL,
   BROWSER_LIVE_SERVER,
+  type BrowserLiveBox,
   type BrowserLiveClientMessage,
   type BrowserLiveCloseReason,
   type BrowserLiveServerMessage,
@@ -108,6 +109,7 @@ import { jsonOf } from "../http/http-effect.js";
 import { Sync } from "../sync/watch.js";
 import type { RelaySocket } from "../terminal/relay.js";
 import { BROWSER_LIVE_BOUNDS } from "./bounds.js";
+import { inspectAt, type PickTarget, pickAt } from "./pick.js";
 
 /** The panel's socket: a relay side, and how many bytes it has yet to send, which paces the frames. */
 export interface BrowserLiveViewer extends RelaySocket {
@@ -274,7 +276,9 @@ type InputMessage = Exclude<
       | typeof BROWSER_LIVE_CLIENT.VIEWPORT
       | typeof BROWSER_LIVE_CLIENT.NAVIGATE
       | typeof BROWSER_LIVE_CLIENT.HISTORY
-      | typeof BROWSER_LIVE_CLIENT.WATCHING;
+      | typeof BROWSER_LIVE_CLIENT.WATCHING
+      | typeof BROWSER_LIVE_CLIENT.INSPECT
+      | typeof BROWSER_LIVE_CLIENT.PICK;
   }
 >;
 
@@ -298,6 +302,27 @@ function steeringOf(message: SteerMessage): QueuedInput {
   }
 
   return { step: message.step === BROWSER_LIVE_HISTORY.BACK ? -1 : 1, move: false };
+}
+
+/** A point in the panel's pixels mapped onto the page's CSS pixels, held inside the panel's viewport. */
+function onPage(point: PixelPoint, viewport: PixelSize, page: PixelSize): PixelPoint {
+  return {
+    x: (Math.min(point.x, viewport.width) * page.width) / viewport.width,
+    y: (Math.min(point.y, viewport.height) * page.height) / viewport.height,
+  };
+}
+
+/** A box in the page's CSS pixels mapped onto the panel's pixels. */
+function onPanel(box: BrowserLiveBox, viewport: PixelSize, page: PixelSize): BrowserLiveBox {
+  const across = viewport.width / page.width;
+  const down = viewport.height / page.height;
+
+  return {
+    x: box.x * across,
+    y: box.y * down,
+    width: box.width * across,
+    height: box.height * down,
+  };
 }
 
 /** The DevTools command an input message is, its point mapped from the panel's viewport onto the page; none where either size is not known yet. */
@@ -332,8 +357,7 @@ function commandOf(
   }
 
   if (viewport === undefined || page === undefined) return undefined;
-  const x = (Math.min(message.x, viewport.width) * page.width) / viewport.width;
-  const y = (Math.min(message.y, viewport.height) * page.height) / viewport.height;
+  const { x, y } = onPage(message, viewport, page);
 
   if (message.type === BROWSER_LIVE_CLIENT.WHEEL) {
     const params = {
@@ -407,6 +431,9 @@ interface LiveView {
   readonly lastActive: Ref.Ref<number>;
   readonly lastFrame: Ref.Ref<number | undefined>;
   readonly inputs: Queue.Queue<QueuedInput, Cause.Done>;
+  /** The point the member's pointer last asked about while picking, an older one still waiting passed over, and each point they picked, in the panel's pixels. */
+  readonly inspects: Queue.Queue<PixelPoint>;
+  readonly picks: Queue.Queue<PixelPoint>;
   /** How the browser's side ended, where an event ended it. */
   readonly browserEnded: Deferred.Deferred<LiveEnd>;
 }
@@ -414,6 +441,11 @@ interface LiveView {
 interface PixelSize {
   readonly width: number;
   readonly height: number;
+}
+
+interface PixelPoint {
+  readonly x: number;
+  readonly y: number;
 }
 
 interface PageState {
@@ -455,6 +487,8 @@ function openView(
       lastActive: yield* Ref.make(startedAt.getTime()),
       lastFrame: yield* Ref.make<number | undefined>(undefined),
       inputs: yield* Queue.make<QueuedInput, Cause.Done>(),
+      inspects: yield* Queue.sliding<PixelPoint>(1),
+      picks: yield* Queue.unbounded<PixelPoint>(),
       browserEnded: yield* Deferred.make<LiveEnd>(),
     };
   });
@@ -753,6 +787,34 @@ function resizes(view: LiveView, size: PixelSize): Effect.Effect<boolean> {
 }
 
 /**
+ * A point the member asks about or picks, queued for the tab where they may
+ * message its agent; a pick from anyone else is refused, and an inspect
+ * passed over, since its outline is drawn only while picking.
+ */
+function askPick(
+  view: LiveView,
+  message: Extract<
+    BrowserLiveClientMessage,
+    { readonly type: typeof BROWSER_LIVE_CLIENT.INSPECT | typeof BROWSER_LIVE_CLIENT.PICK }
+  >,
+): Effect.Effect<void> {
+  const point = { x: message.x, y: message.y };
+
+  if (message.type === BROWSER_LIVE_CLIENT.INSPECT) {
+    return view.drivable ? Effect.asVoid(Queue.offer(view.inspects, point)) : Effect.void;
+  }
+
+  if (!view.drivable) {
+    return send(view, {
+      type: BROWSER_LIVE_SERVER.REFUSED,
+      reason: BROWSER_LIVE_REFUSAL.NOT_PERMITTED,
+    });
+  }
+
+  return Effect.asVoid(Queue.offer(view.picks, point));
+}
+
+/**
  * Note that a viewport counts as someone watching only where it resizes the
  * view, because an older panel sends the same size again every minute to keep
  * the socket open, shown or not, and a pane nobody looks at would hold its
@@ -780,6 +842,9 @@ function onMessage(view: LiveView, message: BrowserLiveClientMessage): Effect.Ef
         return yield* steer(view, message, at);
       case BROWSER_LIVE_CLIENT.WATCHING:
         return;
+      case BROWSER_LIVE_CLIENT.INSPECT:
+      case BROWSER_LIVE_CLIENT.PICK:
+        return yield* askPick(view, message);
       default:
         return yield* drive(view, message, at);
     }
@@ -818,6 +883,65 @@ function dispatchInput(view: LiveView, target: LiveTarget): Effect.Effect<void, 
           yield* Effect.ignore(target.cdp.send({ ...input.command, sessionId: target.sessionId }));
       }
     }),
+  );
+}
+
+/**
+ * Each point asked about answered with the element there, boxed in the
+ * panel's pixels, or none; and each point picked with the element there and
+ * its crop, or none where it could not be read. Inspects and picks run
+ * apart from the input, so a slow read never holds the member's hand back,
+ * and only the newest inspect is answered.
+ */
+function answerPicks(view: LiveView, target: PickTarget): Effect.Effect<void> {
+  const sizes = Effect.gen(function* () {
+    const viewport = yield* Ref.get(view.viewport);
+    const page = yield* Ref.get(view.page);
+
+    return viewport === undefined || page === undefined || page.width < 1 || page.height < 1
+      ? undefined
+      : { viewport, page };
+  });
+
+  const inspect = Effect.gen(function* () {
+    const point = yield* Queue.take(view.inspects);
+    const known = yield* sizes;
+
+    const found =
+      known === undefined
+        ? undefined
+        : yield* inspectAt(target, onPage(point, known.viewport, known.page));
+
+    yield* send(view, {
+      type: BROWSER_LIVE_SERVER.INSPECTED,
+      box:
+        found === undefined || known === undefined
+          ? null
+          : onPanel(found.box, known.viewport, known.page),
+      label: found?.label ?? "",
+    });
+  });
+
+  const pick = Effect.gen(function* () {
+    const point = yield* Queue.take(view.picks);
+    const known = yield* sizes;
+
+    const found =
+      known === undefined
+        ? undefined
+        : yield* pickAt(target, onPage(point, known.viewport, known.page));
+
+    yield* send(view, {
+      type: BROWSER_LIVE_SERVER.PICKED,
+      element:
+        found === undefined || known === undefined
+          ? null
+          : { ...found, pageBox: found.box, box: onPanel(found.box, known.viewport, known.page) },
+    });
+  });
+
+  return Effect.asVoid(
+    Effect.all([Effect.forever(inspect), Effect.forever(pick)], { concurrency: "unbounded" }),
   );
 }
 
@@ -1077,6 +1201,9 @@ function watchBrowser(view: LiveView): Effect.Effect<LiveEnd, never, Scope.Scope
     // The browser holds no such target: the tab closed, or a resume began the browser afresh.
     if (cast.success === undefined) return BROWSER_LIVE_CLOSE_REASON.GONE;
     yield* Effect.forkScoped(Effect.ignore(dispatchInput(view, cast.success)));
+    yield* Effect.forkScoped(
+      answerPicks(view, { ...cast.success, frameId: yield* Ref.get(view.targetId) }),
+    );
 
     return yield* Deferred.await(view.browserEnded);
   });
