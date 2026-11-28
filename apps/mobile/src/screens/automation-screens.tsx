@@ -8,6 +8,7 @@ import {
   AUTOMATIONS_ORDER,
   AUTOMATIONS_ORDER_WORDS,
   type AutomationsOrder,
+  automationFoldsWith,
   automationGroups,
   automationManager,
   automationRunStanding,
@@ -614,14 +615,12 @@ interface FoldPress {
   readonly folded: boolean;
 }
 
-/** `folds` with a press's group folded or opened, each group named once. */
+/** `folds` with a press's group folded or opened as it asked. */
 function foldedWith(
   folds: readonly AutomationListGroup[],
   press: FoldPress,
 ): readonly AutomationListGroup[] {
-  const others = folds.filter((each) => each !== press.group);
-
-  return press.folded ? [...others, press.group] : others;
+  return automationFoldsWith(folds, press.group, press.folded);
 }
 
 /** An automation's row id in the list. */
