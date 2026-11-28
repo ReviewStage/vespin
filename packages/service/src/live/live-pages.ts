@@ -1,9 +1,10 @@
 /**
- * live-pages.ts -- a delta read's whole answer in pages: which builds read them, the page a reader asks for next, and the parent rows each page carries.
+ * live-pages.ts -- a delta read's whole answer in pages: the page a reader asks for next, which builds took a first page for the whole answer, and the parent rows each page carries.
  *
  * A whole answer to a busy account is megabytes, which a phone decodes in
- * one stretch on its one JS thread. So a build that reads pages
- * (`readsPages`) is answered one page at a time, newest first: each page is
+ * one stretch on its one JS thread. So a reader that follows pages, which
+ * says so by naming the first (`LIVE_FIRST_PAGE`) on a read past its sync
+ * id, is answered a whole answer one page at a time, newest first: each page is
  * a few of the read's parent rows (a task, an inbox item) with every row of
  * its other parts that rides with them (its agents, its thread), read
  * through the read's own statements narrowed to those parents, so a page
@@ -35,19 +36,18 @@ import { SqlClient } from "effect/sql";
 import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
 
 /**
- * The first hosted API version whose builds read a whole answer in pages
- * (`client-identity.ts`'s `HOSTED_API_VERSION`). Note that it stands above
- * every version a build sends today, because no client follows a page yet:
- * a build that takes the first page for the whole answer holds only its
- * newest parents, and the rest never come back to it. The client that
- * learns to follow pages ships at this version.
+ * The first hosted API version no build that took a first page for the
+ * whole answer sends. Note that no version gates pages any more, since a
+ * version another change took (#11100) once sent them to builds that never
+ * followed them; a reader asks for pages itself (`LIVE_FIRST_PAGE`).
  */
-const PAGED_API_VERSION = 12;
+const FIRST_PAGE_TAKEN_BEFORE_API_VERSION = 12;
 
 /**
  * The first hosted API version answered a whole answer in pages before any
  * build followed them (#10886): its builds and those up to
- * `PAGED_API_VERSION` took the first page for the whole answer.
+ * `FIRST_PAGE_TAKEN_BEFORE_API_VERSION` took the first page for the whole
+ * answer.
  */
 const FIRST_PAGE_TAKEN_API_VERSION = 10;
 
@@ -107,13 +107,6 @@ interface PageParents {
   readonly next: Option.Option<string>;
 }
 
-/** Whether the build asking reads a whole answer in pages. */
-export function readsPages(request: Request): boolean {
-  const client = presentedClient(request.headers);
-
-  return client !== undefined && client.apiVersion >= PAGED_API_VERSION;
-}
-
 /**
  * Whether the build asking may hold a read's first page for its whole
  * answer, past `past`: a build at a version answered pages it never
@@ -126,7 +119,7 @@ export function mayHoldFirstPage(request: Request, past: number): boolean {
   return (
     client !== undefined &&
     client.apiVersion >= FIRST_PAGE_TAKEN_API_VERSION &&
-    client.apiVersion < PAGED_API_VERSION &&
+    client.apiVersion < FIRST_PAGE_TAKEN_BEFORE_API_VERSION &&
     past < FIRST_PAGES_HEALED_AT
   );
 }

@@ -26,7 +26,9 @@ import {
  * poll after is
  * held until something moves past the id the last answer named, and
  * answered only the rows that moved, with the ids of those that stand no
- * longer. The rows are decoded where they arrive and handed on with where
+ * longer. A whole answer may come a page at a time, each page's rows
+ * joined onto the list and the last letting go every row no page carried
+ * (`SyncStanding`). The rows are decoded where they arrive and handed on with where
  * the answer stands (`task-list-collections.ts` joins them and builds the
  * list), before the follow carries the answer's txids on to a write waiting
  * for them (`followTakingRows`), so a write confirmed on the list finds its
@@ -50,8 +52,8 @@ type TaskListBeside = Pick<TaskListLiveAnswer, "taskWorkspaces" | "liveSince">;
 type Sealed = TaskListLiveAnswer | LiveFailure;
 
 export interface TaskListFollowDependencies {
-  /** The read with its rows inline, fetched from the service, past the sync id named, whole where it is empty or none. */
-  readonly live: (sync: string | undefined) => Effect.Effect<Sealed>;
+  /** The read with its rows inline, fetched from the service, past the sync id named, whole where it is empty or none, or the page of a whole answer named. */
+  readonly live: (sync: string | undefined, page?: string) => Effect.Effect<Sealed>;
   /**
    * The sync id the list already drawn stands at, as the entity store kept
    * it or the last answer taken left it, which each read the follow starts
@@ -91,7 +93,15 @@ function followRows(
   // Note that the issues part, which answers no rows and a released desktop alone follows, is followed as every part is, though this build reads none of it.
   return followTakingRows<"tasks" | "agents", TaskListLiveRows, TaskListLiveAnswer>(
     {
-      poll: (_after, _cursor, sync) => dependencies.live(sync),
+      poll: (_after, _cursor, sync, page) => dependencies.live(sync, page),
+      pages: {
+        keysOf: (rows) => [...rows.tasks, ...rows.agents].map((row) => row.id),
+        join: (held, page) => ({
+          ...page,
+          tasks: [...held.tasks, ...page.tasks],
+          agents: [...held.agents, ...page.agents],
+        }),
+      },
       behind,
       ...(onTxWait === undefined ? undefined : { onTxWait }),
     },

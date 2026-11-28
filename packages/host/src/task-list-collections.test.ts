@@ -512,6 +512,56 @@ it.effect(
 );
 
 it.effect(
+  "the pages of a whole answer join the list, each leaving the rows held standing, and its last lets go every task and agent held that no page carried",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const pool = yield* entityPool();
+        const drawings: LiveTaskList[] = [];
+
+        const collections = yield* taskListCollections({
+          pool,
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+          readAgain: () => Effect.succeed(undefined),
+        });
+
+        const invites = planListRow(INVITES, "Teammate invitations");
+        yield* collections.answer({
+          tasks: [invites, planListRow(BILLING, "Billing")],
+          agents: [agentListRow(BILLING, 0)],
+        });
+
+        yield* collections.answer(
+          { tasks: [{ ...invites, name: "Invites" }], agents: [] },
+          { past: "", next: "", gone: [], paged: true },
+        );
+        yield* TestClock.adjust(DRAW_TICK);
+        assert.deepEqual(
+          drawings
+            .at(-1)
+            ?.list.tasks.map((plan) => plan.name)
+            .toSorted(),
+          ["Billing", "Invites"],
+        );
+
+        yield* collections.answer(
+          { tasks: [], agents: [] },
+          { past: "", next: "9", gone: [], paged: true, carried: new Set([INVITES]) },
+        );
+        yield* TestClock.adjust(DRAW_TICK);
+        assert.deepEqual(
+          drawings.at(-1)?.list.tasks.map((plan) => plan.name),
+          ["Invites"],
+        );
+        assert.deepEqual(drawings.at(-1)?.taskAgents, []);
+      }),
+    ),
+);
+
+it.effect(
   "an agent with no turn reads failed the instant its starting grace ends, with no row moving, and every other task is the object drawn before",
   () =>
     Effect.scoped(

@@ -11,7 +11,7 @@ import { ACCOUNT_INBOX_ITEMS } from "@repo/features/live-wire";
 import { type TaskSummary, taskSummarySchema } from "@repo/features/task-wire";
 import type { EntityPool, HeldRows } from "@repo/sync";
 import { Clock, Effect, Option, Schema } from "effect";
-import { followStoredItems } from "./account-items-stored.js";
+import { ACCOUNT_ITEMS_PAGES, followStoredItems } from "./account-items-stored.js";
 import type { AppInboxItems, AppInboxRead } from "./app-state.js";
 import {
   type AccountWideReads,
@@ -119,10 +119,11 @@ interface HeldItem {
 type Held = ReadonlyMap<string, HeldItem>;
 
 export interface AccountItemsDependencies {
-  /** The account's items read for the account named, past the sync id named, whole where it is empty or none; signed out, or a failure where the service answered none. */
+  /** The account's items read for the account named, past the sync id named, whole where it is empty or none, or the page of a whole answer named; signed out, or a failure where the service answered none. */
   readonly seal: (
     userId: string,
     sync: string | undefined,
+    page?: string,
   ) => Effect.Effect<AccountInboxItemsLiveAnswer | LiveFailure>;
   /** The sync engine's pool, which the items stand in while they are followed. */
   readonly pool: EntityPool;
@@ -158,7 +159,8 @@ type HeldAfterResult = {
  * items now on another plan than they were. A whole answer is every item
  * there is; one past a sync id carries only the items that moved, each
  * whole, and names those that stand no longer, which leave, as does every
- * item settled before the read's window, by the clock.
+ * item settled before the read's window, by the clock. The last page of a
+ * whole answer in pages lets go every item no page carried.
  */
 function heldAfter(
   held: Held,
@@ -181,6 +183,8 @@ function heldAfter(
   }
 
   for (const id of standing?.gone ?? []) next.delete(id);
+
+  for (const id of next.keys()) if (standing?.carried?.has(id) === false) next.delete(id);
   withinWindow(next, now);
 
   const sent = [...carried.values()].flatMap((item) => {
@@ -457,7 +461,7 @@ export function followAccountItems(
         });
 
         const read = yield* followStoredItems({
-          seal: (sync) => dependencies.seal(userId, sync),
+          seal: (sync, page) => dependencies.seal(userId, sync, page),
           pool: dependencies.pool,
           items: threads,
           messages,
@@ -568,7 +572,8 @@ export function followAccountItems(
 
       yield* followTakingRows(
         {
-          poll: (_after, _cursor, sync) => dependencies.seal(userId, sync),
+          poll: (_after, _cursor, sync, page) => dependencies.seal(userId, sync, page),
+          pages: ACCOUNT_ITEMS_PAGES,
           onTxWait: (handed) => {
             wait = handed;
           },

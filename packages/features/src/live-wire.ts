@@ -34,7 +34,8 @@ export const LIVE_POLL_URL = "vespin-poll:";
  * answers deltas, the sync id it holds every row at (`SYNC`), past which it
  * is answered what moved alone, held until something does; and, for a read
  * answered whole in pages, the page it asks for next (`PAGE`), as the page
- * before it named it.
+ * before it named it, or the first (`LIVE_FIRST_PAGE`), by which a reader
+ * that follows pages says so.
  */
 export const LIVE_POLL = {
   QUERY: "poll",
@@ -44,6 +45,29 @@ export const LIVE_POLL = {
   SYNC: "sync",
   PAGE: "page",
 } as const;
+
+/**
+ * The page a reader names to be answered a delta read's whole answer in
+ * pages, from the first: none, as an empty word. Note that the service pages
+ * only a read that names a page, so a build that never does, whatever
+ * version it sends, is answered one whole answer, as every build is that
+ * predates following pages.
+ */
+export const LIVE_FIRST_PAGE = "";
+
+/**
+ * The sync id and page a delta read is asked past: the page named where one
+ * is, or else the first (`LIVE_FIRST_PAGE`) beside a sync id, so a reader
+ * that follows pages is answered any whole answer in them. A read asked with
+ * neither, as one asked around a stalled id is, names no page and is read
+ * whole as a snapshot.
+ */
+export function pagedSyncParams(sync: string | undefined, page: string | undefined) {
+  return {
+    ...(sync === undefined ? undefined : { sync }),
+    ...(page === undefined && sync === undefined ? undefined : { page: page ?? LIVE_FIRST_PAGE }),
+  };
+}
 
 /**
  * The query every live read names the account it was started for under, as

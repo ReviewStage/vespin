@@ -2597,6 +2597,25 @@ function keptItemIds(pool: EntityPool) {
   );
 }
 
+/** Whether each item the Inbox kind's collection keeps now is unread, by id, as a live query loads them from the account's database. */
+function keptUnread(pool: EntityPool) {
+  return Effect.flatMap(pool.collection(INBOX_THREAD), (collection) =>
+    Effect.promise(async () => {
+      const query = createLiveQueryCollection({
+        query: (q) => q.from({ item: collection }),
+        startSync: true,
+        gcTime: 0,
+      });
+
+      await query.preload();
+      const unread = Object.fromEntries(query.toArray.map((item) => [item.id, item.unread]));
+      await query.cleanup();
+
+      return unread;
+    }),
+  );
+}
+
 /** One launch as the host makes it where the Inbox kind is kept on disk: the pool on the local copy, the agents on the pool, then `account`'s database opened. */
 function keptLaunch(root: string, account = "user-dana") {
   return Effect.gen(function* () {
@@ -2958,6 +2977,99 @@ it.effect(
         id: ITEM.id,
         unread: true,
       });
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "a whole answer of the account's items in pages is asked a page after another and kept on disk as every page named, an item kept before that no page carries let go with its messages and their words",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-paged-");
+      const heldMessage = "3a4b5c6d-7e8f-4a9b-8c0d-1e2f3a4b5c6d";
+      const otherMessage = "4b5c6d7e-8f9a-4b0c-9d1e-2f3a4b5c6d7e";
+      const thirdMessage = "5c6d7e8f-9a0b-4c1d-8e2f-3a4b5c6d7e8f";
+      const quit = yield* Scope.make();
+      const first = yield* Scope.provide(quit)(keptLaunch(root));
+      first.sealItems(LIVE_ANSWERED);
+      yield* first.open;
+      yield* settled;
+
+      first.live.items.set({
+        stamps: [stampOf(HELD_ITEM, TASK_ID)],
+        items: [{ ...ITEM_ROW, ...HELD_ITEM }],
+        messages: [messageRowOf(HELD_ITEM, heldMessage, 1)],
+        files: [],
+      });
+
+      yield* toldTimes(first.accountItems, 1);
+      yield* Scope.close(quit, Exit.void);
+
+      const third = { ...OTHER_ITEM, id: "7b8c9d0e-1f2a-4b3c-9d4e-5f6a7b8c9d0e" };
+      const next = yield* keptLaunch(root);
+      next.sealItems(LIVE_ANSWERED);
+
+      next.pageItems([
+        {
+          stamps: [stampOf(OTHER_ITEM, OTHER_TASK_ID)],
+          items: [{ ...ITEM_ROW, ...OTHER_ITEM }],
+          messages: [messageRowOf(OTHER_ITEM, otherMessage, 2)],
+        },
+        {
+          stamps: [stampOf(third, OTHER_TASK_ID)],
+          items: [{ ...ITEM_ROW, ...third }],
+          messages: [messageRowOf(third, thirdMessage, 3)],
+        },
+        { stamps: [], items: [] },
+      ]);
+
+      yield* next.open;
+      yield* settled;
+
+      assert.deepEqual(
+        next.asked.filter((each) => each.startsWith("account-items-page:")),
+        ["account-items-page:1", "account-items-page:2"],
+      );
+      assert.deepEqual(yield* keptItemIds(next.pool), [OTHER_ITEM.id, third.id].toSorted());
+      assert.deepEqual(yield* keptMessageIds(next.pool), [otherMessage, thirdMessage].toSorted());
+      assert.deepEqual(
+        {
+          held: yield* searchedThreads(next, ["at 1"]),
+          first: yield* searchedThreads(next, ["at 2"]),
+          last: yield* searchedThreads(next, ["at 3"]),
+        },
+        { held: [], first: [OTHER_ITEM.id], last: [third.id] },
+      );
+    }).pipe(Effect.provide(keptPlatform)),
+);
+
+it.effect(
+  "an item of a whole answer's first page marked read while its later pages are read stays read on disk once the last lands",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* temporaryDirectoryScoped("compose-agents-stored-paged-mark-");
+      const unread = { ...OTHER_ITEM, unread: true };
+      const lastPage = yield* Deferred.make<void>();
+      const next = yield* keptLaunch(root);
+      next.sealItems(LIVE_ANSWERED);
+      next.pageItems(
+        [
+          {
+            stamps: [stampOf(unread, OTHER_TASK_ID, { unread: true })],
+            items: [{ ...ITEM_ROW, ...unread }],
+          },
+          { stamps: [], items: [] },
+        ],
+        Deferred.await(lastPage),
+      );
+      yield* next.open;
+      yield* settled;
+
+      yield* next.acts.AGENTS_INBOX_READ_STATE({ itemId: unread.id, unread: false });
+      yield* settled;
+      yield* Deferred.succeed(lastPage, undefined);
+      yield* settled;
+
+      assert.deepEqual(yield* keptUnread(next.pool), { [unread.id]: false });
     }).pipe(Effect.provide(keptPlatform)),
 );
 

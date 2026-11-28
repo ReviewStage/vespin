@@ -29,7 +29,7 @@ import { WRITE_UNTAKEN } from "@repo/features/keyed-write";
 import { issueAddressOf, pullRequestAddressOf } from "@repo/features/link-grammar";
 import { LINK_PREVIEW_UNANSWERED } from "@repo/features/link-preview-view";
 import type { AnyLiveRead, LiveReadAnswer, LiveReadAsked } from "@repo/features/live-read";
-import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
+import { type LIVE_READ, LIVE_SIGNED_OUT, pagedSyncParams } from "@repo/features/live-wire";
 import {
   PAGE_OWNER,
   type PageLine,
@@ -1705,7 +1705,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     return followTaskList({
       from: () => listAt,
       dropped: (part, count) => countDropped(TASK_LIST_ROW_KIND[part], count),
-      live: (sync) =>
+      live: (sync, page) =>
         userId === undefined
           ? Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true })
           : Effect.map(
@@ -1713,7 +1713,10 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
               served(
                 client.liveRead(
                   TASK_LIST_READ,
-                  { userId, ...(sync === undefined ? undefined : { sync }) },
+                  {
+                    userId,
+                    ...pagedSyncParams(sync, page),
+                  },
                   {},
                 ),
               ),

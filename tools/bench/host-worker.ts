@@ -14,7 +14,12 @@
  *   desktop or the web, then `steps` answers past a sync id that each move
  *   one live agent, a turn starting and ending in turn, and `steps` that
  *   each move one live plan's own row. Each step ends once the draw tick
- *   has passed and the list is drawn.
+ *   has passed and the list is drawn;
+ * - `paged`: the same whole answer as a build that reads pages takes one
+ *   (`live-follow.ts`'s `followTakingRows`): its first page, `PAGE_TASKS`
+ *   plans, the newest, with their agents and those on no plan, joined on at
+ *   once, then every other page together, joined on with the last, which
+ *   lets go what no page carried, each ending once the draw tick has passed.
  */
 
 import { appendFileSync } from "node:fs";
@@ -38,7 +43,10 @@ import { NOW, SEED, type SeedConstants, seedRows } from "./host-seed.js";
 const WARM_STEPS = 20;
 
 /** What a run measures. */
-const MODE = { KEPT: "kept", ANSWER: "answer" } as const;
+const MODE = { KEPT: "kept", ANSWER: "answer", PAGED: "paged" } as const;
+
+/** How many plans a page of a whole answer carries, as the service pages the task list (`tasksRead`). */
+const PAGE_TASKS = 80;
 
 const { values } = parseArgs({
   options: {
@@ -50,7 +58,7 @@ const { values } = parseArgs({
 });
 
 const root = path.resolve(values.root ?? process.cwd());
-const mode = values.mode === MODE.KEPT ? MODE.KEPT : MODE.ANSWER;
+const mode = Object.values(MODE).find((each) => each === values.mode) ?? MODE.ANSWER;
 const agentCount = Number(values.agents);
 const steps = Number(values.steps);
 
@@ -175,6 +183,43 @@ const program = Effect.gen(function* () {
       keptTasks: round(tasksDrawnAt - standStarted),
       keptAgents: round(drawnAt - tasksDrawnAt),
     };
+  }
+
+  if (mode === MODE.PAGED) {
+    const newestFirst = plans.toSorted(
+      (one, other) => other.createdAt - one.createdAt || (other.id < one.id ? -1 : 1),
+    );
+
+    const firstIds = new Set(newestFirst.slice(0, PAGE_TASKS).map((plan) => plan.id));
+    const ofFirst = (agent: AgentRow) => agent.taskId === null || firstIds.has(agent.taskId);
+    const carried = new Set([...plans, ...agents].map((row) => row.id));
+
+    // Note that a build that reads pages takes the first at once and every other with the last (`followTakingRows`), so the list takes two answers.
+    const firstStarted = performance.now();
+
+    yield* collections.answer(
+      { tasks: newestFirst.slice(0, PAGE_TASKS), agents: agents.filter(ofFirst) },
+      { past: "", next: "", gone: [], paged: true },
+      0,
+    );
+    yield* TestClock.adjust(liveCollection.DRAW_TICK);
+    const pagedFirst = performance.now() - firstStarted;
+    const restStarted = performance.now();
+
+    yield* collections.answer(
+      {
+        tasks: newestFirst.slice(PAGE_TASKS),
+        agents: agents.filter((agent) => !ofFirst(agent)),
+      },
+      { past: "", next: "1", gone: [], paged: true, carried },
+      0,
+    );
+    yield* TestClock.adjust(liveCollection.DRAW_TICK);
+    const pagedRest = performance.now() - restStarted;
+
+    if (last?.taskAgents.length !== agentCount) throw new Error("the pages drew not every agent");
+
+    return { pagedFirst: round(pagedFirst), pagedRest: round(pagedRest) };
   }
 
   const answerStarted = performance.now();
