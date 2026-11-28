@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { MAX_OPENED_TASKS } from "@repo/features/view-choice-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -17,13 +18,17 @@ import {
 import { SIDEBAR_WIDTH, useSidebarCollapse } from "./desktop/sidebar-collapse.js";
 import { useTaskListView } from "./desktop/task-list-view.js";
 import { useConversationFilters } from "./tasks/conversation-filters.js";
+import { settleQueries, withQueryClient } from "./testing/copy-feedback.js";
+import { keepViewChoices } from "./testing/view-choices.js";
 
 /**
  * kept-keys.test.ts -- a view choice kept before it moved onto `useKept` is
  * still kept: each is read from the name and in the shape an earlier build
  * wrote it, and written back under the same name in the same shape, so
- * nobody loses a fold, a width or a filter to the move. The stored texts
- * are spelled out here, never computed from the code under test.
+ * nobody loses a fold, a width or a filter to the move; and one that moved
+ * up to the account is read once from there and handed up in the
+ * account's shape. The stored texts are spelled out here, never computed
+ * from the code under test.
  */
 
 declare global {
@@ -60,7 +65,7 @@ function draw<T>(hook: () => T): Drawn<T> {
 
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
-  act(() => root?.render(createElement(Surface)));
+  act(() => root?.render(withQueryClient(createElement(Surface))));
 
   return {
     now: () => {
@@ -79,29 +84,46 @@ function keep(name: string, text: string): void {
   window.localStorage.setItem(name, text);
 }
 
-test("the sidebar's folds are read from, and written back to, the names they were kept under", () => {
+test("the sidebar's folds this Mac kept move up to the account under their own keys, the latest opened tasks within the bound, and leave the Mac", async () => {
+  const opened = Array.from({ length: MAX_OPENED_TASKS + 1 }, (_, at) => `t${at}`);
   keep("app.sidebarFoldedGroups", '["acme/app",null]');
   keep("app.sidebarPinnedFolded", "true");
   keep("app.sidebarFoldedSections", '["s1"]');
+  keep("app.sidebarOpenedTasks", JSON.stringify(opened));
+  const written = keepViewChoices();
   const folds = draw(() => useFoldedGroups(false));
+  await settleQueries();
+
+  expect(written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value }))).toEqual(
+    expect.arrayContaining([
+      { key: "sidebarFoldedGroups", workspaceId: null, value: ["acme/app", null] },
+      { key: "sidebarPinnedFolded", workspaceId: null, value: true },
+      { key: "sidebarFoldedSections", workspaceId: null, value: ["s1"] },
+      { key: "sidebarOpenedTasks", workspaceId: null, value: opened.slice(1) },
+    ]),
+  );
+  expect(written).toHaveLength(4);
   expect(folds.now().folded("acme/app")).toBe(true);
-  expect(folds.now().folded(null)).toBe(true);
   expect(folds.now().folded("acme/other")).toBe(false);
   expect(folds.now().pinnedFolded).toBe(true);
-  expect(folds.now().sectionFolded("s1")).toBe(true);
-  act(() => folds.now().toggle("acme/other"));
-  act(() => folds.now().togglePinned());
-  act(() => folds.now().toggleSection("s2"));
-  expect(kept("app.sidebarFoldedGroups")).toBe('["acme/app",null,"acme/other"]');
-  expect(kept("app.sidebarPinnedFolded")).toBe("false");
-  expect(kept("app.sidebarFoldedSections")).toBe('["s1","s2"]');
+  expect(folds.now().taskOpened("t0")).toBe(false);
+  expect(folds.now().taskOpened("t1")).toBe(true);
+  expect(kept("app.sidebarFoldedGroups")).toBeNull();
+  expect(kept("app.sidebarPinnedFolded")).toBeNull();
+  expect(kept("app.sidebarOpenedTasks")).toBeNull();
 });
 
-test("a fixture run's folds keep nothing", () => {
+test("a fixture run's folds keep nothing, on the account or the Mac", async () => {
+  keep("app.sidebarPinnedFolded", "true");
+  const written = keepViewChoices();
   const folds = draw(() => useFoldedGroups(true));
+  expect(folds.now().pinnedFolded).toBe(false);
   act(() => folds.now().toggle("acme/app"));
+  await settleQueries();
   expect(folds.now().folded("acme/app")).toBe(true);
+  expect(written).toEqual([]);
   expect(kept("app.sidebarFoldedGroups")).toBeNull();
+  expect(kept("app.sidebarPinnedFolded")).toBe("true");
 });
 
 test("the Inbox opens on Open, addressed to me, where nothing was kept", () => {
@@ -156,42 +178,35 @@ test("a sidebar never folded opens", () => {
   expect(draw(() => useSidebarCollapse(false, false)).now().collapsed).toBe(false);
 });
 
-test("a task list view kept with no Assigned to opens on the reader's own tasks, its finished sub-tasks hidden, and Anyone chosen is kept", () => {
+test("a task list view this Mac kept with no Assigned to moves up for the workspace listed as the reader's own tasks, its finished sub-tasks hidden, and leaves the Mac", async () => {
   keep("app.sidebarTaskViews", '{"w1":{"grouping":"repository"},"w2":{"grouping":"none"}}');
+  const written = keepViewChoices();
+  const list = draw(() => useTaskListView("w2", false));
+  await settleQueries();
 
-  const list = draw(() => ({
-    w1: useTaskListView("w1", false),
-    w2: useTaskListView("w2", false),
-  }));
-
-  expect(list.now().w1.view).toEqual({
-    grouping: "repository",
-    assignedTo: { kind: "me" },
-    finishedSubTasks: false,
-  });
-  expect(list.now().w2.view).toEqual({
-    grouping: "none",
-    assignedTo: { kind: "me" },
-    finishedSubTasks: false,
-  });
-  act(() => list.now().w2.onAssignedTo({ kind: "anyone" }));
+  expect(written.map(({ key, workspaceId, value }) => ({ key, workspaceId, value }))).toEqual([
+    {
+      key: "sidebarTaskView",
+      workspaceId: "w2",
+      value: { grouping: "none", assignedTo: { kind: "me" }, finishedSubTasks: false },
+    },
+  ]);
+  expect(list.now().view.grouping).toBe("none");
   expect(JSON.parse(kept("app.sidebarTaskViews") ?? "{}")).toEqual({
     w1: { grouping: "repository" },
-    w2: { grouping: "none", assignee: { kind: "anyone" }, finished: false },
   });
-  // A later launch reads Anyone back.
-  act(() => root?.unmount());
-  const later = draw(() => useTaskListView("w2", false));
-  expect(later.now().view.assignedTo).toEqual({ kind: "anyone" });
 });
 
-test("the sidebar and a person's page draw one task list view at once", () => {
+test("the sidebar and a person's page draw one task list view", async () => {
+  keepViewChoices();
+
   const drawn = draw(() => ({
     sidebar: useTaskListView("w1", false),
     person: useTaskListView("w1", false),
   }));
 
   act(() => drawn.now().person.onAssignedTo({ kind: "member", userId: "u2" }));
+  await settleQueries();
   expect(drawn.now().sidebar.view.assignedTo).toEqual({ kind: "member", userId: "u2" });
 });
 
