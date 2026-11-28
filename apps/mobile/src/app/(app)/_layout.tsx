@@ -29,6 +29,7 @@ import { useNewTaskDraftsSignOut } from "../../new-task-draft.js";
 import { useInboxNotifications } from "../../notifications.js";
 import { usePushRegistration } from "../../push-device.js";
 import { useResumeLoadCount } from "../../resume-load.js";
+import { useCommentDraftsSignOut } from "../../screens/comment-screens.js";
 import { useRecentOpenedSignOut } from "../../search/recent-opened.js";
 import { useSetupGate } from "../../setup/use-setup-gate.js";
 import { useShareSheet } from "../../share-sheet.js";
@@ -162,6 +163,7 @@ export default function GuardedScreens() {
   useRecentOpenedSignOut(signedIn);
   useComposerDraftsSignOut(signedIn);
   useNewTaskDraftsSignOut(signedIn);
+  useCommentDraftsSignOut(signedIn);
   useHeldSendsSignOut(signedIn);
   useCrashReports();
   useOfflineNotice();

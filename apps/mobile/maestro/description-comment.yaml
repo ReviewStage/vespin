@@ -1,8 +1,10 @@
-# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block in the comment sheet with its words quoted and the comment field taking the keyboard; Send opens the thread at once in the sheet with the words as its first comment, and Close lets the sheet go.
+# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block in the comment sheet with its words quoted and the comment field taking the keyboard; Send opens the thread at once in the sheet with the words as its first comment, and Close lets the sheet go; and words selected in the description's field offering Comment in the system's edit menu, which opens a new thread on those words.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, as `tasks.yaml` is, so Teammate
 # invitations holds its description and its comment threads and no server is
@@ -93,3 +95,69 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - assertNotVisible: "Should an owner be able to resend an expired invite from this page?"
 - takeScreenshot: comment-row-resolved
+# Words selected in the description, edited in place, offer Comment in the
+# system's edit menu after its own acts, as a document's selection offers
+# one, which opens a new thread on those words in the comment sheet. The word
+# is selected as `description-edit.yaml` selects one: a press on the first
+# paragraph opens the field there, a tap at the Context heading's word stands
+# the caret, a second opens the edit menu, and its Select takes the word.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - scrollUntilVisible:
+          element: "Only an admin can add.*"
+          direction: UP
+          centerElement: true
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - runFlow:
+          file: subflows/scroll-in.yaml
+          env:
+            ELEMENT: "Only an admin can add.*"
+            DIRECTION: UP
+            BESIDE: "true"
+- tapOn: "Only an admin can add.*"
+- extendedWaitUntil:
+    visible:
+      id: "description-words"
+    timeout: 10000
+- waitForAnimationToEnd
+- tapOn:
+    id: "description-words"
+    point: "8%,2%"
+- waitForAnimationToEnd
+- tapOn:
+    id: "description-words"
+    point: "8%,2%"
+- tapOn: "Select"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      notVisible: "Comment"
+    commands:
+      - tapOn: "Next Page"
+- takeScreenshot: description-words-menu
+- tapOn: "Comment"
+- assertVisible: "Add a comment"
+- inputText: "Is this the right heading?"
+- waitForAnimationToEnd
+- takeScreenshot: description-words-comment
+- tapOn: "Send"
+- assertVisible: "Is this the right heading?"
+- waitForAnimationToEnd
+- takeScreenshot: description-words-comment-sent
+- tapOn: "Close"
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "Done editing description"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: "Done"

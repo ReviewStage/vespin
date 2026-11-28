@@ -62,6 +62,12 @@ struct FormatActRecord: Record {
   @Field var glyph: String = ""
 }
 
+/// The edit menu's Comment on the words selected: its words and its glyph's name in the asset catalog.
+struct CommentActRecord: Record {
+  @Field var title: String = ""
+  @Field var glyph: String = ""
+}
+
 /// The acts the field offers on its selection: its marks, a link, and the blocks a line is turned into, under the menus' own words.
 struct FormatsRecord: Record {
   @Field var title: String = ""
@@ -626,6 +632,7 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   let onFocusChange = EventDispatcher()
   let onLinkAsk = EventDispatcher()
   let onCaret = EventDispatcher()
+  let onComment = EventDispatcher()
 
   private let textView = UITextView(usingTextLayoutManager: true)
   private let placeholderLabel = UILabel()
@@ -664,6 +671,9 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
   var editable = true {
     didSet { textView.isEditable = editable }
   }
+
+  /// The edit menu's Comment on the words selected, which tells JavaScript the field's words and the selection in them; none where the document takes no comments.
+  var comment: CommentActRecord?
 
   /// Whether the field grows to its words inside the page that holds it, as a description edited in place stands in its task's list, rather than scrolling them itself; it then tells JavaScript the height its words ask for.
   /// How far over the keyboard the caret's line keeps clear while something stands over the field's foot, such as what an `@` offers docked over the keyboard; none while nothing does. Note that the caret's line is brought back into sight as it comes and goes, once the page has laid out around it (`offerSettle`).
@@ -1058,14 +1068,28 @@ final class DocumentFieldView: ExpoView, UITextViewDelegate {
     tellCaret()
   }
 
-  /// The system's edit menu with the field's Format menu after its own acts, as Notes offers one.
+  /// The system's edit menu with Comment on the words selected and the field's Format menu after its own acts, as Notes offers one.
   func textView(
     _ textView: UITextView,
     editMenuForTextIn range: NSRange,
     suggestedActions: [UIMenuElement]
   ) -> UIMenu? {
-    guard editable, let menu = formatMenu() else { return nil }
-    return UIMenu(children: suggestedActions + [menu])
+    let format: UIMenuElement? = editable ? formatMenu() : nil
+    let added = [commentAction(range), format].compactMap { $0 }
+    guard !added.isEmpty else { return nil }
+    return UIMenu(children: suggestedActions + added)
+  }
+
+  /// Comment on the words selected, which tells JavaScript the field's words as drawn, each pill and card the object character, and where the selection stands in them; none where nothing is selected or the document takes no comments.
+  private func commentAction(_ range: NSRange) -> UIMenuElement? {
+    guard let comment, range.length > 0 else { return nil }
+
+    return UIAction(title: comment.title, image: glyphImage(comment.glyph)) { [weak self] _ in
+      guard let self else { return }
+      let string = self.textView.textStorage.string as NSString
+      let to = min(NSMaxRange(range), string.length)
+      self.onComment(["text": string as String, "from": min(range.location, to), "to": to])
+    }
   }
 
   // MARK: Drawing

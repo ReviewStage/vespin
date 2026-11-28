@@ -135,26 +135,31 @@ type StartDraft = {
  */
 const startDrafts = new Map<string, Map<number, Map<number, StartDraft>>>();
 
+/** How many times the drafts were let go at a sign-out, so a refusal that lands after one keeps nothing of the account gone. */
+let startDraftsForgotten = 0;
+
+/** Lets go of every new thread's draft, as the account they were typed under signs out, so the next account on the phone never opens on its words. */
+export function forgetStartDrafts(): void {
+  startDrafts.clear();
+  startDraftsForgotten += 1;
+}
+
 /** The draft kept at one block's offsets of a task, whatever block it was typed on; none kept, or no block yet read. */
-function heldDraftAt(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+function heldDraftAt(taskId: string, block: StartSpan | undefined): StartDraft | undefined {
   if (block === undefined) return undefined;
 
   return startDrafts.get(taskId)?.get(block.from)?.get(block.to);
 }
 
 /** The draft kept toward a new thread on one block of a task, typed on these same words; none kept, or no block yet read. */
-function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+function startDraftOf(taskId: string, block: StartSpan | undefined): StartDraft | undefined {
   const draft = heldDraftAt(taskId, block);
 
   return draft?.quote === block?.quote ? draft : undefined;
 }
 
 /** Keeps a new thread's draft on one block of a task, or lets it go at none. */
-function keepStartDraft(
-  taskId: string,
-  block: DescriptionBlock,
-  draft: StartDraft | undefined,
-): void {
+function keepStartDraft(taskId: string, block: StartSpan, draft: StartDraft | undefined): void {
   const spans = startDrafts.get(taskId) ?? new Map<number, Map<number, StartDraft>>();
   const ends = spans.get(block.from) ?? new Map<number, StartDraft>();
 
@@ -623,6 +628,15 @@ export function threadsOnBlocks(
   return on;
 }
 
+/**
+ * Where a new thread stands on a description: a block's span and the words
+ * it quotes, or the words a reader selected (`WORDS`), measured in the text
+ * the start sends beside it.
+ */
+export type StartSpan = Pick<DescriptionBlock, "from" | "to" | "quote"> & {
+  readonly scope?: typeof DESCRIPTION_COMMENT_SCOPE.WORDS;
+};
+
 /** A new thread's field on a block: its words, whether they may go, what a send that was refused said, and the send, which answers the thread's id at once, before the service has. */
 export interface CommentStart {
   readonly words: string;
@@ -649,9 +663,9 @@ interface RefusedStart extends SentStart {
 }
 
 /**
- * A new thread on one block of a task's description, as the panel's block
- * comment starts one (`TASKS_COMMENT_START`): its first comment's words, the
- * block's quote and span, and the description's text the span is measured
+ * A new thread on one block of a task's description, or on words selected
+ * in it, as the panel's block and words comments start one
+ * (`TASKS_COMMENT_START`): its first comment's words, the quote and span, and the description's text the span is measured
  * in, which the service carries over to the text as it stands. It goes
  * under an id minted here, so the host draws the thread at once and the
  * send answers that id before the service does, and under a key kept for as
@@ -664,7 +678,7 @@ interface RefusedStart extends SentStart {
 export function useCommentStart(
   taskId: string,
   text: string,
-  block: DescriptionBlock | undefined,
+  block: StartSpan | undefined,
 ): CommentStart {
   const acts = useHostActs();
   const write = useWrite();
@@ -768,6 +782,7 @@ export function useCommentStart(
       }
 
       inFlight.current = true;
+      const forgotten = startDraftsForgotten;
       const files = pictures.files ?? [];
       const carried = heldPictures.current;
       const repeated = sameSend(sent, kept, files) ? sent : undefined;
@@ -792,7 +807,7 @@ export function useCommentStart(
             start: {
               id: start.threadId,
               clientKey: start.key,
-              scope: DESCRIPTION_COMMENT_SCOPE.BLOCK,
+              scope: block.scope ?? DESCRIPTION_COMMENT_SCOPE.BLOCK,
               quote,
               anchor: { from: block.from, to: block.to },
               text,
@@ -809,6 +824,8 @@ export function useCommentStart(
                 : COMMENT_NOTE.NOT_POSTED,
           unanswered: COMMENT_NOTE.NOT_POSTED,
           inPlace: (why, noticed) => {
+            // Note that a refusal landing after a sign-out keeps nothing, and is said to no one, since its account is gone.
+            if (forgotten !== startDraftsForgotten) return;
             const now = heldDraftAt(taskId, block);
 
             // Note that words typed toward this block since the send, in a field opened on it again, are kept over the refused ones, and so is a draft another block's words now stand under at these offsets; an earlier refusal's draft on this block gives way to this one.

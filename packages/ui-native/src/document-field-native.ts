@@ -120,6 +120,19 @@ export interface NativeOpening {
   readonly y: number;
 }
 
+/** The edit menu's Comment on the words selected: its words, and its glyph's name in the asset catalog. */
+export interface NativeCommentAct {
+  readonly title: string;
+  readonly glyph: string;
+}
+
+/** The words a Comment was pressed on: the field's words as drawn, each pill and card the object character, and where the selection stands in them. */
+export interface NativeCommented {
+  readonly text: string;
+  readonly from: number;
+  readonly to: number;
+}
+
 interface NativeDocumentFieldProps {
   readonly ref?: Ref<NativeDocumentFieldDoors> | undefined;
   readonly style?: StyleProp<ViewStyle>;
@@ -128,6 +141,8 @@ interface NativeDocumentFieldProps {
   readonly placeholder?: string | undefined;
   readonly editable?: boolean | undefined;
   readonly formats?: NativeFormats | undefined;
+  /** The edit menu's Comment on the words selected; none where the document takes no comments. */
+  readonly comment?: NativeCommentAct | undefined;
   /** Whether the field grows to its words inside the page that holds it, rather than scrolling them itself, telling the height they ask for. */
   readonly fitsWords?: boolean | undefined;
   /** How far over the keyboard the caret's line keeps clear while something stands over the field's foot; none while nothing does. */
@@ -150,6 +165,8 @@ interface NativeDocumentFieldProps {
     }>,
   ) => void;
   readonly onFocusChange: (event: NativeSyntheticEvent<{ readonly focused: boolean }>) => void;
+  /** Comment pressed on the words selected. */
+  readonly onComment?: ((event: NativeSyntheticEvent<NativeCommented>) => void) | undefined;
 }
 
 /** The module the view stands in, and the view's own name, which its Swift type names. */

@@ -1,7 +1,7 @@
 // document-field.tsx -- a document's rich field, as Notion edits a page: each block drawn with no syntax in the app's native document field, and the document written back with only the blocks that changed printed again.
 
 import { readerZone } from "@repo/features/date-mention";
-import { descriptionHead } from "@repo/features/description-blocks";
+import { descriptionHead, drawnSpan } from "@repo/features/description-blocks";
 import {
   BLOCK_KIND,
   type DocumentBlock,
@@ -47,6 +47,8 @@ import {
   FORMAT_ACT,
   type FormatAct,
   type NativeCard,
+  type NativeCommentAct,
+  type NativeCommented,
   NativeDocumentField,
   type NativeDocumentFieldDoors,
   type NativeDocumentLine,
@@ -174,7 +176,20 @@ interface DocumentFieldProps {
   readonly keepClear?: number | undefined;
   /** Where the field takes the keyboard with its caret once it stands, read as it mounts; none leaves the keyboard alone. */
   readonly opensAt?: DocumentFieldOpening | undefined;
+  /** Comment in the edit menu on the words selected, handed their span of the Markdown the field would save now, the words they quote, and that Markdown; none where the document takes no comments. */
+  readonly onComment?: ((commented: DocumentCommented) => void) | undefined;
 }
+
+/** Words a Comment was pressed on: their span of `text`, the Markdown the field would save as it was pressed, and the words a thread on them quotes. */
+export interface DocumentCommented {
+  readonly from: number;
+  readonly to: number;
+  readonly quote: string;
+  readonly text: string;
+}
+
+/** The edit menu's Comment, in the panel's word and glyph. */
+const COMMENT_ACT: NativeCommentAct = { title: "Comment", glyph: GLYPH.COMMENT };
 
 /** What the field last told: the Markdown it wrote, the Markdown that was written against, and its lines as the blocks it wrote read them. */
 interface Told {
@@ -328,6 +343,7 @@ export function DocumentField({
   fitsWords = false,
   keepClear,
   opensAt,
+  onComment,
 }: DocumentFieldProps) {
   const colors = useColors();
   const native = useRef<NativeDocumentFieldDoors>(null);
@@ -421,11 +437,12 @@ export function DocumentField({
   const pending = useRef<PendingLines | undefined>(undefined);
   const frame = useRef<number | undefined>(undefined);
 
-  const write = () => {
+  // Answers the Markdown it wrote, none where nothing was pending or words handed from outside won.
+  const write = (): string | undefined => {
     frame.current = undefined;
     const held = pending.current;
 
-    if (held === undefined) return;
+    if (held === undefined) return undefined;
     pending.current = undefined;
     const { told } = held;
 
@@ -433,7 +450,7 @@ export function DocumentField({
     if (held.base !== handed.markdown) {
       setSeen(told.changes);
 
-      return;
+      return undefined;
     }
 
     const edited = editedBlocks(told.lines.map((line) => toldLine(line, files)));
@@ -443,6 +460,8 @@ export function DocumentField({
     setTold({ markdown, base: handed.markdown, lines: editedLines(edited) });
 
     if (markdown !== value) onChange(markdown);
+
+    return markdown;
   };
 
   // Note that the frame's write reads the newest render's Markdown and blocks, which a render between the key and the frame may have handed.
@@ -464,6 +483,15 @@ export function DocumentField({
 
     return { nonce: 1, start: false, line, x: opensAt.x, y: opensAt.y };
   }, [opensAt, read, base, handed]);
+
+  // Note that the words are measured in the Markdown as it now stands, the frame's pending write laid first, so words typed just before the press are in it; the service carries the span over to the description as saved.
+  const commented = ({ nativeEvent }: NativeSyntheticEvent<NativeCommented>) => {
+    if (frame.current !== undefined) cancelAnimationFrame(frame.current);
+    const text = latest.current() ?? value;
+    const span = drawnSpan(nativeEvent.text, text, nativeEvent.from, nativeEvent.to);
+
+    if (span !== undefined) onComment?.({ ...span, text });
+  };
 
   const onLines = ({ nativeEvent }: NativeSyntheticEvent<NativeToldEvent>) => {
     pending.current = { told: nativeEvent, base: handed.markdown };
@@ -535,6 +563,8 @@ export function DocumentField({
       placeholder={placeholder}
       editable={editable}
       formats={FORMATS}
+      comment={onComment === undefined ? undefined : COMMENT_ACT}
+      onComment={onComment === undefined ? undefined : commented}
       testID={testID}
       onLinkAsk={onLinkAsk}
       onCaret={onCaret}
