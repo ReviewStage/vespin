@@ -148,7 +148,7 @@ export function MobileBar({
               count={OFFICE === undefined || OFFICE === "presence" ? inboxCount : undefined}
               onPress={go(inbox.open)}
             >
-              {OFFICE === undefined || OFFICE === "presence" ? "Inbox" : "Office"}
+              {OFFICE === undefined || OFFICE === "presence" ? "Inbox" : "Managers"}
             </BarItem>
           ) : null}
           <BarItem icon={<ListTodoIcon />} current={inTasks} onPress={go(board.open)}>

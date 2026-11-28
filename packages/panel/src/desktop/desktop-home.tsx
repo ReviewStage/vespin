@@ -37,8 +37,15 @@ import { useWaitingItems, type WaitingItems } from "../tasks/use-waiting-items.j
 import { letGoOfFocus, useHomeNewTask, useListsTask, welcomed } from "./desktop-welcome.js";
 import { HomeStarters } from "./home-starters.js";
 import { CalmOffice, PresenceStrip } from "./office-prototype/calm-office.js";
+import { FunOffice } from "./office-prototype/fun-office.js";
 import { OfficePage } from "./office-prototype/office-page.js";
-import { CALM, OFFICE, PROGRESS_IDEAS, REFERENCE_IDEAS } from "./office-prototype/office-params.js";
+import {
+  CALM,
+  FUN_IDEAS,
+  OFFICE,
+  PROGRESS_IDEAS,
+  REFERENCE_IDEAS,
+} from "./office-prototype/office-params.js";
 import { ProgressOffice } from "./office-prototype/progress-office.js";
 import { ReferenceOffice } from "./office-prototype/reference-office.js";
 import { PERSON_SECTION_FOLD, PersonBody, PersonSectionFrame } from "./person-frame.js";
@@ -329,7 +336,9 @@ export function DesktopHome({
 
   // PROTOTYPE, throwaway: the Office in Home's place while the address asks for it.
   if (OFFICE !== undefined && OFFICE !== "presence")
-    return REFERENCE_IDEAS.has(OFFICE) ? (
+    return FUN_IDEAS.has(OFFICE) ? (
+      <FunOffice variant={OFFICE} />
+    ) : REFERENCE_IDEAS.has(OFFICE) ? (
       <ReferenceOffice variant={OFFICE} />
     ) : PROGRESS_IDEAS.has(OFFICE) ? (
       <ProgressOffice variant={OFFICE} />

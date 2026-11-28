@@ -20,7 +20,13 @@ export const OFFICE_VARIANT = {
   HILLTOP: "hilltop",
   BOARD: "board",
   STANDUP: "standup",
+  GARDEN: "garden",
+  TRACK: "track",
+  CITY: "city",
 } as const;
+
+/** The round-six ideas: playful scenes, almost without words. */
+export const FUN_IDEAS = new Set<string>(["garden", "track", "city"]);
 
 /** The round-five ideas, each after a product people already read at a glance. */
 export const REFERENCE_IDEAS = new Set<string>(["hilltop", "board", "standup"]);

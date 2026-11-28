@@ -3059,7 +3059,7 @@ function SidebarColumn({
             current={atHome ? NAV_CURRENT.PAGE : undefined}
             onClick={placeDoors.onHome}
           >
-            Office
+            Managers
           </NavItem>
         )}
         {inboxOn ? (

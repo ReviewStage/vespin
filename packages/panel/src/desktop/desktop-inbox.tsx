@@ -86,8 +86,15 @@ import { useCloudTerminalTab } from "../tasks/use-terminal-session.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { AgentPane } from "./main-tabs.js";
 import { CalmOffice, PresenceStrip } from "./office-prototype/calm-office.js";
+import { FunOffice } from "./office-prototype/fun-office.js";
 import { OfficePage } from "./office-prototype/office-page.js";
-import { CALM, OFFICE, PROGRESS_IDEAS, REFERENCE_IDEAS } from "./office-prototype/office-params.js";
+import {
+  CALM,
+  FUN_IDEAS,
+  OFFICE,
+  PROGRESS_IDEAS,
+  REFERENCE_IDEAS,
+} from "./office-prototype/office-params.js";
 import { ProgressOffice } from "./office-prototype/progress-office.js";
 import { ReferenceOffice } from "./office-prototype/reference-office.js";
 import {
@@ -209,7 +216,9 @@ export const DesktopInbox = memo(function DesktopInboxOrOffice(props: {
     );
   }
   if (OFFICE !== undefined && props.room === SHELL_ROOM.NARROW)
-    return REFERENCE_IDEAS.has(OFFICE) ? (
+    return FUN_IDEAS.has(OFFICE) ? (
+      <FunOffice variant={OFFICE} />
+    ) : REFERENCE_IDEAS.has(OFFICE) ? (
       <ReferenceOffice variant={OFFICE} />
     ) : PROGRESS_IDEAS.has(OFFICE) ? (
       <ProgressOffice variant={OFFICE} />

@@ -713,3 +713,448 @@
     padding: 8px 0 24px;
   }
 }
+
+/* Round six: playful scenes. Motion plays once as the page opens (data-play), then only a doze and an ask keep moving. */
+.fun-scene {
+  padding: 8px 0 24px;
+}
+.fun-name {
+  font-size: 12px;
+  color: var(--ui-color-text-muted);
+  font-weight: 500;
+}
+.fun-bubble {
+  position: relative;
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--ui-color-attention);
+  color: var(--ui-color-on-attention);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  box-shadow: var(--ui-shadow-card);
+}
+.fun-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  background: inherit;
+  transform: translateX(-50%) rotate(45deg);
+  border-radius: 2px;
+}
+.fun-zzz {
+  font-weight: 700;
+  color: var(--ui-color-text-muted);
+  font-size: 13px;
+  letter-spacing: 1px;
+}
+.fun-zzz span:nth-child(1) {
+  font-size: 16px;
+}
+.fun-zzz span:nth-child(2) {
+  font-size: 19px;
+}
+[data-play] .fun-bubble {
+  animation: fun-bob 1.6s ease-in-out 2.2s infinite alternate;
+}
+[data-play] .fun-zzz {
+  display: inline-block;
+  animation: fun-doze 2.4s ease-in-out infinite;
+}
+@keyframes fun-bob {
+  to {
+    transform: translateY(-5px);
+  }
+}
+@keyframes fun-doze {
+  0% {
+    opacity: 0.3;
+    transform: translate(0, 4px);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.3;
+    transform: translate(6px, -8px);
+  }
+}
+
+/* Garden */
+.fun-garden {
+  position: relative;
+  padding-top: 24px;
+}
+.fun-garden-row {
+  display: flex;
+  justify-content: space-around;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 0 12px;
+}
+.fun-plant {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 120px;
+}
+.fun-plant-air {
+  height: 34px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.fun-plant-svg {
+  overflow: visible;
+  margin-bottom: -6px;
+}
+.fun-plant-goal {
+  stroke: var(--ui-color-border-strong);
+  stroke-width: 2;
+  stroke-dasharray: 2 6;
+  stroke-linecap: round;
+}
+.fun-plant-bud {
+  fill: var(--ui-color-ground);
+  stroke: var(--ui-color-border-strong);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+}
+.fun-plant-stem {
+  stroke: color-mix(in oklab, var(--ui-color-complete) 70%, var(--ui-color-text));
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.fun-plant-stem-wrap {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+}
+.fun-leaf {
+  fill: color-mix(in oklab, var(--ui-color-complete) 55%, var(--ui-color-ground));
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.fun-leaf[data-new] {
+  fill: var(--ui-color-complete);
+}
+[data-play] .fun-plant-stem-wrap {
+  animation: fun-grow-stem 1.1s cubic-bezier(0.3, 1.4, 0.6, 1) 0.3s both;
+}
+[data-play] .fun-leaf[data-new] {
+  animation: fun-sprout 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) var(--fun-delay) both;
+}
+@keyframes fun-grow-stem {
+  from {
+    transform: scaleY(var(--fun-from));
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes fun-sprout {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.fun-plant[data-mood="asking"] .fun-plant-svg {
+  transform: rotate(-7deg);
+  transform-origin: bottom center;
+}
+.fun-plant[data-mood="asking"] .fun-plant-stem {
+  stroke: color-mix(in oklab, var(--ui-color-attention) 45%, var(--ui-color-text-muted));
+}
+.fun-plant[data-mood="asking"] .fun-leaf {
+  fill: color-mix(in oklab, var(--ui-color-attention) 35%, var(--ui-color-ground));
+}
+.fun-plant[data-mood="quiet"] .fun-plant-svg {
+  opacity: 0.55;
+}
+.fun-plant-face {
+  position: relative;
+  z-index: 1;
+}
+.fun-garden-sill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22px;
+  height: 14px;
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--ui-color-manager-face-peach) 55%, var(--ui-color-well));
+}
+.fun-plant .fun-name {
+  margin-top: 20px;
+}
+.fun-garden-row {
+  margin-bottom: 0;
+  position: relative;
+  z-index: 1;
+}
+
+/* Track */
+.fun-track {
+  position: relative;
+  margin: 0 auto;
+}
+.fun-track svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.fun-track-ground {
+  fill: color-mix(in oklab, var(--ui-color-manager-face-peach) 22%, var(--ui-color-ground));
+}
+.fun-track-infield {
+  fill: color-mix(in oklab, var(--ui-color-complete) 16%, var(--ui-color-ground));
+}
+.fun-track-lane {
+  fill: none;
+  stroke: var(--ui-color-ground);
+  stroke-width: 1.5;
+  opacity: 0.9;
+}
+.fun-track-past {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+  opacity: 0.35;
+  stroke-dasharray: var(--fun-was) 100;
+}
+.fun-track-trail {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  stroke-dasharray: calc(var(--fun-now) - var(--fun-was)) 100;
+  stroke-dashoffset: calc(-1 * var(--fun-was));
+}
+.fun-track-finish {
+  stroke: var(--ui-color-text);
+  stroke-width: 4;
+  stroke-dasharray: 4 4;
+}
+.fun-flag {
+  position: absolute;
+  font-size: 26px;
+}
+.fun-runner {
+  position: absolute;
+  left: 0;
+  top: 0;
+  offset-distance: var(--fun-now);
+  offset-rotate: 0deg;
+  offset-anchor: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.fun-runner .fun-bubble,
+.fun-runner .fun-zzz {
+  position: absolute;
+  bottom: 38px;
+}
+.fun-runner[data-mood="asking"] .ui-manager-face {
+  filter: drop-shadow(0 0 0 var(--ui-color-attention))
+    drop-shadow(0 0 3px var(--ui-color-attention));
+}
+[data-play] .fun-runner {
+  animation: fun-run 1.8s cubic-bezier(0.4, 0, 0.2, 1) 0.4s both;
+}
+[data-play] .fun-track-trail {
+  animation: fun-trail 1.8s cubic-bezier(0.4, 0, 0.2, 1) 0.4s both;
+}
+@keyframes fun-run {
+  from {
+    offset-distance: var(--fun-was);
+  }
+  to {
+    offset-distance: var(--fun-now);
+  }
+}
+@keyframes fun-trail {
+  from {
+    stroke-dasharray: 0 100;
+  }
+}
+
+/* City */
+.fun-city {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 56px 24px 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklab, var(--ui-color-manager-face-blue) 30%, var(--ui-color-ground)),
+    var(--ui-color-ground)
+  );
+}
+[data-ui-theme="dark"] .fun-city {
+  background: linear-gradient(to bottom, #0c1530, #15112b 70%, var(--ui-color-ground));
+}
+.fun-moon {
+  position: absolute;
+  right: 48px;
+  top: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #ffe9a8;
+  box-shadow: 0 0 24px #ffe9a866;
+}
+.fun-city-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 14px;
+}
+.fun-building {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.fun-roof {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -4px;
+  position: relative;
+  z-index: 1;
+}
+.fun-tower {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  align-content: end;
+  border-radius: 6px 6px 0 0;
+  background: color-mix(in oklab, var(--fun-ink) 45%, var(--ui-color-text-muted));
+}
+[data-ui-theme="dark"] .fun-tower {
+  background: color-mix(in oklab, var(--fun-ink) 30%, #1b1f33);
+}
+.fun-window {
+  height: 30px;
+  border-radius: 3px;
+  background: color-mix(in oklab, var(--ui-color-text) 55%, transparent);
+}
+[data-ui-theme="dark"] .fun-window {
+  background: #0b0e1c;
+}
+.fun-window[data-lit] {
+  background: #ffd66b;
+  box-shadow: 0 0 10px #ffd66b88;
+}
+[data-play] .fun-window[data-new] {
+  animation: fun-light 0.7s steps(1, end) var(--fun-delay) both;
+}
+@keyframes fun-light {
+  0% {
+    background: #0b0e1c;
+    box-shadow: none;
+  }
+  30% {
+    background: #ffd66b;
+    box-shadow: 0 0 10px #ffd66b88;
+  }
+  45% {
+    background: #0b0e1c;
+    box-shadow: none;
+  }
+  60% {
+    background: #ffd66b;
+    box-shadow: 0 0 10px #ffd66b88;
+  }
+}
+.fun-building[data-mood="quiet"] .fun-tower {
+  filter: saturate(0.5) brightness(0.9);
+}
+.fun-street {
+  position: relative;
+  height: 30px;
+  margin: 0 -24px;
+  background: #2b2e3b;
+}
+.fun-building .fun-name {
+  position: relative;
+  top: 6px;
+  color: #f4f4f6;
+  font-weight: 600;
+  z-index: 1;
+  height: 0;
+}
+.fun-city-row {
+  margin-bottom: 0;
+}
+
+@media (max-width: 700px) {
+  .fun-garden-row {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 40px;
+    margin-bottom: 0;
+  }
+  .fun-plant {
+    width: 76px;
+  }
+  .fun-garden-row {
+    padding: 0;
+    gap: 6px;
+  }
+  .fun-plant-face .ui-manager-face,
+  .fun-roof .ui-manager-face {
+    width: 38px;
+    height: 38px;
+  }
+  .fun-garden-sill {
+    display: none;
+  }
+  .fun-plant .fun-name {
+    margin-top: 4px;
+  }
+  .fun-bubble {
+    font-size: 11px;
+    padding: 3px 7px;
+  }
+  .fun-city {
+    padding: 44px 8px 0;
+  }
+  .fun-city-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    justify-items: center;
+    align-items: end;
+    gap: 6px;
+    row-gap: 14px;
+  }
+  .fun-building .fun-name {
+    color: var(--ui-color-text);
+    height: auto;
+    top: 0;
+    margin-top: 4px;
+    font-size: 11px;
+  }
+  [data-ui-theme="dark"] .fun-building .fun-name {
+    color: #f4f4f6;
+  }
+  .fun-tower {
+    padding: 6px;
+    gap: 4px;
+  }
+  .fun-window {
+    height: 13px;
+  }
+  .fun-moon {
+    right: 16px;
+    top: 12px;
+    width: 28px;
+    height: 28px;
+  }
+}
