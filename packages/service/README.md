@@ -618,6 +618,11 @@ choice is the window the context ring reads, nothing more. The read is the
 `ModelCatalog` service `src/runtime.ts`'s layer builds once per instance, cached
 for an hour on a success and for no time on a failure, so an outage at the
 gateway is retried on the next request rather than answered for the hour.
+Only a read that needs the models waits on it (a Start's check, the model list,
+usage's prices): the agent tools that only name a model by it answer from the
+copy the instance holds (`held`) and never fetch, and a Start whose choice is
+no Cursor model never reads Cursor's list, which an expired account's list
+answers at once and is read again after the response.
 The catalog is public and the same for every account, but the answer is the
 account's: the bearer is resolved before the read, and the offer is cut to
 it. `fastNotEnabled` marks a model whose fast versions are dropped because

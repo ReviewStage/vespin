@@ -1619,13 +1619,12 @@ const standingsOf = (agents: readonly Agent[]) =>
   });
 
 /**
- * The models offered as the catalog last read them, or none where it cannot
- * be read: a model is then named from its id, as the screen names it before
- * the catalog arrives.
+ * The models offered as this instance already holds them, or none: a model
+ * is then named from its id, as the screen names it before the catalog
+ * arrives. Note that this never fetches, because a call that only names
+ * models by the catalog is not worth a cold instance's wait on the gateway.
  */
-const offeredModels = Effect.flatMap(ModelCatalog, (catalog) =>
-  Effect.orElseSucceed(catalog.read, (): readonly OfferedModel[] => []),
-);
+const offeredModels = Effect.flatMap(ModelCatalog, (catalog) => catalog.held);
 
 /** The newest journal of each agent's conversation, read once for the lot, keyed by conversation. The agents were read through their workspace's gate, so their conversations are read by id. */
 const newestJournalsOf = (agents: readonly Agent[]) =>
