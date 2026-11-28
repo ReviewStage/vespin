@@ -3294,6 +3294,7 @@ function SidebarColumn({
                         phone,
                       )}
                       head={tasks.signedIn ? GROUP_HEAD.SCROLLS : GROUP_HEAD.NONE}
+                      glyph={<EntityGlyph kind={ENTITY_KIND.BOARD} />}
                       label={
                         assignedTo.kind === ASSIGNED_TO.MEMBER ? (
                           <ReplayMask>{tasksHead}</ReplayMask>

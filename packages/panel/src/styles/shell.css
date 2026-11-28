@@ -119,10 +119,14 @@
   --ui-list-gap: var(--ui-sidebar-places-gap);
 }
 
-/* A group's head stays a control tall over its chunky rows, so a section
-   with nothing in it reads as a label rather than an empty row. */
+/* A group's head stays a control tall over its chunky rows, its words a
+   caption's size in the emphasis weight, so it reads as the label over its
+   rows, a section with nothing in it included, rather than one more row. */
 .desktop-sidebar .ui-group-header-head {
   --ui-control-height: var(--ui-sidebar-head-height);
+
+  font-size: var(--ui-sidebar-head-size);
+  font-weight: var(--ui-sidebar-head-weight);
 }
 
 /* The head stands on the lines of the column under it and the buttons over
