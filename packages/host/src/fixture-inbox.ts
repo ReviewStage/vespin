@@ -782,7 +782,7 @@ const DIGEST_ITEMS: readonly InboxItem[] = [
   ),
 ];
 
-/** The rounding task's items: one closed by its agent once the question no longer stood, and one whose ask the agent withdrew before posting on, so the line saying so stands between its messages. */
+/** The rounding task's items: one closed by its agent once the question no longer stood, one whose ask the agent withdrew before posting on, so the line saying so stands between its messages, and one whose ask a newer message replaced. */
 const ROUNDING_ITEMS: readonly InboxItem[] = [
   item(
     21,
@@ -827,6 +827,24 @@ const ROUNDING_ITEMS: readonly InboxItem[] = [
       322,
       3 * DAY - 3 * MINUTE,
       "Added a test with three lines whose per-line tax comes to a cent more than the total's.",
+    ),
+  ]),
+  // Note that the agent asked again before anyone answered, so its first ask stands replaced, its options stepped back, under the line saying a newer message took its place.
+  item(23, AGENT.ROUNDING, "refund-rounding", "How a refund's cents round", [
+    agentSaid(
+      330,
+      2 * DAY,
+      "Refunds round down to the cent today. Should they round as charges do?",
+      {
+        type: INBOX_ASK.DECIDE,
+        options: [{ label: "Down" }, { label: "Nearest cent" }],
+        status: INBOX_ASK_STATUS.REPLACED,
+      },
+    ),
+    agentSaid(
+      331,
+      2 * DAY - 5 * MINUTE,
+      "Charges round to the nearest cent, so refunds do too now; a refund never comes to a cent more than its charge.",
     ),
   ]),
 ];

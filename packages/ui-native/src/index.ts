@@ -477,6 +477,8 @@ export {
   STATUS_MARK_SYMBOL,
 } from "./status-mark-model.js";
 
+export { SteppedBack } from "./stepped-back.js";
+
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
 export {
