@@ -76,6 +76,7 @@ import {
   useNestColumn,
 } from "./list-row.js";
 import { Markdown, type MarkdownFile, type MarkdownVideo } from "./markdown.js";
+import type { MarkedWords } from "./markdown-model.js";
 import { AgentTile, Avatar, type Face, FailedMark, ToneGlyph, WorkingMark } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { ProblemLine } from "./problem-line.js";
@@ -911,6 +912,9 @@ type WordsRowProps = {
   readonly reactions?: string | undefined;
   /** Whether the words stand cut to their first dozen lines or so, fading into the ground at their foot, as a long pull request description stands until Show more. */
   readonly folded?: boolean | undefined;
+  /** The words comment threads stand on, by offsets into the words, each underlined and opening its thread on a press (`onOpenMarked`); none marks nothing. */
+  readonly marked?: readonly MarkedWords[] | undefined;
+  readonly onOpenMarked?: ((id: string) => void) | undefined;
 };
 
 /**
@@ -1096,6 +1100,8 @@ export function WordsRow({
   menuGroups = [],
   reactions,
   edge = WORDS_EDGE.PAGE,
+  marked,
+  onOpenMarked,
 }: WordsRowProps) {
   const colors = useColors();
   const inset = useRowInset();
@@ -1119,6 +1125,8 @@ export function WordsRow({
             fileAt={fileAt}
             linkStanding={linkStanding}
             hidesHtml={hidesHtml}
+            marked={marked}
+            onOpenMarked={onOpenMarked}
             headings
             diagrams
           />

@@ -1,4 +1,4 @@
-# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block in the comment sheet with its words quoted and the comment field taking the keyboard; Send opens the thread at once in the sheet with the words as its first comment, and Close lets the sheet go; and words selected in the description's field offering Comment in the system's edit menu, which opens a new thread on those words.
+# description-comment.yaml -- a task's description drawn block by block, a block's count of the open comment threads on it, and a long press on a block offering Comment, which opens a new thread on that block in the comment sheet with its words quoted and the comment field taking the keyboard; Send opens the thread at once in the sheet with the words as its first comment, and Close lets the sheet go; and words selected in the description's field offering Comment in the system's edit menu, which opens a new thread on those words, underlined once read, a press on them opening their thread.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -161,3 +161,16 @@ env:
       true: ${FLOATING_TABS == 'true'}
     commands:
       - tapOn: "Done"
+# Read again, the words the thread stands on are underlined in the attention
+# ink, and a press on them opens their thread in the comment sheet.
+- extendedWaitUntil:
+    notVisible:
+      id: "description-words"
+    timeout: 10000
+- waitForAnimationToEnd
+- takeScreenshot: description-words-marked
+- tapOn: "Context"
+- assertVisible: "Is this the right heading?"
+- waitForAnimationToEnd
+- takeScreenshot: description-words-mark-opened
+- tapOn: "Close"

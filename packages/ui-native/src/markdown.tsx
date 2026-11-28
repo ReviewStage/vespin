@@ -63,6 +63,7 @@ import {
   type MarkdownChip,
   type MarkdownRun,
   type MarkdownSuggestion,
+  type MarkedWords,
   markdownBlocks,
 } from "./markdown-model.js";
 import { MediaBox } from "./media-box.js";
@@ -250,6 +251,8 @@ interface Drawing {
   readonly viewPictures: ReturnType<typeof usePicturesView>;
   /** How many lists stand around the words, which a bullet's mark follows as a browser's does: a disc, then a ring, then a square; none outside a list. */
   readonly listDepth?: number | undefined;
+  /** Opens the comment thread marked words stand under, by its id; none where no words are marked. */
+  readonly openMarked: ((id: string) => void) | undefined;
 }
 
 /** A chip of a GitHub page as its standing draws it: its mark, its name, and its state's words after it. */
@@ -619,24 +622,58 @@ function Runs({
   return runs.map((run, at) => <RunView key={at} run={run} drawing={drawing} />);
 }
 
+/**
+ * What words a comment thread stands on wear: the attention ink's underline,
+ * as a document marks commented words, and a press that opens the thread;
+ * nothing for words no thread stands on.
+ */
+function markedLook(
+  marked: string | undefined,
+  drawing: Drawing,
+): { readonly style?: TextStyle; readonly onPress?: () => void } {
+  const { openMarked, colors } = drawing;
+
+  if (marked === undefined || openMarked === undefined) return {};
+
+  return {
+    style: { textDecorationLine: "underline", textDecorationColor: colors.ATTENTION },
+    onPress: () => openMarked(marked),
+  };
+}
+
 function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing: Drawing }) {
   const { colors } = drawing;
 
   switch (run.kind) {
-    case MARKDOWN_RUN.WORDS:
-      return <Text style={wordStyle(run)}>{run.text}</Text>;
-    case MARKDOWN_RUN.CODE:
+    case MARKDOWN_RUN.WORDS: {
+      const look = markedLook(run.marked, drawing);
+
+      return (
+        <Text style={[wordStyle(run), look.style]} onPress={look.onPress}>
+          {run.text}
+        </Text>
+      );
+    }
+
+    case MARKDOWN_RUN.CODE: {
+      const look = markedLook(run.marked, drawing);
+
       return (
         <Text
-          style={{
-            fontFamily: MONOSPACE_FONT,
-            fontSize: ROLE_SIZE.ROW_LINE,
-            backgroundColor: colors.WELL,
-          }}
+          style={[
+            {
+              fontFamily: MONOSPACE_FONT,
+              fontSize: ROLE_SIZE.ROW_LINE,
+              backgroundColor: colors.WELL,
+            },
+            look.style,
+          ]}
+          onPress={look.onPress}
         >
           {run.text}
         </Text>
       );
+    }
     case MARKDOWN_RUN.LINK: {
       const onPress = open(run.target, drawing);
 
@@ -1594,6 +1631,10 @@ type MarkdownProps = {
   readonly wordPicture?: ((name: string) => MarkdownWordPicture | undefined) | undefined;
   /** Muted words standing right after the words, run on after the last paragraph's, as an edited message's "(edited)"; none on most words. */
   readonly after?: string | undefined;
+  /** The words comment threads stand on, by offsets into the words, each underlined in the attention ink; none marks nothing. Note that the words are read again only when this changes, so a caller hands the same one while the threads stand. */
+  readonly marked?: readonly MarkedWords[] | undefined;
+  /** Opens the thread marked words stand under, on a press on them. */
+  readonly onOpenMarked?: ((id: string) => void) | undefined;
 };
 
 /** A picture the words name by its marker, as its chip draws it: the address it is drawn from, none while its bytes are on their way and `null` where they could not be read, and what reads it again. */
@@ -1678,6 +1719,8 @@ export function Markdown({
   wordPictures,
   wordPicture = noWordPicture,
   after,
+  marked,
+  onOpenMarked,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
@@ -1702,8 +1745,9 @@ export function Markdown({
         hidesHtml,
         diagrams,
         pictures: wordPictures,
+        marked,
       }),
-    [words, repository, typed, hidesHtml, diagrams, wordPictures],
+    [words, repository, typed, hidesHtml, diagrams, wordPictures, marked],
   );
 
   // The names the words' chips found as they drew, by chip, for the blocks they were read from, so a line's label and actions say what each chip shows; the words read again start none.
@@ -1745,6 +1789,7 @@ export function Markdown({
     suggestion,
     wordPicture,
     viewPictures,
+    openMarked: onOpenMarked,
   };
 
   // Note that muted words after the words run on after the last paragraph's, as Slack's "(edited)" does, and stand on a line of their own after any other block.

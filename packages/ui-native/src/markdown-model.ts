@@ -151,9 +151,25 @@ export interface MarkdownSuggestion {
   readonly target: LinkTarget;
 }
 
+/** Words a comment thread stands on, by offsets into the words read, and the thread's id. */
+export interface MarkedWords {
+  readonly from: number;
+  readonly to: number;
+  readonly id: string;
+}
+
 export type MarkdownRun =
-  | ({ readonly kind: typeof MARKDOWN_RUN.WORDS; readonly text: string } & WordMarks)
-  | { readonly kind: typeof MARKDOWN_RUN.CODE; readonly text: string }
+  | ({
+      readonly kind: typeof MARKDOWN_RUN.WORDS;
+      readonly text: string;
+      /** The thread these words stand under, where one does (`MarkdownReading`'s `marked`). */
+      readonly marked?: string | undefined;
+    } & WordMarks)
+  | {
+      readonly kind: typeof MARKDOWN_RUN.CODE;
+      readonly text: string;
+      readonly marked?: string | undefined;
+    }
   | {
       readonly kind: typeof MARKDOWN_RUN.LINK;
       readonly target: LinkTarget;
@@ -225,6 +241,8 @@ export interface MarkdownReading {
   readonly diagrams?: boolean | undefined;
   /** The pictures the message carries, by the names its markers name them by ("Picture 1"), each marker of one drawn as its chip; every marker stays its words where none is given, as in words that carry no pictures. */
   readonly pictures?: Pick<ReadonlySet<string>, "has"> | undefined;
+  /** The words comment threads stand on, by offsets into the words read, each drawn marked under its thread, the oldest first where two overlap; none marks nothing. */
+  readonly marked?: readonly MarkedWords[] | undefined;
 }
 
 /** A line break inside a paragraph's words, which Markdown reads as a space. */
@@ -535,6 +553,56 @@ function wordsWithPictures(
   return [...runs, ...wordsRun(text.slice(at), marks)];
 }
 
+/** The thread a node's words stand under, the first of `marked` over any of them; none where none is. */
+function markedOver(node: Nodes, marked: readonly MarkedWords[]): string | undefined {
+  const from = node.position?.start.offset;
+  const to = node.position?.end.offset;
+
+  if (from === undefined || to === undefined) return undefined;
+
+  return marked.find((span) => span.from < to && span.to > from)?.id;
+}
+
+/**
+ * A text node's run cut where the threads' words start and end, each piece
+ * under the thread it stands in. Note that the cut is counted in the words
+ * as written, so a node whose words read otherwise than they are spelled,
+ * an escape or an entity in them, is marked whole where any of it is, and
+ * so are words a picture's chip cuts.
+ */
+function markedRuns(node: Text, runs: MarkdownRun[], reader: Reader): MarkdownRun[] {
+  const marked = reader.reading.marked ?? [];
+  const from = node.position?.start.offset;
+  const to = node.position?.end.offset;
+  const [only] = runs;
+
+  if (marked.length === 0 || from === undefined || to === undefined) return runs;
+
+  if (runs.length !== 1 || only?.kind !== MARKDOWN_RUN.WORDS || only.text.length !== to - from) {
+    const id = markedOver(node, marked);
+
+    return id === undefined
+      ? runs
+      : runs.map((run) => (run.kind === MARKDOWN_RUN.WORDS ? { ...run, marked: id } : run));
+  }
+
+  const over = marked.filter((span) => span.from < to && span.to > from);
+  const cuts = [
+    ...new Set([
+      0,
+      only.text.length,
+      ...over.flatMap((span) => [Math.max(span.from, from) - from, Math.min(span.to, to) - from]),
+    ]),
+  ].sort((one, other) => one - other);
+
+  return cuts.slice(1).map((end, at) => {
+    const start = cuts[at] ?? 0;
+    const id = over.find((span) => span.from <= from + start && span.to >= from + end)?.id;
+
+    return { ...only, text: only.text.slice(start, end), marked: id };
+  });
+}
+
 /** The runs an inline node draws, under the marks of the nodes around it. */
 function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): MarkdownRun[] {
   const inside = (children: readonly PhrasingContent[], more: Partial<WordMarks>) =>
@@ -548,11 +616,17 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
 
       return node.type === "html"
         ? wordsRun(text, marks)
-        : wordsWithPictures(node, text, marks, reader);
+        : markedRuns(node, wordsWithPictures(node, text, marks, reader), reader);
     }
 
     case "inlineCode":
-      return [{ kind: MARKDOWN_RUN.CODE, text: node.value }];
+      return [
+        {
+          kind: MARKDOWN_RUN.CODE,
+          text: node.value,
+          marked: markedOver(node, reader.reading.marked ?? []),
+        },
+      ];
     case "break":
       return [{ kind: MARKDOWN_RUN.BREAK }];
     case "strong":
