@@ -8,6 +8,7 @@
    can. An app imports this after its reset and before its utilities. */
 
 @import "./components/motion/motion.css";
+@import "./components/motion/loop-frames.css";
 @import "./components/visually-hidden/visually-hidden.css";
 @import "./components/layout/layout.css";
 @import "./components/scroll-area/scroll-area.css";
@@ -91,6 +92,7 @@
 @import "./components/zoom-image/zoom-image.css";
 @import "./components/remote-surface/remote-surface.css";
 @import "./components/agent-pointer/agent-pointer.css";
+@import "./components/working-mark/working-mark.css";
 @import "./components/manager-face/manager-face.css";
 @import "./components/editable-block/editable-block.css";
 @import "./components/editable-heading/editable-heading.css";

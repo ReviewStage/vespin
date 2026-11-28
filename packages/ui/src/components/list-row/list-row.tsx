@@ -41,6 +41,8 @@ import {
   useListSelection,
 } from "../selection/list-selection.js";
 import { SELECT_BOX_PLACE, SelectBox } from "../selection/select-box.js";
+import { SwitchMark } from "../switch/switch.js";
+import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import {
   reachInRun,
   VIRTUAL_ROWS_ANCHOR,
@@ -643,6 +645,113 @@ export function List({
     >
       {contexts(children)}
     </ul>,
+  );
+}
+
+/** The room a list's heads leave before their first column, for the rows' leading marks: none, a glyph's, or an avatar's. */
+export const LIST_HEADS_LEAD = {
+  NONE: "none",
+  GLYPH: "glyph",
+  AVATAR: "avatar",
+} as const;
+
+export type ListHeadsLead = (typeof LIST_HEADS_LEAD)[keyof typeof LIST_HEADS_LEAD];
+
+/** The room a list's heads leave after their columns, for the rows' acts: none, or a switch's. */
+export const LIST_HEADS_ACTS = {
+  NONE: "none",
+  SWITCH: "switch",
+} as const;
+
+export type ListHeadsActs = (typeof LIST_HEADS_ACTS)[keyof typeof LIST_HEADS_ACTS];
+
+/** How wide each lead the heads leave room for stands, the rows' own mark's size. */
+const HEADS_LEAD_WIDTH = {
+  [LIST_HEADS_LEAD.GLYPH]: "w-control-icon",
+  [LIST_HEADS_LEAD.AVATAR]: "w-avatar-row",
+} as const satisfies Record<Exclude<ListHeadsLead, typeof LIST_HEADS_LEAD.NONE>, string>;
+
+/** One column's head among a list's heads (`ListHeads`): its name in the caption's muted type, cut short where its column is. */
+export function ListHead({ children }: { children: string }): React.JSX.Element {
+  return (
+    <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} truncate>
+      {children}
+    </Text>
+  );
+}
+
+/**
+ * The heads over a list's columns, as a table's stand over its cells: the
+ * first column's name where the rows' words start, and each column of their
+ * metadata named over it. It is laid out as a row of the list is, in the
+ * row's own tracks and insets, its lead, its acts, and its ⋯ kept as empty
+ * room the rows' own size, so a head stands over its column whatever the
+ * row's room; `meta` is the rows' own metadata box with a `ListHead` in
+ * each column. It takes no press and is not heard, since a list read by a
+ * reader names each value in its row, so a list stands it over its rows
+ * apart from the list itself (`variant`, `density`, and `inset` its list's).
+ */
+export function ListHeads({
+  title,
+  meta,
+  lead = LIST_HEADS_LEAD.NONE,
+  acts = LIST_HEADS_ACTS.NONE,
+  more = false,
+  variant = LIST_VARIANT.PLAIN,
+  density = LIST_DENSITY.REGULAR,
+  inset = LIST_INSET.LIST,
+}: {
+  /** The first column's name, over the rows' words. */
+  title: string;
+  /** The rows' metadata box, a `ListHead` in each of its columns. */
+  meta: ReactNode;
+  lead?: ListHeadsLead;
+  acts?: ListHeadsActs;
+  /** Whether the rows draw a ⋯ after their acts. */
+  more?: boolean;
+  variant?: ListVariant;
+  density?: ListDensity;
+  inset?: ListInset;
+}): React.JSX.Element {
+  const drawsActs = acts !== LIST_HEADS_ACTS.NONE;
+
+  return (
+    <div
+      className={`${LIST_CLASS} ui-list-heads`}
+      aria-hidden="true"
+      data-variant={variant}
+      data-density={density}
+      data-inset={inset}
+    >
+      <div
+        className={ROW_CLASS}
+        data-acts={drawsActs ? "true" : undefined}
+        data-more={more ? "true" : undefined}
+        data-end="true"
+      >
+        <div className={MAIN_CLASS}>
+          {lead === LIST_HEADS_LEAD.NONE ? null : (
+            <span className={`${LEADING_CLASS} ${HEADS_LEAD_WIDTH[lead]}`} />
+          )}
+          <span className="ui-list-row-text col-[text] min-w-0">
+            <ListHead>{title}</ListHead>
+          </span>
+          <span className={END_CLASS}>
+            <span className="ui-list-row-meta">{meta}</span>
+          </span>
+        </div>
+        {drawsActs ? (
+          <div className="ui-list-row-actions invisible row-1 flex items-center gap-ui-4">
+            <SwitchMark checked={false} />
+          </div>
+        ) : null}
+        {more ? (
+          <div className="ui-list-row-more row-1 flex items-center">
+            <span className="inline-flex size-control" />
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

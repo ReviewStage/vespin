@@ -72,6 +72,7 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import { useInboxListing } from "../tasks/use-inbox-listing.js";
 import { useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
 import { useInboxItemOpenSpan, useInboxOpenSpan } from "../tasks/use-inbox-spans.js";
+import { usePlainLinkNames } from "../tasks/use-link-standing.js";
 import {
   OpenAddressesHere,
   type OpenAddressHere,
@@ -202,6 +203,7 @@ export const DesktopInbox = memo(function DesktopInbox({
   // New task is the way on from an Inbox with nothing in it, wherever an account can start one.
   const newTask = tasks.signedIn ? tasks.newTask.onOpen : undefined;
   const inbox = useInboxDoor(tasks);
+  const links = usePlainLinkNames();
   // A task chosen narrows the Inbox to its own items, which a chip over the list names and clears.
   const narrowedTask = useInboxView(tasks).narrowed;
   const narrowedTaskRow = useNamedTask(narrowedTask, tasks.typedNames);
@@ -223,10 +225,12 @@ export const DesktopInbox = memo(function DesktopInbox({
     named,
     marks,
     standing,
+    listedStanding,
     markable: unread,
     counts,
     list,
     listedRows,
+    olderPages,
     steps,
     onPointing,
     chosen,
@@ -234,6 +238,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     filteredOut,
     search,
     searched,
+    searchingService,
     missing,
     chosenFailed,
     onRetryChosen,
@@ -247,8 +252,11 @@ export const DesktopInbox = memo(function DesktopInbox({
   // Mark all as read marks the listed workspace's items, or a task's alone, each on its own, since the service marks a workspace's whole.
   const { onMarkAll, onMarkEach } = marks;
 
+  // Note that All's older items are drawn read too, since the service marks every item of the workspace, those past the feed among them.
   const markAll = () =>
-    (narrowedTask === undefined ? onMarkAll : onMarkEach)(standing.flatMap(({ items }) => items));
+    (narrowedTask === undefined ? onMarkAll : onMarkEach)(
+      listedStanding.flatMap(({ items }) => items),
+    );
 
   useAppCommand(APP_COMMAND.MARK_INBOX_READ, tasks.shown && unread ? markAll : undefined);
   // Note that a phone shows one thing at a time across the screen: the list, or the item in its place.
@@ -608,7 +616,7 @@ export const DesktopInbox = memo(function DesktopInbox({
             mentions={mentions}
             phone={
               room === SHELL_ROOM.NARROW && chosen !== undefined
-                ? { back: cardTitle(chosen.item.title), onBack: sidePanel.onToggle }
+                ? { back: cardTitle(chosen.item.title, links), onBack: sidePanel.onToggle }
                 : undefined
             }
           />
@@ -672,6 +680,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                     <InboxListNote
                       failed={failed}
                       reading={reading}
+                      readingOlder={olderPages?.reading}
                       empty={listedRows.length === 0}
                       alone={columns.shown === INBOX_COLUMNS.LIST}
                       filteredOut={filteredOut ? choices : undefined}
@@ -679,6 +688,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                       onList={columns.onList}
                       onRetry={onRetry}
                       searched={searched}
+                      searching={searchingService}
                       onNewTask={newTask}
                       none={narrowedTask === undefined ? undefined : NOTHING_HERE}
                     />
@@ -688,6 +698,7 @@ export const DesktopInbox = memo(function DesktopInbox({
                   onClose={resolveItems}
                   onRemind={marks.onRemind}
                   onPointing={onPointing}
+                  onAtEnd={olderPages?.onAtEnd}
                 />
                 {chosen === undefined || chosenItem === undefined ? (
                   <section

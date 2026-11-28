@@ -1,5 +1,6 @@
 // automation-screens.tsx -- the Automations tab's list, as the desktop's Automations page lists them: the workspace's and then the reader's own, each in the order View options chose, a finished one-time automation folded under Finished, each row opening its page, with Run now and its switch behind a swipe and a long press, then Copy link, Take over, and Delete.
 
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { CREATE_WITH_AGENT_WORDS } from "@repo/features/automation-agent-brief";
 import { firingMark } from "@repo/features/automation-firing-mark";
 import {
@@ -8,6 +9,7 @@ import {
   AUTOMATIONS_ORDER_WORDS,
   type AutomationsOrder,
   automationGroups,
+  automationManager,
   automationRunStanding,
   automationTriggerText,
   DEFAULT_AUTOMATIONS_ORDER,
@@ -26,6 +28,7 @@ import {
   automationPhoneLine,
   READING_AUTOMATIONS,
 } from "@repo/features/automation-words";
+import { agentName } from "@repo/features/model-label";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { TASKS_VIEW_WORDS } from "@repo/features/tasks-page-model";
 import { sinceText } from "@repo/features/time-format";
@@ -56,6 +59,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
 import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
+import { useWorkspaceManagers } from "../agents/use-managers.js";
 import { newAutomationRoute } from "../automations/automation-editor-route.js";
 import {
   AUTOMATION_RUNS_ROUTE,
@@ -346,6 +350,7 @@ function AutomationsList({
   const now = useMinute();
   const read = useWorkspaceAutomations(workspace.id);
   const acts = useAutomationActs();
+  const managers = useWorkspaceManagers(workspace.id);
   const [asking, setAsking] = useState<AutomationSummary | undefined>(undefined);
   // Note that Finished opens folded, as the desktop's group does, since a one-time automation that ran is done with.
   const [finishedFolded, setFinishedFolded] = useState(true);
@@ -367,6 +372,7 @@ function AutomationsList({
     <AutomationListRow
       automation={automation}
       workspace={workspace}
+      managers={managers}
       acts={acts}
       now={now}
       onOpen={() => open(automation)}
@@ -546,8 +552,8 @@ function automationKey(automation: AutomationSummary): string {
 }
 
 /**
- * One automation's row: what fires it and when it runs next, how its newest
- * run went, and when, faded while it is off. Its swipe and long press hold
+ * One automation's row: what fires it and when it runs next, the Manager its
+ * runs land on and how its newest run went, and when, faded while it is off. Its swipe and long press hold
  * Run now and its switch; its long press then Copy link and, for an owner or
  * an admin where its creator left, Take over; and Delete, red behind a
  * swipe from the trailing edge and last in the menu, asks first.
@@ -555,6 +561,7 @@ function automationKey(automation: AutomationSummary): string {
 function AutomationListRow({
   automation,
   workspace,
+  managers,
   acts,
   now,
   onOpen,
@@ -562,12 +569,15 @@ function AutomationListRow({
 }: {
   readonly automation: AutomationSummary;
   readonly workspace: Workspace;
+  /** The workspace's Managers, whose face and name the row leads its last line with where its runs land on one. */
+  readonly managers: readonly ListedAgent[];
   readonly acts: AutomationActs;
   readonly now: number;
   readonly onOpen: () => void;
   readonly onAskDelete: () => void;
 }) {
   const maker = useAutomationMaker(automation, workspace.id);
+  const manager = automationManager(automation, managers);
 
   const takeOver = takesOver(maker, workspace)
     ? [
@@ -587,6 +597,7 @@ function AutomationListRow({
       line={automationPhoneLine(automation, now)}
       standing={automationRunStanding(automation.lastRun)}
       standingWords={automationLastRunWords(automation)}
+      manager={manager === undefined ? undefined : { name: agentName(manager), face: manager.face }}
       {...firingLook(firingMark(automation.trigger))}
       when={lastRunWhen(automation, now)}
       faded={!automation.enabled}

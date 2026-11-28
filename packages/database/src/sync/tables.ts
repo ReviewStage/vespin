@@ -518,20 +518,17 @@ export const machineCommandAskSync = defineSyncTable(machineCommandAsk, {
 
 /**
  * The account's preferences row, on the account's topic, which the
- * account's read of its default agent, chapters model, and Slack
- * notifications is woken on. Note that where the account last chose to run
- * a task is ignored, because a Start with Runs on, an enroll, and a
- * register each rewrite it and only an agent's start reads it, and so is
- * the row's own instant, which every settings push moves whether or not a
- * column a view reads changed.
+ * account's read of its default agent, chapters model, Slack
+ * notifications, and last Runs on pick is woken on. Note that the row's own
+ * instant is ignored, because every settings push moves it whether or not a
+ * column a view reads changed. The pick is watched, so New task on every
+ * device starts where the last Start chose; a Start, an enroll, or a
+ * register that writes it as it stood wakes nothing, since the capture
+ * notifies only a column that moved.
  */
 export const accountPreferenceSync = defineSyncTable(accountPreference, {
   topics: [{ kind: TOPIC.ACCOUNT, column: accountPreference.userId }],
-  ignore: [
-    accountPreference.runsOnMachine,
-    accountPreference.runsOnDeviceId,
-    accountPreference.updatedAt,
-  ],
+  ignore: [accountPreference.updatedAt],
 });
 
 /**

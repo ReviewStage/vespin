@@ -571,6 +571,9 @@ export function ChipName(props: ChipNameProps): React.JSX.Element {
   const kept = props.cut === CHIP_CUT.MIDDLE ? keptEnd(props.children) : "";
 
   // Note that a name cut in its middle is a row of its two parts, so only its start ends in the ellipsis.
+  // Note that the code face's size is asked on its face's mark, because the inherited role takes the whole
+  // `font` from the chip, size included, and a plain size beside it loses: the code face is a caption's
+  // size, keeping the chip's line, since a monospace face set at a label's reads larger than the words beside it.
   return (
     <Text
       as={TEXT_ELEMENT.SPAN}
@@ -579,7 +582,7 @@ export function ChipName(props: ChipNameProps): React.JSX.Element {
       truncate={kept === ""}
       className={[
         NAME,
-        props.mono === true ? "text-caption leading-[inherit]" : "",
+        props.mono === true ? "data-[font=mono]:text-caption-inline" : "",
         kept === "" ? "" : "inline-flex min-w-0 overflow-hidden whitespace-nowrap",
       ]
         .filter((part) => part !== "")

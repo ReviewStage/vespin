@@ -30,6 +30,7 @@ import {
   type InboxPinnedRun,
   type InboxRun,
   type InboxShow,
+  type InboxWhose,
   inboxAtNow,
   inboxCounts,
   inboxGroup,
@@ -88,7 +89,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Settings } from "react-native";
 import {
   cachedFile,
   cachedPicture,
@@ -107,8 +107,8 @@ import { usePictureShownCount } from "../picture-shown.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { useInboxGroupsRead, useInboxWaiting, useInboxWholeGroupsIn } from "./inbox-groups.js";
 import { useSearchedWords, useThreadMessages } from "./inbox-rows.js";
-import { useInboxRunFolds } from "./inbox-runs.js";
 import { useInboxShown } from "./inbox-shown.js";
+import { useInboxRunFolds } from "./inbox-view-choices.js";
 import {
   refusedWords,
   SETTLE,
@@ -120,9 +120,6 @@ import {
 
 /** What a thread's videos and files are named under among the app's caches. */
 const INBOX_MEDIA_PREFIX = "inbox";
-
-/** The defaults key the Inbox's scope is kept under, as the panel keeps its window's. */
-const INBOX_SCOPE_KEY = "inboxScope";
 
 /** No file of a thread read yet. */
 const NOTHING_READ: ThreadMediaRead = {
@@ -167,30 +164,6 @@ export function useChosenInbox(reach: InboxReach = INBOX_ATTENTION): UseChosenIn
   return { groups, whole, read: answered, chosen, workspaces: workspaces.length };
 }
 
-/** The scope kept, or Open, the panel's own first scope, where none was ever chosen. */
-function keptScope(): InboxShow {
-  const kept: unknown = Settings.get(INBOX_SCOPE_KEY);
-
-  return Object.values(INBOX_SHOW).find((show) => show === kept) ?? INBOX_SHOW.OPEN;
-}
-
-type UseInboxScopeResult = {
-  readonly show: InboxShow;
-  readonly choose: (show: InboxShow) => void;
-};
-
-/** The Inbox's scope, kept in the app's defaults across launches, and the choice of another. */
-export function useInboxScope(): UseInboxScopeResult {
-  const [show, setShow] = useState(keptScope);
-
-  const choose = (next: InboxShow) => {
-    Settings.set({ [INBOX_SCOPE_KEY]: next });
-    setShow(next);
-  };
-
-  return { show, choose };
-}
-
 /** What the Inbox lists: its rows in the list's order, what each scope counts, whether any row is unread, the reader they were read for, and where the feed they come from stands. */
 export interface InboxListing {
   /** Every thread listed, in the list's order, a folded run's among them. */
@@ -212,8 +185,9 @@ export interface InboxListing {
 const NO_FOLDS: ReadonlySet<InboxRun> = new Set();
 
 /**
- * The Inbox under `show`, narrowed by `search`, the reader's own items alone
- * as the panel's Inbox lists them until told otherwise, the item `chosen`
+ * The Inbox under `show`, narrowed by `search`, the items addressed to
+ * `whose`, the reader's own where none is named, as the panel's Inbox lists
+ * them until told otherwise, the item `chosen`
  * kept among them whatever the scope, as the panel keeps the item its pane
  * shows. Where `pinnedFirst` asks it, as the Inbox tab's list and its steps
  * do, the pinned tasks' threads stand first under Pinned and the rest under
@@ -227,6 +201,8 @@ export function useInboxListing(view: {
   readonly search: string;
   readonly chosen?: string | undefined;
   readonly pinnedFirst?: boolean | undefined;
+  /** Whom the items listed are addressed to; the reader's own where none is named. */
+  readonly whose?: InboxWhose | undefined;
 }): InboxListing {
   // Note that only All lists a settled thread the reader read, so only All reads every item kept; another scope reads the chosen thread beside what asks for attention, since the list keeps it once it is settled and read.
   const reach = useMemo(
@@ -247,7 +223,7 @@ export function useInboxListing(view: {
     select: selectInboxFeed,
   });
 
-  const { show, search, chosen, pinnedFirst = false } = view;
+  const { show, search, chosen, pinnedFirst = false, whose = MINE } = view;
   const tokens = useMemo(() => searchTokens(search), [search]);
   const { data: told } = useQuery({ ...appStateQuery, select: selectInboxHoldings });
   const stored = told?.stored === true;
@@ -273,7 +249,7 @@ export function useInboxListing(view: {
       show,
       chosen,
       readerId,
-      whose: MINE,
+      whose,
       search: { tokens, wordsOf },
       pinnedFirst,
       folded,
@@ -285,11 +261,24 @@ export function useInboxListing(view: {
       runs: inboxPinnedRuns(list),
       feed,
       read,
-      counts: inboxCounts(standing, readerId, MINE),
+      counts: inboxCounts(standing, readerId, whose),
       readerId,
       wordsOf,
     });
-  }, [keep, groups, wordsOf, readerId, feed, read, show, search, chosen, pinnedFirst, folded]);
+  }, [
+    keep,
+    groups,
+    wordsOf,
+    readerId,
+    feed,
+    read,
+    show,
+    search,
+    chosen,
+    pinnedFirst,
+    whose,
+    folded,
+  ]);
 }
 
 /** A thread as its screen draws it: its whole item, its sends drawn on it, with what holds it. */

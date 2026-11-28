@@ -301,6 +301,11 @@ test("with no automations the page says what one is, and with no workspace liste
   await settle();
 
   assert.match(page.textContent ?? "", /No automations yet\./u);
+  assert.equal(
+    page.querySelector(".ui-list-heads") === null,
+    true,
+    "no column heads stand over no rows",
+  );
   act(() => world.root?.unmount());
   world.root = undefined;
 

@@ -370,6 +370,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   live: {
     inbox: SCREEN_ONLY,
     inboxItems: SCREEN_ONLY,
+    inboxOlder: SCREEN_ONLY,
+    inboxSearch: SCREEN_ONLY,
     taskRecord: SCREEN_ONLY,
     taskPages: SCREEN_ONLY,
     agentPages: SCREEN_ONLY,

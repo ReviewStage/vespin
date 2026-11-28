@@ -78,6 +78,8 @@ export {
   chipMarkOf,
 } from "./chip-mark-model.js";
 
+export { ChipNamesProvider, type UseChipNames } from "./chip-names.js";
+
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
@@ -164,6 +166,7 @@ export { GlassBar, GlassDock, useDockRoom } from "./glass-bar.js";
 export {
   GLYPH,
   type Glyph,
+  glyphIcon,
   glyphSymbol,
   type LucideSymbol,
   type MarkLook,

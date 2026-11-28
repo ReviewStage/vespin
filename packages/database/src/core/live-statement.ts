@@ -92,11 +92,22 @@ export function liveLatest(column: SQLWrapper): SQL<number> {
  * That the column, or a text expression, is one of the keys: false where
  * there are none, and otherwise one membership test whose keys bind as one
  * JSON text, so a delta read's statement holds any number of them in a
- * single placeholder. A column's keys are cast to its own type, so an index
- * on it still serves the test.
+ * single placeholder (`liveKeysBound`).
  */
 export function liveKeysIn(expression: SQLWrapper, keys: readonly string[]): SQL {
-  if (keys.length === 0) return sql`false`;
+  return keys.length === 0 ? sql`false` : liveKeysBound(expression, keys);
+}
+
+/**
+ * That the column, or a text expression, is one of the keys, as one
+ * membership test whose keys bind as one JSON text, none among them
+ * included. A column's keys are cast to its own type, so an index on it
+ * still serves the test. Note that a read whose keys are bound as it is
+ * asked tests them so even where there are none, because a statement whose
+ * condition is a constant `false` plans as no scan of its tables, which the
+ * registry of what each read reads cannot check (`live-query.test.ts`).
+ */
+export function liveKeysBound(expression: SQLWrapper, keys: readonly string[]): SQL {
   const type = is(expression, Column) ? expression.getSQLType() : "text";
 
   return sql`${expression} in (select jsonb_array_elements_text(${JSON.stringify([...new Set(keys)])}::jsonb)::${sql.raw(type)})`;

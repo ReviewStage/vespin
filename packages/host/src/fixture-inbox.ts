@@ -83,6 +83,7 @@ import type { HostLine } from "@repo/features/host-live";
 import { HOST_PAIRING_CALL_FAILURE } from "@repo/features/host-pairing-view";
 import type { HostPairingAnswer } from "@repo/features/host-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
+import type { InboxSearchPlace } from "@repo/features/inbox-service-search";
 import {
   INBOX_APPROVAL_OPTION,
   INBOX_ASK,
@@ -159,6 +160,7 @@ import {
 } from "@repo/features/picture-source-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { TASK_SECTION_GLYPH, TASK_SECTION_ICON_KIND } from "@repo/features/task-section-wire";
 import {
   DESCRIPTION_ACTOR,
@@ -193,6 +195,8 @@ import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
 import {
   type AppHeldById,
+  type AppInboxFound,
+  type AppInboxItems,
   type AppInboxTask,
   type AppInboxTaskHolding,
   type AppManagerChat,
@@ -883,6 +887,99 @@ function largeThread(n: number): InboxItem {
     ],
     n % 3 === 0 ? { status: INBOX_STATUS.ANSWERED } : {},
   );
+}
+
+/** How many items each page of the older Inbox items stands, fewer than the service's, so a run reads every page in a short list; the last page short, as a service's last is. */
+const OLDER_PAGE_ITEMS = [6, 3] as const;
+
+/** How many pages of older items the staged account holds past its feed. */
+const OLDER_PAGES = OLDER_PAGE_ITEMS.length;
+
+/** The cursor the `page`th page of older items reads past, as the service's own word stands for it. */
+function olderCursor(page: number): string {
+  return `older-${page}`;
+}
+
+/** The `n`th older item: a closed thread of a staged task more than a month back, the latest first, so All lists it past the feed. */
+function olderThread(n: number): InboxItem {
+  const holder = LARGE_HOLDERS[n % LARGE_HOLDERS.length] ?? LARGE_HOLDERS[0];
+  const ago = 35 * DAY + n * 9 * HOUR;
+  const at = 20_000 + n * 2;
+
+  return item(
+    2000 + n,
+    holder.agentId,
+    `older-${n}`,
+    `Older thread ${n + 1}: how a partial cent rounds`,
+    [
+      agentSaid(at, ago, LARGE_WORDS),
+      adaSaid(at + 1, ago - 10 * MINUTE, "Round half up, as the invoice does."),
+    ],
+    { status: INBOX_STATUS.CLOSED, settledAt: LANDED - ago + 10 * MINUTE },
+  );
+}
+
+/** The item only a search finds: a closed thread of the rounding task three months back, past every page of older items. */
+function foundOnlyThread(): InboxItem {
+  const ago = 92 * DAY;
+  const at = 21_000;
+
+  return item(
+    2100,
+    AGENT.ROUNDING,
+    "found-0",
+    "Quarter close: why the ledger rounds to even",
+    [
+      agentSaid(at, ago, LARGE_WORDS),
+      adaSaid(at + 1, ago - 10 * MINUTE, "To even, as the ledger does; the invoice follows it."),
+    ],
+    { status: INBOX_STATUS.CLOSED, settledAt: LANDED - ago + 10 * MINUTE },
+  );
+}
+
+/** Every staged item past the feed a search may find, by the task each stands on: the older threads, read or not, and the one only a search finds. */
+function searchableItems(): readonly { readonly taskId: string; readonly item: InboxItem }[] {
+  const total = OLDER_PAGE_ITEMS.reduce((sum, each) => sum + each, 0);
+
+  const older = Array.from({ length: total }, (_, n) => ({
+    taskId: (LARGE_HOLDERS[n % LARGE_HOLDERS.length] ?? LARGE_HOLDERS[0]).taskId,
+    item: olderThread(n),
+  }));
+
+  return [...older, { taskId: TASK.ROUNDING, item: foundOnlyThread() }];
+}
+
+/** The staged items past the feed whose title holds every word of `query`, by the task each stands on, as the service's search answers them into the host. */
+function stagedFound(query: string): AppInboxItems {
+  const tokens = searchTokens(query);
+  const onTasks = new Map<string, InboxItem[]>();
+
+  for (const { taskId, item: found } of searchableItems()) {
+    if (!matchesTokens([found.title], tokens)) continue;
+    onTasks.set(taskId, [...(onTasks.get(taskId) ?? []), found]);
+  }
+
+  return { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(onTasks) };
+}
+
+/** What each place's search found in the run, by the place, as the host holds it (`LIVE_READ.INBOX_FOUND`). */
+const foundAt = new Map<InboxSearchPlace, AppInboxFound>();
+
+/** How many pages of older items the run has read, which All lists past the feed. */
+let olderPagesRead = 0;
+
+/** The older items the run has read, by the task each stands on, as the host holds them (`LIVE_READ.INBOX_OLDER`). */
+function olderItemsRead(): AppInboxItems {
+  const onTasks = new Map<string, InboxItem[]>();
+
+  const read = OLDER_PAGE_ITEMS.slice(0, olderPagesRead).reduce((sum, each) => sum + each, 0);
+
+  for (let n = 0; n < read; n += 1) {
+    const holder = LARGE_HOLDERS[n % LARGE_HOLDERS.length] ?? LARGE_HOLDERS[0];
+    onTasks.set(holder.taskId, [...(onTasks.get(holder.taskId) ?? []), olderThread(n)]);
+  }
+
+  return { [INBOX_SCOPE_KIND.TASK]: Object.fromEntries(onTasks) };
 }
 
 /** The staged items with the large Inbox's threads laid beside them, by the task each stands on. */
@@ -2864,6 +2961,10 @@ export function inboxAppState(
     [LIVE_READ.INBOX_ITEMS]: {
       rows: { [INBOX_SCOPE_KIND.TASK]: fed, agents: AGENT_INBOXES },
     },
+    ...(olderPagesRead === 0 ? undefined : { [LIVE_READ.INBOX_OLDER]: { rows: olderItemsRead() } }),
+    [LIVE_READ.INBOX_FOUND]: Object.fromEntries(
+      [...foundAt].map(([place, found]) => [place, { rows: found }]),
+    ),
     [LIVE_READ.HELD_TASK]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
     [LIVE_READ.DESCRIPTION_COMMENTS]: stagedComments(state),
@@ -3472,7 +3573,7 @@ const AUTOMATION_COMMON = {
   mine: true,
 } as const;
 
-/** The fixture workspace's automations, newest made first, as its list reads them: two the workspace shares, and one of Ada's own, turned off. */
+/** The fixture workspace's automations, newest made first, as its list reads them: two the workspace shares, the digest handing its runs to the Release manager, and one of Ada's own, turned off. */
 const AUTOMATIONS: readonly AutomationSummary[] = [
   {
     ...AUTOMATION_COMMON,
@@ -3521,6 +3622,8 @@ const AUTOMATIONS: readonly AutomationSummary[] = [
     },
     nextRunAt: DIGEST_DUE.NEXT,
     lastRun: newestRun(AUTOMATION.DIGEST),
+    // Note that the digest hands every run to the Release manager, so its row names the Manager its runs land on.
+    target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: AGENT.MANAGER },
     createdAt: LANDED - 30 * DAY,
     scope: AUTOMATION_SCOPE.WORKSPACE,
     repositories: ["ada/relay"],
@@ -3897,6 +4000,20 @@ const ANSWERS: StagedAnswers = {
     return { agent: held, messageId: clientKey };
   },
   // Note that a reaction to a message of the release Manager's chat is kept for the run, so the chat stands with it as it would once its read carries it; the panel's run stages its document again on it (`tasks-fixture-loader.ts`).
+  // A page of older items is read into the run's, the page after it answered where one stands.
+  [ACT_KIND.AGENTS_INBOX_OLDER_PAGE]: ({ before }) => {
+    const page = before === undefined ? 1 : Number(before.replace("older-", "")) + 1;
+    olderPagesRead = Math.max(olderPagesRead, Math.min(page, OLDER_PAGES));
+
+    return page < OLDER_PAGES ? { next: olderCursor(page) } : {};
+  },
+  // A place's search finds the staged items past the feed whose title holds its words, and its words cleared let them go.
+  [ACT_KIND.AGENTS_INBOX_SEARCH]: ({ place, query }) => {
+    if (query === undefined) foundAt.delete(place);
+    else foundAt.set(place, { query, items: stagedFound(query) });
+
+    return {};
+  },
   [ACT_KIND.AGENTS_CHAT_REACT]: ({ agentId, messageId, kind, reacted }) => {
     if (agentId !== AGENT.MANAGER) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     const message = reactedManagerChat().messages.find((each) => each.id === messageId);

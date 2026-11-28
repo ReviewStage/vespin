@@ -185,6 +185,7 @@ import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useTaskListCollections, useTaskListRow } from "../host/host-provider.js";
+import { useTitleLinkNames } from "../inbox/preview-link-names.js";
 import { useAgentThreadsLine } from "../inbox/use-agent-threads.js";
 import { useNewestNote } from "../newest-note.js";
 import { useOpenDrawnCount } from "../open-drawn.js";
@@ -1096,9 +1097,10 @@ const AgentConversation = memo(function AgentConversation({
   const pictures = usePictures(PICTURE_OWNER.AGENT, id, pictureIds);
 
   // Note that a title with no words left once read, such as a brief of code alone, falls back to "Agent" rather than a blank bar.
-  const title =
-    cardTitle(shown === undefined ? (transcript?.word?.title ?? brief ?? "") : agentName(shown)) ||
-    UNLISTED_AGENT;
+  const barWords =
+    shown === undefined ? (transcript?.word?.title ?? brief ?? "") : agentName(shown);
+
+  const title = cardTitle(barWords, useTitleLinkNames(barWords)) || UNLISTED_AGENT;
 
   useScreenActivity((workspaces) =>
     shown === undefined || shown.taskId === null

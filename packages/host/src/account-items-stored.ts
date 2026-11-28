@@ -9,7 +9,8 @@
  * replaces what the database keeps, an answer past a sync id upserts the
  * items it carries, each on the task its stamp names, and deletes those that
  * stand no longer for the account (`gone`); the sync id rides beside them in
- * the same transaction, so a launch always reads past it, the database
+ * the same transaction, so a launch, and an attempt started again after a
+ * refusal or a follow that stopped, always reads past it, the database
  * keeping every item it was answered. An item settled before the read's
  * window leaves it by the clock, which no answer says, so after each
  * standing and each answer the follow asks the database for those alone,
@@ -294,8 +295,6 @@ export interface StoredItemsFollow {
   readonly messages: Effect.Effect<HeldRows<ThreadMessage, never>, never, Scope.Scope>;
   /** The words each of those messages says, which a search reads, written as the messages are. */
   readonly words: KeptWords;
-  /** Whether this attempt may read past the sync id kept, as the first of a follow's does. */
-  readonly resumes: boolean;
   /** The task list's summaries of the tasks named, of those it holds now. */
   readonly tasksListed: (taskIds: readonly string[]) => readonly TaskSummary[];
   /** Hears the read's wait for a write's transaction once the follow hands one. */
@@ -359,7 +358,7 @@ export function followStoredItems(
     const messages = yield* follow.messages;
     yield* agedOut;
 
-    const first = yield* follow.seal(follow.resumes ? (kept?.at ?? "") : "");
+    const first = yield* follow.seal(kept?.at ?? "");
 
     if ("failure" in first) return false;
 

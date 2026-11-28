@@ -2,18 +2,20 @@
  * account-preferences.ts -- the account's preferences' live read bound: its three statements, the tables they read, and the topic that wakes it.
  *
  * The account's own row, as stored: the coding agents' default as its three
- * columns stand, the chapters model, and whether our Slack bot writes the
- * account, each null where never chosen, which the reader reads as the
- * snapshot does (`ACCOUNT_PREFERENCES_READ`). No row for an account that
- * stored none. Beside it, the sounds the account keeps of its own, by id,
- * name, and hash, never their bytes, so a client fetches one again only once
- * its hash moved; and which of them each of its two sounds plays.
+ * columns stand, the chapters model, whether our Slack bot writes the
+ * account, and where its last Start chose to run an agent, each null where
+ * never chosen, which the reader reads as the snapshot does
+ * (`ACCOUNT_PREFERENCES_READ`). No row for an account that stored none.
+ * Beside it, the sounds the account keeps of its own, by id, name, and
+ * hash, never their bytes, so a client fetches one again only once its hash
+ * moved; and which of them each of its two sounds plays.
  *
  * It is woken on the account's topic by a write to any column a view
- * reads, a sound added, renamed, removed, or chosen among them. Note that a Start with Runs
- * on, an enroll, and a register write only the row's runs-on pick, and a settings push that changes nothing
- * writes only its instant; the capture ignores both, so none of them wakes
- * this read or the account's other reads.
+ * reads, a sound added, renamed, removed, or chosen among them. Note that a
+ * settings push that changes nothing writes only the row's instant, and a
+ * Start that names the place its last one did writes the pick as it stood;
+ * the capture ignores both, so neither wakes this read or the account's
+ * other reads.
  */
 
 import { queryBuilder } from "@repo/database/core/query";
@@ -43,6 +45,8 @@ export const accountPreferencesRead = bindLiveRead(ACCOUNT_PREFERENCES_READ, {
           agentContextWindow: accountPreference.agentContextWindow,
           chaptersModel: accountPreference.chaptersModel,
           slackNotifications: accountPreference.slackNotifications,
+          runsOnMachine: accountPreference.runsOnMachine,
+          runsOnDeviceId: accountPreference.runsOnDeviceId,
         },
       },
       (selection) =>
