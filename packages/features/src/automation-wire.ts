@@ -359,6 +359,15 @@ export const AUTOMATION_SCOPE = {
 
 export type AutomationScope = (typeof AUTOMATION_SCOPE)[keyof typeof AUTOMATION_SCOPE];
 
+/** The groups the list stands its rows in, each folding as the sidebar's groups do: each owner's, then Finished. */
+export const AUTOMATION_LIST_GROUP = {
+  ...AUTOMATION_SCOPE,
+  FINISHED: "finished",
+} as const;
+
+export type AutomationListGroup =
+  (typeof AUTOMATION_LIST_GROUP)[keyof typeof AUTOMATION_LIST_GROUP];
+
 export const automationScopeSchema = EffectSchema.Literals(Object.values(AUTOMATION_SCOPE));
 
 /** Where an automation's run lands. */

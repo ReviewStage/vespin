@@ -3454,12 +3454,17 @@ function stagedAgent(agentId: string): AgentSummary | undefined {
 
 /* ----- The automations ----- */
 
-/** The fixture workspace's automations, by id: a digest on a schedule, a fix on each failed check, and a deploy check its webhook calls, turned off. */
+/** The fixture workspace's automations, by id: a digest on a schedule, a fix on each failed check, a deploy check its webhook calls, turned off, and a one-time rounding fix that ran. */
 const AUTOMATION = {
   DIGEST: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c01",
   CHECKS: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c02",
   DEPLOY: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c03",
+  ROUNDING: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c04",
 } as const;
+
+/** When the one-time rounding fix ran, on the hour four days before the fixture landed, as its schedule spells it in UTC and as its run was due. */
+const ROUNDING_DUE = Math.floor((LANDED - 4 * DAY) / HOUR) * HOUR;
+const ROUNDING_AT = new Date(ROUNDING_DUE).toISOString().slice(0, 16);
 
 /** The digest's schedule: Mondays at 9:00 AM UTC. */
 const DIGEST_SCHEDULE = { cron: "0 9 * * 1", timezone: "UTC" } as const;
@@ -3547,6 +3552,17 @@ const AUTOMATION_RUNS: ReadonlyMap<string, readonly AutomationRunSummary[]> = ne
     ],
   ],
   [
+    AUTOMATION.ROUNDING,
+    [
+      automationRun(
+        6,
+        LANDED - ROUNDING_DUE,
+        { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: ROUNDING_DUE },
+        { id: AGENT.ROUNDING, title: "Fix ledger rounding", status: AGENT_STATUS.COMPLETED },
+      ),
+    ],
+  ],
+  [
     AUTOMATION.DEPLOY,
     [
       automationRun(5, 3 * HOUR, { kind: AUTOMATION_FIRING.WEBHOOK, bytes: 1824 }, null, {
@@ -3573,7 +3589,7 @@ const AUTOMATION_COMMON = {
   mine: true,
 } as const;
 
-/** The fixture workspace's automations, newest made first, as its list reads them: two the workspace shares, the digest handing its runs to the Release manager, and one of Ada's own, turned off. */
+/** The fixture workspace's automations, as its list reads them: two the workspace shares, the digest handing its runs to the Release manager, one of Ada's own, turned off, and a one-time fix that ran, under Finished. */
 const AUTOMATIONS: readonly AutomationSummary[] = [
   {
     ...AUTOMATION_COMMON,
@@ -3627,6 +3643,23 @@ const AUTOMATIONS: readonly AutomationSummary[] = [
     createdAt: LANDED - 30 * DAY,
     scope: AUTOMATION_SCOPE.WORKSPACE,
     repositories: ["ada/relay"],
+  },
+  {
+    ...AUTOMATION_COMMON,
+    id: AUTOMATION.ROUNDING,
+    name: "Fix ledger rounding before the close",
+    // Note that it ran once, as its one-time schedule asked, and stands paused for it, so it stands under Finished.
+    enabled: false,
+    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, at: ROUNDING_AT, timezone: "UTC" },
+    action: {
+      kind: AUTOMATION_ACTION.AGENT,
+      prompt: "Fix the ledger's rounding of split invoices before the month closes.",
+    },
+    nextRunAt: null,
+    lastRun: newestRun(AUTOMATION.ROUNDING),
+    createdAt: LANDED - 6 * DAY,
+    scope: AUTOMATION_SCOPE.WORKSPACE,
+    repositories: ["ada/ledger"],
   },
 ];
 

@@ -20,6 +20,7 @@
 
 import { type WireValue, WireValueSchema } from "@repo/wire";
 import { Option, Schema } from "effect";
+import { AUTOMATION_LIST_GROUP } from "./automation-wire.js";
 import { INBOX_RUNS, INBOX_SHOW, INBOX_WHOSE } from "./inbox-list-model.js";
 import { wireUuidSchema } from "./service-wire.js";
 import { ASSIGNED_TO, TASK_GROUPING } from "./task-list-model.js";
@@ -62,6 +63,8 @@ export const VIEW_CHOICE_KEY = {
   INBOX_PINNED_FIRST: "inboxPinnedFirst",
   /** The Inbox's runs folded while its pinned tasks' items stand first (`INBOX_RUNS`). */
   INBOX_FOLDED_RUNS: "inboxFoldedRuns",
+  /** Which of the Automations list's groups stand folded (`AUTOMATION_LIST_GROUP`): each owner's, and Finished. */
+  AUTOMATIONS_FOLDED: "automationsFolded",
 } as const;
 
 export type ViewChoiceKey = (typeof VIEW_CHOICE_KEY)[keyof typeof VIEW_CHOICE_KEY];
@@ -195,6 +198,11 @@ export const VIEW_CHOICE = {
     VIEW_CHOICE_KEY.INBOX_FOLDED_RUNS,
     VIEW_CHOICE_SCOPE.ACCOUNT,
     Schema.Array(Schema.Literals(INBOX_RUNS)),
+  ),
+  [VIEW_CHOICE_KEY.AUTOMATIONS_FOLDED]: viewChoice(
+    VIEW_CHOICE_KEY.AUTOMATIONS_FOLDED,
+    VIEW_CHOICE_SCOPE.ACCOUNT,
+    Schema.Array(Schema.Literals(Object.values(AUTOMATION_LIST_GROUP))),
   ),
 } as const satisfies { readonly [Key in ViewChoiceKey]: ViewChoice<ViewChoiceSchema> };
 

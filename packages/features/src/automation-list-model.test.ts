@@ -9,6 +9,7 @@ import {
   automationManager,
   automationNext,
   automationNextRuns,
+  automationRanLine,
   automationRunLine,
   automationRunPlace,
   automationRunStanding,
@@ -153,6 +154,48 @@ test("a one-time automation that ran and stands paused is finished, in no owner'
   ]);
   assert.deepEqual(finishedAutomations([ran, rearmed, turnedOff]), [ran]);
 });
+
+test("Finished lists the one-time automations that ran by when each ran, the latest first, whatever the order asked", () => {
+  const ranOn = (id: string, at: string, day: number) =>
+    automation(id, {
+      name: id,
+      trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, at, timezone: "UTC" },
+      enabled: false,
+      nextRunAt: null,
+      lastRun: run({
+        firing: { kind: "schedule", dueAt: Date.UTC(2026, 10, day, 9) },
+        firedAt: Date.UTC(2026, 10, day, 9),
+      }),
+    });
+
+  const early = ranOn("early", "2026-11-02T09:00", 2);
+  const late = ranOn("late", "2026-11-20T09:00", 20);
+  const middle = ranOn("middle", "2026-11-10T09:00", 10);
+
+  assert.deepEqual(
+    finishedAutomations([early, late, middle]).map(({ id }) => id),
+    ["late", "middle", "early"],
+  );
+});
+
+test.each([
+  {
+    agent: { id: "agent-1", title: "Smoke-test the release", status: AGENT_STATUS.COMPLETED },
+    said: "Started “Smoke-test the release”",
+  },
+  { agent: { id: "agent-1", title: null, status: AGENT_STATUS.RUNNING }, said: "Started an agent" },
+  {
+    agent: null,
+    status: AUTOMATION_RUN_STATUS.SKIPPED,
+    reason: AUTOMATION_RUN_REASON.CONCURRENCY,
+    said: "Skipped: an earlier run's agent was still at work.",
+  },
+] as const)(
+  "a finished one-time automation says what its run started, or why it started nothing: $said",
+  ({ said, ...made }) => {
+    assert.equal(automationRanLine(run(made)), said);
+  },
+);
 
 test.each([
   { target: undefined, named: undefined },

@@ -1,6 +1,5 @@
 import {
   GROUP_HEADING,
-  type GroupFold,
   GroupHeader,
   LIST_HEADS_ACTS,
   LIST_HEADS_LEAD,
@@ -16,6 +15,7 @@ import {
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import type { ReactNode } from "react";
+import { sidebarHead } from "./sidebar-fold.js";
 
 /**
  * automation-list-frame.tsx -- the Automations list's boxes, which the list and its placeholders both draw.
@@ -84,31 +84,50 @@ export function AutomationsActsSkeleton(): React.JSX.Element {
   );
 }
 
+/** What a group's count is read as, one and many. */
+const AUTOMATIONS_COUNTED = { one: "automation", many: AUTOMATIONS_NOUN } as const;
+
+/** How a group folds, as the list keeps it: whether it stands folded, and what a press on its head asks. */
+export interface AutomationGroupFold {
+  readonly folded: boolean;
+  readonly onToggle: () => void;
+}
+
 /**
- * One owner's automations in a list, under its heading where `headed`.
+ * One group of automations in a list, an owner's or Finished, under its
+ * head where `headed`: the head the sidebar's groups wear (`sidebarHead`),
+ * led by the group's picture or glyph (`glyph`), folding its rows on a
+ * press as the list keeps it (`fold`), and counting them while folded, and
+ * at rest on a phone, as the sidebar counts its groups.
  * Note that the list is a plain one, each row lit on its own as the Tasks
  * list's and the Inbox's are, so a row's hover, focus, and open menu draw
- * as theirs do. A lone owner's list is still a region named by its owner, as a
- * headed one is by its heading, so a reader moving by landmark hears whose
- * automations they are either way. A row made or deleted stands or goes
- * at once.
+ * as theirs do. A list with no head, the placeholder's, is still a region
+ * named by its owner, as a headed one is by its heading, so a reader moving
+ * by landmark hears whose automations they are either way. A row made or
+ * deleted stands or goes at once.
  */
 export function AutomationGroupList({
   name,
   nameMasked = true,
   headed,
+  glyph,
   fold,
   count,
+  phone = false,
   children,
 }: {
   name: string;
   /** Whether the name is a person's words, a workspace's name, kept masked in a screen recording. */
   nameMasked?: boolean;
   headed: boolean;
-  /** How a headed group folds under its heading; left out, its rows always stand. */
-  fold?: GroupFold | undefined;
-  /** How many rows a headed group holds, after its name, as a phone's list counts them; none where it counts nothing. */
+  /** What leads the head: the owner's picture, or Finished's glyph. */
+  glyph?: ReactNode;
+  /** How the group folds; left out, its rows always stand. */
+  fold?: AutomationGroupFold | undefined;
+  /** How many rows the group holds, which its head counts while folded, and at rest on a phone. */
   count?: number | undefined;
+  /** Whether the room is a phone's, whose heads count their rows at rest. */
+  phone?: boolean;
   children: ReactNode;
 }): React.JSX.Element {
   const rows = <List label={name}>{children}</List>;
@@ -116,10 +135,20 @@ export function AutomationGroupList({
   return headed ? (
     <div className={AUTOMATION_GROUP}>
       <GroupHeader
+        {...sidebarHead(
+          fold === undefined
+            ? undefined
+            : {
+                folded: fold.folded,
+                onToggle: fold.onToggle,
+                count: count ?? 0,
+                noun: AUTOMATIONS_COUNTED,
+              },
+          phone,
+        )}
         heading={GROUP_HEADING.H2}
+        glyph={glyph}
         label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
-        fold={fold}
-        count={count === undefined ? undefined : { value: count, noun: AUTOMATIONS_NOUN }}
       >
         {rows}
       </GroupHeader>
