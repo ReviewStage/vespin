@@ -3,7 +3,6 @@
 import { PRODUCT_PICTURE_KIND } from "@repo/features/analytics";
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
-import { agentName, providerOf } from "@repo/features/model-label";
 import { PICTURE_OWNER } from "@repo/features/picture-source-wire";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
@@ -31,6 +30,7 @@ import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import {
   type CommentReply,
+  commentAgents,
   threadMessages,
   threadOpen,
   useCommentMedia,
@@ -263,12 +263,7 @@ function CommentThread({
     };
   }, [standing, id, router, onOwnTab]);
 
-  const agents = new Map(
-    (overview?.agents ?? []).map(
-      ({ agent }) =>
-        [agent.id, { name: agentName(agent), harness: providerOf(agent.model) }] as const,
-    ),
-  );
+  const agents = commentAgents([...(overview?.agents ?? []), ...(overview?.archived ?? [])]);
 
   const task = overview?.task;
   const path = commentPath(overview);

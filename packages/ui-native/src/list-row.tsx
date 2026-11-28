@@ -49,6 +49,7 @@ import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import type { ManagerFace as ManagerFaceValue } from "@repo/features/manager-face";
+import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -66,6 +67,7 @@ import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink, rowHeard, rowMenu, rowSwipes } from "./interactions.js";
 import { type RowInset, useRowInset } from "./layout-margin.js";
 import {
+  AgentTile,
   Avatar,
   type Face,
   FailedMark,
@@ -240,14 +242,30 @@ type RowActs = {
  * What holds an Inbox row's thread, named on its first line: a task, its
  * status ring leading its name, or an agent on no task by its name, a
  * Manager's face leading it, as `TaskRow`'s lead takes a status or a
- * Manager, and the panel's row leads with its holder's glyph.
+ * Manager, and the panel's row leads with its holder's glyph; or, for a
+ * comment thread, who wrote its first comment, their face or the agent's
+ * tile leading their name, as the panel's comment heads its words.
  */
 type RowHolder = { readonly name: string } & (
-  | { readonly status?: TaskStatus | undefined; readonly manager?: undefined }
+  | {
+      readonly status?: TaskStatus | undefined;
+      readonly manager?: undefined;
+      readonly writer?: undefined;
+    }
   | {
       readonly status?: undefined;
       /** The Manager's face, and whether it works, which the face wears. */
       readonly manager: { readonly face: ManagerFaceValue; readonly working: boolean };
+      readonly writer?: undefined;
+    }
+  | {
+      readonly status?: undefined;
+      readonly manager?: undefined;
+      /** The writer's face: a member's picture or letters, or a coding agent's tile, wearing its harness's mark where it is known. */
+      readonly writer: Face & {
+        readonly agent: boolean;
+        readonly harness?: ModelProvider | undefined;
+      };
     }
 );
 
@@ -930,6 +948,19 @@ function LineGlyph({ line }: { readonly line: InboxLineKind | undefined }) {
   return <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_LINE} hidden />;
 }
 
+/** A comment's writer where a row's ring would stand: an agent's tile, or a member's face. */
+function WriterFace({
+  writer,
+  size,
+}: {
+  readonly writer: NonNullable<RowHolder["writer"]>;
+  readonly size: number;
+}) {
+  if (writer.agent) return <AgentTile harness={writer.harness} size={size} />;
+
+  return <Avatar name={writer.name} id={writer.id} picture={writer.picture} size={size} />;
+}
+
 /**
  * An Inbox row's first line, over the title, as the panel's lead line: the
  * copper dot in the margin while the thread is unread, the task's status
@@ -974,6 +1005,8 @@ function TaskLine({
         <HStack modifiers={[frame({ width: leadWidth })]}>
           {task.manager !== undefined ? (
             <ManagerFace face={task.manager.face} size={leadWidth} working={task.manager.working} />
+          ) : task.writer !== undefined ? (
+            <WriterFace writer={task.writer} size={leadWidth} />
           ) : task.status === undefined ? null : (
             <TaskStatusMark status={task.status} />
           )}
