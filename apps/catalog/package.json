@@ -14,7 +14,7 @@
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "catalog:",
     "@fontsource-variable/geist": "catalog:",
-    "@fontsource-variable/jetbrains-mono": "catalog:",
+    "@fontsource-variable/geist-mono": "catalog:",
     "@repo/features": "workspace:*",
     "@repo/settings": "workspace:*",
     "@repo/ui": "workspace:*",
