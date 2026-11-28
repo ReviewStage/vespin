@@ -175,9 +175,10 @@ type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "command" | "on
 };
 
 /**
- * What the composer's Approval capsule opens, in a glass of its own, while a call
- * waits that no row of the transcript draws, such as a subagent's, so it is
- * still answered: a raised hand and how many wait in the attention ink,
+ * What stands in the composer's head, over its field, while a call waits
+ * that no row of the transcript draws, such as a subagent's, so it is still
+ * answered, as the panel stands such a call in its conversation, folded
+ * away and back by the composer's Approval capsule: a raised hand and how many wait in the attention ink,
  * what the oldest asks, and Deny, Always allow and Allow. A call whose row is drawn is
  * answered there alone, as on the panel. The page tells VoiceOver of every
  * call waiting from its composer, which stands while this comes and goes.

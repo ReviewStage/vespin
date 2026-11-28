@@ -83,10 +83,10 @@ env:
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-task-agents
-# An agent's page: its calls' lines wrapping rather than cut, and the held
-# call's banner over the composer, which scrolls in place once it would
-# stand taller than a share of the window, so the transcript stays in sight
-# above it.
+# An agent's page: its calls' lines wrapping rather than cut, and the
+# composer's head saying a message denies the call waiting, which scrolls in
+# place once it would stand taller than a share of the window, so the
+# transcript stays in sight above it.
 - launchApp:
     arguments:
       fixture: inbox
