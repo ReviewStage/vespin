@@ -10,8 +10,9 @@ import {
 } from "@repo/features/inbox-wire";
 import { type DraftSuggestion, draftSuggestionSchema } from "@repo/features/suggestion-model";
 import { createRest, type Rest } from "@repo/ui";
+import { EXCESS_KEYS } from "@repo/wire";
 import { createStore, type ReadonlyStore, Store, useSelector } from "@tanstack/react-store";
-import { Duration, Equal, Option, Schema, SchemaTransformation } from "effect";
+import { Duration, Equal, Option, Schema } from "effect";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { readKept, readKeptText, writeKept, writeKeptText } from "./kept-storage.js";
 import type { BoxWords } from "./tasks/box-words.js";
@@ -87,23 +88,6 @@ export const DRAFT_PLACE = {
   EDIT: "edit",
 } as const;
 
-/** A description's comment's kind as storage holds it: today's, or `planComment`, which every draft kept before the description was named so holds, read as today's. */
-const descriptionCommentKind = Schema.Literals([
-  DRAFT_PLACE.DESCRIPTION_COMMENT,
-  "planComment",
-]).pipe(
-  Schema.decodeTo(
-    Schema.Literal(DRAFT_PLACE.DESCRIPTION_COMMENT),
-    SchemaTransformation.transform<
-      typeof DRAFT_PLACE.DESCRIPTION_COMMENT,
-      typeof DRAFT_PLACE.DESCRIPTION_COMMENT | "planComment"
-    >({
-      decode: () => DRAFT_PLACE.DESCRIPTION_COMMENT,
-      encode: (kind) => kind,
-    }),
-  ),
-);
-
 const draftPlaceSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.AGENT),
@@ -148,7 +132,7 @@ const draftPlaceSchema = Schema.Union([
     workspaceId: Schema.NullOr(Schema.String),
   }),
   Schema.Struct({
-    kind: descriptionCommentKind,
+    kind: Schema.Literal(DRAFT_PLACE.DESCRIPTION_COMMENT),
     /** The plan the comment is on, which the sidebar marks. */
     taskId: Schema.String,
     /**
@@ -181,7 +165,7 @@ const draftPlaceSchema = Schema.Union([
   }),
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.REVIEW_REPLY),
-    /** GitHub's own id for the thread, which names it across every pull request; a build from before also kept the agent whose pull request it is on, read past. */
+    /** GitHub's own id for the thread, which names it across every pull request. */
     threadId: Schema.String,
   }),
   Schema.Struct({
@@ -195,93 +179,6 @@ const draftPlaceSchema = Schema.Union([
 
 /** Where one draft goes. */
 export type DraftPlace = typeof draftPlaceSchema.Type;
-
-/**
- * New task's words on one of the workspace's own issues, as a build from
- * before the app kept no issues stored them. No card opens on an issue now, so
- * such an entry is read past rather than taken for the workspace's own
- * draft, which it would displace, and goes once its account writes again.
- */
-const issueDraftPlaceSchema = Schema.Struct({
-  kind: Schema.Literal(DRAFT_PLACE.NEW_TASK),
-  workspaceId: Schema.NullOr(Schema.String),
-  issueId: Schema.String,
-});
-
-/**
- * An inbox card's place as a build from before its picks kept their
- * revision stored it: the revision in the place, and its thread apart from
- * its answer. Note that such an entry is read as today's place with the
- * revision moved onto its draft, so its picks still stand on the ask they
- * were made on, and goes once its account writes again.
- */
-const revisedPlaceSchema = Schema.Struct({
-  kind: Schema.Literal(DRAFT_PLACE.INBOX),
-  taskId: Schema.NullOr(Schema.String),
-  agentId: Schema.String,
-  itemId: Schema.String,
-  revision: Schema.Number,
-  thread: Schema.optionalKey(Schema.Literal(true)),
-});
-
-/**
- * A line comment's place as a build from before Pull request tabs named
- * their pull request by its repository stored it: by the agent whose tab it
- * was written in. Its pull request cannot be told from the agent, so such an
- * entry is read past rather than refusing every draft beside it, and goes
- * once its account writes again.
- */
-const agentLineCommentPlaceSchema = Schema.Struct({
-  kind: Schema.Literal(DRAFT_PLACE.LINE_COMMENT),
-  agentId: Schema.String,
-});
-
-/** The places of boxes since removed, as a build from before stored them: Chat's and its ask's answer, and the Inbox's New thread's. */
-const RETIRED_DRAFT_PLACE = {
-  CHAT: "chat",
-  CHAT_ASK: "chatAsk",
-  NEW_THREAD: "newThread",
-} as const;
-
-/**
- * A removed box's place, as a build from before it was removed stored it. No
- * box opens on one now, so such an entry is read past rather than refusing
- * every draft beside it, and goes once its account writes again.
- */
-const retiredPlaceSchema = Schema.Struct({
-  kind: Schema.Literals(Object.values(RETIRED_DRAFT_PLACE)),
-});
-
-/** A place as storage may hold it: one of today's, New task's on an issue (`issueDraftPlaceSchema`), one with its revision (`revisedPlaceSchema`), a line comment's by its agent (`agentLineCommentPlaceSchema`), or a removed box's (`retiredPlaceSchema`). */
-const storedPlaceSchema = Schema.Union([
-  issueDraftPlaceSchema,
-  revisedPlaceSchema,
-  draftPlaceSchema,
-  agentLineCommentPlaceSchema,
-  retiredPlaceSchema,
-]);
-
-type StoredPlace = typeof storedPlaceSchema.Type;
-
-/** Whether a stored place is a removed box's, which no box opens now. */
-function retired(stored: StoredPlace): stored is typeof retiredPlaceSchema.Type {
-  return Object.values<string>(RETIRED_DRAFT_PLACE).includes(stored.kind);
-}
-
-/** The place a box opens today that a stored place names, with the revision a place from before held for its picks; none for a place no box opens now. */
-function placeOf(
-  stored: StoredPlace,
-): { readonly place: DraftPlace; readonly revision?: number } | undefined {
-  if (retired(stored) || "issueId" in stored) return undefined;
-
-  // A line comment kept by its agent, whose pull request cannot be told now, opens no box.
-  if (stored.kind === DRAFT_PLACE.LINE_COMMENT && !("repository" in stored)) return undefined;
-
-  if (!("revision" in stored)) return { place: stored };
-  const { kind, taskId, agentId, itemId, revision } = stored;
-
-  return { place: { kind, taskId, agentId, itemId }, revision };
-}
 
 /** The element of a page a thread being started there is on, as its draft keeps it. */
 const pageElementSchema = Schema.Struct({
@@ -297,7 +194,7 @@ export type DraftPageElement = typeof pageElementSchema.Type;
 /** One place's draft as storage keeps it: its words, a card's picks where it holds some, and the account that wrote it. */
 const storedDraftSchema = Schema.Struct({
   accountId: Schema.NullOr(Schema.String),
-  place: storedPlaceSchema,
+  place: draftPlaceSchema,
   text: Schema.String,
   choices: Schema.optionalKey(Schema.Array(Schema.String)),
   values: Schema.optionalKey(Schema.Array(inboxFormValueSchema)),
@@ -309,8 +206,13 @@ const storedDraftSchema = Schema.Struct({
   suggestion: Schema.optionalKey(draftSuggestionSchema),
 });
 
-/** The drafts as storage keeps them, the latest written last. */
-const storedDrafts = Schema.fromJsonString(Schema.Array(storedDraftSchema));
+/** The drafts as storage keeps them, the latest written last, each entry read on its own (`readStored`). */
+const storedEntries = Schema.fromJsonString(Schema.Array(Schema.Unknown));
+
+/** One entry read as today's shape, a key it does not name refusing it, so an entry an older build kept is read past rather than taken for another place's. */
+const decodeEntry = Schema.decodeUnknownOption(storedDraftSchema, {
+  onExcessProperty: EXCESS_KEYS.REFUSE,
+});
 
 type StoredDraft = typeof storedDraftSchema.Type;
 
@@ -403,9 +305,10 @@ function entryText(entry: StoredDraft): string {
 }
 
 /**
- * Every account's kept drafts, none where none were kept or they no longer
- * read. Note that storage holding the text it held last is not decoded
- * again, so a read finding what this window wrote costs one comparison.
+ * Every account's kept drafts, none where none were kept, and none of an
+ * entry that no longer reads, which goes at the next write while every entry
+ * beside it stands. Note that storage holding the text it held last is not
+ * decoded again, so a read finding what this window wrote costs one comparison.
  */
 function readStored(): readonly StoredDraft[] {
   const text = readKeptText(STORAGE_KEY);
@@ -413,7 +316,11 @@ function readStored(): readonly StoredDraft[] {
   if (text === storedLast.text) return storedLast.entries;
 
   const entries =
-    text === null ? [] : Option.getOrElse(Schema.decodeUnknownOption(storedDrafts)(text), () => []);
+    text === null
+      ? []
+      : Option.getOrElse(Schema.decodeUnknownOption(storedEntries)(text), () => []).flatMap(
+          (entry) => Option.toArray(decodeEntry(entry)),
+        );
 
   storedLast = { text, entries };
 
@@ -422,8 +329,8 @@ function readStored(): readonly StoredDraft[] {
 
 /**
  * Keeps every account's drafts, answering whether storage took them; a write
- * that fails leaves those kept before. The text is the one `storedDrafts`
- * encodes, joined from each entry's own (`entryText`), so an entry written
+ * that fails leaves those kept before. The text is the one `storedEntries`
+ * reads, joined from each entry's own (`entryText`), so an entry written
  * before is not encoded again.
  */
 function writeStored(entries: readonly StoredDraft[]): boolean {
@@ -435,39 +342,28 @@ function writeStored(entries: readonly StoredDraft[]): boolean {
   return true;
 }
 
-/** The owner's kept drafts; storage keeps no files, and no draft of files alone, or of a place no box opens now. */
+/** The owner's kept drafts; storage keeps no files, and no draft of files alone. */
 function readDrafts(owner: Owner): readonly KeptDraft[] {
-  const read = readStored()
+  return readStored()
     .filter((kept) => kept.accountId === owner)
-    .flatMap(({ place: storedPlace, text, choices = [], values = [], ...rest }) => {
-      const read = placeOf(storedPlace);
+    .map(({ place, text, choices = [], values = [], ...rest }) => {
+      const { steps, press, dropped, revision, element, suggestion } = rest;
 
-      if (read === undefined) return [];
-      const { steps, press, dropped, element, suggestion } = rest;
-      const revision = rest.revision ?? read.revision;
-
-      return [
-        {
-          place: read.place,
-          text,
-          attachments: [],
-          choices,
-          values,
-          ...(steps === undefined ? undefined : { steps }),
-          ...(press === undefined ? undefined : { press }),
-          ...(dropped === undefined ? undefined : { dropped }),
-          ...(revision === undefined ? undefined : { revision }),
-          ...(element === undefined ? undefined : { element }),
-          ...(suggestion === undefined ? undefined : { suggestion }),
-        },
-      ];
+      return {
+        place,
+        text,
+        attachments: [],
+        choices,
+        values,
+        ...(steps === undefined ? undefined : { steps }),
+        ...(press === undefined ? undefined : { press }),
+        ...(dropped === undefined ? undefined : { dropped }),
+        ...(revision === undefined ? undefined : { revision }),
+        ...(element === undefined ? undefined : { element }),
+        ...(suggestion === undefined ? undefined : { suggestion }),
+      };
     })
     .filter(stored);
-
-  // Note that an inbox card's answer and its thread, kept apart before, are one place now, so the one written later stands.
-  return read.filter(
-    (kept, at) => !read.slice(at + 1).some((later) => Equal.equals(later.place, kept.place)),
-  );
 }
 
 /** Whether a kept draft is the one storage holds for an entry: the owner's, at its place, holding the same. */
