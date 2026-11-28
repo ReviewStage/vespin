@@ -484,8 +484,8 @@ function literalNode(ast: SchemaAST.Literal): JsonSchemaNode {
 }
 
 /**
- * A union of literals of one primitive kind is the builder's `enumOf`, one
- * `enum` node; any other union is its `union`, an `anyOf` of members. `null`
+ * A union of literals of one primitive kind is one `enum` node
+ * (`enumNode`); any other union is an `anyOf` of members. `null`
  * is never a member of an `enum`, because the builder's null node has no
  * `enum` to join, and v4 states `null` as a node of its own rather than as a
  * literal, so a union naming it never reads as one kind.

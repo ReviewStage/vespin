@@ -774,7 +774,7 @@ interface MintedSecret {
 /**
  * A webhook's rows once it is saved as one: its address to copy, and New
  * secret, which asks first, since the new one stops the one a sender holds,
- * and then shows the new one once (`SecretRows`). Before it is saved as a
+ * and then shows the new one once (`SecretScreen`). Before it is saved as a
  * webhook, its footer says a save gives it both.
  */
 function WebhookRows({

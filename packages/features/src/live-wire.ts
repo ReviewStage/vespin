@@ -262,7 +262,7 @@ export const LIVE_READ = {
   VIEW_CHOICES: "viewChoices",
   /** The shell commands the account always allows its coding agents to run unasked, by the account: fetched by the host while a window holds it, and laid from each write's own answer. */
   ALLOWED_COMMANDS: "allowedCommands",
-  /** The run of an automation that started one agent, by the agent: the service's `agentOriginLive` query, held for the windows that show the agent's page and a few they showed lately. */
+  /** The run of an automation that started one agent, by the agent: the service's `agentOriginRead` query, held for the windows that show the agent's page and a few they showed lately. */
   AGENT_ORIGINS: "agentOrigins",
   /** Every inbox item the account reaches. */
   INBOX_ITEMS: "inboxItems",
@@ -284,13 +284,13 @@ export const LIVE_READ = {
   MEMORIES: "workspaceMemories",
   /** The models a coding agent may run on as the account is offered them, and its devices a task may run on, by the account: fetched by the host while a window holds it, and asked again as a window comes forward, and as the account's provider keys move. */
   MODELS: "models",
-  /** One task's pages, or one agent's on no task, by what they stand on: the service's `taskPagesLive` or `agentPagesLive` query, by its kind, held for the windows that chose it and a few they chose lately. */
+  /** One task's pages, or one agent's on no task, by what they stand on: the service's `taskPagesRead` or `agentPagesRead` query, by its kind, held for the windows that chose it and a few they chose lately. */
   PAGES: "pages",
   /** The account's own provider keys and plans, as hints and statuses and never a key, by the account: fetched by the host while a window holds it, and laid from each write's own answer. */
   PROVIDER_KEYS: "providerKeys",
   /** The account's own GitHub token as its login, hint, and status, never the token, by the account: fetched by the host while a window holds it, and laid from each save's and removal's own answer. */
   GITHUB_TOKEN: "githubToken",
-  /** One agent's pull request's newest chapters, by the agent and the pull request's number: the service's `pullRequestChaptersLive` query. */
+  /** One agent's pull request's newest chapters, by the agent and the pull request's number: the service's `pullRequestChaptersRead` query. */
   PULL_REQUEST_CHAPTERS: "pullRequestChapters",
   /** One pull request's newest chapters, by the workspace, its repository, and its number: the service's `repositoryPullRequestChapters` query. */
   REPOSITORY_PULL_REQUEST_CHAPTERS: "repositoryPullRequestChapters",
@@ -310,13 +310,13 @@ export const LIVE_READ = {
   REPOSITORY_PULL_REQUEST_VIEWED: "repositoryPullRequestViewed",
   /** What the reviewer and label pickers offer of one pull request's repository, keyed and fetched as `REPOSITORY_PULL_REQUEST`. */
   REPOSITORY_REVIEW_OPTIONS: "repositoryReviewOptions",
-  /** One task's comments, its description's own threads or one page's: the service's `taskCommentsLive` query. */
+  /** One task's comments, its description's own threads or one page's: the service's `taskCommentsRead` query. */
   DESCRIPTION_COMMENTS: "taskComments",
-  /** One task's description history, by the task: the service's `taskHistoryLive` query for its newest page, then the older pages its version history read past it, held for the windows that show it and a few they showed lately. */
+  /** One task's description history, by the task: the service's `taskHistoryRead` query for its newest page, then the older pages its version history read past it, held for the windows that show it and a few they showed lately. */
   HISTORY: "taskHistory",
   /** One Manager's chat, by the agent: the service's `managerChat` query for its newest page, then the older pages its chat read past it, held for the windows that show the chat and a few they showed lately. */
   MANAGER_CHAT: "managerChat",
-  /** One task's cloud Browser tabs, every one of its agents', or one agent's, by what they are listed for: the service's `taskBrowserTabsLive` or `agentBrowserTabsLive` query, by its kind, held for the windows whose side panel lists them and a few they listed lately. */
+  /** One task's cloud Browser tabs, every one of its agents', or one agent's, by what they are listed for: the service's `taskBrowserTabsRead` or `agentBrowserTabsRead` query, by its kind, held for the windows whose side panel lists them and a few they listed lately. */
   BROWSER_TABS: "browserTabs",
   /** The repositories the account reaches in one workspace, or in every one where a list names none, by the workspace: fetched by the host while a window holds it. */
   REPOSITORY_LISTS: "repositoryLists",
@@ -359,7 +359,7 @@ export const LIVE_READ = {
   /**
    * One task's description, by the task, held for the windows that opened it and a
    * few they opened lately. Note that no live query carries its text: the
-   * host follows the task's record (`taskRecordLive`), whose description mark moves
+   * host follows the task's record (`taskRecordRead`), whose description mark moves
    * with each save, and reads the description again where it moved past the copy held.
    */
   HELD_TASK: "heldTask",

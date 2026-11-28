@@ -173,7 +173,7 @@ export function phoneAudioOf(run: Pick<CommandRun, "exitCode" | "stdout">): Uint
   return bytes;
 }
 
-/** Makes an MP4 of the WebM at the absolute path and uploads it to the presigned URL, as the sandbox's default user; read its run with `uploadedCopySizeOf`. */
+/** Makes an MP4 of the WebM at the absolute path and uploads it to the presigned URL, as the sandbox's default user; read its run with `copyUploaded`. */
 export function phoneVideoUploadAsk(path: string, upload: SandboxUpload): CommandAsk {
   const parts = uploadCommandParts(upload);
 

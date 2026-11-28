@@ -120,7 +120,7 @@ import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-bindi
  * status, which turns on it, is the reader's to read, and so is the order.
  *
  * A reader past a sync id is read the same statements narrowed to the rows
- * what moved could move (`taskListDeltaStatements`): a plan whose own row,
+ * what moved could move (`tasksRead`'s `delta`): a plan whose own row,
  * pin, read mark, or block moved, that a moved plan blocks, or that names a
  * moved member, and an agent whose own row or pin moved, whose turn or
  * conversation moved, whose plan moved, that names a moved member or Mac,

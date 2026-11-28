@@ -707,7 +707,7 @@ test("a plan opened with its Inbox tab shown rather than its plan is read at onc
   assert.equal(unreadOnOpen(true), "true");
 });
 
-/** A second plan beside `DOCUMENT_PLAN`, saved after it. */
+/** A second task beside `DOCUMENT_TASK`, saved after it. */
 const NOTES_TASK: Task = {
   ...DOCUMENT_TASK,
   id: "0c9a3f1e-6b2d-4e8f-a1c7-3d5e7f9a1b2c",

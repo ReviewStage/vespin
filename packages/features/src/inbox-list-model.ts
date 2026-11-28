@@ -1092,7 +1092,7 @@ function needsReader(item: InboxRow, readerId: string | undefined): boolean {
  * Whether an item waits on the reader at `now`: it needs them (`needsReader`)
  * and holds no reminder still ahead (`remindsLater`), what Open lists for them
  * and every count of what needs them counts, the sidebar's Inbox row's among
- * them (`places-waiting.ts`'s `waitingThreads`).
+ * them.
  */
 export function waitsOnReaderNow(
   item: InboxRow,
