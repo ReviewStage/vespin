@@ -1,0 +1,22 @@
+pinned to 385e67d63b
+== bundle PJjact11318 base 385e67d63b
+  built 385e67d63b base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+after/iphone-light-skeleton: fails 0 shots 1 
+after/iphone-dark-skeleton: fails 0 shots 1 
+after/ipad-light-skeleton: fails 0 shots 1 
+after/ipad-dark-skeleton: fails 0 shots 1 
+== bundle PJact11318b base 83fc2c9e9c
+  built 83fc2c9e9c base app Vmain-current.app ()
+  install 0
+  typecheck mobile 0 ui-native 0 (Version 7.0.2; 0 clean, 1 errors, 2 did not run)
+  export 0 (simulator-bundle.sh)
+  signed 0
+== before bundle 83fc2c9e9c over Vmain-current.app
+before/iphone-light-skeleton: fails 0 shots 1 
+before/iphone-dark-skeleton: fails 0 shots 1 
+before/ipad-light-skeleton: fails 0 shots 1 
+before/ipad-dark-skeleton: fails 0 shots 1 
