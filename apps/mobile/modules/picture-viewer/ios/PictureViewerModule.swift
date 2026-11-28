@@ -200,9 +200,8 @@ final class PicturePage: UIViewController, UIScrollViewDelegate, UIGestureRecogn
 
   override func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    // Note that a turn of the device fits the picture anew while it isn't zoomed.
-    guard !zoomedIn else { return }
-    fitPicture()
+    // Note that a turn of the device fits the picture anew while it isn't zoomed, and centers it anew at its zoom while it is, so none of it stands out of reach.
+    if zoomedIn { centerPicture() } else { fitPicture() }
   }
 
   /// Sizes the image view to the picture fitted inside the screen, so a zoom pans across the picture alone and stops at its edges, where a swipe goes on to the next page.
