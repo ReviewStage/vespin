@@ -8,8 +8,8 @@
  * it (`use-inbox-service-search.ts` there). The host reads what the service
  * finds and holds it for the place (`LIVE_READ.INBOX_FOUND`), which the
  * Inbox is grouped with under All (`inbox-groups.tsx`), never here. A screen
- * gone lets its place's search go, since a tab stays mounted only while the
- * app stands it.
+ * gone stops asking but leaves what its place found standing, where a thread
+ * opened from it is still read, until the place's next search.
  */
 
 import {
@@ -41,15 +41,18 @@ export function useInboxServiceSearch(
   );
 
   const words = asked ? typed : "";
+  const asks = serviceInboxSearchQuery(words) !== undefined;
 
+  // Note that words too few to ask leave the search rather than let it go, for the same reason as the screen going below: the listing lists what the place found only while it asks (`use-inbox.ts`).
   useEffect(() => {
-    search.type(words);
-  }, [search, words]);
+    if (asks) search.type(words);
+    else search.leave();
+  }, [search, words, asks]);
 
-  // Note that the place's search is let go as the screen goes, so the host holds nothing a screen no longer shows.
-  useEffect(() => () => search.end(), [search]);
+  // Note that the search is left as the screen goes but what it found is not let go, because a thread opened from it may stand on another screen, as an iPad opens a Search row on the Inbox tab, which takes the Search column away, and a thread on no task, a Manager's, has no task's inbox to be read from in its place; the place's next search replaces them, and nothing lists them while it asks nothing.
+  useEffect(() => () => search.leave(), [search]);
 
   const searching = useSyncExternalStore(search.subscribe, search.searching);
 
-  return { asks: serviceInboxSearchQuery(words) !== undefined, searching };
+  return { asks, searching };
 }
