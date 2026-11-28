@@ -108,6 +108,7 @@
     "./ios-menu-commands": "./src/ios-menu-commands.js",
     "./ios-share-destinations": "./src/ios-share-destinations.js",
     "./ios-share-page-model": "./src/ios-share-page-model.js",
+    "./ios-share-send": "./src/ios-share-send.js",
     "./ios-share-wire": "./src/ios-share-wire.js",
     "./ios-sign-in-wire": "./src/ios-sign-in-wire.js",
     "./ios-system-activity": "./src/ios-system-activity.js",

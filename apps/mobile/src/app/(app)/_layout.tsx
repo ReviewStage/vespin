@@ -40,6 +40,7 @@ import { useNoticeForAccount, useOfflineNotice } from "../../use-write.js";
 const SHEET_ROUTE = {
   SETTINGS: "settings",
   START_TASK: "start-task",
+  SHARE: "share",
   START_AGENT: "start-agent",
   AGENT_PORTS: "agent-ports",
   TASK_RELATION: "task-relation",
@@ -214,6 +215,11 @@ export default function GuardedScreens() {
           <Stack.Screen
             name={SHEET_ROUTE.START_TASK}
             options={{ presentation: sheetPresentation, title: "New task" }}
+          />
+          {/* Note that the share page opens on a draft the share sheet kept as a sheet at its full height, as New task does. */}
+          <Stack.Screen
+            name={SHEET_ROUTE.SHARE}
+            options={{ presentation: sheetPresentation, title: "Send to" }}
           />
           <Stack.Screen
             name={SHEET_ROUTE.START_AGENT}

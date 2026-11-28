@@ -33,6 +33,11 @@ export const SHARE_PAGE_WORDS = {
   CANCEL: "Cancel",
   /** Several places ticked, as the "To" capsule says them. */
   places: (count: number) => `${count} places`,
+  /** What the page says where a send did not go to every place ticked, which stay ticked for Send again. */
+  notSent: (count: number) =>
+    count === 1
+      ? "It didn't go to one place. Send again to try it."
+      : `It didn't go to ${count} places. Send again to try them.`,
 } as const;
 
 /** Each kind's heading. */
