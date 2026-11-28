@@ -1,6 +1,11 @@
 // use-share-send.ts -- a share sent from the app, each place's write through the host's own act, as the app's composers send theirs.
 
-import { SHARE_SEND_KIND, type ShareSend, type ShareSendTo } from "@repo/features/ios-share-send";
+import {
+  newTaskShareWent,
+  SHARE_SEND_KIND,
+  type ShareSend,
+  type ShareSendTo,
+} from "@repo/features/ios-share-send";
 import { ACT_KIND } from "@repo/host/acts";
 import { useCallback } from "react";
 import { useHostActs } from "../host/host-provider.js";
@@ -33,7 +38,7 @@ export function useShareSend(): (sends: readonly ShareSendTo[]) => Promise<reado
         case SHARE_SEND_KIND.TASK_AGENT:
           return acts[ACT_KIND.AGENTS_START](send.params).then((answer) => !("failure" in answer));
         case SHARE_SEND_KIND.NEW_TASK:
-          return acts[ACT_KIND.TASKS_START](send.params).then((answer) => !("failure" in answer));
+          return acts[ACT_KIND.TASKS_START](send.params).then(newTaskShareWent);
       }
     },
     [acts],

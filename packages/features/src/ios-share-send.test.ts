@@ -1,8 +1,10 @@
 import { expect, test } from "vitest";
+import { AGENT_CALL_FAILURE } from "./agent-view.js";
 import { SHARE_NEW_TASK_ID } from "./ios-share-page-model.js";
-import { SHARE_SEND_KIND, shareSendsOf } from "./ios-share-send.js";
+import { newTaskShareWent, SHARE_SEND_KIND, shareSendsOf } from "./ios-share-send.js";
 import { SHARE_DESTINATION_KIND, type ShareDestination } from "./ios-share-wire.js";
 import { TASK_STATUS } from "./task-wire.js";
+import { TASK_CALL_FAILURE } from "./tasks-view.js";
 
 /**
  * ios-share-send.test.ts -- a share sends each place ticked the one write
@@ -101,4 +103,15 @@ test("each place ticked is sent the write its own composer makes, under its own 
       },
     },
   ]);
+});
+
+test("a new task whose agent was refused did not take the share, since its words went only to the agent", () => {
+  expect(
+    newTaskShareWent({
+      taskId: "task-new",
+      agentStart: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+    }),
+  ).toBe(false);
+  expect(newTaskShareWent({ taskId: "task-new" })).toBe(true);
+  expect(newTaskShareWent({ failure: TASK_CALL_FAILURE.NOT_FOUND })).toBe(false);
 });

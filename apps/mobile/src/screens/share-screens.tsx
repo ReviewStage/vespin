@@ -3,7 +3,7 @@
 import { SHARE_PAGE_WORDS } from "@repo/features/ios-share-page-model";
 import { shareSendsOf } from "@repo/features/ios-share-send";
 import { randomUUID } from "expo-crypto";
-import { useRouter } from "expo-router";
+import { useNavigation, useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import { SharePage } from "../share/share-page.js";
 import { useShareSend } from "../share/use-share-send.js";
@@ -27,11 +27,12 @@ export interface ShareDraftOpened {
  * words and pictures in the field. Each place is sent under a key minted
  * once for the page, and New task's task id too, so Send pressed again after
  * a write that did not go sends the rest and never a second of one that
- * did. Every write gone, the sheet closes; otherwise the page says how many
- * did not go and keeps the words.
+ * did. Every write gone, the sheet closes, where it still stands in front;
+ * otherwise the page says how many did not go and keeps the words.
  */
 export function ShareDraftScreen({ draft }: { readonly draft: ShareDraftOpened }) {
   const router = useRouter();
+  const navigation = useNavigation();
   const destinations = useShareDestinations();
   const send = useShareSend();
   const [words, setWords] = useState(draft.prompt);
@@ -67,8 +68,9 @@ export function ShareDraftScreen({ draft }: { readonly draft: ShareDraftOpened }
     void send(sends).then((failed) => {
       setSending(false);
 
+      // Note that the sheet closes only while it still stands in front, so a send that lands after the reader closed it, or opened something over it, moves nothing of theirs.
       if (failed.length === 0) {
-        router.back();
+        if (navigation.isFocused()) router.back();
 
         return;
       }

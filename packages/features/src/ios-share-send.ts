@@ -22,7 +22,7 @@ import type {
 import type { AgentAttachment } from "./agent-wire.js";
 import { SHARE_NEW_TASK_ID } from "./ios-share-page-model.js";
 import { SHARE_DESTINATION_KIND, type ShareDestination } from "./ios-share-wire.js";
-import type { TasksStartRequest } from "./tasks-view.js";
+import type { TasksStartAnswer, TasksStartRequest } from "./tasks-view.js";
 
 /** Which write a share makes, by the act each kind's composer sends. */
 export const SHARE_SEND_KIND = {
@@ -135,4 +135,11 @@ export function shareSendsOf(source: ShareSendSource): readonly ShareSendTo[] {
 
     return row === undefined ? [] : [{ to, send: rowSend(row, source) }];
   });
+}
+
+/** Whether New task's start took the share: the task made and its agent started, since the words go only to its agent. */
+export function newTaskShareWent(answer: TasksStartAnswer): boolean {
+  if ("failure" in answer) return false;
+
+  return answer.agentStart === undefined || !("failure" in answer.agentStart);
 }
