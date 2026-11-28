@@ -56,7 +56,10 @@ env:
 # known by its list's title, because a pick of the place already picked is
 # no change of the sidebar's selection, which SwiftUI reports nothing of, so
 # an upright window's sidebar, shown to pick it, stood over the list after it
-# (vjipadmain's failure-notice lane).
+# (vjipadmain's failure-notice lane). The title is found by its bar's
+# identifier, which iOS sets to the title, never by the words alone, because
+# a list's search field heads with a magnifying glass heard as "Search",
+# which stood for the Search place on the Tasks list (managers.yaml, jp10991).
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}
@@ -68,7 +71,8 @@ env:
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}
-      notVisible: "${TAB}"
+      notVisible:
+        id: "${TAB}"
     commands:
       - runFlow:
           file: show-sidebar.yaml
