@@ -61,6 +61,14 @@ env:
       ELEMENT: "expired-invites.csv.*3 lines"
       DIRECTION: UP
       BESIDE: ${FLOATING_TABS}
+# Note that a scroll to the chip is undone by Jump to latest, which stands only
+# once the page has moved off its end, so the calls below stand where the page
+# opened them rather than behind the composer.
+- tapOn:
+    text: "Jump to latest"
+    optional: true
+- waitForAnimationToEnd:
+    timeout: 5000
 # A call opens in place on its body: a command as a terminal, its prompt over
 # what it printed.
 - tapOn: "Edited.*"
