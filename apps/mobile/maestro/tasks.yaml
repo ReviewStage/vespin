@@ -111,11 +111,11 @@ env:
     direction: UP
 - waitForAnimationToEnd
 # A swipe from the leading edge reveals Unpin, which a full swipe would
-# press at once, so the flow swipes partway across Pinned's row, under the
-# Managers group and Pinned's header, and a tap on the row's own words
-# closes it unpressed. Note that the swipe's height is the row's on the
-# iPhone 18 Pro since the Managers group stood above Pinned; at the old
-# height it ran over Release manager and opened its page (j10404).
+# press at once, so the flow swipes partway across the digest's row, and a
+# tap on the row's own words closes it unpressed. Note that the swipe starts
+# on the row itself rather than at a point of the window, because Pinned
+# stands Managers among its tasks by their pins, Docs manager above the
+# digest, and a point that once fell on the digest's row now falls on his.
 # Note that the row is closed before anything else is pressed, because a row
 # left open takes the next press on the list, the long press below among
 # them, only to close itself; and that a regular window, whose swipes read
@@ -125,9 +125,9 @@ env:
       notVisible: "No task selected"
     commands:
       - swipe:
-          start: "8%, 33%"
-          end: "38%, 33%"
-          duration: 900
+          from:
+            text: "Weekly digest email"
+          direction: RIGHT
       - waitForAnimationToEnd
       - takeScreenshot: tasks-swipe-leading
       - tapOn: "Weekly digest email"
