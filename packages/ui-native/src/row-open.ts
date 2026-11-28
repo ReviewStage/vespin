@@ -26,6 +26,13 @@ export const RowPickContext = createContext<(() => void) | undefined>(undefined)
 export const RowSelectedContext = createContext<string | undefined>(undefined);
 
 /**
+ * The id of the row the system's sidebar list stands selected on its own
+ * fill, which a row reads only to ink its words for that fill, never to draw
+ * one. None outside a sidebar list.
+ */
+export const RowSidebarPickedContext = createContext<string | undefined>(undefined);
+
+/**
  * Whether its list is the system's sidebar list, as an iPad's own sidebar
  * is, whose own selection highlight, metrics and pointer hover each row
  * keeps rather than drawing its own fill over a cleared ground. False
