@@ -53,7 +53,6 @@ import {
   Composer,
   ComposerFoot,
   GLYPH,
-  MentionSuggestions,
   ResolvableAsk,
   StepList,
   SteppedBack,
@@ -71,7 +70,8 @@ import {
   takePictures,
 } from "../use-attached-pictures.js";
 import { useDictation } from "../use-dictation.js";
-import { useMentionOffer } from "../use-mention-offer.js";
+import { useComposerMentions } from "../use-mention-offer.js";
+import { useMentionPills } from "../use-mention-pills.js";
 import { usePillField } from "../use-pill-field.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
@@ -500,23 +500,12 @@ export function ThreadComposer({
   const said = useNewestNote([pictureNote, sendNote, dictated.note, ...box.notes]);
 
   // Note that the thread's own agent, whom the reply goes to, is left out of what an `@` offers, as on its own page.
-  const mentions = useMentionOffer({ ...place, agentId: item.agentId }, pillField.mentions);
+  const mentions = useComposerMentions({ ...place, agentId: item.agentId }, pillField.mentions);
+  // Note that what an `@` offers is drawn by the field's own native list, which stands it on the keystroke.
+  const pills = useMentionPills(pillField.pills, mentions, true);
 
-  // Note that the box's head holds what an `@` offers, then the newest refusal.
-  const head =
-    mentions === undefined && said === undefined ? undefined : (
-      <>
-        {mentions === undefined ? null : (
-          <MentionSuggestions
-            groups={mentions.groups}
-            empty={mentions.empty}
-            crumb={mentions.crumb}
-            onPick={mentions.pick}
-          />
-        )}
-        {said === undefined ? null : <AskNote words={said} />}
-      </>
-    );
+  // Note that the box's head holds the newest refusal.
+  const head = said === undefined ? undefined : <AskNote words={said} />;
 
   const placeholder = asNew
     ? INBOX_BOX_WORDS.NEW_THREAD_PLACEHOLDER
@@ -528,7 +517,7 @@ export function ThreadComposer({
     placeholder,
     words: draft.note,
     onWords: onNote,
-    pills: pillField.pills,
+    pills,
     // Note that a new thread starts from words alone, so no picked answer lights Send for one.
     sendable: !asNew && (answerReady || nods),
     onSend: sendTyped,

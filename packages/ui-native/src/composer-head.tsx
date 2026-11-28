@@ -1,6 +1,17 @@
-// composer-head.tsx -- what stands over a composer's field inside its glass: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers, the line saying the field holds a sent message's words to send in its place.
+// composer-head.tsx -- what stands over a composer's field: the pictures attached to the message as thumbnails and its pasted text files as chips by name and lines, each taken off by its ×, the skills a `/` offers and what an `@` offers as the system's list, the line saying the field holds a sent message's words to send in its place.
 
-import { Button, HStack, Image, ScrollView, Spacer, VStack, ZStack } from "@expo/ui/swift-ui";
+import {
+  Button,
+  HStack,
+  Image,
+  List,
+  ScrollView,
+  Section,
+  Spacer,
+  useNativeState,
+  VStack,
+  ZStack,
+} from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
@@ -12,11 +23,16 @@ import {
   frame,
   lineLimit,
   tint,
+  useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
-import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { type ReactNode, useEffect, useState } from "react";
+import { useAccessibilitySize, useScaledSize, useTextScale } from "./accessibility.js";
 import { CHIP_MARK, type ChipMark } from "./chip-mark-model.js";
+import { useOfferRoom } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar, AvatarPhoto, HarnessMark, MANAGER_FACE_SEAT, ManagerFace } from "./marks.js";
+import { GoesMark, PUSH_ROW_GOES } from "./settings-form.js";
+import { useSuggestionKeys } from "./suggestion-keys.js";
 import { Text } from "./text.js";
 import { toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -176,11 +192,17 @@ export type SkillSuggestion = {
   readonly detail: string;
 };
 
-/** The most suggestions the head stands at once before it scrolls them, so the field stays in sight over the keyboard. */
-const SUGGESTIONS_SHOWN = 4;
+/** How tall a row of one line stands in the system's list at the default text size, a little over its 44 pt so the first guess errs tall, which the list's height is first reckoned from. */
+const ROW_ONE_LINE = PRESS_SIZE + 4;
 
-/** How tall one suggestion stands, in points: a press's least, as Apple's guidelines ask. */
-const SUGGESTION_HEIGHT = PRESS_SIZE + 6;
+/** How tall a row of two lines, a name over a muted line, stands in the system's list at the default text size, erring tall. */
+const ROW_TWO_LINES = 66;
+
+/** How tall a section's header stands in the system's plain list at the default text size, erring tall. */
+const SECTION_HEADER = 40;
+
+/** What the list's height holds past its rows as the system measures them, so its last row's foot is never cut by a rounding. */
+const LIST_SLACK = SPACE.TIGHT * 2;
 
 /**
  * What a suggestion's row leads with, in a square the size of a row's
@@ -241,10 +263,14 @@ function SuggestionMark({
 }
 
 /**
- * One row a composer's head offers over the field, as a `/` offers a skill
- * and an `@` a mention: its glyph, its words, and a muted line after them,
- * the row's whole width taking the press. Note that at an accessibility
- * size its words wrap rather than cut.
+ * One row the list a composer offers holds, as a `/` offers a skill and an
+ * `@` a mention: the system's button in the system's list, which flashes
+ * the row's gray while held, its mark centered in the column a row's lead
+ * mark stands in, its title in the body style over a muted line in the
+ * subheadline style; a kind's row ends in the chevron a row that goes on
+ * ends in, as Settings' rows do. A row a hardware keyboard's arrows have
+ * chosen stands on the selected row's fill, as a list's selected row does.
+ * Note that at an accessibility size its words wrap rather than cut.
  */
 function SuggestionRow({
   glyph,
@@ -252,6 +278,8 @@ function SuggestionRow({
   title,
   detail,
   opens = false,
+  place,
+  chosen = false,
   onPress,
 }: {
   readonly glyph: Glyph;
@@ -260,31 +288,34 @@ function SuggestionRow({
   readonly detail?: string | undefined;
   /** Whether a press opens a narrower list rather than writing the row, which its trailing chevron says, as a row that goes on does in iOS's lists. */
   readonly opens?: boolean | undefined;
+  /** Where the row stands in its list, which a hardware keyboard's arrows scroll to (`useSuggestionKeys`). */
+  readonly place: number;
+  /** Whether a hardware keyboard's arrows have chosen the row, which Return picks. */
+  readonly chosen?: boolean | undefined;
   readonly onPress: () => void;
 }) {
   const large = useAccessibilitySize();
   const lines = large ? [] : [lineLimit(1)];
   const colors = useColors();
+  const column = useScaledSize(MARK_SIZE.LEAD);
 
   return (
-    <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityLabel(title)]}>
-      {/* Note that the shape stands on the row's full-width frame, not on the button, so a press past the row's words still picks it. */}
-      <HStack
-        spacing={SPACE.ROW}
-        modifiers={[
-          frame({
-            minHeight: SUGGESTION_HEIGHT,
-            maxWidth: Number.POSITIVE_INFINITY,
-            alignment: "leading",
-          }),
-          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        ]}
-      >
-        <SuggestionMark glyph={glyph} mark={mark} />
+    <Button
+      onPress={onPress}
+      modifiers={[
+        accessibilityLabel(title),
+        SwiftModifiers.listRowBackground(chosen ? colors.SELECTED : "transparent"),
+        SwiftModifiers.id(String(place)),
+      ]}
+    >
+      <HStack spacing={SPACE.ROW}>
+        <ZStack modifiers={[frame({ width: column })]}>
+          <SuggestionMark glyph={glyph} mark={mark} />
+        </ZStack>
         <VStack alignment="leading" spacing={1}>
           <Text
             modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
+              font({ textStyle: TYPE_ROLE.ROW_TITLE }),
               foregroundStyle(colors.TEXT),
               ...lines,
             ]}
@@ -306,11 +337,7 @@ function SuggestionRow({
         {opens ? (
           <>
             <Spacer />
-            <Image
-              {...glyphImage(GLYPH.DISCLOSURE)}
-              color={colors.TEXT_MUTED}
-              modifiers={[font({ textStyle: TYPE_ROLE.TIME }), accessibilityHidden()]}
-            />
+            <GoesMark goes={PUSH_ROW_GOES.PAGE} />
           </>
         ) : null}
       </HStack>
@@ -318,13 +345,30 @@ function SuggestionRow({
   );
 }
 
+/** A row of the list saying it holds nothing, such as no result matching, in the muted ink, taking no press. */
+function NoneRow({ words }: { readonly words: string }) {
+  const colors = useColors();
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE }),
+        foregroundStyle(colors.TEXT_MUTED),
+        SwiftModifiers.listRowBackground("transparent"),
+      ]}
+    >
+      {words}
+    </Text>
+  );
+}
+
 /** What a narrowed `@` list's way back is heard as, the panel's words for every kind. */
 const WIDEN_WORDS = "All kinds";
 
 /**
- * The crumb a narrowed `@` list stands under, as the panel's: the back
- * chevron iOS draws, then the kind's glyph and name, the whole of it one
- * press that widens the list to every kind again, heard as "All kinds".
+ * The way back out of a narrowed `@` list, as the system's back reads: its
+ * chevron and the kind's glyph and name, one row of the list a press on
+ * which widens it to every kind again, heard as "All kinds".
  */
 function MentionCrumbRow({ crumb }: { readonly crumb: MentionCrumb }) {
   const colors = useColors();
@@ -334,22 +378,12 @@ function MentionCrumbRow({ crumb }: { readonly crumb: MentionCrumb }) {
     <Button
       onPress={crumb.onBack}
       modifiers={[
-        buttonStyle("plain"),
         accessibilityLabel(WIDEN_WORDS),
         accessibilityHint(crumb.name),
+        SwiftModifiers.listRowBackground("transparent"),
       ]}
     >
-      <HStack
-        spacing={SPACE.TIGHT}
-        modifiers={[
-          frame({
-            minHeight: PRESS_SIZE,
-            maxWidth: Number.POSITIVE_INFINITY,
-            alignment: "leading",
-          }),
-          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        ]}
-      >
+      <HStack spacing={SPACE.TIGHT}>
         <Image {...glyphImage(GLYPH.BACK)} size={size} color={colors.TEXT_MUTED} />
         <Image {...glyphImage(crumb.glyph)} size={size} color={colors.TEXT_MUTED} />
         <Text
@@ -389,18 +423,105 @@ export type MentionSuggestionGroup = {
   readonly rows: readonly MentionSuggestion[];
 };
 
+/** The rows a list holds, by how many lines each draws, and its sections' headers, which its height is reckoned from. */
+interface ListRows {
+  readonly oneLine: number;
+  readonly twoLines: number;
+  readonly headers: number;
+}
+
+/**
+ * The one list a composer offers over its field, whatever it offers (a
+ * `/`'s skills, an `@`'s mentions): the system's plain list, its rows in
+ * its own metrics, separators and pressed gray, its groups under the
+ * system's section headers, on the popover's own glass with no ground of
+ * ours; or what stands where there are no rows, in the muted ink. Note that
+ * the system's list takes all the room it is offered and has no height of
+ * its own to hug, so it is handed the height of its rows as the list itself
+ * measures them (its scroll geometry's content height), first guessed from
+ * its rows at the reader's text size until it has measured, up to the room
+ * over the keyboard (`useOfferRoom`), past which it scrolls; the row a
+ * hardware keyboard's arrows choose is scrolled to.
+ */
+function SuggestionList({
+  counted,
+  empty,
+  chosen,
+  children,
+}: {
+  readonly counted: ListRows;
+  /** What stands in the rows' place, such as no result matching; the rows stand where none is given. */
+  readonly empty: string | undefined;
+  /** The place of the row a hardware keyboard's arrows have chosen, which the list scrolls to; none while none is. */
+  readonly chosen?: number | undefined;
+  readonly children: ReactNode;
+}) {
+  const colors = useColors();
+  const room = useOfferRoom();
+  const scale = Math.min(Math.max(useTextScale(), 1), 2);
+  const scrolled = useNativeState<string | null>(null);
+  const [measured, setMeasured] = useState<number | undefined>(undefined);
+
+  // Note that the height is taken again only as the rows' own height moves, never as they scroll.
+  const geometry = useScrollGeometryChange(({ contentHeight }) => {
+    const tall = Math.ceil(contentHeight) + LIST_SLACK;
+    setMeasured((was) => (was === tall ? was : tall));
+  });
+
+  useEffect(() => {
+    if (chosen !== undefined) scrolled.value = String(chosen);
+  }, [chosen, scrolled]);
+
+  if (empty !== undefined) {
+    return (
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_LINE }),
+          foregroundStyle(colors.TEXT_MUTED),
+          frame({ minHeight: ROW_ONE_LINE, alignment: "leading" }),
+          SwiftModifiers.padding({ horizontal: SPACE.EDGE }),
+        ]}
+      >
+        {empty}
+      </Text>
+    );
+  }
+
+  const guessed =
+    (counted.oneLine * ROW_ONE_LINE +
+      counted.twoLines * ROW_TWO_LINES +
+      counted.headers * SECTION_HEADER) *
+    scale;
+
+  const tall = measured ?? guessed;
+
+  return (
+    <List
+      modifiers={[
+        SwiftModifiers.listStyle("plain"),
+        SwiftModifiers.scrollContentBackground("hidden"),
+        SwiftModifiers.scrollDismissesKeyboard("never"),
+        SwiftModifiers.scrollPosition(scrolled, { anchor: "center" }),
+        ...(geometry === null ? [] : [geometry]),
+        frame({ height: Math.min(Math.round(tall), room) }),
+      ]}
+    >
+      {children}
+    </List>
+  );
+}
+
 /**
  * What an `@` being typed offers, as the panel's mention picker groups it:
- * each group under its small muted heading, its rows led by the mark of
- * the entity each names, as the chip a pick writes leads with it (a
- * person's face, a task's status, an agent's harness, a pull request's
- * state, a thread's ask), else their kind's glyph, a person's "You" or
- * address and a task's key after the name, and
- * the row picked written into the message; what stands where nothing
- * matches said in the muted ink. It stands over the field inside the
- * composer's glass, as Messages and Slack stand theirs right over the
- * keyboard, its rows scrolling with the head they stand in, so the field
- * stays in sight.
+ * each group a section of the system's list under its header, its rows led
+ * by the mark of the entity each names, as the chip a pick writes leads
+ * with it (a person's face, a task's status, an agent's harness, a pull
+ * request's state, a thread's ask), else their kind's glyph, a person's
+ * "You" or address and a task's key under the name, a kind's row ending in
+ * the chevron, and the row picked written into the message; a narrowed
+ * list stands under its way back; what stands where nothing matches said in
+ * the muted ink. It stands in the system's popover over the composer
+ * (`OfferPopover`).
  */
 export function MentionSuggestions({
   groups,
@@ -415,68 +536,74 @@ export function MentionSuggestions({
   readonly crumb?: MentionCrumb | undefined;
   readonly onPick: (group: string, id: string) => void;
 }) {
-  const colors = useColors();
-  const head = crumb === undefined ? null : <MentionCrumbRow crumb={crumb} />;
+  // Each row by its place in the whole list, which the arrows step through across its groups.
+  const starts = groups.map((_, at) =>
+    groups.slice(0, at).reduce((sum, group) => sum + group.rows.length, 0),
+  );
 
-  if (groups.length === 0) {
-    if (empty === undefined) return head;
+  const rows = groups.flatMap((group) => group.rows.map((row) => ({ group: group.title, row })));
 
-    return (
-      <VStack alignment="leading" spacing={0}>
-        {head}
-        <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-        >
-          {empty}
-        </Text>
-      </VStack>
-    );
-  }
+  const chosen = useSuggestionKeys(rows.length, (place) => {
+    const picked = rows[place];
 
-  // Note that the rows scroll with the composer's head, its one scroller (`BarHead`), never in a scroller of their own inside it, which cut a row through and scrolled inside a scroll; a narrowed list's crumb stands over them.
+    if (picked !== undefined) onPick(picked.group, picked.row.id);
+  });
+
+  if (groups.length === 0 && empty === undefined && crumb === undefined) return null;
+
+  const twoLines = rows.filter(({ row }) => row.detail !== undefined && row.detail !== "").length;
+
+  // Note that a narrowed list finding nothing says so under its way back, as the list finding nothing says it in its place.
+  const none = groups.length === 0 && crumb !== undefined ? empty : undefined;
+
+  const counted = {
+    oneLine: rows.length - twoLines + (crumb === undefined ? 0 : 1) + (none === undefined ? 0 : 1),
+    twoLines,
+    // Note that a narrowed list's crumb already names its one group, so its group stands with no header.
+    headers: crumb === undefined ? groups.length : 0,
+  };
+
+  const back = crumb === undefined ? null : <MentionCrumbRow crumb={crumb} />;
+
   return (
-    <VStack alignment="leading" spacing={0}>
-      {head}
-      <VStack alignment="leading" spacing={SPACE.TIGHT}>
-        {groups.map((group) => (
-          <VStack key={group.title} alignment="leading" spacing={0}>
-            {/* Note that a narrowed list's crumb already names its one group. */}
-            {crumb === undefined ? (
-              <Text
-                modifiers={[
-                  font({ textStyle: TYPE_ROLE.GROUP_HEADER }),
-                  foregroundStyle(colors.TEXT_MUTED),
-                  SwiftModifiers.accessibilityAddTraits(["isHeader"]),
-                ]}
-              >
-                {group.title}
-              </Text>
-            ) : null}
-            {group.rows.map((row) => (
-              <SuggestionRow
-                key={row.id}
-                glyph={row.glyph}
-                mark={row.mark}
-                title={row.name}
-                detail={row.detail}
-                opens={row.opens}
-                onPress={() => onPick(group.title, row.id)}
-              />
-            ))}
-          </VStack>
-        ))}
-      </VStack>
-    </VStack>
+    <SuggestionList
+      counted={counted}
+      empty={groups.length === 0 && crumb === undefined ? empty : undefined}
+      chosen={chosen}
+    >
+      {back === null ? null : (
+        <Section>
+          {back}
+          {none === undefined ? null : <NoneRow words={none} />}
+        </Section>
+      )}
+      {groups.map((group, at) => (
+        <Section key={group.title} {...(crumb === undefined && { title: group.title })}>
+          {group.rows.map((row, index) => (
+            <SuggestionRow
+              key={row.id}
+              glyph={row.glyph}
+              mark={row.mark}
+              title={row.name}
+              detail={row.detail}
+              opens={row.opens}
+              place={(starts[at] ?? 0) + index}
+              chosen={chosen === (starts[at] ?? 0) + index}
+              onPress={() => onPick(group.title, row.id)}
+            />
+          ))}
+        </Section>
+      ))}
+    </SuggestionList>
   );
 }
 
 /**
- * The skills a `/` being typed offers, as a list over the field inside the
- * composer's glass, right above the keyboard, as Messages offers its
- * suggestions: each its `/name` and a muted line of what it is for, written
- * into the message on a press; what stands in their place where there are
- * none, such as why they could not be read, said in the muted ink. It
- * scrolls past a few, so the field stays in sight.
+ * The skills a `/` being typed offers, in the same list what an `@` offers
+ * stands in (`SuggestionList`), in the system's popover over the composer:
+ * each its `/name` and a muted line of what it is for, written into the
+ * message on a press; what stands in their place where there are none,
+ * such as why they could not be read, said in the muted ink.
  */
 export function SkillSuggestions({
   skills,
@@ -488,42 +615,32 @@ export function SkillSuggestions({
   readonly empty: string | undefined;
   readonly onPick: (name: string) => void;
 }) {
-  const colors = useColors();
-  // Note that at an accessibility size the list stands whole, since four rows of a fixed height showed about two.
-  const large = useAccessibilitySize();
+  const chosen = useSuggestionKeys(skills.length, (place) => {
+    const picked = skills[place];
 
-  if (skills.length === 0) {
-    if (empty === undefined) return null;
+    if (picked !== undefined) onPick(picked.name);
+  });
 
-    return (
-      <Text
-        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-      >
-        {empty}
-      </Text>
-    );
-  }
+  if (skills.length === 0 && empty === undefined) return null;
 
-  const rows = (
-    <VStack alignment="leading" spacing={0}>
-      {skills.map((skill) => (
+  return (
+    <SuggestionList
+      counted={{ oneLine: 0, twoLines: skills.length, headers: 0 }}
+      empty={skills.length === 0 ? empty : undefined}
+      chosen={chosen}
+    >
+      {skills.map((skill, place) => (
         <SuggestionRow
           key={skill.name}
           glyph={GLYPH.SKILL}
           title={skill.word}
           detail={skill.detail}
+          place={place}
+          chosen={chosen === place}
           onPress={() => onPick(skill.name)}
         />
       ))}
-    </VStack>
-  );
-
-  if (large || skills.length <= SUGGESTIONS_SHOWN) return rows;
-
-  return (
-    <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
-      {rows}
-    </ScrollView>
+    </SuggestionList>
   );
 }
 

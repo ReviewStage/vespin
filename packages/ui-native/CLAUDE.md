@@ -95,13 +95,26 @@ builds a control of its own.
   opening the thread it names), its pull request ("#128", opening its
   page), and its queue ("2 queued", opening its `QueuedLines`, with Steer
   and Delete, under the row, held open while one is edited), the row
-  scrolling sideways where it outruns the column and stepping aside while
-  a `/` or an `@` offers its list; and its head, inside the same glass,
-  holds the `SkillSuggestions` a `/` offers, the `MentionSuggestions` an `@`
-  offers (the panel's groups and words, each row led by the mark its pill
-  wears, a bare `@` listing Suggested then Browse, a row per kind with
-  iOS's chevron, and a list narrowed to one kind, `@people:`, standing
-  under its crumb, whose ‹ widens it), its `AttachedPictures`, an `EditingLine` with Cancel while the field
+  scrolling sideways where it outruns the column; over it, what an `@`
+  offers stands in the field's own native list (`PillField`'s `offer`,
+  `offer-tree.ts`, drawn by `OfferList.swift`): the system's plain `List`
+  in UIKit's own popover over the field, built once the field first holds
+  the keyboard and kept, opened by the field itself on the keystroke that
+  types the `@` from what a bare `@` offers, handed over ahead of time, so
+  no JavaScript stands between the key and the list; JavaScript keeps the
+  one matcher (`@repo/features/mention-offer`) and hands each word's tree,
+  named by the words it answers, the list showing the newest it holds and
+  a press acting only on a tree that answers the words now typed; a
+  `Section` per group under the system's header, its rows the system's
+  buttons, each led by the mark its pill wears, a kind's row ending in
+  Settings' chevron, a narrowed list (`@people:`) under its way back, and
+  ↑/↓/Return its own; what a `/` offers stands in the system's popover
+  anchored on the composer (`Composer`'s `offer`, `OfferPopover`) as one
+  list (`SuggestionList`), handed the height of its rows as it measures
+  them (its scroll geometry), up to the room over the keyboard
+  (`useOfferRoom`); and
+  its head, inside the same glass, holds its
+  `AttachedPictures`, an `EditingLine` with Cancel while the field
   holds a sent message's words to send in its place (the panel's Edit, the field
   taking the keyboard through `focusAsk`), an `AskNote`, and an agent's
   `ContinueLine` (why its turn failed and Continue in new agent, where only a

@@ -14,6 +14,7 @@ import type { NativeSyntheticEvent } from "react-native";
 import { type CaretAtWord, caretAtWord, drawnPill, sameAtWord, toldWord } from "./caret-at-word.js";
 import { useChipMarkOf } from "./chip-mark.js";
 import type { TakenWords } from "./composer-press.js";
+import { type FieldOffer, offerPressOf } from "./offer-tree.js";
 import {
   NativePillField,
   type NativePillFieldDoors,
@@ -23,6 +24,7 @@ import {
   type NativeWords,
 } from "./pill-field-native.js";
 import { pillLook } from "./pill-look.js";
+import { type ListKeysField, listKeyOf } from "./suggestion-keys.js";
 import { useColors } from "./tokens/colors.js";
 
 /** No files held: every marker stays words. */
@@ -92,6 +94,10 @@ interface PillFieldProps {
   /** The `@` word the caret stands in as it changes, which a mention offer reads; none once the caret stands in none. */
   readonly onAtWord?: ((word: CaretAtWord | undefined) => void) | undefined;
   readonly onFocusChange?: ((focused: boolean) => void) | undefined;
+  /** The list offered over the field, whose rows a hardware keyboard's keys move through and pick (`useSuggestionKeysHost`); none while none floats. */
+  readonly listKeys?: ListKeysField | undefined;
+  /** What an `@` offers, as the trees the field's native list draws, and where its presses go; none where the field offers nothing natively. */
+  readonly offer?: FieldOffer | undefined;
   readonly testID?: string | undefined;
 }
 
@@ -122,6 +128,8 @@ export function PillField({
   autoFocus,
   onAtWord,
   onFocusChange,
+  listKeys,
+  offer,
   testID,
 }: PillFieldProps) {
   const colors = useColors();
@@ -267,6 +275,20 @@ export function PillField({
       }}
       onFocusChange={({ nativeEvent }) => onFocusChange?.(nativeEvent.focused)}
       onPillPress={onPillPress}
+      offer={offer?.trees.offer}
+      offerBare={offer?.trees.bare}
+      onOffer={({ nativeEvent }) => {
+        const press = offerPressOf(nativeEvent);
+
+        if (press !== undefined) offer?.onPress(press);
+      }}
+      listKeys={listKeys !== undefined}
+      listPicks={listKeys?.picks === true}
+      onListKey={({ nativeEvent }) => {
+        const key = listKeyOf(nativeEvent.key);
+
+        if (key !== undefined) listKeys?.onKey(key);
+      }}
     />
   );
 }

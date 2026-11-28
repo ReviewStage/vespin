@@ -16,7 +16,6 @@ import {
   EditingLine,
   GLYPH,
   GlassDock,
-  MentionSuggestions,
   managerThreadItems,
   NO_TOGGLES,
   openCuts,
@@ -89,31 +88,23 @@ function ThreadComposer({
   const said = useNewestNote([composer.note, dictated.note, note]);
 
   const head =
-    composer.cancelMessageEdit === undefined &&
-    composer.skills === undefined &&
-    composer.mentions === undefined &&
-    said === undefined ? undefined : (
+    composer.cancelMessageEdit === undefined && said === undefined ? undefined : (
       <>
-        {composer.skills === undefined ? null : (
-          <SkillSuggestions
-            skills={composer.skills.skills}
-            empty={composer.skills.empty}
-            onPick={composer.skills.pick}
-          />
-        )}
-        {composer.mentions === undefined ? null : (
-          <MentionSuggestions
-            groups={composer.mentions.groups}
-            empty={composer.mentions.empty}
-            crumb={composer.mentions.crumb}
-            onPick={composer.mentions.pick}
-          />
-        )}
         {composer.cancelMessageEdit === undefined ? null : (
           <EditingLine onCancel={composer.cancelMessageEdit} />
         )}
         {said === undefined ? null : <AskNote words={said} />}
       </>
+    );
+
+  // Note that what a `/` offers pops over the composer in the system's popover, as on the agent's own page.
+  const offer =
+    composer.skills === undefined ? undefined : (
+      <SkillSuggestions
+        skills={composer.skills.skills}
+        empty={composer.skills.empty}
+        onPick={composer.skills.pick}
+      />
     );
 
   return (
@@ -128,6 +119,7 @@ function ThreadComposer({
       onDropPictures={composer.dropPictures}
       onLongPaste={composer.pasteText}
       head={head}
+      offer={offer}
       focusAsk={composer.focusAsk}
       pills={composer.pills}
     />

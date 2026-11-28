@@ -1,6 +1,6 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
-import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
+import { Host, HStack, Popover, ScrollView, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   frame,
@@ -71,6 +71,15 @@ export const BAR_HEAD_INSET = {
 
 /** The most of the window's height above the keyboard what heads a bar takes before it scrolls inside the bar, so the content under the bar stays in reach at the largest text sizes and with the keyboard up. */
 const HEAD_SHARE = 0.35;
+
+/** The most a list offered over a bar stands, in points, before it scrolls inside itself: about five rows and a half, as Mail's recipient suggestions stand, so the last row shows cut and says the list goes on. */
+const OFFER_MOST = 300;
+
+/** The least a list offered over a bar stands, in points: two rows, even where the window over the keyboard leaves less, such as a landscape iPhone's. */
+const OFFER_LEAST = 100;
+
+/** What the room over the keyboard holds besides a list offered over a bar, in points: the screen's bar under the top safe area, and a composer of a line with its row of capsules under it, and their gaps. */
+const OFFER_CLEAR = PRESS_SIZE * 3 + SPACE.ROW * 3;
 
 const styles = StyleSheet.create({
   // The bar's own gap above the tab bar, or the keyboard.
@@ -216,6 +225,24 @@ export function BarHead({
 }
 
 /**
+ * How tall a list offered over a bar, such as what an `@` offers, may stand
+ * before it scrolls inside itself: the room between the screen's bar and
+ * the composer over the keyboard, since a popover stands over the page
+ * rather than pushing it, two rows at the least and about five and a half
+ * at the most. Note that it is handed to the list as its height, since the
+ * system's list takes all the room it is offered and has no height of its
+ * own to hug.
+ */
+export function useOfferRoom(): number {
+  const { height: window } = useWindowDimensions();
+  const { top } = useSafeAreaInsets();
+  const keyboard = useKeyboardHeight(false);
+  const room = window - keyboard - top - OFFER_CLEAR;
+
+  return Math.round(Math.min(OFFER_MOST, Math.max(OFFER_LEAST, room)));
+}
+
+/**
  * What a dock pins at its foot, standing in the screen's bottom safe area,
  * and telling its dock how tall it stands, its gap with it, as it grows and
  * shrinks, so the content under it scrolls clear of all of it.
@@ -245,6 +272,61 @@ function DockedFoot({ children }: { readonly children: ReactNode }) {
 }
 
 /**
+ * What a field offers as words are typed, such as what an `@` offers, in
+ * the system's popover anchored to the top of the composer it wraps, its
+ * arrow down at the field, as iOS offers suggestions over the control they
+ * complete, and as the desktop's picker pops over its box; no ground of
+ * ours, the popover's own glass behind it. The page behind it stays
+ * pressable, so a press past it goes where it lands, and the field keeps
+ * the keyboard and the words typed. Note that the composer stands inside it
+ * whether or not it is presented, so it coming and going never draws the
+ * field anew.
+ */
+export function OfferPopover({
+  offer,
+  children,
+}: {
+  readonly offer: ReactNode;
+  readonly children: ReactNode;
+}) {
+  const { width: window } = useWindowDimensions();
+  // Note that the popover stands as wide as the composer it points at, as a column's composer stands in it.
+  const wide = Math.min(window, READING_WIDTH) - BAR_MARGIN * 2;
+  // Whether the system let the popover go while something was still offered, as VoiceOver's escape does; it stays gone, its list unmounted so it no longer takes the field's keys, until the offer itself closes and opens again.
+  const [letGo, setLetGo] = useState(false);
+  const offered = offer !== undefined;
+
+  if (!offered && letGo) setLetGo(false);
+
+  const shown = offered && !letGo;
+
+  return (
+    <Popover
+      isPresented={shown}
+      attachmentAnchor="top"
+      arrowEdge="bottom"
+      onIsPresentedChange={(presented) => {
+        if (!presented && offered) setLetGo(true);
+      }}
+    >
+      <Popover.Trigger>{children}</Popover.Trigger>
+      <Popover.Content>
+        <VStack
+          alignment="leading"
+          spacing={0}
+          modifiers={[
+            frame({ idealWidth: wide, alignment: "topLeading" }),
+            SwiftModifiers.presentationBackgroundInteraction("enabled"),
+          ]}
+        >
+          {shown ? offer : null}
+        </VStack>
+      </Popover.Content>
+    </Popover>
+  );
+}
+
+/**
  * A bar of glass holding a composer's field and its buttons, floating over
  * the content it scrolls above, as the system's own bars do. Its children
  * are SwiftUI pieces, laid in a row on a host of its own, under its head
@@ -265,8 +347,11 @@ export function GlassBar({
   modifiers = [],
   field = false,
   heads = false,
+  offer,
 }: {
   readonly children: ReactNode;
+  /** What the field offers as words are typed, such as what an `@` offers, shown in the system's popover over the bar (`OfferPopover`); nothing where none is given. Note that only a bar whose head comes and goes (`heads`) shows it. */
+  readonly offer?: ReactNode;
   /** What stands under the row inside the same glass, such as the capsules saying where a start runs; nothing where none is given. */
   readonly foot?: ReactNode;
   /** SwiftUI standing over the bar in a glass of its own, such as an agent's queued messages, as the panel stands its queue over its box, across the bar's whole column, its content inset as far as the bar stands in (`BAR_MARGIN`); nothing where none is given. */
@@ -306,23 +391,26 @@ export function GlassBar({
       </VStack>
     );
 
-  const bar = (
-    <Host matchContents={{ vertical: true }} style={[styles.content, styles.bar]}>
-      {alone ? (
+  const inner = alone ? (
+    row
+  ) : (
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
+      {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
+      {foot === undefined ? (
         row
       ) : (
-        <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers, ...glass]}>
-          {head === undefined ? null : <BarHead filled={field}>{head}</BarHead>}
-          {foot === undefined ? (
-            row
-          ) : (
-            <VStack alignment="leading" spacing={BAR_FOOT_GAP}>
-              {row}
-              {foot}
-            </VStack>
-          )}
+        <VStack alignment="leading" spacing={BAR_FOOT_GAP}>
+          {row}
+          {foot}
         </VStack>
       )}
+    </VStack>
+  );
+
+  // Note that the popover wraps the bar whenever the bar's head may come and go, whether or not it stands, so presenting it never moves the field into a view of its own and lets go of the keyboard.
+  const bar = (
+    <Host matchContents={{ vertical: true }} style={[styles.content, styles.bar]}>
+      {heads ? <OfferPopover offer={offer}>{inner}</OfferPopover> : inner}
     </Host>
   );
 

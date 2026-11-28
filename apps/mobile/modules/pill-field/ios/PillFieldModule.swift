@@ -44,7 +44,7 @@ public final class PillFieldModule: Module {
     Name("PillField")
 
     View(PillFieldView.self) {
-      Events("onWords", "onHeight", "onFocusChange", "onPillPress")
+      Events("onWords", "onHeight", "onFocusChange", "onPillPress", "onListKey", "onOffer")
 
       Prop("value") { (view: PillFieldView, value: ValueRecord) in
         view.take(StyledRuns(value.runs), seen: value.seen)
@@ -64,6 +64,22 @@ public final class PillFieldModule: Module {
 
       Prop("editable") { (view: PillFieldView, editable: Bool?) in
         view.editable = editable ?? true
+      }
+
+      Prop("listKeys") { (view: PillFieldView, on: Bool?) in
+        view.listKeys = on ?? false
+      }
+
+      Prop("listPicks") { (view: PillFieldView, on: Bool?) in
+        view.listPicks = on ?? false
+      }
+
+      Prop("offer") { (view: PillFieldView, json: String?) in
+        view.takeOffer(json)
+      }
+
+      Prop("offerBare") { (view: PillFieldView, json: String?) in
+        view.takeOfferBare(json)
       }
 
       AsyncFunction("insertPills") { (view: PillFieldView, pills: [PillRecord], word: WordRecord?) in
@@ -562,6 +578,56 @@ final class PillTextView: UITextView {
     get { field?.heardWords() ?? super.accessibilityValue }
     set { super.accessibilityValue = newValue }
   }
+
+  /// A hardware keyboard's ↑ and ↓ while a list is offered over the field, and its Return once an arrow has chosen a row, each told to JavaScript rather than moving the caret or breaking the line, as the desktop's picker takes them.
+  override var keyCommands: [UIKeyCommand]? {
+    // Note that while the field's own list of what an `@` offers stands, its keys are the field's, never JavaScript's.
+    if let field, field.offerShown {
+      var commands = [
+        offerCommand(UIKeyCommand.inputUpArrow, key: "up"),
+        offerCommand(UIKeyCommand.inputDownArrow, key: "down"),
+      ]
+      if field.offerChosen { commands.append(offerCommand("\r", key: "pick")) }
+
+      return commands + (super.keyCommands ?? [])
+    }
+    guard let field, field.listKeys else { return super.keyCommands }
+    var commands = [
+      listCommand(UIKeyCommand.inputUpArrow, key: "up"),
+      listCommand(UIKeyCommand.inputDownArrow, key: "down"),
+    ]
+    if field.listPicks { commands.append(listCommand("\r", key: "pick")) }
+
+    return commands + (super.keyCommands ?? [])
+  }
+
+  /// A key the offered list takes, ahead of the text view's own use of it.
+  private func listCommand(_ input: String, key: String) -> UIKeyCommand {
+    let command = UIKeyCommand(
+      title: "", action: #selector(listKey(_:)), input: input, modifierFlags: [], propertyList: key)
+    command.wantsPriorityOverSystemBehavior = true
+
+    return command
+  }
+
+  @objc private func listKey(_ command: UIKeyCommand) {
+    guard let key = command.propertyList as? String else { return }
+    field?.onListKey(["key": key])
+  }
+
+  /// A key the field's own list of what an `@` offers takes, ahead of the text view's own use of it.
+  private func offerCommand(_ input: String, key: String) -> UIKeyCommand {
+    let command = UIKeyCommand(
+      title: "", action: #selector(offerKey(_:)), input: input, modifierFlags: [], propertyList: key)
+    command.wantsPriorityOverSystemBehavior = true
+
+    return command
+  }
+
+  @objc private func offerKey(_ command: UIKeyCommand) {
+    guard let key = command.propertyList as? String else { return }
+    field?.offerKey(key)
+  }
 }
 
 final class PillFieldView: ExpoView, UITextViewDelegate {
@@ -569,6 +635,50 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
   let onHeight = EventDispatcher()
   let onFocusChange = EventDispatcher()
   let onPillPress = EventDispatcher()
+  let onListKey = EventDispatcher()
+  let onOffer = EventDispatcher()
+
+  /// The field's own list of what an `@` offers, built once the field first holds what a bare `@` offers, and kept.
+  private lazy var offerList: OfferController = {
+    let list = OfferController()
+    list.model.onPick = { [weak self] group, row in self?.offerPress(group: group, row: row) }
+    list.model.onBack = { [weak self] in self?.offerPressBack() }
+    list.onLetGo = { [weak self] in self?.offerLetGo = true }
+    return list
+  }()
+
+  /// What a bare `@` offers, which the list stands the moment an `@` is typed; none where the field offers nothing natively.
+  private var offerBare: OfferTreeData?
+
+  /// The newest tree JavaScript handed for the `@` word, and the words it answers.
+  private var offerNewest: OfferTreeData?
+
+  /// What is typed after the `@` the caret ends, as the field reads it on each change; none while the caret ends no `@` word.
+  private var offerWord: String?
+
+  /// Whether the list was let go while the `@` word still stands, by the system or by JavaScript finding nothing; it stays closed until the word does.
+  private var offerLetGo = false
+
+  /// A press made while the list's tree was older than the words, held until a tree answering them lands.
+  private enum OfferAct {
+    case pick(String)
+    case back
+  }
+
+  /// A held press and the words it was pressed under, which it acts on only while they still stand.
+  private var offerHeld: (act: OfferAct, word: String)?
+
+  /// Whether the field's own list stands.
+  var offerShown: Bool { offerBare != nil && offerList.shown }
+
+  /// Whether a hardware keyboard's arrows have chosen one of its rows, which Return then picks.
+  var offerChosen: Bool { offerList.model.chosen != nil }
+
+  /// Whether a list is offered over the field, whose rows a hardware keyboard's arrows move through.
+  var listKeys = false
+
+  /// Whether an arrow has chosen one of the offered list's rows, which Return then picks.
+  var listPicks = false
 
   private let textView = PillTextView(usingTextLayoutManager: true)
   private let placeholderLabel = UILabel()
@@ -758,6 +868,8 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     }
 
     quiet = false
+    // Note that the emptied field stands no `@` word, though it tells no change of its own, so the list a send took the words from under goes with them.
+    followOffer(before: "", selected: false)
     return ["runs": held.map(\.told), "changes": changes]
   }
 
@@ -799,10 +911,12 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
 
   func textViewDidBeginEditing(_ textView: UITextView) {
     onFocusChange(["focused": true])
+    if offerBare != nil { offerList.prepare() }
   }
 
   func textViewDidEndEditing(_ textView: UITextView) {
     onFocusChange(["focused": false])
+    if offerBare != nil { offerList.hide() }
   }
 
   // MARK: Words
@@ -939,6 +1053,22 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
 
   /// Tells JavaScript the runs, so it writes the Markdown with a marker typed as words escaped, and the caret's line before and after it with each pill as the object character.
   private func tell() {
+    let line = caretLine()
+    let selected = textView.selectedRange
+
+    onWords([
+      "runs": heldRuns().map(\.told),
+      "before": line.before,
+      "after": line.after,
+      "caret": line.caret,
+      "selected": selected.length > 0,
+      "changes": changes,
+    ])
+    followOffer(before: line.before, selected: selected.length > 0)
+  }
+
+  /// The caret's line, its words before the caret and after the selection, each pill the object character.
+  private func caretLine() -> (before: String, after: String, caret: Int) {
     let string = textView.textStorage.string as NSString
     let selected = textView.selectedRange
     let caret = min(selected.location, string.length)
@@ -949,14 +1079,136 @@ final class PillFieldView: ExpoView, UITextViewDelegate {
     let nextBreak = string.range(of: "\n", options: [], range: rest)
     let lineEnd = nextBreak.location == NSNotFound ? string.length : nextBreak.location
 
-    onWords([
-      "runs": heldRuns().map(\.told),
-      "before": string.substring(with: NSRange(location: lineStart, length: caret - lineStart)),
-      "after": string.substring(with: NSRange(location: selectionEnd, length: lineEnd - selectionEnd)),
-      "caret": caret,
-      "selected": selected.length > 0,
-      "changes": changes,
-    ])
+    return (
+      string.substring(with: NSRange(location: lineStart, length: caret - lineStart)),
+      string.substring(with: NSRange(location: selectionEnd, length: lineEnd - selectionEnd)),
+      caret
+    )
+  }
+
+  // MARK: What an `@` offers
+
+  /// The `@` word the caret ends, as `@repo/features/at-word` reads it: `@` at a word's start, then up to six words with no bracket, parenthesis, or `@`.
+  private static let atWord = try? NSRegularExpression(
+    pattern: "(^|\\s)@((?:[^\\s@\\[\\]()]+(?: [^\\s@\\[\\]()]+){0,5})?)$"
+  )
+
+  /// What is typed after the `@` the caret ends, read from its line's words before it; none where the caret ends no `@` word.
+  private func atWordQuery(_ before: String) -> String? {
+    let range = NSRange(location: 0, length: (before as NSString).length)
+    guard let match = Self.atWord?.firstMatch(in: before, options: [], range: range) else { return nil }
+    let query = match.range(at: 2)
+    return query.location == NSNotFound ? "" : (before as NSString).substring(with: query)
+  }
+
+  /// Follows the `@` word on each change of the words or the caret: stands the list the moment one is typed, from the newest tree or a bare `@`'s, with no round trip, and lets it go the moment none stands.
+  private func followOffer(before: String, selected: Bool) {
+    guard offerBare != nil else { return }
+    let word = selected ? nil : atWordQuery(before)
+    offerWord = word
+    // Note that a press held under other words is let go, so it never lands on a row the words have moved past.
+    if let held = offerHeld, held.word != word { offerHeld = nil }
+    guard word != nil else {
+      offerLetGo = false
+      offerHeld = nil
+      offerList.hide()
+      return
+    }
+    guard textView.isFirstResponder, !offerLetGo, !offerList.shown, let tree = offerNewest ?? offerBare else { return }
+    offerList.model.tree = tree
+    offerList.model.chosen = nil
+    offerList.show(over: self)
+  }
+
+  /// Takes the tree JavaScript hands for the `@` word: shown at once in the list's place, never an empty frame; none closes the list, as nothing found past a space closes it.
+  func takeOffer(_ json: String?) {
+    let tree = readOfferTree(json)
+    offerNewest = tree
+    guard offerBare != nil else { return }
+    guard let tree else {
+      if offerWord != nil, offerList.shown { offerLetGo = true }
+      offerHeld = nil
+      offerList.hide()
+      return
+    }
+    if offerList.model.tree != tree {
+      offerList.model.tree = tree
+      offerList.model.chosen = nil
+    }
+    if textView.isFirstResponder, !offerList.shown, offerWord != nil, !offerLetGo { offerList.show(over: self) }
+    releaseHeld()
+  }
+
+  /// Takes what a bare `@` offers, which stands the list the moment an `@` is typed; none where the field offers nothing natively.
+  func takeOfferBare(_ json: String?) {
+    let bare = readOfferTree(json)
+    let first = offerBare == nil && bare != nil
+    offerBare = bare
+    if bare == nil {
+      offerList.hide()
+    } else if first, textView.isFirstResponder {
+      offerList.prepare()
+      // Note that an `@` typed before the field held what one offers stands its list now, rather than at the next key.
+      followOffer(before: caretLine().before, selected: textView.selectedRange.length > 0)
+    }
+  }
+
+  /// Whether the newest tree answers the words the field holds now, so a press on it acts on what is typed.
+  private var offerCurrent: OfferTreeData? {
+    guard let tree = offerNewest, let word = offerWord, tree.query == word else { return nil }
+    return tree
+  }
+
+  /// A row pressed: sent at once where the newest tree answers the words, else held until one does.
+  private func offerPress(group: Int, row: Int) {
+    guard let shown = offerList.model.tree, group < shown.groups.count, row < shown.groups[group].rows.count else { return }
+    let id = shown.groups[group].rows[row].id
+    guard let current = offerCurrent, let place = current.find(id) else {
+      offerHeld = offerWord.map { (.pick(id), $0) }
+      return
+    }
+    onOffer(["kind": "pick", "query": current.query, "group": place.group, "id": id])
+  }
+
+  /// The way back pressed, sent or held as a row is.
+  private func offerPressBack() {
+    guard let current = offerCurrent else {
+      offerHeld = offerWord.map { (.back, $0) }
+      return
+    }
+    onOffer(["kind": "back", "query": current.query])
+  }
+
+  /// Acts on a press held for a tree answering the words, now that one has landed; a row it no longer holds is let go.
+  private func releaseHeld() {
+    guard let held = offerHeld, let current = offerCurrent, current.query == held.word else { return }
+    offerHeld = nil
+    switch held.act {
+    case .pick(let id):
+      guard let place = current.find(id) else { return }
+      onOffer(["kind": "pick", "query": current.query, "group": place.group, "id": id])
+    case .back:
+      onOffer(["kind": "back", "query": current.query])
+    }
+  }
+
+  /// A hardware keyboard's key in the list: ↑ and ↓ step the chosen row, wrapping round its ends, and Return picks it.
+  func offerKey(_ key: String) {
+    let model = offerList.model
+    guard let tree = model.tree else { return }
+    let count = tree.rowCount
+    guard count > 0 else { return }
+    switch key {
+    case "down":
+      model.chosen = model.chosen.map { ($0 + 1) % count } ?? 0
+    case "up":
+      model.chosen = model.chosen.map { ($0 + count - 1) % count } ?? count - 1
+    case "pick":
+      guard let chosen = model.chosen, let place = tree.place(chosen) else { return }
+      offerPress(group: place.group, row: place.row)
+    default:
+      return
+    }
   }
 
   /// Puts the selection's Markdown on the pasteboard as plain words, as the desktop's box copies.

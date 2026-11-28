@@ -214,6 +214,8 @@ function suggestion(
 
 /** What an `@` being typed offers, what stands where nothing matches, and the press that writes one. */
 export interface MentionsOffered {
+  /** The words after the `@` it answers, which a native list holds a pick to, so it never acts on a row the words have moved past. */
+  readonly query: string;
   readonly groups: readonly MentionSuggestionGroup[];
   readonly empty: string | undefined;
   /** The kind the list is narrowed to, and the press back to every kind; none for every kind. */
@@ -243,7 +245,7 @@ export interface MentionPills {
  * keystroke never waits on the account's thousands of tasks; a row's mark
  * is worked out only for the rows drawn.
  */
-export function useMentionOffer(
+function useMentionState(
   place: {
     readonly workspaceId: string | undefined;
     readonly taskId: string | undefined;
@@ -253,7 +255,7 @@ export function useMentionOffer(
     readonly description?: string | undefined;
   },
   pills: MentionPills,
-): MentionsOffered | undefined {
+): MentionsState {
   const { workspaceId, taskId, agentId, description } = place;
   const { word } = pills;
   const asking = word !== undefined && workspaceId !== undefined;
@@ -316,7 +318,7 @@ export function useMentionOffer(
   }, [automations, machines, taskId, held?.pages, readsPaths, pathsPending]);
 
   const candidates = useMemo((): Candidates | undefined => {
-    if (!asking || step === undefined) return undefined;
+    if (!reading || step === undefined) return undefined;
     const now = Date.now();
     const marks = new Map<string, ChipMark>();
 
@@ -436,7 +438,7 @@ export function useMentionOffer(
     return { sources, named, marks };
   }, [
     catalog,
-    asking,
+    reading,
     step,
     agents,
     tasks,
@@ -457,8 +459,9 @@ export function useMentionOffer(
     pending,
   ]);
 
-  // Note that the words are searched on a deferred copy of them, so a key draws the field at once and the search over every row follows when React has the time, the list showing the last words' rows meanwhile.
-  const query = useDeferredValue(word?.query);
+  // Note that the words are searched on a deferred copy of them, so a key draws the field at once and the search over every row follows when React has the time, the list showing the last words' rows meanwhile; until a first copy has come, the list opens on what nothing typed offers, so it stands with the `@` rather than once the search catches up, which a busy page, such as a working agent's, could hold off.
+  const deferred = useDeferredValue(word?.query);
+  const query = deferred ?? (word === undefined ? undefined : "");
   const describedName = current?.name;
   const describedNumber = current?.number;
 
@@ -488,16 +491,17 @@ export function useMentionOffer(
     return mentionOffer({ ...candidates.sources, description: sections, dates }, query);
   }, [candidates, step, query, description, taskId, describedName, describedNumber, workspace]);
 
-  if (!asking || query === undefined) return undefined;
-  const { groups, narrowed } = offer;
-
-  // Note that once the words run past a space with nothing found, the offer closes, as the panel's list closes, so a sentence that began with an `@` goes on unhindered.
-  if (groups.length === 0 && query.includes(" ")) return undefined;
+  // What nothing typed after an `@` offers, held while the field holds the keyboard, which a native list stands the moment an `@` is typed.
+  const bareOffer = useMemo(
+    (): MentionOffered =>
+      candidates === undefined
+        ? NO_OFFER
+        : mentionOffer({ ...candidates.sources, description: [], dates: () => [] }, ""),
+    [candidates],
+  );
 
   // The `@` word written anew as `@` and `words`, as a kind's row narrows the list and its crumb widens it.
   const retype = (words: string) => pills.rewrite(`${MENTION_SIGIL}${words}`);
-
-  const typed = typedMentionKind(query);
 
   // A drawn row's mark: the one it was handed, else its entity's chip mark, worked out now for the few rows drawn.
   const markOfTarget = (target: string): ChipMark | undefined => {
@@ -509,36 +513,82 @@ export function useMentionOffer(
     return destination === undefined ? undefined : markOf(entityOfDestination(destination));
   };
 
-  const crumb =
-    narrowed === undefined || typed === undefined
-      ? undefined
-      : {
-          name: narrowed.name,
-          glyph: FROM_GLYPH[narrowed.from],
-          // Note that the way back keeps the words searched and deletes the `kind:`, as the panel's crumb does.
-          // Note that a folder walked into steps back out to the folder it stands in.
-          onBack: () => retype(narrowed.back ?? query.slice(typed.entry.length)),
-        };
+  // What `offered` offers for the words `words`, drawn as the list draws it, with its crumb and its pick.
+  const offeredOf = (offered: MentionOffered, words: string): MentionsOffered | undefined => {
+    const { groups, narrowed } = offered;
+
+    // Note that once the words run past a space with nothing found, the offer closes, as the panel's list closes, so a sentence that began with an `@` goes on unhindered.
+    if (groups.length === 0 && words.includes(" ")) return undefined;
+    const typed = typedMentionKind(words);
+
+    const crumb =
+      narrowed === undefined || typed === undefined
+        ? undefined
+        : {
+            name: narrowed.name,
+            glyph: FROM_GLYPH[narrowed.from],
+            // Note that the way back keeps the words searched and deletes the `kind:`, as the panel's crumb does.
+            // Note that a folder walked into steps back out to the folder it stands in.
+            onBack: () => retype(narrowed.back ?? words.slice(typed.entry.length)),
+          };
+
+    return {
+      query: words,
+      groups: groups.map((group) => ({
+        title: group.title,
+        rows: group.rows.map((row) => suggestion(row, markOfTarget)),
+      })),
+      empty: groups.length === 0 ? MENTION_NO_MATCH : undefined,
+      crumb,
+      pick: (title, id) => {
+        const row = groups
+          .find((group) => group.title === title)
+          ?.rows.find((each) => (isKindChoice(each) ? each.query : each.id) === id);
+
+        if (row === undefined) return;
+        buzz(BUZZ.SELECTION);
+
+        if (isKindChoice(row)) return retype(row.query);
+
+        if (row.walk !== undefined) return retype(row.walk);
+        pills.pick({ name: row.written ?? row.name, target: row.target });
+      },
+    };
+  };
 
   return {
-    groups: groups.map((group) => ({
-      title: group.title,
-      rows: group.rows.map((row) => suggestion(row, markOfTarget)),
-    })),
-    empty: groups.length === 0 ? MENTION_NO_MATCH : undefined,
-    crumb,
-    pick: (title, id) => {
-      const row = groups
-        .find((group) => group.title === title)
-        ?.rows.find((each) => (isKindChoice(each) ? each.query : each.id) === id);
-
-      if (row === undefined) return;
-      buzz(BUZZ.SELECTION);
-
-      if (isKindChoice(row)) return retype(row.query);
-
-      if (row.walk !== undefined) return retype(row.walk);
-      pills.pick({ name: row.written ?? row.name, target: row.target });
-    },
+    offered: !asking || query === undefined ? undefined : offeredOf(offer, query),
+    bare: candidates === undefined ? undefined : offeredOf(bareOffer, ""),
+    typed: word?.query,
   };
+}
+
+/** What an `@` offers in a composer: what the `@` word the caret stands in offers, and what a bare `@` offers, held while the field holds the keyboard. */
+export interface MentionsState {
+  /** What the `@` word offers; none while no `@` word stands. */
+  readonly offered: MentionsOffered | undefined;
+  /** What a bare `@` offers, held ready while the field holds the keyboard, which a native list stands the moment an `@` is typed; none before the place is read. */
+  readonly bare: MentionsOffered | undefined;
+  /** The words after the `@` the caret stands in as last told, ahead of the deferred search; none while no `@` word stands. */
+  readonly typed: string | undefined;
+}
+
+/**
+ * What the `@` word the caret of the field drawing `pills` stands in
+ * offers in the place, a pick putting the mention's pill there; none while
+ * no `@` word stands, or before the place's workspace is known.
+ */
+export function useMentionOffer(
+  place: Parameters<typeof useMentionState>[0],
+  pills: MentionPills,
+): MentionsOffered | undefined {
+  return useMentionState(place, pills).offered;
+}
+
+/** What an `@` offers in a composer's field of pills, and what a bare `@` offers there, which the field's native list stands the moment an `@` is typed. */
+export function useComposerMentions(
+  place: Parameters<typeof useMentionState>[0],
+  pills: MentionPills,
+): MentionsState {
+  return useMentionState(place, pills);
 }

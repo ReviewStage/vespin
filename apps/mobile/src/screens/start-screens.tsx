@@ -91,7 +91,8 @@ import {
   SAVE_DRAFT_WORDS,
   useKeptWords,
 } from "../use-kept-words.js";
-import { type MentionsOffered, useMentionOffer } from "../use-mention-offer.js";
+import { useComposerMentions } from "../use-mention-offer.js";
+import { useMentionPills } from "../use-mention-pills.js";
 import { usePillField } from "../use-pill-field.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
@@ -747,13 +748,6 @@ function useClosingStart(
   return { starting: sent, go };
 }
 
-/** What an `@` offers, as the start page takes it; none while a `/` offers its skills, which stand in its place. */
-function offeredMentions(offered: MentionsOffered | undefined, skills: SkillsOffered | undefined) {
-  return skills !== undefined || offered === undefined
-    ? undefined
-    : { groups: offered.groups, empty: offered.empty, crumb: offered.crumb, onPick: offered.pick };
-}
-
 /** The skills a `/` offers, as the start page takes them. */
 function offered(skills: SkillsOffered | undefined) {
   return skills === undefined
@@ -824,10 +818,13 @@ export function NewAgentScreen({
   // The field, which draws each mention and each picture attached as its pill.
   const pillField = usePillField(prompt, setPrompt, pictures);
 
-  const mentions = useMentionOffer(
+  const mentions = useComposerMentions(
     { workspaceId: startsOn?.workspaceId, taskId: startsOn?.id },
     pillField.mentions,
   );
+
+  // Note that what an `@` offers is drawn by the field's own native list, which stands it on the keystroke, and none while a `/` offers its skills.
+  const pills = useMentionPills(pillField.pills, mentions, skills === undefined);
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
   const startSuggested = async (
@@ -953,7 +950,6 @@ export function NewAgentScreen({
           onLongPaste: pictures.pasteText,
         }}
         skills={offered(skills)}
-        mentions={offeredMentions(mentions, skills)}
         pictures={pictures.attached}
         onDetach={pictures.detach}
         onDropPictures={pictures.drop}
@@ -973,7 +969,7 @@ export function NewAgentScreen({
             : talk.onTalk
         }
         testIds={{ field: TEST_IDS.NEW_AGENT.WORDS, add: TEST_IDS.NEW_AGENT.ATTACH }}
-        pills={pillField.pills}
+        pills={pills}
         trailing={<StartModelChip pick={pick} shown={modelsShown} onShown={setModelsShown} />}
         chips={
           <>
@@ -1320,7 +1316,9 @@ export function NewTaskScreen({
   // The field, which draws each mention and each picture attached as its pill.
   const pillField = usePillField(prompt, setPrompt, pictures);
 
-  const mentions = useMentionOffer({ workspaceId, taskId: undefined }, pillField.mentions);
+  const mentions = useComposerMentions({ workspaceId, taskId: undefined }, pillField.mentions);
+  // Note that what an `@` offers is drawn by the field's own native list, which stands it on the keystroke, and none while a `/` offers its skills.
+  const pills = useMentionPills(pillField.pills, mentions, skills === undefined);
 
   const unreached =
     tree !== undefined
@@ -1417,7 +1415,6 @@ export function NewTaskScreen({
           onLongPaste: pictures.pasteText,
         }}
         skills={offered(skills)}
-        mentions={offeredMentions(mentions, skills)}
         pictures={pictures.attached}
         onDetach={pictures.detach}
         onDropPictures={pictures.drop}
@@ -1442,7 +1439,7 @@ export function NewTaskScreen({
             : talk.onTalk
         }
         testIds={{ field: TEST_IDS.NEW_TASK.WORDS, add: TEST_IDS.NEW_TASK.ATTACH }}
-        pills={pillField.pills}
+        pills={pills}
         trailing={<StartModelChip pick={pick} shown={modelsShown} onShown={setModelsShown} />}
         chips={
           <>
