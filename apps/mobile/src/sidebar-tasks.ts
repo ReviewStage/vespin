@@ -8,8 +8,6 @@ export type SidebarTasks = {
   readonly sections: ReactNode;
   /** Opens a row pressed that is no task, such as a Manager's, whose page is pushed; false for a task's, which the sidebar opens on Tasks. */
   readonly opens: (id: string) => boolean;
-  /** Whether the tree stands a task's row, which its sidebar may stand selected; false for one it draws nowhere, such as a finished task or one under a folded group. */
-  readonly draws: (taskId: string) => boolean;
 };
 
 /** The tasks' part of an iPad's sidebar; none but on an iPad, where the tabs' layout holds it. */

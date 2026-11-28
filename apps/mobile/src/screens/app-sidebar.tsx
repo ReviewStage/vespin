@@ -91,7 +91,7 @@ const TAB_PLACE = {
 
 /**
  * What the sidebar stands selected: the tab in front's place, or on Tasks
- * the task picked beside it, by its id, where the sidebar draws its row. Note that while no tab stands, as
+ * the task picked beside it, by its id. Note that while no tab stands, as
  * under a sheet over the tabs, it keeps what it last stood on.
  */
 function useSidebarHere(): string | undefined {
@@ -100,18 +100,13 @@ function useSidebarHere(): string | undefined {
   // Note that the Merge queue's page, pushed on a tab's stack, stands its own row selected, as the panel's sidebar stands its place.
   const queued = segments.at(-1) === MERGE_QUEUE_SEGMENT;
   const pickedTask = useSplitPicked(SPLIT_TAB.TASKS);
-  const tasks = useSidebarTasks();
-
-  // Note that a task picked stands selected only where the sidebar draws its row, Tasks otherwise, because a sidebar whose selection moved off a task's row to a task it draws nowhere, such as a finished one a search opened, crashed inside SwiftUI's own List.
-  const drawnTask =
-    pickedTask !== undefined && tasks?.draws(pickedTask) === true ? pickedTask : undefined;
 
   const here = queued
     ? SIDEBAR_PLACE.MERGE_QUEUE
     : tab === undefined
       ? undefined
       : tab === IOS_TAB.TASKS
-        ? (drawnTask ?? TAB_PLACE[tab])
+        ? (pickedTask ?? TAB_PLACE[tab])
         : TAB_PLACE[tab];
 
   const [kept, keep] = useState(here);

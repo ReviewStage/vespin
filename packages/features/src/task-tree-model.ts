@@ -640,36 +640,3 @@ export function taskBranches(rows: readonly DrawnTaskRow[]): readonly TaskBranch
 
   return top;
 }
-
-/** What a reader opened of a tree: whether a group stands folded shut, and the parents whose sub-tasks stand open, by id. */
-export interface TaskTreeShown {
-  readonly folded: (group: TaskTreeGroup) => boolean;
-  readonly opened: ReadonlySet<string>;
-}
-
-/**
- * The ids of the tasks a tree stands as rows, as the phone draws it: every
- * group's top rows but a folded group's, and a task's sub-tasks only while
- * it stands open, since SwiftUI's disclosure holds no rows while shut. Note
- * that a list's selection is told only an id this holds, because an iPad's
- * sidebar whose selection moved off a row it drew to a task it drew nowhere,
- * such as a finished one a search opened, crashed inside SwiftUI's own List.
- */
-export function drawnTaskIds(tree: TaskTree, shown: TaskTreeShown): ReadonlySet<string> {
-  const drawn = new Set<string>();
-  const groups = [tree.pinned, tree.following, ...tree.sections, ...tree.tasks];
-
-  const walk = (branches: readonly TaskBranch[]) => {
-    for (const { row, branches: under } of branches) {
-      drawn.add(row.task.id);
-
-      if (shown.opened.has(row.task.id)) walk(under);
-    }
-  };
-
-  for (const group of groups) {
-    if (group !== undefined && !shown.folded(group)) walk(taskBranches(group.rows));
-  }
-
-  return drawn;
-}
